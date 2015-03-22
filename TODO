@@ -1,0 +1,11 @@
+[NEW FEATURES]
+
+- implement new disruptors (syntactic & semantic)
+- implement new node types that leverage python-constraint
+- implement generic generators for generator-based node
+- PIN DBI integration for x86 targets
+
+[ENHANCEMENT]
+
+- clean up test.py
+- write documentation (don't forget to gather all comments tagged '### DOC ###')
