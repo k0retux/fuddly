@@ -1,4 +1,4 @@
-fuddly is a fuzzing framework.
+fuddly is a fuzzing and data manipulation framework.
 
 List of features
 ----------------

@@ -5,3 +5,4 @@
 !protocols
 !protocols/*.py
 !example*.py
+!__init__.py
