@@ -785,7 +785,7 @@ class INT(VT):
             self.exhausted = False
 
         if self.int_list is not None:
-            if self.int_list_copy is not None:
+            if self.int_list_copy is not None and self.drawn_val is not None:
                 self.int_list_copy.insert(0, self.drawn_val)
         else:
             if self.idx > 0:

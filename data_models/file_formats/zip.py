@@ -174,6 +174,7 @@ class ZIP_DataModel(DataModel):
                         'alt': [
                             {'conf': 'ABS',
                              'type': MH.Generator,
+                             'clear_attrs': [NodeInternals.ResetOnUnfreeze],
                              'contents': lambda x: Node('cts', value_type=\
                                                         String(size=x.get_raw_value())),
                              'node_args': 'compressed_size'}

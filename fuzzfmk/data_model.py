@@ -373,6 +373,7 @@ class NodeInternals(object):
     Abs_Postpone = 6
 
     CloneExtNodeArgs = 7
+    ResetOnUnfreeze = 8
 
     def __init__(self, defaults=True, arg=None):
         self.private = None
@@ -389,7 +390,9 @@ class NodeInternals(object):
             # Used for absorption
             NodeInternals.Abs_Postpone: False,
             # Used for Gen and Func
-            NodeInternals.CloneExtNodeArgs: False
+            NodeInternals.CloneExtNodeArgs: False,
+            # Used for Gen
+            NodeInternals.ResetOnUnfreeze: True
             }
 
         self._sync_with = None
@@ -1001,17 +1004,19 @@ class NodeInternals_GenFunc(NodeInternals):
         else:
             return self.generated_node.is_frozen()
 
-    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False):
-        if self.is_attr_set(NodeInternals.Mutable):
+    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False):
+        # if self.is_attr_set(NodeInternals.Mutable): 
+        if self.is_attr_set(NodeInternals.ResetOnUnfreeze):
             # 'dont_change_state' is not supported in this case. But
             # if generator is stateless, it should not be a problem
             self.reset_generator()
         else:
             self.generated_node.unfreeze(conf, recursive=recursive, dont_change_state=dont_change_state,
-                                        ignore_entanglement=ignore_entanglement)
+                                        ignore_entanglement=ignore_entanglement, only_generators=only_generators)
 
     def unfreeze_all(self, recursive=True, ignore_entanglement=False):
-        if self.is_attr_set(NodeInternals.Mutable):
+        # if self.is_attr_set(NodeInternals.Mutable):
+        if self.is_attr_set(NodeInternals.ResetOnUnfreeze):
             self.reset_generator()
         else:
             self.generated_node.unfreeze_all(recursive=recursive, ignore_entanglement=ignore_entanglement)
@@ -1159,7 +1164,9 @@ class NodeInternals_Term(NodeInternals):
     def is_frozen(self):
         return self.frozen_node is not None
 
-    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False):
+    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False):
+        if only_generators:
+            return
         if dont_change_state and self.frozen_node is not None:
             self._unfreeze_without_state_change(self.frozen_node)
         self.frozen_node = None
@@ -2052,7 +2059,7 @@ class NodeInternals_NonTerm(NodeInternals):
         else:
             if self.is_attr_set(NodeInternals.Finite):
                 node_list, idx = NodeInternals_NonTerm._get_next_random_component(self.subnodes_csts,
-                                                                                excluded_idx=self.excluded_components)
+                                                                                  excluded_idx=self.excluded_components)
                 self.excluded_components.append(idx)
                 if len(self.excluded_components) == len(self.subnodes_csts) // 2:
                     self.exhausted = True
@@ -2060,7 +2067,7 @@ class NodeInternals_NonTerm(NodeInternals):
                     self.exhausted = False
             else:
                 node_list = NodeInternals_NonTerm._get_random_component(self.subnodes_csts,
-                                                self.subnodes_csts_total_weight)
+                                                                        self.subnodes_csts_total_weight)
 
 
         for delim, sublist in self.__iter_csts(node_list):
@@ -2535,16 +2542,19 @@ class NodeInternals_NonTerm(NodeInternals):
                     n.entangled_nodes = None
 
 
-    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False):
+    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False):
         if recursive:
-            iterable = self.subnodes_set
+            if dont_change_state or only_generators:
+                iterable = self.frozen_node_list
+            else:
+                iterable = self.subnodes_set
 
             for e in iterable:
                 if e.is_frozen(conf):
                     e.unfreeze(conf=conf, recursive=True, dont_change_state=dont_change_state,
-                               ignore_entanglement=ignore_entanglement)
+                               ignore_entanglement=ignore_entanglement, only_generators=only_generators)
 
-        if not dont_change_state:
+        if not dont_change_state and not only_generators:
             self._cleanup_entangled_nodes()
 
             self.frozen_node_list = None
@@ -2621,7 +2631,9 @@ class NodeInternals_NonTerm(NodeInternals):
                 e.clear_attr(name, conf=conf, all_conf=all_conf, recursive=recursive)
 
     def set_clone_info(self, info):
-        iterable = copy.copy(self.subnodes_set)
+        iterable = self.subnodes_set
+        if self.frozen_node_list:
+            iterable = iterable.union(self.frozen_node_list)
         for e in iterable:
             e._set_clone_info(info)
 
@@ -3679,7 +3691,8 @@ class Node(object):
             if e == self:
                 return n
         else:
-            return '*** ERROR: get_path_from() --> Node not found! ***'
+            return "*** ERROR: get_path_from() --> Node '{:s}' " \
+                "not reachable from '{:s}'***".format(self.name, node.name)
 
 
     def get_all_paths_from(self, node, conf=None):
@@ -3770,6 +3783,9 @@ class Node(object):
 
 
     def get_flatten_value(self, conf=None, recursive=True):
+        return self.to_bytes(conf=conf, recursive=recursive)
+
+    def to_bytes(self, conf=None, recursive=True):
         val = self.get_value(conf=conf, recursive=recursive)
 
         if not isinstance(val, bytes):
@@ -3777,7 +3793,6 @@ class Node(object):
             val = b''.join(val)
 
         return val
-
 
     def set_frozen_value(self, value, conf=None):
         conf = self.__check_conf(conf)
@@ -3789,7 +3804,7 @@ class Node(object):
             raise ValueError
 
 
-    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False):
+    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False):
         if conf is not None:
             next_conf = conf
         else:
@@ -3800,12 +3815,12 @@ class Node(object):
 
         if self.is_frozen(conf):
             self.internals[conf].unfreeze(next_conf, recursive=recursive, dont_change_state=dont_change_state,
-                                          ignore_entanglement=ignore_entanglement)
+                                          ignore_entanglement=ignore_entanglement, only_generators=only_generators)
 
         if not ignore_entanglement and self.entangled_nodes is not None:
             for e in self.entangled_nodes:
                 e.unfreeze(conf=next_conf, recursive=recursive, dont_change_state=dont_change_state,
-                           ignore_entanglement=True)
+                           ignore_entanglement=True, only_generators=only_generators)
 
 
     def unfreeze_all(self, recursive=True, ignore_entanglement=False):

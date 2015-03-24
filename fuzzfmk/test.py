@@ -2136,6 +2136,10 @@ class TestDataModel(unittest.TestCase):
 
         self.assertEqual(zip_buff, abs_buff)
 
+        # abszip.show()
+        flen_before = len(abszip['ZIP/file_list/file/data'].to_bytes())
+        print('file data len before: ', flen_before)
+
         off_before = abszip['ZIP/cdir/cdir_hdr:2/file_hdr_off']
         # Needed to avoid generated ZIP files that have less than 2 files.
         if off_before is not None:
@@ -2143,14 +2147,35 @@ class TestDataModel(unittest.TestCase):
             # fields are automatically updated
             off_before = off_before.get_flatten_value()
             print('offset before:', off_before)
-            print(abszip['ZIP/file_list/file/data'].absorb(b'TEST', constraints=AbsNoCsts()))
-            abszip['ZIP/cdir/cdir_hdr:2'].unfreeze()
+            csz_before = abszip['ZIP/file_list/file/header/common_attrs/compressed_size'].to_bytes()
+            print('compressed_size before:', csz_before)
+
+            abszip['ZIP/file_list/file/header/common_attrs/compressed_size'].set_current_conf('MAIN')
+
+            NEWVAL = b'TEST'
+            print(abszip['ZIP/file_list/file/data'].absorb(NEWVAL, constraints=AbsNoCsts()))
+
+            flen_after = len(abszip['ZIP/file_list/file/data'].to_bytes())
+            print('file data len after: ', flen_after)
+
+            abszip.unfreeze(only_generators=True)
             abszip.get_value()
+
+            # print('\n******\n')
+            # abszip.show()
+
             off_after = abszip['ZIP/cdir/cdir_hdr:2/file_hdr_off'].get_flatten_value()
             print('offset after: ', off_after)
+            csz_after = abszip['ZIP/file_list/file/header/common_attrs/compressed_size'].to_bytes()
+            print('compressed_size after:', csz_after)
 
-            # Should not equal in the general case
+            # Should not be equal in the general case
             self.assertNotEqual(off_before, off_after)
+            # Should be equal in the general case
+            self.assertEqual(struct.unpack('<L', off_before)[0] - struct.unpack('<L', off_after)[0],
+                             flen_before - flen_after)
+            self.assertEqual(struct.unpack('<L', csz_after)[0], len(NEWVAL))
+
 
         for n, pkzip in dm.zip_dict.items():
 
