@@ -161,7 +161,9 @@ class d_fuzz_terminal_nodes(StatefulDisruptor):
 @disruptor(tactics, dtype="tTYPE", weight=1,
            gen_args = GENERIC_ARGS,
            args={'path': ('graph path regexp to select nodes on which' \
-                 ' the disruptor should apply', None, str)})
+                 ' the disruptor should apply', None, str),
+                 'deep': ('when set to True, if a node structure has changed, the modelwalker ' \
+                          'will reset its walk through the children nodes', True, bool)})
 class d_fuzz_typed_nodes(StatefulDisruptor):
     '''
     Save the previous data the first time then fuzz the each node
@@ -181,6 +183,7 @@ class d_fuzz_typed_nodes(StatefulDisruptor):
         self.consumer = TypedNodeDisruption(max_runs_per_node=self.max_runs_per_node,
                                             min_runs_per_node=self.min_runs_per_node,
                                             respect_order=False)
+        self.consumer.need_reset_when_structure_change = self.deep
         self.consumer.set_node_interest(path_regexp=self.path)
         self.walker = iter(ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init))
 
@@ -441,7 +444,7 @@ class d_switch_to_alternate_conf(Disruptor):
         self.available_confs = dm.get_available_confs()
 
         if self.available_confs:
-            self.conf_fallback = self.available_confs.pop()
+            self.conf_fallback = self.available_confs[0]
         else:
             self.conf_fallback = None
 

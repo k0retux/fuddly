@@ -1569,7 +1569,7 @@ class TestModelWalker(unittest.TestCase):
         tn_consumer.set_node_interest(internals_criteria=ic)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True, max_steps=100):
             print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
-        self.assertEqual(idx, 25) # 25 when no String()
+        self.assertEqual(idx, 23) # 23 when no String()
 
 
     def test_TypedNodeDisruption_2(self):

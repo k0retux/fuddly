@@ -1697,12 +1697,12 @@ class Fuzzy_INT32(with_metaclass(meta_32b, Fuzzy_INT)):
     short_cformat = 'L'
     alt_short_cformat = 'l'
 
-class Other_Fuzzy_INT32(Fuzzy_INT32):
-    mini = 0
-    maxi = 2**32-1
-    int_list = [0xDEADBEEF, 0xAAAAAAAA]
-    short_cformat = 'L'
-    alt_short_cformat = 'l'
+# class Other_Fuzzy_INT32(Fuzzy_INT32):
+#     mini = 0
+#     maxi = 2**32-1
+#     int_list = [0xDEADBEEF, 0xAAAAAAAA]
+#     short_cformat = 'L'
+#     alt_short_cformat = 'l'
 
 
 #class INT64(INT, metaclass=meta_64b)
@@ -1742,12 +1742,12 @@ class Fuzzy_INT64(with_metaclass(meta_64b, Fuzzy_INT)):
     short_cformat = 'Q'
     alt_short_cformat = 'q'
 
-class Other_Fuzzy_INT64(Fuzzy_INT64):
-    mini = 0
-    maxi = 2**64-1
-    int_list = [0xDEADBEEFDEADBEEF, 0xAAAAAAAAAAAAAAAA]
-    short_cformat = 'Q'
-    alt_short_cformat = 'q'
+# class Other_Fuzzy_INT64(Fuzzy_INT64):
+#     mini = 0
+#     maxi = 2**64-1
+#     int_list = [0xDEADBEEFDEADBEEF, 0xAAAAAAAAAAAAAAAA]
+#     short_cformat = 'Q'
+#     alt_short_cformat = 'q'
 
 
 
