@@ -2994,7 +2994,7 @@ class FuzzShell(cmd.Cmd):
                 return False
 
             actions = self.__parse_instructions(l)
-            if t is None:
+            if actions is None:
                 self.__error_msg = "Syntax Error!"
                 return False
 

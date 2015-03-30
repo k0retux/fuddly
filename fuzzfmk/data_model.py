@@ -3556,10 +3556,11 @@ class Node(object):
             return cond1 and cond2 and cond3
 
         def get_reachable_nodes_rec(node, config, rdepth, top_node):
-            if respect_order:
-                s = []
-            else:
-                s = set()
+            s = []
+            # if respect_order:
+            #     s = []
+            # else:
+            #     s = set()
 
             if config == None:
                 config = self.current_conf
@@ -3574,10 +3575,11 @@ class Node(object):
 
             if node.is_conf_existing(owned_conf) or (owned_conf == None):
                 if __compliant(node, config, top_node):
-                    if respect_order:
-                        s.append(node)
-                    else:
-                        s.add(node)
+                    s.append(node)
+                    # if respect_order:
+                    #     s.append(node)
+                    # else:
+                    #     s.add(node)
 
             if rdepth <= -1 or rdepth > 0:
                 s2 = internal.get_child_nodes_by_attr(internals_criteria=internals_criteria,
@@ -3589,12 +3591,15 @@ class Node(object):
                                                       relative_depth = rdepth - 1,
                                                       top_node=top_node)
                 if s2:
-                    if respect_order:
-                        for e in s2:
-                            if e not in s:
-                                s.append(e)
-                    else:
-                        s = s.union(s2)
+                    for e in s2:
+                        if e not in s:
+                            s.append(e)
+                    # if respect_order:
+                    #     for e in s2:
+                    #         if e not in s:
+                    #             s.append(e)
+                    # else:
+                    #     s = s.union(s2)
 
             return s
 

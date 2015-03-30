@@ -32,6 +32,7 @@ import zlib
 
 from fuzzfmk.plumbing import *
 from fuzzfmk.data_model import *
+from fuzzfmk.data_model_helpers import *
 from fuzzfmk.value_types import *
 from fuzzfmk.fuzzing_primitives import *
 from fuzzfmk.basic_primitives import *
@@ -82,6 +83,8 @@ class USB_DataModel(DataModel):
 
     def build_data_model(self):
 
+        mh = ModelHelper(dm=self)
+
         e_intf_contents = Node('contents')
         e_conf_contents = Node('contents')
         
@@ -95,15 +98,24 @@ class USB_DataModel(DataModel):
             return e
         e_wtotlen_gen = Node('wTotalLength')
         e_wtotlen_gen.set_generator_func(conf_len, func_node_arg=e_conf_contents)
+        # e_wtotlen_gen.add_conf('MSD')
+        # e_wtotlen_gen.set_generator_func(conf_len, func_node_arg=e_conf_contents, func_arg=1, conf='MSD')
+
         # This function is called with e_conf_contents as a parameter
         def nb_intf(node):
             # node.get_value()
             # print('QTY: ', node.cc._nodes_drawn_qty)
-            nb = min(node.cc.get_drawn_node_qty('INTF'), 2**8-1)
-            e = Node('dyn', value_type=UINT8(int_list=[nb]))
+            try:
+                nb = min(node.cc.get_drawn_node_qty('INTF'), 2**8-1)
+                e = Node('dyn', value_type=UINT8(int_list=[nb]))
+            except:
+                e = Node('dyn_default', value_type=UINT8(int_list=[10]))
             return e
         e_bnumintf = Node('bNumInterfaces')
         e_bnumintf.set_generator_func(nb_intf, func_node_arg=e_conf_contents)
+        e_bnumintf.add_conf('MSD')
+        e_bnumintf.set_values(value_type=UINT8(int_list=[1]), conf='MSD')
+
         e_bconfval = Node('bConfValue', value_type=UINT8(mini=1, maxi=50))
         e_iconf = Node('iConf', value_type=UINT8(int_list=[USB_DEFS.STRINGID_CONFIG]))
         
@@ -147,6 +159,8 @@ class USB_DataModel(DataModel):
             return e
         e_bnumep = Node('bNumEndpoints')
         e_bnumep.set_generator_func(nb_eps, func_node_arg=e_intf_contents)
+        e_bnumep.add_conf('MSD')
+        e_bnumep.set_values(value_type=UINT8(int_list=[2]), conf='MSD')
 
         cls_ids = [USB_DEFS.USB_CLASS_MASS_STORAGE,
                    USB_DEFS.USB_CLASS_PRINTER,
@@ -158,14 +172,20 @@ class USB_DataModel(DataModel):
 
         e_bintfcls = Node('bInterfaceClass', value_type=UINT8(int_list=cls_ids))
         e_bintfcls.make_random()
+        e_bintfcls.add_conf('MSD')
+        e_bintfcls.set_values(value_type=UINT8(int_list=[0x08]), conf='MSD')
 
         subcls_ids = [0x06, 0, 1, 2, 3, 4, 5, 7, 8]
         e_bintfsubcls = Node('bInterfaceSubClass', value_type=UINT8(int_list=subcls_ids))
         e_bintfsubcls.make_random()
+        e_bintfsubcls.add_conf('MSD')
+        e_bintfsubcls.set_values(value_type=UINT8(int_list=[0x06]), conf='MSD')
 
         proto_ids = [0x80, 0x06, 0, 1, 2]
         e_bintfproto = Node('bInterfaceProtocol', value_type=UINT8(int_list=proto_ids))
         e_bintfproto.make_random()
+        e_bintfproto.add_conf('MSD')
+        e_bintfproto.set_values(value_type=UINT8(int_list=[0x50]), conf='MSD')
 
         e_iintf = Node('iInterface', value_type=UINT8(int_list=[USB_DEFS.STRINGID_INTERFACE]))
         
@@ -185,51 +205,104 @@ class USB_DataModel(DataModel):
 
         # ENDPOINT DESC
 
-        e_blength = Node('bLength', value_type=UINT8(int_list=[7]))
-        e_bdesctype = Node('bDescType', value_type=UINT8(int_list=[USB_DEFS.DT_ENDPOINT]))
+        # e_blength = Node('bLength', value_type=UINT8(int_list=[7]))
+        # e_bdesctype = Node('bDescType', value_type=UINT8(int_list=[USB_DEFS.DT_ENDPOINT]))
 
-        vt = BitField(subfield_limits=[4,7,8],
-                      subfield_val_extremums=[[0,0b1111],None,[0,1]],
-                      subfield_val_lists=[None,[0],None],
-                      endian=VT.LittleEndian)
-        e_epaddr = Node('bEndpointAddr', value_type=vt)
-        # e_epaddr.make_determinist()
-        # old_e_epaddr = Node('bEndpointAddr', value_type=UINT8(int_list=[0b10001111]))
+        # vt = BitField(subfield_limits=[4,7,8],
+        #               subfield_val_extremums=[[0,0b1111],None,[0,1]],
+        #               subfield_val_lists=[None,[0],None],
+        #               endian=VT.LittleEndian)
+        # e_epaddr = Node('bEndpointAddr', value_type=vt)
+        # # e_epaddr.make_determinist()
+        # # old_e_epaddr = Node('bEndpointAddr', value_type=UINT8(int_list=[0b10001111]))
         
-        vt_no_ischron = BitField(subfield_limits=[2,6,8], subfield_val_lists=[[0,2,3],[0],[0]],
-                                 endian=VT.LittleEndian)
-        vt_ischron = BitField(subfield_limits=[2,4,6,8],
-                              subfield_val_extremums=[None,[0,3],[0,2],None],
-                              subfield_val_lists=[[1],None,None,[0]],
-                              endian=VT.LittleEndian)
-        e_bmattrib = Node('bmAttributes', value_type=vt_no_ischron)
-        e_bmattrib.set_fuzz_weight(5)
-        # e_bmattrib.make_determinist()
+        # vt_no_ischron = BitField(subfield_limits=[2,6,8], subfield_val_lists=[[0,2,3],[0],[0]],
+        #                          endian=VT.LittleEndian)
+        # vt_ischron = BitField(subfield_limits=[2,4,6,8],
+        #                       subfield_val_extremums=[None,[0,3],[0,2],None],
+        #                       subfield_val_lists=[[1],None,None,[0]],
+        #                       endian=VT.LittleEndian)
+        # e_bmattrib = Node('bmAttributes', value_type=vt_no_ischron)
+        # e_bmattrib.set_fuzz_weight(5)
+        # # e_bmattrib.make_determinist()
 
-        e_bmattrib_iso = Node('bmAttributes_isoch', value_type=vt_ischron)
-        e_bmattrib_iso.set_fuzz_weight(5)
-        # e_bmattrib_iso.make_determinist()
-        # e_bmattrib.add_conf('ISO')
-        # e_bmattrib.set_values(value_type=vt_ischron, conf='ISO')
+        # e_bmattrib_iso = Node('bmAttributes_isoch', value_type=vt_ischron)
+        # e_bmattrib_iso.set_fuzz_weight(5)
+        # # e_bmattrib_iso.make_determinist()
+        # # e_bmattrib.add_conf('ISO')
+        # # e_bmattrib.set_values(value_type=vt_ischron, conf='ISO')
 
-        # old_e_bmattrib = Node('bmAttributes', value_type=UINT8(int_list=[0b00000010]))
+        # # old_e_bmattrib = Node('bmAttributes', value_type=UINT8(int_list=[0b00000010]))
 
-        vt = BitField(subfield_limits=[11,13,16],
-                      subfield_val_extremums=[[0,2047],[0,2],[0,0]],
-                      subfield_val_lists=[None,None,[0]],
-                      endian=VT.LittleEndian)
-        e_wmaxpacketsize = Node('wMaxPacketSize', value_type=vt)
-        e_wmaxpacketsize.set_fuzz_weight(4)
-        # e_wmaxpacketsize.make_determinist()
+        # vt = BitField(subfield_limits=[11,13,16],
+        #               subfield_val_extremums=[[0,2047],[0,2],[0,0]],
+        #               subfield_val_lists=[None,None,[0]],
+        #               endian=VT.LittleEndian)
+        # e_wmaxpacketsize = Node('wMaxPacketSize', value_type=vt)
+        # e_wmaxpacketsize.set_fuzz_weight(4)
+        # # e_wmaxpacketsize.make_determinist()
 
-        # old_e_wmaxpacketsize = Node('wMaxPacketSize', value_type=UINT16_le(int_list=[512, 256, 128]))
-        e_binterval = Node('bInterval', value_type=UINT8(int_list=[4]))
+        # # old_e_wmaxpacketsize = Node('wMaxPacketSize', value_type=UINT16_le(int_list=[512, 256, 128]))
+        # e_binterval = Node('bInterval', value_type=UINT8(int_list=[4]))
         
-        e_ep_desc = Node('EP_DESC')
-        e_ep_desc.set_subnodes_with_csts([
-                2, ['u>', [e_blength, 1], [e_bdesctype, 1], [e_epaddr, 1], [e_bmattrib, 1], [e_wmaxpacketsize, 1], [e_binterval, 1]],
-                1, ['u>', [e_blength, 1], [e_bdesctype, 1], [e_epaddr, 1], [e_bmattrib_iso, 1], [e_wmaxpacketsize, 1], [e_binterval, 1]]
-                ])
+        # e_ep_desc = Node('EP_DESC')
+        # e_ep_desc.set_subnodes_with_csts([
+        #         2, ['u>', [e_blength, 1], [e_bdesctype, 1], [e_epaddr, 1], [e_bmattrib, 1], [e_wmaxpacketsize, 1], [e_binterval, 1]],
+        #         1, ['u>', [e_blength, 1], [e_bdesctype, 1], [e_epaddr, 1], [e_bmattrib_iso, 1], [e_wmaxpacketsize, 1], [e_binterval, 1]]
+        #         ])
+
+        ep_desc = \
+        {'name': 'EP_DESC',
+         'contents': [
+             {'name': 'bLength',
+              'contents': UINT8(int_list=[7])},
+             {'name': 'bDescType',
+              'contents': UINT8(int_list=[USB_DEFS.DT_ENDPOINT])},
+             {'name': 'bEndpointAddr',
+              'contents': BitField(subfield_limits=[4,7,8],
+                                   subfield_val_extremums=[[0,0b1111],None,[0,1]],
+                                   subfield_val_lists=[None,[0],None],
+                                   endian=VT.LittleEndian),
+              'alt': [
+                  {'conf': 'BULK-IN',
+                   'contents': BitField(subfield_limits=[4,7,8],
+                                        subfield_val_lists=[[1],[0],[1]],
+                                        endian=VT.LittleEndian)},
+                  {'conf': 'BULK-OUT',
+                   'contents': BitField(subfield_limits=[4,7,8],
+                                        subfield_val_lists=[[2],[0],[0]],
+                                        endian=VT.LittleEndian)}]},
+             {'name': 'bmAttributes',
+              'contents': BitField(subfield_limits=[2,6,8], subfield_val_lists=[[0,2,3],[0],[0]],
+                                   endian=VT.LittleEndian),
+              'fuzz_weight': 5,
+              'alt': [
+                  {'conf': 'ISO',
+                   'contents': BitField(subfield_limits=[2,4,6,8],
+                                        subfield_val_extremums=[None,[0,3],[0,2],None],
+                                        subfield_val_lists=[[1],None,None,[0]],
+                                        endian=VT.LittleEndian)}
+              ]},
+             {'name': 'wMaxPacketSize',
+              'contents': BitField(subfield_limits=[11,13,16],
+                                   subfield_val_extremums=[None,[0,2],[0,0]],
+                                   subfield_val_lists=[[2**x for x in range(1,12)],None,[0]],
+                                   endian=VT.LittleEndian),
+              'random': True,
+              'alt': [
+                  {'conf': 'MSD',
+                   'contents': BitField(subfield_limits=[11,13,16],
+                                        subfield_val_extremums=[None,[0,2],[0,0]],
+                                        subfield_val_lists=[[0x8, 0x10, 0x20, 0x40],[0],[0]],
+                                        endian=VT.LittleEndian)}]},
+             {'name': 'bInterval',
+              'contents': UINT8(int_list=[4]),
+              'alt': [
+                  {'conf': 'MSD',
+                   'contents': UINT8(int_list=[0])}]}
+         ]}
+
+        e_ep_desc = mh.create_graph_from_desc(ep_desc)
 
         # e_ep_desc.make_random(all_conf=True, recursive=True)
 
@@ -241,12 +314,27 @@ class USB_DataModel(DataModel):
 
         e_intf = Node('INTF')
         e_intf.set_subnodes_basic([e_intf_desc, e_intf_contents])
-
         e_intf_desc.make_random(all_conf=True, recursive=True)
+
+        e_intf.add_conf('MSD')
+        msd_intf_desc = e_intf_desc.get_clone('INTF_DESC')
+        msd_intf_desc.set_current_conf('MSD', recursive=True)
+        msd_ep_bulkin = e_ep_desc.get_clone('EP_BLKIN')
+        msd_ep_bulkin.set_current_conf('MSD', recursive=True)
+        msd_ep_bulkin.set_current_conf('BULK-IN', recursive=True)
+        msd_ep_bulkout = e_ep_desc.get_clone('EP_BLKOUT')
+        msd_ep_bulkout.set_current_conf('MSD', recursive=True)
+        msd_ep_bulkout.set_current_conf('BULK-OUT', recursive=True)
+        e_intf.set_subnodes_basic([msd_intf_desc, msd_ep_bulkin, msd_ep_bulkout], conf='MSD')
+
+        msd_intf = e_intf.get_clone('MSD_INTF')
+        msd_intf.set_current_conf('MSD')
 
         e_conf_contents.set_subnodes_with_csts([
                 1, ['u>', [e_intf, 1, 5]]
-                ])
+                ])        
+        e_conf_contents.add_conf('MSD')
+        e_conf_contents.set_subnodes_basic([msd_intf], conf='MSD')
 
         e_intf_alt = Node('INTF', base_node=e_intf, ignore_frozen_state=True)
         e_conf_contents.add_conf('BIGCONF')
@@ -258,8 +346,18 @@ class USB_DataModel(DataModel):
 
         conf = Node('CONF')
         conf.set_subnodes_basic([e_conf_desc, e_conf_contents])
+        conf.add_conf('MSD')
+        msd_conf_desc = e_conf_desc.get_clone('MSD_CONF_DESC')
+        msd_conf_desc.set_current_conf('MSD', recursive=True)
+
+        conf.set_subnodes_basic([msd_conf_desc, e_conf_contents], conf='MSD')
         conf.set_semantics(NodeSemantics(['CONF_DESC']))
 
+        msd_conf = conf.get_clone('MSD_CONF')
+        msd_conf.set_current_conf('MSD', recursive=True)
+
+        # msd_conf.show()
+        # raise ValueError
 
         # DEVICE DESCRIPTOR
 
@@ -300,9 +398,9 @@ class USB_DataModel(DataModel):
 
         # Mass-Storage Device
 
-        e_devclass_ms = Node('bDeviceClass', value_type=UINT8(int_list=[8]))
-        e_devsubclass_ms = Node('bDeviceSubClass', value_type=UINT8(int_list=[6]))
-        e_bdevproto_ms = Node('bDeviceProto', value_type=UINT8(int_list=[80]))
+        e_devclass_ms = Node('bDeviceClass', value_type=UINT8(int_list=[0]))
+        e_devsubclass_ms = Node('bDeviceSubClass', value_type=UINT8(int_list=[0]))
+        e_bdevproto_ms = Node('bDeviceProto', value_type=UINT8(int_list=[0]))
 
         dev_ms = Node('DEV_MS')
         dev_ms.set_subnodes_basic([
@@ -361,8 +459,7 @@ class USB_DataModel(DataModel):
 
         invalid_str = ['A'*126, # max str len is 253, in utf-16 it is 253/2 = 126 char
                        'A'*127, # thus 254 in utf-16 (check off-by-one)
-                       'AhAh...%s...%n.%n.%n.%n.%n',
-                       'BBB %n%n%n%n%n',
+                       '%s%n%n%n%n%n',
                        '',
                        '\x00',
                        '\r\n']
@@ -396,7 +493,7 @@ class USB_DataModel(DataModel):
 
         string.set_semantics(NodeSemantics(['STRING_DESC']))
 
-        self.register_nodes(conf, dev, langid_tbl, string, dev_ms)
+        self.register_nodes(conf, msd_conf, dev, langid_tbl, string, dev_ms)
 
 
 data_model = USB_DataModel()

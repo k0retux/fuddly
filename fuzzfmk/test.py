@@ -1677,7 +1677,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of confs: %d'%idx, rgb=Color.INFO))
 
-        self.assertEqual(idx, 189) # 193
+        self.assertEqual(idx, 150) # previously 189
 
 
 
@@ -2054,6 +2054,19 @@ class TestDataModel(unittest.TestCase):
                 data.get_value()
                 # data.show(raw_limit=200)
                 print('Success!')
+
+
+    @unittest.skipIf(ignore_data_model_specifics, "USB specific test cases")
+    def test_usb_specifics(self):
+
+        dm = fmk.get_data_model_by_name('usb')
+        dm.build_data_model()
+
+        msd_conf = dm.get_data('MSD_CONF')
+        msd_conf.show()
+        
+        self.assertEqual(len(msd_conf.to_bytes()), 32)
+
 
     @unittest.skipIf(ignore_data_model_specifics, "PNG specific test cases")
     def test_png_specifics(self):

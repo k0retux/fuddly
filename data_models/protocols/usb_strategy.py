@@ -116,7 +116,7 @@ else:
 @operator(tactics,
           gen_args={'init': ('make the model walker ignore all the steps until the provided one', 1, int),
                     'max_steps': ("number of test cases to run", 20, int)},
-          args={'mode': ('strategy mode (0, 1, 2 or 666)', 0, int)})
+          args={'mode': ('strategy mode: 0, 1 (fuzz DEV), 2 (Mass-Storage) or 666 (BigConf)', 2, int)})
 class Op1(Operator):
 
     def start(self, fmk_ops, dm, monitor, target, logger, user_input):
@@ -140,6 +140,8 @@ class Op1(Operator):
         if self.mode == 666:
             self.instr_list.append([('CONF', UI(finite=True)), ('ALT', None, UI(conf='BIGCONF')),
                                     ('tTYPE#2', UI(init=self.init, clone_node=False), None)])
+        elif self.mode == 2:
+            self.instr_list.append([('MSD_CONF', UI(finite=True)), ('tTYPE#2', UI(init=self.init))])
         else:
             self.instr_list.append([('CONF', UI(finite=True)), ('tTYPE#2', UI(init=self.init))])
             self.instr_list.append([('CONF#2', UI(finite=True)), ('tTYPE#3', UI(init=self.init))])

@@ -162,6 +162,9 @@ class d_fuzz_terminal_nodes(StatefulDisruptor):
            gen_args = GENERIC_ARGS,
            args={'path': ('graph path regexp to select nodes on which' \
                  ' the disruptor should apply', None, str),
+                 'order': ('when set to True, the fuzzing order is strictly guided ' \
+                           'by the data structure. Otherwise, fuzz weight (if specified ' \
+                           'in the data model) is used for ordering', False, bool),
                  'deep': ('when set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes', True, bool)})
 class d_fuzz_typed_nodes(StatefulDisruptor):
@@ -182,7 +185,7 @@ class d_fuzz_typed_nodes(StatefulDisruptor):
 
         self.consumer = TypedNodeDisruption(max_runs_per_node=self.max_runs_per_node,
                                             min_runs_per_node=self.min_runs_per_node,
-                                            respect_order=False)
+                                            respect_order=self.order)
         self.consumer.need_reset_when_structure_change = self.deep
         self.consumer.set_node_interest(path_regexp=self.path)
         self.walker = iter(ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init))
