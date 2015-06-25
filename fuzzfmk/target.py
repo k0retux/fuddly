@@ -158,6 +158,7 @@ class PrinterTarget(Target):
         self.__feedback = TargetFeedback()
         self.__tmpfile_ext = tmpfile_ext
         self.__target_ip = None
+        self.__target_port = None
         self.__printer_name = None
         self.__cpt = None
 
@@ -166,6 +167,12 @@ class PrinterTarget(Target):
 
     def get_target_ip(self):
         return self.__target_ip
+
+    def set_target_port(self, target_port):
+        self.__target_port = target_port
+
+    def get_target_port(self):
+        return self.__target_port
 
     def set_printer_name(self, printer_name):
         self.__printer_name = printer_name
@@ -184,7 +191,12 @@ class PrinterTarget(Target):
             print('/!\\ ERROR /!\\: the PrinterTarget IP has not been set')
             return False
 
+        if self.__target_port is None:
+            self.__target_port = 631
+
         cups.setServer(self.__target_ip)
+        cups.setPort(self.__target_port)
+
         self.__connection = cups.Connection()
 
         try:

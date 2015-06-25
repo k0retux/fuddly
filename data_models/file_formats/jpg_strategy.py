@@ -88,6 +88,7 @@ class Op1(Operator):
 
         if isinstance(target, LocalTarget):
             target.set_target_path(self.path)
+            self._last_feedback = []
 
         self.nb_gen_val_cpt = 0
         if self.mode == 1:
@@ -110,6 +111,7 @@ class Op1(Operator):
     def stop(self, fmk_ops, dm, monitor, target, logger):
         if isinstance(target, LocalTarget):
             monitor.stop_probe('health_check')
+            self._last_feedback = None
 
 
     def plan_next_operation(self, fmk_ops, dm, monitor, target, logger, fmk_feedback):
@@ -130,8 +132,6 @@ class Op1(Operator):
                 for dmaker, idx in change_list:
                     logger.log_fmk_info('Exhausted data maker [#{:d}]: {:s} ({:s})'.format(idx, dmaker['dmaker_type'], dmaker['dmaker_name']),
                                         nl_before=True, nl_after=False)
-                time.sleep(1)
-
 
             clone_tag = "#{:d}".format(len(self.gen_ids) + 1)
             clone_tag2 = "#{:d}".format(self.init_gen_len + len(self.gen_ids) + 1)
@@ -161,10 +161,18 @@ class Op1(Operator):
 
         if isinstance(target, LocalTarget):
             health_status = monitor.get_probe_status('health_check')
-            linst.set_target_feedback_info(health_status.get_private_info())
+            info = health_status.get_private_info()
+            linst.set_target_feedback_info(info)
+
+            export = True
+            if info in self._last_feedback:
+                export = False
+            else:
+                self._last_feedback.append(info)
 
             if health_status.get_status() == -1:
-                linst.set_instruction(LastInstruction.ExportData)
+                if export:
+                    linst.set_instruction(LastInstruction.ExportData)
                 linst.set_comments('This input has triggered an error, but not a crash!')
                 target.stop_target()
             elif health_status.get_status() == -2:
