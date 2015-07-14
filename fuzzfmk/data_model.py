@@ -2921,13 +2921,37 @@ def make_entangled_nodes(node_list):
 
 
 class Node(object):
+    '''Create a new node. To be used within a graph-based data model.
+
+    Args:
+      name (str): Name of the node. Every children node of a node shall have a unique name.
+        Useful to look for specific nodes within a graph.
+      subnodes (list): (Optional) List of subnodes.
+        If provided the Node will be created as a non-terminal node.
+      values (list): (Optional) List of strings.
+        If provided the instantiated node will be a  String-typed leaf node (taking its possible
+        values from the parameter).
+      value_type (VT): (Optional) The value type that characterize the node. Defined within
+        `value_types.py` and inherits from either `VT` or `VT_Alt`. If provided the instantiated
+        node will be a value_type-typed leaf node.
+      base_node (Node): (Optional) If provided, it will be used as a template to create the new node.
+      ignore_frozen_state (bool): [If `base_node` provided] If True, the clone process of
+        base_node will ignore its current state.
+      accept_external_entanglement (bool): [If `base_node` provided] If True, during the cloning
+        process of base_node, every entangled nodes outside the current graph will be referenced
+        within the new node without being copied. Otherwise, a *Warning* message will be raised.
+      acceptance_set (set): [If `base_node` provided] If provided, will be used as a set of
+        entangled nodes that could be referenced within the new node during the cloning process.
+      copy_dico (dict): [If `base_node` provided] It is used internally during the cloning process,
+       and should not be used for any functional purpose.
+
+    Returns:
+      Node: Node object
+    '''
    
     def __init__(self, name, base_node=None, copy_dico=None, ignore_frozen_state=False,
                  accept_external_entanglement=False, acceptance_set=None,
                  subnodes=None, values=None, value_type=None):
-        '''
-        @copy_dico: is used internally, and should not be used for functional purpose
-        '''
 
         self.internals = {}
         self.name = name
@@ -2981,7 +3005,18 @@ class Node(object):
                 self.make_empty()
 
     def get_clone(self, name, ignore_frozen_state=False):
+        '''Create a new node. To be used wihtin a graph-based data model.
+        
+        Args:
+          name (str): name of the new Node instance
+          ignore_frozen_state (bool): if set to False, the clone function will produce a Node with the same state as the duplicated Node. Otherwise, the only the state won't be kept.
+
+        Returns:
+          Node: duplicated Node object
+        '''
+
         return Node(name, base_node=self, ignore_frozen_state=ignore_frozen_state)
+
 
     def set_contents(self, base_node,
                      copy_dico=None, ignore_frozen_state=False,
@@ -4144,7 +4179,7 @@ class Node(object):
     
 class Env4NT(object):
     ''' 
-    define methods for NonTerm nodes
+    Define methods for non-terminal nodes
     '''
     def __init__(self):
         self.drawn_node_attrs = {}

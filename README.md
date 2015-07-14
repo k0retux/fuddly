@@ -38,8 +38,11 @@ Dependencies
   - [xtermcolor] [2]: terminal color support
   - [cups] [3]: Python bindings for libcups
   - [rpyc] [4]: Remote Python Call (RPyC), a transparent and symmetric RPC library
+* For documentation construction
+  - [sphinx] [5]: spinx >= 1.3 (with builtin napoleon extension)
 
 [1]: http://pythonhosted.org/six/ "six"
 [2]: https://github.com/broadinstitute/xtermcolor "xtermcolor"
 [3]: https://pypi.python.org/pypi/pycups "cups"
 [4]: https://pypi.python.org/pypi/rpyc "rpyc"
+[5]: http://sphinx-doc.org/ "sphinx"

@@ -1,0 +1,9 @@
+*
+!.gitignore
+!source/
+!source/conf.py
+!source/*.rst
+!source/images/
+!source/images/*.odg
+!source/images/*.png
+!Makefile
