@@ -1550,6 +1550,9 @@ class NodeInternals_Func(NodeInternals_Term):
 
 
 class NodeInternals_NonTerm(NodeInternals):
+    '''It is a kind of node internals that enable to structure the graph
+    through a specific grammar...
+    '''
 
     def _init_specific(self, arg):
         self.reset()
@@ -1941,6 +1944,8 @@ class NodeInternals_NonTerm(NodeInternals):
 
 
     def get_subnodes_with_csts(self):
+        '''Generate the structure of the non terminal node.
+        '''
 
         def construct_subnodes(node, subnode_list, mode):
             if self.is_attr_set(NodeInternals.Determinist):
@@ -2921,37 +2926,76 @@ def make_entangled_nodes(node_list):
 
 
 class Node(object):
-    '''Create a new node. To be used within a graph-based data model.
+    '''A Node is the basic building-block used within a graph-based data model.
 
-    Args:
-      name (str): Name of the node. Every children node of a node shall have a unique name.
-        Useful to look for specific nodes within a graph.
-      subnodes (list): (Optional) List of subnodes.
-        If provided the Node will be created as a non-terminal node.
-      values (list): (Optional) List of strings.
-        If provided the instantiated node will be a  String-typed leaf node (taking its possible
-        values from the parameter).
-      value_type (VT): (Optional) The value type that characterize the node. Defined within
-        `value_types.py` and inherits from either `VT` or `VT_Alt`. If provided the instantiated
-        node will be a value_type-typed leaf node.
-      base_node (Node): (Optional) If provided, it will be used as a template to create the new node.
-      ignore_frozen_state (bool): [If `base_node` provided] If True, the clone process of
-        base_node will ignore its current state.
-      accept_external_entanglement (bool): [If `base_node` provided] If True, during the cloning
-        process of base_node, every entangled nodes outside the current graph will be referenced
-        within the new node without being copied. Otherwise, a *Warning* message will be raised.
-      acceptance_set (set): [If `base_node` provided] If provided, will be used as a set of
-        entangled nodes that could be referenced within the new node during the cloning process.
-      copy_dico (dict): [If `base_node` provided] It is used internally during the cloning process,
-       and should not be used for any functional purpose.
-
-    Returns:
-      Node: Node object
+    Attributes:
+      internals (dict: str --> NodeInternals): Contains all the configuration of a
+        node. A configuration is associated to the internals/contents
+        of a node, which can live independently of the other
+        configuration.
+      current_conf (str): Identifier to a configuration. Every usable node use at least one main
+        configuration, namely ``'MAIN'``.
+      name (str): Identifier of a node. Defined at instantiation.
+        Shall be unique from its parent perspective.
+      env (Env): One environment object is added to all the nodes of a node
+        graph when the latter is registered within a data model
+        (cf. :func:`DataModel.register_nodes()`). It is used for sharing
+        global resources between nodes.
+      entangled_nodes (set(Node)): Collection of all the nodes entangled with this one. All
+        the entangled nodes will react the same way as one of their
+        peers (within some extent) if this peer is subjected to a
+        stimuli. The node's properties related to entanglement are
+        only the ones that directly define a node. For instance,
+        changing a node's NodeInternals will propagate to its
+        entangled peers but changing the state of a node's
+        NodeInternals won't propagate. It is used for dealing with
+        multiple instance of a same node (within the scope of a
+        NonTerm
+        node---cf. :func:`NodeInternals_NonTerm.get_subnodes_with_csts()`).
+        But this mechanism can also be used for your own specific purpose. 
+      semantics (NodeSemantics): (optional) Used to associate a semantics to a
+        node. Can be used during graph traversal in order to perform
+        actions related to semantics.
+      fuzz_weight (int): The fuzz weight is an optional attribute of Node() which
+        express Data Model designer's hints for prioritizing the nodes
+        to fuzz. If set, this attribute is used by some generic
+        *disruptors* (the ones that rely on a ModelWalker object---refer to
+        fuzzing_primitives.py)
+      depth (int): Depth of the node wwithin the graph from a specific given
+        root. Will be computed lazily (only when requested).
+      tmp_ref_count (int): (internal use) Temporarily used during the creation of multiple
+        instance of a same node, especially in order to generate unique names.
+      _post_freeze_handler (function): Is executed just after a node is frozen (which
+        is the result of requesting its value when it is not
+        freezed---e.g., at its creation).
     '''
    
     def __init__(self, name, base_node=None, copy_dico=None, ignore_frozen_state=False,
                  accept_external_entanglement=False, acceptance_set=None,
                  subnodes=None, values=None, value_type=None):
+        '''
+        Args:
+          name (str): Name of the node. Every children node of a node shall have a unique name.
+            Useful to look for specific nodes within a graph.
+          subnodes (list): (Optional) List of subnodes.
+            If provided the Node will be created as a non-terminal node.
+          values (list): (Optional) List of strings.
+            If provided the instantiated node will be a  String-typed leaf node (taking its possible
+            values from the parameter).
+          value_type (VT): (Optional) The value type that characterize the node. Defined within
+            `value_types.py` and inherits from either `VT` or `VT_Alt`. If provided the instantiated
+            node will be a value_type-typed leaf node.
+          base_node (Node): (Optional) If provided, it will be used as a template to create the new node.
+          ignore_frozen_state (bool): [If `base_node` provided] If True, the clone process of
+            base_node will ignore its current state.
+          accept_external_entanglement (bool): [If `base_node` provided] If True, during the cloning
+            process of base_node, every entangled nodes outside the current graph will be referenced
+            within the new node without being copied. Otherwise, a *Warning* message will be raised.
+          acceptance_set (set): [If `base_node` provided] If provided, will be used as a set of
+            entangled nodes that could be referenced within the new node during the cloning process.
+          copy_dico (dict): [If `base_node` provided] It is used internally during the cloning process,
+           and should not be used for any functional purpose.
+        '''
 
         self.internals = {}
         self.name = name
@@ -2960,16 +3004,13 @@ class Node(object):
         self.entangled_nodes = None
 
         self.semantics = None
-
         self.fuzz_weight = None
 
-        self.depth = 0
+        self._post_freeze_handler = None 
 
-        # Used for NonTerm Node
+        self.depth = 0
         self.tmp_ref_count = 1
 
-        self._post_freeze_handler = None
-        
         if base_node is not None and subnodes is None and values is None and value_type is None:
 
             # self.env = base_node.env
@@ -3009,7 +3050,8 @@ class Node(object):
         
         Args:
           name (str): name of the new Node instance
-          ignore_frozen_state (bool): if set to False, the clone function will produce a Node with the same state as the duplicated Node. Otherwise, the only the state won't be kept.
+          ignore_frozen_state (bool): if set to False, the clone function will produce
+            a Node with the same state as the duplicated Node. Otherwise, the only the state won't be kept.
 
         Returns:
           Node: duplicated Node object
@@ -3021,6 +3063,29 @@ class Node(object):
     def set_contents(self, base_node,
                      copy_dico=None, ignore_frozen_state=False,
                      accept_external_entanglement=False, acceptance_set=None):
+        '''Set the contents of the node based on the one provided within
+        `base_node`. This method performs a deep copy of `base_node`,
+        but some parameters can change the behavior of the copy.
+
+        .. note:: python deepcopy() is not used for perfomance reason
+          (10 to 20 times slower).
+
+        Args:
+          base_node (Node): (Optional) Used as a template to create the new node.
+          ignore_frozen_state (bool): If True, the clone process of
+            base_node will ignore its current state.
+          accept_external_entanglement (bool): If True, during the cloning
+            process of base_node, every entangled nodes outside the current graph will be referenced
+            within the new node without being copied. Otherwise, a *Warning* message will be raised.
+          acceptance_set (set): If provided, will be used as a set of
+            entangled nodes that could be referenced within the new node during the cloning process.
+          copy_dico (dict): It is used internally during the cloning process,
+            and should not be used for any functional purpose.
+
+        Returns:
+          dict: For each subnodes of `base_node` (keys), reference the
+            corresponding subnodes within the new node.
+        '''
 
         self._post_freeze_handler = base_node._post_freeze_handler
         
@@ -3136,18 +3201,47 @@ class Node(object):
 
         return node_dico
 
+    def set_fuzz_weight(self, w):
+        '''Set the fuzzing weight of the node to `w`.
+
+        The fuzz weight is an optional attribute of Node() which
+        express Data Model designer's hints for prioritizing the nodes
+        to fuzz. If set, this attribute is used by some generic
+        *disruptors* (the ones that rely on a ModelWalker object---refer to
+        fuzzing_primitives.py)
+
+        Args:
+          w (int): Value of the weight (by default every nodes has a weight of 1)
+
+        Returns:
+          None
+        '''
+        self.fuzz_weight = int(w)
+
+    def get_fuzz_weight(self):
+        '''Return the fuzzing weight of the node.
+
+        Returns:
+          int: the fuzzing weight
+        '''
+        return self.fuzz_weight
 
     def reset_fuzz_weight(self, recursive=False):
+        '''Reset to standard (1) the fuzzing weight that is associated to this
+        node, and all its subnodes if `recursive` parameter is set to `True`.
+
+        .. _test:
+
+        Args:
+          recursive (bool): if set to `True`, reset also every subnodes (all reachable nodes from this one).
+
+        Returns:
+          None
+        '''
         self.fuzz_weight = 1
         if recursive:
             for conf in self.internals:
                 self.internals[conf].reset_fuzz_weight(recursive=recursive)
-
-    def set_fuzz_weight(self, w):
-        self.fuzz_weight = int(w)
-
-    def get_fuzz_weight(self):
-        return self.fuzz_weight
 
     def add_conf(self, conf):
         # @conf could not be None or the empty string
@@ -3168,6 +3262,7 @@ class Node(object):
         return self.internals.keys()
 
     confs = property(fget=__get_confs)
+    '''Property giving all node's configurations (read only)'''
 
     def _set_subtrees_current_conf(self, node, conf, reverse, ignore_entanglement=False):
         if node.is_conf_existing(conf):
@@ -3254,9 +3349,10 @@ class Node(object):
         return self.internals
 
     cc = property(fget=__get_current_internals, fset=__set_current_internals)
+    '''Property linked to the current node's `internals` (read / write)'''
 
     c = property(fget=__get_internals)
-
+    '''Property linked to `self.internals` (read only)'''
     
     def get_internals_backup(self):
         return Node(self.name, base_node=self, accept_external_entanglement=True)
@@ -4317,7 +4413,9 @@ class Env(object):
 
 
 class DataModel(object):
-    
+    ''' The abstraction of a data model.
+    '''
+
     file_extension = 'bin'
     name = None
 
@@ -4391,6 +4489,12 @@ class DataModel(object):
         return sorted(self.__confs)
 
     def register_nodes(self, *node_list):
+        '''Enable to registers the nodes that will be part of the data
+        model. At least one node should be registered within
+        :func:`DataModel.build_data_model()` to represent the data
+        format. But several nodes can be registered in order, for instance, to
+        represent the various component of a protocol/standard/...
+        '''
         if not node_list:
             msg = "\n*** WARNING: nothing to register for " \
                   "the data model '{nm:s}'!"\

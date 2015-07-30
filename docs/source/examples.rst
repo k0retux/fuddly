@@ -1,24 +1,12 @@
-Introduction
-************
-
-TBD
-
-
-
-Tutorial
-********
-
-TBD
-
 Useful Examples
 ***************
 
 ZIP archive modification
 ========================
 
-The following example illustrates how to modify the second file
-contents of a ZIP archive, and let *fuddly* recalculate every
-constraints for you
+The following example (refer to the figure `below <#zip-example>`_)
+illustrates how to modify the second file contents of a ZIP archive,
+and let *fuddly* recalculate every constraints for you.
 
 .. highlight:: python
    :linenothreshold: 5
@@ -35,7 +23,7 @@ constraints for you
     abszip.get_value()
 
 
-.. zip_example:
+.. _zip_example:
 .. figure::  images/zip_mod.png
    :align:   center
 

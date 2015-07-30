@@ -11,7 +11,11 @@ Contents:
 .. toctree::
    :maxdepth: 4
 
-   intro
+   introduction
+
+   tutorial
+
+   examples
 
    fuzzfmk
 

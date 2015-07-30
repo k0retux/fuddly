@@ -19,6 +19,7 @@ fuzzfmk.data_model module
 
 .. automodule:: fuzzfmk.data_model
     :members:
+    :private-members:
     :show-inheritance:
 
 fuzzfmk.data_model_helpers module
@@ -34,6 +35,15 @@ fuzzfmk.value_types module
 --------------------------
 
 .. automodule:: fuzzfmk.value_types
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
+fuzzfmk.generic_data_makers module
+----------------------------------
+
+.. automodule:: fuzzfmk.generic_data_makers
     :members:
     :undoc-members:
     :show-inheritance:
@@ -56,13 +66,6 @@ fuzzfmk.value_types module
        :undoc-members:
        :show-inheritance:
 
-   fuzzfmk.generic_data_makers module
-   ----------------------------------
-
-   .. automodule:: fuzzfmk.generic_data_makers
-       :members:
-       :undoc-members:
-       :show-inheritance:
 
    fuzzfmk.logger module
    ---------------------
