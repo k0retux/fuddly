@@ -20,6 +20,7 @@ fuzzfmk.data_model module
 .. automodule:: fuzzfmk.data_model
     :members:
     :private-members:
+    :special-members:
     :show-inheritance:
 
 fuzzfmk.data_model_helpers module

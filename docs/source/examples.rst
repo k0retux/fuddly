@@ -1,3 +1,5 @@
+.. _useful-examples:
+
 Useful Examples
 ***************
 

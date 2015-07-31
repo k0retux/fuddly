@@ -49,6 +49,7 @@ Dependencies
 * For documentation generation:
   - [sphinx] [5]: sphinx >= 1.3 (with builtin napoleon extension)
   - [texlive] [6] (optional): Needed to generate PDF documentation
+  - [readthedocs theme] [7] (optional): Privileged html theme for sphinx
 
 [1]: http://pythonhosted.org/six/ "six"
 [2]: https://github.com/broadinstitute/xtermcolor "xtermcolor"
@@ -56,3 +57,4 @@ Dependencies
 [4]: https://pypi.python.org/pypi/rpyc "rpyc"
 [5]: http://sphinx-doc.org/ "sphinx"
 [6]: https://www.tug.org/texlive/
+[7]: https://github.com/snide/sphinx_rtd_theme

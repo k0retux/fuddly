@@ -363,7 +363,9 @@ class SyncScope:
     Inexistence = 3
 
 class NodeInternals(object):
-    
+    '''Base class for implementing the contents of a node.
+    '''
+
     Freezable = 1
     Mutable = 2
     Determinist = 3
@@ -2929,7 +2931,7 @@ class Node(object):
     '''A Node is the basic building-block used within a graph-based data model.
 
     Attributes:
-      internals (dict: str --> NodeInternals): Contains all the configuration of a
+      internals (dict: str --> :class:`NodeInternals`): Contains all the configuration of a
         node. A configuration is associated to the internals/contents
         of a node, which can live independently of the other
         configuration.
@@ -2941,7 +2943,7 @@ class Node(object):
         graph when the latter is registered within a data model
         (cf. :func:`DataModel.register_nodes()`). It is used for sharing
         global resources between nodes.
-      entangled_nodes (set(Node)): Collection of all the nodes entangled with this one. All
+      entangled_nodes (set(:class:`Node`)): Collection of all the nodes entangled with this one. All
         the entangled nodes will react the same way as one of their
         peers (within some extent) if this peer is subjected to a
         stimuli. The node's properties related to entanglement are
@@ -2953,7 +2955,7 @@ class Node(object):
         NonTerm
         node---cf. :func:`NodeInternals_NonTerm.get_subnodes_with_csts()`).
         But this mechanism can also be used for your own specific purpose. 
-      semantics (NodeSemantics): (optional) Used to associate a semantics to a
+      semantics (:class:`NodeSemantics`): (optional) Used to associate a semantics to a
         node. Can be used during graph traversal in order to perform
         actions related to semantics.
       fuzz_weight (int): The fuzz weight is an optional attribute of Node() which
