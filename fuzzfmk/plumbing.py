@@ -645,7 +645,17 @@ class Fuzzer(object):
                 printer_name = ', Name: ' + printer_name if printer_name is not None else ''
                 name = tg.__class__.__name__ + ' [IP: ' + tg.get_target_ip() + printer_name + ']'
             elif isinstance(tg, LocalTarget):
-                name = tg.__class__.__name__ + ' [Program: ' + tg.get_target_path() + ']'
+                pre_args = tg.get_pre_args()
+                post_args = tg.get_post_args()
+                args = ''
+                if pre_args or post_args:
+                    if pre_args is not None:
+                        args += pre_args
+                    if post_args is not None:
+                        args += post_args
+                    args = ', Args: ' + args
+
+                name = tg.__class__.__name__ + ' [Program: ' + tg.get_target_path() + args + ']'
             else:
                 desc = tg.get_description()
                 if desc is None:
@@ -1120,15 +1130,26 @@ class Fuzzer(object):
                 p = "::[ END BURST ]::\n"
             else:
                 p = None
-            self.lg.log_current_target_feedback(preamble=p)
+            ok = self.lg.log_current_target_feedback(preamble=p)
+            if not ok:
+                self._log_directly_retrieved_target_feedback(preamble=p)
 
     @EnforceOrder(accepted_states=['S2'])
     def log_target_residual_feedback(self):
         if self.__send_enabled:
             p = "\n::[ RESIDUAL TARGET FEEDBACK ]::"
             e = "::[ ------------------------ ]::\n"
-            self.lg.log_current_target_feedback(preamble=p, epilogue=e)
+            ok = self.lg.log_current_target_feedback(preamble=p, epilogue=e)
+            if not ok:
+                self._log_directly_retrieved_target_feedback(preamble=p, epilogue=e)
 
+    def _log_directly_retrieved_target_feedback(self, preamble=None, epilogue=None):
+        # This method is to be used when the target does not make use
+        # of Logger.collect_target_feedback() facility. We thus try to
+        # access the feedback from Target directly
+        tg_fbk = self.tg.get_target_feedback()
+        if tg_fbk is not None:
+            self.lg.log_target_feedback_from(tg_fbk.get_bytes(), preamble=preamble, epilogue=epilogue)
 
     @EnforceOrder(accepted_states=['S2'])
     def check_target_readiness(self):

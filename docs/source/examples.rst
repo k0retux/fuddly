@@ -10,9 +10,6 @@ The following example (refer to the figure `below <#zip-example>`_)
 illustrates how to modify the second file contents of a ZIP archive,
 and let *fuddly* recalculate every constraints for you.
 
-.. highlight:: python
-   :linenothreshold: 5
-
 .. code-block:: python
    :linenos:
 

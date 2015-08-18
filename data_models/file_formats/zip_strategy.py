@@ -26,11 +26,16 @@ from fuzzfmk.target import *
 from fuzzfmk.logger import *
 from fuzzfmk.tactics_helper import *
 
+import os
+import fuzzfmk
+app_folder = os.path.dirname(os.path.dirname(fuzzfmk.__file__))
+
 tactics = Tactics()
 
 logger = Logger('zip', data_in_seperate_file=True, explicit_export=True, export_orig=False)
 
 local_tg = LocalTarget(tmpfile_ext='.zip')
 local_tg.set_target_path('unzip')
+local_tg.set_post_args('-d ' + app_folder + os.sep + 'workspace/')
 
 targets = [local_tg]

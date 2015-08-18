@@ -9,13 +9,16 @@ Welcome to fuddly's documentation!
 Contents:
 
 .. toctree::
+   :numbered:
    :maxdepth: 4
 
-   introduction
+   overview
 
    tutorial
 
    examples
+
+   disruptors
 
    fuzzfmk
 

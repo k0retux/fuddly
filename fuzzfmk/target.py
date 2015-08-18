@@ -252,6 +252,8 @@ class LocalTarget(Target):
         self.__suffix = '{:0>12d}'.format(random.randint(2**16, 2**32))
         self.__app = None
         self.__target_path = None
+        self.__pre_args = None
+        self.__post_args = None
         self.__feedback = TargetFeedback()
         self.__tmpfile_ext = tmpfile_ext
 
@@ -260,6 +262,18 @@ class LocalTarget(Target):
 
     def get_target_path(self):
         return self.__target_path
+
+    def set_pre_args(self, pre_args):
+        self.__pre_args = pre_args
+
+    def get_pre_args(self):
+        return self.__pre_args
+
+    def set_post_args(self, post_args):
+        self.__post_args = post_args
+
+    def get_post_args(self):
+        return self.__post_args
 
     def start(self):
         if not self.__target_path:
@@ -277,22 +291,37 @@ class LocalTarget(Target):
         with open(name, 'wb') as f:
              f.write(data)
 
-        cmd = [self.__target_path, name]
-        self.__app = subprocess.Popen(args=cmd, stderr=subprocess.PIPE)
+        if self.__pre_args is not None and self.__post_args is not None:
+            cmd = [self.__target_path] + self.__pre_args.split() + [name] + self.__post_args.split()
+        elif self.__pre_args is not None:
+            cmd = [self.__target_path] + self.__pre_args.split() + [name]
+        elif self.__post_args is not None:
+            cmd = [self.__target_path, name] + self.__post_args.split()
+        else:
+            cmd = [self.__target_path, name]
+
+        self.__app = subprocess.Popen(args=cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         fl = fcntl.fcntl(self.__app.stderr, fcntl.F_GETFL)
         fcntl.fcntl(self.__app.stderr, fcntl.F_SETFL, fl | os.O_NONBLOCK)
 
-
+        fl = fcntl.fcntl(self.__app.stdout, fcntl.F_GETFL)
+        fcntl.fcntl(self.__app.stdout, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+        
     def stop_target(self):
         os.kill(self.__app.pid, signal.SIGTERM)
 
 
     def get_target_feedback(self, delay=0.2):
-        ret = select.select([self.__app.stderr], [], [], delay)
+        if self.__app is None:
+            return
+
+        ret = select.select([self.__app.stdout, self.__app.stderr], [], [], delay)
         if ret[0]:
-            err_fd = ret[0][0]
-            byte_string = err_fd.read()
+            byte_string = b''
+            for fd in ret[0][:-1]:
+                byte_string += fd.read() + '\n\n'
+            byte_string += ret[0][-1].read()
         else:
             byte_string = b''
 
