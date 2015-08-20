@@ -37,6 +37,10 @@ app_folder = os.path.dirname(os.path.dirname(fuzzfmk.__file__))
 
 
 class Target(object):
+
+    '''
+    Class abstracting the target we interact with.
+    '''
     
     def __init__(self, args=None):
         self._logger=None
@@ -114,11 +118,11 @@ class Target(object):
     def stop_target(self):
         raise NotImplementedError
 
-    def get_target_feedback(self):
-        raise NotImplementedError
-
     def is_alive(self):
         raise NotImplementedError
+
+    def get_target_feedback(self):
+        return None
 
     def get_description(self):
         return None
@@ -234,16 +238,6 @@ class PrinterTarget(Target):
             self.__connection.printFile(self.__printer_name, file_name, 'job_'+ self.__suffix + inc, {})
         except cups.IPPError as err:
             print('CUPS Server Errror: ', err)
-
-    def stop_target(self):
-        raise NotImplementedError
-
-    def get_target_feedback(self):
-        raise NotImplementedError
-
-    def is_alive(self):
-        raise NotImplementedError
-
 
 
 class LocalTarget(Target):

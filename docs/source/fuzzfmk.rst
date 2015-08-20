@@ -21,6 +21,7 @@ fuzzfmk.data_model module
     :members:
     :private-members:
     :special-members:
+    :exclude-members: __dict__, __weakref__
     :show-inheritance:
 
 fuzzfmk.data_model_helpers module
@@ -45,6 +46,24 @@ fuzzfmk.generic_data_makers module
 ----------------------------------
 
 .. automodule:: fuzzfmk.generic_data_makers
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
+fuzzfmk.target module
+---------------------
+
+.. automodule:: fuzzfmk.target
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
+fuzzfmk.tactics_helper module
+-----------------------------
+
+.. automodule:: fuzzfmk.tactics_helper
     :members:
     :undoc-members:
     :show-inheritance:
@@ -88,22 +107,6 @@ fuzzfmk.generic_data_makers module
    -----------------------
 
    .. automodule:: fuzzfmk.plumbing
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-   fuzzfmk.tactics_helper module
-   -----------------------------
-
-   .. automodule:: fuzzfmk.tactics_helper
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-   fuzzfmk.target module
-   ---------------------
-
-   .. automodule:: fuzzfmk.target
        :members:
        :undoc-members:
        :show-inheritance:

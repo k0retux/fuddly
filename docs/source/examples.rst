@@ -8,7 +8,7 @@ ZIP archive modification
 
 The following example (refer to the figure `below <#zip-example>`_)
 illustrates how to modify the second file contents of a ZIP archive,
-and let *fuddly* recalculate every constraints for you.
+and let ``fuddly`` recalculate every constraints for you.
 
 .. code-block:: python
    :linenos:
@@ -22,7 +22,7 @@ and let *fuddly* recalculate every constraints for you.
     abszip.get_value()
 
 
-.. _zip_example:
+.. _zip-example:
 .. figure::  images/zip_mod.png
    :align:   center
 

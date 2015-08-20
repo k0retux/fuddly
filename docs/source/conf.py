@@ -30,7 +30,8 @@ sys.path.insert(0, os.path.abspath('../../'))
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'sphinx.ext.todo'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -271,3 +272,5 @@ texinfo_documents = [
 #texinfo_no_detailmenu = False
 
 napoleon_include_private_with_doc = True
+
+todo_include_todos = True

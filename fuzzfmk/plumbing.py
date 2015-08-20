@@ -740,12 +740,14 @@ class Fuzzer(object):
         self.__stats_countdown = 9
 
     def __init_fmk_internals_step2(self, dm):
+        self._recompute_current_generators()
+        # need the logger active
+        self.__reset_fmk_internals()
+
+    def _recompute_current_generators(self):
         specific_gen = self.__tactics.get_generators()
         generic_gen = self._generic_tactics.get_generators()
         self.__current_gen = list(specific_gen.keys()) + list(generic_gen.keys())
-
-        # need the logger active
-        self.__reset_fmk_internals()
 
     @EnforceOrder(accepted_states=['S0','S1','S2'])
     def get_data_model_by_name(self, name):
@@ -1081,6 +1083,8 @@ class Fuzzer(object):
                                 self.lg.log_fuzzing_initial_generator(gen_type_initial, gen_name, gen_ui)
 
                         self.lg.log_fuzzing_step(num)
+
+                        # print(gen, dmaker_type, gen_type_initials)
 
                         if dmaker_type in gen:
                             dmaker_obj = self._generic_tactics.get_generator_obj(dmaker_type, data_maker_name)
@@ -1662,8 +1666,10 @@ class Fuzzer(object):
 
                     if cloned_dmaker_type in get_dmakers():
                         ok = clone_dmaker(cloned_dmaker_type, new_dmaker_type=dmaker_type, dmaker_name=provided_dmaker_name)
+                        self._recompute_current_generators()
                     elif cloned_dmaker_type in get_gen_dmakers():
                         ok = clone_gen_dmaker(cloned_dmaker_type, new_dmaker_type=dmaker_type, dmaker_name=provided_dmaker_name)
+                        self._recompute_current_generators()
                     else:
                         self.set_error(err_msg, code=Error.CloneError)
                         return None
@@ -2832,7 +2838,7 @@ class FuzzShell(cmd.Cmd):
         '''
         Reset a specified initialized Data Maker
         (Note: like cleanup_dmaker but clean also the seed if present)
-        |_ syntax: reset_dmaker
+        |_ syntax: reset_dmaker <dmaker_type> [dmaker_name]
         '''
         ret = self.do_cleanup_dmaker(line, reset_existing_seed=True)
         return ret

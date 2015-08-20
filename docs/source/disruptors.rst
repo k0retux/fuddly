@@ -3,7 +3,14 @@
 Generic Disruptor List
 **********************
 
-The current generic disruptors are presented below:
+The current generic disruptors are presented within the following
+sections.
+
+Stateless Disruptors
+====================
+
+ALT - Alternative Node Configuration
+------------------------------------
 
 .. code-block:: none
 
@@ -27,6 +34,12 @@ The current generic disruptors are presented below:
        |      |       set dynamically with the first-found existing alternate configuration]
        |      | default: None [type: str]
 
+
+C - Node Corruption
+-------------------
+
+.. code-block:: none
+
    *** Generic disruptors of type 'C' ***                                                                                                                         
      name: d_corrupt_node_bits  (weight: 4, valid: False) [stateless disruptor]
 
@@ -48,6 +61,12 @@ The current generic disruptors are presented below:
        |      | desc: if provided change the selected byte with the new one
        |      | default: None [type: str]
 
+
+Cp - Corruption at Specific Position
+------------------------------------
+
+.. code-block:: none
+
    *** Generic disruptors of type 'Cp' ***                                                                                                                        
      name: d_corrupt_bits_by_position  (weight: 4, valid: False) [stateless disruptor]
 
@@ -63,6 +82,12 @@ The current generic disruptors are presented below:
        |_ idx
        |      | desc: byte index to be corrupted (from 1 to data length)
        |      | default: 1 [type: int]
+
+
+EXT - Make Use of an External Program
+-------------------------------------
+
+.. code-block:: none
 
    *** Generic disruptors of type 'EXT' ***                                                                                                                       
      name: d_call_external_program  (weight: 1, valid: False) [stateless disruptor]
@@ -82,6 +107,12 @@ The current generic disruptors are presented below:
        |      |       program, otherwise it will be provided on the command line directly
        |      | default: True [type: bool]
 
+
+SIZE - Truncate
+---------------
+
+.. code-block:: none
+
    *** Generic disruptors of type 'SIZE' ***                                                                                                                      
      name: d_max_size  (weight: 4, valid: False) [stateless disruptor]
 
@@ -96,6 +127,12 @@ The current generic disruptors are presented below:
        |      |       apply
        |      | default: None [type: str]
 
+
+STRUCT - Shake Up Data Structure
+--------------------------------
+
+.. code-block:: none
+
    *** Generic disruptors of type 'STRUCT' ***                                                                                                                    
      name: d_fuzz_model_structure  (weight: 1, valid: False) [stateless disruptor]
 
@@ -107,6 +144,15 @@ The current generic disruptors are presented below:
        |      | desc: graph path regexp to select nodes on which the disruptor should 
        |      |       apply
        |      | default: None [type: str]
+
+
+Stateful Disruptors
+===================
+
+tALT - Walk Through Alternative Node Configurations
+---------------------------------------------------
+
+.. code-block:: none
 
    *** Generic disruptors of type 'tALT' ***                                                                                                                      
      name: d_switch_to_alternate_conf  (weight: 1, valid: False) [stateful disruptor]
@@ -139,6 +185,12 @@ The current generic disruptors are presented below:
        |      |       all subnodes fetched by @path, one-by-one. [default value is 
        |      |       set dynamically with the first-found existing alternate configuration]
        |      | default: None [type: str, list, tuple]
+
+
+tTERM - Basic Alteration of Terminal Node
+-----------------------------------------
+
+.. code-block:: none
 
    *** Generic disruptors of type 'tTERM' ***                                                                                                                     
      name: d_fuzz_terminal_nodes  (weight: 1, valid: False) [stateful disruptor]
@@ -175,6 +227,11 @@ The current generic disruptors are presented below:
        |_ ascii
        |      | desc: enforce all outputs to be ascii 7bits
        |      | default: False [type: bool]
+
+tTYPE - Advanced Alteration of Terminal Typed Node
+--------------------------------------------------
+
+.. code-block:: none
 
    *** Generic disruptors of type 'tTYPE' ***
      name: d_fuzz_typed_nodes  (weight: 1, valid: False) [stateful disruptor]
@@ -214,6 +271,12 @@ The current generic disruptors are presented below:
        |      | desc: when set to True, if a node structure has changed, the modelwalker 
        |      |       will reset its walk through the children nodes
        |      | default: True [type: bool]
+
+
+tWALK - Walk Through a Data Model
+---------------------------------
+
+.. code-block:: none
 
    *** Generic disruptors of type 'tWALK' ***
      name: d_iter_over_data  (weight: 1, valid: False) [stateful disruptor]

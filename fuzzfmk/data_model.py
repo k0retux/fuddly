@@ -32,7 +32,6 @@ import copy
 import re
 import binascii
 import collections
-import weakref
 import traceback
 
 sys.path.append('.')
