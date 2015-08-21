@@ -2660,7 +2660,7 @@ class FuzzShell(cmd.Cmd):
     def do_launch_operator_noseed(self, line):
         '''
         Launch the specified operator without using any current seed
-        |_ syntax: launch_operator  <op_name>
+        |_ syntax: launch_operator_noseed  <op_name>
         '''
         ret = self.do_launch_operator(line, use_existing_seed=False)
         return ret
@@ -2669,7 +2669,7 @@ class FuzzShell(cmd.Cmd):
     def do_launch_operator_verbose(self, line):
         '''
         Launch the specified operator and use any existing seed (pretty print enabled)
-        |_ syntax: launch_operator <op_name>
+        |_ syntax: launch_operator_verbose <op_name>
         '''
         ret = self.do_launch_operator(line, use_existing_seed=False, verbose=True)
         return ret

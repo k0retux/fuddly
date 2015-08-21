@@ -18,30 +18,41 @@ considering like using malformed data, playing around the protocol
 sequencing, and so on.  Fuzzing is similar to what is termed *fault
 injection* in the field of *dependability*.
 
-Our main objective are:
+``fuddly`` is a fuzzing and data manipulation framework whose main
+objectives are:
 
-- To allow users to build a unique data model mixing very accurate
-  representations for certain aspects with much coarser ones for
-  others that are outside the focus of the testing; leaving open the
-  way of refining the other parts should the need arise. We also imply
-  with this objective to be able to mix up generation and mutation
-  fuzzing techniques.
+* To allow users to build data model that:
 
-- To represent the data in a way that simplify the process of
-  fuzzing and especially to enable the implementation of sophisticated
-  transformations. By ''sophisticated'' we mean the capability to act
-  on any data part (that is not necessarily contiguous) while
-  preserving consistency of dependent parts if so desired. This
-  amounts to allowing transformations to be articulated around
-  syntactic criteria---*e.g.*, modification a specific field---or
-  semantic ones---*e.g.*, transformation of the *n*:sup:`th`
-  page of a PDF file.
+  - mix very accurate representations for certain aspects with much
+    coarser ones for others that are outside the focus of the testing;
+    leaving open the way of refining the other parts should the need
+    arise;
 
-- To be able to follow a protocol in order to put the target in
-  a specific state before starting the fuzzing, while keeping the
-  capability to deviate from the protocol requirements. This last
-  option is especially useful to allow exploring other fuzzing facets
-  based on protocol sequencing, timing constraints, and so on.
+  - may be combined with each other;
+
+  - enable to dissect raw data for analyzing them and enable to absorb
+    them within the data model for manipulation;
+
+  - enable to mix up generation and mutation
+    fuzzing techniques.
+
+* To represent the data in a way that simplify the process of fuzzing
+  and especially to enable the implementation of elaborated
+  transformations. By ''elaborated'' we mean the capability to act on
+  any data part (that is not necessarily contiguous) while preserving
+  consistency of dependent parts if so desired. This amounts to
+  allowing transformations to be articulated around syntactic
+  criteria---*e.g.*, modification of an integer depending on the size
+  of the field hosting it---or semantic ones---*e.g.*, alteration of a
+  value regarding its meaning for a given data format or protocol,
+  alteration of specific data sub-parts forming a sound group for a
+  given data format or protocol.
 
 
-.. todo:: Add & translate part of SSTIC article
+* To automate the fuzzing process relying on various fuddly's
+  sub-systems enabling: the communication with the target, to follow
+  and monitor its behavior and to act accordingly (*e.g.*, deviate
+  from the protocol requirements like sequencing, timing constraints,
+  and so on), thanks to data model search and modification
+  primitives, while recording every piece of information generated
+  during this process and enabling to replay it. 

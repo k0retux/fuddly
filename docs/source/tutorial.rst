@@ -26,7 +26,10 @@ running the ``./client.py`` script.
        shell = FuzzShell("FuzzShell", fuzzer)
        shell.cmdloop()
 
-Start a fuzzing session
+
+.. _tuto:start-fuzzshell:
+
+Start a Fuzzing Session
 -----------------------
 
 After running this script you should be prompted with something like
@@ -607,7 +610,9 @@ the cloned data makers::
   >> send ZIP_00#new tTYPE#new
 
 
-.. todo:: Tackle *data seeds* topic.
+.. todo:: Tackle *data seeds* topic, useful for replays (as an
+          alternative to replay commands that may consume lots of
+          memory).
 
 
 
@@ -633,14 +638,63 @@ is already loaded, simply issue the command ``enable_data_model
 <data_model_name>`` to let fuddly do the job for you.
 
 
-Use an Operator to send malformed ZIP files
--------------------------------------------
+Use an Operator to send malformed data
+--------------------------------------
 
+``Operators`` (\ :class:`fuzzfmk.tactics_helper.Operator`) are useful
+to automate the fuzzing process, that is to automatically collect
+target feedback when its worth it, to automatically save test cases
+that affect the target and to automatically decide on the following
+steps based on thoughtful criteria.
 
+Let's take the example of an already defined operator that
+targets programs handling JPG files.
 
+.. seealso:: To define your own operators refer to
+             :ref:`tuto:operator`.
 
+First, we need to load the JPG data model and select a target we want
+to fuzz, for instance the ``display`` program. You can do it in one
+line by issuing the following command::
 
+  >> enable_data_model jpg 1
 
+The last parameter is the identifier of the target. It's a shortcut to
+what have been presented in section :ref:`tuto:start-fuzzshell`. If
+you issue the command ``show_targets`` you will notice the enabled
+target as it is highlighted in the console, like you can see in the
+figure `bellow <#target-enabled>`_.
+
+.. _target-enabled:
+.. figure::  images/target_enabled.png
+   :align:   center
+
+Then, you can look at the available operators and learn about their
+parameters by issuing the command::
+
+  >> show_operators
+
+This command will display the `following <#operator-show>`_:
+
+.. _operator-show:
+.. figure::  images/operator_show.png
+   :align:   center
+
+To launch the operator ``Op1`` and limit to 5 the number of test cases to
+run, issue the command::
+
+  >> launch_operator Op1<max_steps=5>
+
+This will trigger the Operator that will execute the ``display``
+program with the first generated JPG file. It will look at ``stdout``
+and ``stderr`` for error messages, or look for any crashes, and if
+such a situation occurs, will save the related JPG file under
+``exported_data/jpg/`` and log everything under ``trace/``. It will
+also try to avoid saving JPG files that trigger errors whose type has
+already been seen. Once the operator is all done with this first test
+case, it can plan the next actions it needs ``fuddly`` to perform for
+it. In our case, it will go on with the next iteration of a disruptor
+chain, basically ``JPG<finite=True> tTYPE``.
 
 
 
@@ -659,13 +713,24 @@ fuddly>/data_models/[file_formats|protocol]``:
    what is important is to use the same prefix for these two
    files, and to conform to the template.
 
-
 .. _data-model:
 
-Defining the Data Model
------------------------
+Data Modeling
+-------------
 
-.. note:: Defined within ``mydf.py``
+Overview
+++++++++
+
+
+
+
+
+
+Defining the Imaginary myDF Data Model
+++++++++++++++++++++++++++++++++++++++
+
+.. note:: The implementation of the data model shall reside within
+          ``mydf.py``.
 
 .. code-block:: python
    :linenos:
@@ -751,11 +816,48 @@ Defining Specific Disruptors
 
 .. _tuto:operator:
 
-Defining Probes and Operators
+Defining Operators and Probes
 -----------------------------
 
+In order to automatize what a human operator could perform to interact
+with one or more targets, the abstracted class
+:class:`fuzzfmk.tactics_helper.Operator` can be inherited. The purpose
+of this class is to give you the opportunity to plan the operations
+you want to perform on the target (data type to send, type of
+modifications to perform on data before sending it, and so on). Thus,
+you could embeds all the protocol logic to be able to adapt the
+fuzzing strategy based on various criteria---{\em e.g.}, monitoring
+feedback, operator choices, and so on. By default, the operator is
+recalled after each data emission to the target, but it can also
+provide to fuddly a batch of instructions, that will be executed prior
+to its recall. You have also the ability to stimulate the target
+through its different I/O interfaces in parallel, while each of the
+inputs followed a specific protocol. Obviously, a monitoring
+infrastructure is available to support you during the decision
+process.
+
+.. seealso:: The monitoring infrastructure enables the creation of
+             independent probes to watch or measure any kinds of
+             parameters linked to the target or anything else. Refer
+             to :ref:`tuto:probes` to learn how to create them.
+
+.. seealso:: To implement complex protocol logic, using a state
+             machine library as `toysm
+             <https://github.com/willakat/toysm>`_ can be helpful.
 
 
+
+Operators
++++++++++
+
+
+
+
+
+.. _tuto:probes:
+
+Probes & The Monitoring Subsystem
++++++++++++++++++++++++++++++++++
 
 
 
