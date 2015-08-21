@@ -47,15 +47,12 @@ from fuzzfmk.monitor import *
 import fuzzfmk.generic_data_makers
 import fuzzfmk.error_handling as eh
 
-FUZZER_FMK_VERSION = '0.18'
-
 import data_models
-import fuzzfmk
-fuzzfmk_folder = os.path.dirname(fuzzfmk.__file__)
-app_folder = os.path.dirname(os.path.dirname(fuzzfmk.__file__))
+
+from fuzzfmk.global_resources import *
+
 
 sig_int_handler = signal.getsignal(signal.SIGINT)
-
 
 r_pyfile = re.compile(".*\.py$")
 def is_python_file(fname):
@@ -2211,7 +2208,7 @@ class FuzzShell(cmd.Cmd):
         cmd.Cmd.__init__(self, completekey, stdin, stdout)
         self.fz = fuzzer
         self.prompt = '>> '
-        self.intro = colorize(FontStyle.BOLD + "\n-=[ %s ]=- (with Fuzzer FmK %s)\n" % (title, FUZZER_FMK_VERSION), rgb=Color.TITLE)
+        self.intro = colorize(FontStyle.BOLD + "\n-=[ %s ]=- (with Fuddly FmK %s)\n" % (title, fuddly_version), rgb=Color.TITLE)
 
         self.__allowed_cmd = re.compile(
             '^quit$|^show_data_models$|^use_data_model|^set_target|^show_targets$|^enable_fuzzing$' \

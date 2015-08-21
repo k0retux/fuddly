@@ -26,8 +26,7 @@
 import sys
 import os
 
-import fuzzfmk
-app_folder = os.path.dirname(os.path.dirname(fuzzfmk.__file__))
+from fuzzfmk.global_resources import *
 from fuzzfmk.plumbing import *
 
 sys.path.insert(0, os.path.join(app_folder, 'external_libs'))

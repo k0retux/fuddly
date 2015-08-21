@@ -38,10 +38,8 @@ sys.path.append('.')
 
 from fuzzfmk.basic_primitives import *
 from libs.external_modules import *
+from fuzzfmk.global_resources import *
 
-import fuzzfmk
-fuzzfmk_folder = os.path.dirname(fuzzfmk.__file__)
-app_folder = os.path.dirname(os.path.dirname(fuzzfmk.__file__))
 
 DEBUG = False
 

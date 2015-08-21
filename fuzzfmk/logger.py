@@ -28,12 +28,9 @@ import threading
 
 from libs.external_modules import *
 from fuzzfmk.data_model import Data
+from fuzzfmk.global_resources import *
 
 import data_models
-import fuzzfmk
-fuzzfmk_folder = os.path.dirname(fuzzfmk.__file__)
-app_folder = os.path.dirname(os.path.dirname(fuzzfmk.__file__))
-
 
 class Stats:
     def __init__(self, generic_generators):
