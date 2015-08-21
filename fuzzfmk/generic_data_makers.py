@@ -37,7 +37,7 @@ from fuzzfmk.basic_primitives import *
 from fuzzfmk.value_types import *
 from fuzzfmk.data_model_helpers import GENERIC_ARGS
 
-app_folder = os.path.dirname(os.path.dirname(fuzzfmk.__file__))
+from fuzzfmk.global_resources import *
 
 tactics = Tactics()
 

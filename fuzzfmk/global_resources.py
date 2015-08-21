@@ -24,6 +24,8 @@
 import os
 import fuzzfmk
 
+fuddly_version = '0.18.1'
+
 fuzzfmk_folder = os.path.dirname(fuzzfmk.__file__)
 app_folder = os.path.dirname(os.path.dirname(fuzzfmk.__file__))
 
