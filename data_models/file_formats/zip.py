@@ -100,10 +100,12 @@ class ZIP_DataModel(DataModel):
              {'name': 'start_padding',
               'contents': String(size=0),
               'qty': (0,1),
+              'clear_attrs': [NodeInternals.Mutable],
               'alt': [
                   {'conf': 'ABS',
                    'contents': String(size=0),
                    'set_attrs': [NodeInternals.Abs_Postpone],
+                   'clear_attrs': [NodeInternals.Mutable],
                    'absorb_csts': AbsNoCsts()}
               ]},
              {'name': 'file_list',

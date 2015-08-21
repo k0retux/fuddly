@@ -28,12 +28,9 @@ import threading
 
 from libs.external_modules import *
 from fuzzfmk.data_model import Data
+from fuzzfmk.global_resources import *
 
 import data_models
-import fuzzfmk
-fuzzfmk_folder = os.path.dirname(fuzzfmk.__file__)
-app_folder = os.path.dirname(os.path.dirname(fuzzfmk.__file__))
-
 
 class Stats:
     def __init__(self, generic_generators):
@@ -178,13 +175,6 @@ class Logger(object):
         msg = p + "*** [ %s ] ***" % info + s
         self.log_fn(msg, rgb=rgb)
 
-    def log_target_feedback_from_operator(self, feedback):
-        if sys.version_info[0] > 2 and isinstance(feedback, bytes):
-            feedback = feedback.decode('latin_1')
-
-        self.log_fn("### Target Feedback (collected from the Operator):", rgb=Color.FEEDBACK)
-        self.log_fn(feedback)
-
     def collect_target_feedback(self, fbk):
         if sys.version_info[0] > 2 and isinstance(fbk, bytes):
             fbk = fbk.decode('latin_1')
@@ -197,8 +187,8 @@ class Logger(object):
             self._tg_fbk = []
 
         if not fbk_list:
-            # self.log_fn("\n::[ NO TARGET FEEDBACK ]::\n")
-            return
+            # self.log_fn("\n::[ NO TARGET FEEDBACK ]::\n") 
+            return False
 
         if preamble is not None:
             self.log_fn(preamble)
@@ -211,7 +201,36 @@ class Logger(object):
             self.log_fn(epilogue)
 
         self.print_console('\n')
+
+        return True
         
+    def log_target_feedback_from(self, feedback, preamble=None, epilogue=None):
+        feedback = self._decode_target_feedback(feedback)
+
+        if preamble is not None:
+            self.log_fn(preamble)
+
+        if not feedback:
+            self.log_fn("### No Target Feedback!", rgb=Color.FEEDBACK)
+        else:
+            self.log_fn("### Target Feedback:", rgb=Color.FEEDBACK)
+            self.log_fn(feedback)
+
+        if epilogue is not None:
+            self.log_fn(epilogue)
+
+    def log_target_feedback_from_operator(self, feedback):
+        feedback = self._decode_target_feedback(feedback)
+        if not feedback:
+            self.log_fn("### No Target Feedback!", rgb=Color.FEEDBACK)
+        else:
+            self.log_fn("### Target Feedback (collected from the Operator):", rgb=Color.FEEDBACK)
+            self.log_fn(feedback)
+
+    def _decode_target_feedback(self, feedback):
+        if sys.version_info[0] > 2 and isinstance(feedback, bytes):
+            feedback = feedback.decode('latin_1')        
+        return feedback.strip()
 
     def start_new_log_entry(self, preamble=''):
         self.__idx += 1

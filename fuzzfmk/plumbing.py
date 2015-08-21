@@ -47,15 +47,12 @@ from fuzzfmk.monitor import *
 import fuzzfmk.generic_data_makers
 import fuzzfmk.error_handling as eh
 
-FUZZER_FMK_VERSION = '0.18'
-
 import data_models
-import fuzzfmk
-fuzzfmk_folder = os.path.dirname(fuzzfmk.__file__)
-app_folder = os.path.dirname(os.path.dirname(fuzzfmk.__file__))
+
+from fuzzfmk.global_resources import *
+
 
 sig_int_handler = signal.getsignal(signal.SIGINT)
-
 
 r_pyfile = re.compile(".*\.py$")
 def is_python_file(fname):
@@ -645,7 +642,17 @@ class Fuzzer(object):
                 printer_name = ', Name: ' + printer_name if printer_name is not None else ''
                 name = tg.__class__.__name__ + ' [IP: ' + tg.get_target_ip() + printer_name + ']'
             elif isinstance(tg, LocalTarget):
-                name = tg.__class__.__name__ + ' [Program: ' + tg.get_target_path() + ']'
+                pre_args = tg.get_pre_args()
+                post_args = tg.get_post_args()
+                args = ''
+                if pre_args or post_args:
+                    if pre_args is not None:
+                        args += pre_args
+                    if post_args is not None:
+                        args += post_args
+                    args = ', Args: ' + args
+
+                name = tg.__class__.__name__ + ' [Program: ' + tg.get_target_path() + args + ']'
             else:
                 desc = tg.get_description()
                 if desc is None:
@@ -730,12 +737,14 @@ class Fuzzer(object):
         self.__stats_countdown = 9
 
     def __init_fmk_internals_step2(self, dm):
+        self._recompute_current_generators()
+        # need the logger active
+        self.__reset_fmk_internals()
+
+    def _recompute_current_generators(self):
         specific_gen = self.__tactics.get_generators()
         generic_gen = self._generic_tactics.get_generators()
         self.__current_gen = list(specific_gen.keys()) + list(generic_gen.keys())
-
-        # need the logger active
-        self.__reset_fmk_internals()
 
     @EnforceOrder(accepted_states=['S0','S1','S2'])
     def get_data_model_by_name(self, name):
@@ -1072,6 +1081,8 @@ class Fuzzer(object):
 
                         self.lg.log_fuzzing_step(num)
 
+                        # print(gen, dmaker_type, gen_type_initials)
+
                         if dmaker_type in gen:
                             dmaker_obj = self._generic_tactics.get_generator_obj(dmaker_type, data_maker_name)
                             if dmaker_obj is None:
@@ -1120,15 +1131,26 @@ class Fuzzer(object):
                 p = "::[ END BURST ]::\n"
             else:
                 p = None
-            self.lg.log_current_target_feedback(preamble=p)
+            ok = self.lg.log_current_target_feedback(preamble=p)
+            if not ok:
+                self._log_directly_retrieved_target_feedback(preamble=p)
 
     @EnforceOrder(accepted_states=['S2'])
     def log_target_residual_feedback(self):
         if self.__send_enabled:
             p = "\n::[ RESIDUAL TARGET FEEDBACK ]::"
             e = "::[ ------------------------ ]::\n"
-            self.lg.log_current_target_feedback(preamble=p, epilogue=e)
+            ok = self.lg.log_current_target_feedback(preamble=p, epilogue=e)
+            if not ok:
+                self._log_directly_retrieved_target_feedback(preamble=p, epilogue=e)
 
+    def _log_directly_retrieved_target_feedback(self, preamble=None, epilogue=None):
+        # This method is to be used when the target does not make use
+        # of Logger.collect_target_feedback() facility. We thus try to
+        # access the feedback from Target directly
+        tg_fbk = self.tg.get_target_feedback()
+        if tg_fbk is not None:
+            self.lg.log_target_feedback_from(tg_fbk.get_bytes(), preamble=preamble, epilogue=epilogue)
 
     @EnforceOrder(accepted_states=['S2'])
     def check_target_readiness(self):
@@ -1641,8 +1663,10 @@ class Fuzzer(object):
 
                     if cloned_dmaker_type in get_dmakers():
                         ok = clone_dmaker(cloned_dmaker_type, new_dmaker_type=dmaker_type, dmaker_name=provided_dmaker_name)
+                        self._recompute_current_generators()
                     elif cloned_dmaker_type in get_gen_dmakers():
                         ok = clone_gen_dmaker(cloned_dmaker_type, new_dmaker_type=dmaker_type, dmaker_name=provided_dmaker_name)
+                        self._recompute_current_generators()
                     else:
                         self.set_error(err_msg, code=Error.CloneError)
                         return None
@@ -2184,7 +2208,7 @@ class FuzzShell(cmd.Cmd):
         cmd.Cmd.__init__(self, completekey, stdin, stdout)
         self.fz = fuzzer
         self.prompt = '>> '
-        self.intro = colorize(FontStyle.BOLD + "\n-=[ %s ]=- (with Fuzzer FmK %s)\n" % (title, FUZZER_FMK_VERSION), rgb=Color.TITLE)
+        self.intro = colorize(FontStyle.BOLD + "\n-=[ %s ]=- (with Fuddly FmK %s)\n" % (title, fuddly_version), rgb=Color.TITLE)
 
         self.__allowed_cmd = re.compile(
             '^quit$|^show_data_models$|^use_data_model|^set_target|^show_targets$|^enable_fuzzing$' \
@@ -2633,7 +2657,7 @@ class FuzzShell(cmd.Cmd):
     def do_launch_operator_noseed(self, line):
         '''
         Launch the specified operator without using any current seed
-        |_ syntax: launch_operator  <op_name>
+        |_ syntax: launch_operator_noseed  <op_name>
         '''
         ret = self.do_launch_operator(line, use_existing_seed=False)
         return ret
@@ -2642,7 +2666,7 @@ class FuzzShell(cmd.Cmd):
     def do_launch_operator_verbose(self, line):
         '''
         Launch the specified operator and use any existing seed (pretty print enabled)
-        |_ syntax: launch_operator <op_name>
+        |_ syntax: launch_operator_verbose <op_name>
         '''
         ret = self.do_launch_operator(line, use_existing_seed=False, verbose=True)
         return ret
@@ -2811,7 +2835,7 @@ class FuzzShell(cmd.Cmd):
         '''
         Reset a specified initialized Data Maker
         (Note: like cleanup_dmaker but clean also the seed if present)
-        |_ syntax: reset_dmaker
+        |_ syntax: reset_dmaker <dmaker_type> [dmaker_name]
         '''
         ret = self.do_cleanup_dmaker(line, reset_existing_seed=True)
         return ret

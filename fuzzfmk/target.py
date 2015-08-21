@@ -29,14 +29,14 @@ import select
 import signal
 
 from libs.external_modules import *
-
 import data_models
-import fuzzfmk
-fuzzfmk_folder = os.path.dirname(fuzzfmk.__file__)
-app_folder = os.path.dirname(os.path.dirname(fuzzfmk.__file__))
-
+from fuzzfmk.global_resources import *
 
 class Target(object):
+
+    '''
+    Class abstracting the target we interact with.
+    '''
     
     def __init__(self, args=None):
         self._logger=None
@@ -114,11 +114,11 @@ class Target(object):
     def stop_target(self):
         raise NotImplementedError
 
-    def get_target_feedback(self):
-        raise NotImplementedError
-
     def is_alive(self):
         raise NotImplementedError
+
+    def get_target_feedback(self):
+        return None
 
     def get_description(self):
         return None
@@ -158,6 +158,7 @@ class PrinterTarget(Target):
         self.__feedback = TargetFeedback()
         self.__tmpfile_ext = tmpfile_ext
         self.__target_ip = None
+        self.__target_port = None
         self.__printer_name = None
         self.__cpt = None
 
@@ -166,6 +167,12 @@ class PrinterTarget(Target):
 
     def get_target_ip(self):
         return self.__target_ip
+
+    def set_target_port(self, target_port):
+        self.__target_port = target_port
+
+    def get_target_port(self):
+        return self.__target_port
 
     def set_printer_name(self, printer_name):
         self.__printer_name = printer_name
@@ -184,7 +191,12 @@ class PrinterTarget(Target):
             print('/!\\ ERROR /!\\: the PrinterTarget IP has not been set')
             return False
 
+        if self.__target_port is None:
+            self.__target_port = 631
+
         cups.setServer(self.__target_ip)
+        cups.setPort(self.__target_port)
+
         self.__connection = cups.Connection()
 
         try:
@@ -223,16 +235,6 @@ class PrinterTarget(Target):
         except cups.IPPError as err:
             print('CUPS Server Errror: ', err)
 
-    def stop_target(self):
-        raise NotImplementedError
-
-    def get_target_feedback(self):
-        raise NotImplementedError
-
-    def is_alive(self):
-        raise NotImplementedError
-
-
 
 class LocalTarget(Target):
 
@@ -240,6 +242,8 @@ class LocalTarget(Target):
         self.__suffix = '{:0>12d}'.format(random.randint(2**16, 2**32))
         self.__app = None
         self.__target_path = None
+        self.__pre_args = None
+        self.__post_args = None
         self.__feedback = TargetFeedback()
         self.__tmpfile_ext = tmpfile_ext
 
@@ -248,6 +252,18 @@ class LocalTarget(Target):
 
     def get_target_path(self):
         return self.__target_path
+
+    def set_pre_args(self, pre_args):
+        self.__pre_args = pre_args
+
+    def get_pre_args(self):
+        return self.__pre_args
+
+    def set_post_args(self, post_args):
+        self.__post_args = post_args
+
+    def get_post_args(self):
+        return self.__post_args
 
     def start(self):
         if not self.__target_path:
@@ -265,22 +281,37 @@ class LocalTarget(Target):
         with open(name, 'wb') as f:
              f.write(data)
 
-        cmd = [self.__target_path, name]
-        self.__app = subprocess.Popen(args=cmd, stderr=subprocess.PIPE)
+        if self.__pre_args is not None and self.__post_args is not None:
+            cmd = [self.__target_path] + self.__pre_args.split() + [name] + self.__post_args.split()
+        elif self.__pre_args is not None:
+            cmd = [self.__target_path] + self.__pre_args.split() + [name]
+        elif self.__post_args is not None:
+            cmd = [self.__target_path, name] + self.__post_args.split()
+        else:
+            cmd = [self.__target_path, name]
+
+        self.__app = subprocess.Popen(args=cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         fl = fcntl.fcntl(self.__app.stderr, fcntl.F_GETFL)
         fcntl.fcntl(self.__app.stderr, fcntl.F_SETFL, fl | os.O_NONBLOCK)
 
-
+        fl = fcntl.fcntl(self.__app.stdout, fcntl.F_GETFL)
+        fcntl.fcntl(self.__app.stdout, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+        
     def stop_target(self):
         os.kill(self.__app.pid, signal.SIGTERM)
 
 
     def get_target_feedback(self, delay=0.2):
-        ret = select.select([self.__app.stderr], [], [], delay)
+        if self.__app is None:
+            return
+
+        ret = select.select([self.__app.stdout, self.__app.stderr], [], [], delay)
         if ret[0]:
-            err_fd = ret[0][0]
-            byte_string = err_fd.read()
+            byte_string = b''
+            for fd in ret[0][:-1]:
+                byte_string += fd.read() + '\n\n'
+            byte_string += ret[0][-1].read()
         else:
             byte_string = b''
 

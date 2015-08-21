@@ -27,11 +27,8 @@ import datetime
 import time
 
 from libs.external_modules import *
-
 import data_models
-import fuzzfmk
-fuzzfmk_folder = os.path.dirname(fuzzfmk.__file__)
-app_folder = os.path.dirname(os.path.dirname(fuzzfmk.__file__))
+from fuzzfmk.global_resources import *
 
 
 class MonitorCondition(object):

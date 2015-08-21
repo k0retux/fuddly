@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 ################################################################################
 #
 #  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
@@ -23,19 +21,12 @@
 #
 ################################################################################
 
-import sys
 import os
+import fuzzfmk
 
-from fuzzfmk.global_resources import *
-from fuzzfmk.plumbing import *
+fuddly_version = '0.18.1'
 
-sys.path.insert(0, os.path.join(app_folder, 'external_libs'))
+fuzzfmk_folder = os.path.dirname(fuzzfmk.__file__)
+app_folder = os.path.dirname(os.path.dirname(fuzzfmk.__file__))
 
-if __name__ == "__main__":
-
-    fuzzer = Fuzzer()
-
-    shell = FuzzShell("FuzzShell", fuzzer)
-    shell.cmdloop()
-
-    sys.exit(0)
+workspace_folder = app_folder + os.sep + 'workspace/'

@@ -25,6 +25,7 @@ from fuzzfmk.plumbing import *
 from fuzzfmk.target import *
 from fuzzfmk.logger import *
 from fuzzfmk.tactics_helper import *
+import fuzzfmk.global_resources as gr
 
 tactics = Tactics()
 
@@ -32,5 +33,6 @@ logger = Logger('zip', data_in_seperate_file=True, explicit_export=True, export_
 
 local_tg = LocalTarget(tmpfile_ext='.zip')
 local_tg.set_target_path('unzip')
+local_tg.set_post_args('-d ' + gr.workspace_folder)
 
 targets = [local_tg]
