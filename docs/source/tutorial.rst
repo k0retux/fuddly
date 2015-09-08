@@ -172,7 +172,7 @@ which will invoke the ``unzip`` program with a ZIP file:
    ...
    >> 
 
-Note that a :class:`fuzzfmk.data_model.DataModel` can define any number of data
+Note that a :class:`fuzzfmk.data_model_helpers.DataModel` can define any number of data
 types---to model for instance the various atoms within a data format,
 or to represent some specific use cases, ...
 
@@ -721,9 +721,175 @@ Data Modeling
 Overview
 ++++++++
 
+Within fuddly data representation is performed through the description
+of a directed acyclic graph whose terminal nodes describe the
+different parts of a data format and the arcs---which can be of
+different kinds---capture its structure. This graph includes syntactic
+and semantic information of the data format. Using a graph as a data
+model enables to represent various kind of data format with
+flexibility. By flexibility we mean the possibility to mix accurate
+representations for certain aspects with much coarser ones for
+others---e.g., modeling accurately only the data parts which are
+assumed to be complex to handle by the target---and a high-level of
+expressiveness.
+
+.. _dm-mapping:
+.. figure::  images/dm_mapping.png
+   :align:   center
+   :scale:   50 %
+
+   Data Representation
+
+From this model, data can be generated (look at the figure
+:ref:`dm-gen`) and existing raw data can be absorbed. This latter
+operation is a projection of the existing raw data within the data
+model (see the example :ref:`ex:zip-mod` and also the section
+:ref:`tuto:dm-absorption`). Data generation allows to create data that
+conforms to the model if we want to iteract correctly with the target,
+or to create degenerate data if we want to assess target
+robustness. Data absorption can allow to generate data from existing
+ones if the model is not accurate enough to generate correct data by
+itself; or to understand the target outputs in order to interact
+correctly with it or not.
+
+.. _dm-gen:
+.. figure::  images/dm_gen.png
+   :align:   center
+   :scale:   40 %
+
+   Data Generation
+
+Generating data boils down to walk the graph that model the data
+format. After each traversal, a data is produced and each traversal
+make the graph evolving, in a deterministic or random way depending on
+your intent. Graph walking is also a way to perform node alteration on
+the fly (through entities called *disruptors*).
+
+.. seealso:: Refer to :ref:`tuto:disruptors` to learn how to perform
+             modification of data generated from the model. Refer to
+             :ref:`tuto:dmaker-chain` in order to play with existing
+             generic disruptors within the frame of the ``fuddly``
+             shell.
+
+Different kinds of node are defined within fuddly in order to model
+data:
+
+- Terminal nodes with typed-value contents (e.g., ``UINT16``,
+  ``BitField``, ``String``, ...)
+
+- Non-terminal nodes that are used to define the data format
+  structure. They put in order the different parts of a data format,
+  and can even specify a grammar to express a more complex assembly.
+
+- *Generator* nodes that are used to dynamically generate a part of
+  the graph according to other nodes (from within the graph itself or
+  not) and/or other criteria provided as parameters.
+
+.. _dm-nodes:
+.. figure::  images/dm_nodes.png
+   :align:   center
+   :scale:   60 %
+
+   Node Types
+
+The structure of a data format is grasped by the links between the
+graph nodes. Within ``fuddly`` data model, we distinguish three kinds
+of links:
+
+- Parent-child links which define a basic structure between the graph
+  nodes. They are ruled by non-terminal nodes.
+
+- Links associated to specific criteria that condition some part of
+  the graph. For instance, node generation can be associated to the
+  existence of another one; different node set can be synchronized
+  relatively to their cardinality.
+
+.. _dm-constraints:
+.. figure::  images/dm_constraints.png
+   :align:   center
+
+   Node Constraints
+
+- Links defined between generator nodes and their parameter
+  nodes. They are especially useful when a complex relationship exist
+  between multiple nodes. The generator nodes are then used to rule
+  this relationship by defining it through a function.
+
+Additionally, for each node can be defined alternative configurations,
+enabling for instance to dynamically change a terminal node in a
+non-terminal node or a generator node. These configurations can be
+added dynamically and switched at any times even during the graph
+traversal. This feature can be leveraged to capture different facets
+of a data format within the same data model; while offering the
+possibility to work on only one view at a time. It can also be useful
+for absorption. Indeed, this operation can require to model some part
+of the data format in a way different from the one took on for the
+generation. The alternative configurations enable to aggregate these
+differences within the same data model.
+
+Finally, it is also possible to associate various kind of attributes
+to the nodes:
+
+- classic ones like Mutable, Determinist, Finite, ...
+
+- semantic ones that allows to group nodes based on some specific
+  meanings (for instance a PDF page), in order to enable higher level
+  data manipulation.
+
+- user-defined ones for specifying specific semantics to the nodes to
+  enable enhanced data modification.
+
+A First Example
++++++++++++++++
+
+In order to create a data model, ``fuddly``'s low-level primitives can
+be used, or more simply the high-level infrastructure that create the
+model from kind of JSON representation. For complex case, the two
+approaches could be complementary. Moreover data models can also use
+other data models whether the need arises.
+
+Let's look at the following example which is a limited description of
+the PNG data format:
+
+.. code-block:: python
+   :linenos:
+
+   png_desc = \
+   {'name': 'PNG_model',
+    'contents': [
+	{'name': 'sig',
+	 'contents': String(val_list=[b'\x89PNG\r\n\x1a\n'], size=8)},
+	{'name': 'chunks',
+	 'qty': (2,200),
+	 'contents': [
+	      {'name': 'len',
+	       'contents': UINT32_be()},
+	      {'name': 'type',
+	       'contents': String(val_list=['IHDR', 'IEND', 'IDAT', 'PLTE'], size=4)},
+	      {'name': 'data_gen',
+	       'type': MH.Generator,
+	       'contents': lambda x: Node('data', value_type= \
+					  String(size=x[0].get_raw_value())),
+	       'node_args': ['len']},
+	      {'name': 'crc32_gen',
+	       'type': MH.Generator,
+	       'contents': g_crc32,
+	       'node_args': ['type', 'data_gen'],
+	       'clear_attrs': [NodeInternals.Freezable]}
+	 ]}
+    ]}
 
 
 
+In short, we see that the root node is ``PNG_model``, which is the
+parent of the terminal node ``sig`` representing PNG file signature
+(lines 4-5) and the non-terminal node ``chunks`` representing the
+file's chunks (lines 6-23) [#]_. This latter node describe the PNG
+file structure by defining the chunk contents in lines 9-22---in this very
+simplistic data model, chunk types are not distinguished, but it can
+easily be expanded---and the number of chunks allowed in
+a PNG file in line 7---from 2 to 200, artificially chosen for this
+example.
 
 
 Defining the Imaginary myDF Data Model
@@ -749,13 +915,162 @@ Defining the Imaginary myDF Data Model
 	 
 
       def build_data_model(self):
-         ''' PUT YOUR CODE HERE '''
+
+         # Data Type Definition
+	 d1 = ...
+	 d2 = ...
+	 d3 = ...
+
+	 self.register(d1, d2, d3)
 
 
    data_model = MyDF_DataModel()
 
 
-You first need to define a class that inherits from the :class:`fuzzfmk.data_model.DataModel` class.
+You first need to define a class that inherits from the
+:class:`fuzzfmk.data_model_helpers.DataModel` class, as seen in
+line 5. The definition of the data types of a data format will be
+written in python within the method
+:func:`fuzzfmk.data_model_helpers.DataModel.build_data_model()`.  In
+the previous listing, the data types are represented by ``d1``, ``d2``
+and ``d3``. Once defined, they should be registered within the data
+model, by calling
+:func:`fuzzfmk.data_model_helpers.DataModel.register()` on them.
+
+For briefly demonstrating part of fuddly features to describe data
+formats, we take the following example whose only purpose is to mix
+various constructions, and value types.
+
+.. seealso:: For a more thorough description of the patterns that can
+             be used to describe data formats, refer to
+             :ref:`dm:patterns`
+
+.. seealso:: For a list and description of the currently defined value
+             types refer to :ref:`vt:value-types`.
+
+
+.. code-block:: python
+   :linenos:
+
+   d1 = \
+   {'name': 'TestNode',
+    'contents': [
+
+	 # block 1
+	 {'section_type': MH.Ordered,
+	  'duplicate_mode': MH.Copy,
+	  'contents': [
+
+	      {'contents': BitField(subfield_sizes=[21,2,1], endian=VT.BigEndian,
+				    subfield_val_lists=[None, [0b10], [0,1]],
+				    subfield_val_extremums=[[0, 2**21-1], None, None]),
+	       'name': 'val1',
+	       'qty': (1, 5)},
+
+	      {'name': 'val2'},
+
+	      {'name': 'middle',
+	       'mode': MH.NotMutableClone,
+	       'contents': [{
+		   'section_type': MH.Random,
+		   'contents': [
+
+		       {'contents': String(val_list=['OK', 'KO'], size=2),
+			'name': 'val2'},
+
+		       {'name': 'val21',
+			'clone': 'val1'},
+
+		       {'name': 'USB_desc',
+			'export_from': 'usb',
+			'data_id': 'STR'},
+
+		       {'type': MH.Leaf,
+			'contents': lambda x: x[0] + x[1],
+			'name': 'val22',
+			'node_args': ['val1', 'val3'],
+			'mode': MH.FrozenArgs}
+		   ]}]},
+
+	      {'contents': String(max_sz = 10),
+	       'name': 'val3',
+	       'sync_qty_with': 'val1',
+	       'alt': [
+		   {'conf': 'alt1',
+		    'contents': SINT8(int_list=[1,4,8])},
+		   {'conf': 'alt2',
+		    'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
+		    'determinist': True}]}
+	  ]},
+
+	 # block 2
+	 {'section_type': MH.Pick,
+	  'weights': (10,5),
+	  'contents': [
+	      {'contents': String(val_list=['PLIP', 'PLOP'], size=4),
+	       'name': ('val21', 2)},
+
+	      {'contents': SINT16_be(int_list=[-1, -3, -5, 7]),
+	       'name': ('val22', 2)}
+	  ]}
+    ]}
+
+
+At first glance, the data model is composed of two parts: *block 1*
+(lines 6-50) and *block 2* (lines 53-61). Within these blocks, various
+constructions are used. Below, some insights:
+
+line 6, line 21, line 53
+  The keyword ``section_type`` allows to choose the order to be
+  enforce by a non-terminal node to its children. ``MH.Ordered``
+  specifies that the children should be kept strictly in the order of
+  the description. ``MH.Random`` specifies there is no order to
+  enforce (except if the parent node has the ``determinist``
+  attribute). ``MH.Pick`` specifies that only one node among the
+  children should be kept at a time---the choice is randomly performed
+  except if the parent has the ``determinist`` attribute---as per the
+  weight associated to each child node (``weights``, line 54).
+
+lines 10-14
+  A terminal node with typed-value contents is defined. It is a
+  ``BitField``. This node have an attribute ``'qty': (1,5)`` (line 14)
+  which specifies that it can be present from 1 to 5 times. (Note
+  that, by default, raw data absorption will also be constrained by
+  this limit)
+
+line 16
+  This pattern allows to use an already defined node. In our case, it
+  is the node ``val2`` specified in lines 24-25.
+
+lines 27-28
+  This pattern with the keyword ``clone`` allows to make a full copy
+  of an existing node.
+
+
+lines 30-32
+  The keywords ``export_from`` and ``data_id`` are used for exporting
+  a data type from another data model. In this case it is a ``STRING
+  Descriptor`` data type from the ``USB`` data model.
+
+lines 34-38
+  Here is defined a terminal node with a function as contents (simpler
+  alternative to the *generator* nodes). It takes two nodes of the
+  current graph as parameters, namely: ``val1`` and ``val3``.
+
+lines 45-49
+  Two alternate configurations of node ``val3`` are specified through
+  this pattern.
+
+lines 43
+  The keyword ``sync_qty_with`` allows to synchronize the number of
+  nodes to generate or to absorb with the one specified by its
+  name. In this case it is the node ``val1`` which is defined in lines 10-14
+
+
+
+.. [#] These chunks are information blocks that compose every PNG
+       file.
+
 
 
 
@@ -769,6 +1084,22 @@ Visualization of a Data Issued From a Data Model
 
 .. todo:: Explain data paths, and how it is used within fuddly (like
           unix file paths)
+
+
+
+.. _tuto:dm-absorption:
+
+Absorption of Raw Data that Conforms to the Data Model
+++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+
+
+
+
+
+
+
 
 
 
@@ -826,7 +1157,7 @@ of this class is to give you the opportunity to plan the operations
 you want to perform on the target (data type to send, type of
 modifications to perform on data before sending it, and so on). Thus,
 you could embeds all the protocol logic to be able to adapt the
-fuzzing strategy based on various criteria---{\em e.g.}, monitoring
+fuzzing strategy based on various criteria---*e.g.*, monitoring
 feedback, operator choices, and so on. By default, the operator is
 recalled after each data emission to the target, but it can also
 provide to fuddly a batch of instructions, that will be executed prior

@@ -3,6 +3,8 @@
 Useful Examples
 ***************
 
+.. _ex:zip-mod:
+
 ZIP archive modification
 ========================
 

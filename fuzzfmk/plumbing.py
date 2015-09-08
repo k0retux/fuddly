@@ -332,8 +332,16 @@ class Fuzzer(object):
 
             dm_params['rld_args'] = (prefix, name)
 
-            dm_params['dm'] = eval(prefix + name + '.data_model')
-            dm_params['tactics'] = eval(prefix + name + '_strategy' + '.tactics')
+            try:
+                dm_params['dm'] = eval(prefix + name + '.data_model')
+            except:
+                print(colorize("*** ERROR: '%s.py' shall contain a global variable 'data_model' ***" % (name), rgb=Color.ERROR))
+                return None
+            try:
+                dm_params['tactics'] = eval(prefix + name + '_strategy' + '.tactics')
+            except:
+                print(colorize("*** ERROR: '%s_strategy.py' shall contain a global variable 'tactics' ***" % (name), rgb=Color.ERROR))
+                return None
 
             try:
                 logger = eval(prefix + name + '_strategy' + '.logger')
