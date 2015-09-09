@@ -348,7 +348,7 @@ class Example_DataModel(DataModel):
 
                    {'contents': BitField(subfield_sizes=[21,2,1], endian=VT.BigEndian,
                                          subfield_val_lists=[None, [0b10], [0,1]],
-                                         subfield_val_extremums=[[0, 2**21-1], None, None]),
+                                         subfield_val_extremums=[[500, 600], None, None]),
                     'name': 'val1',
                     'qty': (1, 5)},
 
@@ -370,11 +370,11 @@ class Example_DataModel(DataModel):
                              'export_from': 'usb',
                              'data_id': 'STR'},
 
-                            {'type': MH.Leaf,
-                             'contents': lambda x: x[0] + x[1],
+                            {'type': MH.Generator,
+                             'contents': lambda x: Node('cts', values=[x[0].get_flatten_value() \
+                                                                       + x[1].get_flatten_value()]),
                              'name': 'val22',
-                             'node_args': ['val1', 'val3'],
-                             'mode': MH.FrozenArgs}
+                             'node_args': [('val21', 2), 'val3']}
                         ]}]},
 
                    {'contents': String(max_sz = 10),

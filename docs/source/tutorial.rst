@@ -371,8 +371,14 @@ can see on lines 16 & 19.
 .. seealso:: If you want to see an ASCII representation of the data,
              in order to grasp the way the graph is built, issue the
              command ``show_data`` after the generation process. It
-             will depict something like what is presented `there
+             will depict something like what is presented `hereunder
              <#zip-show-cmd>`_.
+
+	     .. _zip-show-cmd:
+	     .. figure::  images/zip_show.png
+		:align:   center
+		:scale: 60%
+
 
 
 .. note:: Generic parameters are given to data makers
@@ -892,6 +898,8 @@ a PNG file in line 7---from 2 to 200, artificially chosen for this
 example.
 
 
+.. _dm:mydf:
+
 Defining the Imaginary myDF Data Model
 ++++++++++++++++++++++++++++++++++++++
 
@@ -963,7 +971,7 @@ various constructions, and value types.
 
 	      {'contents': BitField(subfield_sizes=[21,2,1], endian=VT.BigEndian,
 				    subfield_val_lists=[None, [0b10], [0,1]],
-				    subfield_val_extremums=[[0, 2**21-1], None, None]),
+				    subfield_val_extremums=[[500, 600], None, None]),
 	       'name': 'val1',
 	       'qty': (1, 5)},
 
@@ -985,11 +993,12 @@ various constructions, and value types.
 			'export_from': 'usb',
 			'data_id': 'STR'},
 
-		       {'type': MH.Leaf,
-			'contents': lambda x: x[0] + x[1],
+		       {'type': MH.Generator,
+			'contents': lambda x: Node('cts',
+		                                   values=[x[0].get_flatten_value() \
+                                                           + x[1].get_flatten_value()]),
 			'name': 'val22',
-			'node_args': ['val1', 'val3'],
-			'mode': MH.FrozenArgs}
+			'node_args': [('val21', 2), 'val3']}
 		   ]}]},
 
 	      {'contents': String(max_sz = 10),
@@ -1020,7 +1029,7 @@ At first glance, the data model is composed of two parts: *block 1*
 (lines 6-50) and *block 2* (lines 53-61). Within these blocks, various
 constructions are used. Below, some insights:
 
-line 6, line 21, line 53
+line 6, line 21, line 54
   The keyword ``section_type`` allows to choose the order to be
   enforce by a non-terminal node to its children. ``MH.Ordered``
   specifies that the children should be kept strictly in the order of
@@ -1029,7 +1038,7 @@ line 6, line 21, line 53
   attribute). ``MH.Pick`` specifies that only one node among the
   children should be kept at a time---the choice is randomly performed
   except if the parent has the ``determinist`` attribute---as per the
-  weight associated to each child node (``weights``, line 54).
+  weight associated to each child node (``weights``, line 55).
 
 lines 10-14
   A terminal node with typed-value contents is defined. It is a
@@ -1052,21 +1061,29 @@ lines 30-32
   a data type from another data model. In this case it is a ``STRING
   Descriptor`` data type from the ``USB`` data model.
 
-lines 34-38
-  Here is defined a terminal node with a function as contents (simpler
-  alternative to the *generator* nodes). It takes two nodes of the
-  current graph as parameters, namely: ``val1`` and ``val3``.
+lines 34-39
+  Here is defined a *generator* nodes. It takes two nodes of
+  the current graph as parameters, namely: ``(val21, 2)`` and
+  ``val3``. It simply create a new node with a value equal to the
+  contents of its node parameters.
 
-lines 45-49
+  .. note:: The syntax ``(X, nb)``---as illustrated by ``(val21,
+	    2)``---allows to use within the description the same name ``X`` for
+	    different nodes having different parents while being able to reference
+	    them uniquely---thanks to ``nb``---as illustrated by this generator
+	    node.
+
+lines 45-50
   Two alternate configurations of node ``val3`` are specified through
   this pattern.
 
-lines 43
+lines 44
   The keyword ``sync_qty_with`` allows to synchronize the number of
   nodes to generate or to absorb with the one specified by its
   name. In this case it is the node ``val1`` which is defined in lines 10-14
 
 
+--------------
 
 .. [#] These chunks are information blocks that compose every PNG
        file.
@@ -1074,12 +1091,19 @@ lines 43
 
 
 
-Visualization of a Data Issued From a Data Model
-++++++++++++++++++++++++++++++++++++++++++++++++
+Visualization of Modeled Data
+-----------------------------
 
-.. _zip-show-cmd:
-.. figure::  images/zip_show.png
+Let's show how to visualize an instance of the imaginary TestNode data
+model we just described in section :ref:`dm:mydf`. It is only a matter
+of calling the method ``.show()`` on it, which will draw in ASCII what
+can be seen on the figure :ref:`testnode-show`.
+
+.. _testnode-show:
+.. figure::  images/testnode_show.png
    :align:   center
+
+   TestNode Visualization
 
 
 .. todo:: Explain data paths, and how it is used within fuddly (like
@@ -1090,13 +1114,100 @@ Visualization of a Data Issued From a Data Model
 .. _tuto:dm-absorption:
 
 Absorption of Raw Data that Conforms to the Data Model
-++++++++++++++++++++++++++++++++++++++++++++++++++++++
+------------------------------------------------------
+
+A First Example
++++++++++++++++
+
+Let's begin with a simple example on how to absorb raw data that will
+match the imaginary TestNode data model we just described in section
+:ref:`dm:mydf`.
+
+.. code-block:: python
+   :linenos:
+
+   from fuzzfmk.plumbing import *
+
+   fmk = Fuzzer()
+
+   fmk.enable_data_model(name="tuto")
+
+   test_data = fmk.dm.get_data('TestNode')    # first instance of TestNode data model
+   test_absorb = fmk.dm.get_data('TestNode')  # second instance of TestNode data model
+
+   raw_data = test_data.get_flatten_value()
+   print(raw_data)
+
+In our case, this code block output the following::
+
+  '@\x02"\xc0\x027OKPLIP (DYi\x0b!_\n&OK\x14\x03b\x00l\x00a\x00b\x00l\x00a\x00.\x00.\x00.\x00\xc0\x025 (DYi\x0b!_\n& (DYi\x0b!_\n&PLIP'
+
+(Note that if you execute that on your side you will maybe get
+something else, as there is some random in this data model.)
+
+And if we want to visualize it more gracefully, we can simply write
+``test_data.show()`` which will draw in ASCII what can be seen on the
+figure :ref:`testnode-show`.
+
+.. note::
+   You can remark that we have instanciated twice the TestNode
+   data model in line 7 and 8. The first one referenced by ``test_data``
+   was used to generate the previous raw data while the second one
+   referenced by ``test_absorb`` will be used in what follows to
+   demonstrate absorption.
+
+In order to absorb what have been previously generated, we will use the
+second data model instance ``test_absorb`` and will call its
+``.absorb()`` method with the previous generated data:
+
+.. code-block:: python
+   :linenos:
+
+   test_absorb.absorb(raw_data)
+
+The following tuple will be returned::
+
+  (4, 0, 71, 'TestNode')  # --> (status, offset, size, name)
+
+The *status* is ``4`` which means that everything went well, that is,
+all the provided data has been absorbed. The *offset* and *size* give
+the part of the data that has been absorbed. In our case, it maps the
+full length of the original data, namely ``71`` bytes.
+
+Finally, if you call the method ``.show()`` on the model instance
+``test_absorb`` you will see the same ASCII representation as the
+original one depicted by :ref:`testnode-show`.
 
 
 
+Absorption Constraints
+++++++++++++++++++++++
+
+Absorption constraints can be configured in order to accept data that
+does not conform completely to the defined data model, which can be
+helpful if this data model does not specify every aspects of a data
+format.
+
+.. code-block:: python
+   :linenos:
+
+   AbsCsts(size=True, contents=True, regexp=True, struct=True)
+
+   AbsNoCsts()
+
+   AbsFullCsts()
+
+   status, off, size, name = data_type.absorb(data, constraints=AbsNoCsts(size=True,struct=True))
+
+
+.. todo:: Write the section Absorption Constraints
 
 
 
+Defining Absorption Helpers
++++++++++++++++++++++++++++
+
+.. todo:: Write the section Defining Absorption Helpers
 
 
 
@@ -1198,3 +1309,14 @@ Probes & The Monitoring Subsystem
 
 Using `fuddly` Through Advanced Python Interpreter
 ==================================================
+
+.. code-block:: none
+   :linenos:
+
+   import sys
+   from fuzzfmk.global_resources import *
+   from fuzzfmk.plumbing import *
+
+   sys.path.insert(0, external_libs_folder)
+
+   fmk = Fuzzer()
