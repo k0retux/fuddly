@@ -704,6 +704,40 @@ chain, basically ``JPG<finite=True> tTYPE``.
 
 
 
+
+
+
+
+.. _fuddly-advanced:
+
+Using `fuddly` Through Advanced Python Interpreter
+==================================================
+
+.. todo:: Write the section to use fuddly Through Advanced Python
+          Interpreter
+
+
+To use ``fuddly`` within any python interpreter like ``ipython``, you
+will need to issue the following commands:
+
+.. code-block:: none
+   :linenos:
+   :emphasize-lines: 1,2,5
+
+   import sys
+   from fuzzfmk.global_resources import *
+   from fuzzfmk.plumbing import *
+
+   sys.path.insert(0, external_libs_folder)
+
+   fmk = Fuzzer()
+
+
+The lines 1, 2 and 5 are not necessary if you don't intend to use
+external libraries.
+
+
+
 Implementing a Data Model and Defining the Associated Fuzzing Environment
 =========================================================================
 
@@ -970,7 +1004,7 @@ various constructions, and value types.
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 6, 10-14, 16, 21, 27-28, 30-32, 34-39, 44, 45-50, 54
+   :emphasize-lines: 5, 53, 64
 
    d1 = \
    {'name': 'TestNode',
@@ -996,7 +1030,8 @@ various constructions, and value types.
 		   'contents': [
 
 		       {'contents': String(val_list=['OK', 'KO'], size=2),
-			'name': 'val2'},
+			'name': 'val2',
+			'qty': (1, 3)},
 
 		       {'name': 'val21',
 			'clone': 'val1'},
@@ -1006,9 +1041,8 @@ various constructions, and value types.
 			'data_id': 'STR'},
 
 		       {'type': MH.Generator,
-			'contents': lambda x: Node('cts',
-		                                   values=[x[0].get_flatten_value() \
-                                                           + x[1].get_flatten_value()]),
+			'contents': lambda x: Node('cts', values=[x[0].to_bytes() \
+                                                                 + x[1].to_bytes()]),
 			'name': 'val22',
 			'node_args': [('val21', 2), 'val3']}
 		   ]}]},
@@ -1029,27 +1063,43 @@ various constructions, and value types.
 	  'weights': (10,5),
 	  'contents': [
 	      {'contents': String(val_list=['PLIP', 'PLOP'], size=4),
-	       'name': ('val21', 2)},
+	       'name': 'val4'},
 
 	      {'contents': SINT16_be(int_list=[-1, -3, -5, 7]),
+	       'name': 'val5'}
+	  ]},
+
+	 # block 3
+	 {'section_type': MH.FullyRandom,
+	  'contents': [
+	      {'contents': String(val_list=['AAA', 'BBBB', 'CCCCC']),
+	       'name': ('val21', 2)},
+
+	      {'contents': UINT8(int_list=[2, 4, 6, 8]),
+	       'qty': (2, 3),
 	       'name': ('val22', 2)}
 	  ]}
-    ]}
+     ]}
 
-At first glance, the data model is composed of two parts: *block 1*
-(lines 6-50) and *block 2* (lines 53-61). Within these blocks, various
-constructions are used. Below, some insights:
+At first glance, the data model is composed of three parts: *block 1*
+(lines 6-50), *block 2* (lines 53-61) and *block 3* (lines
+64-72). Within these blocks, various constructions are used. Below,
+some insights:
 
-line 6, line 21, line 54
+line 6, line 21, line 54, line 65
   The keyword ``section_type`` allows to choose the order to be
   enforce by a non-terminal node to its children. ``MH.Ordered``
   specifies that the children should be kept strictly in the order of
   the description. ``MH.Random`` specifies there is no order to
-  enforce (except if the parent node has the ``determinist``
-  attribute). ``MH.Pick`` specifies that only one node among the
-  children should be kept at a time---the choice is randomly performed
-  except if the parent has the ``determinist`` attribute---as per the
-  weight associated to each child node (``weights``, line 55).
+  enforce between any node *blocks* (we intend by block the set of all
+  the nodes that could be generated from a unique description block
+  like in line 24-26), except if the parent node has the
+  ``determinist`` attribute. ``MH.FullyRandom`` specifies there is no
+  order to enforce between every single nodes. ``MH.Pick`` specifies
+  that only one node among the children should be kept at a time---the
+  choice is randomly performed except if the parent has the
+  ``determinist`` attribute---as per the weight associated to each
+  child node (``weights``, line 55).
 
 lines 10-14
   A terminal node with typed-value contents is defined. It is a
@@ -1060,19 +1110,19 @@ lines 10-14
 
 line 16
   This pattern allows to use an already defined node. In our case, it
-  is the node ``val2`` specified in lines 24-25.
+  is the node ``val2`` specified in lines 24-26.
 
-lines 27-28
+lines 28-29
   This pattern with the keyword ``clone`` allows to make a full copy
   of an existing node.
 
 
-lines 30-32
+lines 31-33
   The keywords ``export_from`` and ``data_id`` are used for exporting
   a data type from another data model. In this case it is a ``STRING
   Descriptor`` data type from the ``USB`` data model.
 
-lines 34-39
+lines 35-39
   Here is defined a *generator* nodes. It takes two nodes of
   the current graph as parameters, namely: ``(val21, 2)`` and
   ``val3``. It simply create a new node with a value equal to the
@@ -1091,7 +1141,7 @@ lines 45-50
 lines 44
   The keyword ``sync_qty_with`` allows to synchronize the number of
   nodes to generate or to absorb with the one specified by its
-  name. In this case it is the node ``val1`` which is defined in lines 10-14
+  name. In this case it is the node ``val1`` which is defined in lines 10-14.
 
 
 
@@ -1166,12 +1216,12 @@ match the imaginary TestNode data model we just described in section
    data_gen = fmk.dm.get_data('TestNode')    # first instance of TestNode data model
    data_abs = fmk.dm.get_data('TestNode')  # second instance of TestNode data model
 
-   raw_data = data_gen.get_flatten_value()
+   raw_data = data_gen.to_bytes()
    print(raw_data)
 
 In our case, this code block output the following::
 
-  '@\x02"\xc0\x027OKPLIP (DYi\x0b!_\n&OK\x14\x03b\x00l\x00a\x00b\x00l\x00a\x00.\x00.\x00.\x00\xc0\x025 (DYi\x0b!_\n& (DYi\x0b!_\n&PLIP'
+  '\xc0\x027\xc0\x022@\x01\xfa\xc0\x02TOKOK\x14\x03b\x00l\x00a\x00b\x00l\x00a\x00.\x00.\x00.\x00AAA.R5l%Jde==@\x02\x15.R5l%Jde==.R5l%Jde==.R5l%Jde==.R5l%Jde==PLIPAAA\x08\x04\x06'
 
 (Note that if you execute that on your side you will maybe get
 something else, as there is some random in this data model.)
@@ -1198,12 +1248,12 @@ second data model instance ``data_abs`` and will call its
 
 The following tuple will be returned::
 
-  (4, 0, 71, 'TestNode')  # --> (status, offset, size, name)
+  (4, 0, 102, 'TestNode')  # --> (status, offset, size, name)
 
 The *status* is ``4`` which means that everything went well, that is,
 all the provided data has been absorbed. The *offset* and *size* give
 the part of the data that has been absorbed. In our case, it maps the
-full length of the original data, namely ``71`` bytes.
+full length of the original data, namely ``102`` bytes.
 
 Finally, if you call the method ``.show()`` on the model instance
 ``data_abs`` you will see the same ASCII representation as the
@@ -1491,19 +1541,3 @@ Probes & The Monitoring Subsystem
 
 
 
-
-.. _fuddly-advanced:
-
-Using `fuddly` Through Advanced Python Interpreter
-==================================================
-
-.. code-block:: none
-   :linenos:
-
-   import sys
-   from fuzzfmk.global_resources import *
-   from fuzzfmk.plumbing import *
-
-   sys.path.insert(0, external_libs_folder)
-
-   fmk = Fuzzer()

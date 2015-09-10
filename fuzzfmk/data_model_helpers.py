@@ -61,8 +61,8 @@ class MH:
 
     # section_type attribute
     Ordered = '>'
-    Random = '=.'
-    FullyRandom = '=..'
+    Random = '=..'
+    FullyRandom = '=.'
     Pick = '=+'
 
     # duplicate_mode attribute
