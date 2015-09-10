@@ -12,15 +12,6 @@ class MyDF_DataModel(DataModel):
 
     def build_data_model(self):
 
-        test_desc = \
-        {'name': 'test',
-         'contents': [
-             {'name': 'str1',
-              'contents': String(val_list=['ABCDEF', 'abcdef'])},
-             {'name': 'str2',
-              'contents': String(val_list=['GHIJKL', 'ghijkl'])}
-         ]}
-
         test_node_desc = \
         {'name': 'TestNode',
          'contents': [
@@ -85,7 +76,53 @@ class MyDF_DataModel(DataModel):
          ]}
 
 
-        self.register(test_desc, test_node_desc)
+        def keycode_helper(blob, constraints, node_internals):
+            off = blob.find(b'\xd2')
+            if off > -1:
+                return AbsorbStatus.Accept, off, None
+            else:
+                return AbsorbStatus.Reject, 0, None
+
+        abstest_desc = \
+        {'name': 'AbsTest',
+         'contents': [
+
+             {'name': 'prefix',
+              'contents': UINT8(int_list=[0xcc, 0xff, 0xee])},
+
+             {'name': 'variable_string',
+              'contents': String(max_sz=20),
+              'set_attrs': [NodeInternals.Abs_Postpone]},
+
+             {'name': 'keycode',
+              'contents': UINT16_be(int_list=[0xd2d3, 0xd2fe, 0xd2aa]),
+              'absorb_helper': keycode_helper},
+
+             {'name': 'variable_suffix',
+              'contents': String(val_list=['END', 'THE_END'])}
+         ]}
+
+
+        abstest2_desc = \
+        {'name': 'AbsTest2',
+         'contents': [
+
+             {'name': 'prefix',
+              'contents': UINT8(int_list=[0xcc, 0xff, 0xee])},
+
+             {'name': 'variable_string',
+              'contents': String(max_sz=20),
+              'set_attrs': [NodeInternals.Abs_Postpone]},
+
+             {'name': 'keycode',
+              'contents': UINT16_be(int_list=[0xd2d3, 0xd2fe, 0xd2aa])},
+
+             {'name': 'variable_suffix',
+              'contents': String(val_list=['END', 'THE_END'])}
+         ]}
+
+
+        self.register(test_node_desc, abstest_desc, abstest2_desc)
 
 
 

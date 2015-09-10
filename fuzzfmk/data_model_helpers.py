@@ -94,7 +94,8 @@ class ModelHelper(object):
         # Export description keys
         'export_from', 'data_id',
         # node properties description keys
-        'determinist', 'random', 'clear_attrs', 'set_attrs', 'absorb_csts',
+        'determinist', 'random', 'clear_attrs', 'set_attrs',
+        'absorb_csts', 'absorb_helper',
         'semantics', 'fuzz_weight',
         'sync_qty_with', 'exists_if', 'exists_if_not',
         'post_freeze'
@@ -400,6 +401,9 @@ class ModelHelper(object):
         param = desc.get('absorb_csts', None)
         if param is not None:
             node.enforce_absorb_constraints(param, conf=conf)
+        param = desc.get('absorb_helper', None)
+        if param is not None:
+            node.set_absorb_helper(param, conf=conf)
         param = desc.get('semantics', None)
         if param is not None:
             node.set_semantics(NodeSemantics(param))
@@ -609,8 +613,8 @@ class DataModel(object):
 
 
     def register_descriptors(self, *desc_list):
-        mh = ModelHelper(dm=self)
         for desc in desc_list:
+            mh = ModelHelper(dm=self)
             desc_name = 'Unreadable Name'
             try:
                 desc_name = desc['name']
@@ -620,7 +624,6 @@ class DataModel(object):
                 raise UserWarning(msg)
 
             self.register_nodes(node)
-
 
     def set_new_env(self, node):
         env = Env()

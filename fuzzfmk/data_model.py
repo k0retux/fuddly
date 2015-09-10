@@ -2299,7 +2299,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
                 if st == AbsorbStatus.Reject:
                     if DEBUG:
-                        print('REJECT: %s, blob: %r' % (node.name, blob[:4]))
+                        print('REJECT: %s, blob: %r ...' % (node.name, blob[:4]))
                     if min_node == 0:
                         # abort = False
                         break
@@ -2310,7 +2310,7 @@ class NodeInternals_NonTerm(NodeInternals):
                         break
                 elif st == AbsorbStatus.Absorbed or st == AbsorbStatus.FullyAbsorbed:
                     if DEBUG:
-                        print('\nABSORBED: %s, abort: %r, blob: %r, consumed: %d' \
+                        print('\nABSORBED: %s, abort: %r, blob: %r ... , consumed: %d' \
                               % (node.name, abort, blob[:sz][:50], sz))
 
                     sz2 = 0

@@ -11,9 +11,9 @@ like ``ipython``.
 Using ``fuddly`` simple UI: ``FuzzShell``
 =========================================
 
-A simple UI---called FuzzShell---allows to interact with fuddly in an
-easy way. In this tutorial we present the usual commands that can be
-used during a fuzzing session. But first we have to launch it by
+A simple UI---called FuzzShell---allows to interact with ``fuddly`` in
+an easy way. In this tutorial we present the usual commands that can
+be used during a fuzzing session. But first we have to launch it by
 running the ``./client.py`` script.
 
 .. note::
@@ -707,18 +707,6 @@ chain, basically ``JPG<finite=True> tTYPE``.
 Implementing a Data Model and Defining the Associated Fuzzing Environment
 =========================================================================
 
-Assuming we want to model an imaginary data format called `myDF`.  Two
-files need to be created within ``<root of
-fuddly>/data_models/[file_formats|protocol]``:
-
-  - ``mydf.py``
-  - ``mydf_strategy.py``
-
-
-.. note:: Within the file names, ``mydf`` is not really important. However,
-   what is important is to use the same prefix for these two
-   files, and to conform to the template.
-
 .. _data-model:
 
 Data Modeling
@@ -900,14 +888,31 @@ example.
 
 .. _dm:mydf:
 
-Defining the Imaginary myDF Data Model
+Defining the Imaginary MyDF Data Model
 ++++++++++++++++++++++++++++++++++++++
 
-.. note:: The implementation of the data model shall reside within
-          ``mydf.py``.
+Assuming we want to model an imaginary data format called `MyDF`.  Two
+files need to be created within ``<root of
+fuddly>/data_models/[file_formats|protocol]/``:
+
+``mydf.py``
+  Should contain the implementation of the data model related to
+  ``MyDF`` data format, **which is the topic of the current section**.
+
+``mydf_strategy.py``
+  Should contain everything else that you need for your purpose
+  like: targets (:ref:`targets-def`), logger (:ref:`logger-def`),
+  operators & probes (:ref:`tuto:operator`), specific
+  disruptors (:ref:`tuto:disruptors`).
+
+By default, ``fuddly`` will use the prefix ``mydf`` for referencing
+the data model. But it can be overloaded within the data model
+definition, as it is done in the following example (in line 8) which
+is a simple skeleton for ``mydf.py``:
 
 .. code-block:: python
    :linenos:
+   :emphasize-lines: 5, 8, 14
 
    from fuzzfmk.data_model import *
    from fuzzfmk.value_types import *
@@ -916,7 +921,7 @@ Defining the Imaginary myDF Data Model
    class MyDF_DataModel(DataModel):
 
       file_extension = 'myd'
-      name = 'mydf_overload_iyw'
+      name = 'overload_default_name_if_you_wish'
 
       def dissect(self, data, idx):
          ''' PUT YOUR CODE HERE '''
@@ -935,10 +940,16 @@ Defining the Imaginary myDF Data Model
    data_model = MyDF_DataModel()
 
 
-You first need to define a class that inherits from the
-:class:`fuzzfmk.data_model_helpers.DataModel` class, as seen in
-line 5. The definition of the data types of a data format will be
-written in python within the method
+.. note:: All elements discussed during this tutorial, related to the
+          data model ``mydf``, are implemented within ``tuto.py`` and
+          ``tuto_strategy.py``. Don't hesitate to play with what are
+          defined within, Either with ``ipython`` or ``FuzzShell``
+          (:ref:`tuto:start-fuzzshell`).
+
+In this skeleton, you can notice that you have to define a class that
+inherits from the :class:`fuzzfmk.data_model_helpers.DataModel` class,
+as seen in line 5. The definition of the data types of a data format
+will be written in python within the method
 :func:`fuzzfmk.data_model_helpers.DataModel.build_data_model()`.  In
 the previous listing, the data types are represented by ``d1``, ``d2``
 and ``d3``. Once defined, they should be registered within the data
@@ -959,6 +970,7 @@ various constructions, and value types.
 
 .. code-block:: python
    :linenos:
+   :emphasize-lines: 6, 10-14, 16, 21, 27-28, 30-32, 34-39, 44, 45-50, 54
 
    d1 = \
    {'name': 'TestNode',
@@ -1024,7 +1036,6 @@ various constructions, and value types.
 	  ]}
     ]}
 
-
 At first glance, the data model is composed of two parts: *block 1*
 (lines 6-50) and *block 2* (lines 53-61). Within these blocks, various
 constructions are used. Below, some insights:
@@ -1083,6 +1094,24 @@ lines 44
   name. In this case it is the node ``val1`` which is defined in lines 10-14
 
 
+
+To register such a description within the data model ``MyDF`` you can
+directly use :func:`fuzzfmk.data_model_helpers.DataModel.register()`
+as seen in the previous example. But if you want to access afterwards
+to the defined nodes, you can also transform this description to a
+graph, before registering it, like this:
+
+.. code-block:: python
+   :linenos:
+
+   mh = ModelHelper(self)
+   root_node = mh.create_graph_from_desc(d1)
+
+You could then access to all the registered nodes tided up in the
+specific dictionary ``mh.node_dico``, whether you want to perform
+extra operation on them.
+
+
 --------------
 
 .. [#] These chunks are information blocks that compose every PNG
@@ -1106,14 +1135,16 @@ can be seen on the figure :ref:`testnode-show`.
    TestNode Visualization
 
 
-.. todo:: Explain data paths, and how it is used within fuddly (like
-          unix file paths)
-
+.. note:: You can notice that the graph paths of the modeled data are
+          presented in a similar form as Unix file paths (for
+          instance ``TestNode/middle/val2``). As it is explained in
+          the section :ref:`tuto:disruptors`, using these paths are a
+          typical way for referencing a node within a modeled data.
 
 
 .. _tuto:dm-absorption:
 
-Absorption of Raw Data that Conforms to the Data Model
+Absorption of Raw Data that Complies to the Data Model
 ------------------------------------------------------
 
 A First Example
@@ -1130,12 +1161,12 @@ match the imaginary TestNode data model we just described in section
 
    fmk = Fuzzer()
 
-   fmk.enable_data_model(name="tuto")
+   fmk.enable_data_model(name="mydf")
 
-   test_data = fmk.dm.get_data('TestNode')    # first instance of TestNode data model
-   test_absorb = fmk.dm.get_data('TestNode')  # second instance of TestNode data model
+   data_gen = fmk.dm.get_data('TestNode')    # first instance of TestNode data model
+   data_abs = fmk.dm.get_data('TestNode')  # second instance of TestNode data model
 
-   raw_data = test_data.get_flatten_value()
+   raw_data = data_gen.get_flatten_value()
    print(raw_data)
 
 In our case, this code block output the following::
@@ -1146,24 +1177,24 @@ In our case, this code block output the following::
 something else, as there is some random in this data model.)
 
 And if we want to visualize it more gracefully, we can simply write
-``test_data.show()`` which will draw in ASCII what can be seen on the
+``data_gen.show()`` which will draw in ASCII what can be seen on the
 figure :ref:`testnode-show`.
 
 .. note::
    You can remark that we have instanciated twice the TestNode
-   data model in line 7 and 8. The first one referenced by ``test_data``
+   data model in line 7 and 8. The first one referenced by ``data_gen``
    was used to generate the previous raw data while the second one
-   referenced by ``test_absorb`` will be used in what follows to
+   referenced by ``data_abs`` will be used in what follows to
    demonstrate absorption.
 
 In order to absorb what have been previously generated, we will use the
-second data model instance ``test_absorb`` and will call its
+second data model instance ``data_abs`` and will call its
 ``.absorb()`` method with the previous generated data:
 
 .. code-block:: python
    :linenos:
 
-   test_absorb.absorb(raw_data)
+   data_abs.absorb(raw_data)
 
 The following tuple will be returned::
 
@@ -1175,7 +1206,7 @@ the part of the data that has been absorbed. In our case, it maps the
 full length of the original data, namely ``71`` bytes.
 
 Finally, if you call the method ``.show()`` on the model instance
-``test_absorb`` you will see the same ASCII representation as the
+``data_abs`` you will see the same ASCII representation as the
 original one depicted by :ref:`testnode-show`.
 
 
@@ -1186,32 +1217,167 @@ Absorption Constraints
 Absorption constraints can be configured in order to accept data that
 does not conform completely to the defined data model, which can be
 helpful if this data model does not specify every aspects of a data
-format.
+format, or if you want to voluntarily step outside the data format
+requirements.
+
+By default, when you perform an absorption, every data model
+constraints will be enforce. If you want to free some ones, you need
+to provide a :class:`fuzzfmk.data_model.AbsCsts` object---specifying the constraints you
+want---when calling the method ``.absorb()``.
+
+Currently, there is four kinds of constraints:
+
+``size``
+  If size matters for some nodes---for instance if ``String()`` size
+  attributes are specified within a terminal node---this constraint
+  control it.
+ 
+``contents``
+  Only the values specified in the data model are accepted
+
+``regexp``
+  This constraint control if regular expression---that some terminal
+  nodes can specify---should be complied to.
+
+``struct``
+  This constraint control whether or not data structure should be
+  complied to. That covers part of the grammar specified through
+  non-terminal nodes: quantity of children, quantity synchronization
+  (specified through ``sync_qty_with`` attribute), and existence
+  synchronization---specified through ``exists_if`` or
+  ``exists_if_not`` attribute.
+
+
+There is also the shortcuts :class:`fuzzfmk.data_model.AbsNoCsts` and
+:class:`fuzzfmk.data_model.AbsFullCsts` which respectively set no
+constraints, or all constraints. Thus, if you want to only respect
+``size`` and ``struct`` constraints, you can provide the object
+``AbsNoCsts(size=True,struct=True)`` to the ``.absorb()`` method, like
+what follows:
 
 .. code-block:: python
-   :linenos:
 
-   AbsCsts(size=True, contents=True, regexp=True, struct=True)
+   status, off, size, name = data_abs.absorb(data, constraints=AbsNoCsts(size=True,struct=True))
 
-   AbsNoCsts()
-
-   AbsFullCsts()
-
-   status, off, size, name = data_type.absorb(data, constraints=AbsNoCsts(size=True,struct=True))
-
-
-.. todo:: Write the section Absorption Constraints
+In some cases, it could also be useful to only set absorption
+constraints to some nodes. To do so, you can call the method
+:func:`fuzzfmk.data_model.Node.enforce_absorb_constraints()` on the
+related nodes with your chosen constraints. You can also add a
+specific field ``absorb_csts`` (refer to :ref:`dm:patterns`) within a
+data model description to reach the same objective.
 
 
 
 Defining Absorption Helpers
 +++++++++++++++++++++++++++
 
-.. todo:: Write the section Defining Absorption Helpers
+For complex scenario of absorption, the constraints defined within the
+data model are not always sufficient. In such cases you could add
+helpers to the related nodes. Let's say you want to model something
+like that:
 
+.. code-block:: python
+   :linenos:
 
+   split_desc = \
+   {'name': 'test',
+    'contents': [
 
+	{'name': 'prefix',
+	 'contents': UINT8(int_list=[0xcc, 0xff, 0xee])},
 
+	{'name': 'variable_string',
+	 'contents': String(max_sz=20)},
+
+	{'name': 'keycode',
+	 'contents': UINT16_be(int_list=[0xd2d3, 0xd2fe, 0xd2aa])},
+
+	{'name': 'variable_suffix',
+	 'contents': String(val_list=['END', 'THE_END'])}
+    ]}
+
+It works as intended for data generation, but if you want to absorb a
+data that comply to this model, you will currently need to help
+``fuddly`` a little, as the node ``variable_string`` could be too
+greedy and absorb the ``keycode`` whether the raw data to absorb
+contains a ``variable_string`` strictly below the limit of the
+specified ``20`` characters, like this::
+
+  \xffABCDEF\xd2\xfeTHE_END
+
+To help ``fuddly`` making the right things, you could define an helper
+function and associate it to the ``keycode`` node as illustrated in
+what follows:
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 1-6, 17, 21
+
+   def keycode_helper(blob, constraints, node_internals):
+       off = blob.find(b'\xd2')
+       if off > -1:
+	   return AbsorbStatus.Accept, off, None
+       else:
+	   return AbsorbStatus.Reject, 0, None
+
+   split_desc = \
+   {'name': 'test',
+    'contents': [
+
+	{'name': 'prefix',
+	 'contents': UINT8(int_list=[0xcc, 0xff, 0xee])},
+
+	{'name': 'variable_string',
+	 'contents': String(max_sz=20),
+	 'set_attrs': [NodeInternals.Abs_Postpone]},
+
+	{'name': 'keycode',
+	 'contents': UINT16_be(int_list=[0xd2d3, 0xd2fe, 0xd2aa]),
+	 'absorb_helper': keycode_helper},
+
+	{'name': 'variable_suffix',
+	 'contents': String(val_list=['END', 'THE_END'])}
+    ]}
+
+Notice that we also add a specific attribute to the node
+``variable_string``, namely: ``NodeInternals.Abs_Postpone``. This will
+instruct ``fuddly`` to postpone any absorption corresponding to this
+node, awaiting that the next node first find in the raw data what he
+wants. Now, if we look at the ``keycode_helper()`` function, we can
+notice that it has access to part of the raw data (the one that still
+need to be consumed/absorbed) through its ``blob`` parameter. It
+basically looks for a byte with the value ``\xd2``. If it finds it, it
+will return a success status as well as the offset where it wants to
+start absorption (in this case it is the offset of what it
+finds). Note, that the last value returned in the tuple is a ``size``
+attribute. In this case it is set to ``None``, but it can enforce the
+size of what should be absorbed in what remains in the raw data (could
+be useful for instance for ``String()``).
+
+Now if you try to absorb the previous raw data, it will work as
+expected. This example is voluntarily simple enough to better grasp
+what is the purpose of having a helper. It could be legitimately
+expected that in this case ``fuddly`` do it by itself, and in fact it
+is currently able to do so ;) thanks to some already defined
+``absorb_auto_helpers`` methods. Thus, in this example you could
+remove the *helper* stuff, while still keeping the
+``NodeInternals.Abs_Postpone`` attribute on the node
+``variable_string``, and everything will work as expected.
+
+.. seealso:: The already defined auto-helper functions, behave
+             accordingly to the typed value contents. They are more
+             elaborated than the example *helper* function defined
+             above. Look at the code
+             :func:`fuzzfmk.value_types.INT.absorb_auto_helper()`
+             and/or
+             :func:`fuzzfmk.value_types.String.absorb_auto_helper()`
+             in order to better understand how it works.
+
+Even if ``fuddly`` can handle by itself this classic cases, you
+could face situations where absorption will really not be so obvious
+(whether you didn't put sufficient constraints within the data model,
+or because you don't want to for letting more freedom during data
+generation).
 
 
 
@@ -1234,6 +1400,10 @@ Initiating the Fuzzing Environment
 Defining the Targets
 --------------------
 
+.. todo:: Write the section on Target()
+
+
+
 Generic Targets
 +++++++++++++++
 
@@ -1242,8 +1412,17 @@ Specific Targets
 ++++++++++++++++
 
 
+
+
+
+.. _logger-def:
+
 Defining the Logger
 -------------------
+
+.. todo:: Write the section on Logger()
+
+
 
 .. _tuto:disruptors:
 
@@ -1252,7 +1431,13 @@ Defining Specific Disruptors
 
 .. note:: Also look at :ref:`useful-examples`
 
-.. todo:: Present the ModelWalker class
+
+
+.. todo:: Write the section on disruptors. Explain:
+	  - Data paths, syntactic & semantic criteria
+	  - primitive to search and modify within the graph
+	  - ModelWalker class
+	  - ...
 
 
 
@@ -1260,6 +1445,8 @@ Defining Specific Disruptors
 
 Defining Operators and Probes
 -----------------------------
+
+.. todo:: Write the section on Operators
 
 In order to automatize what a human operator could perform to interact
 with one or more targets, the abstracted class
