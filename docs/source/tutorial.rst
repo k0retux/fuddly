@@ -11,9 +11,9 @@ like ``ipython``.
 Using ``fuddly`` simple UI: ``FuzzShell``
 =========================================
 
-A simple UI---called FuzzShell---allows to interact with fuddly in an
-easy way. In this tutorial we present the usual commands that can be
-used during a fuzzing session. But first we have to launch it by
+A simple UI---called FuzzShell---allows to interact with ``fuddly`` in
+an easy way. In this tutorial we present the usual commands that can
+be used during a fuzzing session. But first we have to launch it by
 running the ``./client.py`` script.
 
 .. note::
@@ -172,7 +172,7 @@ which will invoke the ``unzip`` program with a ZIP file:
    ...
    >> 
 
-Note that a :class:`fuzzfmk.data_model.DataModel` can define any number of data
+Note that a :class:`fuzzfmk.data_model_helpers.DataModel` can define any number of data
 types---to model for instance the various atoms within a data format,
 or to represent some specific use cases, ...
 
@@ -371,8 +371,14 @@ can see on lines 16 & 19.
 .. seealso:: If you want to see an ASCII representation of the data,
              in order to grasp the way the graph is built, issue the
              command ``show_data`` after the generation process. It
-             will depict something like what is presented `there
+             will depict something like what is presented `hereunder
              <#zip-show-cmd>`_.
+
+	     .. _zip-show-cmd:
+	     .. figure::  images/zip_show.png
+		:align:   center
+		:scale: 60%
+
 
 
 .. note:: Generic parameters are given to data makers
@@ -698,20 +704,141 @@ chain, basically ``JPG<finite=True> tTYPE``.
 
 
 
+
+
+
+
+.. _fuddly-advanced:
+
+Using ``fuddly`` Through Advanced Python Interpreter
+====================================================
+
+To use ``fuddly`` within any python interpreter like ``ipython``, you
+will need to issue the following commands:
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 1,2,5
+
+   import sys
+   from fuzzfmk.global_resources import *
+   from fuzzfmk.plumbing import *
+
+   sys.path.insert(0, external_libs_folder)
+
+   fmk = Fuzzer()
+
+
+The lines 1, 2 and 5 are not necessary if you don't intend to use
+external libraries. From now on you can use ``fuddly`` through the
+object ``fmk``. Every commands defined by ``FuzzShell`` (refer to
+:ref:`tuto:start-fuzzshell`) are backed by a method of the class
+:class:`fuzzfmk.plumbing.Fuzzer`.
+
+Below we demonstrate some commands:
+
+.. code-block:: python
+   :linenos:
+
+   # To show the available data models
+   fmk.show_data_models()
+
+   # Contains the list of all the DataModel objects available
+   fmk.dm_list
+
+   # Enable the ZIP data model by name, and select the target with ID ``1``
+   fmk.enable_data_model(name='zip', tg=1)
+
+   # Reference to the currently loaded data model, in this case the ZIP one
+   fmk.dm
+
+   # Reload all sub-systems and data model definitions and choose the target 0
+   fmk.reload_all(tg_num=0)
+
+   # Show available targets for this data model
+   fmk.show_targets()
+
+   # Show a list of the registered data type within the data model
+   fmk.show_dm_data_identifiers()
+   # Or
+   list(fmk.dm.data_identifiers())
+   
+   # Get an instance of the modeled data ZIP_00 which is made from the
+   # absorption of an existing ZIP archive within <fuddly_dir>/imported_data/zip/
+   dt = fmk.dm.get_data('ZIP_00')
+
+   # Display the raw contents of the first generated element of the data type `dt`
+   # Its the flatten version of calling .get_value() on it. Note that doing so will
+   # freeze the data type to the generated output, no matter how many times you call
+   # these method on it
+   dt.to_bytes()
+
+   # Pretty print the current value. (if the data type is not already frozen,
+   # it will call g.get_value() on it)
+   dt.show()
+
+   # Unfreeze the data type to get a new value and then display it
+   dt.unfreeze()
+   dt.show()
+
+   # Send the current data, log it and save it
+   fmk.send_data_and_log(Data(dt))
+
+   # Perform a tTYPE disruption on it, but give the 5th generated
+   # cases and enforce the disruptor to strictly follow the ZIP structure
+   # Finally truncate the output to 200 bytes
+   action_list = [('tTYPE', UI(init=5), UI(order=True)), ('SIZE', None, UI(sz=200))]
+   altered_data = fmk.get_data(action_list, data_orig=Data(dt))
+
+   # Send this new data and look at the actions that perform tTYPE and
+   # SIZE through the console or the logs
+   fmk.send_data_and_log(altered_data)
+   
+
+The last command will display something like this (with some color if
+you have the ``xtermcolor`` python library):
+
+.. code-block:: none
+
+   ========[ 2 ]==[ 11/09/2015 - 20:06:56 ]=======================
+   ### Target ack received at: None
+   ### Initial Generator (currently disabled):
+    |- generator type: None | generator name: None | User input: None
+     ...
+   ### Fuzzing (step 1):
+    |- disruptor type: tTYPE | disruptor name: d_fuzz_typed_nodes | User input: G=[init=5], S=[order=True]
+    |- data info:
+       |_ model walking index: 5
+       |_  |_ run: 1 / -1 (max)
+       |_ current fuzzed node:     ZIP_00/file_list/file/header/common_attrs/version_needed
+       |_  |_ value type:         <fuzzfmk.value_types.Fuzzy_INT16 object at 0x7efe52da4c90>
+       |_  |_ original node value: 1400 (ascii: )
+       |_  |_ corrupt node value:  0080 (ascii: �)
+   ### Fuzzing (step 2):
+    |- disruptor type: SIZE | disruptor name: d_max_size | User input: G=None, S=[sz=200]
+    |- data info:
+       |_ orig node length: 1054002
+       |_ right truncation
+       |_ new node length: 200
+   ### Data size: 200 bytes
+   ### Emitted data is stored in the file:
+   ./exported_data/zip/2015_09_11_200656_00.zip
+
+
+.. code-block:: python
+   :linenos:
+
+   # And to terminate fuddly properly 
+   fmk.exit_fuzzer()
+
+
+For more information on how to manually make modification on data,
+refer to the section :ref:`tuto:disruptors`
+
+
+
 Implementing a Data Model and Defining the Associated Fuzzing Environment
 =========================================================================
-
-Assuming we want to model an imaginary data format called `myDF`.  Two
-files need to be created within ``<root of
-fuddly>/data_models/[file_formats|protocol]``:
-
-  - ``mydf.py``
-  - ``mydf_strategy.py``
-
-
-.. note:: Within the file names, ``mydf`` is not really important. However,
-   what is important is to use the same prefix for these two
-   files, and to conform to the template.
 
 .. _data-model:
 
@@ -721,19 +848,204 @@ Data Modeling
 Overview
 ++++++++
 
+Within fuddly data representation is performed through the description
+of a directed acyclic graph whose terminal nodes describe the
+different parts of a data format and the arcs---which can be of
+different kinds---capture its structure. This graph includes syntactic
+and semantic information of the data format. Using a graph as a data
+model enables to represent various kind of data format with
+flexibility. By flexibility we mean the possibility to mix accurate
+representations for certain aspects with much coarser ones for
+others---e.g., modeling accurately only the data parts which are
+assumed to be complex to handle by the target---and a high-level of
+expressiveness.
 
+.. _dm-mapping:
+.. figure::  images/dm_mapping.png
+   :align:   center
+   :scale:   50 %
 
+   Data Representation
 
+From this model, data can be generated (look at the figure
+:ref:`dm-gen`) and existing raw data can be absorbed. This latter
+operation is a projection of the existing raw data within the data
+model (see the example :ref:`ex:zip-mod` and also the section
+:ref:`tuto:dm-absorption`). Data generation allows to create data that
+conforms to the model if we want to iteract correctly with the target,
+or to create degenerate data if we want to assess target
+robustness. Data absorption can allow to generate data from existing
+ones if the model is not accurate enough to generate correct data by
+itself; or to understand the target outputs in order to interact
+correctly with it or not.
 
+.. _dm-gen:
+.. figure::  images/dm_gen.png
+   :align:   center
+   :scale:   40 %
 
-Defining the Imaginary myDF Data Model
-++++++++++++++++++++++++++++++++++++++
+   Data Generation
 
-.. note:: The implementation of the data model shall reside within
-          ``mydf.py``.
+Generating data boils down to walk the graph that model the data
+format. After each traversal, a data is produced and each traversal
+make the graph evolving, in a deterministic or random way depending on
+your intent. Graph walking is also a way to perform node alteration on
+the fly (through entities called *disruptors*).
+
+.. seealso:: Refer to :ref:`tuto:disruptors` to learn how to perform
+             modification of data generated from the model. Refer to
+             :ref:`tuto:dmaker-chain` in order to play with existing
+             generic disruptors within the frame of the ``fuddly``
+             shell.
+
+Different kinds of node are defined within fuddly in order to model
+data:
+
+- Terminal nodes with typed-value contents (e.g., ``UINT16``,
+  ``BitField``, ``String``, ...)
+
+- Non-terminal nodes that are used to define the data format
+  structure. They put in order the different parts of a data format,
+  and can even specify a grammar to express a more complex assembly.
+
+- *Generator* nodes that are used to dynamically generate a part of
+  the graph according to other nodes (from within the graph itself or
+  not) and/or other criteria provided as parameters.
+
+.. _dm-nodes:
+.. figure::  images/dm_nodes.png
+   :align:   center
+   :scale:   60 %
+
+   Node Types
+
+The structure of a data format is grasped by the links between the
+graph nodes. Within ``fuddly`` data model, we distinguish three kinds
+of links:
+
+- Parent-child links which define a basic structure between the graph
+  nodes. They are ruled by non-terminal nodes.
+
+- Links associated to specific criteria that condition some part of
+  the graph. For instance, node generation can be associated to the
+  existence of another one; different node set can be synchronized
+  relatively to their cardinality.
+
+.. _dm-constraints:
+.. figure::  images/dm_constraints.png
+   :align:   center
+
+   Node Constraints
+
+- Links defined between generator nodes and their parameter
+  nodes. They are especially useful when a complex relationship exist
+  between multiple nodes. The generator nodes are then used to rule
+  this relationship by defining it through a function.
+
+Additionally, for each node can be defined alternative configurations,
+enabling for instance to dynamically change a terminal node in a
+non-terminal node or a generator node. These configurations can be
+added dynamically and switched at any times even during the graph
+traversal. This feature can be leveraged to capture different facets
+of a data format within the same data model; while offering the
+possibility to work on only one view at a time. It can also be useful
+for absorption. Indeed, this operation can require to model some part
+of the data format in a way different from the one took on for the
+generation. The alternative configurations enable to aggregate these
+differences within the same data model.
+
+Finally, it is also possible to associate various kind of attributes
+to the nodes:
+
+- classic ones like Mutable, Determinist, Finite, ...
+
+- semantic ones that allows to group nodes based on some specific
+  meanings (for instance a PDF page), in order to enable higher level
+  data manipulation.
+
+- user-defined ones for specifying specific semantics to the nodes to
+  enable enhanced data modification.
+
+A First Example
++++++++++++++++
+
+In order to create a data model, ``fuddly``'s low-level primitives can
+be used, or more simply the high-level infrastructure that create the
+model from kind of JSON representation. For complex case, the two
+approaches could be complementary. Moreover data models can also use
+other data models whether the need arises.
+
+Let's look at the following example which is a limited description of
+the PNG data format:
 
 .. code-block:: python
    :linenos:
+
+   png_desc = \
+   {'name': 'PNG_model',
+    'contents': [
+	{'name': 'sig',
+	 'contents': String(val_list=[b'\x89PNG\r\n\x1a\n'], size=8)},
+	{'name': 'chunks',
+	 'qty': (2,200),
+	 'contents': [
+	      {'name': 'len',
+	       'contents': UINT32_be()},
+	      {'name': 'type',
+	       'contents': String(val_list=['IHDR', 'IEND', 'IDAT', 'PLTE'], size=4)},
+	      {'name': 'data_gen',
+	       'type': MH.Generator,
+	       'contents': lambda x: Node('data', value_type= \
+					  String(size=x[0].get_raw_value())),
+	       'node_args': ['len']},
+	      {'name': 'crc32_gen',
+	       'type': MH.Generator,
+	       'contents': g_crc32,
+	       'node_args': ['type', 'data_gen'],
+	       'clear_attrs': [NodeInternals.Freezable]}
+	 ]}
+    ]}
+
+
+
+In short, we see that the root node is ``PNG_model``, which is the
+parent of the terminal node ``sig`` representing PNG file signature
+(lines 4-5) and the non-terminal node ``chunks`` representing the
+file's chunks (lines 6-23) [#]_. This latter node describe the PNG
+file structure by defining the chunk contents in lines 9-22---in this very
+simplistic data model, chunk types are not distinguished, but it can
+easily be expanded---and the number of chunks allowed in
+a PNG file in line 7---from 2 to 200, artificially chosen for this
+example.
+
+
+.. _dm:mydf:
+
+Defining the Imaginary MyDF Data Model
+++++++++++++++++++++++++++++++++++++++
+
+Assuming we want to model an imaginary data format called `MyDF`.  Two
+files need to be created within ``<root of
+fuddly>/data_models/[file_formats|protocol]/``:
+
+``mydf.py``
+  Should contain the implementation of the data model related to
+  ``MyDF`` data format, **which is the topic of the current section**.
+
+``mydf_strategy.py``
+  Should contain everything else that you need for your purpose
+  like: targets (:ref:`targets-def`), logger (:ref:`logger-def`),
+  operators & probes (:ref:`tuto:operator`), specific
+  disruptors (:ref:`tuto:disruptors`).
+
+By default, ``fuddly`` will use the prefix ``mydf`` for referencing
+the data model. But it can be overloaded within the data model
+definition, as it is done in the following example (in line 8) which
+is a simple skeleton for ``mydf.py``:
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 5, 8, 14
 
    from fuzzfmk.data_model import *
    from fuzzfmk.value_types import *
@@ -742,34 +1054,479 @@ Defining the Imaginary myDF Data Model
    class MyDF_DataModel(DataModel):
 
       file_extension = 'myd'
-      name = 'mydf_overload_iyw'
+      name = 'overload_default_name_if_you_wish'
 
       def dissect(self, data, idx):
          ''' PUT YOUR CODE HERE '''
 	 
 
       def build_data_model(self):
-         ''' PUT YOUR CODE HERE '''
+
+         # Data Type Definition
+	 d1 = ...
+	 d2 = ...
+	 d3 = ...
+
+	 self.register(d1, d2, d3)
 
 
    data_model = MyDF_DataModel()
 
 
-You first need to define a class that inherits from the :class:`fuzzfmk.data_model.DataModel` class.
+.. note:: All elements discussed during this tutorial, related to the
+          data model ``mydf``, are implemented within ``tuto.py`` and
+          ``tuto_strategy.py``. Don't hesitate to play with what are
+          defined within, Either with ``ipython`` or ``FuzzShell``
+          (:ref:`tuto:start-fuzzshell`).
+
+In this skeleton, you can notice that you have to define a class that
+inherits from the :class:`fuzzfmk.data_model_helpers.DataModel` class,
+as seen in line 5. The definition of the data types of a data format
+will be written in python within the method
+:func:`fuzzfmk.data_model_helpers.DataModel.build_data_model()`.  In
+the previous listing, the data types are represented by ``d1``, ``d2``
+and ``d3``. Once defined, they should be registered within the data
+model, by calling
+:func:`fuzzfmk.data_model_helpers.DataModel.register()` on them.
+
+For briefly demonstrating part of fuddly features to describe data
+formats, we take the following example whose only purpose is to mix
+various constructions, and value types.
+
+.. seealso:: For a more thorough description of the patterns that can
+             be used to describe data formats, refer to
+             :ref:`dm:patterns`
+
+.. seealso:: For a list and description of the currently defined value
+             types refer to :ref:`vt:value-types`.
+
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 5, 53, 64
+
+   d1 = \
+   {'name': 'TestNode',
+    'contents': [
+
+	 # block 1
+	 {'section_type': MH.Ordered,
+	  'duplicate_mode': MH.Copy,
+	  'contents': [
+
+	      {'contents': BitField(subfield_sizes=[21,2,1], endian=VT.BigEndian,
+				    subfield_val_lists=[None, [0b10], [0,1]],
+				    subfield_val_extremums=[[500, 600], None, None]),
+	       'name': 'val1',
+	       'qty': (1, 5)},
+
+	      {'name': 'val2'},
+
+	      {'name': 'middle',
+	       'mode': MH.NotMutableClone,
+	       'contents': [{
+		   'section_type': MH.Random,
+		   'contents': [
+
+		       {'contents': String(val_list=['OK', 'KO'], size=2),
+			'name': 'val2',
+			'qty': (1, 3)},
+
+		       {'name': 'val21',
+			'clone': 'val1'},
+
+		       {'name': 'USB_desc',
+			'export_from': 'usb',
+			'data_id': 'STR'},
+
+		       {'type': MH.Generator,
+			'contents': lambda x: Node('cts', values=[x[0].to_bytes() \
+                                                                 + x[1].to_bytes()]),
+			'name': 'val22',
+			'node_args': [('val21', 2), 'val3']}
+		   ]}]},
+
+	      {'contents': String(max_sz = 10),
+	       'name': 'val3',
+	       'sync_qty_with': 'val1',
+	       'alt': [
+		   {'conf': 'alt1',
+		    'contents': SINT8(int_list=[1,4,8])},
+		   {'conf': 'alt2',
+		    'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
+		    'determinist': True}]}
+	  ]},
+
+	 # block 2
+	 {'section_type': MH.Pick,
+	  'weights': (10,5),
+	  'contents': [
+	      {'contents': String(val_list=['PLIP', 'PLOP'], size=4),
+	       'name': 'val4'},
+
+	      {'contents': SINT16_be(int_list=[-1, -3, -5, 7]),
+	       'name': 'val5'}
+	  ]},
+
+	 # block 3
+	 {'section_type': MH.FullyRandom,
+	  'contents': [
+	      {'contents': String(val_list=['AAA', 'BBBB', 'CCCCC']),
+	       'name': ('val21', 2)},
+
+	      {'contents': UINT8(int_list=[2, 4, 6, 8]),
+	       'qty': (2, 3),
+	       'name': ('val22', 2)}
+	  ]}
+     ]}
+
+At first glance, the data model is composed of three parts: *block 1*
+(lines 6-50), *block 2* (lines 53-61) and *block 3* (lines
+64-72). Within these blocks, various constructions are used. Below,
+some insights:
+
+line 6, line 21, line 54, line 65
+  The keyword ``section_type`` allows to choose the order to be
+  enforce by a non-terminal node to its children. ``MH.Ordered``
+  specifies that the children should be kept strictly in the order of
+  the description. ``MH.Random`` specifies there is no order to
+  enforce between any node *blocks* (we intend by block the set of all
+  the nodes that could be generated from a unique description block
+  like in line 24-26), except if the parent node has the
+  ``determinist`` attribute. ``MH.FullyRandom`` specifies there is no
+  order to enforce between every single nodes. ``MH.Pick`` specifies
+  that only one node among the children should be kept at a time---the
+  choice is randomly performed except if the parent has the
+  ``determinist`` attribute---as per the weight associated to each
+  child node (``weights``, line 55).
+
+lines 10-14
+  A terminal node with typed-value contents is defined. It is a
+  ``BitField``. This node have an attribute ``'qty': (1,5)`` (line 14)
+  which specifies that it can be present from 1 to 5 times. (Note
+  that, by default, raw data absorption will also be constrained by
+  this limit)
+
+line 16
+  This pattern allows to use an already defined node. In our case, it
+  is the node ``val2`` specified in lines 24-26.
+
+lines 28-29
+  This pattern with the keyword ``clone`` allows to make a full copy
+  of an existing node.
+
+
+lines 31-33
+  The keywords ``export_from`` and ``data_id`` are used for exporting
+  a data type from another data model. In this case it is a ``STRING
+  Descriptor`` data type from the ``USB`` data model.
+
+lines 35-39
+  Here is defined a *generator* nodes. It takes two nodes of
+  the current graph as parameters, namely: ``(val21, 2)`` and
+  ``val3``. It simply create a new node with a value equal to the
+  contents of its node parameters.
+
+  .. note:: The syntax ``(X, nb)``---as illustrated by ``(val21,
+	    2)``---allows to use within the description the same name ``X`` for
+	    different nodes having different parents while being able to reference
+	    them uniquely---thanks to ``nb``---as illustrated by this generator
+	    node.
+
+lines 45-50
+  Two alternate configurations of node ``val3`` are specified through
+  this pattern.
+
+lines 44
+  The keyword ``sync_qty_with`` allows to synchronize the number of
+  nodes to generate or to absorb with the one specified by its
+  name. In this case it is the node ``val1`` which is defined in lines 10-14.
 
 
 
-Visualization of a Data Issued From a Data Model
-++++++++++++++++++++++++++++++++++++++++++++++++
+To register such a description within the data model ``MyDF`` you can
+directly use :func:`fuzzfmk.data_model_helpers.DataModel.register()`
+as seen in the previous example. But if you want to access afterwards
+to the defined nodes, you can also transform this description to a
+graph, before registering it, like this:
 
-.. _zip-show-cmd:
-.. figure::  images/zip_show.png
+.. code-block:: python
+   :linenos:
+
+   mh = ModelHelper(self)
+   root_node = mh.create_graph_from_desc(d1)
+
+You could then access to all the registered nodes tided up in the
+specific dictionary ``mh.node_dico``, whether you want to perform
+extra operation on them.
+
+
+--------------
+
+.. [#] These chunks are information blocks that compose every PNG
+       file.
+
+
+
+
+Visualization of Modeled Data
+-----------------------------
+
+Let's show how to visualize an instance of the imaginary TestNode data
+model we just described in section :ref:`dm:mydf`. It is only a matter
+of calling the method ``.show()`` on it, which will draw in ASCII what
+can be seen on the figure :ref:`testnode-show`.
+
+.. _testnode-show:
+.. figure::  images/testnode_show.png
    :align:   center
 
+   TestNode Visualization
 
-.. todo:: Explain data paths, and how it is used within fuddly (like
-          unix file paths)
 
+.. note:: You can notice that the graph paths of the modeled data are
+          presented in a similar form as Unix file paths (for
+          instance ``TestNode/middle/val2``). As it is explained in
+          the section :ref:`tuto:disruptors`, using these paths are a
+          typical way for referencing a node within a modeled data.
+
+
+.. _tuto:dm-absorption:
+
+Absorption of Raw Data that Complies to the Data Model
+------------------------------------------------------
+
+A First Example
++++++++++++++++
+
+Let's begin with a simple example on how to absorb raw data that will
+match the imaginary TestNode data model we just described in section
+:ref:`dm:mydf`.
+
+.. code-block:: python
+   :linenos:
+
+   from fuzzfmk.plumbing import *
+
+   fmk = Fuzzer()
+
+   fmk.enable_data_model(name="mydf")
+
+   data_gen = fmk.dm.get_data('TestNode')    # first instance of TestNode data model
+   data_abs = fmk.dm.get_data('TestNode')  # second instance of TestNode data model
+
+   raw_data = data_gen.to_bytes()
+   print(raw_data)
+
+In our case, this code block output the following::
+
+  '\xc0\x027\xc0\x022@\x01\xfa\xc0\x02TOKOK\x14\x03b\x00l\x00a\x00b\x00l\x00a\x00.\x00.\x00.\x00AAA.R5l%Jde==@\x02\x15.R5l%Jde==.R5l%Jde==.R5l%Jde==.R5l%Jde==PLIPAAA\x08\x04\x06'
+
+(Note that if you execute that on your side you will maybe get
+something else, as there is some random in this data model.)
+
+And if we want to visualize it more gracefully, we can simply write
+``data_gen.show()`` which will draw in ASCII what can be seen on the
+figure :ref:`testnode-show`.
+
+.. note::
+   You can remark that we have instanciated twice the TestNode
+   data model in line 7 and 8. The first one referenced by ``data_gen``
+   was used to generate the previous raw data while the second one
+   referenced by ``data_abs`` will be used in what follows to
+   demonstrate absorption.
+
+In order to absorb what have been previously generated, we will use the
+second data model instance ``data_abs`` and will call its
+``.absorb()`` method with the previous generated data:
+
+.. code-block:: python
+   :linenos:
+
+   data_abs.absorb(raw_data)
+
+The following tuple will be returned::
+
+  (4, 0, 102, 'TestNode')  # --> (status, offset, size, name)
+
+The *status* is ``4`` which means that everything went well, that is,
+all the provided data has been absorbed. The *offset* and *size* give
+the part of the data that has been absorbed. In our case, it maps the
+full length of the original data, namely ``102`` bytes.
+
+Finally, if you call the method ``.show()`` on the model instance
+``data_abs`` you will see the same ASCII representation as the
+original one depicted by :ref:`testnode-show`.
+
+
+
+Absorption Constraints
+++++++++++++++++++++++
+
+Absorption constraints can be configured in order to accept data that
+does not conform completely to the defined data model, which can be
+helpful if this data model does not specify every aspects of a data
+format, or if you want to voluntarily step outside the data format
+requirements.
+
+By default, when you perform an absorption, every data model
+constraints will be enforce. If you want to free some ones, you need
+to provide a :class:`fuzzfmk.data_model.AbsCsts` object---specifying the constraints you
+want---when calling the method ``.absorb()``.
+
+Currently, there is four kinds of constraints:
+
+``size``
+  If size matters for some nodes---for instance if ``String()`` size
+  attributes are specified within a terminal node---this constraint
+  control it.
+ 
+``contents``
+  Only the values specified in the data model are accepted
+
+``regexp``
+  This constraint control if regular expression---that some terminal
+  nodes can specify---should be complied to.
+
+``struct``
+  This constraint control whether or not data structure should be
+  complied to. That covers part of the grammar specified through
+  non-terminal nodes: quantity of children, quantity synchronization
+  (specified through ``sync_qty_with`` attribute), and existence
+  synchronization---specified through ``exists_if`` or
+  ``exists_if_not`` attribute.
+
+
+There is also the shortcuts :class:`fuzzfmk.data_model.AbsNoCsts` and
+:class:`fuzzfmk.data_model.AbsFullCsts` which respectively set no
+constraints, or all constraints. Thus, if you want to only respect
+``size`` and ``struct`` constraints, you can provide the object
+``AbsNoCsts(size=True,struct=True)`` to the ``.absorb()`` method, like
+what follows:
+
+.. code-block:: python
+
+   status, off, size, name = data_abs.absorb(data, constraints=AbsNoCsts(size=True,struct=True))
+
+In some cases, it could also be useful to only set absorption
+constraints to some nodes. To do so, you can call the method
+:func:`fuzzfmk.data_model.Node.enforce_absorb_constraints()` on the
+related nodes with your chosen constraints. You can also add a
+specific field ``absorb_csts`` (refer to :ref:`dm:patterns`) within a
+data model description to reach the same objective.
+
+
+
+Defining Absorption Helpers
++++++++++++++++++++++++++++
+
+For complex scenario of absorption, the constraints defined within the
+data model are not always sufficient. In such cases you could add
+helpers to the related nodes. Let's say you want to model something
+like that:
+
+.. code-block:: python
+   :linenos:
+
+   split_desc = \
+   {'name': 'test',
+    'contents': [
+
+	{'name': 'prefix',
+	 'contents': UINT8(int_list=[0xcc, 0xff, 0xee])},
+
+	{'name': 'variable_string',
+	 'contents': String(max_sz=20)},
+
+	{'name': 'keycode',
+	 'contents': UINT16_be(int_list=[0xd2d3, 0xd2fe, 0xd2aa])},
+
+	{'name': 'variable_suffix',
+	 'contents': String(val_list=['END', 'THE_END'])}
+    ]}
+
+It works as intended for data generation, but if you want to absorb a
+data that comply to this model, you will currently need to help
+``fuddly`` a little, as the node ``variable_string`` could be too
+greedy and absorb the ``keycode`` whether the raw data to absorb
+contains a ``variable_string`` strictly below the limit of the
+specified ``20`` characters, like this::
+
+  \xffABCDEF\xd2\xfeTHE_END
+
+To help ``fuddly`` making the right things, you could define an helper
+function and associate it to the ``keycode`` node as illustrated in
+what follows:
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 1-6, 17, 21
+
+   def keycode_helper(blob, constraints, node_internals):
+       off = blob.find(b'\xd2')
+       if off > -1:
+	   return AbsorbStatus.Accept, off, None
+       else:
+	   return AbsorbStatus.Reject, 0, None
+
+   split_desc = \
+   {'name': 'test',
+    'contents': [
+
+	{'name': 'prefix',
+	 'contents': UINT8(int_list=[0xcc, 0xff, 0xee])},
+
+	{'name': 'variable_string',
+	 'contents': String(max_sz=20),
+	 'set_attrs': [NodeInternals.Abs_Postpone]},
+
+	{'name': 'keycode',
+	 'contents': UINT16_be(int_list=[0xd2d3, 0xd2fe, 0xd2aa]),
+	 'absorb_helper': keycode_helper},
+
+	{'name': 'variable_suffix',
+	 'contents': String(val_list=['END', 'THE_END'])}
+    ]}
+
+Notice that we also add a specific attribute to the node
+``variable_string``, namely: ``NodeInternals.Abs_Postpone``. This will
+instruct ``fuddly`` to postpone any absorption corresponding to this
+node, awaiting that the next node first find in the raw data what he
+wants. Now, if we look at the ``keycode_helper()`` function, we can
+notice that it has access to part of the raw data (the one that still
+need to be consumed/absorbed) through its ``blob`` parameter. It
+basically looks for a byte with the value ``\xd2``. If it finds it, it
+will return a success status as well as the offset where it wants to
+start absorption (in this case it is the offset of what it
+finds). Note, that the last value returned in the tuple is a ``size``
+attribute. In this case it is set to ``None``, but it can enforce the
+size of what should be absorbed in what remains in the raw data (could
+be useful for instance for ``String()``).
+
+Now if you try to absorb the previous raw data, it will work as
+expected. This example is voluntarily simple enough to better grasp
+what is the purpose of having a helper. It could be legitimately
+expected that in this case ``fuddly`` do it by itself, and in fact it
+is currently able to do so ;) thanks to some already defined
+``absorb_auto_helpers`` methods. Thus, in this example you could
+remove the *helper* stuff, while still keeping the
+``NodeInternals.Abs_Postpone`` attribute on the node
+``variable_string``, and everything will work as expected.
+
+.. seealso:: The already defined auto-helper functions, behave
+             accordingly to the typed value contents. They are more
+             elaborated than the example *helper* function defined
+             above. Look at the code
+             :func:`fuzzfmk.value_types.INT.absorb_auto_helper()`
+             and/or
+             :func:`fuzzfmk.value_types.String.absorb_auto_helper()`
+             in order to better understand how it works.
+
+Even if ``fuddly`` can handle by itself this classic cases, you
+could face situations where absorption will really not be so obvious
+(whether you didn't put sufficient constraints within the data model,
+or because you don't want to for letting more freedom during data
+generation).
 
 
 
@@ -792,6 +1549,10 @@ Initiating the Fuzzing Environment
 Defining the Targets
 --------------------
 
+.. todo:: Write the section on Target()
+
+
+
 Generic Targets
 +++++++++++++++
 
@@ -800,8 +1561,17 @@ Specific Targets
 ++++++++++++++++
 
 
+
+
+
+.. _logger-def:
+
 Defining the Logger
 -------------------
+
+.. todo:: Write the section on Logger()
+
+
 
 .. _tuto:disruptors:
 
@@ -810,7 +1580,13 @@ Defining Specific Disruptors
 
 .. note:: Also look at :ref:`useful-examples`
 
-.. todo:: Present the ModelWalker class
+
+
+.. todo:: Write the section on disruptors. Explain:
+	  - Data paths, syntactic & semantic criteria
+	  - primitive to search and modify within the graph
+	  - ModelWalker class
+	  - ...
 
 
 
@@ -819,6 +1595,8 @@ Defining Specific Disruptors
 Defining Operators and Probes
 -----------------------------
 
+.. todo:: Write the section on Operators
+
 In order to automatize what a human operator could perform to interact
 with one or more targets, the abstracted class
 :class:`fuzzfmk.tactics_helper.Operator` can be inherited. The purpose
@@ -826,7 +1604,7 @@ of this class is to give you the opportunity to plan the operations
 you want to perform on the target (data type to send, type of
 modifications to perform on data before sending it, and so on). Thus,
 you could embeds all the protocol logic to be able to adapt the
-fuzzing strategy based on various criteria---{\em e.g.}, monitoring
+fuzzing strategy based on various criteria---*e.g.*, monitoring
 feedback, operator choices, and so on. By default, the operator is
 recalled after each data emission to the target, but it can also
 provide to fuddly a batch of instructions, that will be executed prior
@@ -862,8 +1640,3 @@ Probes & The Monitoring Subsystem
 
 
 
-
-.. _fuddly-advanced:
-
-Using `fuddly` Through Advanced Python Interpreter
-==================================================

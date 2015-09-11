@@ -24,12 +24,11 @@
 ################################################################################
 
 import sys
-import os
 
 from fuzzfmk.global_resources import *
 from fuzzfmk.plumbing import *
 
-sys.path.insert(0, os.path.join(app_folder, 'external_libs'))
+sys.path.insert(0, external_libs_folder)
 
 if __name__ == "__main__":
 

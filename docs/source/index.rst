@@ -20,6 +20,8 @@ Contents:
 
    disruptors
 
+   data_model
+
    api
 
 

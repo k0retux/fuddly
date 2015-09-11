@@ -1788,6 +1788,45 @@ class TestNodeFeatures(unittest.TestCase):
         self.assertEqual(size, len(msg))
 
 
+    def test_absorb_nonterm_fullyrandom(self):
+        
+        test_desc = \
+        {'name': 'test',
+         'contents': [
+             {'section_type': MH.FullyRandom,
+              'contents': [
+                  {'contents': String(val_list=['AAA', 'BBBB', 'CCCCC']),
+                   'qty': (2, 3),
+                   'name': 'str'},
+
+                  {'contents': UINT8(int_list=[2, 4, 6, 8]),
+                   'qty': (3, 6),
+                   'name': 'int'}
+              ]}
+         ]}
+
+        for i in range(5):
+            mh = ModelHelper()
+            node = mh.create_graph_from_desc(test_desc)
+            node_abs = Node('test_abs', base_node=node)
+
+            node.set_env(Env())
+            node_abs.set_env(Env())
+
+            node.show()
+
+            data = node.to_bytes()
+            status, off, size, name = node_abs.absorb(data, constraints=AbsFullCsts())
+
+            print('Absorb Status:', status, off, size, name)
+            print(' \_ length of original data:', len(data))
+            print(' \_ remaining:', data[size:])
+
+            node_abs.show()
+
+            self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+
+
     def test_intg_absorb_1(self):
 
         self.helper1_called = False

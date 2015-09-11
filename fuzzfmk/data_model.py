@@ -40,7 +40,6 @@ from fuzzfmk.basic_primitives import *
 from libs.external_modules import *
 from fuzzfmk.global_resources import *
 
-
 DEBUG = False
 
 
@@ -100,7 +99,7 @@ class Data(object):
 
     def to_bytes(self):
         if self.node:
-            val = self.node.get_flatten_value()
+            val = self.node.to_bytes()
             self.raw = val
 
         return self.raw
@@ -167,7 +166,7 @@ class Data(object):
 
     def get_length(self):
         if self.node:
-            self.raw = self.node.get_flatten_value()
+            self.raw = self.node.to_bytes()
         return len(self.raw)
 
     def materialize(self):
@@ -213,12 +212,12 @@ class Data(object):
 
     def __str__(self):
         if self.node:
-            self.raw = self.node.get_flatten_value()
+            self.raw = self.node.to_bytes()
         return str(self.raw)
 
     def __repr__(self):
         if self.node:
-            self.raw = self.node.get_flatten_value()
+            self.raw = self.node.to_bytes()
         return repr(self.raw)
 
 
@@ -969,6 +968,7 @@ class NodeInternals_GenFunc(NodeInternals):
             st, off, sz, name = self.generated_node.absorb(blob, constraints=constraints, conf=conf)
         except (ValueError, AssertionError) as e:
             st, off, sz = AbsorbStatus.Reject, 0, None
+            print('\n***TEST')
 
         # if st is AbsorbStatus.Reject:
         #     self.reset_generator()
@@ -1476,13 +1476,13 @@ class NodeInternals_Func(NodeInternals_Term):
                 func_node_arg = self.node_arg
 
             if isinstance(func_node_arg, Node):
-                val = func_node_arg.get_flatten_value(conf=conf, recursive=recursive)
+                val = func_node_arg.to_bytes(conf=conf, recursive=recursive)
             # if not an Node it is either a NodeAbstraction or a list
             else:
                 val = []
                 for e in func_node_arg:
                     if e is not None:
-                        val.append(e.get_flatten_value(conf=conf, recursive=recursive))
+                        val.append(e.to_bytes(conf=conf, recursive=recursive))
                     else:
                         val.append(b'')
 
@@ -2036,9 +2036,9 @@ class NodeInternals_NonTerm(NodeInternals):
             if len(to_entangle) > 1:
                 make_entangled_nodes(to_entangle)
 
-            # node.get_flatten_value() has to be called after the
+            # node.to_bytes() has to be called after the
             # previous copy process, to avoid copying frozen node
-            self._set_drawn_node_attrs(node, nb, len(node.get_flatten_value()))
+            self._set_drawn_node_attrs(node, nb, len(node.to_bytes()))
 
 
         if self.frozen_node_list is not None:
@@ -2106,7 +2106,7 @@ class NodeInternals_NonTerm(NodeInternals):
                     lg = len(l)
 
                     # unfold the Nodes one after another
-                    if delim[2:3] == '..':
+                    if delim[2:] == '..':
                         for i in range(lg):
                             node = random.choice(l)
                             l.remove(node)
@@ -2171,7 +2171,7 @@ class NodeInternals_NonTerm(NodeInternals):
         off = 0
         for idx in range(num):
             n = self.frozen_node_list[idx]
-            off += len(n.get_flatten_value())
+            off += len(n.to_bytes())
 
         return off
 
@@ -2207,8 +2207,8 @@ class NodeInternals_NonTerm(NodeInternals):
 
         return node_desc[0], min_node, max_node
 
-    def _clone_node(self, base_node, node_no):
-        if node_no > 0:
+    def _clone_node(self, base_node, node_no, force_clone=False):
+        if node_no > 0 or force_clone:
             base_node.tmp_ref_count += 1
             nid = base_node.name + ':' + str(base_node.tmp_ref_count)
             node = Node(nid, base_node=base_node, ignore_frozen_state=True,
@@ -2265,9 +2265,11 @@ class NodeInternals_NonTerm(NodeInternals):
             
         # Helper function
         def _try_absorption_with(base_node, min_node, max_node, blob, consumed_size,
-                                 postponed_node_desc):
+                                 postponed_node_desc, force_clone=False):
 
             DEBUG = False
+
+            consumed_nb = 0
 
             if constraints[AbsCsts.Structure]:
                 qty = self._qty_from_node(base_node)
@@ -2281,7 +2283,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
             if max_node == 0:
                 # base_node.reset_state(recursive=True, conf=conf)
-                return None, blob, consumed_size
+                return None, blob, consumed_size, consumed_nb
             elif min_node == max_node:
                 itr = range(max_node)
             else:
@@ -2292,15 +2294,14 @@ class NodeInternals_NonTerm(NodeInternals):
             abort = False
             tmp_list = []
             for i, node_no in zip(itr, range(len(itr))):
-
-                node = self._clone_node(base_node, node_no)
+                node = self._clone_node(base_node, node_no, force_clone)
 
                 # We try to absorb the blob
                 st, off, sz, name = node.absorb(blob, constraints, conf=conf)
 
                 if st == AbsorbStatus.Reject:
                     if DEBUG:
-                        print('REJECT: %s, blob: %r' % (node.name, blob[:4]))
+                        print('REJECT: %s, blob: %r ...' % (node.name, blob[:4]))
                     if min_node == 0:
                         # abort = False
                         break
@@ -2311,7 +2312,7 @@ class NodeInternals_NonTerm(NodeInternals):
                         break
                 elif st == AbsorbStatus.Absorbed or st == AbsorbStatus.FullyAbsorbed:
                     if DEBUG:
-                        print('\nABSORBED: %s, abort: %r, blob: %r, consumed: %d' \
+                        print('\nABSORBED: %s, abort: %r, blob: %r ... , consumed: %d' \
                               % (node.name, abort, blob[:sz][:50], sz))
 
                     sz2 = 0
@@ -2335,11 +2336,20 @@ class NodeInternals_NonTerm(NodeInternals):
                             # We need to reject this absorption as
                             # accepting it could prevent finding a
                             # good non-terminal shape.
-                            abort = True
-                            break
+                            if i == 0 and min_node == 0:  # this case is OK
+                                # abort = False
+                                break
+                            elif i <= min_node: # reject in this case
+                                abort = True
+                                break
+                            else:   # no need to check max_node, the loop stop at it 
+                                # abort = False
+                                break
 
                     blob = blob[off+sz:]
+                    assert(sz2 == off)
                     consumed_size += sz+sz2 # off+sz
+                    consumed_nb = i+1 if min_node == max_node else i
                     tmp_list.append(node)
                     # self.frozen_node_list.append(node)
                 else:
@@ -2356,12 +2366,12 @@ class NodeInternals_NonTerm(NodeInternals):
                         nd.reset_state(conf=conf)
             else:
                 nb_nodes = len(tmp_list)
-                self._set_drawn_node_attrs(base_node, nb=nb_nodes, sz=len(base_node.get_flatten_value()))
+                self._set_drawn_node_attrs(base_node, nb=nb_nodes, sz=len(base_node.to_bytes()))
                 for n, idx in zip(tmp_list, range(nb_nodes)):
                     n._set_clone_info((idx, nb_nodes))
                 self.frozen_node_list += tmp_list
 
-            return abort, blob, consumed_size
+            return abort, blob, consumed_size, consumed_nb
 
 
         while not abs_exhausted and status == AbsorbStatus.Reject:
@@ -2399,7 +2409,7 @@ class NodeInternals_NonTerm(NodeInternals):
                             postponed_node_desc = node_desc
                             continue
                         else:
-                            abort, blob, consumed_size = _try_absorption_with(base_node,
+                            abort, blob, consumed_size, consumed_nb = _try_absorption_with(base_node,
                                                                               min_node, max_node,
                                                                               blob, consumed_size,
                                                                               postponed_node_desc)
@@ -2420,45 +2430,107 @@ class NodeInternals_NonTerm(NodeInternals):
 
                 elif delim[1] == '=':
 
-                    # '=.' means: no particular orders between each kind of nodes
-                    # '=..' means: no particular orders between the nodes
-                    # ---------------------------------------------------
-                    # While this distinction can make sense for node
-                    # generation, it does not really for absorption. Thus,
-                    # '=.' and '=..' are handled the same way.
+                    # '=..' means: no particular orders between each kind of nodes
+                    # '=.' means: no particular orders between all the nodes (fully random)
 
                     if delim[2] == '.':
                         node_desc_list = copy.copy(sublist)
                         list_sz = len(node_desc_list)
                         cpt = list_sz
 
-                        while node_desc_list:
+                        if delim[2:] == '..':
+                            while node_desc_list:
 
-                            if cpt == 0 and len(node_desc_list) == list_sz:                               
-                                # if we enter here it means no
-                                # node has been able to absorb
-                                # anything
-                                abort = True
-                                break
+                                if cpt == 0 and len(node_desc_list) == list_sz:
+                                    # if we enter here it means no
+                                    # node has been able to absorb
+                                    # anything
+                                    abort = True
+                                    break
 
-                            elif cpt == 0:
-                                list_sz = len(node_desc_list)
-                                cpt = list_sz
+                                elif cpt == 0:
+                                    list_sz = len(node_desc_list)
+                                    cpt = list_sz
 
-                            cpt -= 1
+                                cpt -= 1
 
-                            node_desc = node_desc_list.pop(0)
-                            base_node, min_node, max_node = NodeInternals_NonTerm._parse_node_desc(node_desc)
+                                node_desc = node_desc_list.pop(0)
+                                base_node, min_node, max_node = NodeInternals_NonTerm._parse_node_desc(node_desc)
 
-                            # postponed_node_desc is not supported here as it does not make sense
-                            abort, blob, consumed_size = _try_absorption_with(base_node, min_node, max_node, blob, consumed_size,
-                                                                              postponed_node_desc=postponed_node_desc)
-                            if abort is None:
-                                continue
+                                # postponed_node_desc is not supported here as it does not make sense
+                                abort, blob, consumed_size, consumed_nb = _try_absorption_with(base_node, min_node, max_node,
+                                                                                        blob, consumed_size,
+                                                                                        postponed_node_desc=postponed_node_desc)
+                                if abort is None:
+                                    continue
 
-                            if abort:
-                                # we give a new chance to this node because it is maybe not at the right place
-                                node_desc_list.append(node_desc)
+                                if abort:
+                                    # we give a new chance to this node because it is maybe not at the right place
+                                    node_desc_list.append(node_desc)
+
+                        else: # case delim[2:] == '.'
+
+                            l = []
+                            qty_list = []
+                            for node_desc in node_desc_list:
+                                base_node, min_node, max_node = NodeInternals_NonTerm._parse_node_desc(node_desc)
+                                l.append([base_node, min_node, False]) # (bn, min, force_clone)
+                                qty_list.append([max_node])
+
+                            prev_qty_list = copy.deepcopy(qty_list)
+                            stop_cpt = 0
+                            next_l = l
+                            next_qty_list = qty_list
+                            while True:
+                                l = copy.copy(next_l)
+                                qty_list = copy.copy(next_qty_list)
+                                list_sz = len(l)
+
+                                if stop_cpt == list_sz:
+                                    for node_tuple, qty_obj in zip(l, qty_list):
+                                        if node_tuple[1] > 0:
+                                            abort = True
+                                            break
+                                    else:
+                                        abort = False
+
+                                    break
+                                        
+
+                                for node_tuple, qty_obj in zip(l, qty_list):
+                                    base_node, min_node, force_clone = node_tuple
+                                    max_node = qty_obj[0]
+                                    # we force min_node to 0 as we don't want _try_absorption_with()
+                                    # to check that condition, as we do it within the caller.
+                                    fake_min_node = 0
+                                
+                                    if max_node != 0:
+                                        # postponed_node_desc is not supported here as it does not make sense
+                                        tmp_abort, blob, consumed_size, consumed_nb = _try_absorption_with(base_node, fake_min_node,
+                                                                                        max_node,
+                                                                                        blob, consumed_size,
+                                                                                        postponed_node_desc=postponed_node_desc,
+                                                                                        force_clone=force_clone)
+
+                                    if not tmp_abort and consumed_nb > 0:
+                                        assert(qty_obj[0] - consumed_nb >= 0)
+                                        qty_obj[0] = qty_obj[0] - consumed_nb # update max_node
+                                        # We now set force_clone to True as we already consumed the base_node
+                                        # but _try_absorption_with() will not know that if we recall it with
+                                        # the same base_node at a later time
+                                        node_tuple[2] = True
+                                        if node_tuple[1] > 0:
+                                            node_tuple[1] = max(0, node_tuple[1] - consumed_nb) # update min_node
+                                        if qty_obj[0] == 0:
+                                            next_l.remove(node_tuple)
+                                            next_qty_list.remove(qty_obj)
+
+                                if qty_list == prev_qty_list:
+                                    stop_cpt += 1
+                                else:
+                                    stop_cpt = 0
+                                    prev_qty_list = copy.deepcopy(qty_list)
+
 
                     elif delim[2] == '+':
 
@@ -2490,8 +2562,9 @@ class NodeInternals_NonTerm(NodeInternals):
                                 continue
 
                             else:
-                                abort, blob, consumed_size = _try_absorption_with(base_node, min_node, max_node, blob, consumed_size,
-                                                                                  postponed_node_desc)
+                                abort, blob, consumed_size, consumed_nb = _try_absorption_with(base_node, min_node, max_node,
+                                                                                               blob, consumed_size,
+                                                                                               postponed_node_desc)
 
                                 if abort is None or abort:
                                     continue
@@ -3916,10 +3989,6 @@ class Node(object):
                 e.reset_state(recursive=recursive, exclude_self=exclude_self, conf=next_conf,
                               ignore_entanglement=True)
 
-
-    def get_flatten_value(self, conf=None, recursive=True):
-        return self.to_bytes(conf=conf, recursive=recursive)
-
     def to_bytes(self, conf=None, recursive=True):
         val = self.get_value(conf=conf, recursive=recursive)
 
@@ -3928,6 +3997,8 @@ class Node(object):
             val = b''.join(val)
 
         return val
+
+    get_flatten_value = to_bytes
 
     def set_frozen_value(self, value, conf=None):
         conf = self.__check_conf(conf)
@@ -3986,13 +4057,13 @@ class Node(object):
                     continue
 
             if verbose:
-                l.append((n, e.depth, e.get_flatten_value()))
+                l.append((n, e.depth, e.to_bytes()))
             else:
                 l.append((n, e.depth))
 
             if e.env is None:
                 print(n + ' (' + str(e.depth) + ')' + ' ' + str(e.env))
-                print('Node value: ', e.get_flatten_value())
+                print('Node value: ', e.to_bytes())
                 print("The 'env' attr of this Node is NONE")
                 raise ValueError
 
@@ -4180,7 +4251,7 @@ class Node(object):
                 prev_depth = depth
 
                 if node.is_term(conf_tmp):
-                    raw = node.get_flatten_value()
+                    raw = node.to_bytes()
                     raw_len = len(raw)
                     val = node.pretty_print()
 
@@ -4234,7 +4305,7 @@ class Node(object):
         return id(self)
 
     def __str__(self):
-        # NEVER return something with self.get_flatten_value() as side
+        # NEVER return something with self.to_bytes() as side
         # effects are not welcomed
         return repr(self)
 
@@ -4408,169 +4479,6 @@ class Env(object):
         new_env.exhausted_nodes = copy.copy(self.exhausted_nodes)
         new_env.env4NT = copy.copy(self.env4NT)
         return new_env
-
-
-
-class DataModel(object):
-    ''' The abstraction of a data model.
-    '''
-
-    file_extension = 'bin'
-    name = None
-
-    def __init__(self):
-        self.__dm_hashtable = {}
-        self.__built = False
-        self.__confs = set()
-
-    def pre_build(self):
-        '''
-        This method is called when a data model is loaded.
-        It is executed before build_data_model().
-        To be implemented by the user.
-        '''
-        pass
-        
-
-    def build_data_model(self):
-        '''
-        This method is called when a data model is loaded.
-        It is called only the first time the data model is loaded. 
-        To be implemented by the user.
-        '''
-        pass
-
-    def load_data_model(self, dm_db):
-        self.pre_build()
-        if not self.__built:
-            self.__dm_db = dm_db
-            self.build_data_model()
-            self.__built = True
-
-    def unload_data_model(self):
-        pass
-
-
-    def get_external_node(self, dm_name, data_id, name=None):
-        dm = self.__dm_db[dm_name]
-        dm.load_data_model(self.__dm_db)
-        try:
-            node = dm.get_data(data_id, name=name)
-        except ValueError:
-            return None
-
-        return node
-
-
-    def show(self):
-        print(colorize(FontStyle.BOLD + '\n-=[ Data Types ]=-\n', rgb=Color.INFO))
-        idx = 0
-        for data_key in self.__dm_hashtable:
-            print(colorize('[%d] ' % idx + data_key, rgb=Color.SUBINFO))
-            idx += 1
-
-    def get_data(self, hash_key, name=None):
-        if hash_key in self.__dm_hashtable:
-            nm = hash_key if name is None else name
-            node = Node(nm, base_node=self.__dm_hashtable[hash_key], ignore_frozen_state=False)
-            return node
-        else:
-            raise ValueError('Requested data does not exist!')
-
-
-    def data_identifiers(self):
-        hkeys = sorted(self.__dm_hashtable.keys())
-        for k in hkeys:
-            yield k
-        
-
-    def get_available_confs(self):
-        return sorted(self.__confs)
-
-    def register_nodes(self, *node_list):
-        '''Enable to registers the nodes that will be part of the data
-        model. At least one node should be registered within
-        :func:`DataModel.build_data_model()` to represent the data
-        format. But several nodes can be registered in order, for instance, to
-        represent the various component of a protocol/standard/...
-        '''
-        if not node_list:
-            msg = "\n*** WARNING: nothing to register for " \
-                  "the data model '{nm:s}'!"\
-                  "\n   [probable reason: ./imported_data/{nm:s}/ not " \
-                  "populated with sample files]".format(nm=self.name)
-            raise UserWarning(msg)
-
-        for e in node_list:
-            if e is None:
-                continue
-            if e.env is None:
-                env = Env()
-                env.set_data_model(self)
-                e.set_env(env)
-            else:
-                e.env.set_data_model(self)
-
-            self.__dm_hashtable[e.name] = e
-
-            self.__confs = self.__confs.union(e.gather_alt_confs())
-
-    def set_new_env(self, node):
-        env = Env()
-        env.set_data_model(self)
-        node.set_env(env)
-
-
-    def import_file_contents(self, extension=None, dissector=lambda x, y: x,
-                             subdir=None, path=None, filename=None):
-
-        if hasattr(self, 'dissect'):
-            dissector = self.dissect
-            
-        if extension is None:
-            extension = self.file_extension
-        if path is None:
-            path = self.get_import_directory_path(subdir=subdir)
-
-        r_file = re.compile(".*\." + extension + "$")
-        def is_good_file_by_ext(fname):
-            return bool(r_file.match(fname))
-
-        def is_good_file_by_fname(fname):
-            return filename == fname
-            
-        files = []
-        for (dirpath, dirnames, filenames) in os.walk(path):
-            files.extend(filenames)
-            break
-        
-        if filename is None:
-            files = list(filter(is_good_file_by_ext, files))
-        else:
-            files = list(filter(is_good_file_by_fname, files))
-        msgs = {}
-        idx = 0
-
-        for name in files:
-            with open(os.path.join(path, name), 'rb') as f:
-                buff = f.read()
-                msgs[name] = dissector(buff, idx)
-            idx +=1
-
-        return msgs
-
-    def get_import_directory_path(self, subdir=None):
-        if subdir is None:
-            subdir = self.name
-        if subdir is None:
-            path = os.path.join(app_folder, 'imported_data')
-        else:
-            path = os.path.join(app_folder, 'imported_data', subdir)
-
-        if not os.path.exists(path):
-            os.makedirs(path)
-
-        return path
 
 
 

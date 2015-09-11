@@ -156,6 +156,8 @@ class meta_8b(type):
             if 'usable' in attrs:
                 if cls.usable == False:
                     return
+            else:
+                cls.usable = True
             meta_8b.compatible_class[name] = cls
 
         if "Fuzzy" in name:
@@ -179,6 +181,8 @@ class meta_16b(type):
             if 'usable' in attrs:
                 if cls.usable == False:
                     return
+            else:
+                cls.usable = True
             meta_16b.compatible_class[name] = cls
 
         if "Fuzzy" in name:
@@ -202,6 +206,8 @@ class meta_32b(type):
             if 'usable' in attrs:
                 if cls.usable == False:
                     return
+            else:
+                cls.usable = True
             meta_32b.compatible_class[name] = cls
 
         if "Fuzzy" in name:
@@ -224,6 +230,8 @@ class meta_64b(type):
             if 'usable' in attrs:
                 if cls.usable == False:
                     return
+            else:
+                cls.usable = True
             meta_64b.compatible_class[name] = cls
 
         if "Fuzzy" in name:
@@ -245,6 +253,8 @@ class meta_int_str(type):
             if 'usable' in attrs:
                 if cls.usable == False:
                     return
+            else:
+                cls.usable = True
             meta_int_str.compatible_class[name] = cls
 
         if "Fuzzy" in name:
@@ -1410,8 +1420,8 @@ class BitField(VT_Alt):
     def get_value(self):
         '''
         In determinist mode, all the values such a BitField should
-        be able to generate are not covered but only a subset of it
-        (i.e., all combinations are not computed). It has been choosen
+        be able to generate are not covered but only a subset of them
+        (i.e., all combinations are not computed). It has been chosen
         to only keep the value based on the following algorithm:
         "exhaust each subfield one at a time".
 

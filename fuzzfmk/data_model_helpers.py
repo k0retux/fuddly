@@ -61,8 +61,8 @@ class MH:
 
     # section_type attribute
     Ordered = '>'
-    Random = '=.'
-    FullyRandom = '=..'
+    Random = '=..'
+    FullyRandom = '=.'
     Pick = '=+'
 
     # duplicate_mode attribute
@@ -94,7 +94,8 @@ class ModelHelper(object):
         # Export description keys
         'export_from', 'data_id',
         # node properties description keys
-        'determinist', 'random', 'clear_attrs', 'set_attrs', 'absorb_csts',
+        'determinist', 'random', 'clear_attrs', 'set_attrs',
+        'absorb_csts', 'absorb_helper',
         'semantics', 'fuzz_weight',
         'sync_qty_with', 'exists_if', 'exists_if_not',
         'post_freeze'
@@ -251,7 +252,7 @@ class ModelHelper(object):
             self._register_todo(n, self._complete_generator, args=(node_args, conf), unpack_args=True,
                                 prio=self.HIGH_PRIO)
         else:
-            raise ValueError("Error[invalid contents]: {:s}".format(repr(contents)))
+            raise ValueError("*** ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
         self._handle_common_attr(n, desc, conf)
 
@@ -359,6 +360,8 @@ class ModelHelper(object):
         contents = desc.get('contents')
 
         if issubclass(contents.__class__, VT):
+            if hasattr(contents, 'usable') and contents.usable == False:
+                raise ValueError("ERROR: {:s} is not usable! (use a subclass of it)".format(repr(contents)))
             n.set_values(value_type=contents, conf=conf)
         elif hasattr(contents, '__call__'):
             other_args = desc.get('other_args', None)
@@ -376,7 +379,7 @@ class ModelHelper(object):
                                 prio=self.HIGH_PRIO)
 
         else:
-            raise ValueError("Error[invalid contents]: {:s}".format(repr(contents)))
+            raise ValueError("ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
         self._handle_common_attr(n, desc, conf)
 
@@ -400,6 +403,9 @@ class ModelHelper(object):
         param = desc.get('absorb_csts', None)
         if param is not None:
             node.enforce_absorb_constraints(param, conf=conf)
+        param = desc.get('absorb_helper', None)
+        if param is not None:
+            node.set_absorb_helper(param, conf=conf)
         param = desc.get('semantics', None)
         if param is not None:
             node.set_semantics(NodeSemantics(param))
@@ -490,3 +496,190 @@ class ModelHelper(object):
         assert(not isinstance(node.cc, NodeInternals_Empty))
                
         return node
+
+
+
+#### Data Model Abstraction
+
+class DataModel(object):
+    ''' The abstraction of a data model.
+    '''
+
+    file_extension = 'bin'
+    name = None
+
+    def __init__(self):
+        self.__dm_hashtable = {}
+        self.__built = False
+        self.__confs = set()
+
+    def pre_build(self):
+        '''
+        This method is called when a data model is loaded.
+        It is executed before build_data_model().
+        To be implemented by the user.
+        '''
+        pass
+
+
+    def build_data_model(self):
+        '''
+        This method is called when a data model is loaded.
+        It is called only the first time the data model is loaded.
+        To be implemented by the user.
+        '''
+        pass
+
+    def load_data_model(self, dm_db):
+        self.pre_build()
+        if not self.__built:
+            self.__dm_db = dm_db
+            self.build_data_model()
+            self.__built = True
+
+    def unload_data_model(self):
+        pass
+
+
+    def get_external_node(self, dm_name, data_id, name=None):
+        dm = self.__dm_db[dm_name]
+        dm.load_data_model(self.__dm_db)
+        try:
+            node = dm.get_data(data_id, name=name)
+        except ValueError:
+            return None
+
+        return node
+
+
+    def show(self):
+        print(colorize(FontStyle.BOLD + '\n-=[ Data Types ]=-\n', rgb=Color.INFO))
+        idx = 0
+        for data_key in self.__dm_hashtable:
+            print(colorize('[%d] ' % idx + data_key, rgb=Color.SUBINFO))
+            idx += 1
+
+    def get_data(self, hash_key, name=None):
+        if hash_key in self.__dm_hashtable:
+            nm = hash_key if name is None else name
+            node = Node(nm, base_node=self.__dm_hashtable[hash_key], ignore_frozen_state=False)
+            return node
+        else:
+            raise ValueError('Requested data does not exist!')
+
+
+    def data_identifiers(self):
+        hkeys = sorted(self.__dm_hashtable.keys())
+        for k in hkeys:
+            yield k
+
+
+    def get_available_confs(self):
+        return sorted(self.__confs)
+
+    def register(self, *node_or_desc_list):
+        for n in node_or_desc_list:
+            if isinstance(n, Node):
+                self.register_nodes(n)
+            else:
+                self.register_descriptors(n)
+
+
+    def register_nodes(self, *node_list):
+        '''Enable to registers the nodes that will be part of the data
+        model. At least one node should be registered within
+        :func:`DataModel.build_data_model()` to represent the data
+        format. But several nodes can be registered in order, for instance, to
+        represent the various component of a protocol/standard/...
+        '''
+        if not node_list:
+            msg = "\n*** WARNING: nothing to register for " \
+                  "the data model '{nm:s}'!"\
+                  "\n   [probable reason: ./imported_data/{nm:s}/ not " \
+                  "populated with sample files]".format(nm=self.name)
+            raise UserWarning(msg)
+
+        for e in node_list:
+            if e is None:
+                continue
+            if e.env is None:
+                env = Env()
+                env.set_data_model(self)
+                e.set_env(env)
+            else:
+                e.env.set_data_model(self)
+
+            self.__dm_hashtable[e.name] = e
+
+            self.__confs = self.__confs.union(e.gather_alt_confs())
+
+
+    def register_descriptors(self, *desc_list):
+        for desc in desc_list:
+            mh = ModelHelper(dm=self)
+            desc_name = 'Unreadable Name'
+            try:
+                desc_name = desc['name']
+                node = mh.create_graph_from_desc(desc)
+            except:
+                msg = "*** ERROR: problem encountered with the '{desc:s}' descriptor!".format(desc=desc_name)
+                raise UserWarning(msg)
+
+            self.register_nodes(node)
+
+    def set_new_env(self, node):
+        env = Env()
+        env.set_data_model(self)
+        node.set_env(env)
+
+
+    def import_file_contents(self, extension=None, dissector=lambda x, y: x,
+                             subdir=None, path=None, filename=None):
+
+        if hasattr(self, 'dissect'):
+            dissector = self.dissect
+
+        if extension is None:
+            extension = self.file_extension
+        if path is None:
+            path = self.get_import_directory_path(subdir=subdir)
+
+        r_file = re.compile(".*\." + extension + "$")
+        def is_good_file_by_ext(fname):
+            return bool(r_file.match(fname))
+
+        def is_good_file_by_fname(fname):
+            return filename == fname
+
+        files = []
+        for (dirpath, dirnames, filenames) in os.walk(path):
+            files.extend(filenames)
+            break
+
+        if filename is None:
+            files = list(filter(is_good_file_by_ext, files))
+        else:
+            files = list(filter(is_good_file_by_fname, files))
+        msgs = {}
+        idx = 0
+
+        for name in files:
+            with open(os.path.join(path, name), 'rb') as f:
+                buff = f.read()
+                msgs[name] = dissector(buff, idx)
+            idx +=1
+
+        return msgs
+
+    def get_import_directory_path(self, subdir=None):
+        if subdir is None:
+            subdir = self.name
+        if subdir is None:
+            path = os.path.join(app_folder, 'imported_data')
+        else:
+            path = os.path.join(app_folder, 'imported_data', subdir)
+
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+        return path

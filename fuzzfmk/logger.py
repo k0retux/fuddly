@@ -429,7 +429,7 @@ class Logger(object):
         self.stats = stats
 
     def log_stats(self):
-        fd = open(app_folder + '/trace/' + self.now + '_' + self.name + '_stats', 'w')
+        fd = open(app_folder + '/trace/' + self.now + '_' + self.name + '_stats', 'w+')
 
         stats = self.stats.get_formated_stats()
 
