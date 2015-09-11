@@ -710,17 +710,13 @@ chain, basically ``JPG<finite=True> tTYPE``.
 
 .. _fuddly-advanced:
 
-Using `fuddly` Through Advanced Python Interpreter
-==================================================
-
-.. todo:: Write the section to use fuddly Through Advanced Python
-          Interpreter
-
+Using ``fuddly`` Through Advanced Python Interpreter
+====================================================
 
 To use ``fuddly`` within any python interpreter like ``ipython``, you
 will need to issue the following commands:
 
-.. code-block:: none
+.. code-block:: python
    :linenos:
    :emphasize-lines: 1,2,5
 
@@ -734,7 +730,110 @@ will need to issue the following commands:
 
 
 The lines 1, 2 and 5 are not necessary if you don't intend to use
-external libraries.
+external libraries. From now on you can use ``fuddly`` through the
+object ``fmk``. Every commands defined by ``FuzzShell`` (refer to
+:ref:`tuto:start-fuzzshell`) are backed by a method of the class
+:class:`fuzzfmk.plumbing.Fuzzer`.
+
+Below we demonstrate some commands:
+
+.. code-block:: python
+   :linenos:
+
+   # To show the available data models
+   fmk.show_data_models()
+
+   # Contains the list of all the DataModel objects available
+   fmk.dm_list
+
+   # Enable the ZIP data model by name, and select the target with ID ``1``
+   fmk.enable_data_model(name='zip', tg=1)
+
+   # Reference to the currently loaded data model, in this case the ZIP one
+   fmk.dm
+
+   # Reload all sub-systems and data model definitions and choose the target 0
+   fmk.reload_all(tg_num=0)
+
+   # Show available targets for this data model
+   fmk.show_targets()
+
+   # Show a list of the registered data type within the data model
+   fmk.show_dm_data_identifiers()
+   # Or
+   list(fmk.dm.data_identifiers())
+   
+   # Get an instance of the modeled data ZIP_00 which is made from the
+   # absorption of an existing ZIP archive within <fuddly_dir>/imported_data/zip/
+   dt = fmk.dm.get_data('ZIP_00')
+
+   # Display the raw contents of the first generated element of the data type `dt`
+   # Its the flatten version of calling .get_value() on it. Note that doing so will
+   # freeze the data type to the generated output, no matter how many times you call
+   # these method on it
+   dt.to_bytes()
+
+   # Pretty print the current value. (if the data type is not already frozen,
+   # it will call g.get_value() on it)
+   dt.show()
+
+   # Unfreeze the data type to get a new value and then display it
+   dt.unfreeze()
+   dt.show()
+
+   # Send the current data, log it and save it
+   fmk.send_data_and_log(Data(dt))
+
+   # Perform a tTYPE disruption on it, but give the 5th generated
+   # cases and enforce the disruptor to strictly follow the ZIP structure
+   # Finally truncate the output to 200 bytes
+   action_list = [('tTYPE', UI(init=5), UI(order=True)), ('SIZE', None, UI(sz=200))]
+   altered_data = fmk.get_data(action_list, data_orig=Data(dt))
+
+   # Send this new data and look at the actions that perform tTYPE and
+   # SIZE through the console or the logs
+   fmk.send_data_and_log(altered_data)
+   
+
+The last command will display something like this (with some color if
+you have the ``xtermcolor`` python library):
+
+.. code-block:: none
+
+   ========[ 2 ]==[ 11/09/2015 - 20:06:56 ]=======================
+   ### Target ack received at: None
+   ### Initial Generator (currently disabled):
+    |- generator type: None | generator name: None | User input: None
+     ...
+   ### Fuzzing (step 1):
+    |- disruptor type: tTYPE | disruptor name: d_fuzz_typed_nodes | User input: G=[init=5], S=[order=True]
+    |- data info:
+       |_ model walking index: 5
+       |_  |_ run: 1 / -1 (max)
+       |_ current fuzzed node:     ZIP_00/file_list/file/header/common_attrs/version_needed
+       |_  |_ value type:         <fuzzfmk.value_types.Fuzzy_INT16 object at 0x7efe52da4c90>
+       |_  |_ original node value: 1400 (ascii: )
+       |_  |_ corrupt node value:  0080 (ascii: �)
+   ### Fuzzing (step 2):
+    |- disruptor type: SIZE | disruptor name: d_max_size | User input: G=None, S=[sz=200]
+    |- data info:
+       |_ orig node length: 1054002
+       |_ right truncation
+       |_ new node length: 200
+   ### Data size: 200 bytes
+   ### Emitted data is stored in the file:
+   ./exported_data/zip/2015_09_11_200656_00.zip
+
+
+.. code-block:: python
+   :linenos:
+
+   # And to terminate fuddly properly 
+   fmk.exit_fuzzer()
+
+
+For more information on how to manually make modification on data,
+refer to the section :ref:`tuto:disruptors`
 
 
 

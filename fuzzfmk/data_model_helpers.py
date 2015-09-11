@@ -252,7 +252,7 @@ class ModelHelper(object):
             self._register_todo(n, self._complete_generator, args=(node_args, conf), unpack_args=True,
                                 prio=self.HIGH_PRIO)
         else:
-            raise ValueError("Error[invalid contents]: {:s}".format(repr(contents)))
+            raise ValueError("*** ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
         self._handle_common_attr(n, desc, conf)
 
@@ -360,6 +360,8 @@ class ModelHelper(object):
         contents = desc.get('contents')
 
         if issubclass(contents.__class__, VT):
+            if hasattr(contents, 'usable') and contents.usable == False:
+                raise ValueError("ERROR: {:s} is not usable! (use a subclass of it)".format(repr(contents)))
             n.set_values(value_type=contents, conf=conf)
         elif hasattr(contents, '__call__'):
             other_args = desc.get('other_args', None)
@@ -377,7 +379,7 @@ class ModelHelper(object):
                                 prio=self.HIGH_PRIO)
 
         else:
-            raise ValueError("Error[invalid contents]: {:s}".format(repr(contents)))
+            raise ValueError("ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
         self._handle_common_attr(n, desc, conf)
 

@@ -70,6 +70,14 @@ fuzzfmk.tactics_helper module
 
 
 ..
+   fuzzfmk.plumbing module
+   -----------------------
+
+   .. automodule:: fuzzfmk.plumbing
+       :members:
+       :undoc-members:
+
+..
    fuzzfmk.error_handling module
    -----------------------------
 
@@ -99,14 +107,6 @@ fuzzfmk.tactics_helper module
    ----------------------
 
    .. automodule:: fuzzfmk.monitor
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-   fuzzfmk.plumbing module
-   -----------------------
-
-   .. automodule:: fuzzfmk.plumbing
        :members:
        :undoc-members:
        :show-inheritance:

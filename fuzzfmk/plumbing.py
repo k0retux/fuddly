@@ -225,6 +225,10 @@ class EnforceOrder(object):
 
 class Fuzzer(object):
 
+    ''' 
+    Defines the methods to operate every sub-systems of fuddly
+    '''
+
     def __init__(self):
         self.__started = False
         self.__first_loading = True

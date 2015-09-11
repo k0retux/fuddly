@@ -1796,6 +1796,7 @@ class TestNodeFeatures(unittest.TestCase):
              {'section_type': MH.FullyRandom,
               'contents': [
                   {'contents': String(val_list=['AAA', 'BBBB', 'CCCCC']),
+                   'qty': (2, 3),
                    'name': 'str'},
 
                   {'contents': UINT8(int_list=[2, 4, 6, 8]),

@@ -2296,8 +2296,6 @@ class NodeInternals_NonTerm(NodeInternals):
             for i, node_no in zip(itr, range(len(itr))):
                 node = self._clone_node(base_node, node_no, force_clone)
 
-                ignore_last_absorption = False
-
                 # We try to absorb the blob
                 st, off, sz, name = node.absorb(blob, constraints, conf=conf)
 
@@ -2338,15 +2336,22 @@ class NodeInternals_NonTerm(NodeInternals):
                             # We need to reject this absorption as
                             # accepting it could prevent finding a
                             # good non-terminal shape.
-                            ignore_last_absorption = True
+                            if i == 0 and min_node == 0:  # this case is OK
+                                # abort = False
+                                break
+                            elif i <= min_node: # reject in this case
+                                abort = True
+                                break
+                            else:   # no need to check max_node, the loop stop at it 
+                                # abort = False
+                                break
 
-                    if not ignore_last_absorption:
-                        blob = blob[off+sz:]
-                        assert(sz2 == off)
-                        consumed_size += sz+sz2 # off+sz
-                        consumed_nb = i+1 if min_node == max_node else i
-                        tmp_list.append(node)
-                        # self.frozen_node_list.append(node)
+                    blob = blob[off+sz:]
+                    assert(sz2 == off)
+                    consumed_size += sz+sz2 # off+sz
+                    consumed_nb = i+1 if min_node == max_node else i
+                    tmp_list.append(node)
+                    # self.frozen_node_list.append(node)
                 else:
                     raise ValueError
 
