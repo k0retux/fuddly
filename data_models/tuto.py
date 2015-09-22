@@ -1,3 +1,8 @@
+import sys
+sys.path.append('.')
+
+from fuzzfmk.plumbing import *
+
 from fuzzfmk.data_model import *
 from fuzzfmk.value_types import *
 from fuzzfmk.data_model_helpers import *
@@ -133,8 +138,74 @@ class MyDF_DataModel(DataModel):
          ]}
 
 
-        self.register(test_node_desc, abstest_desc, abstest2_desc)
+        separator_desc = \
+        {'name': 'separator',
+         'separator': {'contents': {'name': 'sep',
+                                    'contents': String(val_list=['\n'], absorb_regexp=b'[\r\n|\n]+'),
+                                    'absorb_csts': AbsNoCsts(regexp=True)},
+                       'prefix': False,
+                       'suffix': False,
+                       'unique': True},
+         'contents': [
+             {'section_type': MH.FullyRandom,
+              'contents': [
+                  {'name': 'parameters',
+                   'separator': {'contents': {'name': ('sep',2),
+                                              'contents': String(val_list=[' '], absorb_regexp=b' +'),
+                                              'absorb_csts': AbsNoCsts(regexp=True)}},
+                   'qty': 3,
+                   'contents': [
+                       {'section_type': MH.FullyRandom,
+                        'contents': [
+                            {'name': 'color',
+                            'contents': [
+                                {'name': 'id',
+                                 'contents': String(val_list=['color='])},
+                                {'name': 'val',
+                                 'contents': String(val_list=['red', 'black'])}
+                            ]},
+                            {'name': 'type',
+                             'contents': [
+                                 {'name': ('id', 2),
+                                  'contents': String(val_list=['type='])},
+                                 {'name': ('val', 2),
+                                  'contents': String(val_list=['circle', 'cube', 'rectangle'], determinist=False)}
+                            ]},
+                        ]}]},
+                  {'contents': String(val_list=['AAAA', 'BBBB', 'CCCC'], determinist=False),
+                   'qty': (4, 6),
+                   'name': 'str'}
+              ]}
+         ]}
+
+
+        self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc)
 
 
 
 data_model = MyDF_DataModel()
+
+if __name__ == "__main__":
+
+    fuzzer = Fuzzer()
+
+    fuzzer.enable_data_model(name='mydf')
+    fmk = fuzzer
+
+    d = fmk.dm.get_data('separator')
+    d_abs = fmk.dm.get_data('separator')
+
+    d.show()
+    raw_data = d.to_bytes()
+
+    print('Original data:')
+    print(raw_data)
+
+    status, off, size, name = d_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+    print('\nAbsorb Status:', status, off, size, name)
+    print(' \_ length of original data:', len(raw_data))
+    print(' \_ remaining:', raw_data[size:])
+
+    raw_data_abs = d_abs.to_bytes()
+    print(raw_data_abs)

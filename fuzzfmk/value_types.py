@@ -263,8 +263,9 @@ class meta_int_str(type):
 
 class String(VT_Alt):
     
-    def init_specific(self, val_list=None, size=None, min_sz=None, max_sz=None, determinist=True,
-                      ascii_mode=False, extra_fuzzy_list=None, absorb_regexp=None):
+    def init_specific(self, val_list=None, size=None, min_sz=None,
+                      max_sz=None, determinist=True, ascii_mode=False,
+                      extra_fuzzy_list=None, absorb_regexp=None):
 
         self.drawn_val = None
 
@@ -330,6 +331,12 @@ class String(VT_Alt):
 
     def do_absorb(self, blob, constraints, off=0, size=None):
 
+        self.orig_max_sz = self.max_sz
+        self.orig_min_sz = self.min_sz
+        self.orig_val_list = copy.copy(self.val_list)
+        self.orig_val_list_copy = copy.copy(self.val_list_copy)
+        self.orig_drawn_val = self.drawn_val
+
         if size is not None:
             if self.max_sz < size:
                 print("\nWARNING: Incorrect size detected! [size:%d > max_sz]" % size)
@@ -365,7 +372,6 @@ class String(VT_Alt):
         elif val_sz < self.min_sz:
             self.min_sz = val_sz
 
-
         if self.val_list is None:
             self.val_list = []
 
@@ -378,6 +384,29 @@ class String(VT_Alt):
 
         return val, off, val_sz
 
+
+    def do_revert_absorb(self):
+        '''
+        If needed should be called just after self.do_absorb().
+        (safe to recall it more than once)
+        '''
+        if hasattr(self, 'orig_drawn_val'):
+            self.val_list = self.orig_val_list
+            self.val_list_copy = self.orig_val_list_copy
+            self.min_sz = self.orig_min_sz
+            self.max_sz = self.orig_max_sz
+            self.drawn_val = self.orig_drawn_val
+
+    def do_cleanup_absorb(self):
+        '''
+        To be called after self.do_absorb() or self.do_revert_absorb()
+        '''
+        if hasattr(self, 'orig_drawn_val'):
+            del self.orig_val_list
+            del self.orig_val_list_copy
+            del self.orig_min_sz
+            del self.orig_max_sz
+            del self.orig_drawn_val
 
     def _read_value_from(self, blob, constraints):
         if constraints[AbsCsts.Regexp]:
@@ -413,8 +442,10 @@ class String(VT_Alt):
                     assert(sz >= self.min_sz)
 
 
-    def set_description(self, val_list=None, size=None, min_sz=None, max_sz=None, determinist=True,
-                        ascii_mode=False, extra_fuzzy_list=None, absorb_regexp=None):
+    def set_description(self, val_list=None, size=None, min_sz=None,
+                        max_sz=None, determinist=True,
+                        ascii_mode=False, extra_fuzzy_list=None,
+                        absorb_regexp=None):
         '''
         @size take precedence over @min_sz and @max_sz
         '''
@@ -643,6 +674,11 @@ class INT(VT):
 
 
     def do_absorb(self, blob, constraints, off=0, size=None):
+
+        self.orig_int_list = copy.copy(self.int_list)
+        self.orig_int_list_copy = copy.copy(self.int_list_copy)
+        self.orig_drawn_val = self.drawn_val
+
         blob = blob[off:]
 
         val, sz = self._read_value_from(blob, size)
@@ -663,6 +699,22 @@ class INT(VT):
         self.drawn_val = orig_val
 
         return val, off, sz
+
+
+    def do_revert_absorb(self):
+        '''
+        If needed should be called just after self.do_absorb().
+        '''
+        if hasattr(self, 'orig_drawn_val'):
+            self.int_list = self.orig_int_list
+            self.int_list_copy = self.orig_int_list_copy
+            self.drawn_val = self.orig_drawn_val
+
+    def do_cleanup_absorb(self):
+        if hasattr(self, 'orig_drawn_val'):
+            del self.orig_int_list
+            del self.orig_int_list_copy
+            del self.orig_drawn_val
 
     def make_determinist(self):
         self.determinist = True
@@ -1383,6 +1435,10 @@ class BitField(VT_Alt):
 
     def do_absorb(self, blob, constraints, off=0, size=None):
 
+        self.orig_idx = copy.deepcopy(self.idx)
+        self.orig_subfield_vals = copy.deepcopy(self.subfield_vals)
+        self.orig_drawn_val = self.drawn_val
+
         self.reset_state()
 
         blob = blob[off:self.nb_bytes]
@@ -1403,10 +1459,13 @@ class BitField(VT_Alt):
                 if constraints[AbsCsts.Contents] and (mini > val or maxi < val):
                     raise ValueError("Value for subfield number {:d} does not match the constraints!".format(i+1))
                 self.idx[i] = val - mini
+                if not constraints[AbsCsts.Contents]: # update extremums if necessary
+                    extrems[0] = min(extrems[0], val)
+                    extrems[1] = max(extrems[1], val)
             else:
                 if constraints[AbsCsts.Contents] and val not in val_list:
                     raise ValueError("Value for subfield number {:d} does not match the constraints!".format(i+1))
-                val_list.insert(insert_idx, val)
+                val_list.insert(insert_idx, val)                
 
             if first_pass:
                 first_pass = False
@@ -1416,6 +1475,24 @@ class BitField(VT_Alt):
                 
         return blob, off, self.nb_bytes
 
+
+    def do_revert_absorb(self):
+        '''
+        If needed should be called just after self.do_absorb().
+        '''
+        if hasattr(self, 'orig_drawn_val'):
+            self.idx = self.orig_idx
+            self.subfield_vals = self.orig_subfield_vals
+            self.drawn_val = self.orig_drawn_val
+
+    def do_cleanup_absorb(self):
+        '''
+        To be called after self.do_absorb() or self.do_revert_absorb()
+        '''
+        if hasattr(self, 'orig_drawn_val'):
+            del self.orig_idx
+            del self.orig_subfield_vals
+            del self.orig_drawn_val
 
     def get_value(self):
         '''

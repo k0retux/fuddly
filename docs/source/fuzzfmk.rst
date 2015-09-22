@@ -19,6 +19,7 @@ fuzzfmk.data_model module
 
 .. automodule:: fuzzfmk.data_model
     :members:
+    :undoc-members:
     :private-members:
     :special-members:
     :exclude-members: __dict__, __weakref__

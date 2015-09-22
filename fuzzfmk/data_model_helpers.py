@@ -24,6 +24,8 @@
 from fuzzfmk.data_model import *
 from fuzzfmk.value_types import VT
 
+import traceback
+
 ################################
 # ModelWalker Helper Functions #
 ################################
@@ -89,10 +91,11 @@ class ModelHelper(object):
         'name', 'contents', 'qty', 'clone', 'type', 'alt', 'conf', 'mode',
         # NonTerminal description keys
         'weight', 'section_type', 'duplicate_mode', 'weights',
+        'separator', 'prefix', 'suffix', 'unique',
         # Generator/Function description keys
         'node_args', 'other_args', 'provide_helpers',
         # Export description keys
-        'export_from', 'data_id',
+        'export_from', 'data_id',        
         # node properties description keys
         'determinist', 'random', 'clear_attrs', 'set_attrs',
         'absorb_csts', 'absorb_helper',
@@ -296,6 +299,16 @@ class ModelHelper(object):
         mode = desc.get('mode', MH.MutableClone)
         internals = n.cc if conf is None else n.c[conf]
         internals.set_mode(mode)
+
+        sep_desc = desc.get('separator', None)
+        if sep_desc is not None:
+            sep_node_desc = sep_desc.get('contents', None)
+            assert(sep_node_desc is not None)
+            sep_node = self._create_graph_from_desc(sep_node_desc, n)
+            prefix = sep_desc.get('prefix', True)
+            suffix = sep_desc.get('suffix', True)
+            unique = sep_desc.get('unique', False)
+            n.set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique)
 
         self._handle_common_attr(n, desc, conf)
 
@@ -622,6 +635,9 @@ class DataModel(object):
                 desc_name = desc['name']
                 node = mh.create_graph_from_desc(desc)
             except:
+                print('-'*60)
+                traceback.print_exc(file=sys.stdout)
+                print('-'*60)
                 msg = "*** ERROR: problem encountered with the '{desc:s}' descriptor!".format(desc=desc_name)
                 raise UserWarning(msg)
 

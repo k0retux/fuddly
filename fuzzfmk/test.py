@@ -1973,6 +1973,88 @@ class TestNodeFeatures(unittest.TestCase):
         b.show(raw_limit=400)
 
 
+
+class TestNode_NonTerm(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        pass
+
+    def setUp(self):
+        pass
+
+    def test_separator(self):
+        test_desc = \
+        {'name': 'test',
+         'separator': {'contents': {'name': 'SEP',
+                                    'contents': String(val_list=[' ', '  ', '     '],
+                                                       absorb_regexp=b'\s+', determinist=False),
+                                    'absorb_csts': AbsNoCsts(regexp=True)},
+                       'prefix': True,
+                       'suffix': True,
+                       'unique': True},
+         'contents': [
+             {'section_type': MH.FullyRandom,
+              'contents': [
+                  {'contents': String(val_list=['AAA', 'BBBB', 'CCCCC']),
+                   'qty': (3, 5),
+                   'name': 'str'},
+
+                  {'contents': String(val_list=['1', '22', '333']),
+                   'qty': (3, 5),
+                   'name': 'int'}
+              ]},
+
+             {'section_type': MH.Random,
+              'contents': [
+                  {'contents': String(val_list=['WW', 'YYY', 'ZZZZ']),
+                   'qty': (2, 2),
+                   'name': 'str2'},
+
+                  {'contents': UINT16_be(int_list=[0xFFFF, 0xAAAA, 0xCCCC]),
+                   'qty': (3, 3),
+                   'name': 'int2'}
+              ]},
+             {'section_type': MH.Pick,
+              'contents': [
+                  {'contents': String(val_list=['LAST', 'END']),
+                   'qty': (2, 2),
+                   'name': 'str3'},
+
+                  {'contents': UINT16_be(int_list=[0xDEAD, 0xBEEF]),
+                   'qty': (2, 2),
+                   'name': 'int3'}
+              ]}
+         ]}
+
+        for i in range(3):
+            mh = ModelHelper()
+            node = mh.create_graph_from_desc(test_desc)
+            node_abs = Node('test_abs', base_node=node)
+
+            node.set_env(Env())
+            node_abs.set_env(Env())
+
+            node.show()
+            raw_data = node.to_bytes()
+            print('Original data:')
+            print(repr(raw_data), len(raw_data))
+
+            status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+            print('Absorb Status:', status, off, size, name)
+            print(' \_ length of original data:', len(raw_data))
+            print(' \_ remaining:', raw_data[size:])
+            raw_data_abs = node_abs.to_bytes()
+            print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+
+            # node_abs.show()
+
+            self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+            self.assertEqual(len(raw_data), len(raw_data_abs))
+            self.assertEqual(raw_data, raw_data_abs)
+
+
 class TestHLAPI(unittest.TestCase):
 
     @classmethod

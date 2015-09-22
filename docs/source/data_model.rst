@@ -247,3 +247,80 @@ the first example. We additionally specify the parameter
 
 Data Model Patterns & Keywords
 ==============================
+
+
+How to Describe the Separators Used within a Data Format
+--------------------------------------------------------
+
+The example below shows how to define the separators for delimiting
+lines of an imaginary data model (line 2-7), and for delimiting
+parameters with space characters (line 12-14).
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 2-7, 12-14
+
+    {'name': 'separator_test',
+     'separator': {'contents': {'name': 'sep',
+				'contents': String(val_list=['\n'], absorb_regexp=b'[\r\n|\n]+'),
+				'absorb_csts': AbsNoCsts(regexp=True)},
+		   'prefix': False,
+		   'suffix': False,
+		   'unique': True},
+     'contents': [
+	 {'section_type': MH.FullyRandom,
+	  'contents': [
+	      {'name': 'parameters',
+	       'separator': {'contents': {'name': ('sep',2),
+					  'contents': String(val_list=[' '], absorb_regexp=b' +'),
+					  'absorb_csts': AbsNoCsts(regexp=True)}},
+	       'qty': 3,
+	       'contents': [
+		   {'section_type': MH.FullyRandom,
+		    'contents': [
+			{'name': 'color',
+			'contents': [
+			    {'name': 'id',
+			     'contents': String(val_list=['color='])},
+			    {'name': 'val',
+			     'contents': String(val_list=['red', 'black'])}
+			]},
+			{'name': 'type',
+			 'contents': [
+			     {'name': ('id', 2),
+			      'contents': String(val_list=['type='])},
+			     {'name': ('val', 2),
+			      'contents': String(val_list=['circle', 'cube', 'rectangle'], determinist=False)}
+			]},
+		    ]}]},
+	      {'contents': String(val_list=['AAAA', 'BBBB', 'CCCC'], determinist=False),
+	       'qty': (4, 6),
+	       'name': 'str'}
+	  ]}
+     ]}
+
+
+From this data model you could get a data like that:
+
+.. code-block:: none
+
+   CCCC
+   BBBB
+    type=circle color=red 
+    type=rectangle color=red 
+   BBBB
+   AAAA
+   CCCC
+    color=red type=cube
+
+.. note:: Note this data model can be used to absorb data samples
+          (refer to :ref:`tuto:dm-absorption`) that may use more than
+          one empty line as first-level separator (thanks to the
+          ``absorb_regexp`` parameter in line 3), and more than one
+          space character as second-level separators (thanks to the
+          ``absorb_regexp`` parameter in line 13).
+
+.. note:: You can also perform specific *separator mutation* within a
+          disruptor (refer to :ref:`tuto:disruptors`), as separator nodes have
+          the specific attribute
+          :const:`fuzzfmk.data_model.NodeInternals.Separator` set.
