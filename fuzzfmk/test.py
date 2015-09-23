@@ -1973,6 +1973,43 @@ class TestNodeFeatures(unittest.TestCase):
         b.show(raw_limit=400)
 
 
+    def test_exist_condition(self):
+        ''' Test existence condition for generation and absorption
+        '''
+
+        d = fmk.dm.get_external_node(dm_name='mydf', data_id='exist_cond')
+
+        for i in range(10):
+
+            d_abs = fmk.dm.get_external_node(dm_name='mydf', data_id='exist_cond')
+
+            d.show()
+            raw_data = d.to_bytes()
+
+            print('-----------------------')
+            print('Original Data:')
+            print(repr(raw_data))
+            print('-----------------------')
+
+            status, off, size, name = d_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+            raw_data_abs = d_abs.to_bytes()
+            print('-----------------------')
+            print('Absorbed Data:')
+            print(repr(raw_data_abs))
+            print('-----------------------')
+
+            print('-----------------------')
+            print('Absorb Status: status=%d, off=%d, sz=%d, name=%s' % (status, off, size, name))
+            print(' \_ length of original data: %d' % len(raw_data))
+            print(' \_ remaining: %r' %raw_data[size:])
+            print('-----------------------')
+
+            self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+            self.assertEqual(raw_data, raw_data_abs)
+
+            d.unfreeze()
+
 
 class TestNode_NonTerm(unittest.TestCase):
 

@@ -1047,6 +1047,12 @@ class BitField(VT_Alt):
         self.idx_inuse = self.idx
         
     def set_subfield(self, idx, val):
+        '''
+        Args:
+          idx (int): subfield index, from 0 (low significant subfield) to nb_subfields-1
+            (specific index -1 is used to choose the last subfield).
+          val (int): new value for the subfield
+        '''
         if idx == -1:
             idx = len(self.subfield_sizes) - 1
         assert(self.is_compatible(val, self.subfield_sizes[idx]))

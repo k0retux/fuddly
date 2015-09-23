@@ -353,10 +353,93 @@ class AbsFullCsts(AbsCsts):
         AbsCsts.__init__(self, size=size, contents=contents, regexp=regexp, struct=struct)
 
 
+### Materials for Node Synchronization ###
+
 class SyncScope:
     Qty = 1
     Existence = 2
     Inexistence = 3
+
+class NodeCondition(object):
+    '''
+    Base class for every node-related conditions. (Note that NodeCondition
+    may be copied many times. If some attributes need to be fully copied,
+    handle this through __copy__() overriding).
+    '''
+    def check(self, node):
+        raise NotImplementedError
+
+
+class RawCondition(NodeCondition):
+
+    def __init__(self, val):
+        '''
+        Args:
+          val (bytes): byte representation (or list of byte representation)
+            that satisfy the condition
+        '''
+        if isinstance(val, tuple) or isinstance(val, list):
+            self.val = []
+            for v in val:
+                self.val.append(convert_to_internal_repr(v))
+        else:
+            self.val = convert_to_internal_repr(val)
+
+    def check(self, node):
+        if isinstance(self.val, tuple) or isinstance(self.val, list):
+            result = node.to_bytes() in self.val
+        else:
+            result = node.to_bytes() == self.val
+
+        return result
+
+
+class IntCondition(NodeCondition):
+
+    def __init__(self, val):
+        '''
+        Args:
+          val (int): integer (or integer list) that satisfy the condition
+        '''
+        self.val = val
+
+    def check(self, node):
+        from fuzzfmk.value_types import INT
+        assert(node.is_typed_value(subkind=INT))
+
+        if isinstance(self.val, tuple) or isinstance(self.val, list):
+            result = node.get_current_raw_val() in self.val
+        else:
+            assert(isinstance(self.val, int))
+            result = node.get_current_raw_val() == self.val
+
+        return result
+
+
+class BitFieldCondition(NodeCondition):
+
+    def __init__(self, sf, val):
+        '''
+        Args:
+          sf (int): subfield of the BitField() on which the condition apply
+          val (int): integer (or integer list) that satisfy the condition
+        '''
+        self.sf = sf
+        self.val = val
+
+    def check(self, node):
+        from fuzzfmk.value_types import BitField
+        assert(node.is_typed_value(subkind=BitField))
+
+        if isinstance(self.val, tuple) or isinstance(self.val, list):
+            result = node.get_subfield(idx=self.sf) in self.val
+        else:
+            assert(isinstance(self.val, int))
+            result = node.get_subfield(idx=self.sf) == self.val
+
+        return result
+
+
 
 class NodeInternals(object):
     '''Base class for implementing the contents of a node.
@@ -410,10 +493,10 @@ class NodeInternals(object):
     def get_current_subkind(self):
         raise NotImplementedError
 
-    def set_node_sync(self, node, scope):
+    def set_node_sync(self, node, scope, param=None):
         if self._sync_with is None:
             self._sync_with = {}
-        self._sync_with[scope] = node
+        self._sync_with[scope] = (node, param)
 
     def get_node_sync(self, scope):
         if self._sync_with is None:
@@ -438,10 +521,12 @@ class NodeInternals(object):
     def _update_node_refs(self, node_dico, debug):
         sync_nodes = copy.copy(self._sync_with)
 
-        for scope, node in sync_nodes.items():
+        for scope, obj in sync_nodes.items():
+            node, param = obj
             new_node = node_dico.get(node, None)
+            new_param = copy.copy(param)
             if new_node is not None:
-                self._sync_with[scope] = new_node
+                self._sync_with[scope] = (new_node, new_param)
             else:
                 # this case only triggers during a call to
                 # NonTerm.get_subnodes_with_csts(), that is when new
@@ -1939,6 +2024,17 @@ class NodeInternals_NonTerm(NodeInternals):
                 print("\n*** WARNING: no Env() is provided yet for node '%s'! " \
                       "Thus cannot call methods on it!" % node.name)
 
+    def _clear_drawn_node_attrs(self, node):
+        if self._nodes_drawn_qty and node.name in self._nodes_drawn_qty:
+            del self._nodes_drawn_qty[node.name]
+        if node.env is not None:
+            node.env.clear_drawn_node_attrs(id(node))
+        else:
+            if DEBUG:
+                print("\n*** WARNING: no Env() is provided yet for node '%s'! " \
+                      "Thus cannot call methods on it!" % node.name)
+
+
     def get_drawn_node_qty(self, node_ref):
         if isinstance(node_ref, Node):
             name = node_ref.name
@@ -2049,11 +2145,14 @@ class NodeInternals_NonTerm(NodeInternals):
             if shall_exist is not None:
                 if not shall_exist:
                     nb = 0
+                    return
 
             to_entangle = set()
 
             base_node = node
             external_entangled_nodes = [] if base_node.entangled_nodes is None else list(base_node.entangled_nodes)
+
+            new_node = None
 
             for i in range(nb):
                 # 'unique' mode
@@ -2116,7 +2215,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
             # We need to call set_clone_info() only once for 's' mode
             # as there is only one instance.
-            if mode == 's':
+            if new_node is not None and mode == 's':
                 new_node._set_clone_info((0,nb))
 
             if len(to_entangle) > 1:
@@ -2400,7 +2499,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
     @staticmethod
     def _qty_from_node(node):
-        sync_node = node.synchronized_with(SyncScope.Qty)
+        sync_node, param = node.synchronized_with(SyncScope.Qty)
         if sync_node is not None:
             nb = node.env.get_drawn_node_qty(id(sync_node))
             if nb is not None:
@@ -2414,12 +2513,23 @@ class NodeInternals_NonTerm(NodeInternals):
 
     @staticmethod
     def _existence_from_node(node):
-        sync_node = node.synchronized_with(SyncScope.Existence)
+        sync_node, condition = node.synchronized_with(SyncScope.Existence)
         if sync_node is not None:
             exist = node.env.node_exists(id(sync_node))
-            return True if exist else False
+            crit_1 = True if exist else False
+            crit_2 = False
+            if exist and condition is not None:
+                try:
+                    crit_2 = condition.check(sync_node)
+                except Exception as e:
+                    print("\n*** ERROR: existence condition is not verifiable " \
+                          "for node '{:s}' (id: {:d})!\n" \
+                          "*** The condition checker raise an exception!".format(node.name, id(node)))
+                    raise
 
-        sync_node = node.synchronized_with(SyncScope.Inexistence)
+            return crit_1 and crit_2
+
+        sync_node, condition = node.synchronized_with(SyncScope.Inexistence)
         if sync_node is not None:
             inexist = not node.env.node_exists(id(sync_node))
             return True if inexist else False
@@ -2586,6 +2696,7 @@ class NodeInternals_NonTerm(NodeInternals):
                         nd.reset_state(conf=conf)
                 for n in tmp_list:
                     n.cancel_absorb()
+                self._clear_drawn_node_attrs(base_node)
             else:
                 self._set_drawn_node_attrs(base_node, nb=nb_absorbed, sz=len(base_node.to_bytes()))
                 for n, idx in zip(tmp_list, range(nb_absorbed)):
@@ -2899,6 +3010,8 @@ class NodeInternals_NonTerm(NodeInternals):
 
             self.frozen_node_list = None
             self._nodes_drawn_qty = {}
+            for n in self.subnodes_set:
+                self._clear_drawn_node_attrs(n)
 
         if self.exhausted:
             self.excluded_components = []
@@ -2917,6 +3030,8 @@ class NodeInternals_NonTerm(NodeInternals):
 
         self.frozen_node_list = None
         self._nodes_drawn_qty = {}
+        for n in self.subnodes_set:
+            self._clear_drawn_node_attrs(n)
 
         if self.exhausted:
             self.excluded_components = []
@@ -3747,9 +3862,13 @@ class Node(object):
         conf = self.__check_conf(conf)
         return isinstance(self.internals[conf], NodeInternals_Func)
 
-    def is_typed_value(self, conf=None):
+    def is_typed_value(self, conf=None, subkind=None):
         conf = self.__check_conf(conf)
-        return isinstance(self.internals[conf], NodeInternals_TypedValue)
+        resp = isinstance(self.internals[conf], NodeInternals_TypedValue)
+        if resp and subkind is not None:
+            resp = (self.internals[conf].get_current_subkind() == subkind) or \
+                   issubclass(self.internals[conf].get_current_subkind(), subkind)
+        return resp
 
     def is_nonterm(self, conf=None):
         conf = self.__check_conf(conf)
@@ -3974,13 +4093,14 @@ class Node(object):
         for c in self.internals:
             self.internals[c].set_clone_info(info)
 
-    def make_synchronized_with(self, node, scope, conf=None):
+    def make_synchronized_with(self, node, scope, param=None, conf=None):
         conf = self.__check_conf(conf)
-        self.internals[conf].set_node_sync(node, scope=scope)
+        self.internals[conf].set_node_sync(node, scope=scope, param=param)
 
     def synchronized_with(self, scope, conf=None):
         conf = self.__check_conf(conf)
-        return self.internals[conf].get_node_sync(scope)
+        val = self.internals[conf].get_node_sync(scope)
+        return val if val is not None else (None, None)
 
     def set_attr(self, name, conf=None, all_conf=False, recursive=False):
         if all_conf:
@@ -4670,9 +4790,9 @@ class Env4NT(object):
         else:
             return False
 
-    # not currently used
     def clear_drawn_node_attrs(self, node_id):
-        del self.drawn_node_attrs[node_id]
+        if node_id in self.drawn_node_attrs:
+            del self.drawn_node_attrs[node_id]
 
     def update_node_ids(self, id_list):
         if not self.drawn_node_attrs:

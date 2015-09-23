@@ -61,7 +61,7 @@ class MH:
     Generator = 2
     Leaf = 3
 
-    # section_type attribute
+    # shape_type & section_type attribute
     Ordered = '>'
     Random = '=..'
     FullyRandom = '=.'
@@ -90,7 +90,7 @@ class ModelHelper(object):
         # generic description keys
         'name', 'contents', 'qty', 'clone', 'type', 'alt', 'conf', 'mode',
         # NonTerminal description keys
-        'weight', 'section_type', 'duplicate_mode', 'weights',
+        'weight', 'shape_type', 'section_type', 'duplicate_mode', 'weights',
         'separator', 'prefix', 'suffix', 'unique',
         # Generator/Function description keys
         'node_args', 'other_args', 'provide_helpers',
@@ -140,7 +140,7 @@ class ModelHelper(object):
             name = name_desc
             ident = 1
         else:
-            raise ValueError("Name is not recognized: '%s'!"%name_desc)
+            raise ValueError("Name is not recognized: '%s'!" % name_desc)
 
         return name, ident
 
@@ -290,7 +290,10 @@ class ModelHelper(object):
                 shapes.append(shape)
         else:
             # in this case there is only one shape
-            shape = self._create_nodes_from_shape(cts, n)
+            shtype = desc.get('shape_type', MH.Ordered)
+            dupmode = desc.get('duplicate_mode', MH.Copy)
+            shape = self._create_nodes_from_shape(cts, n, shape_type=shtype,
+                                                  dup_mode=dupmode)
             shapes.append(1)
             shapes.append(shape)
 
@@ -315,7 +318,7 @@ class ModelHelper(object):
         return n
 
 
-    def _create_nodes_from_shape(self, shapes, parent_node):
+    def _create_nodes_from_shape(self, shapes, parent_node, shape_type=None, dup_mode=None):
         
         def _handle_section(nodes_desc, sh):
             for n in nodes_desc:
@@ -350,8 +353,8 @@ class ModelHelper(object):
             # in this case, sections are materialised in the description
             for section_desc in shapes:
                 self._verify_keys_conformity(section_desc)
-                sec_type = section_desc.get('section_type', '>')
-                dupmode = section_desc.get('duplicate_mode', 'u')
+                sec_type = section_desc.get('section_type', MH.Ordered)
+                dupmode = section_desc.get('duplicate_mode', MH.Copy)
                 # TODO: revamp weights
                 weights = ''.join(str(section_desc.get('weights', '')).split(' '))
                 sh.append(dupmode+sec_type+weights)
@@ -360,7 +363,7 @@ class ModelHelper(object):
             # if 'name' attr is present, there is no section in the
             # shape, thus we adopt a default sequencing of nodes (that
             # is 'u>')
-            sh.append('u>')
+            sh.append(dup_mode + shape_type)
             _handle_section(shapes, sh)
 
         return sh
@@ -427,15 +430,15 @@ class ModelHelper(object):
             self._register_todo(node, self._set_sync_node,
                                 args=(ref, SyncScope.Qty, conf),
                                 unpack_args=True)
-        ref = desc.get('exists_if', None)
-        if ref is not None:
+        condition = desc.get('exists_if', None)
+        if condition is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(ref, SyncScope.Existence, conf),
+                                args=(condition, SyncScope.Existence, conf),
                                 unpack_args=True)
-        ref = desc.get('exists_if_not', None)
-        if ref is not None:
+        condition = desc.get('exists_if_not', None)
+        if condition is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(ref, SyncScope.Inexistence, conf),
+                                args=(condition, SyncScope.Inexistence, conf),
                                 unpack_args=True)
         fw = desc.get('fuzz_weight', None)
         if fw is not None:
@@ -470,9 +473,15 @@ class ModelHelper(object):
             raise ValueError("arguments refer to an inexistent node ({:s}, {!s})!".format(ref[0], ref[1]))
         parent_node.replace_subnode(node, self.node_dico[ref])
 
-    def _set_sync_node(self, node, sync_with_ref, scope, conf):
-        sync_with = self.__get_node_from_db(sync_with_ref)
-        node.make_synchronized_with(sync_with, scope=scope, conf=conf)
+    def _set_sync_node(self, node, arg, scope, conf):
+        if isinstance(arg, tuple) and issubclass(arg[0].__class__, NodeCondition):
+            param = arg[0]
+            sync_with = self.__get_node_from_db(arg[1])
+        else:
+            param = None
+            sync_with = self.__get_node_from_db(arg)
+
+        node.make_synchronized_with(sync_with, scope=scope, param=param, conf=conf)
 
     def _complete_func(self, node, args, conf):
         if isinstance(args, str):

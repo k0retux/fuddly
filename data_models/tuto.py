@@ -179,7 +179,54 @@ class MyDF_DataModel(DataModel):
          ]}
 
 
-        self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc)
+        sync_desc = \
+        {'name': 'exist_cond',
+         'shape_type': MH.Ordered,
+         'contents': [
+             {'name': 'opcode',
+              'contents': String(val_list=['A1', 'A2', 'A3'], determinist=True)},
+
+             {'name': 'command_A1',
+              'contents': String(val_list=['AAA', 'BBBB', 'CCCCC']),
+              'exists_if': (RawCondition('A1'), 'opcode'),
+              'qty': 3},
+
+             {'name': 'command_A2',
+              'contents': UINT32_be(int_list=[0xDEAD, 0xBEEF]),
+              'exists_if': (RawCondition('A2'), 'opcode')},
+
+             {'name': 'command_A3',
+              'exists_if': (RawCondition('A3'), 'opcode'),
+              'contents': [
+                  {'name': 'A3_subopcode',
+                   'contents': BitField(subfield_sizes=[15,2,4], endian=VT.BigEndian,
+                                        subfield_val_lists=[None, [1,2], [5,6,12]],
+                                        subfield_val_extremums=[[500, 600], None, None],
+                                        determinist=False)},
+
+                  {'name': 'A3_int',
+                   'contents': UINT16_be(int_list=[10, 20, 30], determinist=False)},
+
+                  {'name': 'A3_deco1',
+                   'exists_if': (IntCondition(10), 'A3_int'),
+                   'contents': String(val_list=['*1*0*'])},
+
+                  {'name': 'A3_deco2',
+                   'exists_if': (IntCondition([20, 30]), 'A3_int'),
+                   'contents': String(val_list=['+2+0+3+0+'])}
+              ]},
+
+             {'name': 'A31_payload',
+              'contents': String(val_list=['$ A31_OK $', '$ A31_KO $'], determinist=False),
+              'exists_if': (BitFieldCondition(sf=2, val=[6,12]), 'A3_subopcode')},
+
+             {'name': 'A32_payload',
+              'contents': String(val_list=['$ A32_VALID $', '$ A32_INVALID $'], determinist=False),
+              'exists_if': (BitFieldCondition(sf=2, val=5), 'A3_subopcode')}
+         ]}
+
+
+        self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc, sync_desc)
 
 
 
@@ -192,20 +239,32 @@ if __name__ == "__main__":
     fuzzer.enable_data_model(name='mydf')
     fmk = fuzzer
 
-    d = fmk.dm.get_data('separator')
-    d_abs = fmk.dm.get_data('separator')
+    data_id_list = ['exist_cond'] #'separator'
+    loop_cpt = 5
 
-    d.show()
-    raw_data = d.to_bytes()
+    for data_id in data_id_list:
+        for i in range(loop_cpt):
+            d = fmk.dm.get_data(data_id)
+            d_abs = fmk.dm.get_data(data_id)
 
-    print('Original data:')
-    print(raw_data)
+            d.show()
+            raw_data = d.to_bytes()
 
-    status, off, size, name = d_abs.absorb(raw_data, constraints=AbsFullCsts())
+            print('-----------------------')
+            print('Original Data:')
+            print(repr(raw_data))
+            print('-----------------------')
 
-    print('\nAbsorb Status:', status, off, size, name)
-    print(' \_ length of original data:', len(raw_data))
-    print(' \_ remaining:', raw_data[size:])
+            status, off, size, name = d_abs.absorb(raw_data, constraints=AbsFullCsts())
 
-    raw_data_abs = d_abs.to_bytes()
-    print(raw_data_abs)
+            raw_data_abs = d_abs.to_bytes()
+            print('-----------------------')
+            print('Absorbed Data:')
+            print(repr(raw_data_abs))
+            print('-----------------------')
+
+            print('-----------------------')
+            print('Absorb Status: status=%d, off=%d, sz=%d, name=%s' % (status, off, size, name))
+            print(' \_ length of original data: %d' % len(raw_data))
+            print(' \_ remaining: %r' %raw_data[size:])
+            print('-----------------------')
