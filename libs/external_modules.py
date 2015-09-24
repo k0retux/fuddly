@@ -82,3 +82,12 @@ try:
 except ImportError:
     cups_module = False
     print('WARNING [FMK]: python-cups module is not installed, Printer targets will not be available!')
+
+
+crcmod_module = True
+try:
+    import crcmod
+except ImportError:
+    crcmod_module = False
+    print('WARNING [FMK]: python-crcmod module is not installed, the MH.CRC()' \
+          ' generator template will not be available!')

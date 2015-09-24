@@ -339,23 +339,25 @@ class String(VT_Alt):
 
         if size is not None:
             if self.max_sz < size:
-                print("\nWARNING: Incorrect size detected! [size:%d > max_sz]" % size)
+                # print("\nWARNING: Incorrect size detected! [size:%d > max_sz]" % size)
                 if constraints[AbsCsts.Size]:
-                    raise ValueError('max_sz constraint not respected by size arguments!')
+                    size = self.max_sz
+                    # raise ValueError('max_sz constraint not respected by size arguments!')
                 else:
                     self.max_sz = size
 
             if self.min_sz > size:
-                print("\nWARNING: Incorrect size detected! [size:%d < min_sz]" % size)
+                # print("\nWARNING: Incorrect size detected! [size:%d < min_sz]" % size)
                 if constraints[AbsCsts.Size]:
-                    raise ValueError('min_sz constraint not respected by size arguments!')
+                    size = self.min_sz
+                    # raise ValueError('min_sz constraint not respected by size arguments!')
                 else:
                     self.min_sz = size
 
         if constraints[AbsCsts.Size]:
             sz = size if size is not None else self.max_sz
             val = self._read_value_from(blob[off:sz], constraints)
-            val_sz = sz
+            val_sz = len(val) # maybe different from sz if blob is smaller
         else:
             val = self._read_value_from(blob[off:], constraints)
             val_sz = len(val)

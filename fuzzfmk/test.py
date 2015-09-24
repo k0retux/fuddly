@@ -2276,6 +2276,52 @@ class TestDataModel(unittest.TestCase):
             self.assertEqual(jpg_buff, orig_buff)
 
 
+    @unittest.skipIf(ignore_data_model_specifics, "Tutorial specific test cases, cover various construction")
+    def test_tuto_specifics(self):
+        '''Tutorial specific test cases, cover various data model patterns and
+        absorption.'''
+
+        dm = fmk.get_data_model_by_name('mydf')
+        dm.load_data_model(fmk._name2dm)
+
+        data_id_list = ['misc_gen', 'len_gen', 'exist_cond', 'separator', 'AbsTest', 'AbsTest2']
+        loop_cpt = 5
+
+        for data_id in data_id_list:
+            d = dm.get_data(data_id)
+
+            for i in range(loop_cpt):
+                d_abs = dm.get_data(data_id)
+                d_abs.set_current_conf('ABS', recursive=True)
+
+                d.show()
+                raw_data = d.to_bytes()
+
+                print('-----------------------')
+                print('Original Data:')
+                print(repr(raw_data))
+                print('-----------------------')
+
+                status, off, size, name = d_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+                raw_data_abs = d_abs.to_bytes()
+                print('-----------------------')
+                print('Absorbed Data:')
+                print(repr(raw_data_abs))
+                print('-----------------------')
+
+                print('-----------------------')
+                print('Absorb Status: status=%d, off=%d, sz=%d, name=%s' % (status, off, size, name))
+                print(' \_ length of original data: %d' % len(raw_data))
+                print(' \_ remaining: %r' %raw_data[size:])
+                print('-----------------------')
+
+                self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+                self.assertEqual(raw_data, raw_data_abs)
+
+                d.unfreeze()
+
+
     @unittest.skipIf(ignore_data_model_specifics, "ZIP specific test cases")
     def test_zip_specifics(self):
 

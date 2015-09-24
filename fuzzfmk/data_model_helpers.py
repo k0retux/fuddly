@@ -22,9 +22,13 @@
 ################################################################################
 
 from fuzzfmk.data_model import *
+import fuzzfmk.value_types as fvt
 from fuzzfmk.value_types import VT
 
+from libs.external_modules import *
+
 import traceback
+import datetime
 
 ################################
 # ModelWalker Helper Functions #
@@ -78,6 +82,110 @@ class MH:
     # NonTerminal node mode
     NotMutableClone = 1
     MutableClone = 2
+
+    ###########################
+    ### Generator Templates ###
+    ###########################
+
+    @staticmethod
+    def LEN(vt=fvt.INT_str):
+        '''
+        Return a *generator* that returns the length of a node parameter.
+
+        Args:
+          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+        '''
+        def length(vt, node):
+            n = Node('cts', value_type=vt(int_list=[len(node.to_bytes())]))
+            n.set_semantics(NodeSemantics(['len']))
+            return n
+
+        vt = MH._validate_int_vt(vt)
+        return functools.partial(length, vt)
+
+    @staticmethod
+    def QTY(node_name, vt=fvt.INT_str):
+        '''Return a *generator* that returns the quantity of child node instances (referenced
+        by name) of the node parameter provided to the *generator*.
+
+        Args:
+          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+          node_name (str): name of the child node whose instance amount will be returned
+            by the generator
+        '''
+        def qty(node_name, vt, node):
+            nb = node.cc.get_drawn_node_qty(node_name)
+            n = Node('cts', value_type=vt(int_list=[nb]))
+            n.set_semantics(NodeSemantics(['qty']))
+            return n
+
+        vt = MH._validate_int_vt(vt)
+        return functools.partial(qty, node_name, vt)
+
+    @staticmethod
+    def TIMESTAMP(time_format="%H%M%S"):
+        '''
+        Return a *generator* that returns the current time (in a String-type node).
+
+        Args:
+          time_format (str): time format to be used by the generator.
+        '''
+        def timestamp(time_format):
+            now = datetime.datetime.utcnow()
+            ts = now.strftime(time_format)
+            n = Node('cts', value_type=fvt.String(val_list=[ts], size=len(ts)))
+            n.set_semantics(NodeSemantics(['timestamp']))
+            return n
+        
+        return functools.partial(timestamp, time_format)
+
+    @staticmethod
+    def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=True):
+        '''Return a *generator* that returns the CRC (in the chosen type) of
+        all the node parameters. (Default CRC is PKZIP CRC32)
+
+        Args:
+          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+          poly (int): CRC polynom
+          init_crc (int): initial value used to start the CRC calculation.
+          xor_out (int): final value to XOR with the calculated CRC value.
+          rev (bool): bit reversed algorithm when `True`.
+        '''
+        def crc(vt, poly, init_crc, xor_out, rev, nodes):
+            crc_func = crcmod.mkCrcFun(poly, initCrc=init_crc, xorOut=xor_out, rev=rev)
+            if isinstance(nodes, Node):
+                s = nodes.to_bytes()
+            else:
+                if issubclass(nodes.__class__, NodeAbstraction):
+                    nodes = nodes.get_concrete_nodes()
+                elif not isinstance(nodes, tuple) and not isinstance(nodes, list):
+                    raise TypeError("Contents of 'nodes' parameter is incorrect!")
+                s = b''
+                for n in nodes:
+                    s += n.to_bytes()
+
+            result = crc_func(s)
+
+            n = Node('cts', value_type=vt(int_list=[result]))
+            n.set_semantics(NodeSemantics(['crc']))
+            return n
+
+        if not crcmod_module:
+            raise NotImplementedError('the CRC template has been disabled because python-crcmod module is not installed!')
+
+        vt = MH._validate_int_vt(vt)
+        return functools.partial(crc, vt, poly, init_crc, xor_out, rev)
+
+
+    @staticmethod
+    def _validate_int_vt(vt):
+        if not issubclass(vt, fvt.INT):
+            print("*** WARNING: the value type of typed node requested is not supported!" \
+                  " Use of 'INT_str' instead.")
+            vt = fvt.INT_str             
+        return vt
+
+
 
 class ModelHelper(object):
 
@@ -251,9 +359,10 @@ class ModelHelper(object):
             node_args = desc.get('node_args', None)
             n.set_generator_func(contents, func_arg=other_args,
                                  provide_helpers=provide_helpers, conf=conf)
-            # node_args interpretation is postponed after all nodes has been created
-            self._register_todo(n, self._complete_generator, args=(node_args, conf), unpack_args=True,
-                                prio=self.HIGH_PRIO)
+            if node_args is not None:
+                # node_args interpretation is postponed after all nodes has been created
+                self._register_todo(n, self._complete_generator, args=(node_args, conf), unpack_args=True,
+                                    prio=self.HIGH_PRIO)
         else:
             raise ValueError("*** ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
@@ -318,7 +427,7 @@ class ModelHelper(object):
         return n
 
 
-    def _create_nodes_from_shape(self, shapes, parent_node, shape_type=None, dup_mode=None):
+    def _create_nodes_from_shape(self, shapes, parent_node, shape_type=MH.Ordered, dup_mode=MH.Copy):
         
         def _handle_section(nodes_desc, sh):
             for n in nodes_desc:

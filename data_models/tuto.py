@@ -226,45 +226,59 @@ class MyDF_DataModel(DataModel):
          ]}
 
 
-        self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc, sync_desc)
+        len_gen_desc = \
+        {'name': 'len_gen',
+         'contents': [
+             {'name': 'len',
+              'type': MH.Generator,
+              'contents': MH.LEN(UINT32_be),
+              'node_args': 'payload',
+              'absorb_csts': AbsNoCsts()},
+
+             {'name': 'payload',
+              'contents': String(min_sz=10, max_sz=100, determinist=False)},
+         ]}
+
+        misc_gen_desc = \
+        {'name': 'misc_gen',
+         'contents': [
+             {'name': 'integers',
+              'contents': [
+                  {'name': 'int16',
+                   'qty': (2, 10),
+                   'contents': UINT16_be(int_list=[16, 1, 6], determinist=False)},
+
+                  {'name': 'int32',
+                   'qty': (3, 8),
+                   'contents': UINT32_be(int_list=[32, 3, 2], determinist=False)}
+              ]},
+
+             {'name': 'int16_qty',
+              'type': MH.Generator,
+              'contents': MH.QTY(node_name='int16', vt=UINT8),
+              'node_args': 'integers'},
+
+             {'name': 'int32_qty',
+              'type': MH.Generator,
+              'contents': MH.QTY(node_name='int32', vt=UINT8),
+              'node_args': 'integers'},
+
+             {'name': 'tstamp',
+              'type': MH.Generator,
+              'contents': MH.TIMESTAMP("%H%M%S"),
+              'absorb_csts': AbsCsts(contents=False)},
+
+             {'name': 'crc',
+              'type': MH.Generator,
+              'contents': MH.CRC(UINT32_be),
+              'node_args': ['tstamp', 'int32_qty'],
+              'absorb_csts': AbsCsts(contents=False)}
+
+         ]}
+
+        self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
+                      sync_desc, len_gen_desc, misc_gen_desc)
 
 
 
 data_model = MyDF_DataModel()
-
-if __name__ == "__main__":
-
-    fuzzer = Fuzzer()
-
-    fuzzer.enable_data_model(name='mydf')
-    fmk = fuzzer
-
-    data_id_list = ['exist_cond'] #'separator'
-    loop_cpt = 5
-
-    for data_id in data_id_list:
-        for i in range(loop_cpt):
-            d = fmk.dm.get_data(data_id)
-            d_abs = fmk.dm.get_data(data_id)
-
-            d.show()
-            raw_data = d.to_bytes()
-
-            print('-----------------------')
-            print('Original Data:')
-            print(repr(raw_data))
-            print('-----------------------')
-
-            status, off, size, name = d_abs.absorb(raw_data, constraints=AbsFullCsts())
-
-            raw_data_abs = d_abs.to_bytes()
-            print('-----------------------')
-            print('Absorbed Data:')
-            print(repr(raw_data_abs))
-            print('-----------------------')
-
-            print('-----------------------')
-            print('Absorb Status: status=%d, off=%d, sz=%d, name=%s' % (status, off, size, name))
-            print(' \_ length of original data: %d' % len(raw_data))
-            print(' \_ remaining: %r' %raw_data[size:])
-            print('-----------------------')
