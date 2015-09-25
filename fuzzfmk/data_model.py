@@ -42,7 +42,6 @@ from fuzzfmk.global_resources import *
 
 DEBUG = False
 
-
 class Data(object):
 
     def __init__(self, data=''):
@@ -1705,6 +1704,11 @@ class NodeInternals_NonTerm(NodeInternals):
     through a specific grammar...
     '''
 
+    INFINITY_LIMIT = 30  # Used to limit the number of created nodes
+                         # when the max quantity is specified to be
+                         # infinite (-1). "Infinite quantity" makes
+                         # sense only for absorption operation.
+
     def _init_specific(self, arg):
         self.reset()
 
@@ -2080,8 +2084,6 @@ class NodeInternals_NonTerm(NodeInternals):
     @staticmethod
     def _get_next_heavier_component(comp_list, excluded_idx=[]):
         current_weight = -1
-        current_comp = None
-        current_idx = None
         for idx, weight, comp in split_verbose_with(lambda x: isinstance(x, int), comp_list):
             if idx in excluded_idx:
                 continue
@@ -2091,7 +2093,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 current_idx = idx
 
         if current_weight == -1:
-            return None, None
+            return [], None
         else:
             return current_comp, current_idx
 
@@ -2112,7 +2114,7 @@ class NodeInternals_NonTerm(NodeInternals):
             if s >= r:
                 return comp[0], idx
         else:
-            return None, None
+            return [], None
 
     # to be used only in Finite mode
     def count_of_possible_cases(self):
@@ -2126,14 +2128,23 @@ class NodeInternals_NonTerm(NodeInternals):
         def construct_subnodes(node, subnode_list, mode, ignore_separator=False):
             if self.is_attr_set(NodeInternals.Determinist):
                 if len(node) == 3:
-                    nb = (node[1] + node[2]) // 2
+                    if node[2] == -1: # infinite case
+                        # for generation we limit to min+INFINITY_LIMIT
+                        nb = node[1] + NodeInternals_NonTerm.INFINITY_LIMIT
+                    else:    
+                        nb = (node[1] + node[2]) // 2
                 else:
-                    nb = node[1]
+                    nb = NodeInternals_NonTerm.INFINITY_LIMIT if node[1] == -1 else node[1]
             else:
                 if len(node) == 3:
-                    nb = random.randint(node[1], node[2])
+                    if node[2] == -1: # infinite case
+                        # for generation we limit to min+INFINITY_LIMIT
+                        maxi = node[1] + NodeInternals_NonTerm.INFINITY_LIMIT
+                    else:
+                        maxi = node[2]
+                    nb = random.randint(node[1], maxi)
                 else:
-                    nb = node[1]
+                    nb = NodeInternals_NonTerm.INFINITY_LIMIT if node[1] == -1 else node[1]
 
             node = node[0]
 
@@ -2247,8 +2258,9 @@ class NodeInternals_NonTerm(NodeInternals):
         determinist = self.is_attr_set(NodeInternals.Determinist)
         
         if determinist:
+
             node_list, idx = NodeInternals_NonTerm._get_next_heavier_component(self.subnodes_csts,
-                                                                             excluded_idx=self.excluded_components)
+                                                                               excluded_idx=self.excluded_components)
             self.excluded_components.append(idx)
             # 'len(self.subnodes_csts)' is always even
             if len(self.excluded_components) == len(self.subnodes_csts) // 2:
@@ -2287,8 +2299,12 @@ class NodeInternals_NonTerm(NodeInternals):
 
             if determinist:
                 if delim[1] == '>':
-                    for node in sublist:
+                    for i, node in enumerate(sublist):
                         construct_subnodes(node, sublist_tmp, delim[0])
+                        if self.separator is not None and i < len(sublist)-1:
+                            new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
+                                                            ignore_frozen_state=ignore_sep_fstate)
+                            sublist_tmp.append(new_sep)
                 elif delim[1] == '=':
                     if delim[2] == '+':
                         if sublist[0] > -1:
@@ -2600,15 +2616,18 @@ class NodeInternals_NonTerm(NodeInternals):
 
             if max_node == 0:
                 return None, blob, consumed_size, consumed_nb
-            else:
-                itr = range(1, max_node+1)
+            # else:
+            #     itr = range(1, max_node+1)
 
             orig_blob = blob
             orig_consumed_size = consumed_size
             nb_absorbed = 0
             abort = False
             tmp_list = []
-            for node_no in itr:
+
+            node_no = 1
+            while node_no <= max_node or max_node < 0: # max_node < 0 means infinity
+            # for node_no in itr:
                 node = self._clone_node(base_node, node_no-1, force_clone)
 
                 # We try to absorb the blob
@@ -2684,6 +2703,8 @@ class NodeInternals_NonTerm(NodeInternals):
 
                 else:
                     raise ValueError
+
+                node_no += 1
 
             if abort:
                 blob = orig_blob
@@ -2858,8 +2879,12 @@ class NodeInternals_NonTerm(NodeInternals):
                                                                                         force_clone=force_clone)
 
                                     if not tmp_abort and consumed_nb > 0:
-                                        assert(qty_obj[0] - consumed_nb >= 0)
+                                        # assert(qty_obj[0] - consumed_nb >= 0)
+
+                                        # Note that qty_obj[0] can be < 0 if max_node is set
+                                        # to -1 (for specifying infinity)
                                         qty_obj[0] = qty_obj[0] - consumed_nb # update max_node
+
                                         # We now set force_clone to True as we already consumed the base_node
                                         # but _try_absorption_with() will not know that if we recall it with
                                         # the same base_node at a later time

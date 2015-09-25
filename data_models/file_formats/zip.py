@@ -92,7 +92,7 @@ class ZIP_DataModel(DataModel):
 
 
         MIN_FILE = 0
-        MAX_FILE = 30
+        MAX_FILE = -1
 
         zip_desc = \
         {'name': 'ZIP',

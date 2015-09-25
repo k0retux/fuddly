@@ -2020,9 +2020,70 @@ class TestNode_NonTerm(unittest.TestCase):
     def setUp(self):
         pass
 
+
+    def test_infinity(self):
+
+        infinity_desc = \
+        {'name': 'infinity',
+         'contents': [
+             {'name': 'prefix',
+              'contents': String(val_list=['A']),
+              'qty': (2,-1)},
+             {'name': 'mid',
+              'contents': String(val_list=['H']),
+              'qty': -1},
+             {'name': 'suffix',
+              'contents': String(val_list=['Z']),
+              'qty': (2,-1)},
+         ]}
+
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(infinity_desc)
+        node_abs = Node('infinity_abs', base_node=node)
+        node_abs2 = Node('infinity_abs', base_node=node)
+
+        node.set_env(Env())
+        node_abs.set_env(Env())
+        node_abs2.set_env(Env())
+
+        # node.show()
+        raw_data = node.to_bytes()
+        print('\n*** Test with generated raw data (infinite is limited to )\n\nOriginal data:')
+        print(repr(raw_data), len(raw_data))
+
+        status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+        print('Absorb Status:', status, off, size, name)
+        print(' \_ length of original data:', len(raw_data))
+        print(' \_ remaining:', raw_data[size:])
+        raw_data_abs = node_abs.to_bytes()
+        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        # node_abs.show()
+
+        self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+        self.assertEqual(raw_data, raw_data_abs)
+
+        print('\n*** Test with big raw data\n\nOriginal data:')
+        raw_data2 = 'A'*(NodeInternals_NonTerm.INFINITY_LIMIT + 30) + 'H'*(NodeInternals_NonTerm.INFINITY_LIMIT + 1) + \
+                   'Z'*(NodeInternals_NonTerm.INFINITY_LIMIT - 1)
+        print(repr(raw_data2), len(raw_data2))
+
+        status, off, size, name = node_abs2.absorb(raw_data2, constraints=AbsFullCsts())
+
+        print('Absorb Status:', status, off, size, name)
+        print(' \_ length of original data:', len(raw_data2))
+        print(' \_ remaining:', raw_data2[size:])
+        raw_data_abs2 = node_abs2.to_bytes()
+        print(' \_ absorbed data:', repr(raw_data_abs2), len(raw_data_abs2))
+
+        self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+        self.assertEqual(raw_data2, raw_data_abs2)
+
+
     def test_separator(self):
         test_desc = \
         {'name': 'test',
+         'determinist': True,
          'separator': {'contents': {'name': 'SEP',
                                     'contents': String(val_list=[' ', '  ', '     '],
                                                        absorb_regexp=b'\s+', determinist=False),
@@ -2064,12 +2125,12 @@ class TestNode_NonTerm(unittest.TestCase):
               ]}
          ]}
 
-        for i in range(3):
-            mh = ModelHelper()
-            node = mh.create_graph_from_desc(test_desc)
-            node_abs = Node('test_abs', base_node=node)
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(test_desc)
+        node.set_env(Env())
 
-            node.set_env(Env())
+        for i in range(5):
+            node_abs = Node('test_abs', base_node=node)
             node_abs.set_env(Env())
 
             node.show()
@@ -2090,6 +2151,8 @@ class TestNode_NonTerm(unittest.TestCase):
             self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
             self.assertEqual(len(raw_data), len(raw_data_abs))
             self.assertEqual(raw_data, raw_data_abs)
+
+            node.unfreeze()
 
 
 class TestHLAPI(unittest.TestCase):

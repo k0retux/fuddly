@@ -704,10 +704,6 @@ chain, basically ``JPG<finite=True> tTYPE``.
 
 
 
-
-
-
-
 .. _fuddly-advanced:
 
 Using ``fuddly`` Through Advanced Python Interpreter
@@ -987,7 +983,7 @@ the PNG data format:
 	{'name': 'sig',
 	 'contents': String(val_list=[b'\x89PNG\r\n\x1a\n'], size=8)},
 	{'name': 'chunks',
-	 'qty': (2,200),
+	 'qty': (2,-1),
 	 'contents': [
 	      {'name': 'len',
 	       'contents': UINT32_be()},
@@ -1015,9 +1011,17 @@ file's chunks (lines 6-23) [#]_. This latter node describe the PNG
 file structure by defining the chunk contents in lines 9-22---in this very
 simplistic data model, chunk types are not distinguished, but it can
 easily be expanded---and the number of chunks allowed in
-a PNG file in line 7---from 2 to 200, artificially chosen for this
-example.
+a PNG file in line 7---from ``2`` to ``-1`` (meaning infinity).
 
+.. note:: ``-1`` means infinity if used to specify the maximum amount
+          allowed for a given node. It makes sense only for absorption
+          operation (refer to :ref:`tuto:dm-absorption`), because for
+          data generation, a strict limit
+          (:const:`fuzzfmk.data_model.NodeInternals_NonTerm.INFINITY_LIMIT`)
+          is set to avoid getting unintended too big data. If you
+          intend to get such kind of data, specify explicitly the
+          maximum, or use a disruptor to do so
+          (:ref:`tuto:disruptors`).
 
 .. _dm:mydf:
 
@@ -1130,7 +1134,7 @@ various constructions, and value types.
 
 		       {'contents': String(val_list=['OK', 'KO'], size=2),
 			'name': 'val2',
-			'qty': (1, 3)},
+			'qty': (1, -1)},
 
 		       {'name': 'val21',
 			'clone': 'val1'},

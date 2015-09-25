@@ -158,12 +158,13 @@ class MyDF_DataModel(DataModel):
                        {'section_type': MH.FullyRandom,
                         'contents': [
                             {'name': 'color',
-                            'contents': [
-                                {'name': 'id',
-                                 'contents': String(val_list=['color='])},
-                                {'name': 'val',
-                                 'contents': String(val_list=['red', 'black'])}
-                            ]},
+                             'determinist': True,  # used only for test purpose
+                             'contents': [
+                                 {'name': 'id',
+                                  'contents': String(val_list=['color='])},
+                                 {'name': 'val',
+                                  'contents': String(val_list=['red', 'black'])}
+                             ]},
                             {'name': 'type',
                              'contents': [
                                  {'name': ('id', 2),
@@ -275,6 +276,7 @@ class MyDF_DataModel(DataModel):
               'absorb_csts': AbsCsts(contents=False)}
 
          ]}
+
 
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc)
