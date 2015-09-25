@@ -265,7 +265,8 @@ class String(VT_Alt):
     
     def init_specific(self, val_list=None, size=None, min_sz=None,
                       max_sz=None, determinist=True, ascii_mode=False,
-                      extra_fuzzy_list=None, absorb_regexp=None):
+                      extra_fuzzy_list=None, absorb_regexp=None,
+                      alphabet=string.printable):
 
         self.drawn_val = None
 
@@ -280,7 +281,7 @@ class String(VT_Alt):
         self.set_description(val_list=val_list, size=size, min_sz=min_sz,
                              max_sz=max_sz, determinist=determinist,
                              ascii_mode=ascii_mode, extra_fuzzy_list=extra_fuzzy_list,
-                             absorb_regexp=absorb_regexp)
+                             absorb_regexp=absorb_regexp, alphabet=alphabet)
 
     def make_private(self, forget_current_state):
         if forget_current_state:
@@ -447,11 +448,12 @@ class String(VT_Alt):
     def set_description(self, val_list=None, size=None, min_sz=None,
                         max_sz=None, determinist=True,
                         ascii_mode=False, extra_fuzzy_list=None,
-                        absorb_regexp=None):
+                        absorb_regexp=None, alphabet=string.printable):
         '''
         @size take precedence over @min_sz and @max_sz
         '''
 
+        self.alphabet = alphabet
         self.ascii_mode = ascii_mode
 
         if absorb_regexp is None:
@@ -523,10 +525,10 @@ class String(VT_Alt):
     def _populate_val_list(self):
         self.val_list = []
         if self.min_sz < self.max_sz:
-            self.val_list.append(bp.rand_string(size=self.max_sz))
-            self.val_list.append(bp.rand_string(size=self.min_sz))
+            self.val_list.append(bp.rand_string(size=self.max_sz, str_set=self.alphabet))
+            self.val_list.append(bp.rand_string(size=self.min_sz, str_set=self.alphabet))
         else:
-            self.val_list.append(bp.rand_string(size=self.max_sz))
+            self.val_list.append(bp.rand_string(size=self.max_sz, str_set=self.alphabet))
 
         if self.min_sz+1 < self.max_sz:
             self.val_list += [bp.rand_string(mini=self.min_sz+1, maxi=self.max_sz-1) for i in range(3)]

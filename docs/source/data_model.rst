@@ -112,6 +112,9 @@ parameters:
   supplementary constraint for data absorption operation (refer to
   :ref:`tuto:dm-absorption` for more information on that topic).
 
+``alphabet`` [optional, default value: **string.printable**]
+  The alphabet to use for generating data, in case no ``val_list`` is
+  provided.
 
 
 BitField

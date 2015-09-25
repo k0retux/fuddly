@@ -2155,6 +2155,55 @@ class TestNode_NonTerm(unittest.TestCase):
             node.unfreeze()
 
 
+
+class TestNode_TypedValue(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        pass
+
+    def setUp(self):
+        pass
+
+
+    def test_str_alphabet(self):
+
+        alphabet = 'ABC'
+
+        alpha_desc = \
+        {'name': 'alpha',
+         'contents': String(min_sz=20, max_sz=100, alphabet=alphabet)}
+
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(alpha_desc)
+        node.set_env(Env())
+
+        node_abs = Node('alpha_abs', base_node=node)
+        node_abs.set_env(Env())
+
+        node.show()
+        raw_data = node.to_bytes()
+        print('\n*** Test with generated raw data (infinite is limited to )\n\nOriginal data:')
+        print(repr(raw_data), len(raw_data))
+
+        for l in raw_data:
+            if sys.version_info[0] > 2:
+                l = chr(l)
+            self.assertTrue(l in alphabet)
+
+        status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+        print('Absorb Status:', status, off, size, name)
+        print(' \_ length of original data:', len(raw_data))
+        print(' \_ remaining:', raw_data[size:])
+        raw_data_abs = node_abs.to_bytes()
+        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        node_abs.show()
+
+        self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+        self.assertEqual(raw_data, raw_data_abs)
+
+
 class TestHLAPI(unittest.TestCase):
 
     @classmethod
