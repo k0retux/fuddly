@@ -284,6 +284,12 @@ def convert_to_internal_repr(val):
             val = bytes(val, 'latin_1')
     return val
 
+def unconvert_from_internal_repr(val):
+    assert(isinstance(val, bytes))
+    if sys.version_info[0] > 2:
+        val = val.decode()
+    return val
+
 
 nodes_weight_re = re.compile('(.*?)\((.*)\)')
 
@@ -2648,7 +2654,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 elif st == AbsorbStatus.Absorbed or st == AbsorbStatus.FullyAbsorbed:
                     if DEBUG:
                         print('\nABSORBED: %s, abort: %r, blob: %r ... , consumed: %d' \
-                              % (node.name, abort, blob[:sz][:50], sz))
+                              % (node.name, abort, blob[off:sz][:100], sz))
                         
                     nb_absorbed = node_no
                     sz2 = 0

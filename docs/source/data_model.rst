@@ -114,7 +114,8 @@ parameters:
 
 ``alphabet`` [optional, default value: **string.printable**]
   The alphabet to use for generating data, in case no ``val_list`` is
-  provided.
+  provided. Also use during absorption to validate the contents. It is
+  checked if there is no ``val_list``.
 
 
 BitField

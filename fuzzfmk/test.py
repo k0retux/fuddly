@@ -2064,8 +2064,8 @@ class TestNode_NonTerm(unittest.TestCase):
         self.assertEqual(raw_data, raw_data_abs)
 
         print('\n*** Test with big raw data\n\nOriginal data:')
-        raw_data2 = 'A'*(NodeInternals_NonTerm.INFINITY_LIMIT + 30) + 'H'*(NodeInternals_NonTerm.INFINITY_LIMIT + 1) + \
-                   'Z'*(NodeInternals_NonTerm.INFINITY_LIMIT - 1)
+        raw_data2 = b'A'*(NodeInternals_NonTerm.INFINITY_LIMIT + 30) + b'H'*(NodeInternals_NonTerm.INFINITY_LIMIT + 1) + \
+                   b'Z'*(NodeInternals_NonTerm.INFINITY_LIMIT - 1)
         print(repr(raw_data2), len(raw_data2))
 
         status, off, size, name = node_abs2.absorb(raw_data2, constraints=AbsFullCsts())
@@ -2168,11 +2168,20 @@ class TestNode_TypedValue(unittest.TestCase):
 
     def test_str_alphabet(self):
 
-        alphabet = 'ABC'
+        alphabet1 = 'ABC'
+        alphabet2 = 'NED'
 
         alpha_desc = \
-        {'name': 'alpha',
-         'contents': String(min_sz=20, max_sz=100, alphabet=alphabet)}
+        {'name': 'top',
+         'contents': [
+             {'name': 'alpha1',
+              'contents': String(min_sz=10, max_sz=100, val_list=['A'*10], alphabet=alphabet1),
+              'set_attrs': [NodeInternals.Abs_Postpone]},
+             {'name': 'alpha2',
+              'contents': String(min_sz=10, max_sz=100, alphabet=alphabet2)},
+             {'name': 'end',
+              'contents': String(val_list=['END'])},
+         ]}
 
         mh = ModelHelper()
         node = mh.create_graph_from_desc(alpha_desc)
@@ -2183,13 +2192,18 @@ class TestNode_TypedValue(unittest.TestCase):
 
         node.show()
         raw_data = node.to_bytes()
-        print('\n*** Test with generated raw data (infinite is limited to )\n\nOriginal data:')
         print(repr(raw_data), len(raw_data))
 
+        alphabet = alphabet1 + alphabet2
         for l in raw_data:
             if sys.version_info[0] > 2:
                 l = chr(l)
             self.assertTrue(l in alphabet)
+
+
+        print('\n*** Test with following  data:')
+        raw_data = b'A'*10 + b'DNE'*30+ b'E'*10 + b'END'
+        print(repr(raw_data), len(raw_data))
 
         status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
 
@@ -2202,6 +2216,25 @@ class TestNode_TypedValue(unittest.TestCase):
 
         self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
         self.assertEqual(raw_data, raw_data_abs)
+
+        node_abs = Node('alpha_abs', base_node=node)
+        node_abs.set_env(Env())
+
+        print('\n*** Test with following data:')
+        raw_data = b'A'*10 + b'DNE'*20 + b'F' + b'END'
+        print(repr(raw_data), len(raw_data))
+
+        status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+        print('Absorb Status:', status, off, size, name)
+        print(' \_ length of original data:', len(raw_data))
+        print(' \_ remaining:', raw_data[size:])
+        raw_data_abs = node_abs.to_bytes()
+        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        node_abs.show()
+
+        self.assertEqual(status, AbsorbStatus.Reject)
+        self.assertEqual(raw_data[size:], b'FEND')
 
 
 class TestHLAPI(unittest.TestCase):
