@@ -318,6 +318,7 @@ class String(VT_Alt):
                         break
 
         elif constraints[AbsCsts.Contents] and self.alphabet is not None:
+            size = None
             blob = unconvert_from_internal_repr(blob)
             alp = unconvert_from_internal_repr(self.alphabet)
             for l in alp:
@@ -332,7 +333,6 @@ class String(VT_Alt):
                         off = new_off
                 if off == sup_sz:
                     off = -1
-                    size = None
 
         elif constraints[AbsCsts.Regexp] and self.regexp is not None:
             g = re.search(self.regexp, blob, re.S)
