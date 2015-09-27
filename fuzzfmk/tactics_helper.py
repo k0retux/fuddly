@@ -1337,12 +1337,3 @@ if __name__ == "__main__":
     print(ui)
 
 
-
-### OBSOLETE
-class Memory:
-    '''
-    memory that can be used within fuzzing_primitives.py
-    '''
-    def __init__(self):
-        self.new = True 
-

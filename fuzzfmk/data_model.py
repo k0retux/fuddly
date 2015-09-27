@@ -2956,7 +2956,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 if abort:
                     break
 
-            if self.frozen_node_list and self.frozen_node_list[-1].is_attr_set(NodeInternals.Separator):
+            if self.separator is not None and self.frozen_node_list and self.frozen_node_list[-1].is_attr_set(NodeInternals.Separator):
                 if not self.separator.suffix:
                     sep = self.frozen_node_list.pop(-1)
                     data = sep.to_bytes()

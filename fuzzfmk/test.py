@@ -958,26 +958,24 @@ class TestMisc(unittest.TestCase):
         evt.make_finite(all_conf=True, recursive=True)
         evt.make_determinist(all_conf=True, recursive=True)
         evt.show()
-        # evt.get_value()
-        mem = Memory()
         prev_path = None
         turn_nb_list = []
-        for i in range(150):
+        tn_consumer = TypedNodeDisruption()
+        for rnode, node, orig_node_val, i in ModelWalker(evt, tn_consumer, make_determinist=True, max_steps=200):
             print('=======[ %d ]========' % i)
-            print('  orig:    ', evt.get_flatten_value())
+            print('  orig:    ', rnode.get_flatten_value())
             print('  ----')
-            node, orig_node_val, remaining = fuzz_typed_values(mem, evt)
             if node != None:
-                print('  fuzzed:  ', evt.get_flatten_value())
+                print('  fuzzed:  ', rnode.get_flatten_value())
                 print('  ----')
-                current_path = node.get_path_from(evt)
+                current_path = node.get_path_from(rnode)
                 if current_path != prev_path:
                     turn_nb_list.append(i)
                 print('  current fuzzed node:     %s' % current_path)
                 prev_path = current_path
                 vt = node.cc.get_value_type()
                 print('  node value type:        ', vt)
-                if issubclass(vt.__class__, VT_Alt): #issubclass(vt.__class__, BitField):
+                if issubclass(vt.__class__, VT_Alt):
                     print('  |- node fuzzy mode:        ', vt._fuzzy_mode)
                 print('  node value type determinist:        ', vt.determinist)
                 print('  node determinist:        ', node.cc.is_attr_set(NodeInternals.Determinist))
@@ -988,21 +986,20 @@ class TestMisc(unittest.TestCase):
                                                                                      orig_node_val))
                 print('  node corrupted value:   (hexlified) {0!s:s}, {0!s:s}'.format(binascii.hexlify(node.get_flatten_value()),
                                                                                      node.get_flatten_value()))
-                print('  remaining nodes:         %d' % remaining)
             else:
                 turn_nb_list.append(i)
                 print('\n--> Fuzzing terminated!\n')
                 break
 
         print('\nTurn number when Node has changed: %r, number of test cases: %d' % (turn_nb_list, i))
-        good_list = [0, 9, 19, 25, 34, 40, 53, 65, 73, 81, 89, 97, 105]
-        
+        good_list = [1, 9, 17, 28, 36, 44, 52, 61, 67, 76, 82, 95]
+
         msg = "If Fuzzy_<TypedValue>.int_list have been modified in size, the good_list should be updated.\n" \
               "If BitField are in random mode [currently put in determinist mode], the fuzzy_mode can produce more" \
               " or less value depending on drawn value when .get_value() is called (if the drawn value is" \
               " the max for instance, drawn_value+1 will not be produced)"
 
-        self.assertTrue(i == good_list[-1] and turn_nb_list == good_list, msg=msg)
+        self.assertTrue(turn_nb_list == good_list, msg=msg)
 
 
     def test_Node_Attr_01(self):
