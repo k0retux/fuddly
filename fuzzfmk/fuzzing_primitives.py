@@ -117,7 +117,7 @@ class ModelWalker(object):
         # children in other states that are not dealt with in this current call)
         for node in node_list:
 
-            perform_sencond_step = True
+            perform_second_step = True
             again = True
 
             DEBUG_PRINT('--(1)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()), level=2)
@@ -161,7 +161,7 @@ class ModelWalker(object):
                 # In this step, we provide the node to the Consumer,
                 # for possible uses/modifications. This is performed within our
                 # method node_consumer_helper().
-                if perform_sencond_step:
+                if perform_second_step:
                     
                     consumer_gen = self.node_consumer_helper(node, structure_has_changed, consumed_nodes)
                     for consumed_node, orig_node_val, reset, ignore_node in consumer_gen:
@@ -180,19 +180,19 @@ class ModelWalker(object):
                         # be directly skipped after Step 1 completes)
 
                         if ignore_node and reset:
-                            perform_sencond_step = False
+                            perform_second_step = False
                             again = True
                             break
                         elif ignore_node and not reset:
-                            perform_sencond_step = False
+                            perform_second_step = False
                             again = False
                             break
                         elif reset:
-                            perform_sencond_step = True
+                            perform_second_step = True
                             again = True
                             break
                         else:
-                            perform_sencond_step = True
+                            perform_second_step = True
                             again = False
 
                         if value_not_yielded_yet:
@@ -323,6 +323,10 @@ class ModelWalker(object):
                         # that means forget what has been saved (don't recover)
                         not_recovered = False
                 else:
+                    if node in consumed_nodes:
+                        print('\n****TEST')
+                        self._consumer.recover_node(node)
+                        not_recovered = False
                     return
 
             else:
@@ -338,7 +342,7 @@ class ModelWalker(object):
                 node.unfreeze(recursive=False)
                 node.get_value()
             elif not consume_called_again:
-                if not_recovered and self._consumer.interested_by(node):
+                if not_recovered and (self._consumer.interested_by(node) or node in consumed_nodes):
                     self._consumer.recover_node(node)
                     if not node.is_exhausted() and self._consumer.need_reset(node):
                         # node.reset_state(recursive=True, exclude_self=True)
@@ -397,9 +401,9 @@ class NodeConsumerStub(object):
         the criteria. (to be implemented according to the
         implementation of need_reset())
         
-        --> Return True to say that you have correctly consumed the node.
-        --> Return False, if despite your current criteria for node interest,
-            you are in fact not interested
+        Return True to say that you have correctly consumed the node.
+        Return False, if despite your current criteria for node interest,
+        you are in fact not interested
         '''
         DEBUG_PRINT('*** consume_node() called on: {:s}, (depth: {:d})'.format(node.name, node.depth))
         if node.is_exhausted():
@@ -411,14 +415,12 @@ class NodeConsumerStub(object):
     def save_node(self, node):
         '''
         Generic way to save a node (can impact performance)
-
         '''
         self.__node_backup = node.get_internals_backup()
 
     def recover_node(self, node):
         '''
         Generic way to recover a node
-
         '''
         node.set_internals(self.__node_backup)
 
@@ -888,6 +890,37 @@ class TypedNodeDisruption(NodeConsumerStub):
                 fuzzy_vt_obj.remove_value_list([val])
 
 
+
+class SeparatorDisruption(NodeConsumerStub):
+
+    def init_specific(self, separators):
+        self._internals_criteria = \
+            dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable, dm.NodeInternals.Separator],
+                                     node_kinds=[dm.NodeInternals_Term])
+
+        self.val_list = [b'']
+        if separators is not None:
+            self.val_list += list(separators)
+
+        self.yield_original_val = False
+        # self.need_reset_when_structure_change = True
+
+    def consume_node(self, node):
+        orig_val = node.to_bytes()
+        new_val_list = copy.copy(self.val_list)
+
+        if orig_val in new_val_list:
+            new_val_list.remove(orig_val)
+
+        node.cc.import_value_type(value_type=vtype.String(val_list=new_val_list))
+        # Note, that node attributes are not altered by this
+        # operation, especially usefull in our case, because we have
+        # to preserve dm.NodeInternals.Separator
+
+        node.make_finite()
+        node.make_determinist()
+
+        return True
 
 
 def fuzz_data_tree(top_node, paths_regexp=None):

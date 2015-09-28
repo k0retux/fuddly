@@ -300,7 +300,7 @@ class String(VT_Alt):
         size = self.max_sz
 
         # If 'Contents' constraint is set, we seek for string within
-        # val_list.
+        # val_list or conforming to the alphabet.
         # If 'Regexp' constraint is set, we seek for string matching
         # the regexp.
         # If no such constraints are provided, we assume off==0
@@ -363,7 +363,7 @@ class String(VT_Alt):
             if val_sz < self.min_sz:
                 raise ValueError('min_sz constraint not respected!')
         else:
-            blob = blob[off:size+off] if size is not None else blob[off:]
+            blob = blob[off:] #blob[off:size+off] if size is not None else blob[off:]
             val = self._read_value_from(blob, constraints)
             val_sz = len(val)
 

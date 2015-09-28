@@ -12,7 +12,7 @@ class MyDF_DataModel(DataModel):
     file_extension = 'df'
     name = 'mydf'
 
-    def dissect(self, data, idx):
+    def absorb(self, data, idx):
         pass
 
     def build_data_model(self):
@@ -35,6 +35,9 @@ class MyDF_DataModel(DataModel):
                   
                   {'name': 'middle',
                    'mode': MH.NotMutableClone,
+                   'separator': {'contents': {'name': 'sep',
+                                              'contents': String(val_list=['\n'], absorb_regexp=b'\n+'),
+                                              'absorb_csts': AbsNoCsts(regexp=True)}},
                    'contents': [{
                        'section_type': MH.Random,
                        'contents': [

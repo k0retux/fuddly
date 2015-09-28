@@ -113,10 +113,10 @@ SIZE - Truncate
 
 .. code-block:: none
 
-   *** Generic disruptors of type 'SIZE' ***                                                                                                                      
+   *** Generic disruptors of type 'SIZE' ***
      name: d_max_size  (weight: 4, valid: False) [stateless disruptor]
 
-       Truncate the data (or part of the data) to the provided size.                                                                                              
+       Truncate the data (or part of the data) to the provided size.
 
      specific args: 
        |_ sz
@@ -133,11 +133,11 @@ STRUCT - Shake Up Data Structure
 
 .. code-block:: none
 
-   *** Generic disruptors of type 'STRUCT' ***                                                                                                                    
+   *** Generic disruptors of type 'STRUCT' ***
      name: d_fuzz_model_structure  (weight: 1, valid: False) [stateless disruptor]
 
-       Disrupt the data model structure (replace ordered sections by                                                                                              
-       unordered ones).                                                                                                                                           
+       Disrupt the data model structure (replace ordered sections by
+       unordered ones).
 
      specific args: 
        |_ path
@@ -154,13 +154,11 @@ tALT - Walk Through Alternative Node Configurations
 
 .. code-block:: none
 
-   *** Generic disruptors of type 'tALT' ***                                                                                                                      
+   *** Generic disruptors of type 'tALT' ***
      name: d_switch_to_alternate_conf  (weight: 1, valid: False) [stateful disruptor]
 
-       Save the previous data the first time then switch the                                                                                                      
-       configuration of each node, one by one, with the provided                                                                                                  
-       alternate configuration. When iteration is terminated, the                                                                                                 
-       disruptor hands over.                                                                                                                                      
+       Switch the configuration of each node, one by one, with the         
+       provided alternate configuration.
 
      generic args: 
        |_ clone_node
@@ -187,17 +185,16 @@ tALT - Walk Through Alternative Node Configurations
        |      | default: None [type: str, list, tuple]
 
 
-tTERM - Basic Alteration of Terminal Node
+tTERM (OBSOLETE) - Basic Alteration of Terminal Node
 -----------------------------------------
 
 .. code-block:: none
 
-   *** Generic disruptors of type 'tTERM' ***                                                                                                                     
+   *** Generic disruptors of type 'tTERM' ***
      name: d_fuzz_terminal_nodes  (weight: 1, valid: False) [stateful disruptor]
 
-       Save the previous data the first time then fuzz the each node                                                                                              
-       (INDEPENDENTLY of its type), one by one. When iteration is                                                                                                 
-       terminated, the disruptor hands over.                                                                                                                      
+       Perform alterations on terminal nodes (one at a time),
+       without considering its type.                              
 
      generic args: 
        |_ clone_node
@@ -236,9 +233,9 @@ tTYPE - Advanced Alteration of Terminal Typed Node
    *** Generic disruptors of type 'tTYPE' ***
      name: d_fuzz_typed_nodes  (weight: 1, valid: False) [stateful disruptor]
 
-       Save the previous data the first time then fuzz the each node
-       (RELATIVELY to its type), one by one. When iteration is
-       terminated, the disruptor hands over.
+       Perform alterations on typed nodes (one at a time) accordingly to
+       its type and various complementary information (such as size,
+       allowed values, ...).
 
      generic args: 
        |_ clone_node
@@ -273,6 +270,53 @@ tTYPE - Advanced Alteration of Terminal Typed Node
        |      | default: True [type: bool]
 
 
+tSEP - Alteration of Separator Node
+-----------------------------------
+
+.. code-block:: none
+
+   *** Generic disruptors of type 'tSEP' ***
+     name: d_fuzz_separator_nodes  (weight: 1, valid: False) [stateful disruptor]
+
+       Perform alterations on separators (one at a time). Each time a
+       separator is encountered in the provided data, it will be replaced
+       by another separator picked from the ones existing within the
+       provided data.
+
+     generic args: 
+       |_ clone_node
+       |      | desc: if True the dmaker will always return a copy of the node. (for 
+       |      |       stateless diruptors dealing with big data it can be usefull 
+       |      |       to it to False)
+       |      | default: True [type: bool]
+       |_ init
+       |      | desc: make the model walker ignore all the steps until the provided 
+       |      |       one
+       |      | default: 1 [type: int]
+       |_ max_steps
+       |      | desc: maximum number of steps (-1 means until the end)
+       |      | default: -1 [type: int]
+       |_ runs_per_node
+       |      | desc: maximum number of test cases for a single node (-1 means until 
+       |      |       the end)
+       |      | default: -1 [type: int]
+     specific args: 
+       |_ path
+       |      | desc: graph path regexp to select nodes on which the disruptor should 
+       |      |       apply
+       |      | default: None [type: str]
+       |_ order
+       |      | desc: when set to True, the fuzzing order is strictly guided by the 
+       |      |       data structure. Otherwise, fuzz weight (if specified in the 
+       |      |       data model) is used for ordering
+       |      | default: False [type: bool]
+       |_ deep
+       |      | desc: when set to True, if a node structure has changed, the modelwalker 
+       |      |       will reset its walk through the children nodes
+       |      | default: True [type: bool]
+
+
+
 tWALK - Walk Through a Data Model
 ---------------------------------
 
@@ -281,8 +325,9 @@ tWALK - Walk Through a Data Model
    *** Generic disruptors of type 'tWALK' ***
      name: d_iter_over_data  (weight: 1, valid: False) [stateful disruptor]
 
-       Walk through a data model. When iteration is terminated, the
-       disruptor hands over.
+       Walk through the provided data and for each visited node, iterates
+       over the allowed values (with respect to the data model).
+       Note: *no alteration* is performed by this disruptor.
 
      generic args: 
        |_ clone_node

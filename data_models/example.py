@@ -356,6 +356,9 @@ class Example_DataModel(DataModel):
 
                    {'name': 'middle',
                     'mode': MH.NotMutableClone,
+                    'separator': {'contents': {'name': 'sep',
+                                               'contents': String(val_list=['\n'], absorb_regexp=b'\n+'),
+                                               'absorb_csts': AbsNoCsts(regexp=True)}},
                     'contents': [{
                         'section_type': MH.Random,
                         'contents': [

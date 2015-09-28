@@ -36,7 +36,7 @@ class PNG_DataModel(DataModel):
     file_extension = 'png'
     name = 'png'
 
-    def dissect(self, data, idx):
+    def absorb(self, data, idx):
         
         png = self.png.get_clone('PNG_{:0>2d}'.format(idx))
         status, off, size, name = png.absorb(data, constraints=AbsNoCsts(size=True))

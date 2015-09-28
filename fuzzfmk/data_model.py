@@ -2622,8 +2622,6 @@ class NodeInternals_NonTerm(NodeInternals):
 
             if max_node == 0:
                 return None, blob, consumed_size, consumed_nb
-            # else:
-            #     itr = range(1, max_node+1)
 
             orig_blob = blob
             orig_consumed_size = consumed_size
@@ -2633,7 +2631,6 @@ class NodeInternals_NonTerm(NodeInternals):
 
             node_no = 1
             while node_no <= max_node or max_node < 0: # max_node < 0 means infinity
-            # for node_no in itr:
                 node = self._clone_node(base_node, node_no-1, force_clone)
 
                 # We try to absorb the blob
@@ -2688,24 +2685,26 @@ class NodeInternals_NonTerm(NodeInternals):
                                 abort = True
                                 node.cancel_absorb()
                                 break
-                            else:   # no need to check max_node, the loop stop at it 
+                            else:   # no need to check max_node, the loop stop at it
                                 # abort = False
                                 break
                             
-                    blob = blob[off+sz:]
-                    assert(sz2 == off)
-                    consumed_size += sz+sz2 # off+sz
-                    consumed_nb = nb_absorbed
-                    tmp_list.append(node)
+                    if sz2 == off:                        
+                        blob = blob[off+sz:]
+                        consumed_size += sz+sz2 # off+sz
+                        consumed_nb = nb_absorbed
+                        tmp_list.append(node)
 
-                    if self.separator is not None:
-                        abort, blob, consumed_size, new_sep = _try_separator_absorption_with(blob, consumed_size)
-                        if abort:
-                            if nb_absorbed >= min_node:
-                                abort = False
-                            break
-                        else:
-                            tmp_list.append(new_sep)
+                        if self.separator is not None:
+                            abort, blob, consumed_size, new_sep = _try_separator_absorption_with(blob, consumed_size)
+                            if abort:
+                                if nb_absorbed >= min_node:
+                                    abort = False
+                                break
+                            else:
+                                tmp_list.append(new_sep)
+                    else:
+                        abort = True
 
                 else:
                     raise ValueError
@@ -3865,7 +3864,8 @@ class Node(object):
     '''Property linked to `self.internals` (read only)'''
     
     def get_internals_backup(self):
-        return Node(self.name, base_node=self, accept_external_entanglement=True)
+        return Node(self.name, base_node=self, ignore_frozen_state=False,
+                    accept_external_entanglement=True)
 
     def set_internals(self, backup):
         self.name = backup.name

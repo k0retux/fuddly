@@ -67,7 +67,7 @@ class JPG_DataModel(DataModel):
         nodes = list(self.jpg_dict.values())
         self.register_nodes(*nodes)
 
-    def dissect(self, buff, idx):
+    def absorb(self, buff, idx):
 
         for k, sof in markers['SOF'].items():
             if not re.search(sof, buff, re.S):

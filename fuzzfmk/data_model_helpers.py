@@ -672,6 +672,14 @@ class DataModel(object):
         pass
 
 
+    def absorb(self, data, idx):
+        '''
+        If your data model is able to absorb raw data, do it here.  This
+        function is called for each files (with the right extension)
+        present in imported_data/<data_model_name>.
+        '''
+        return data
+
     def get_external_node(self, dm_name, data_id, name=None):
         dm = self.__dm_db[dm_name]
         dm.load_data_model(self.__dm_db)
@@ -767,11 +775,11 @@ class DataModel(object):
         node.set_env(env)
 
 
-    def import_file_contents(self, extension=None, dissector=lambda x, y: x,
+    def import_file_contents(self, extension=None, absorber=None,
                              subdir=None, path=None, filename=None):
 
-        if hasattr(self, 'dissect'):
-            dissector = self.dissect
+        if absorber is None:
+            absorber = self.absorb
 
         if extension is None:
             extension = self.file_extension
@@ -800,7 +808,9 @@ class DataModel(object):
         for name in files:
             with open(os.path.join(path, name), 'rb') as f:
                 buff = f.read()
-                msgs[name] = dissector(buff, idx)
+                d_abs = absorber(buff, idx)
+                if d_abs is not None:
+                    msgs[name] = d_abs
             idx +=1
 
         return msgs

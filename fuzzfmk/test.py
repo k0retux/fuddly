@@ -1674,7 +1674,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of confs: %d'%idx, rgb=Color.INFO))
 
-        self.assertEqual(idx, 150) # previously 189
+        self.assertIn(idx, [148, 149, 150]) # previously 189
 
 
 
@@ -2217,7 +2217,7 @@ class TestNode_TypedValue(unittest.TestCase):
         node_abs = Node('alpha_abs', base_node=node)
         node_abs.set_env(Env())
 
-        print('\n*** Test with following data:')
+        print('\n*** Test with following INVALID data:')
         raw_data = b'A'*10 + b'DNE'*20 + b'F' + b'END'
         print(repr(raw_data), len(raw_data))
 
@@ -2563,7 +2563,7 @@ class TestFMK(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        fmk.enable_data_model(name='example')
+        fmk.enable_data_model(name='mydf')
 
     def setUp(self):
         pass
@@ -2578,18 +2578,30 @@ class TestFMK(unittest.TestCase):
         for dis in gen_disruptors:
             print("\n\n---[ Tested Disruptor %r ]---" % dis)
             if dis == 'EXT':
-                d = fmk.get_data([dmaker_type, (dis, None, UI(cmd='/bin/cat', file_mode=True))])
+                act = [dmaker_type, (dis, None, UI(cmd='/bin/cat', file_mode=True))]
+                d = fmk.get_data(act)
             else:
-                d = fmk.get_data([dmaker_type, dis])
-            if d is None:
-                raise ValueError
-            else:
+                act = [dmaker_type, dis]
+                d = fmk.get_data(act)
+            if d is not None:
                 fmk.log_data(d)
                 print("\n---[ Pretty Print ]---\n")
                 d.pretty_print()
                 fmk.cleanup_dmaker(dmaker_type=dmaker_type, reset_existing_seed=True)
+            else:
+                print("\n***WARNING: the sequence %r returns nothing!" % act)
+                raise ValueError
 
         fmk.cleanup_all_dmakers(reset_existing_seed=True)
+
+
+    def test_separator_disruptor(self):
+        for i in range(100):
+            d = fmk.get_data(['SEPARATOR', 'tSEP'])
+            if d is None:
+                break
+            fmk.new_transfer_preamble()
+            fmk.log_data(d)
 
 
 if __name__ == "__main__":

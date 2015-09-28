@@ -70,6 +70,15 @@ fuzzfmk.tactics_helper module
     :show-inheritance:
 
 
+fuzzfmk.fuzzing_primitives module
+---------------------------------
+
+.. automodule:: fuzzfmk.fuzzing_primitives
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
 ..
    fuzzfmk.plumbing module
    -----------------------
@@ -83,14 +92,6 @@ fuzzfmk.tactics_helper module
    -----------------------------
 
    .. automodule:: fuzzfmk.error_handling
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-   fuzzfmk.fuzzing_primitives module
-   ---------------------------------
-
-   .. automodule:: fuzzfmk.fuzzing_primitives
        :members:
        :undoc-members:
        :show-inheritance:
