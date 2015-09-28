@@ -36,7 +36,7 @@ class ZIP_DataModel(DataModel):
     file_extension = 'zip'
     name = 'zip'
 
-    def dissect(self, data, idx):
+    def absorb(self, data, idx):
         
         nm = 'ZIP_{:0>2d}'.format(idx)
         pkzip = self.pkzip.get_clone(nm)
@@ -92,7 +92,7 @@ class ZIP_DataModel(DataModel):
 
 
         MIN_FILE = 0
-        MAX_FILE = 30
+        MAX_FILE = -1
 
         zip_desc = \
         {'name': 'ZIP',

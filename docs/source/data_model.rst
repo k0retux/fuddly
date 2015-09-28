@@ -18,6 +18,8 @@ data model, which enables ``fuddly`` to perform more enhanced fuzzing.
    :ref:`tuto:disruptors`, for how to create your own *disruptors*.
 
 
+.. _vt:integer:
+
 Integer
 -------
 
@@ -110,6 +112,10 @@ parameters:
   supplementary constraint for data absorption operation (refer to
   :ref:`tuto:dm-absorption` for more information on that topic).
 
+``alphabet`` [optional, default value: **string.printable**]
+  The alphabet to use for generating data, in case no ``val_list`` is
+  provided. Also use during absorption to validate the contents. It is
+  checked if there is no ``val_list``.
 
 
 BitField
@@ -247,3 +253,412 @@ the first example. We additionally specify the parameter
 
 Data Model Patterns & Keywords
 ==============================
+
+
+How to Describe the Separators Used within a Data Format
+--------------------------------------------------------
+
+The example below shows how to define the separators for delimiting
+lines of an imaginary data model (line 2-7), and for delimiting
+parameters with space characters (line 12-14).
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 2-7, 12-14
+
+    {'name': 'separator_test',
+     'separator': {'contents': {'name': 'sep',
+				'contents': String(val_list=['\n'], absorb_regexp=b'[\r\n|\n]+'),
+				'absorb_csts': AbsNoCsts(regexp=True)},
+		   'prefix': False,
+		   'suffix': False,
+		   'unique': True},
+     'contents': [
+	 {'section_type': MH.FullyRandom,
+	  'contents': [
+	      {'name': 'parameters',
+	       'separator': {'contents': {'name': ('sep',2),
+					  'contents': String(val_list=[' '], absorb_regexp=b' +'),
+					  'absorb_csts': AbsNoCsts(regexp=True)}},
+	       'qty': 3,
+	       'contents': [
+		   {'section_type': MH.FullyRandom,
+		    'contents': [
+			{'name': 'color',
+			'contents': [
+			    {'name': 'id',
+			     'contents': String(val_list=['color='])},
+			    {'name': 'val',
+			     'contents': String(val_list=['red', 'black'])}
+			]},
+			{'name': 'type',
+			 'contents': [
+			     {'name': ('id', 2),
+			      'contents': String(val_list=['type='])},
+			     {'name': ('val', 2),
+			      'contents': String(val_list=['circle', 'cube', 'rectangle'], determinist=False)}
+			]},
+		    ]}]},
+	      {'contents': String(val_list=['AAAA', 'BBBB', 'CCCC'], determinist=False),
+	       'qty': (4, 6),
+	       'name': 'str'}
+	  ]}
+     ]}
+
+
+From this data model you could get a data like that:
+
+.. code-block:: none
+
+   CCCC
+   BBBB
+    type=circle color=red 
+    type=rectangle color=red 
+   BBBB
+   AAAA
+   CCCC
+    color=red type=cube
+
+.. note:: Note this data model can be used to absorb data samples
+          (refer to :ref:`tuto:dm-absorption`) that may use more than
+          one empty line as first-level separator (thanks to the
+          ``absorb_regexp`` parameter in line 3), and more than one
+          space character as second-level separators (thanks to the
+          ``absorb_regexp`` parameter in line 13).
+
+.. note:: You can also perform specific *separator mutation* within a
+          disruptor (refer to :ref:`tuto:disruptors`), as separator nodes have
+          the specific attribute
+          :const:`fuzzfmk.data_model.NodeInternals.Separator` set.
+
+
+How to Describe a Data Format Whose Parts Change Depending on Some Fields
+-------------------------------------------------------------------------
+
+The example below shows how to define a data format based on *opcodes*
+and *sub-opcodes* which change the form of the data itself. We use for
+that purpose the keyword ``exists_if`` with some subclasses of
+:class:`fuzzfmk.data_model.NodeCondition` and node references. 
+
+.. note:: The keyword ``exists_if`` can directly take a node
+          reference. In such case, the condition is the existence of
+          this node itself.
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 9, 14, 17, 29, 33, 39, 43
+
+    {'name': 'exist_cond',
+     'shape_type': MH.Ordered,
+     'contents': [
+	 {'name': 'opcode',
+	  'contents': String(val_list=['A1', 'A2', 'A3'], determinist=True)},
+
+	 {'name': 'command_A1',
+	  'contents': String(val_list=['AAA', 'BBBB', 'CCCCC']),
+	  'exists_if': (RawCondition('A1'), 'opcode'),
+	  'qty': 3},
+
+	 {'name': 'command_A2',
+	  'contents': UINT32_be(int_list=[0xDEAD, 0xBEEF]),
+	  'exists_if': (RawCondition('A2'), 'opcode')},
+
+	 {'name': 'command_A3',
+	  'exists_if': (RawCondition('A3'), 'opcode'),
+	  'contents': [
+	      {'name': 'A3_subopcode',
+	       'contents': BitField(subfield_sizes=[15,2,4], endian=VT.BigEndian,
+				    subfield_val_lists=[None, [1,2], [5,6,12]],
+				    subfield_val_extremums=[[500, 600], None, None],
+				    determinist=False)},
+
+	      {'name': 'A3_int',
+	       'contents': UINT16_be(int_list=[10, 20, 30], determinist=False)},
+
+	      {'name': 'A3_deco1',
+	       'exists_if': (IntCondition(10), 'A3_int'),
+	       'contents': String(val_list=['*1*0*'])},
+
+	      {'name': 'A3_deco2',
+	       'exists_if': (IntCondition([20, 30]), 'A3_int'),
+	       'contents': String(val_list=['+2+0+3+0+'])}
+	  ]},
+
+	 {'name': 'A31_payload',
+	  'contents': String(val_list=['$ A31_OK $', '$ A31_KO $'], determinist=False),
+	  'exists_if': (BitFieldCondition(sf=2, val=[6,12]), 'A3_subopcode')},
+
+	 {'name': 'A32_payload',
+	  'contents': String(val_list=['$ A32_VALID $', '$ A32_INVALID $'], determinist=False),
+	  'exists_if': (BitFieldCondition(sf=2, val=5), 'A3_subopcode')}
+     ]}
+
+
+Example of data generated by such a data model are presented below (in ASCII art):
+
+.. code-block:: none
+
+   [0] exist_cond [NonTerm]
+    \__(1) exist_cond/opcode [String] size=2B
+    |        \_raw: 'A3'
+    \__[1] exist_cond/command_A3 [NonTerm]
+    |   \__(2) exist_cond/command_A3/A3_subopcode [BitField] size=3B
+    |   |        \_ (+|2: 0110 |1: 01 |0: 000001001001001 |padding: 000 |-) 6558280
+    |   |        \_raw: 'd\x12H'
+    |   \__(2) exist_cond/command_A3/A3_int [UINT16_be] size=2B
+    |   |        \_ 10 (0xA)
+    |   |        \_raw: '\x00\n'
+    |   \__(2) exist_cond/command_A3/A3_deco1 [String] size=5B
+    |            \_raw: '*1*0*'
+    \__(1) exist_cond/A31_payload [String] size=10B
+	     \_raw: '$ A31_OK $'
+
+
+   [0] exist_cond [NonTerm]
+    \__(1) exist_cond/opcode [String] size=2B
+    |        \_raw: 'A1'
+    \__(1) exist_cond/command_A1 [String] size=3B
+    |        \_raw: 'AAA'
+    \__(1) exist_cond/command_A1:2 [String] size=3B
+    |        \_raw: 'AAA'
+    \__(1) exist_cond/command_A1:3 [String] size=3B
+	     \_raw: 'AAA'
+
+
+   [0] exist_cond [NonTerm]
+    \__(1) exist_cond/opcode [String] size=2B
+    |        \_raw: 'A2'
+    \__(1) exist_cond/command_A2 [UINT32_be] size=4B
+	     \_ 48879 (0xBEEF)
+	     \_raw: '\x00\x00\xbe\xef'
+
+
+.. note:: Note this data model can be used for generating data and
+          also (without modification) for absorbing data samples that
+          comply to its grammar (refer to :ref:`tuto:dm-absorption`)
+
+
+How to Generate Nodes Dynamically (for length, counter, ...)
+------------------------------------------------------------
+
+The example below shows how to describe a node that will dynamically
+generate a node containing the length of another one, a variable
+character string in our case.
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 5-6
+
+    {'name': 'len_gen',
+     'contents': [
+	 {'name': 'len',
+	  'type': MH.Generator,
+	  'contents': lambda x: Node('cts', value_type= \
+                                     UINT32_be(int_list=[len(x.to_bytes())])),
+	  'node_args': 'payload'},
+
+	 {'name': 'payload',
+	  'contents': String(min_sz=10, max_sz=100, determinist=False)},
+     ]}
+
+Note the *generator* is just a specific kind of node
+(:class:`fuzzfmk.data_model.NodeInternals_GenFunc`) that embeds a
+function that returns a node (:class:`fuzzfmk.data_model.Node`). In
+the previous description, the function is provided through the keyword
+``contents``, and it's a simple lambda function taking a node as
+parameter, on which is called
+:meth:`fuzzfmk.data_model.Node.to_bytes()` to get its bytes
+representation and then the ``len()`` function. The result is used for
+defining a terminal node of type
+:class:`fuzzfmk.value_types.UINT32_be` (refer to section :ref:`vt:integer`).
+
+This use case can be described by using the specific *generator
+template* :meth:`fuzzfmk.data_model_helpers.MH.LEN()` which will basically
+return the previous lambda function. The following example makes use
+of it.
+
+.. note:: Generator templates are defined as static methods of
+          :class:`fuzzfmk.data_model_helpers.MH`. They make the description
+          of some generic use cases simpler.
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 5
+
+    {'name': 'len_gen',
+     'contents': [
+	 {'name': 'len',
+	  'type': MH.Generator,
+	  'contents': MH.LEN(UINT32_be),
+	  'node_args': 'payload'},
+
+	 {'name': 'payload',
+	  'contents': String(min_sz=10, max_sz=100, determinist=False)},
+     ]}
+
+
+To conclude on this use case, note that the previous description can
+be used for data generation, but it won't be usable as-is for data
+absorption (refer to :ref:`tuto:dm-absorption`). Indeed, the way
+absorption works is by walking through the graph and it will reach the
+generator first. This one will freeze the string contents by getting
+its bytes representation and will create an ``UINT32_be`` node with
+only one value, the length of the arbitrarily generated string. This
+value will be used for validating the corresponding data part within
+the raw data to absorb, as the absorption operation will by default
+enforce contents equality. Hence, it will fail. To solve this problem,
+the simplest solution is to release some local constraints during
+absorption, namely we need to release the ``Contents`` constraint for
+the ``len`` node. More simply, we can release all the absorption
+constraints for this node, as shown in the following example:
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 7
+
+    {'name': 'len_gen',
+     'contents': [
+	 {'name': 'len',
+	  'type': MH.Generator,
+	  'contents': MH.LEN(UINT32_be),
+	  'node_args': 'payload',
+	  'absorb_csts': AbsNoCsts()  # or more accurately AbsCsts(contents=False)
+	  },
+
+	 {'name': 'payload',
+	  'contents': String(min_sz=10, max_sz=100, determinist=False)},
+     ]}
+
+Another solution can be to define an alternate configuration that will
+be used only for absorption:
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 7-9
+
+    {'name': 'len_gen',
+     'contents': [
+	 {'name': 'len',
+	  'type': MH.Generator,
+	  'contents': MH.LEN(UINT32_be),
+	  'node_args': 'payload',
+	  'alt': [
+	      {'conf': 'ABS',
+	       'contents': UINT32_be(maxi=100)} ]},
+
+	 {'name': 'payload',
+	  'contents': String(min_sz=10, max_sz=100, determinist=False)},
+     ]}
+
+This solution is more complex, but can revealed itself to be useful
+for more complex situation.
+
+.. seealso:: Look at the example :ref:`ex:zip-mod` to see how to
+   change the node configuration before absorption. And for more
+   insights on that topic refer to :ref:`data-model` and
+   :ref:`tuto:disruptors`.
+
+
+Finally, let's take the following example that illustrates other
+*generator templates*, namely
+:meth:`fuzzfmk.data_model_helpers.MH.QTY()`,
+:meth:`fuzzfmk.data_model_helpers.MH.CRC()` and
+:meth:`fuzzfmk.data_model_helpers.MH.TIMESTAMP()`.
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 16, 21, 26, 31
+
+    {'name': 'misc_gen',
+     'contents': [
+	 {'name': 'integers',
+	  'contents': [
+	      {'name': 'int16',
+	       'qty': (2, 10),
+	       'contents': UINT16_be(int_list=[16, 1, 6], determinist=False)},
+
+	      {'name': 'int32',
+	       'qty': (3, 8),
+	       'contents': UINT32_be(int_list=[32, 3, 2], determinist=False)}
+	  ]},
+
+	 {'name': 'int16_qty',
+	  'type': MH.Generator,
+	  'contents': MH.QTY(node_name='int16', vt=UINT8),
+	  'node_args': 'integers'},
+
+	 {'name': 'int32_qty',
+	  'type': MH.Generator,
+	  'contents': MH.QTY(node_name='int32', vt=UINT8),
+	  'node_args': 'integers'},
+
+	 {'name': 'tstamp',
+	  'type': MH.Generator,
+	  'contents': MH.TIMESTAMP("%H%M%S"),
+	  'absorb_csts': AbsCsts(contents=False)},
+
+	 {'name': 'crc',
+	  'type': MH.Generator,
+	  'contents': MH.CRC(UINT32_be),
+	  'node_args': ['tstamp', 'int32_qty'],
+	  'absorb_csts': AbsCsts(contents=False)}
+     ]}
+
+.. note:: Note this data model is compatible for *data absorption*.
+
+Here under an example of data generated by such a data model (in ASCII art):
+
+.. code-block:: none
+
+   [0] misc_gen [NonTerm]
+    \__[1] misc_gen/integers [NonTerm]
+    |   \__(2) misc_gen/integers/int16 [UINT16_be] size=2B
+    |   |        \_ 6 (0x6)
+    |   |        \_raw: '\x00\x06'
+    |   \__(2) misc_gen/integers/int16:2 [UINT16_be] size=2B
+    |   |        \_ 1 (0x1)
+    |   |        \_raw: '\x00\x01'
+    |   \__(2) misc_gen/integers/int16:3 [UINT16_be] size=2B
+    |   |        \_ 1 (0x1)
+    |   |        \_raw: '\x00\x01'
+    |   \__(2) misc_gen/integers/int16:4 [UINT16_be] size=2B
+    |   |        \_ 6 (0x6)
+    |   |        \_raw: '\x00\x06'
+    |   \__(2) misc_gen/integers/int16:5 [UINT16_be] size=2B
+    |   |        \_ 6 (0x6)
+    |   |        \_raw: '\x00\x06'
+    |   \__(2) misc_gen/integers/int16:6 [UINT16_be] size=2B
+    |   |        \_ 1 (0x1)
+    |   |        \_raw: '\x00\x01'
+    |   \__(2) misc_gen/integers/int16:7 [UINT16_be] size=2B
+    |   |        \_ 1 (0x1)
+    |   |        \_raw: '\x00\x01'
+    |   \__(2) misc_gen/integers/int32 [UINT32_be] size=4B
+    |   |        \_ 2 (0x2)
+    |   |        \_raw: '\x00\x00\x00\x02'
+    |   \__(2) misc_gen/integers/int32:2 [UINT32_be] size=4B
+    |   |        \_ 3 (0x3)
+    |   |        \_raw: '\x00\x00\x00\x03'
+    |   \__(2) misc_gen/integers/int32:3 [UINT32_be] size=4B
+    |            \_ 2 (0x2)
+    |            \_raw: '\x00\x00\x00\x02'
+    \__[1] misc_gen/int16_qty [GenFunc | node_args: misc_gen/integers]
+    |   \__(2) misc_gen/int16_qty/cts [UINT8] size=1B
+    |            \_ 7 (0x7)
+    |            \_raw: '\x07'
+    \__[1] misc_gen/int32_qty [GenFunc | node_args: misc_gen/integers]
+    |   \__(2) misc_gen/int32_qty/cts [UINT8] size=1B
+    |            \_ 3 (0x3)
+    |            \_raw: '\x03'
+    \__[1] misc_gen/tstamp [GenFunc | node_args: None]
+    |   \__(2) misc_gen/tstamp/cts [String] size=6B
+    |            \_raw: '170140'
+    \__[1] misc_gen/crc [GenFunc | node_args: misc_gen/tstamp, misc_gen/int32_qty]
+	\__(2) misc_gen/crc/cts [UINT32_be] size=4B
+		 \_ 110906314 (0x69C4BCA)
+		 \_raw: '\x06\x9cK\xca'
+
+
+Which correspond to the following data::
+
+  '\x00\x06\x00\x01\x00\x01\x00\x06\x00\x06\x00\x01\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03\x00\x00\x00\x02\x07\x03170140\x06\x9cK\xca'

@@ -117,7 +117,7 @@ class ModelWalker(object):
         # children in other states that are not dealt with in this current call)
         for node in node_list:
 
-            perform_sencond_step = True
+            perform_second_step = True
             again = True
 
             DEBUG_PRINT('--(1)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()), level=2)
@@ -161,7 +161,7 @@ class ModelWalker(object):
                 # In this step, we provide the node to the Consumer,
                 # for possible uses/modifications. This is performed within our
                 # method node_consumer_helper().
-                if perform_sencond_step:
+                if perform_second_step:
                     
                     consumer_gen = self.node_consumer_helper(node, structure_has_changed, consumed_nodes)
                     for consumed_node, orig_node_val, reset, ignore_node in consumer_gen:
@@ -180,19 +180,19 @@ class ModelWalker(object):
                         # be directly skipped after Step 1 completes)
 
                         if ignore_node and reset:
-                            perform_sencond_step = False
+                            perform_second_step = False
                             again = True
                             break
                         elif ignore_node and not reset:
-                            perform_sencond_step = False
+                            perform_second_step = False
                             again = False
                             break
                         elif reset:
-                            perform_sencond_step = True
+                            perform_second_step = True
                             again = True
                             break
                         else:
-                            perform_sencond_step = True
+                            perform_second_step = True
                             again = False
 
                         if value_not_yielded_yet:
@@ -323,6 +323,10 @@ class ModelWalker(object):
                         # that means forget what has been saved (don't recover)
                         not_recovered = False
                 else:
+                    if node in consumed_nodes:
+                        print('\n****TEST')
+                        self._consumer.recover_node(node)
+                        not_recovered = False
                     return
 
             else:
@@ -338,7 +342,7 @@ class ModelWalker(object):
                 node.unfreeze(recursive=False)
                 node.get_value()
             elif not consume_called_again:
-                if not_recovered and self._consumer.interested_by(node):
+                if not_recovered and (self._consumer.interested_by(node) or node in consumed_nodes):
                     self._consumer.recover_node(node)
                     if not node.is_exhausted() and self._consumer.need_reset(node):
                         # node.reset_state(recursive=True, exclude_self=True)
@@ -397,9 +401,9 @@ class NodeConsumerStub(object):
         the criteria. (to be implemented according to the
         implementation of need_reset())
         
-        --> Return True to say that you have correctly consumed the node.
-        --> Return False, if despite your current criteria for node interest,
-            you are in fact not interested
+        Return True to say that you have correctly consumed the node.
+        Return False, if despite your current criteria for node interest,
+        you are in fact not interested
         '''
         DEBUG_PRINT('*** consume_node() called on: {:s}, (depth: {:d})'.format(node.name, node.depth))
         if node.is_exhausted():
@@ -411,14 +415,12 @@ class NodeConsumerStub(object):
     def save_node(self, node):
         '''
         Generic way to save a node (can impact performance)
-
         '''
         self.__node_backup = node.get_internals_backup()
 
     def recover_node(self, node):
         '''
         Generic way to recover a node
-
         '''
         node.set_internals(self.__node_backup)
 
@@ -888,6 +890,39 @@ class TypedNodeDisruption(NodeConsumerStub):
                 fuzzy_vt_obj.remove_value_list([val])
 
 
+
+class SeparatorDisruption(NodeConsumerStub):
+
+    def init_specific(self, separators):
+        self._internals_criteria = \
+            dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable, dm.NodeInternals.Separator],
+                                     node_kinds=[dm.NodeInternals_Term])
+
+        self.val_list = [b'']
+        if separators is not None:
+            self.val_list += list(separators)
+
+        self.yield_original_val = False
+        # self.need_reset_when_structure_change = True
+
+    def consume_node(self, node):
+        orig_val = node.to_bytes()
+        new_val_list = copy.copy(self.val_list)
+
+        if orig_val in new_val_list:
+            new_val_list.remove(orig_val)
+
+        node.cc.import_value_type(value_type=vtype.String(val_list=new_val_list))
+        # Note, that node attributes are not altered by this
+        # operation, especially usefull in our case, because we have
+        # to preserve dm.NodeInternals.Separator
+
+        node.make_finite()
+        node.make_determinist()
+
+        return True
+
+
 def fuzz_data_tree(top_node, paths_regexp=None):
 
     c = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable],
@@ -902,310 +937,4 @@ def fuzz_data_tree(top_node, paths_regexp=None):
         l = node.get_reachable_nodes(internals_criteria=c)
         for e in l:
             e.cc.change_subnodes_csts([('*', 'u=.')])
-
-
-def rand_string(size=None, mini=1, maxi=10, str_set=string.printable):
-
-    out = ""
-    if size is None:
-        size = random.randint(mini, maxi)
-    while len(out) < size:
-        val = random.choice(str_set)
-        out += val
-
-    if sys.version_info[0] > 2:
-        out = bytes(out, 'latin_1')
-    else:
-        out = bytes(out)
-
-    return out
-
-
-import array
-
-def corrupt_bytes(s, p=0.01, n=None, ctrl_char=False):
-    """Corrupt a given percentage or number of bytes from a string"""
-    s = bytearray(s)
-    l = len(s)
-    if n is None:
-        n = max(1,int(l*p))
-    for i in random.sample(range(l), n):
-        if ctrl_char:
-            s[i] = random.choice([x for x in range(0,32)] + [0x7f])
-        else:
-            s[i] = (s[i]+random.randint(1,255))%256
-
-    return bytes(s)
-
-def corrupt_bits(s, p=0.01, n=None, ascii=False):
-    """Flip a given percentage or number of bits from a string"""
-    s = bytearray(s)
-    l = len(s)*8
-    if n is None:
-        n = max(1,int(l*p))
-    for i in random.sample(range(l), n):
-        s[i//8] ^= 1 << (i%8)
-        if ascii:
-            s[i//8] &= 0x7f
-
-    return bytes(s)
-
-
-
-######## OBSOLETE FUNCTIONS #########
-
-# OBSOLETE
-def fuzz_typed_values(mem, top_node, paths_regexp=None):
-
-    def _create_fuzzy_vt_list(e):
-        vt = e.cc.get_value_type()
-
-        if issubclass(vt.__class__, vtype.VT_Alt):
-            new_vt = copy.copy(vt)
-            new_vt.make_private(forget_current_state=False)
-            new_vt.switch_mode()
-            fuzzy_vt_list = [new_vt]
-
-        else:
-            fuzzy_vt_cls = list(vt.fuzzy_cls.values())
-            fuzzy_vt_list = []
-            for c in fuzzy_vt_cls:
-                fuzzy_vt_list.append(c(vt.endian))
-
-        return fuzzy_vt_list
-
-
-    def _extend_fuzzy_vt_list(flist, e):
-        vt = e.cc.get_value_type()
-
-        if issubclass(vt.__class__, vtype.VT_Alt):
-            return
-
-        specific_fuzzy_vals = e.cc.get_specific_fuzzy_values()
-
-        val = vt.get_current_raw_val()
-        if val is not None:
-            supp_list = [val + 1, val - 1]
-            if specific_fuzzy_vals is not None:
-                for v in specific_fuzzy_vals:
-                    supp_list.insert(0, v)
-
-            if vt.mini is not None:
-                supp_list.append(vt.mini-1)
-                supp_list.append(vt.maxi+1)
-
-            for o in flist:
-                # We don't need to check with vt.mini-1 or vt.maxi+1,
-                # as the following test will provide the first
-                # compliant choice that will also be OK for the
-                # previous values (ortherwise, no VT will be OK, and
-                # these values will be filtered through the call to
-                # extend_value_list())
-                if o.is_compatible(val + 1) or o.is_compatible(val - 1):
-                    fuzzy_vt_obj = o
-                    break
-
-            fuzzy_vt_obj.extend_value_list(supp_list)
-
-    def prepare_new_fuzzy_vt(e):
-        mem.current_node_fuzzy_vt_obj = _create_fuzzy_vt_list(e)
-        _extend_fuzzy_vt_list(mem.current_node_fuzzy_vt_obj, e)
-        
-    def save_orig_vt_and_val(e):
-        mem.orig_node_vt = e.cc.get_value_type()
-        mem.orig_node_val = e.get_flatten_value()
-
-    def restore_orig_vt_and_val(e):
-        e.cc.import_value_type(value_type=mem.orig_node_vt)
-        e.set_frozen_value(mem.orig_node_val)
-        mem.orig_node_vt = None
-        mem.orig_node_val = None
-
-    def change_value_type(e):
-        vt_obj = mem.current_node_fuzzy_vt_obj.pop(0)
-        e.cc.import_value_type(value_type=vt_obj)
-
-        if e.env != mem._env:
-            print('\n*** DEBUG - e.env:', e.env)
-            raise ValueError
-
-
-    if mem.new:
-        mem.new = False
-
-        mem.tval_nodes_list = []
-
-        mem.internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable],
-                                                      node_kinds=[dm.NodeInternals_TypedValue])
-
-        mem.orig_node_vt = None
-        mem.orig_node_val = None
-        mem.current_node = None
-        mem.current_node_fuzzy_vt_obj = None
-
-        top_node.make_finite(all_conf=True, recursive=True)
-        top_node.get_value()
-        top_node.env.clear_all_exhausted_nodes()
-
-        mem._env = top_node.env
-
-        if paths_regexp:
-            node_list = top_node.get_reachable_nodes(path_regexp=paths_regexp)
-            if not node_list:
-                return None, None, None
-        else:
-            node_list = [top_node]
-
-        mem.tval_nodes_list = []
-        for e in node_list:
-            mem.tval_nodes_list += e.get_reachable_nodes(internals_criteria=mem.internals_criteria)
-
-        if len(mem.tval_nodes_list) == 0:
-            # if no typed value Node
-            return None, None, None
-
-        mem.current_node = mem.tval_nodes_list[0]
-        prepare_new_fuzzy_vt(mem.current_node)
-        save_orig_vt_and_val(mem.current_node)
-        change_value_type(mem.current_node)
-
-    if len(mem.tval_nodes_list) == 0:
-        return None, None, None
-
-    exhausted = top_node.env.exhausted_node_exists()
-
-    if len(mem.current_node_fuzzy_vt_obj) != 0 and exhausted:
-        top_node.env.clear_exhausted_node(mem.current_node)
-        change_value_type(mem.current_node)
-
-    elif len(mem.current_node_fuzzy_vt_obj) != 0 and not exhausted:
-        pass
-
-    elif len(mem.current_node_fuzzy_vt_obj) == 0 and exhausted:
-        assert(len(mem.tval_nodes_list) != 0)
-
-        top_node.env.clear_exhausted_node(mem.current_node)
-        restore_orig_vt_and_val(mem.current_node)
-
-        mem.tval_nodes_list.pop(0)
-        if len(mem.tval_nodes_list) == 0:
-            return None, None, None
-
-        mem.current_node = mem.tval_nodes_list[0]
-        prepare_new_fuzzy_vt(mem.current_node)
-        save_orig_vt_and_val(mem.current_node)
-        change_value_type(mem.current_node)
-
-    elif len(mem.current_node_fuzzy_vt_obj) == 0 and not exhausted:
-        pass
-
-    else:
-        raise ValueError('Implementation Error')
-
-    mem.current_node.unfreeze(ignore_entanglement=True)
-    mem.current_node.get_value()
-    
-    return mem.current_node, mem.orig_node_val, len(mem.tval_nodes_list)
-
-
-# OBSOLETE
-def get_node_from_attr(mem, top_node, internals_criteria, paths_regexp=None):
-
-    if mem.new:
-        mem.new = False
-
-        mem.val_nodes_list = []
-        mem.internals_criteria=internals_criteria
-
-    if paths_regexp:
-        mem.val_nodes_list = []
-
-    if len(mem.val_nodes_list) == 0:
-        top_node.unfreeze(ignore_entanglement=True)
-        top_node.get_value()
-
-        if paths_regexp:
-            node_list = top_node.get_reachable_nodes(path_regexp=paths_regexp)
-            if not node_list:
-                return None, None
-        else:
-            node_list = [top_node]
-
-        mem.val_nodes_list = []
-        for e in node_list:
-            mem.val_nodes_list += e.get_reachable_nodes(internals_criteria=mem.internals_criteria)
-
-        random.shuffle(mem.val_nodes_list)
-        mem.prev_node_val = None
-
-    if mem.prev_node_val:
-        mem.prev_node.set_frozen_value(mem.prev_node_val)
-
-    node = mem.val_nodes_list.pop(0)
-
-    mem.prev_node_val = node.get_value()
-    mem.prev_node = node
-
-    return node, len(mem.val_nodes_list)
-
-
-# OBSOLETE
-def get_terminal_node(mem, top_node, paths_regexp=None):
-
-    if mem.new:        
-        mem.internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable],
-                                                      node_kinds=[dm.NodeInternals_Term])
-
-    return get_node_from_attr(mem, top_node, internals_criteria=mem.internals_criteria, paths_regexp=paths_regexp)
-
-
-
-# OBSOLETE
-def get_node_with_alt_conf(mem, top_node, conf, paths_regexp=None):
-
-    if mem.new:
-        mem.new = False
-
-        mem.val_nodes_list = []
-        mem.c = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable])
-
-    if paths_regexp:
-        mem.val_nodes_list = []
-
-    if len(mem.val_nodes_list) == 0:
-        top_node.make_finite(all_conf=True, recursive=True)
-        top_node.unfreeze_all(ignore_entanglement=True)
-        top_node.get_value()
-
-        if paths_regexp:
-            node_list = top_node.get_reachable_nodes(path_regexp=paths_regexp)
-            if not node_list:
-                return None, None
-        else:
-            node_list = [top_node]
-
-        mem.val_nodes_list = []
-
-        for e in node_list:
-            mem.val_nodes_list += e.get_reachable_nodes(internals_criteria=mem.c, owned_conf=conf)
-
-        if mem.val_nodes_list == []:
-            return None, None
-
-        mem.val_nodes_list = sorted(mem.val_nodes_list, key=lambda x: -x.depth)
-        mem.prev_node = None
-
-    if mem.prev_node:
-        mem.prev_node.set_current_conf(conf='MAIN', reverse=True, recursive=False)
-        mem.prev_node.unfreeze(conf, ignore_entanglement=True)
-
-    node = mem.val_nodes_list.pop(0)
-    node.unfreeze(conf, ignore_entanglement=True)
-
-    mem.prev_node = node
-
-    node.set_current_conf(conf=conf, recursive=False)
-
-    return node, len(mem.val_nodes_list)
-
 

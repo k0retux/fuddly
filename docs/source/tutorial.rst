@@ -704,10 +704,6 @@ chain, basically ``JPG<finite=True> tTYPE``.
 
 
 
-
-
-
-
 .. _fuddly-advanced:
 
 Using ``fuddly`` Through Advanced Python Interpreter
@@ -987,7 +983,7 @@ the PNG data format:
 	{'name': 'sig',
 	 'contents': String(val_list=[b'\x89PNG\r\n\x1a\n'], size=8)},
 	{'name': 'chunks',
-	 'qty': (2,200),
+	 'qty': (2,-1),
 	 'contents': [
 	      {'name': 'len',
 	       'contents': UINT32_be()},
@@ -1015,9 +1011,17 @@ file's chunks (lines 6-23) [#]_. This latter node describe the PNG
 file structure by defining the chunk contents in lines 9-22---in this very
 simplistic data model, chunk types are not distinguished, but it can
 easily be expanded---and the number of chunks allowed in
-a PNG file in line 7---from 2 to 200, artificially chosen for this
-example.
+a PNG file in line 7---from ``2`` to ``-1`` (meaning infinity).
 
+.. note:: ``-1`` means infinity if used to specify the maximum amount
+          allowed for a given node. It makes sense only for absorption
+          operation (refer to :ref:`tuto:dm-absorption`), because for
+          data generation, a strict limit
+          (:const:`fuzzfmk.data_model.NodeInternals_NonTerm.INFINITY_LIMIT`)
+          is set to avoid getting unintended too big data. If you
+          intend to get such kind of data, specify explicitly the
+          maximum, or use a disruptor to do so
+          (:ref:`tuto:disruptors`).
 
 .. _dm:mydf:
 
@@ -1045,7 +1049,7 @@ is a simple skeleton for ``mydf.py``:
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 5, 8, 14
+   :emphasize-lines: 5, 8, 17
 
    from fuzzfmk.data_model import *
    from fuzzfmk.value_types import *
@@ -1055,10 +1059,6 @@ is a simple skeleton for ``mydf.py``:
 
       file_extension = 'myd'
       name = 'overload_default_name_if_you_wish'
-
-      def dissect(self, data, idx):
-         ''' PUT YOUR CODE HERE '''
-	 
 
       def build_data_model(self):
 
@@ -1083,11 +1083,51 @@ In this skeleton, you can notice that you have to define a class that
 inherits from the :class:`fuzzfmk.data_model_helpers.DataModel` class,
 as seen in line 5. The definition of the data types of a data format
 will be written in python within the method
-:func:`fuzzfmk.data_model_helpers.DataModel.build_data_model()`.  In
+:meth:`fuzzfmk.data_model_helpers.DataModel.build_data_model()`.  In
 the previous listing, the data types are represented by ``d1``, ``d2``
 and ``d3``. Once defined, they should be registered within the data
 model, by calling
 :func:`fuzzfmk.data_model_helpers.DataModel.register()` on them.
+
+.. note:: If you want to import data samples complying to your data
+          model:
+	  
+	  - First, you have to overwrite the method
+            :meth:`fuzzfmk.data_model_helpers.DataModel.absorb` in
+            order to perform the operations for absorbing the samples
+            (refer to :ref:`tuto:dm-absorption`). This method is
+            called for each file found in ``imported_data/mydf/``, and
+            should return a modeled data.
+
+	  - Then, you have to perform the import manually within the
+            method
+            :meth:`fuzzfmk.data_model_helpers.DataModel.build_data_model()`
+            by calling the method
+            :meth:`fuzzfmk.data_model_helpers.DataModel.import_file_contents()`
+            which returns a dictionary with every imported data samples.
+
+	  The following code illustrates that:
+
+	  .. code-block:: python
+	     :linenos:
+
+	     class MyDF_DataModel(DataModel):
+		file_extension = 'myd'
+		name = 'overload_default_name_if_you_wish'
+
+		def absorb(self, data, idx):
+		    dtype = self.dtype.get_clone('DTYPE_{:0>2d}'.format(idx))
+		    status, off, size, name = dtype.absorb(data)
+		    return dtype if status == AbsorbStatus.FullyAbsorbed else None
+
+		def build_data_model(self):
+		    # Definition of the data type: dtype
+		    self.dtype = ...
+
+		    dtype_dict = self.import_file_contents(extension='dtype')
+
+		    self.register(*dtype_dict.values())
+
 
 For briefly demonstrating part of fuddly features to describe data
 formats, we take the following example whose only purpose is to mix
@@ -1130,7 +1170,7 @@ various constructions, and value types.
 
 		       {'contents': String(val_list=['OK', 'KO'], size=2),
 			'name': 'val2',
-			'qty': (1, 3)},
+			'qty': (1, -1)},
 
 		       {'name': 'val21',
 			'clone': 'val1'},
@@ -1533,7 +1573,8 @@ generation).
 Initiating the Fuzzing Environment
 ----------------------------------
 
-.. note:: Defined within ``mydf_strategy.py``
+The fuzzing environment is defined within ``mydf_strategy.py``. It
+starts with:
 
 .. code-block:: python
    :linenos:
@@ -1542,6 +1583,12 @@ Initiating the Fuzzing Environment
    from fuzzfmk.tactics_helper import *
 
    tactics = Tactics()
+
+``Fuddly`` registers for each data model the related
+dynamically-created generators, and if defined, specific disruptors,
+specific operators and specific probes.  For that purpose, an object
+:class:`fuzzfmk.tactics_helper.Tactics` has to be instantiated and
+referenced by the global variable ``tactics``.
 
 
 .. _targets-def:
@@ -1578,15 +1625,217 @@ Defining the Logger
 Defining Specific Disruptors
 ----------------------------
 
-.. note:: Also look at :ref:`useful-examples`
+.. seealso:: For insights on how to manipulate data, refer to
+             :ref:`data-manip`.
+
+
+Overview
+++++++++
+
+To define a specific disruptor for your data model you basically have
+to define a subclass of :class:`fuzzfmk.tactics_helper.Disruptor` or
+:class:`fuzzfmk.tactics_helper.StatefulDisruptor`, and use the
+decorator ``@disruptor`` on it to register it. The first parameter of
+this decorator has to be the :class:`fuzzfmk.tactics_helper.Tactics`
+object you declare at the beginning of ``mydf_strategy.py``.
+
+.. code-block:: python
+   :linenos:
+
+   @disruptor(tactics, dtype="DISRUPTOR_TYPE", weight=1)
+   class disruptor_name(Disruptor):
+
+      def disrupt_data(self, dm, target, prev_data):
+
+           # Do something with prev_data
+
+	   return prev_data
+          
+
+For stateful disruptor you also need to implement the method
+:meth:`fuzzfmk.tactics_helper.StatefulDisruptor.set_seed`. It will be called
+only when the disruptor needs a new data to consume. Thus, it will be
+called the very first time, and then each time the disruptor notify
+``fuddly`` that it needs a new data to consume. This notification is
+done by calling :meth:`fuzzfmk.tactics_helper.StatefulDisruptor.handover`
+within :meth:`fuzzfmk.tactics_helper.StatefulDisruptor.disrupt_data`. The
+following code block illustrates such kind of disruptor:
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 13, 14
+
+   @disruptor(tactics, dtype="DISRUPTOR_TYPE", weight=1)
+   class disruptor_name(StatefulDisruptor):
+
+      def set_seed(self, prev_data):
+          self.seed_node = prev_data.node
+
+      def disrupt_data(self, dm, target, data):
+          new_node = do_some_modification(self.seed_node)
+	  if new_node is None:
+	      data.make_unusable()
+	      self.handover()
+	  else:
+              data.update_from_node(new_node)
+	      data.add_info('description of the modification')
+
+	  return data
+
+.. note:: Remark the call to the method
+   :meth:`fuzzfmk.data_model.Data.update_from_node` (line 13). Such
+   construction comes from the fact ``fuddly`` uses a data-model
+   independent *container* (:class:`fuzzfmk.data_model.Data`) for
+   passing modeled data from one sub-system to another. This container
+   is also used, for logging purpose, to register the sequence of
+   modifications performed on the data (especially the disruptor
+   chain--- refer to :ref:`tuto:dmaker-chain`) and other things, such
+   as information retrieved from what a disruptor wants to report
+   (line 14), for instance, insights on the modifications it
+   performed.
+
+You can also define parameters for your disruptor, by specifying the
+``args`` attribute of the decorator with a dictionary. This dictionary
+references for each parameter of your disruptors a tuple composed of a
+description of the parameter, its default value, and the type of the
+value. The following example illustrates this use case, as well as the
+way to access the parameters within the disruptor methods.
+
+.. code-block:: python
+   :linenos:
+
+   @disruptor(tactics, dtype="DISRUPTOR_TYPE", weight=1,
+              args={'param_1': ('param_1 description', None, str),
+	            'param_2': ('param_2 description ', True, bool)})
+   class disruptor_name(StatefulDisruptor):
+
+      def set_seed(self, prev_data):
+          do_stuff(self.param_1)
+	  do_other_stuff(self.param_2)
 
 
 
-.. todo:: Write the section on disruptors. Explain:
-	  - Data paths, syntactic & semantic criteria
-	  - primitive to search and modify within the graph
-	  - ModelWalker class
-	  - ...
+The Model Walker Infrastructure
++++++++++++++++++++++++++++++++
+
+The model walker infrastructure can helps you if you want to define a
+stateful disruptor that performs operations on the provided data, for
+each of its node (or for specific nodes of interest), one node at a
+time.
+
+Basically, the class :class:`fuzzfmk.fuzzing_primitives.ModelWalker`
+takes a modeled data as a parameter and an instance of a subclass of
+:class:`fuzzfmk.fuzzing_primitives.NodeConsumerStub`---acting like a
+*visitor* but being able to modify the nodes it visits. This special
+*visitor* has to establish the criteria of the nodes on which it is
+interested in and it has to implement the method
+:meth:`fuzzfmk.fuzzing_primitives.NodeConsumerStub.consume_node` to
+perform the intended modification on such nodes.
+
+Let's take the following generic consumer
+:class:`fuzzfmk.fuzzing_primitives.SeparatorDisruption`, that
+replaces, one at a time, every separators of a modeled data with
+another inappropriate separator.
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 4-6
+
+   class SeparatorDisruption(NodeConsumerStub):
+
+       def init_specific(self, separators):
+	   self._internals_criteria = \
+	       dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable, dm.NodeInternals.Separator],
+					node_kinds=[dm.NodeInternals_Term])
+
+	   self.val_list = [b'']
+	   if separators is not None:
+	       self.val_list += list(separators)
+
+       def consume_node(self, node):
+	   orig_val = node.to_bytes()
+	   new_val_list = copy.copy(self.val_list)
+
+	   if orig_val in new_val_list:
+	       new_val_list.remove(orig_val)
+
+	   node.import_value_type(value_type=vtype.String(val_list=new_val_list))
+
+	   node.make_finite()
+	   node.make_determinist()
+
+	   return True
+
+
+In brief, at initialization, we define the kind of nodes on which we
+are interested in doing some operations (line 4-6). We then register
+the list of separator words allowed for this data. The core of our
+modification is implemented within the method
+:meth:`fuzzfmk.fuzzing_primitives.SeparatorDisruption.consume_node`,
+which is called by the model walker each time it encounters a node of
+interest, that is in our case a separator. In this method we change
+the separator node such as it will expand as any separator words
+except the legitimate one. After
+:meth:`fuzzfmk.fuzzing_primitives.SeparatorDisruption.consume_node` is
+called, the model walker will iterate over each defined shapes for
+this node (by issuing continuously
+:meth:`fuzzfmk.data_model.Node.get_value()` then
+:meth:`fuzzfmk.data_model.Node.unfreeze()`) until exhaustion or after
+a predefined limit.
+
+.. note:: Saving and restoring the consumed nodes is performed
+          automatically by
+          :class:`fuzzfmk.fuzzing_primitives.NodeConsumerStub`, but
+          depending on your needs you can override the related
+          methods.
+
+Finally, to make the *Model Walker* walks, you only have to instantiate
+it with the intended parameters, and it will return an iterator. Thus,
+for instance, you can display the result of the step-by-step
+alterations of ``data_to_alter`` by executing the following code
+snippet:
+
+.. code-block:: python
+   :linenos:
+
+    consumer = SeparatorDisruption()
+    for root_node, consumed_node, orig_val, idx in ModelWalker(data_to_alter, consumer):
+        print(root_node.to_bytes())
+
+
+If we put all things together, we can write our *separator* disruptor
+like this (which is a simpler version of the generic disruptor
+:class:`fuzzfmk.generic_data_makers.d_fuzz_separator_nodes`):
+
+.. code-block:: python
+   :linenos:
+
+   @disruptor(tactics, dtype="tSEP", weight=1)
+   class disruptor_name(StatefulDisruptor):
+
+       def set_seed(self, prev_data):
+	   prev_data.node.get_value()
+
+	   ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Separator])
+	   sep_list = set(map(lambda x: x.to_bytes(),
+	                      prev_data.node.get_reachable_nodes(internals_criteria=ic)))
+	   sep_list = list(sep_list)
+
+	   self.consumer = SeparatorDisruption()
+	   self.walker = iter(ModelWalker(prev_data.node, self.consumer))
+
+    def disrupt_data(self, dm, target, data):
+        try:
+            rnode, consumed_node, orig_node_val, idx = next(self.walker)
+        except StopIteration:
+            data.make_unusable()
+            self.handover()
+            return data
+
+	data.update_from_node(rnode)
+
+	return data
+
 
 
 

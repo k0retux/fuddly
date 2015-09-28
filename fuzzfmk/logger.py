@@ -78,7 +78,8 @@ class Logger(object):
     '''
     All log_* function is to be used internally by the framework
     '''
-    def __init__(self, name, prefix='', data_in_seperate_file=False, explicit_export=False, export_orig=True):
+    def __init__(self, name, prefix='', data_in_seperate_file=False, explicit_export=False, export_orig=True,
+                 export_raw_data=True):
 
         self.name = name
         self.p = prefix
@@ -89,13 +90,14 @@ class Logger(object):
         now = datetime.datetime.now()
         self.__prev_export_date = now.strftime("%Y%m%d_%H%M%S")
         self.__export_cpt = 0
+        self.__export_raw_data = export_raw_data
 
         self._tg_fbk = []
         self._tg_fbk_lck = threading.Lock()
 
         def init_logfn(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False):
             if issubclass(x.__class__, Data):
-                data = repr(x)
+                data = repr(x) if self.__export_raw_data else str(x)
                 rgb = None
                 style = None
             elif issubclass(x.__class__, bytes) and sys.version_info[0] > 2:
@@ -129,7 +131,7 @@ class Logger(object):
 
             def intern_func(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False):
                 if issubclass(x.__class__, Data):
-                    data = repr(x)
+                    data = repr(x) if self.__export_raw_data else str(x)
                     rgb = None
                     style = None
                 elif issubclass(x.__class__, bytes) and sys.version_info[0] > 2:

@@ -958,26 +958,24 @@ class TestMisc(unittest.TestCase):
         evt.make_finite(all_conf=True, recursive=True)
         evt.make_determinist(all_conf=True, recursive=True)
         evt.show()
-        # evt.get_value()
-        mem = Memory()
         prev_path = None
         turn_nb_list = []
-        for i in range(150):
+        tn_consumer = TypedNodeDisruption()
+        for rnode, node, orig_node_val, i in ModelWalker(evt, tn_consumer, make_determinist=True, max_steps=200):
             print('=======[ %d ]========' % i)
-            print('  orig:    ', evt.get_flatten_value())
+            print('  orig:    ', rnode.get_flatten_value())
             print('  ----')
-            node, orig_node_val, remaining = fuzz_typed_values(mem, evt)
             if node != None:
-                print('  fuzzed:  ', evt.get_flatten_value())
+                print('  fuzzed:  ', rnode.get_flatten_value())
                 print('  ----')
-                current_path = node.get_path_from(evt)
+                current_path = node.get_path_from(rnode)
                 if current_path != prev_path:
                     turn_nb_list.append(i)
                 print('  current fuzzed node:     %s' % current_path)
                 prev_path = current_path
                 vt = node.cc.get_value_type()
                 print('  node value type:        ', vt)
-                if issubclass(vt.__class__, VT_Alt): #issubclass(vt.__class__, BitField):
+                if issubclass(vt.__class__, VT_Alt):
                     print('  |- node fuzzy mode:        ', vt._fuzzy_mode)
                 print('  node value type determinist:        ', vt.determinist)
                 print('  node determinist:        ', node.cc.is_attr_set(NodeInternals.Determinist))
@@ -988,21 +986,20 @@ class TestMisc(unittest.TestCase):
                                                                                      orig_node_val))
                 print('  node corrupted value:   (hexlified) {0!s:s}, {0!s:s}'.format(binascii.hexlify(node.get_flatten_value()),
                                                                                      node.get_flatten_value()))
-                print('  remaining nodes:         %d' % remaining)
             else:
                 turn_nb_list.append(i)
                 print('\n--> Fuzzing terminated!\n')
                 break
 
         print('\nTurn number when Node has changed: %r, number of test cases: %d' % (turn_nb_list, i))
-        good_list = [0, 9, 19, 25, 34, 40, 53, 65, 73, 81, 89, 97, 105]
-        
+        good_list = [1, 9, 17, 28, 36, 44, 52, 61, 67, 76, 82, 95]
+
         msg = "If Fuzzy_<TypedValue>.int_list have been modified in size, the good_list should be updated.\n" \
               "If BitField are in random mode [currently put in determinist mode], the fuzzy_mode can produce more" \
               " or less value depending on drawn value when .get_value() is called (if the drawn value is" \
               " the max for instance, drawn_value+1 will not be produced)"
 
-        self.assertTrue(i == good_list[-1] and turn_nb_list == good_list, msg=msg)
+        self.assertTrue(turn_nb_list == good_list, msg=msg)
 
 
     def test_Node_Attr_01(self):
@@ -1677,7 +1674,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of confs: %d'%idx, rgb=Color.INFO))
 
-        self.assertEqual(idx, 150) # previously 189
+        self.assertIn(idx, [148, 149, 150]) # previously 189
 
 
 
@@ -1973,6 +1970,270 @@ class TestNodeFeatures(unittest.TestCase):
         b.show(raw_limit=400)
 
 
+    def test_exist_condition(self):
+        ''' Test existence condition for generation and absorption
+        '''
+
+        d = fmk.dm.get_external_node(dm_name='mydf', data_id='exist_cond')
+
+        for i in range(10):
+
+            d_abs = fmk.dm.get_external_node(dm_name='mydf', data_id='exist_cond')
+
+            d.show()
+            raw_data = d.to_bytes()
+
+            print('-----------------------')
+            print('Original Data:')
+            print(repr(raw_data))
+            print('-----------------------')
+
+            status, off, size, name = d_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+            raw_data_abs = d_abs.to_bytes()
+            print('-----------------------')
+            print('Absorbed Data:')
+            print(repr(raw_data_abs))
+            print('-----------------------')
+
+            print('-----------------------')
+            print('Absorb Status: status=%d, off=%d, sz=%d, name=%s' % (status, off, size, name))
+            print(' \_ length of original data: %d' % len(raw_data))
+            print(' \_ remaining: %r' %raw_data[size:])
+            print('-----------------------')
+
+            self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+            self.assertEqual(raw_data, raw_data_abs)
+
+            d.unfreeze()
+
+
+class TestNode_NonTerm(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        pass
+
+    def setUp(self):
+        pass
+
+
+    def test_infinity(self):
+
+        infinity_desc = \
+        {'name': 'infinity',
+         'contents': [
+             {'name': 'prefix',
+              'contents': String(val_list=['A']),
+              'qty': (2,-1)},
+             {'name': 'mid',
+              'contents': String(val_list=['H']),
+              'qty': -1},
+             {'name': 'suffix',
+              'contents': String(val_list=['Z']),
+              'qty': (2,-1)},
+         ]}
+
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(infinity_desc)
+        node_abs = Node('infinity_abs', base_node=node)
+        node_abs2 = Node('infinity_abs', base_node=node)
+
+        node.set_env(Env())
+        node_abs.set_env(Env())
+        node_abs2.set_env(Env())
+
+        # node.show()
+        raw_data = node.to_bytes()
+        print('\n*** Test with generated raw data (infinite is limited to )\n\nOriginal data:')
+        print(repr(raw_data), len(raw_data))
+
+        status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+        print('Absorb Status:', status, off, size, name)
+        print(' \_ length of original data:', len(raw_data))
+        print(' \_ remaining:', raw_data[size:])
+        raw_data_abs = node_abs.to_bytes()
+        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        # node_abs.show()
+
+        self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+        self.assertEqual(raw_data, raw_data_abs)
+
+        print('\n*** Test with big raw data\n\nOriginal data:')
+        raw_data2 = b'A'*(NodeInternals_NonTerm.INFINITY_LIMIT + 30) + b'H'*(NodeInternals_NonTerm.INFINITY_LIMIT + 1) + \
+                   b'Z'*(NodeInternals_NonTerm.INFINITY_LIMIT - 1)
+        print(repr(raw_data2), len(raw_data2))
+
+        status, off, size, name = node_abs2.absorb(raw_data2, constraints=AbsFullCsts())
+
+        print('Absorb Status:', status, off, size, name)
+        print(' \_ length of original data:', len(raw_data2))
+        print(' \_ remaining:', raw_data2[size:])
+        raw_data_abs2 = node_abs2.to_bytes()
+        print(' \_ absorbed data:', repr(raw_data_abs2), len(raw_data_abs2))
+
+        self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+        self.assertEqual(raw_data2, raw_data_abs2)
+
+
+    def test_separator(self):
+        test_desc = \
+        {'name': 'test',
+         'determinist': True,
+         'separator': {'contents': {'name': 'SEP',
+                                    'contents': String(val_list=[' ', '  ', '     '],
+                                                       absorb_regexp=b'\s+', determinist=False),
+                                    'absorb_csts': AbsNoCsts(regexp=True)},
+                       'prefix': True,
+                       'suffix': True,
+                       'unique': True},
+         'contents': [
+             {'section_type': MH.FullyRandom,
+              'contents': [
+                  {'contents': String(val_list=['AAA', 'BBBB', 'CCCCC']),
+                   'qty': (3, 5),
+                   'name': 'str'},
+
+                  {'contents': String(val_list=['1', '22', '333']),
+                   'qty': (3, 5),
+                   'name': 'int'}
+              ]},
+
+             {'section_type': MH.Random,
+              'contents': [
+                  {'contents': String(val_list=['WW', 'YYY', 'ZZZZ']),
+                   'qty': (2, 2),
+                   'name': 'str2'},
+
+                  {'contents': UINT16_be(int_list=[0xFFFF, 0xAAAA, 0xCCCC]),
+                   'qty': (3, 3),
+                   'name': 'int2'}
+              ]},
+             {'section_type': MH.Pick,
+              'contents': [
+                  {'contents': String(val_list=['LAST', 'END']),
+                   'qty': (2, 2),
+                   'name': 'str3'},
+
+                  {'contents': UINT16_be(int_list=[0xDEAD, 0xBEEF]),
+                   'qty': (2, 2),
+                   'name': 'int3'}
+              ]}
+         ]}
+
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(test_desc)
+        node.set_env(Env())
+
+        for i in range(5):
+            node_abs = Node('test_abs', base_node=node)
+            node_abs.set_env(Env())
+
+            node.show()
+            raw_data = node.to_bytes()
+            print('Original data:')
+            print(repr(raw_data), len(raw_data))
+
+            status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+            print('Absorb Status:', status, off, size, name)
+            print(' \_ length of original data:', len(raw_data))
+            print(' \_ remaining:', raw_data[size:])
+            raw_data_abs = node_abs.to_bytes()
+            print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+
+            # node_abs.show()
+
+            self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+            self.assertEqual(len(raw_data), len(raw_data_abs))
+            self.assertEqual(raw_data, raw_data_abs)
+
+            node.unfreeze()
+
+
+
+class TestNode_TypedValue(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        pass
+
+    def setUp(self):
+        pass
+
+
+    def test_str_alphabet(self):
+
+        alphabet1 = 'ABC'
+        alphabet2 = 'NED'
+
+        alpha_desc = \
+        {'name': 'top',
+         'contents': [
+             {'name': 'alpha1',
+              'contents': String(min_sz=10, max_sz=100, val_list=['A'*10], alphabet=alphabet1),
+              'set_attrs': [NodeInternals.Abs_Postpone]},
+             {'name': 'alpha2',
+              'contents': String(min_sz=10, max_sz=100, alphabet=alphabet2)},
+             {'name': 'end',
+              'contents': String(val_list=['END'])},
+         ]}
+
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(alpha_desc)
+        node.set_env(Env())
+
+        node_abs = Node('alpha_abs', base_node=node)
+        node_abs.set_env(Env())
+
+        node.show()
+        raw_data = node.to_bytes()
+        print(repr(raw_data), len(raw_data))
+
+        alphabet = alphabet1 + alphabet2
+        for l in raw_data:
+            if sys.version_info[0] > 2:
+                l = chr(l)
+            self.assertTrue(l in alphabet)
+
+
+        print('\n*** Test with following  data:')
+        raw_data = b'A'*10 + b'DNE'*30+ b'E'*10 + b'END'
+        print(repr(raw_data), len(raw_data))
+
+        status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+        print('Absorb Status:', status, off, size, name)
+        print(' \_ length of original data:', len(raw_data))
+        print(' \_ remaining:', raw_data[size:])
+        raw_data_abs = node_abs.to_bytes()
+        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        node_abs.show()
+
+        self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+        self.assertEqual(raw_data, raw_data_abs)
+
+        node_abs = Node('alpha_abs', base_node=node)
+        node_abs.set_env(Env())
+
+        print('\n*** Test with following INVALID data:')
+        raw_data = b'A'*10 + b'DNE'*20 + b'F' + b'END'
+        print(repr(raw_data), len(raw_data))
+
+        status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+        print('Absorb Status:', status, off, size, name)
+        print(' \_ length of original data:', len(raw_data))
+        print(' \_ remaining:', raw_data[size:])
+        raw_data_abs = node_abs.to_bytes()
+        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        node_abs.show()
+
+        self.assertEqual(status, AbsorbStatus.Reject)
+        self.assertEqual(raw_data[size:], b'FEND')
+
+
 class TestHLAPI(unittest.TestCase):
 
     @classmethod
@@ -2157,6 +2418,52 @@ class TestDataModel(unittest.TestCase):
             self.assertEqual(jpg_buff, orig_buff)
 
 
+    @unittest.skipIf(ignore_data_model_specifics, "Tutorial specific test cases, cover various construction")
+    def test_tuto_specifics(self):
+        '''Tutorial specific test cases, cover various data model patterns and
+        absorption.'''
+
+        dm = fmk.get_data_model_by_name('mydf')
+        dm.load_data_model(fmk._name2dm)
+
+        data_id_list = ['misc_gen', 'len_gen', 'exist_cond', 'separator', 'AbsTest', 'AbsTest2']
+        loop_cpt = 5
+
+        for data_id in data_id_list:
+            d = dm.get_data(data_id)
+
+            for i in range(loop_cpt):
+                d_abs = dm.get_data(data_id)
+                d_abs.set_current_conf('ABS', recursive=True)
+
+                d.show()
+                raw_data = d.to_bytes()
+
+                print('-----------------------')
+                print('Original Data:')
+                print(repr(raw_data))
+                print('-----------------------')
+
+                status, off, size, name = d_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+                raw_data_abs = d_abs.to_bytes()
+                print('-----------------------')
+                print('Absorbed Data:')
+                print(repr(raw_data_abs))
+                print('-----------------------')
+
+                print('-----------------------')
+                print('Absorb Status: status=%d, off=%d, sz=%d, name=%s' % (status, off, size, name))
+                print(' \_ length of original data: %d' % len(raw_data))
+                print(' \_ remaining: %r' %raw_data[size:])
+                print('-----------------------')
+
+                self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+                self.assertEqual(raw_data, raw_data_abs)
+
+                d.unfreeze()
+
+
     @unittest.skipIf(ignore_data_model_specifics, "ZIP specific test cases")
     def test_zip_specifics(self):
 
@@ -2256,7 +2563,7 @@ class TestFMK(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        fmk.enable_data_model(name='example')
+        fmk.enable_data_model(name='mydf')
 
     def setUp(self):
         pass
@@ -2271,18 +2578,30 @@ class TestFMK(unittest.TestCase):
         for dis in gen_disruptors:
             print("\n\n---[ Tested Disruptor %r ]---" % dis)
             if dis == 'EXT':
-                d = fmk.get_data([dmaker_type, (dis, None, UI(cmd='/bin/cat', file_mode=True))])
+                act = [dmaker_type, (dis, None, UI(cmd='/bin/cat', file_mode=True))]
+                d = fmk.get_data(act)
             else:
-                d = fmk.get_data([dmaker_type, dis])
-            if d is None:
-                raise ValueError
-            else:
+                act = [dmaker_type, dis]
+                d = fmk.get_data(act)
+            if d is not None:
                 fmk.log_data(d)
                 print("\n---[ Pretty Print ]---\n")
                 d.pretty_print()
                 fmk.cleanup_dmaker(dmaker_type=dmaker_type, reset_existing_seed=True)
+            else:
+                print("\n***WARNING: the sequence %r returns nothing!" % act)
+                raise ValueError
 
         fmk.cleanup_all_dmakers(reset_existing_seed=True)
+
+
+    def test_separator_disruptor(self):
+        for i in range(100):
+            d = fmk.get_data(['SEPARATOR', 'tSEP'])
+            if d is None:
+                break
+            fmk.new_transfer_preamble()
+            fmk.log_data(d)
 
 
 if __name__ == "__main__":

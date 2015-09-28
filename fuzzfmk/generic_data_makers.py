@@ -53,8 +53,9 @@ tactics = Tactics()
                  'singleton': ('consume also terminal nodes with only one possible value', False, bool)})
 class d_iter_over_data(StatefulDisruptor):
     '''
-    Walk through a data model. When iteration is terminated, the
-    disruptor hands over.
+    Walk through the provided data and for each visited node, iterates
+    over the allowed values (with respect to the data model).
+    Note: *no alteration* is performed by this disruptor.
     '''
     def setup(self, dm, user_input):
         return True
@@ -90,78 +91,11 @@ class d_iter_over_data(StatefulDisruptor):
         return data
 
 
-@disruptor(tactics, dtype="tTERM", weight=1,
-           gen_args = GENERIC_ARGS,
-           args={'ascii': ('enforce all outputs to be ascii 7bits', False, bool),
-                 'determinist': ('make the disruptor determinist', True, bool),
-                 'alt_values': ('list of alternative values to be tested ' \
-                                '(replace the current base list used by the disruptor)', None, list)})
-class d_fuzz_terminal_nodes(StatefulDisruptor):
-    '''
-    Save the previous data the first time then fuzz the each node
-    (INDEPENDENTLY of its type), one by one. When iteration is
-    terminated, the disruptor hands over.
-    '''
-    def setup(self, dm, user_input):
-        return True
-
-    def set_seed(self, prev_data):
-        if prev_data.node is None:
-            prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
-            return prev_data
-
-        prev_data.node.make_finite(all_conf=True, recursive=True)
-
-        self.consumer = TermNodeDisruption(max_runs_per_node=self.max_runs_per_node,
-                                           min_runs_per_node=self.min_runs_per_node,
-                                           respect_order=False,
-                                           specific_args=self.alt_values)
-        self.consumer.determinist = self.determinist
-        if self.ascii:
-            self.consumer.ascii = True
-        
-        self.walker = iter(ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init))
-        
-        self.max_runs = None
-        self.current_node = None
-        self.run_num = None
-
-    def disrupt_data(self, dm, target, data):
-        try:
-            rnode, consumed_node, orig_node_val, idx = next(self.walker)
-        except StopIteration:
-            data.make_unusable()
-            self.handover()
-            return data
-
-        new_max_runs = self.consumer.max_nb_runs_for(consumed_node)
-        if self.max_runs != new_max_runs or self.current_node != consumed_node:
-            self.current_node = consumed_node
-            self.max_runs = new_max_runs
-            self.run_num = 1
-        else:
-            self.run_num +=1
-
-        data.add_info('model walking index: {:d}'.format(idx))
-        data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
-        data.add_info('current fuzzed node: %s' % consumed_node.get_path_from(rnode))
-        data.add_info('original val: %s' % repr(orig_node_val))
-        data.add_info('corrupted val: %s' % repr(consumed_node.get_flatten_value()))
-
-        if self.clone_node:
-            exported_node = Node(rnode.name, base_node=rnode)
-            data.update_from_node(exported_node)
-        else:
-            data.update_from_node(rnode)
-
-        return data
-
-
 
 @disruptor(tactics, dtype="tTYPE", weight=1,
            gen_args = GENERIC_ARGS,
            args={'path': ('graph path regexp to select nodes on which' \
-                 ' the disruptor should apply', None, str),
+                          ' the disruptor should apply', None, str),
                  'order': ('when set to True, the fuzzing order is strictly guided ' \
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
                            'in the data model) is used for ordering', False, bool),
@@ -169,9 +103,9 @@ class d_fuzz_terminal_nodes(StatefulDisruptor):
                           'will reset its walk through the children nodes', True, bool)})
 class d_fuzz_typed_nodes(StatefulDisruptor):
     '''
-    Save the previous data the first time then fuzz the each node
-    (RELATIVELY to its type), one by one. When iteration is
-    terminated, the disruptor hands over.
+    Perform alterations on typed nodes (one at a time) accordingly to
+    its type and various complementary information (such as size,
+    allowed values, ...).
     '''
     def setup(self, dm, user_input):
         return True
@@ -238,10 +172,8 @@ class d_fuzz_typed_nodes(StatefulDisruptor):
                           None, (str,list,tuple))})
 class d_switch_to_alternate_conf(StatefulDisruptor):
     '''
-    Save the previous data the first time then switch the
-    configuration of each node, one by one, with the provided
-    alternate configuration. When iteration is terminated, the
-    disruptor hands over.
+    Switch the configuration of each node, one by one, with the
+    provided alternate configuration.
     '''
     def setup(self, dm, user_input):
         available_confs = dm.get_available_confs()
@@ -321,10 +253,91 @@ class d_switch_to_alternate_conf(StatefulDisruptor):
         return data
 
 
+@disruptor(tactics, dtype="tSEP", weight=1,
+           gen_args = GENERIC_ARGS,
+           args={'path': ('graph path regexp to select nodes on which' \
+                          ' the disruptor should apply', None, str),
+                 'order': ('when set to True, the fuzzing order is strictly guided ' \
+                           'by the data structure. Otherwise, fuzz weight (if specified ' \
+                           'in the data model) is used for ordering', False, bool),
+                 'deep': ('when set to True, if a node structure has changed, the modelwalker ' \
+                          'will reset its walk through the children nodes', True, bool)})
+class d_fuzz_separator_nodes(StatefulDisruptor):
+    '''
+    Perform alterations on separators (one at a time). Each time a
+    separator is encountered in the provided data, it will be replaced
+    by another separator picked from the ones existing within the
+    provided data.
+    '''
+    def setup(self, dm, user_input):
+        return True
 
-####################
-# BASIC DISRUPTORS #
-####################
+    def set_seed(self, prev_data):
+        if prev_data.node is None:
+            prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
+            return prev_data
+
+        prev_data.node.get_value()
+
+        ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Separator])
+        sep_list = set(map(lambda x: x.to_bytes(), prev_data.node.get_reachable_nodes(internals_criteria=ic)))
+        sep_list = list(sep_list)
+        prev_data.add_info('separators found: {!r}'.format(sep_list))
+
+        prev_data.node.make_finite(all_conf=True, recursive=True)
+
+        self.consumer = SeparatorDisruption(max_runs_per_node=self.max_runs_per_node,
+                                            min_runs_per_node=self.min_runs_per_node,
+                                            respect_order=self.order,
+                                            specific_args=sep_list)
+        self.consumer.need_reset_when_structure_change = self.deep
+        self.consumer.set_node_interest(path_regexp=self.path)
+        self.walker = iter(ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init))
+
+        self.max_runs = None
+        self.current_node = None
+        self.run_num = None
+
+    def disrupt_data(self, dm, target, data):
+        try:
+            rnode, consumed_node, orig_node_val, idx = next(self.walker)
+        except StopIteration:
+            data.make_unusable()
+            self.handover()
+            return data
+
+        new_max_runs = self.consumer.max_nb_runs_for(consumed_node)
+        if self.max_runs != new_max_runs or self.current_node != consumed_node:
+            self.current_node = consumed_node
+            self.max_runs = new_max_runs
+            self.run_num = 1
+        else:
+            self.run_num +=1
+
+        data.add_info('model walking index: {:d}'.format(idx))        
+        data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
+        data.add_info('current fuzzed separator:     %s' % consumed_node.get_path_from(rnode))
+        data.add_info(' |_ value type:         %s' % consumed_node.cc.get_value_type())
+        data.add_info(' |_ original separator: %s (ascii: %s)' % \
+                      (binascii.b2a_hex(orig_node_val), orig_node_val))
+        data.add_info(' |_ replaced by:        %s (ascii: %s)' % \
+                      (binascii.b2a_hex(consumed_node.get_flatten_value()),
+                      consumed_node.get_flatten_value()))
+
+        if self.clone_node:
+            exported_node = Node(rnode.name, base_node=rnode)
+            data.update_from_node(exported_node)
+        else:
+            data.update_from_node(rnode)
+
+        return data
+
+
+
+
+########################
+# STATELESS DISRUPTORS #
+########################
 
 
 @disruptor(tactics, dtype="EXT", weight=1,
@@ -649,4 +662,77 @@ class d_corrupt_bits_by_position(Disruptor):
 
         return prev_data
 
+
+
+
+
+#######################
+# OBSOLETE DISRUPTORS #
+#######################
+
+
+@disruptor(tactics, dtype="tTERM", weight=1,
+           gen_args = GENERIC_ARGS,
+           args={'ascii': ('enforce all outputs to be ascii 7bits', False, bool),
+                 'determinist': ('make the disruptor determinist', True, bool),
+                 'alt_values': ('list of alternative values to be tested ' \
+                                '(replace the current base list used by the disruptor)', None, list)})
+class d_fuzz_terminal_nodes(StatefulDisruptor):
+    '''
+    [OBSOLETE] Perform alterations on terminal nodes (one at a time),
+    without considering its type.
+    '''
+    def setup(self, dm, user_input):
+        return True
+
+    def set_seed(self, prev_data):
+        if prev_data.node is None:
+            prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
+            return prev_data
+
+        prev_data.node.make_finite(all_conf=True, recursive=True)
+
+        self.consumer = TermNodeDisruption(max_runs_per_node=self.max_runs_per_node,
+                                           min_runs_per_node=self.min_runs_per_node,
+                                           respect_order=False,
+                                           specific_args=self.alt_values)
+        self.consumer.determinist = self.determinist
+        if self.ascii:
+            self.consumer.ascii = True
+        
+        self.walker = iter(ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init))
+        
+        self.max_runs = None
+        self.current_node = None
+        self.run_num = None
+
+    def disrupt_data(self, dm, target, data):
+        try:
+            rnode, consumed_node, orig_node_val, idx = next(self.walker)
+        except StopIteration:
+            data.make_unusable()
+            self.handover()
+            return data
+
+        new_max_runs = self.consumer.max_nb_runs_for(consumed_node)
+        if self.max_runs != new_max_runs or self.current_node != consumed_node:
+            self.current_node = consumed_node
+            self.max_runs = new_max_runs
+            self.run_num = 1
+        else:
+            self.run_num +=1
+
+        data.add_info('model walking index: {:d}'.format(idx))
+        data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
+        data.add_info('current fuzzed node: %s' % consumed_node.get_path_from(rnode))
+        data.add_info('original val: %s' % repr(orig_node_val))
+        data.add_info('corrupted val: %s' % repr(consumed_node.get_flatten_value()))
+
+        if self.clone_node:
+            exported_node = Node(rnode.name, base_node=rnode)
+            data.update_from_node(exported_node)
+        else:
+            data.update_from_node(rnode)
+
+        return data
 
