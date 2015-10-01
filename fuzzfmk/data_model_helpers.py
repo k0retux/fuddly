@@ -182,6 +182,36 @@ class MH:
 
 
     @staticmethod
+    def WRAP(vt=fvt.INT_str, func=len):
+        '''Return a *generator* that returns the result (in the chosen type)
+        of `func` applied on the concatenation of all the node parameters.
+
+        Args:
+          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+          func (function): function applied on the concatenation
+        '''
+        def map_func(vt, func, nodes):
+            if isinstance(nodes, Node):
+                s = nodes.to_bytes()
+            else:
+                if issubclass(nodes.__class__, NodeAbstraction):
+                    nodes = nodes.get_concrete_nodes()
+                elif not isinstance(nodes, tuple) and not isinstance(nodes, list):
+                    raise TypeError("Contents of 'nodes' parameter is incorrect!")
+                s = b''
+                for n in nodes:
+                    s += n.to_bytes()
+
+            result = func(s)
+
+            n = Node('cts', value_type=vt(int_list=[result]))
+            return n
+
+        vt = MH._validate_int_vt(vt)
+        return functools.partial(map_func, vt, func)
+
+
+    @staticmethod
     def _validate_int_vt(vt):
         if not issubclass(vt, fvt.INT):
             print("*** WARNING: the value type of typed node requested is not supported!" \
