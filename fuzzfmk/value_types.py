@@ -43,6 +43,8 @@ import fuzzfmk.basic_primitives as bp
 from fuzzfmk.data_model import AbsorbStatus, AbsCsts, convert_to_internal_repr, unconvert_from_internal_repr
 
 
+DEBUG = False
+
 class VT(object):
     '''
     Base class for value type classes accepted by value Elts
@@ -263,6 +265,12 @@ class meta_int_str(type):
 
 class String(VT_Alt):
     
+    def __repr__(self):
+        if DEBUG:
+            return VT_Alt.__repr__(self)[:-1] + ' contents:' + str(self.val_list) + '>'
+        else:
+            return VT_Alt.__repr__(self)
+
     def init_specific(self, val_list=None, size=None, min_sz=None,
                       max_sz=None, determinist=True, ascii_mode=False,
                       extra_fuzzy_list=None, absorb_regexp=None,

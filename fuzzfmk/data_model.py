@@ -2225,7 +2225,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 subnode_list.append(new_node)
                 to_entangle.add(new_node)
 
-                if self.separator is not None and not ignore_separator and i < nb-1:
+                if self.separator is not None and not ignore_separator:
                     new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
                                                     ignore_frozen_state=ignore_sep_fstate)
                     subnode_list.append(new_sep)
@@ -2290,27 +2290,14 @@ class NodeInternals_NonTerm(NodeInternals):
                                                                         self.subnodes_csts_total_weight)
 
 
-        first_pass = True
         for delim, sublist in self.__iter_csts(node_list):
 
-            if first_pass:
-                first_pass = False
-                sublist_tmp = []
-            elif self.separator is not None and sublist_tmp:
-                new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
-                                                ignore_frozen_state=ignore_sep_fstate)
-                sublist_tmp = [new_sep]
-            else:
-                sublist_tmp = []
+            sublist_tmp = []
 
             if determinist:
                 if delim[1] == '>':
                     for i, node in enumerate(sublist):
                         construct_subnodes(node, sublist_tmp, delim[0])
-                        if self.separator is not None and i < len(sublist)-1:
-                            new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
-                                                            ignore_frozen_state=ignore_sep_fstate)
-                            sublist_tmp.append(new_sep)
                 elif delim[1] == '=':
                     if delim[2] == '+':
                         if sublist[0] > -1:
@@ -2321,10 +2308,6 @@ class NodeInternals_NonTerm(NodeInternals):
                     else:
                         for i, node in enumerate(sublist):
                             construct_subnodes(node, sublist_tmp, delim[0])
-                            if self.separator is not None and i < len(sublist)-1:
-                                new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
-                                                                ignore_frozen_state=ignore_sep_fstate)
-                                sublist_tmp.append(new_sep)
 
                 else:
                     raise ValueError
@@ -2332,11 +2315,6 @@ class NodeInternals_NonTerm(NodeInternals):
             elif delim[1] == '>':
                 for i, node in enumerate(sublist):
                     construct_subnodes(node, sublist_tmp, delim[0])
-                    if self.separator is not None and i < len(sublist)-1:
-                        new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
-                                                        ignore_frozen_state=ignore_sep_fstate)
-                        sublist_tmp.append(new_sep)
-
 
             elif delim[1] == '=':
 
@@ -2350,10 +2328,6 @@ class NodeInternals_NonTerm(NodeInternals):
                             node = random.choice(l)
                             l.remove(node)
                             construct_subnodes(node, sublist_tmp, delim[0])
-                            if self.separator is not None and i < lg-1:
-                                new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
-                                                                ignore_frozen_state=ignore_sep_fstate)
-                                sublist_tmp.append(new_sep)
 
                     # unfold all the Node and then choose randomly
                     else:
@@ -2368,7 +2342,7 @@ class NodeInternals_NonTerm(NodeInternals):
                             node = random.choice(list_unfold)
                             list_unfold.remove(node)
                             sublist_tmp.append(node)
-                            if self.separator is not None and i < lg-1:
+                            if self.separator is not None:
                                 new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
                                                                 ignore_frozen_state=ignore_sep_fstate)
                                 sublist_tmp.append(new_sep)
@@ -2392,11 +2366,9 @@ class NodeInternals_NonTerm(NodeInternals):
         for e in self.subnodes_set:
             e.tmp_ref_count = 1
 
-        if self.separator is not None:
-            if self.separator.suffix:
-                new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
-                                                ignore_frozen_state=ignore_sep_fstate)
-                self.frozen_node_list.append(new_sep)
+        if self.separator is not None and self.frozen_node_list and self.frozen_node_list[-1].is_attr_set(NodeInternals.Separator):
+            if not self.separator.suffix:
+                self.frozen_node_list.pop(-1)
             self._clone_separator_cleanup()
 
         return (self.frozen_node_list, True)
@@ -2539,7 +2511,7 @@ class NodeInternals_NonTerm(NodeInternals):
         if sync_node is not None:
             exist = node.env.node_exists(id(sync_node))
             crit_1 = True if exist else False
-            crit_2 = False
+            crit_2 = True
             if exist and condition is not None:
                 try:
                     crit_2 = condition.check(sync_node)

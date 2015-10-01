@@ -29,6 +29,7 @@ from libs.external_modules import *
 
 import traceback
 import datetime
+import types
 
 ################################
 # ModelWalker Helper Functions #
@@ -123,21 +124,24 @@ class MH:
         return functools.partial(qty, node_name, vt)
 
     @staticmethod
-    def TIMESTAMP(time_format="%H%M%S"):
+    def TIMESTAMP(time_format="%H%M%S", utc=False):
         '''
         Return a *generator* that returns the current time (in a String-type node).
 
         Args:
           time_format (str): time format to be used by the generator.
         '''
-        def timestamp(time_format):
-            now = datetime.datetime.utcnow()
+        def timestamp(time_format, utc):
+            if utc:
+                now = datetime.datetime.utcnow()
+            else:
+                now = datetime.datetime.now()
             ts = now.strftime(time_format)
             n = Node('cts', value_type=fvt.String(val_list=[ts], size=len(ts)))
             n.set_semantics(NodeSemantics(['timestamp']))
             return n
         
-        return functools.partial(timestamp, time_format)
+        return functools.partial(timestamp, time_format, utc)
 
     @staticmethod
     def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=True):
@@ -255,6 +259,16 @@ class ModelHelper(object):
 
     def _create_graph_from_desc(self, desc, parent_node):
 
+        def _get_type(top_desc, contents):
+            pre_ntype = top_desc.get('type', None)
+            if isinstance(contents, list) and pre_ntype in [None, MH.NonTerminal]:
+                ntype = MH.NonTerminal
+            elif hasattr(contents, '__call__') and pre_ntype in [None, MH.Generator]:
+                ntype = MH.Generator
+            else:
+                ntype = MH.Leaf
+            return ntype
+
         self._verify_keys_conformity(desc)
 
         contents = desc.get('contents', None)
@@ -267,11 +281,7 @@ class ModelHelper(object):
         else:
             # Non-terminal are recognized via its contents (avoiding
             # the user to always provide a 'type' field)
-            if isinstance(contents, list):
-                ntype = MH.NonTerminal
-            else:
-                ntype = desc.get('type', MH.Leaf)
-
+            ntype = _get_type(desc, contents)
             nd = dispatcher.get(ntype)(desc)
             self.__post_handling(desc, nd)
 
@@ -283,11 +293,7 @@ class ModelHelper(object):
                 if cts is None:
                     raise ValueError("Cloning or referencing an existing node"\
                                      " into an alternate configuration is not supported")
-                if isinstance(cts, list):
-                    ntype = MH.NonTerminal
-                else:
-                    ntype = alt.get('type', MH.Leaf)
-
+                ntype = _get_type(alt, cts)
                 # dispatcher.get(ntype)(alt, None, node=nd)
                 dispatcher.get(ntype)(alt, node=nd)
 
@@ -448,19 +454,20 @@ class ModelHelper(object):
                     l.insert(0, node)
                     sh.append(l)
                 else:
-                    raise ValueError
-
-        if isinstance(shapes[0], list):
-            # This is a node and not a node_desc. Thus, no section!
-            ref = 'NotNone'
-        else:
-            ref = shapes[0].get('name')
+                    raise ValueError('Unrecognized section type!')
 
         sh = []
 
-        if ref is None:
-            # in this case, sections are materialised in the description
-            for section_desc in shapes:
+        # Note that sections are not always materialised in the description
+        for section_desc in shapes:
+
+            # check if it is directly a node
+            if isinstance(section_desc, list):
+                sh.append(dup_mode + shape_type)
+                _handle_section([section_desc], sh)
+
+            # check if it is a section description
+            elif section_desc.get('name') is None:
                 self._verify_keys_conformity(section_desc)
                 sec_type = section_desc.get('section_type', MH.Ordered)
                 dupmode = section_desc.get('duplicate_mode', MH.Copy)
@@ -468,12 +475,12 @@ class ModelHelper(object):
                 weights = ''.join(str(section_desc.get('weights', '')).split(' '))
                 sh.append(dupmode+sec_type+weights)
                 _handle_section(section_desc.get('contents', []), sh)
-        else:
-            # if 'name' attr is present, there is no section in the
-            # shape, thus we adopt a default sequencing of nodes (that
-            # is 'u>')
-            sh.append(dup_mode + shape_type)
-            _handle_section(shapes, sh)
+
+            # if 'name' attr is present, it is not a section in the
+            # shape, thus we adopt the default sequencing of nodes.
+            else:
+                sh.append(dup_mode + shape_type)
+                _handle_section([section_desc], sh)
 
         return sh
 

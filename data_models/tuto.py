@@ -143,7 +143,7 @@ class MyDF_DataModel(DataModel):
 
         separator_desc = \
         {'name': 'separator',
-         'separator': {'contents': {'name': 'sep',
+         'separator': {'contents': {'name': 'sep_nl',
                                     'contents': String(val_list=['\n'], absorb_regexp=b'[\r\n|\n]+'),
                                     'absorb_csts': AbsNoCsts(regexp=True)},
                        'prefix': False,

@@ -2603,6 +2603,8 @@ class TestFMK(unittest.TestCase):
             fmk.new_transfer_preamble()
             fmk.log_data(d)
 
+        self.assertGreater(i, 2)
+
 
 if __name__ == "__main__":
 
