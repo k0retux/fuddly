@@ -247,6 +247,45 @@ the first example. We additionally specify the parameter
 	     - :func:`fuzzfmk.value_types.VT_Alt.switch_mode` (used currently by the disruptor ``tTYPE``)
 
 
+.. _dm:generators:
+
+Generator Node Templates
+========================
+
+Here under the currently implemented *generator templates* (they are
+all defined as static methods of
+:class:`fuzzfmk.data_model_helpers.MH`):
+
+:meth:`fuzzfmk.data_model_helpers.MH.LEN()`
+      Return a *generator* that returns the length of a node parameter.
+
+:meth:`fuzzfmk.data_model_helpers.MH.QTY()`
+      Return a *generator* that returns the quantity of child node
+      instances (referenced by name) of the node parameter provided to
+      the *generator*.
+
+:meth:`fuzzfmk.data_model_helpers.MH.TIMESTAMP()`
+      Return a *generator* that returns the current time (in a String node).
+
+:meth:`fuzzfmk.data_model_helpers.MH.CRC()`
+      Return a *generator* that returns the CRC (in the chosen type) of
+      all the node parameters.
+
+:meth:`fuzzfmk.data_model_helpers.MH.WRAP()`
+      Return a *generator* that returns the result (in the chosen
+      type) of the provided function applied on the concatenation of
+      all the node parameters.
+
+:meth:`fuzzfmk.data_model_helpers.MH.CYCLE()`
+      Return a *generator* that iterates other the provided value list
+      and returns at each step a node corresponding to the
+      current value.
+
+:meth:`fuzzfmk.data_model_helpers.MH.OFFSET()`
+      Return a *generator* that computes the offset of a child node
+      within its parent node.
+
+
 
 
 .. _dm:patterns:

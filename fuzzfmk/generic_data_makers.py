@@ -51,7 +51,7 @@ tactics = Tactics()
            gen_args = GENERIC_ARGS,
            args={'nt_only': ('walk through non-terminal nodes only', False, bool),
                  'singleton': ('consume also terminal nodes with only one possible value', False, bool)})
-class d_iter_over_data(StatefulDisruptor):
+class sd_iter_over_data(StatefulDisruptor):
     '''
     Walk through the provided data and for each visited node, iterates
     over the allowed values (with respect to the data model).
@@ -101,7 +101,7 @@ class d_iter_over_data(StatefulDisruptor):
                            'in the data model) is used for ordering', False, bool),
                  'deep': ('when set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes', True, bool)})
-class d_fuzz_typed_nodes(StatefulDisruptor):
+class sd_fuzz_typed_nodes(StatefulDisruptor):
     '''
     Perform alterations on typed nodes (one at a time) accordingly to
     its type and various complementary information (such as size,
@@ -170,7 +170,7 @@ class d_fuzz_typed_nodes(StatefulDisruptor):
                           "all subnodes fetched by @path, one-by-one. [default value is set " \
                           "dynamically with the first-found existing alternate configuration]",
                           None, (str,list,tuple))})
-class d_switch_to_alternate_conf(StatefulDisruptor):
+class sd_switch_to_alternate_conf(StatefulDisruptor):
     '''
     Switch the configuration of each node, one by one, with the
     provided alternate configuration.
@@ -262,7 +262,7 @@ class d_switch_to_alternate_conf(StatefulDisruptor):
                            'in the data model) is used for ordering', False, bool),
                  'deep': ('when set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes', True, bool)})
-class d_fuzz_separator_nodes(StatefulDisruptor):
+class sd_fuzz_separator_nodes(StatefulDisruptor):
     '''
     Perform alterations on separators (one at a time). Each time a
     separator is encountered in the provided data, it will be replaced
@@ -677,7 +677,7 @@ class d_corrupt_bits_by_position(Disruptor):
                  'determinist': ('make the disruptor determinist', True, bool),
                  'alt_values': ('list of alternative values to be tested ' \
                                 '(replace the current base list used by the disruptor)', None, list)})
-class d_fuzz_terminal_nodes(StatefulDisruptor):
+class sd_fuzz_terminal_nodes(StatefulDisruptor):
     '''
     [OBSOLETE] Perform alterations on terminal nodes (one at a time),
     without considering its type.

@@ -126,7 +126,7 @@ class MH:
     @staticmethod
     def TIMESTAMP(time_format="%H%M%S", utc=False):
         '''
-        Return a *generator* that returns the current time (in a String-type node).
+        Return a *generator* that returns the current time (in a String node).
 
         Args:
           time_format (str): time format to be used by the generator.
@@ -182,13 +182,15 @@ class MH:
 
 
     @staticmethod
-    def WRAP(vt=fvt.INT_str, func=len):
+    def WRAP(func, vt=fvt.INT_str):
         '''Return a *generator* that returns the result (in the chosen type)
-        of `func` applied on the concatenation of all the node parameters.
+        of the provided function applied on the concatenation of all
+        the node parameters.
 
         Args:
-          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
           func (function): function applied on the concatenation
+          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+
         '''
         def map_func(vt, func, nodes):
             if isinstance(nodes, Node):
@@ -209,6 +211,120 @@ class MH:
 
         vt = MH._validate_int_vt(vt)
         return functools.partial(map_func, vt, func)
+
+    @staticmethod
+    def CYCLE(vals, depth=1, vt=fvt.String):
+        '''Return a *generator* that iterates other the provided value list
+        and returns at each step a `vt` node corresponding to the
+        current value.
+
+        Args:
+          vals (list): the value list to iterate on.
+          depth (int): depth of our nth-ancestor used as a reference to iterate. By default,
+            it is the parent node. Thus, in this case, depending on the drawn quantity
+            of parent nodes, the position within the grand-parent determines the index
+            of the value to use in the provided list, modulo the quantity.
+          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
+        '''
+        class Cycle(object):
+            provide_helpers = True
+            
+            def __init__(self, vals, depth, vt):
+                self.vals = vals
+                self.vals_sz = len(vals)
+                self.vt = vt
+                self.depth = depth
+
+            def __call__(self, helper):
+                info = helper.graph_info
+                try:
+                    idx, total = info[self.depth]
+                except:
+                    idx = 0
+                idx = idx % self.vals_sz
+                if issubclass(self.vt, fvt.INT):
+                    vtype = self.vt(int_list=[self.vals[idx]])
+                elif issubclass(self.vt, fvt.String):
+                    vtype = self.vt(val_list=[self.vals[idx]])
+                else:
+                    raise NotImplementedError('Value type not supported')
+
+                n = Node('cts', value_type=vtype)
+                return n
+
+        assert(not issubclass(vt, fvt.BitField))
+        return Cycle(vals, depth, vt)
+
+
+    @staticmethod
+    def OFFSET(use_current_position=True, depth=1, vt=fvt.INT_str):
+        '''Return a *generator* that computes the offset of a child node
+        within its parent node.
+
+        If `use_current_position` is `True`, the child node is
+        selected automatically, based on our current index within our
+        own parent node (or the nth-ancestor, depending on the
+        parameter `depth`). Otherwise, the child node has to be
+        provided in the node parameters just before its parent node.
+
+        Besides, if there are N node parameters, the first N-1 (or N-2
+        if `use_current_position` is False) nodes are used for adding
+        a fixed amount (the length of their concatenated values) to
+        the offset (determined thanks to the node in the last position
+        of the node parameters).
+
+        The generator returns the result wrapped in a `vt` node.
+
+        Args:
+          use_current_position (bool): automate the computation of the child node position
+          depth (int): depth of our nth-ancestor used as a reference to compute automatically
+            the targeted child node position. Only relevant if `use_current_position` is True.
+          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
+        '''
+        class Offset(object):
+            provide_helpers = True
+            
+            def __init__(self, use_current_position, depth, vt):
+                self.vt = vt
+                self.use_current_position = use_current_position
+                self.depth = depth
+
+            def __call__(self, nodes, helper):
+                if self.use_current_position:
+                    info = helper.graph_info
+                    try:
+                        idx, total = info[self.depth]
+                    except:
+                        idx = 0
+
+                if isinstance(nodes, Node):
+                    assert(self.use_current_position)
+                    base = 0
+                    off = nodes.get_subnode_off(idx)
+                else:
+                    if issubclass(nodes.__class__, NodeAbstraction):
+                        nodes = nodes.get_concrete_nodes()
+                    elif not isinstance(nodes, tuple) and not isinstance(nodes, list):
+                        raise TypeError("Contents of 'nodes' parameter is incorrect!")
+
+                    if not self.use_current_position:
+                        child = nodes[-2]
+                        parent = nodes[-1]
+                        parent.get_value()
+                        idx = parent.get_subnode_idx(child)
+
+                    s = b''
+                    end = -1 if self.use_current_position else -2
+                    for n in nodes[:end]:
+                        s += n.to_bytes()
+                    base = len(s)
+                    off = nodes[-1].get_subnode_off(idx)
+
+                n = Node('cts', value_type=self.vt(int_list=[base+off]))
+                return n
+
+        vt = MH._validate_int_vt(vt)
+        return Offset(use_current_position, depth, vt)
 
 
     @staticmethod
@@ -391,7 +507,10 @@ class ModelHelper(object):
 
         if hasattr(contents, '__call__'):
             other_args = desc.get('other_args', None)
-            provide_helpers = desc.get('provide_helpers', False)
+            if hasattr(contents, 'provide_helpers') and contents.provide_helpers:
+                provide_helpers = True
+            else:
+                provide_helpers = desc.get('provide_helpers', False)
             node_args = desc.get('node_args', None)
             n.set_generator_func(contents, func_arg=other_args,
                                  provide_helpers=provide_helpers, conf=conf)
@@ -487,17 +606,22 @@ class ModelHelper(object):
                     raise ValueError('Unrecognized section type!')
 
         sh = []
-
+        prev_section_exist = False
+        first_pass = True
         # Note that sections are not always materialised in the description
         for section_desc in shapes:
 
             # check if it is directly a node
             if isinstance(section_desc, list):
-                sh.append(dup_mode + shape_type)
+                if prev_section_exist or first_pass:
+                    prev_section_exist = False
+                    first_pass = False
+                    sh.append(dup_mode + shape_type)
                 _handle_section([section_desc], sh)
 
             # check if it is a section description
             elif section_desc.get('name') is None:
+                prev_section_exist = True
                 self._verify_keys_conformity(section_desc)
                 sec_type = section_desc.get('section_type', MH.Ordered)
                 dupmode = section_desc.get('duplicate_mode', MH.Copy)
@@ -509,7 +633,10 @@ class ModelHelper(object):
             # if 'name' attr is present, it is not a section in the
             # shape, thus we adopt the default sequencing of nodes.
             else:
-                sh.append(dup_mode + shape_type)
+                if prev_section_exist or first_pass:
+                    prev_section_exist = False
+                    first_pass = False
+                    sh.append(dup_mode + shape_type)
                 _handle_section([section_desc], sh)
 
         return sh

@@ -2356,6 +2356,27 @@ class TestDataModel(unittest.TestCase):
                 print('Success!')
 
 
+    def test_generic_generators(self):
+        dm = fmk.get_data_model_by_name('mydf')
+        dm.load_data_model(fmk._name2dm)
+
+        for i in range(5):
+            d = dm.get_data('off_gen')
+            d.show()
+            raw = d.to_bytes()
+            print(raw)
+
+            if sys.version_info[0] > 2:
+                retr_off = raw[-1]
+            else:
+                retr_off = struct.unpack('B', raw[-1])[0]
+            print('\nRetrieved offset is: %d' % retr_off)
+
+            int_idx = d['off_gen/body$'].get_subnode_idx(d['off_gen/body/int'])
+            off = int_idx * 3 + 10 # +10 for 'prefix' delta
+            self.assertEqual(off, retr_off)
+
+
     @unittest.skipIf(ignore_data_model_specifics, "USB specific test cases")
     def test_usb_specifics(self):
 

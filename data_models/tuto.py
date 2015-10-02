@@ -243,6 +243,30 @@ class MyDF_DataModel(DataModel):
               'contents': String(min_sz=10, max_sz=100, determinist=False)},
          ]}
 
+
+        offset_gen_desc = \
+        {'name': 'off_gen',
+         'contents': [
+             {'name': 'prefix',
+              'contents': String(size=10, alphabet='*+')},
+
+             {'name': 'body',
+              'shape_type': MH.FullyRandom,
+              'contents': [
+                  {'contents': String(val_list=['AAA']),
+                   'qty': 10,
+                   'name': 'str'},
+                  {'contents': UINT8(int_list=[0x3F]),
+                   'name': 'int'}
+              ]},
+
+             {'name': 'len',
+              'type': MH.Generator,
+              'contents': MH.OFFSET(use_current_position=False, vt=UINT8),
+              'node_args': ['prefix', 'int', 'body']},
+         ]}
+
+
         misc_gen_desc = \
         {'name': 'misc_gen',
          'contents': [
@@ -282,7 +306,7 @@ class MyDF_DataModel(DataModel):
 
 
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
-                      sync_desc, len_gen_desc, misc_gen_desc)
+                      sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc)
 
 
 

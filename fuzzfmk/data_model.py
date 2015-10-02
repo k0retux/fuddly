@@ -2419,6 +2419,10 @@ class NodeInternals_NonTerm(NodeInternals):
 
         return off
 
+    def get_subnode_idx(self, node):
+        self._precondition_subnode_ops()
+        return self.frozen_node_list.index(node)
+
     def get_subnode_qty(self):
         self._precondition_subnode_ops()
         return len(self.frozen_node_list)
