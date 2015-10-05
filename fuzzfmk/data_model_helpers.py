@@ -362,7 +362,7 @@ class ModelHelper(object):
         'post_freeze'
     ]
 
-    def __init__(self, dm=None, delayed_jobs=False):
+    def __init__(self, dm=None, delayed_jobs=True):
         self.dm = dm
         self.delayed_jobs = delayed_jobs
 

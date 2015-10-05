@@ -1071,7 +1071,7 @@ class NodeInternals_GenFunc(NodeInternals):
         return (ret, False)
 
     def absorb(self, blob, constraints, conf):
-        # we make the generator freezable to be sure that _get_value()
+        # We make the generator freezable to be sure that _get_value()
         # won't reset it after absorption
         self.set_attr(NodeInternals.Freezable)
 
@@ -2267,123 +2267,6 @@ class NodeInternals_NonTerm(NodeInternals):
         '''Generate the structure of the non terminal node.
         '''
 
-        def construct_subnodes(node, subnode_list, mode, ignore_separator=False):
-            if self.is_attr_set(NodeInternals.Determinist):
-                if len(node) == 3:
-                    if node[2] == -1: # infinite case
-                        # for generation we limit to min+INFINITY_LIMIT
-                        nb = node[1] + NodeInternals_NonTerm.INFINITY_LIMIT
-                    else:    
-                        nb = (node[1] + node[2]) // 2
-                else:
-                    nb = NodeInternals_NonTerm.INFINITY_LIMIT if node[1] == -1 else node[1]
-            else:
-                if len(node) == 3:
-                    if node[2] == -1: # infinite case
-                        # for generation we limit to min+INFINITY_LIMIT
-                        maxi = node[1] + NodeInternals_NonTerm.INFINITY_LIMIT
-                    else:
-                        maxi = node[2]
-                    nb = random.randint(node[1], maxi)
-                else:
-                    nb = NodeInternals_NonTerm.INFINITY_LIMIT if node[1] == -1 else node[1]
-
-            node_attrs = node[1:]
-            node = node[0]
-
-            qty = self._qty_from_node(node)
-            if qty is not None:
-                nb = qty
-
-            shall_exist = self._existence_from_node(node)
-            if shall_exist is not None:
-                if not shall_exist:
-                    if node.env and node.env.delayed_jobs_enabled:
-                        node.set_attr(NodeInternals.DISABLED)
-                        node.set_private((self, node_attrs, mode, ignore_sep_fstate, ignore_separator))
-                        subnode_list.append(node)
-                    return
-
-            to_entangle = set()
-
-            base_node = node
-            external_entangled_nodes = [] if base_node.entangled_nodes is None else list(base_node.entangled_nodes)
-
-            new_node = None
-
-            for i in range(nb):
-                # 'unique' mode
-                if mode == 'u':
-                    if i == 0 and base_node.tmp_ref_count == 1:
-                        new_node = base_node
-                    else:
-                        base_node.tmp_ref_count += 1
-                        nid = base_node.name + ':' + str(base_node.tmp_ref_count)
-                        if base_node.is_frozen():
-                            ignore_fstate = False
-                        else:
-                            ignore_fstate = True
-
-                        # ignore_fstate = True
-
-                        new_node = Node(nid, base_node=base_node, ignore_frozen_state=ignore_fstate,
-                                      accept_external_entanglement=True,
-                                      acceptance_set=(external_entangled_nodes + subnode_list))
-                        new_node._reset_depth(parent_depth=base_node.depth-1)
-
-                        # For dynamically created Node(), don't propagate the fuzz weight
-                        if self.mode == 1:
-                            new_node.reset_fuzz_weight(recursive=True)
-                            new_node.clear_attr(NodeInternals.Mutable, all_conf=True, recursive=True)
-                            # print('\nname: %s, %s' % (base_node.name, new_node.name),
-                            #       '\nfinite: %r, %r' % (base_node.is_attr_set(NodeInternals.Finite), new_node.is_attr_set(NodeInternals.Finite)),
-                            #       '\nmutable: %r, %r' % (base_node.is_attr_set(NodeInternals.Mutable), new_node.is_attr_set(NodeInternals.Mutable)))
-
-                            # if isinstance(base_node.cc, NodeInternals_NonTerm):
-                            #     print('contents 1: ', base_node.cc.frozen_node_list)
-                            #     print('contents 2: ', new_node.cc.frozen_node_list)
-                            #     if base_node.cc.frozen_node_list and new_node.cc.frozen_node_list:
-                            #         for e1, e2 in zip(base_node.cc.frozen_node_list, new_node.cc.frozen_node_list):
-                            #             print('name: %s, %s' % (e1.name, e2.name),
-                            #                   '\nfinite: %r, %r' % (e1.is_attr_set(NodeInternals.Finite), e2.is_attr_set(NodeInternals.Finite)),
-                            #                   '\nmutable: %r, %r' % (e1.is_attr_set(NodeInternals.Mutable), e2.is_attr_set(NodeInternals.Mutable)))
-
-                        elif self.mode == 2:
-                            if new_node.is_nonterm():
-                                new_node.cc.set_mode(2)
-                        else:
-                            raise ValueError
-
-                    new_node._set_clone_info((base_node.tmp_ref_count-1, nb))
-
-                # 'same' mode
-                elif mode == 's':
-                    new_node = base_node
-                else:
-                    raise ValueError
-
-                subnode_list.append(new_node)
-                to_entangle.add(new_node)
-
-                if self.separator is not None and not ignore_separator:
-                    new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
-                                                    ignore_frozen_state=ignore_sep_fstate)
-                    subnode_list.append(new_sep)
-
-            # We need to call set_clone_info() only once for 's' mode
-            # as there is only one instance.
-            if new_node is not None and mode == 's':
-                new_node._set_clone_info((0,nb))
-
-            if len(to_entangle) > 1:
-                make_entangled_nodes(to_entangle)
-
-            # node._tobytes() has to be called after the
-            # previous copy process, to avoid copying frozen node
-            self._set_drawn_node_attrs(node, nb, len(node._tobytes()))
-
-            return
-
         # In this case we return directly the frozen state
         if self.frozen_node_list is not None:
             return (self.frozen_node_list, False)
@@ -2400,6 +2283,7 @@ class NodeInternals_NonTerm(NodeInternals):
             else:
                 self.frozen_node_list = []
         else:
+            ignore_sep_fstate = None
             self.frozen_node_list = []
 
         determinist = self.is_attr_set(NodeInternals.Determinist)
@@ -2438,24 +2322,24 @@ class NodeInternals_NonTerm(NodeInternals):
             if determinist:
                 if delim[1] == '>':
                     for i, node in enumerate(sublist):
-                        construct_subnodes(node, sublist_tmp, delim[0])
+                        self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
                 elif delim[1] == '=':
                     if delim[2] == '+':
                         if sublist[0] > -1:
                             node = NodeInternals_NonTerm._get_heavier_component(sublist[1])
                         else:
                             node = sublist[1][0]
-                        construct_subnodes(node, sublist_tmp, delim[0])
+                        self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
                     else:
                         for i, node in enumerate(sublist):
-                            construct_subnodes(node, sublist_tmp, delim[0])
+                            self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
 
                 else:
                     raise ValueError
 
             elif delim[1] == '>':
                 for i, node in enumerate(sublist):
-                    construct_subnodes(node, sublist_tmp, delim[0])
+                    self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
 
             elif delim[1] == '=':
 
@@ -2468,7 +2352,7 @@ class NodeInternals_NonTerm(NodeInternals):
                         for i in range(lg):
                             node = random.choice(l)
                             l.remove(node)
-                            construct_subnodes(node, sublist_tmp, delim[0])
+                            self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
 
                     # unfold all the Node and then choose randomly
                     else:
@@ -2476,7 +2360,7 @@ class NodeInternals_NonTerm(NodeInternals):
                         for i in range(lg):
                             node = random.choice(l)
                             l.remove(node)
-                            construct_subnodes(node, list_unfold, delim[0], ignore_separator=True)
+                            self._construct_subnodes(node, list_unfold, delim[0], ignore_sep_fstate, ignore_separator=True)
 
                         lg = len(list_unfold)
                         for i in range(lg):
@@ -2495,7 +2379,7 @@ class NodeInternals_NonTerm(NodeInternals):
                     else:
                         node = random.choice(sublist[1])
 
-                    construct_subnodes(node, sublist_tmp, delim[0])
+                    self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
 
                 else:
                     raise ValueError("delim: '%s'"%delim)
@@ -2519,8 +2403,6 @@ class NodeInternals_NonTerm(NodeInternals):
         l = []
         node_list, was_not_frozen = self.get_subnodes_with_csts()
 
-        # print('\n Dgvalue1: ', list(map(lambda x: x.name, node_list)))
-
         djob_group_created = False        
         for n in node_list:
             if n.is_attr_set(NodeInternals.DISABLED):
@@ -2529,8 +2411,6 @@ class NodeInternals_NonTerm(NodeInternals):
                     if not djob_group_created:
                         djob_group_created = True
                         djob_group = DJobGroup(node_list)
-                        # print('\n Dgvalue1: ', djob_group)
-                    # print('\n Dgvalue2: ', n.name, id(n))
                     n.env.register_djob(NodeInternals_NonTerm._expand_delayed_nodes,
                                         group = djob_group,
                                         key = id(n),
@@ -2552,14 +2432,12 @@ class NodeInternals_NonTerm(NodeInternals):
            node_env.djobs_exists(Node.DJOBS_PRIO_nterm_existence):
             groups = node_env.get_all_djob_groups(prio=Node.DJOBS_PRIO_nterm_existence)
             if groups is not None:
-                # print('\n Dgvalue3, groups:', groups)
                 for gr in groups:
                     for n in gr:
                         if n.is_attr_set(NodeInternals.DISABLED):
                             shall_exist = self._existence_from_node(n)
                             if shall_exist:
                                 djobs = node_env.get_djobs_by_gid(id(gr), prio=Node.DJOBS_PRIO_nterm_existence)
-                                # print('\n Dgvalue4: %r, name: %s' % (djobs, n.name))
                                 func, args, cleanup = djobs[id(n)]
                                 job_idx = args[2]
                                 node_qty = func(*args)
@@ -2580,10 +2458,8 @@ class NodeInternals_NonTerm(NodeInternals):
         node.clear_attr(NodeInternals.DISABLED)
         node_desc = [node] + node_attrs
         expand_list = []
-        # print('\nDexpand1:', node.name, node_desc)
         node_internals._construct_subnodes(node_desc, expand_list, mode, ignore_sep_fstate,
                                            ignore_separator, lazy_mode=False)
-        # print('\nDexpand2:', list(map(lambda x: x.name, expand_list)))
         if expand_list:
             if node_internals.separator is not None and len(node_list) == idx - 1:
                 if not node_internals.separator.suffix and expand_list[-1].is_attr_set(NodeInternals.Separator):
@@ -2594,17 +2470,13 @@ class NodeInternals_NonTerm(NodeInternals):
             for i, n in enumerate(expand_list):
                 node_list.insert(idx+i, n)
 
-        # print('\nDexpand3:', list(map(lambda x: x.name, node_list)), id(node_list[0]), ' ENV:', node.env)
-
         return len(expand_list)
 
     @staticmethod
     def _cleanup_delayed_nodes(node, node_list, idx, conf, rec):
-        # print('\n Dcleanup callback 1')
         node.set_private(None)
         node.clear_attr(NodeInternals.DISABLED)
         if idx < len(node_list):
-            # print('\n Dcleanup callback 2: ', node_list[idx].name)
             node_list.pop(idx)
 
     def set_separator_node(self, sep_node, prefix=True, suffix=True, unique=False):
@@ -2735,13 +2607,11 @@ class NodeInternals_NonTerm(NodeInternals):
         sync_node, condition = node.synchronized_with(SyncScope.Existence)
         if sync_node is not None:
             exist = node.env.node_exists(id(sync_node))
-            # print('\nDexist_cond1:', sync_node.name, sync_node, id(sync_node), exist, sync_node.env)
             crit_1 = True if exist else False
             crit_2 = True
             if exist and condition is not None:
                 try:
                     crit_2 = condition.check(sync_node)
-                    # print('\nDexist_cond2: %r' % crit_2)
                 except Exception as e:
                     print("\n*** ERROR: existence condition is not verifiable " \
                           "for node '{:s}' (id: {:d})!\n" \
@@ -2759,6 +2629,13 @@ class NodeInternals_NonTerm(NodeInternals):
 
 
     def absorb(self, blob, constraints, conf):
+        '''
+        TOFIX: Checking existence condition independently from data
+               description order is not supported. Only supported
+               within the same non-terminal node. Use delayed job
+               infrastructure to cover all cases (TBC).
+        '''
+
         abs_excluded_components = []
         abs_exhausted = False
         status = AbsorbStatus.Reject
@@ -3029,11 +2906,12 @@ class NodeInternals_NonTerm(NodeInternals):
                                 abort, blob, consumed_size, consumed_nb = _try_absorption_with(base_node, min_node, max_node,
                                                                                         blob, consumed_size,
                                                                                         postponed_node_desc=postponed_node_desc)
-                                if abort is None:
-                                    continue
+                                # if abort is None:
+                                #     continue
 
-                                if abort:
-                                    # we give a new chance to this node because it is maybe not at the right place
+                                if abort or abort is None:
+                                    # We give a new chance to this node because it is maybe not at the right place
+                                    # Note: existence condition can be False if not checked in right order
                                     node_desc_list.append(node_desc)
 
                         # No particular orders between all the nodes (fully random)
@@ -3952,8 +3830,6 @@ class Node(object):
         '''Reset to standard (1) the fuzzing weight that is associated to this
         node, and all its subnodes if `recursive` parameter is set to `True`.
 
-        .. _test:
-
         Args:
           recursive (bool): if set to `True`, reset also every subnodes (all reachable nodes from this one).
 
@@ -4600,13 +4476,11 @@ class Node(object):
             self._delayed_jobs_called = True
 
             if self.env.djobs_exists(Node.DJOBS_PRIO_nterm_existence):
-                # print('\n DEBUG2, env:', self.env)
                 self.env.cleanup_remaining_djobs(Node.DJOBS_PRIO_nterm_existence)
 
             if self.env.djobs_exists(Node.DJOBS_PRIO_genfunc):
                 self.env.execute_basic_djobs(Node.DJOBS_PRIO_genfunc)
 
-            # print('\n ********* DEBUG3 ************')
             ret = self._get_value(conf=conf, recursive=recursive)
 
         return ret
@@ -4636,8 +4510,6 @@ class Node(object):
             raise ValueError
 
         ret, was_not_frozen = internal._get_value(conf=next_conf, recursive=recursive)
-
-        # print('\n DEBUG0: ', ret)
 
         if was_not_frozen:
             self._post_freeze(internal)
@@ -5251,7 +5123,6 @@ class Env(object):
         groups = self.get_all_djob_groups(prio=prio)
         if groups is not None:
             for gr in groups:
-                # print('\n Dcleanup', gr)
                 gr_id = id(gr)
                 if gr_id not in self._sorted_jobs[prio]:
                     continue
