@@ -351,7 +351,7 @@ class ModelHelper(object):
         'weight', 'shape_type', 'section_type', 'duplicate_mode', 'weights',
         'separator', 'prefix', 'suffix', 'unique',
         # Generator/Function description keys
-        'node_args', 'other_args', 'provide_helpers',
+        'node_args', 'other_args', 'provide_helpers', 'trigger_last',
         # Export description keys
         'export_from', 'data_id',        
         # node properties description keys
@@ -362,8 +362,9 @@ class ModelHelper(object):
         'post_freeze'
     ]
 
-    def __init__(self, dm=None):
+    def __init__(self, dm=None, delayed_jobs=False):
         self.dm = dm
+        self.delayed_jobs = delayed_jobs
 
     def _verify_keys_conformity(self, desc):
         for k in desc.keys():
@@ -514,6 +515,9 @@ class ModelHelper(object):
             node_args = desc.get('node_args', None)
             n.set_generator_func(contents, func_arg=other_args,
                                  provide_helpers=provide_helpers, conf=conf)
+            trig_last = desc.get('trigger_last', False)
+            if trig_last:
+                n.cc.trigger_last = True
             if node_args is not None:
                 # node_args interpretation is postponed after all nodes has been created
                 self._register_todo(n, self._complete_generator, args=(node_args, conf), unpack_args=True,
@@ -780,7 +784,9 @@ class ModelHelper(object):
         internals.set_generator_func_arg(generator_node_arg=func_args)
 
     def _set_env(self, node, args):
-        node.set_env(Env())
+        env = Env()
+        env.delayed_jobs_enabled = self.delayed_jobs
+        node.set_env(env)
 
     def __get_node_from_db(self, name_desc):
         ref = self._handle_name(name_desc)
@@ -865,7 +871,8 @@ class DataModel(object):
     def get_data(self, hash_key, name=None):
         if hash_key in self.__dm_hashtable:
             nm = hash_key if name is None else name
-            node = Node(nm, base_node=self.__dm_hashtable[hash_key], ignore_frozen_state=False)
+            node = Node(nm, base_node=self.__dm_hashtable[hash_key], ignore_frozen_state=False,
+                        new_env=True)
             return node
         else:
             raise ValueError('Requested data does not exist!')
