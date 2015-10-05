@@ -540,7 +540,7 @@ class NodeInternals(object):
                 # this case only triggers during a call to
                 # NonTerm.get_subnodes_with_csts(), that is when new
                 # subnodes are created during a
-                # Node.get_value(). Indeed, when making copies of a
+                # Node._get_value(). Indeed, when making copies of a
                 # node within the NonTerm.subnodes_set, the node_dico
                 # of the copies may miss upper nodes. In such a case,
                 # no update needs to be done, as the node ref exist
@@ -727,7 +727,7 @@ class NodeInternals(object):
     def pretty_print(self):
         return None
 
-    def get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True):
         raise NotImplementedError
 
     def reset_depth_specific(self, depth):
@@ -832,7 +832,7 @@ class DynNode_Helpers(object):
 
 
 class NodeInternals_Empty(NodeInternals):
-    def get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True):
         return b'<EMPTY>', True
 
     def set_child_env(self, env):
@@ -1049,7 +1049,7 @@ class NodeInternals_GenFunc(NodeInternals):
             self.generator_arg = generator_arg
 
 
-    def get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True):
         if self.trigger_last and not self._trigger_registered:
             assert(self.env is not None)
             self._trigger_registered = True
@@ -1062,16 +1062,16 @@ class NodeInternals_GenFunc(NodeInternals):
         if not self.is_attr_set(NodeInternals.Freezable):
             self.reset_generator()
 
-        ret = self.generated_node.get_value(conf=conf, recursive=recursive)
+        ret = self.generated_node._get_value(conf=conf, recursive=recursive)
         return (ret, False)
 
     def _get_delayed_value(self, conf=None, recursive=True):
         self.reset_generator()
-        ret = self.generated_node.get_value(conf=conf, recursive=recursive)
+        ret = self.generated_node._get_value(conf=conf, recursive=recursive)
         return (ret, False)
 
     def absorb(self, blob, constraints, conf):
-        # we make the generator freezable to be sure that get_value()
+        # we make the generator freezable to be sure that _get_value()
         # won't reset it after absorption
         self.set_attr(NodeInternals.Freezable)
 
@@ -1221,7 +1221,7 @@ class NodeInternals_Term(NodeInternals):
     def _set_frozen_value(self, val):
         self.frozen_node = val
 
-    def get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True):
 
         if self.frozen_node is not None:
             return (self.frozen_node, False)
@@ -1590,11 +1590,11 @@ class NodeInternals_Func(NodeInternals_Term):
 
 
     def absorb(self, blob, constraints, conf):
-        # we make the generator freezable to be sure that get_value()
+        # we make the generator freezable to be sure that _get_value()
         # won't reset it after absorption
         self.set_attr(NodeInternals.Freezable)
 
-        sz = len(convert_to_internal_repr(self.get_value()))
+        sz = len(convert_to_internal_repr(self._get_value()))
 
         self._set_frozen_value(blob[:sz])
 
@@ -2515,7 +2515,7 @@ class NodeInternals_NonTerm(NodeInternals):
         return (self.frozen_node_list, True)
 
 
-    def get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True):
         l = []
         node_list, was_not_frozen = self.get_subnodes_with_csts()
 
@@ -2538,7 +2538,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                         args=[n, node_list, len(l), conf, recursive],
                                         prio=Node.DJOBS_PRIO_nterm_existence)
             else:
-                val = n.get_value(conf=conf, recursive=recursive)
+                val = n._get_value(conf=conf, recursive=recursive)
             l.append(val)
 
         ret = (l, was_not_frozen)
@@ -4594,7 +4594,7 @@ class Node(object):
 
     def freeze(self, conf=None, recursive=True):
         
-        ret = self.get_value(conf=conf, recursive=recursive)
+        ret = self._get_value(conf=conf, recursive=recursive)
 
         if self.env is not None and self.env.delayed_jobs_enabled and not self._delayed_jobs_called:
             self._delayed_jobs_called = True
@@ -4607,11 +4607,13 @@ class Node(object):
                 self.env.execute_basic_djobs(Node.DJOBS_PRIO_genfunc)
 
             # print('\n ********* DEBUG3 ************')
-            ret = self.get_value(conf=conf, recursive=recursive)
+            ret = self._get_value(conf=conf, recursive=recursive)
 
         return ret
 
-    def get_value(self, conf=None, recursive=True):
+    get_value = freeze
+
+    def _get_value(self, conf=None, recursive=True):
 
         if recursive:
             next_conf = conf
@@ -4633,7 +4635,7 @@ class Node(object):
                       "been associted to the Node.)".format(self.name))
             raise ValueError
 
-        ret, was_not_frozen = internal.get_value(conf=next_conf, recursive=recursive)
+        ret, was_not_frozen = internal._get_value(conf=next_conf, recursive=recursive)
 
         # print('\n DEBUG0: ', ret)
 
@@ -4642,7 +4644,7 @@ class Node(object):
             # We need to test self.env because an Node can be freezed
             # before being registered in the data model. It triggers
             # for instance when a generator Node is freezed
-            # (get_value() is called on it) during data model
+            # (_get_value() is called on it) during data model
             # construction.
             if internal.is_exhausted() and self.env is not None:
                 self.env.notify_exhausted_node(self)
@@ -4687,7 +4689,7 @@ class Node(object):
     get_flatten_value = to_bytes
 
     def _tobytes(self, conf=None, recursive=True):
-        val = self.get_value(conf=conf, recursive=recursive)
+        val = self._get_value(conf=conf, recursive=recursive)
         if not isinstance(val, bytes):
             val = list(flatten(val))
             val = b''.join(val)
@@ -4868,7 +4870,7 @@ class Node(object):
             return smaller_depth
 
         # in case the node is not frozen
-        self.get_value()
+        self._get_value()
 
         htable = self.get_all_paths(conf=conf)
         l = []
@@ -5013,7 +5015,7 @@ class Node(object):
 
 
     def __getitem__(self, key):
-        # self.get_value()
+        # self._get_value()
         if isinstance(key, str):
             return self.get_node_by_path(key)
         elif isinstance(key, NodeInternalsCriteria):
