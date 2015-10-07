@@ -886,10 +886,10 @@ class TestMisc(unittest.TestCase):
             if stop_loop:
                 break
             node.unfreeze()
-            
-            print("[#%d] " % i, transform(node.get_flatten_value()))
+            print("[#%d] %r" % (i, transform(node.to_bytes())))
             if node.env.exhausted_node_exists():
                 for e in node.env.get_exhausted_nodes():
+                    criteria_func(e)
                     if criteria_func(e):
                         print('--> exhausted node: ', e.name)
                         stop_loop = True
@@ -1028,9 +1028,25 @@ class TestMisc(unittest.TestCase):
         make_determinist()/finite() on NonTerm Node
         TODO: NEED assertion
         '''
-        loop_count = 20
+        loop_count = 50
 
         crit_func = lambda x: x.name == 'NonTerm'
+
+        print('\n -=[ determinist & finite (loop count: %d) ]=- \n' % loop_count)
+
+        nt  = dm.get_data('NonTerm')
+        nt.make_finite(all_conf=True, recursive=True)
+        nt.make_determinist(all_conf=True, recursive=True)
+        nb = self._loop_nodes(nt, loop_count, criteria_func=crit_func)
+        
+        self.assertEqual(nb, 6)
+
+        print('\n -=[ determinist & infinite (loop count: %d) ]=- \n' % loop_count)
+
+        nt  = dm.get_data('NonTerm')
+        nt.make_infinite(all_conf=True, recursive=True)
+        nt.make_determinist(all_conf=True, recursive=True)
+        self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
         print('\n -=[ random & infinite (loop count: %d) ]=- \n' % loop_count)
 
@@ -1042,22 +1058,9 @@ class TestMisc(unittest.TestCase):
 
         nt = dm.get_data('NonTerm')
         nt.make_finite(all_conf=True, recursive=True)
-        self._loop_nodes(nt, loop_count, criteria_func=crit_func)
+        nb = self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
-        print('\n -=[ determinist & finite (loop count: %d) ]=- \n' % loop_count)
-
-        nt  = dm.get_data('NonTerm')
-        nt.make_finite(all_conf=True, recursive=True)
-        nt.make_determinist(all_conf=True, recursive=True)
-        self._loop_nodes(nt, loop_count, criteria_func=crit_func)
-
-        print('\n -=[ determinist & infinite (loop count: %d) ]=- \n' % loop_count)
-
-        nt  = dm.get_data('NonTerm')
-        nt.make_infinite(all_conf=True, recursive=True)
-        nt.make_determinist(all_conf=True, recursive=True)
-        self._loop_nodes(nt, loop_count, criteria_func=crit_func)
-
+        self.assertEqual(nb, 6)
         
 
     def test_BitField_Attr_01(self):

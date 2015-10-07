@@ -1755,9 +1755,19 @@ class NodeInternals_NonTerm(NodeInternals):
         if exhaust_info is None:
             self.exhausted = False
             self.excluded_components = []
+            self.subcomp_exhausted = True
+            self.expanded_nodelist = []
+            self.expanded_nodelist_sz = None
+            self.expanded_nodelist_origsz = None
+            self.component_seed = None
         else:
             self.exhausted = exhaust_info[0]
             self.excluded_components = exhaust_info[1]
+            self.subcomp_exhausted = exhaust_info[2]
+            self.expanded_nodelist = None
+            self.expanded_nodelist_sz = exhaust_info[3]
+            self.expanded_nodelist_origsz = exhaust_info[4]
+            self.component_seed = exhaust_info[5]
 
         if mode is None:
             self.mode = 1
@@ -1929,7 +1939,9 @@ class NodeInternals_NonTerm(NodeInternals):
             new_nodes_drawn_qty = None
             new_exhaust_info = None
         else:
-            new_exhaust_info = [self.exhausted, copy.copy(self.excluded_components)]
+            new_exhaust_info = [self.exhausted, copy.copy(self.excluded_components),
+                                self.subcomp_exhausted, self.expanded_nodelist_sz, self.expanded_nodelist_origsz,
+                                self.component_seed]
             new_nodes_drawn_qty = copy.copy(self._nodes_drawn_qty)
             new_fl = []
             for e in self.frozen_node_list:
@@ -2131,52 +2143,123 @@ class NodeInternals_NonTerm(NodeInternals):
             return current_comp, current_idx
 
     @staticmethod
-    def _get_next_random_component(comp_list, excluded_idx=[]):
+    def _get_next_random_component(comp_list, excluded_idx=[], seed=None):
         total_weight = 0
         for idx, weight, comp in split_verbose_with(lambda x: isinstance(x, int), comp_list):
             if idx in excluded_idx:
                 continue
             total_weight += weight
 
-        r = random.uniform(0, total_weight)
+        if seed is None:
+            r = random.uniform(0, total_weight)
+        else:
+            r = seed
         s = 0
         for idx, weight, comp in split_verbose_with(lambda x: isinstance(x, int), comp_list):
             if idx in excluded_idx:
                 continue
             s += weight
             if s >= r:
-                return comp[0], idx
+                ret = comp[0], idx, r
+                break
         else:
-            return [], None
+            ret = [], None, r
 
-    # to be used only in Finite mode
-    def count_of_possible_cases(self):
-        return len(self.subnodes_csts) // 2
+        return ret
 
 
-    def _construct_subnodes(self, node, subnode_list, mode, ignore_sep_fstate, ignore_separator=False, lazy_mode=True):
-        if self.is_attr_set(NodeInternals.Determinist):
-            if len(node) == 3:
-                if node[2] == -1: # infinite case
-                    # for generation we limit to min+INFINITY_LIMIT
-                    nb = node[1] + NodeInternals_NonTerm.INFINITY_LIMIT
-                else:    
-                    nb = (node[1] + node[2]) // 2
+    # To be used only in Finite mode
+    def structure_will_change(self):
+
+        crit1 = (len(self.subnodes_csts) // 2) > 1
+
+        assert(self.expanded_nodelist is not None) # only possible during a Node copy
+        if self.expanded_nodelist_origsz is None:
+            # in this case we have never been frozen
+            self.get_subnodes_with_csts()
+        crit2 = self.expanded_nodelist_origsz > 1
+
+        # If crit2 is False while crit1 is also False, the structure
+        # will not change. If crit2 is False at some time, crit1 is
+        # then True, thus we always return the correct answer
+
+        return crit1 or crit2
+
+
+    @staticmethod
+    def _handle_node_desc(node_desc):
+        if len(node_desc) == 3:
+            assert(node_desc[1] > -2 and node_desc[2] > -2)
+            if node_desc[2] == -1 and node_desc[1] >= 0: # infinite case
+                mini = node_desc[1]
+                # for generation we limit to min+INFINITY_LIMIT
+                maxi = mini + NodeInternals_NonTerm.INFINITY_LIMIT
+            elif node_desc[2] == -1 and node_desc[1] == -1:
+                mini = maxi = NodeInternals_NonTerm.INFINITY_LIMIT
             else:
-                nb = NodeInternals_NonTerm.INFINITY_LIMIT if node[1] == -1 else node[1]
+                mini = node_desc[1]
+                maxi = node_desc[2]
         else:
-            if len(node) == 3:
-                if node[2] == -1: # infinite case
-                    # for generation we limit to min+INFINITY_LIMIT
-                    maxi = node[1] + NodeInternals_NonTerm.INFINITY_LIMIT
+            assert(node_desc[1] > -2)
+            mini = maxi = NodeInternals_NonTerm.INFINITY_LIMIT if node_desc[1] == -1 else node_desc[1]
+            
+        return node_desc[0], mini, maxi
+
+    def _copy_nodelist(self, node_list):
+        new_list = []
+        for delim, sublist in self.__iter_csts(node_list):
+            if delim[1] == '>' or delim[1:3] == '=.':
+                new_list.append([delim, copy.copy(sublist)])
+            elif delim[1:3] == '=+':
+                new_list.append([delim, [sublist[0], copy.copy(sublist[1])]])
+        return new_list
+
+    def _generate_expanded_nodelist(self, node_list):
+        expanded_node_list = []
+        for idx, delim, sublist in self.__iter_csts_verbose(node_list):
+            if delim[1] == '>' or delim[1:3] == '=.':
+                for i, node_desc in enumerate(sublist):
+                    node, mini, maxi = self._handle_node_desc(node_desc)
+                    if mini == 0 and maxi > 0:
+                        new_nlist = self._copy_nodelist(node_list)
+                        new_nlist[idx][1][i] = [node, 0]
+                        expanded_node_list.insert(0, new_nlist)
+                        new_nlist = self._copy_nodelist(node_list)
+                        new_nlist[idx][1][i] = [node, 1, maxi]
+                        expanded_node_list.insert(0, new_nlist)
+            elif delim[1:3] == '=+':
+                new_delim = delim[0] + '>'
+                if sublist[0] > -1:
+                    for weight, comp in split_with(lambda x: isinstance(x, int), sublist[1]):
+                        node, mini, maxi = self._handle_node_desc(comp[0])
+                        new_nlist = self._copy_nodelist(node_list)
+                        new_nlist[idx] = [new_delim, [[node, mini, maxi]]]
+                        expanded_node_list.insert(0, new_nlist)
                 else:
-                    maxi = node[2]
-                nb = random.randint(node[1], maxi)
+                    for node_desc in sublist[1]:
+                        node, mini, maxi = self._handle_node_desc(node_desc)
+                        new_nlist = self._copy_nodelist(node_list)
+                        new_nlist[idx] = [new_delim, [[node, mini, maxi]]]
+                        expanded_node_list.insert(0, new_nlist)
             else:
-                nb = NodeInternals_NonTerm.INFINITY_LIMIT if node[1] == -1 else node[1]
+                raise ValueError
 
-        node_attrs = node[1:]
-        node = node[0]
+        if not expanded_node_list:
+            expanded_node_list.append(node_list)
+
+        return expanded_node_list
+
+
+    def _construct_subnodes(self, node_desc, subnode_list, mode, ignore_sep_fstate, ignore_separator=False, lazy_mode=True):
+        
+        node_attrs = node_desc[1:]
+        # node = node_desc[0]
+        node, mini, maxi = self._handle_node_desc(node_desc)
+
+        if self.is_attr_set(NodeInternals.Determinist):
+            nb = (mini + maxi) // 2
+        else:
+            nb = random.randint(mini, maxi)
 
         qty = self._qty_from_node(node)
         if qty is not None:
@@ -2188,12 +2271,6 @@ class NodeInternals_NonTerm(NodeInternals):
                 if node.env and node.env.delayed_jobs_enabled and lazy_mode:
                     node.set_attr(NodeInternals.DISABLED)
                     node.set_private((self, node_attrs, mode, ignore_sep_fstate, ignore_separator))
-                    # wrap_node = Node('SAVE')
-                    # wrap_node.cc = self
-                    # wrap_node.env = node.env
-                    # priv = PrivateData(args=(node_attrs, mode, ignore_sep_fstate, ignore_separator),
-                    #                    node=wrap_node)
-                    # node.set_private(priv)
                     subnode_list.append(node)
                 return
 
@@ -2290,30 +2367,62 @@ class NodeInternals_NonTerm(NodeInternals):
         
         if determinist:
 
-            node_list, idx = NodeInternals_NonTerm._get_next_heavier_component(self.subnodes_csts,
-                                                                               excluded_idx=self.excluded_components)
-            self.excluded_components.append(idx)
-            # 'len(self.subnodes_csts)' is always even
-            if len(self.excluded_components) == len(self.subnodes_csts) // 2:
-                # in this case we have exhausted all components
-                # note that self.excluded_components is reset in a lazy way (within unfreeze)
-                self.exhausted = True
-            else:
-                self.exhausted = False
+            if self.subcomp_exhausted:
+                self.subcomp_exhausted = False
 
-        else:
-            if self.is_attr_set(NodeInternals.Finite):
-                node_list, idx = NodeInternals_NonTerm._get_next_random_component(self.subnodes_csts,
-                                                                                  excluded_idx=self.excluded_components)
+                node_list, idx = self._get_next_heavier_component(self.subnodes_csts,
+                                                                  excluded_idx=self.excluded_components)
                 self.excluded_components.append(idx)
+                # 'len(self.subnodes_csts)' is always even
                 if len(self.excluded_components) == len(self.subnodes_csts) // 2:
+                    # in this case we have exhausted all components
+                    # note that self.excluded_components is reset in a lazy way (within unfreeze)
                     self.exhausted = True
                 else:
                     self.exhausted = False
-            else:
-                node_list = NodeInternals_NonTerm._get_random_component(self.subnodes_csts,
-                                                                        self.subnodes_csts_total_weight)
 
+        else:
+            if self.is_attr_set(NodeInternals.Finite):
+                if self.subcomp_exhausted:
+                    self.subcomp_exhausted = False
+
+                    node_list, idx, self.component_seed = self._get_next_random_component(self.subnodes_csts,
+                                                                                          excluded_idx=self.excluded_components)
+                    self.excluded_components.append(idx)
+                    if len(self.excluded_components) == len(self.subnodes_csts) // 2:
+                        self.exhausted = True
+                    else:
+                        self.exhausted = False
+            else:
+                node_list = self._get_random_component(self.subnodes_csts,
+                                                       self.subnodes_csts_total_weight)
+
+        if self.is_attr_set(NodeInternals.Finite) or determinist:
+            if self.expanded_nodelist is None:
+                # This case occurs when we are a copy of a node and we
+                # keeping the state of the original node was
+                # requested. But the state is kept to the minimum to
+                # avoid memory waste, thus we need to reconstruct
+                # dynamically some part of the state
+                if determinist:
+                    node_list, idx = self._get_next_heavier_component(self.subnodes_csts,
+                                                                      excluded_idx=self.excluded_components)
+                else:
+                    node_list, idx, self.component_seed = self._get_next_random_component(self.subnodes_csts,
+                                                                                          excluded_idx=self.excluded_components,
+                                                                                          seed=self.component_seed)
+                self.expanded_nodelist = self._generate_expanded_nodelist(node_list)
+                self.expanded_nodelist_origsz = len(self.expanded_nodelist)
+                self.expanded_nodelist = self.expanded_nodelist[:self.expanded_nodelist_sz]
+
+            elif not self.expanded_nodelist: # that is == []
+                self.expanded_nodelist = self._generate_expanded_nodelist(node_list)
+                self.expanded_nodelist_origsz = len(self.expanded_nodelist)
+
+            node_list = self.expanded_nodelist.pop(-1)
+            self.expanded_nodelist_sz = len(self.expanded_nodelist)
+            if not self.expanded_nodelist:
+                self.subcomp_exhausted = True
 
         for delim, sublist in self.__iter_csts(node_list):
 
@@ -3070,7 +3179,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
     def is_exhausted(self):
         if self.is_attr_set(NodeInternals.Finite):
-            return self.exhausted
+            return self.exhausted and self.subcomp_exhausted
         else:
             return False
 
@@ -5154,7 +5263,7 @@ class DJobGroup(object):
         self.node_list = node_list
 
     def __id__(self):
-        return id(self)
+        return id(self.node_list)
 
     def __iter__(self):
         for n in self.node_list:

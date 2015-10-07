@@ -212,8 +212,7 @@ class ModelWalker(object):
                     again = False
 
                 if node.is_nonterm():
-                    length = node.cc.count_of_possible_cases()
-                    structure_has_changed = False if length == 1 else True
+                    structure_has_changed = node.cc.structure_will_change()
 
                 if structure_has_changed and self._consumer.need_reset_when_structure_change:
 
