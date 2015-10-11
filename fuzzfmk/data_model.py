@@ -857,7 +857,7 @@ class DynNode_Helpers(object):
     def __init__(self):
         self._graph_info = []
         self._node_pos = {}
-        self._curr_pos = -1
+        self._curr_pos = 0
 
     def __copy__(self):
         new_obj = type(self)()
@@ -869,13 +869,13 @@ class DynNode_Helpers(object):
     def set_graph_info(self, node, info):
         if id(node) not in self._node_pos.keys():
             # print(node.name, id(node))
-            self._curr_pos += 1
+            self._curr_pos -= 1
             self._node_pos[id(node)] = self._curr_pos
 
-        if self._curr_pos < len(self._graph_info):
+        if -self._node_pos[id(node)] <= len(self._graph_info):
             self._graph_info[self._node_pos[id(node)]] = (info, node.name)
         else:
-            self._graph_info.append((info, node.name))
+            self._graph_info.insert(0,(info, node.name))
 
 
     def make_private(self, env=None):
@@ -902,7 +902,8 @@ class DynNode_Helpers(object):
 
 
     def _get_graph_info(self):
-        return list(reversed(self._graph_info))
+        return self._graph_info
+        # return list(reversed(self._graph_info))
 
     graph_info = property(fget=_get_graph_info)
 
