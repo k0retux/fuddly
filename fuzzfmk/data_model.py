@@ -377,12 +377,23 @@ class NodeCondition(object):
 
 class RawCondition(NodeCondition):
 
-    def __init__(self, val):
+    def __init__(self, val=None, neg_val=None):
         '''
         Args:
-          val (bytes): byte representation (or list of byte representation)
-            that satisfy the condition
+          val (bytes): byte representation (or list of byte representations)
+            that satisfies the condition
+          neg_val (bytes): byte representation (or list of byte representations)
+            that does NOT satisfy the condition
         '''
+        assert((val is not None and neg_val is None) or (val is None and neg_val is not None))
+        if val is not None:
+            self.positive_mode = True
+            self._handle_cond(val)
+        elif neg_val is not None:
+            self.positive_mode = False
+            self._handle_cond(neg_val)
+
+    def _handle_cond(self, val):
         if isinstance(val, tuple) or isinstance(val, list):
             self.val = []
             for v in val:
@@ -391,32 +402,51 @@ class RawCondition(NodeCondition):
             self.val = convert_to_internal_repr(val)
 
     def check(self, node):
-        if isinstance(self.val, tuple) or isinstance(self.val, list):
-            result = node._tobytes() in self.val
+        if self.positive_mode:
+            if isinstance(self.val, tuple) or isinstance(self.val, list):
+                result = node._tobytes() in self.val
+            else:
+                result = node._tobytes() == self.val
         else:
-            result = node._tobytes() == self.val
+            if isinstance(self.val, tuple) or isinstance(self.val, list):
+                result = node._tobytes() not in self.val
+            else:
+                result = node._tobytes() != self.val
 
         return result
 
 
 class IntCondition(NodeCondition):
 
-    def __init__(self, val):
+    def __init__(self, val=None, neg_val=None):
         '''
         Args:
-          val (int): integer (or integer list) that satisfy the condition
+          val (int): integer (or integer list) that satisfies the condition
+          neg_val (int): integer (or integer list) that does NOT satisfy the condition
         '''
-        self.val = val
+        assert((val is not None and neg_val is None) or (val is None and neg_val is not None))
+        if val is not None:
+            self.positive_mode = True
+            self.val = val
+        elif neg_val is not None:
+            self.positive_mode = False
+            self.val = neg_val
 
     def check(self, node):
         from fuzzfmk.value_types import INT
         assert(node.is_typed_value(subkind=INT))
 
         if isinstance(self.val, tuple) or isinstance(self.val, list):
-            result = node.get_current_raw_val() in self.val
+            if self.positive_mode:
+                result = node.get_current_raw_val() in self.val
+            else:
+                result = node.get_current_raw_val() not in self.val
         else:
             assert(isinstance(self.val, int))
-            result = node.get_current_raw_val() == self.val
+            if self.positive_mode:
+                result = node.get_current_raw_val() == self.val
+            else:
+                result = node.get_current_raw_val() != self.val
 
         return result
 
@@ -4917,7 +4947,7 @@ class Node(object):
             return smaller_depth
 
         # in case the node is not frozen
-        self._get_value()
+        self.get_value()
 
         htable = self.get_all_paths(conf=conf)
         l = []

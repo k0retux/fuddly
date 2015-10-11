@@ -216,7 +216,7 @@ class MyDF_DataModel(DataModel):
                    'contents': String(val_list=['*1*0*'])},
 
                   {'name': 'A3_deco2',
-                   'exists_if': (IntCondition([20, 30]), 'A3_int'),
+                   'exists_if': (IntCondition(neg_val=[10]), 'A3_int'),
                    'contents': String(val_list=['+2+0+3+0+'])}
               ]},
 
