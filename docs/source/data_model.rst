@@ -288,10 +288,307 @@ all defined as static methods of
 
 
 
+.. _dm:keywords:
+
+Data Model Keywords
+===================
+
+This section describe the *keywords* that you could use within the
+frame of the :class:`fuzzfmk.data_model_helpers.ModelHelper`
+infrastructure. This infrastructure enables you to describe a data
+format in a JSON-like fashion, and will automatically translate this
+description to ``fuddly``'s internal data representation.
+
+
+.. todo:: Describe all the keywords
+
+
+Generic Description Keywords
+----------------------------
+
+name
+  Within ``fuddly``'s data model every node has a name that should be
+  unique only within its siblings. But when it comes to use the
+  :class:`fuzzfmk.data_model_helpers.ModelHelper` infrastructure to
+  describe your data format, if you want to use the same name in a
+  data model description, you have to add an extra key to keep it
+  unique within the description, and thus allowing you to refer to
+  this node anywhere in the description. The following example result
+  in giving the same name to different nodes::
+    
+    'my_name'
+    ('my_name', 2)
+    ('my_name', 'of the command')
+
+  These names serve as *node references* during data description.
+
+
+contents
+  Every node description has at least a ``name`` and a ``contents``
+  attributes (except if you refer to an already existing node, and in
+  this case you have to use only the name attribute with the targeted
+  node reference). The type of the node you describe will directly
+  depends on what you provide in this field:
+
+  - a python ``list`` will be considered as a non-terminal node;
+  - a *Value Type* (refer to :ref:`vt:value-types`) will define a
+    terminal node
+  - a python ``function`` (or everything with a ``__call__`` method)
+    will be considered as a generator.
+
+  Note that for defining a *function node* and not a generator node,
+  you have to state the type attribute to ``MH.Leaf``.
+
+qty
+  Specify the amount of nodes to generate from the description, or a
+  tuple ``(min, max)`` specifying the minimum (which can be 0) and the
+  maximum of node instances you want ``fuddly`` to generate.
+
+  Note ``-1`` means infinity. It makes only sense for absorption
+  operation (refer to :ref:`tuto:dm-absorption`), because for data
+  generation, a strict limit
+  (:const:`fuzzfmk.data_model.NodeInternals_NonTerm.INFINITY_LIMIT`)
+  is set to avoid getting unintended too big data. If you intend to
+  get such kind of data, specify explicitly the maximum, or use a
+  disruptor to do so (:ref:`tuto:disruptors`).
+
+
+clone
+  Allows to make a full copy of an existing node by providing its
+  reference.
+
+type
+  Used only by the :class:`fuzzfmk.data_model_helpers.ModelHelper`
+  infrastructure if there is an ambiguity to determine the node
+  type. This attributes accept the following values:
+
+  - ``MH.Leaf``: to specify a terminal node, either a *value type* or a
+    *function*.
+  - ``MH.NonTerminal``: to specify a *non terminal* node.
+  - ``MH.Generator``: to specify a *generator* node.
+
+
+alt
+  Allows to specify alternative contents, by providing a list of
+  descriptors like here under:
+
+  .. code-block:: python
+
+     'alt': [ {'conf': 'config_n1',
+	       'contents': SINT8(int_list=[1,4,8])},
+	      {'conf': 'config_n2',
+	       'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
+	       'determinist': True} ]
+
+
+conf
+  Used within the scope of the description of an alternative
+  configuration. It set the name of the alternative configuration.
+
+
+mode
+  [to be explained]
+
+
+
+Keywords to Describe Non Terminal Node
+--------------------------------------
+
+shape_type
+  Allows to choose the order to be enforce by a non-terminal node to
+  its children. ``MH.Ordered`` specifies that the children should be
+  kept strictly in the order of the description. ``MH.Random``
+  specifies there is no order to enforce between any *node descriptor*
+  (which can expand to several nodes), except if the parent node has the
+  ``determinist`` attribute. ``MH.FullyRandom`` specifies there is no
+  order to enforce between every single nodes. ``MH.Pick`` specifies
+  that only one node among the children should be kept at a time---the
+  choice is randomly performed except if the parent has the
+  ``determinist`` attribute---as per the weight associated to each
+  child node.
+
+weight
+  Used within the scope of a shape description for a non-terminal
+  node. A non-terminal node can organize all its child nodes in
+  various way by describing different shapes. Each shape has a weight
+  which is used either---when the non-terminal node is random---as a
+  way to determine the chance that ``fuddly`` we use it during the data
+  generation process, or as a mean to order the shape---when the node
+  is put in determinist mode. Let's look at the example here under:
+
+  .. code-block:: python
+
+        {'name': 'test',
+         'contents': [
+
+	      # SHAPE 1
+	      {'weight': 20,
+	       'contents': [
+		   {'section_type': MH.Random,
+		    'contents': [
+			{'contents': String(max_sz=10),
+			 'name': 'val1',
+			 'qty': (1, 5)},
+			 
+	       ...
+
+	      # SHAPE 2
+	      {'weight': 10,
+	       'contents': [
+		   {'section_type': MH.FullyRandom,
+		    'contents': [
+			{'name': 'val1'},
+
+	       ...
+
+  .. note:: A *shape description* is composed of the two attributes
+	    ``weight`` and ``contents``.
+
+
+
+section_type
+  Similar to ``shape_type`` keyword. But only valid for describing a
+  section within a non-terminal node, and limited to this section. The
+  following example illustrates that:
+
+  .. code-block:: python
+
+     {'name': 'test',
+      'shape_type': MH.Random
+      'contents': [
+      
+	     {'name': 'val1',
+	      'contents': String(val_list=['OK', 'KO']),
+	      'qty': (0, 5)},
+
+             {'section_type': MH.Ordered,
+              'contents': [
+
+		     {'name': 'val2',
+		      'contents': UINT16_be(int_list=[10, 20, 30])},
+
+		     {'name': 'val3',
+		      'contents': String(min_sz=2, max_sz=10, alphabet='XYZ')},
+
+		     {'name': 'val4',
+		      'contents': UINT32_le(int_list=[0xDEAD, 0xBEEF])},
+
+	      ]}
+
+	     {'name': 'val5',
+	      'contents': String(val_list=['OPEN', 'CLOSE']),
+	      'qty': 3}
+     ]}
+
+
+
+
+duplicate_mode
+  [to be explained]
+
+weights
+  To be used optionally in the frame of a non-terminal node along with
+  a ``MH.Pick`` type. If used this attribute shall contains an integer
+  tuple describing the weight for each one of the subsequent nodes to
+  be picked. Can be used within a section description, or directly in
+  the non-terminal nodes, if it has a ``MH.Pick`` type.
+
+separator
+  [to be explained]
+
+prefix
+  [to be explained]
+
+suffix
+  [to be explained]
+
+unique
+  [to be explained]
+
+
+
+Keywords to Describe Generator Node
+-----------------------------------
+
+
+node_args
+  [to be explained]
+
+other_args
+  [to be explained]
+
+provide_helpers
+  [to be explained]
+
+trigger_last
+  The triggering of a generator is postpone until everything else has
+  been resolved, when this keyword is set to `True`. It is especially
+  useful when you describe a generator that use a node with an
+  existence condition and when this condition cannot be resolved at
+  the time the generator will normally be triggered (that is when it
+  is reached during the nominal graph traversal).
+
+
+Keywords to Import External Data Description
+--------------------------------------------
+
+import_from
+  Name of the data model to import a data description from
+
+data_id
+  Name of the data description to import
+
+
+Keywords to Describe Node Properties
+------------------------------------
+
+
+determinist
+  make the node behave in a deterministic way
+
+random
+  make the node behave in a random way
+
+clear_attrs
+  [to be explained]
+
+set_attrs
+  [to be explained]
+
+absorb_csts
+  [to be explained]
+
+absorb_helper
+  [to be explained]
+
+semantics
+  [to be explained]
+
+fuzz_weight
+  [to be explained]
+
+sync_qty_with
+  Allows to synchronize the number of node instances to generate or to
+  absorb with the one specified by reference.
+
+
+exists_if
+  [to be explained]
+
+exists_if_not
+  [to be explained]
+
+post_freeze
+  [to be explained]
+
+
+
+
+
 .. _dm:patterns:
 
-Data Model Patterns & Keywords
-==============================
+Data Model Patterns
+===================
 
 
 How to Describe the Separators Used within a Data Format
@@ -432,6 +729,10 @@ that purpose the keyword ``exists_if`` with some subclasses of
 	  'exists_if': (BitFieldCondition(sf=2, val=5), 'A3_subopcode')}
      ]}
 
+.. note:: Existence condition does not have to be located after the
+          node you want to check, it can also be located
+          before. Fuddly will postpone the condition checking in this
+          case.
 
 Example of data generated by such a data model are presented below (in ASCII art):
 
@@ -701,3 +1002,15 @@ Here under an example of data generated by such a data model (in ASCII art):
 Which correspond to the following data::
 
   '\x00\x06\x00\x01\x00\x01\x00\x06\x00\x06\x00\x01\x00\x01\x00\x00\x00\x02\x00\x00\x00\x03\x00\x00\x00\x02\x07\x03170140\x06\x9cK\xca'
+
+
+.. seealso:: You may delay the triggering of a generator, until
+             everything else has been resolved. It is especially
+             useful when you describe a generator that use a node with
+             an existence condition and when this condition cannot be
+             resolved at the time the generator will normally be
+             triggered (that is when it is reached during the nominal
+             graph traversal). To postpone this triggering, you have
+             to set the generator-specific keyword ``trigger_last`` to
+             `True`. Refer to :ref:`dm:keywords` for more information
+             on the available keywords.

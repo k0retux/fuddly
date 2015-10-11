@@ -237,8 +237,10 @@ class MH:
 
             def __call__(self, helper):
                 info = helper.graph_info
+                # print('INFO: ', info)
                 try:
-                    idx, total = info[self.depth]
+                    clone_info, name = info[self.depth]
+                    idx, total = clone_info
                 except:
                     idx = 0
                 idx = idx % self.vals_sz
@@ -352,8 +354,8 @@ class ModelHelper(object):
         'separator', 'prefix', 'suffix', 'unique',
         # Generator/Function description keys
         'node_args', 'other_args', 'provide_helpers', 'trigger_last',
-        # Export description keys
-        'export_from', 'data_id',        
+        # Import description keys
+        'import_from', 'data_id',        
         # node properties description keys
         'determinist', 'random', 'clear_attrs', 'set_attrs',
         'absorb_csts', 'absorb_helper',
@@ -449,11 +451,11 @@ class ModelHelper(object):
     def __handle_clone(self, desc, parent_node):
         name, ident = self._handle_name(desc['name'])
 
-        exp = desc.get('export_from', None)
+        exp = desc.get('import_from', None)
         if exp is not None:
             assert self.dm is not None, "ModelHelper should be initialized with the current data model!"
             data_id = desc.get('data_id', None)
-            assert data_id is not None, "Missing field: 'data_id' (to be used with 'export_from' field)"
+            assert data_id is not None, "Missing field: 'data_id' (to be used with 'import_from' field)"
             nd = self.dm.get_external_node(dm_name=exp, data_id=data_id, name=name)
             assert nd is not None, "The requested data ID '{:s}' does not exist!".format(data_id)
             self.node_dico[(name, ident)] = nd
@@ -517,7 +519,7 @@ class ModelHelper(object):
                                  provide_helpers=provide_helpers, conf=conf)
             trig_last = desc.get('trigger_last', False)
             if trig_last:
-                n.cc.trigger_last = True
+                n.set_attr(NodeInternals.TriggerLast, conf=conf)
             if node_args is not None:
                 # node_args interpretation is postponed after all nodes has been created
                 self._register_todo(n, self._complete_generator, args=(node_args, conf), unpack_args=True,

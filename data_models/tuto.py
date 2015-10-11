@@ -50,7 +50,7 @@ class MyDF_DataModel(DataModel):
                             'clone': 'val1'},
                            
                            {'name': 'USB_desc',
-                            'export_from': 'usb',
+                            'import_from': 'usb',
                             'data_id': 'STR'},
                            
                            {'type': MH.Generator,
@@ -305,9 +305,49 @@ class MyDF_DataModel(DataModel):
          ]}
 
 
-        self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
-                      sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc)
 
+        shape_desc = \
+        {'name': 'shape',
+         'separator': {'contents': {'name': 'sep',
+                                    'contents': String(val_list=[' [!] '])}},
+         'contents': [
+
+             {'weight': 20,
+              'contents': [
+                  {'name': 'prefix1',
+                   'contents': String(size=10, alphabet='+')},
+
+                  {'name': 'body_top',
+                   'contents': [
+
+                       {'name': 'body',
+                        'separator': {'contents': {'name': 'sep2',
+                                                   'contents': String(val_list=['::'])}},
+                        'shape_type': MH.Random, # ignored in determnist mode
+                        'contents': [
+                            {'contents': String(val_list=['AAA']),
+                             'qty': (0, 4),
+                             'name': 'str'},
+                            {'contents': UINT8(int_list=[0x3E]), # chr(0x3E) == '>'
+                             'name': 'int'}
+                        ]}
+                   ]}
+
+              ]},
+
+             {'weight': 20,
+              'contents': [
+                  {'name': 'prefix2',
+                   'contents': String(size=10, alphabet='>')},
+
+                  {'name': 'body'}
+              ]}
+         ]}
+
+
+        self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
+                      sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
+                      shape_desc)
 
 
 data_model = MyDF_DataModel()

@@ -73,6 +73,7 @@ class ModelWalker(object):
         assert(self._max_steps > 0 or self._max_steps == -1)
 
         self.ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable, dm.NodeInternals.Finite])
+        self.triglast_ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.TriggerLast])
 
         self.set_consumer(node_consumer)
 
@@ -107,6 +108,14 @@ class ModelWalker(object):
         return
 
 
+    def _do_reset(self, node):
+        last_gen = self._root_node.get_reachable_nodes(internals_criteria=self.triglast_ic)
+        for n in last_gen:
+            n.unfreeze()
+        node.unfreeze(recursive=True, dont_change_state=True)
+        node.unfreeze(recursive=False)
+        self._consumer.do_after_reset(node)
+
     def walk_graph_rec(self, node_list, value_not_yielded_yet, structure_has_changed, consumed_nodes):
 
         reset = False
@@ -128,9 +137,6 @@ class ModelWalker(object):
 
             while again:
                 again = False                  
-
-                if not value_not_yielded_yet:
-                    value_not_yielded_yet = False
 
                 if reset or value_not_yielded_yet:
                     value_not_yielded_yet = self._consumer.yield_original_val
@@ -154,7 +160,6 @@ class ModelWalker(object):
                                                     structure_has_changed, consumed_nodes)
                     for consumed_node, orig_node_val in generator:
                         yield consumed_node, orig_node_val # YIELD
-
 
                 ### STEP 2 ###
 
@@ -182,6 +187,7 @@ class ModelWalker(object):
                         if ignore_node and reset:
                             perform_second_step = False
                             again = True
+                            self._do_reset(node)
                             break
                         elif ignore_node and not reset:
                             perform_second_step = False
@@ -190,6 +196,7 @@ class ModelWalker(object):
                         elif reset:
                             perform_second_step = True
                             again = True
+                            self._do_reset(node)
                             break
                         else:
                             perform_second_step = True
@@ -200,14 +207,14 @@ class ModelWalker(object):
                         else:
                             value_not_yielded_yet = True
 
+                # We reach this case if the consumer is not interested
+                # with 'node'.  Then if the node is not exhausted we
+                # may have new cases where the consumer will find
+                # something (assuming the consumer accepts to reset).
                 elif self._consumer.need_reset(node) and not node.is_exhausted():
                     again = True
                     # Not consumed so we don't unfreeze() with recursive=True
-                    # node.reset_state(recursive=True, exclude_self=True)
-                    # node.unfreeze(recursive=False)
-                    node.unfreeze(recursive=True, dont_change_state=True)
-                    node.unfreeze(recursive=False)
-
+                    self._do_reset(node)
                 else:
                     again = False
 
@@ -246,6 +253,17 @@ class ModelWalker(object):
 
     def node_consumer_helper(self, node, structure_has_changed, consumed_nodes):
 
+        def _do_if_not_interested(node, orig_node_val):
+            reset = self._consumer.need_reset(node)
+            if reset and not node.is_exhausted():
+                return node, orig_node_val, True, True # --> x, x, reset, ignore_node
+            elif reset and node.is_exhausted():
+                return None, None, False, True # --> x, x, reset, ignore_node
+            elif node.is_exhausted():
+                return node, orig_node_val, False, True
+            else:
+                return node, orig_node_val, False, True
+
         orig_node_val = node.get_flatten_value()
 
         not_recovered = False
@@ -260,80 +278,55 @@ class ModelWalker(object):
         else:
             go_on = False
 
-        if go_on:
-            consumed_nodes.add(node)
-            node.get_value()
-            not_recovered = True
-        else:
-            # that means forget what has been saved (don't recover)
-            not_recovered = False
+        if not go_on:
+            yield _do_if_not_interested(node, orig_node_val)
+            raise ValueError  # We should never return here, otherwise its a bug we want to alert on
+
+        consumed_nodes.add(node)
+        node.get_value()
+        not_recovered = True
 
         max_steps = self._consumer.wait_for_exhaustion(node)
         again = True
 
-        # We enter this loop only if the consumer is interested by the node
+        # We enter this loop only if the consumer is interested by the
+        # node.
         while again:
             reset = self._consumer.need_reset(node)
 
             if reset and not node.is_exhausted():
 
-                if go_on:
-                    yield node, orig_node_val, True, False # --> x, x, reset, dont_ignore_node
-                else:
-                    # node.reset_state(recursive=True, exclude_self=True)
-                    # node.unfreeze(recursive=False)
-                    node.unfreeze(recursive=True, dont_change_state=True)
-                    node.unfreeze(recursive=False)
-
-                    yield node, orig_node_val, True, True # --> x, x, reset, ignore_node
-                    raise ValueError
+                yield node, orig_node_val, True, False # --> x, x, reset, dont_ignore_node
             
             elif reset and node.is_exhausted():
 
                 yield None, None, False, True # --> x, x, reset, ignore_node
-                raise ValueError
+                raise ValueError  # We should never return here, otherwise its a bug we want to alert on
 
             elif node.is_exhausted(): # --> (reset and node.is_exhausted()) or (not reset and node.is_exhausted())
 
-                if go_on:
-                    yield node, orig_node_val, False, False
-                else:
-                    yield node, orig_node_val, False, True
-                    raise ValueError
+                yield node, orig_node_val, False, False
 
                 if self._consumer.interested_by(node):
-                    # if not_recovered:
-                    #     # We have exhausted the consumed node, so recover it
-                    #     self._consumer.recover_node(node)
-                    #     not_recovered = True
-
                     if self._consumer.still_interested_by(node):
-                        go_on = self._consumer.consume_node(node)
+                        self._consumer.consume_node(node)
                     else:
-                        go_on = False
+                        self._consumer.recover_node(node)
+                        yield _do_if_not_interested(node, orig_node_val)
+                        raise ValueError  # We should never return here, otherwise its a bug we want to alert on
 
                     consume_called_again = True
 
-                    if go_on:
-                        node.get_value()
-                        not_recovered = True
-                    else:
-                        self._consumer.recover_node(node)
-                        # that means forget what has been saved (don't recover)
-                        not_recovered = False
+                    node.get_value()
+                    not_recovered = True
                 else:
                     if node in consumed_nodes:
-                        print('\n****TEST')
                         self._consumer.recover_node(node)
                         not_recovered = False
                     return
 
             else:
-                if go_on:
-                    yield node, orig_node_val, False, False
-                else:
-                    yield node, orig_node_val, False, True
-                    raise ValueError
+                yield node, orig_node_val, False, False
 
             if max_steps != 0 and not consume_called_again:
                 max_steps -= 1
@@ -344,11 +337,6 @@ class ModelWalker(object):
                 if not_recovered and (self._consumer.interested_by(node) or node in consumed_nodes):
                     self._consumer.recover_node(node)
                     if not node.is_exhausted() and self._consumer.need_reset(node):
-                        # node.reset_state(recursive=True, exclude_self=True)
-                        # node.unfreeze(recursive=False)
-                        node.unfreeze(recursive=True, dont_change_state=True)
-                        node.unfreeze(recursive=False)
-
                         yield None, None, True, True
                 again = False
 
@@ -361,7 +349,7 @@ class ModelWalker(object):
 
 class NodeConsumerStub(object):
     '''
-    TOFIX: when respect_order=False, BasicVisitor & NonTermVisitor
+    TOFIX (TBC since last cleanup): when respect_order=False, BasicVisitor
     behave strangely (not the same number of yielded values).
     --> to be investigated (maybe wrong implementation of BasicVisitor and NonTermVisitor)
     '''
@@ -431,6 +419,9 @@ class NodeConsumerStub(object):
             return True
         else:
             return False
+
+    def do_after_reset(self, node):
+        pass
 
     def wait_for_exhaustion(self, node):
         '''
@@ -557,18 +548,60 @@ class BasicVisitor(NodeConsumerStub):
 
 
 
+# class NonTermVisitor_OLD(BasicVisitor):
+
+#     def init_specific(self, args):
+#         self.consumed = False
+#         self._internals_criteria = None
+#         self._internals_criteria = dm.NodeInternalsCriteria(negative_node_kinds=[dm.NodeInternals_NonTerm],
+#                                                             negative_attrs=[dm.NodeInternals.Separator])
+
+#     def need_reset(self, node):
+#         if node.is_nonterm():
+#             self.consumed = False
+#             return True
+#         else:
+#             return False
+
+#     def consume_node(self, node):
+#         DEBUG_PRINT('--(in consumer)-> Node:' + node.name)
+#         if not self.consumed and not node.is_nonterm():
+#             self.consumed = True
+#             return True
+#         else:
+#             return False
+
+#     def still_interested_by(self, node):
+#         return False
+
+#     def wait_for_exhaustion(self, node):
+#         if node.is_nonterm():
+#             return -1 # wait until exhaustion
+#         else:
+#             return 0
+
+
 class NonTermVisitor(BasicVisitor):
 
     def init_specific(self, args):
         self.consumed = False
         self._internals_criteria = None
+        self._internals_criteria = dm.NodeInternalsCriteria(negative_node_kinds=[dm.NodeInternals_NonTerm])
+        self.current_nt_node = None
 
     def need_reset(self, node):
-        if node.is_nonterm():
-            self.consumed = False
+        if node.is_nonterm() and node is not self.current_nt_node and node.cc.structure_will_change():
+            # this case is called outside node_consumer_helper(),
+            # because we declared to only be interested with other
+            # kinds of node. Thus it will trigger node.unfreeze()
             return True
         else:
+            # Here we already have consumed the node, we don't want a reset
             return False
+
+    def do_after_reset(self, node):
+        self.consumed = False
+        self.current_nt_node = node
 
     def consume_node(self, node):
         if not self.consumed and not node.is_nonterm():
@@ -581,10 +614,7 @@ class NonTermVisitor(BasicVisitor):
         return False
 
     def wait_for_exhaustion(self, node):
-        if node.is_nonterm():
-            return -1 # wait until exhaustion
-        else:
-            return 0
+        return 0
 
 
 

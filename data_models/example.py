@@ -370,7 +370,7 @@ class Example_DataModel(DataModel):
                              'clone': 'val1'},
 
                             {'name': 'USB_desc',
-                             'export_from': 'usb',
+                             'import_from': 'usb',
                              'data_id': 'STR'},
 
                             {'type': MH.Generator,

@@ -287,7 +287,7 @@ def convert_to_internal_repr(val):
 def unconvert_from_internal_repr(val):
     assert(isinstance(val, bytes))
     if sys.version_info[0] > 2:
-        val = val.decode()
+        val = val.decode('latin_1')
     return val
 
 
@@ -460,8 +460,9 @@ class NodeInternals(object):
 
     CloneExtNodeArgs = 7
     ResetOnUnfreeze = 8
+    TriggerLast = 9
 
-    Separator = 9
+    Separator = 15
 
     DISABLED = 100
 
@@ -483,6 +484,7 @@ class NodeInternals(object):
             NodeInternals.CloneExtNodeArgs: False,
             # Used for Gen
             NodeInternals.ResetOnUnfreeze: True,
+            NodeInternals.TriggerLast: False,
             # Used to distinguish separator
             NodeInternals.Separator: False,
 
@@ -710,7 +712,7 @@ class NodeInternals(object):
     def get_private(self):
         return self.private
 
-    def set_clone_info(self, info):
+    def set_clone_info(self, info, node):
         '''
         Report to Node._set_clone_info() some information about graph
         internals
@@ -823,12 +825,56 @@ class NodeInternalsCriteria(object):
 class DynNode_Helpers(object):
     
     def __init__(self):
-        self.graph_info = []
+        self._graph_info = []
+        self._node_pos = {}
+        self._curr_pos = -1
 
     def __copy__(self):
         new_obj = type(self)()
-        new_obj.graph_info = copy.copy(self.graph_info)
+        new_obj._graph_info = copy.copy(self._graph_info)
+        new_obj._node_pos = copy.copy(self._node_pos)
+        new_obj._curr_pos = self._curr_pos
         return new_obj
+
+    def set_graph_info(self, node, info):
+        if id(node) not in self._node_pos.keys():
+            # print(node.name, id(node))
+            self._curr_pos += 1
+            self._node_pos[id(node)] = self._curr_pos
+
+        if self._curr_pos < len(self._graph_info):
+            self._graph_info[self._node_pos[id(node)]] = (info, node.name)
+        else:
+            self._graph_info.append((info, node.name))
+
+
+    def make_private(self, env=None):
+        if env and env.id_list is None:
+            env.register_basic_djob(self._update_dyn_helper, args=[env],
+                                    prio=Node.DJOBS_PRIO_dynhelpers)
+        elif env:
+            self._update_dyn_helper(env)
+        else:
+            pass
+
+    def _update_dyn_helper(self, env):
+        if env.id_list is not None:
+            # print('*** DynHelper: delayed update')
+            new_node_pos = {}
+            for old_id, new_id in env.id_list:
+                pos = self._node_pos.get(old_id, None)
+                if pos is not None:
+                    # print('*** DynHelper: updated')
+                    new_node_pos[new_id] = pos
+            self._node_pos = new_node_pos
+        else:
+            pass
+
+
+    def _get_graph_info(self):
+        return list(reversed(self._graph_info))
+
+    graph_info = property(fget=_get_graph_info)
 
 
 class NodeInternals_Empty(NodeInternals):
@@ -850,7 +896,6 @@ class NodeInternals_GenFunc(NodeInternals):
         self.pdepth = 0
         self._node_helpers = DynNode_Helpers()
         self.provide_helpers = False
-        self.trigger_last = False
         self._trigger_registered = False
         # self._clear_attr_direct(NodeInternals.AcceptConfChange)
         # self.enforce_absorb_constraints(AbsNoCsts())
@@ -899,8 +944,11 @@ class NodeInternals_GenFunc(NodeInternals):
             self.__generated_node.set_env(self.env)
         self.generator_arg = copy.copy(self.generator_arg)
         self._node_helpers = copy.copy(self._node_helpers)
+        # The call to 'self._node_helpers.make_private()' is performed
+        # the latest that is during self.make_args_private()
 
     def make_args_private(self, node_dico, entangled_set, ignore_frozen_state, accept_external_entanglement):
+        self._node_helpers.make_private(self.env)
 
         if self.node_arg is None:
             return
@@ -1050,7 +1098,7 @@ class NodeInternals_GenFunc(NodeInternals):
 
 
     def _get_value(self, conf=None, recursive=True):
-        if self.trigger_last and not self._trigger_registered:
+        if self.is_attr_set(NodeInternals.TriggerLast) and not self._trigger_registered:
             assert(self.env is not None)
             self._trigger_registered = True
             self.env.register_basic_djob(self._get_delayed_value,
@@ -1099,6 +1147,7 @@ class NodeInternals_GenFunc(NodeInternals):
 
     def reset_state(self, recursive=False, exclude_self=False, conf=None, ignore_entanglement=False):
         if self.is_attr_set(NodeInternals.Mutable):
+            self._trigger_registered = False
             self.reset_generator()
         else:
             self.generated_node.reset_state(recursive, exclude_self=exclude_self, conf=conf,
@@ -1124,11 +1173,14 @@ class NodeInternals_GenFunc(NodeInternals):
         else:
             return self.generated_node.is_frozen()
 
-    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False):
+    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False,
+                 only_generators=False):
         # if self.is_attr_set(NodeInternals.Mutable): 
         if self.is_attr_set(NodeInternals.ResetOnUnfreeze):
             # 'dont_change_state' is not supported in this case. But
-            # if generator is stateless, it should not be a problem
+            # if generator is stateless, it should not be a problem.
+            # And if there is a state, ResetOnUnfreeze should be cleared anyway.
+            self._trigger_registered = False
             self.reset_generator()
         else:
             self.generated_node.unfreeze(conf, recursive=recursive, dont_change_state=dont_change_state,
@@ -1137,6 +1189,7 @@ class NodeInternals_GenFunc(NodeInternals):
     def unfreeze_all(self, recursive=True, ignore_entanglement=False):
         # if self.is_attr_set(NodeInternals.Mutable):
         if self.is_attr_set(NodeInternals.ResetOnUnfreeze):
+            self._trigger_registered = False
             self.reset_generator()
         else:
             self.generated_node.unfreeze_all(recursive=recursive, ignore_entanglement=ignore_entanglement)
@@ -1153,9 +1206,9 @@ class NodeInternals_GenFunc(NodeInternals):
         self.set_env(env)
 
     def set_env(self, env):
+        self.env = env
         if self.__generated_node is not None:
             self.__generated_node.set_env(env)
-        self.env = env
 
     def set_child_attr(self, name, conf=None, all_conf=False, recursive=False):
         if recursive:
@@ -1190,8 +1243,9 @@ class NodeInternals_GenFunc(NodeInternals):
         self.generated_node._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False)
 
 
-    def set_clone_info(self, info):
-        self._node_helpers.graph_info.insert(0, info)
+    def set_clone_info(self, info, node):
+        self._node_helpers.set_graph_info(node, info)
+        # self._node_helpers.graph_info.insert(0, info)
 
 
 class NodeInternals_Term(NodeInternals):
@@ -1436,7 +1490,7 @@ class NodeInternals_Func(NodeInternals_Term):
         self.fct = None
         self.node_arg = None
         self.fct_arg = None
-
+        self.env = None
         self.__mode = None
         self._node_helpers = DynNode_Helpers()
         self.provide_helpers = False
@@ -1480,7 +1534,7 @@ class NodeInternals_Func(NodeInternals_Term):
             self.fct_arg = fct_arg
 
     def set_env(self, env):
-        pass
+        self.env = env
 
     def set_mode(self, mode):
         self.__mode = mode
@@ -1492,10 +1546,12 @@ class NodeInternals_Func(NodeInternals_Term):
         else:
             raise ValueError
 
-    def set_clone_info(self, info):
-        self._node_helpers.graph_info.insert(0, info)
+    def set_clone_info(self, info, node):
+        self._node_helpers.set_graph_info(node, info)
 
     def make_args_private(self, node_dico, entangled_set, ignore_frozen_state, accept_external_entanglement):
+        self._node_helpers.make_private(self.env)
+
         if self.node_arg is None:
             return
 
@@ -1587,7 +1643,8 @@ class NodeInternals_Func(NodeInternals_Term):
         self.set_mode(self.__mode)
 
         self._node_helpers = copy.copy(self._node_helpers)
-
+        # The call to 'self._node_helpers.make_private()' is performed
+        # the latest that is during self.make_args_private()
 
     def absorb(self, blob, constraints, conf):
         # we make the generator freezable to be sure that _get_value()
@@ -2309,7 +2366,7 @@ class NodeInternals_NonTerm(NodeInternals):
                     else:
                         raise ValueError
 
-                new_node._set_clone_info((base_node.tmp_ref_count-1, nb))
+                new_node._set_clone_info((base_node.tmp_ref_count-1, nb), base_node)
 
             # 'same' mode
             elif mode == 's':
@@ -2328,7 +2385,7 @@ class NodeInternals_NonTerm(NodeInternals):
         # We need to call set_clone_info() only once for 's' mode
         # as there is only one instance.
         if new_node is not None and mode == 's':
-            new_node._set_clone_info((0,nb))
+            new_node._set_clone_info((0,nb), base_node)
 
         if len(to_entangle) > 1:
             make_entangled_nodes(to_entangle)
@@ -2911,7 +2968,7 @@ class NodeInternals_NonTerm(NodeInternals):
             else:
                 self._set_drawn_node_attrs(base_node, nb=nb_absorbed, sz=len(base_node._tobytes()))
                 for n, idx in zip(tmp_list, range(nb_absorbed)):
-                    n._set_clone_info((idx, nb_absorbed))
+                    n._set_clone_info((idx, nb_absorbed), base_node)
                 self.frozen_node_list += tmp_list
 
             return abort, blob, consumed_size, consumed_nb
@@ -3317,7 +3374,7 @@ class NodeInternals_NonTerm(NodeInternals):
             for e in iterable:
                 e.clear_attr(name, conf=conf, all_conf=all_conf, recursive=recursive)
 
-    def set_clone_info(self, info):
+    def set_clone_info(self, info, node):
         iterable = self.subnodes_set
         if self.frozen_node_list:
             # union() performs a copy, so we don't touch subnodes_set
@@ -3326,7 +3383,7 @@ class NodeInternals_NonTerm(NodeInternals):
             iterable.add(self.separator.node)
 
         for e in iterable:
-            e._set_clone_info(info)
+            e._set_clone_info(info, node)
 
 
     def reset_depth_specific(self, depth):
@@ -3663,7 +3720,8 @@ class Node(object):
     '''
    
     DJOBS_PRIO_nterm_existence = 100
-    DJOBS_PRIO_genfunc = 200
+    DJOBS_PRIO_dynhelpers = 200
+    DJOBS_PRIO_genfunc = 300
 
     def __init__(self, name, base_node=None, copy_dico=None, ignore_frozen_state=False,
                  accept_external_entanglement=False, acceptance_set=None,
@@ -3722,12 +3780,15 @@ class Node(object):
                                           copy_dico=copy_dico, ignore_frozen_state=ignore_frozen_state,
                                           accept_external_entanglement=accept_external_entanglement,
                                           acceptance_set=acceptance_set)
-            
+
             if new_env and self.env is not None:
                 self.env.update_node_refs(node_dico, ignore_frozen_state=ignore_frozen_state)
             elif DEBUG:
                 print("\n*** WARNING: the copied node '%s' don't have an Env() " \
                       "associated with it!\n" % base_node.name)
+
+            if self.env is not None and self.env.djobs_exists(Node.DJOBS_PRIO_dynhelpers):
+                self.env.execute_basic_djobs(Node.DJOBS_PRIO_dynhelpers)
 
         else:
             self._delayed_jobs_called = False
@@ -3836,7 +3897,7 @@ class Node(object):
 
                 self._finalize_nonterm_node(conf)
 
-            elif base_node.is_genfunc(conf):
+            elif base_node.is_genfunc(conf) or base_node.is_func(conf):
                 self.internals[conf].set_env(self.env)
 
         # Once node_dico has been populated from the node tree,
@@ -4316,14 +4377,14 @@ class Node(object):
 
         return current_conf, next_conf
 
-    def _set_clone_info(self, info):
+    def _set_clone_info(self, info, node):
         '''Used to propagate random draw results when a NonTerm node is frozen
         to the dynamic nodes of its attached subgraphs, namely
         GenFunc/Func nodes which are the only ones which can act
         dynamically.
         '''
         for c in self.internals:
-            self.internals[c].set_clone_info(info)
+            self.internals[c].set_clone_info(info, node)
 
     def make_synchronized_with(self, node, scope, param=None, conf=None):
         conf = self.__check_conf(conf)
@@ -4668,6 +4729,11 @@ class Node(object):
         return val
 
     get_flatten_value = to_bytes
+
+    def to_str(self, conf=None, recursive=True):
+        val = self.to_bytes(conf=conf, recursive=recursive)
+        return unconvert_from_internal_repr(val)
+
 
     def _tobytes(self, conf=None, recursive=True):
         val = self._get_value(conf=conf, recursive=recursive)
@@ -5085,11 +5151,12 @@ class Env(object):
     def __init__(self):
         self.exhausted_nodes = []
         self.env4NT = Env4NT()
-        self.delayed_jobs_enabled = False
+        self.delayed_jobs_enabled = True
         self._sorted_jobs = None
         self._djob_keys = None
         self._djob_groups = None
         self._dm = None
+        self.id_list = None
         # self.cpt = 0
 
     def __getattr__(self, name):
@@ -5145,6 +5212,13 @@ class Env(object):
 
     def update_node_refs(self, node_dico, ignore_frozen_state):
 
+        exh_nodes = []
+        self.id_list = []
+        for old_node, new_node in node_dico.items():
+            self.id_list.append((id(old_node), id(new_node)))
+            if old_node in self.exhausted_nodes:
+                exh_nodes.append(new_node)
+
         if self.is_empty():
             return
 
@@ -5153,15 +5227,13 @@ class Env(object):
             self.env4NT.reset()
             return
 
-        exh_nodes = []
-        id_list = []
-        for old_node, new_node in node_dico.items():
-            id_list.append((id(old_node), id(new_node)))
-            if old_node in self.exhausted_nodes:
-                exh_nodes.append(new_node)
-
         self.exhausted_nodes = exh_nodes
-        self.env4NT.update_node_ids(id_list)
+        self.env4NT.update_node_ids(self.id_list)
+
+    # def update_id_list(self):
+    #     self.id_list = []
+    #     for old_node, new_node in node_dico.items():
+    #         self.id_list.append((id(old_node), id(new_node)))
 
     def register_djob(self, func, group, key, cleanup=None, args=None, prio=1):
         if self._sorted_jobs is None:
@@ -5194,8 +5266,20 @@ class Env(object):
 
     def execute_basic_djobs(self, prio):
         assert(prio in self._sorted_jobs)
-        for func, args in self._sorted_jobs[prio]:
+        jobs = copy.copy(self._sorted_jobs[prio])
+        del self._sorted_jobs[prio] # func() may triggers this func,
+                                    # thus we cleanup before
+        for func, args in jobs:
             func(*args)
+
+    def get_basic_djobs(self, prio):
+        assert(prio in self._sorted_jobs)
+        return self._sorted_jobs[prio]
+
+    def cleanup_basic_djobs(self, prio):
+        if prio not in self._sorted_jobs:
+            return
+        del self._sorted_jobs[prio]
 
     def djobs_exists(self, prio):
         if self._sorted_jobs and prio in self._sorted_jobs and \
@@ -5253,6 +5337,7 @@ class Env(object):
         new_env._sorted_jobs = copy.copy(self._sorted_jobs)
         new_env._djob_keys = copy.copy(self._djob_keys)
         new_env._djob_groups = copy.copy(self._djob_groups)
+        new_env.id_list = copy.copy(self.id_list)
         # new_env.cpt = 0
         return new_env
 

@@ -67,7 +67,8 @@ class ZIP_DataModel(DataModel):
         def g_fhdr_off(nodes, helpers):
             info = helpers.graph_info
             try:
-                num, total = info[1]
+                clone_info, name = info[1]
+                num, total = clone_info
             except:
                 num = 0
             padd_len = len(nodes[0].get_flatten_value())
