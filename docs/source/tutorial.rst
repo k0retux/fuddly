@@ -1,11 +1,11 @@
 Tutorial
 ********
 
-In this tutorial we will first see how to use the basic UI of
-``fuddly``. Then we will walk through basic steps to create a new data
-model and the way to define specific disruptors, and finally we will
-see how to use ``fuddly`` directly from an advanced python interpreter
-like ``ipython``.
+In this tutorial we will begin with the basic UI of ``fuddly``. Then
+we will see how to use ``fuddly`` directly from an advanced python
+interpreter like ``ipython``. Finally, we will walk through basic
+steps to create a new data model and the way to define specific
+disruptors,
 
 
 Using ``fuddly`` simple UI: ``FuzzShell``
@@ -1003,7 +1003,6 @@ the PNG data format:
     ]}
 
 
-
 In short, we see that the root node is ``PNG_model``, which is the
 parent of the terminal node ``sig`` representing PNG file signature
 (lines 4-5) and the non-terminal node ``chunks`` representing the
@@ -1013,15 +1012,9 @@ simplistic data model, chunk types are not distinguished, but it can
 easily be expanded---and the number of chunks allowed in
 a PNG file in line 7---from ``2`` to ``-1`` (meaning infinity).
 
-.. note:: ``-1`` means infinity if used to specify the maximum amount
-          allowed for a given node. It makes sense only for absorption
-          operation (refer to :ref:`tuto:dm-absorption`), because for
-          data generation, a strict limit
-          (:const:`fuzzfmk.data_model.NodeInternals_NonTerm.INFINITY_LIMIT`)
-          is set to avoid getting unintended too big data. If you
-          intend to get such kind of data, specify explicitly the
-          maximum, or use a disruptor to do so
-          (:ref:`tuto:disruptors`).
+.. seealso:: For detailed information on how to describe a data
+             format and getting the list of the usable keywords refer to
+             :ref:`dm:patterns` and :ref:`dm:keywords`.
 
 .. _dm:mydf:
 
@@ -1135,7 +1128,7 @@ various constructions, and value types.
 
 .. seealso:: For a more thorough description of the patterns that can
              be used to describe data formats, refer to
-             :ref:`dm:patterns`
+             :ref:`dm:patterns` and :ref:`dm:keywords`.
 
 .. seealso:: For a list and description of the currently defined value
              types refer to :ref:`vt:value-types`.
@@ -1176,7 +1169,7 @@ various constructions, and value types.
 			'clone': 'val1'},
 
 		       {'name': 'USB_desc',
-			'export_from': 'usb',
+			'import_from': 'usb',
 			'data_id': 'STR'},
 
 		       {'type': MH.Generator,
@@ -1257,7 +1250,7 @@ lines 28-29
 
 
 lines 31-33
-  The keywords ``export_from`` and ``data_id`` are used for exporting
+  The keywords ``import_from`` and ``data_id`` are used for importing
   a data type from another data model. In this case it is a ``STRING
   Descriptor`` data type from the ``USB`` data model.
 
@@ -1452,8 +1445,9 @@ In some cases, it could also be useful to only set absorption
 constraints to some nodes. To do so, you can call the method
 :func:`fuzzfmk.data_model.Node.enforce_absorb_constraints()` on the
 related nodes with your chosen constraints. You can also add a
-specific field ``absorb_csts`` (refer to :ref:`dm:patterns`) within a
-data model description to reach the same objective.
+specific field ``absorb_csts`` (refer to :ref:`dm:keywords` and
+:ref:`dm:patterns`) within a data model description to reach the same
+objective.
 
 
 

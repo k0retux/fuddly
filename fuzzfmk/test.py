@@ -886,10 +886,10 @@ class TestMisc(unittest.TestCase):
             if stop_loop:
                 break
             node.unfreeze()
-            
-            print("[#%d] " % i, transform(node.get_flatten_value()))
+            print("[#%d] %r" % (i, transform(node.to_bytes())))
             if node.env.exhausted_node_exists():
                 for e in node.env.get_exhausted_nodes():
+                    criteria_func(e)
                     if criteria_func(e):
                         print('--> exhausted node: ', e.name)
                         stop_loop = True
@@ -1028,9 +1028,25 @@ class TestMisc(unittest.TestCase):
         make_determinist()/finite() on NonTerm Node
         TODO: NEED assertion
         '''
-        loop_count = 20
+        loop_count = 50
 
         crit_func = lambda x: x.name == 'NonTerm'
+
+        print('\n -=[ determinist & finite (loop count: %d) ]=- \n' % loop_count)
+
+        nt  = dm.get_data('NonTerm')
+        nt.make_finite(all_conf=True, recursive=True)
+        nt.make_determinist(all_conf=True, recursive=True)
+        nb = self._loop_nodes(nt, loop_count, criteria_func=crit_func)
+        
+        self.assertEqual(nb, 6)
+
+        print('\n -=[ determinist & infinite (loop count: %d) ]=- \n' % loop_count)
+
+        nt  = dm.get_data('NonTerm')
+        nt.make_infinite(all_conf=True, recursive=True)
+        nt.make_determinist(all_conf=True, recursive=True)
+        self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
         print('\n -=[ random & infinite (loop count: %d) ]=- \n' % loop_count)
 
@@ -1042,22 +1058,9 @@ class TestMisc(unittest.TestCase):
 
         nt = dm.get_data('NonTerm')
         nt.make_finite(all_conf=True, recursive=True)
-        self._loop_nodes(nt, loop_count, criteria_func=crit_func)
+        nb = self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
-        print('\n -=[ determinist & finite (loop count: %d) ]=- \n' % loop_count)
-
-        nt  = dm.get_data('NonTerm')
-        nt.make_finite(all_conf=True, recursive=True)
-        nt.make_determinist(all_conf=True, recursive=True)
-        self._loop_nodes(nt, loop_count, criteria_func=crit_func)
-
-        print('\n -=[ determinist & infinite (loop count: %d) ]=- \n' % loop_count)
-
-        nt  = dm.get_data('NonTerm')
-        nt.make_infinite(all_conf=True, recursive=True)
-        nt.make_determinist(all_conf=True, recursive=True)
-        self._loop_nodes(nt, loop_count, criteria_func=crit_func)
-
+        self.assertEqual(nb, 6)
         
 
     def test_BitField_Attr_01(self):
@@ -1544,7 +1547,6 @@ class TestModelWalker(unittest.TestCase):
             print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
         self.assertEqual(idx, 26)
 
-
     def test_BasicVisitor(self):
         nt  = self.dm.get_data('Simple')
         default_consumer = BasicVisitor()
@@ -1553,11 +1555,135 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 29)
 
     def test_NonTermVisitor(self):
+        print('***')
         simple  = self.dm.get_data('Simple')
-        nonterm_consumer = NonTermVisitor()
+        nonterm_consumer = NonTermVisitor(respect_order=True)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True, max_steps=10):
-            print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
+            print(colorize('[%d] '%idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 4)
+
+        print('***')
+
+        simple  = self.dm.get_data('Simple')
+        nonterm_consumer = NonTermVisitor(respect_order=False)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True, max_steps=10):
+            print(colorize('[%d] '%idx + repr(rnode.to_bytes()), rgb=Color.INFO))
+        self.assertEqual(idx, 4)
+
+        print('***')
+
+        data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')  # idx == 3
+        nonterm_consumer = NonTermVisitor(respect_order=True)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True, max_steps=10):
+            print(colorize('[%d] '%idx + rnode.to_str(), rgb=Color.INFO))
+        self.assertEqual(idx, 3)
+
+        print('***')
+
+        data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')  # idx == 3
+        nonterm_consumer = NonTermVisitor(respect_order=False)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True, max_steps=10):
+            print(colorize('[%d] '%idx + rnode.to_str(), rgb=Color.INFO))
+        self.assertEqual(idx, 3)
+
+        print('***')
+
+
+    def test_basics(self):
+        # data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')
+        shape_desc = \
+        {'name': 'shape',
+         'separator': {'contents': {'name': 'sep',
+                                    'contents': String(val_list=[' [!] '])}},
+         'contents': [
+
+             {'weight': 20,
+              'contents': [
+                  {'name': 'prefix1',
+                   'contents': String(size=10, alphabet='+')},
+
+                  {'name': 'body_top',
+                   'contents': [
+
+                       {'name': 'body',
+                        'mode' : MH.NotMutableClone,
+                        'separator': {'contents': {'name': 'sep2',
+                                                   'contents': String(val_list=['::'])}},
+                        'shape_type': MH.Random, # ignored in determnist mode
+                        'contents': [
+                            {'contents': Filename(val_list=['AAA']),
+                             'qty': (0, 4),
+                             'name': 'str'},
+                            {'contents': UINT8(int_list=[0x3E]), # chr(0x3E) == '>'
+                             'name': 'int'}
+                        ]}
+                   ]}
+              ]},
+
+             {'weight': 20,
+              'contents': [
+                  {'name': 'prefix2',
+                   'contents': String(size=10, alphabet='>')},
+
+                  {'name': 'body'}
+              ]}
+         ]}
+
+        mh = ModelHelper(delayed_jobs=True)
+        data = mh.create_graph_from_desc(shape_desc)
+
+        raw_vals = [
+            ' [!] ++++++++++ [!] ::=:: [!] ',
+            ' [!] ++++++++++ [!] ::?:: [!] ',
+            ' [!] ++++++++++ [!] ::\xff:: [!] ',
+            ' [!] ++++++++++ [!] ::\x00:: [!] ',
+            ' [!] ++++++++++ [!] ::\x01:: [!] ',
+            ' [!] ++++++++++ [!] ::\x80:: [!] ',
+            ' [!] ++++++++++ [!] ::\x7f:: [!] ',
+            ' [!] ++++++++++ [!] ::AA\xc3::AA\xc3::>:: [!] ',  # [8] could change has it is a random corrupt_bit
+            ' [!] ++++++++++ [!] ::AAAA::AAAA::>:: [!] ',
+            ' [!] ++++++++++ [!] ::::::>:: [!] ',
+            ' [!] ++++++++++ [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAAXXXXXXXXXXXXXXXXXXXXXXXX::>:: [!] ',
+            ' [!] ++++++++++ [!] ::../../../../../../etc/password::../../../../../../etc/password::>:: [!] ',
+            ' [!] ++++++++++ [!] ::../../../../../../Windows/system.ini::../../../../../../Windows/system.ini::>:: [!] ',
+            ' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::file%n%n%n%nname.txt::>:: [!] ',
+            ' [!] ++++++++++ [!] ::AAA::AAA::=:: [!] ',
+            ' [!] ++++++++++ [!] ::AAA::AAA::?:: [!] ',
+            ' [!] ++++++++++ [!] ::AAA::AAA::\xff:: [!] ',
+            ' [!] ++++++++++ [!] ::AAA::AAA::\x00:: [!] ',
+            ' [!] ++++++++++ [!] ::AAA::AAA::\x01:: [!] ',
+            ' [!] ++++++++++ [!] ::AAA::AAA::\x80:: [!] ',
+            ' [!] ++++++++++ [!] ::AAA::AAA::\x7f:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::\xc9AA::\xc9AA::>:: [!] ',  # [22] could change has it is a random corrupt_bit
+            ' [!] >>>>>>>>>> [!] ::AAAA::AAAA::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::::::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAAXXXXXXXXXXXXXXXXXXXXXXXX::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::../../../../../../etc/password::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::../../../../../../Windows/system.ini::../../../../../../Windows/system.ini::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::file%n%n%n%nname.txt::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::AAA::AAA::=:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::AAA::AAA::?:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::AAA::AAA::\xff:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::AAA::AAA::\x00:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::AAA::AAA::\x01:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::AAA::AAA::\x80:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::AAA::AAA::\x7f:: [!] '
+        ]
+
+        tn_consumer = TypedNodeDisruption()
+        ic = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
+                                   negative_attrs=[NodeInternals.Separator],
+                                   node_kinds=[NodeInternals_TypedValue],
+                                   negative_node_subkinds=[String])
+        tn_consumer.set_node_interest(internals_criteria=ic)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, tn_consumer, make_determinist=True, max_steps=100):
+            val = rnode.to_str()
+            print(colorize('[%d] '%idx + repr(val), rgb=Color.INFO))
+            if idx not in [8, 22]: 
+                self.assertEqual(val, raw_vals[idx-1])
+
+        self.assertEqual(idx, 35)
+
 
     def test_TypedNodeDisruption_1(self):
         nt  = self.dm.get_data('Simple')
@@ -2008,6 +2134,79 @@ class TestNodeFeatures(unittest.TestCase):
             d.unfreeze()
 
 
+
+    def test_generalized_exist_cond(self):
+
+        gen_exist_desc = \
+        {'name': 'gen_exist_cond',
+         'separator': {'contents': {'name': 'sep_nl',
+                                    'contents': String(val_list=['\n'], max_sz=100, absorb_regexp=b'[\r\n|\n]+'),
+                                    'absorb_csts': AbsNoCsts(regexp=True)},
+                       'prefix': False, 'suffix': False, 'unique': True},
+         'contents': [
+            {'name': 'body',
+             'qty': 7,
+             'separator': {'contents': {'name': 'sep_space',
+                                        'contents': String(val_list=[' '], max_sz=100, absorb_regexp=b'\s+'),
+                                        'absorb_csts': AbsNoCsts(size=True, regexp=True)},
+                           'prefix': False, 'suffix': False, 'unique': True},
+             'contents': [
+                 {'name': 'val_blk',
+                  'separator': {'contents': {'name': 'sep_quote',
+                                             'contents': String(val_list=['"'])},
+                                'prefix': False, 'suffix': True, 'unique': True},
+                  'contents': [
+                      {'name': 'key',
+                       'contents': String(val_list=['value='])},
+                      {'name': 'val1',
+                       'contents': String(val_list=['Toulouse', 'Paris', 'Lyon']),
+                       'exists_if': (RawCondition('Location'), 'param')},
+                      {'name': 'val2',
+                       'contents': String(val_list=['2015/10/08']),
+                       'exists_if': (RawCondition('Date'), 'param')},
+                      {'name': 'val3',
+                       'contents': String(val_list=['10:40:42']),
+                       'exists_if': (RawCondition('Time'), 'param')},
+                      {'name': 'val4',
+                       'contents': String(val_list=['NOT_SUPPORTED']),
+                       'exists_if': (RawCondition(['NOTSUP1', 'NOTSUP2', 'NOTSUP3']), 'param')}
+                  ]},
+                 {'name': 'name_blk',
+                  'separator': {'contents': {'name': ('sep_quote', 2),
+                                             'contents': String(val_list=['"'])},
+                                'prefix': False, 'suffix': True, 'unique': True},
+                  'contents': [
+                      {'name': ('key', 2),
+                       'contents': String(val_list=['name='])},
+                      {'name': 'param',
+                       'contents': MH.CYCLE(['NOTSUP1', 'Date', 'Time', 'NOTSUP2', 'NOTSUP3', 'Location'],
+                                            depth=2)}
+                  ]}
+             ]}
+         ]}
+
+        mh = ModelHelper(delayed_jobs=True)
+        node = mh.create_graph_from_desc(gen_exist_desc)
+
+        print('***')
+        raw = node.to_bytes()
+        print(raw, len(raw))
+
+        result = \
+        b'value="NOT_SUPPORTED" name="NOTSUP1"\n' \
+        b'value="2015/10/08" name="Date"\n' \
+        b'value="10:40:42" name="Time"\n' \
+        b'value="NOT_SUPPORTED" name="NOTSUP2"\n' \
+        b'value="NOT_SUPPORTED" name="NOTSUP3"\n' \
+        b'value="Toulouse" name="Location"\n' \
+        b'value="NOT_SUPPORTED" name="NOTSUP1"'
+
+        print('***')
+        print(result, len(result))
+
+        self.assertEqual(result, raw)
+
+
 class TestNode_NonTerm(unittest.TestCase):
 
     @classmethod
@@ -2153,6 +2352,11 @@ class TestNode_NonTerm(unittest.TestCase):
 
 
 
+
+
+
+
+
 class TestNode_TypedValue(unittest.TestCase):
 
     @classmethod
@@ -2274,7 +2478,7 @@ class TestHLAPI(unittest.TestCase):
                                      'clone': 'val1'},
 
                                     {'name': 'USB_desc',
-                                     'export_from': 'usb',
+                                     'import_from': 'usb',
                                      'data_id': 'STR'},
 
                                     {'type': MH.Leaf,
@@ -2354,6 +2558,27 @@ class TestDataModel(unittest.TestCase):
                 data.get_value()
                 # data.show(raw_limit=200)
                 print('Success!')
+
+
+    def test_generic_generators(self):
+        dm = fmk.get_data_model_by_name('mydf')
+        dm.load_data_model(fmk._name2dm)
+
+        for i in range(5):
+            d = dm.get_data('off_gen')
+            d.show()
+            raw = d.to_bytes()
+            print(raw)
+
+            if sys.version_info[0] > 2:
+                retr_off = raw[-1]
+            else:
+                retr_off = struct.unpack('B', raw[-1])[0]
+            print('\nRetrieved offset is: %d' % retr_off)
+
+            int_idx = d['off_gen/body$'].get_subnode_idx(d['off_gen/body/int'])
+            off = int_idx * 3 + 10 # +10 for 'prefix' delta
+            self.assertEqual(off, retr_off)
 
 
     @unittest.skipIf(ignore_data_model_specifics, "USB specific test cases")

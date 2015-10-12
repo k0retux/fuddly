@@ -50,7 +50,7 @@ class MyDF_DataModel(DataModel):
                             'clone': 'val1'},
                            
                            {'name': 'USB_desc',
-                            'export_from': 'usb',
+                            'import_from': 'usb',
                             'data_id': 'STR'},
                            
                            {'type': MH.Generator,
@@ -216,7 +216,7 @@ class MyDF_DataModel(DataModel):
                    'contents': String(val_list=['*1*0*'])},
 
                   {'name': 'A3_deco2',
-                   'exists_if': (IntCondition([20, 30]), 'A3_int'),
+                   'exists_if': (IntCondition(neg_val=[10]), 'A3_int'),
                    'contents': String(val_list=['+2+0+3+0+'])}
               ]},
 
@@ -242,6 +242,30 @@ class MyDF_DataModel(DataModel):
              {'name': 'payload',
               'contents': String(min_sz=10, max_sz=100, determinist=False)},
          ]}
+
+
+        offset_gen_desc = \
+        {'name': 'off_gen',
+         'contents': [
+             {'name': 'prefix',
+              'contents': String(size=10, alphabet='*+')},
+
+             {'name': 'body',
+              'shape_type': MH.FullyRandom,
+              'contents': [
+                  {'contents': String(val_list=['AAA']),
+                   'qty': 10,
+                   'name': 'str'},
+                  {'contents': UINT8(int_list=[0x3F]),
+                   'name': 'int'}
+              ]},
+
+             {'name': 'len',
+              'type': MH.Generator,
+              'contents': MH.OFFSET(use_current_position=False, vt=UINT8),
+              'node_args': ['prefix', 'int', 'body']},
+         ]}
+
 
         misc_gen_desc = \
         {'name': 'misc_gen',
@@ -281,9 +305,49 @@ class MyDF_DataModel(DataModel):
          ]}
 
 
-        self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
-                      sync_desc, len_gen_desc, misc_gen_desc)
 
+        shape_desc = \
+        {'name': 'shape',
+         'separator': {'contents': {'name': 'sep',
+                                    'contents': String(val_list=[' [!] '])}},
+         'contents': [
+
+             {'weight': 20,
+              'contents': [
+                  {'name': 'prefix1',
+                   'contents': String(size=10, alphabet='+')},
+
+                  {'name': 'body_top',
+                   'contents': [
+
+                       {'name': 'body',
+                        'separator': {'contents': {'name': 'sep2',
+                                                   'contents': String(val_list=['::'])}},
+                        'shape_type': MH.Random, # ignored in determnist mode
+                        'contents': [
+                            {'contents': String(val_list=['AAA']),
+                             'qty': (0, 4),
+                             'name': 'str'},
+                            {'contents': UINT8(int_list=[0x3E]), # chr(0x3E) == '>'
+                             'name': 'int'}
+                        ]}
+                   ]}
+
+              ]},
+
+             {'weight': 20,
+              'contents': [
+                  {'name': 'prefix2',
+                   'contents': String(size=10, alphabet='>')},
+
+                  {'name': 'body'}
+              ]}
+         ]}
+
+
+        self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
+                      sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
+                      shape_desc)
 
 
 data_model = MyDF_DataModel()
