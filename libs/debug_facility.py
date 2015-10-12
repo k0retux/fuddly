@@ -22,7 +22,7 @@
 ################################################################################
 
 DEBUG = False
-LEVEL = 1
+LEVEL = 0
 
 try:
     from xtermcolor import colorize

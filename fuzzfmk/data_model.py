@@ -493,7 +493,6 @@ class NodeInternals(object):
     TriggerLast = 9
 
     Separator = 15
-
     DISABLED = 100
 
     def __init__(self, defaults=True, arg=None):

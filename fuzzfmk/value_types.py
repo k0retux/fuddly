@@ -514,6 +514,8 @@ class String(VT_Alt):
 
         if extra_fuzzy_list is not None:
             self.extra_fuzzy_list = VT._str2internal(extra_fuzzy_list)
+        elif hasattr(self, 'specific_fuzzing_list'):
+            self.extra_fuzzy_list = self.specific_fuzzing_list
         else:
             self.extra_fuzzy_list = [
                 b'',
@@ -952,6 +954,15 @@ class INT(VT):
     # To be used after calling get_value()
     def is_exhausted(self):
         return self.exhausted
+
+
+class Filename(String):
+    specific_fuzzing_list = [
+        b'../../../../../../etc/password',
+        b'../../../../../../Windows/system.ini',
+        b'file%n%n%n%nname.txt',
+    ]
+
 
 
 class Fuzzy_INT(INT):

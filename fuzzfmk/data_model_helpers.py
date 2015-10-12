@@ -60,7 +60,7 @@ def modelwalker_inputs_handling_helper(dmaker, user_generic_input):
 # Data Model Helper #
 #####################
 
-class MH:
+class MH(object):
     # node type attribute
     NonTerminal = 1
     Generator = 2
@@ -83,6 +83,23 @@ class MH:
     # NonTerminal node mode
     NotMutableClone = 1
     MutableClone = 2
+
+    #######################
+    ### Node Attributes ###
+    #######################
+
+    class Attr(object):
+        Freezable = NodeInternals.Freezable
+        Mutable = NodeInternals.Mutable
+        Determinist = NodeInternals.Determinist
+        Finite = NodeInternals.Finite
+        AcceptConfChange = NodeInternals.AcceptConfChange
+        Abs_Postpone = NodeInternals.Abs_Postpone
+        CloneExtNodeArgs = NodeInternals.CloneExtNodeArgs
+        ResetOnUnfreeze = NodeInternals.ResetOnUnfreeze
+        TriggerLast = NodeInternals.TriggerLast
+
+        Separator = NodeInternals.Separator
 
     ###########################
     ### Generator Templates ###

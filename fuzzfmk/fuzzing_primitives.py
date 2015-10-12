@@ -776,7 +776,7 @@ class TypedNodeDisruption(NodeConsumerStub):
             self.current_fuzz_vt_list = self._create_fuzzy_vt_list(node)
             self._extend_fuzzy_vt_list(self.current_fuzz_vt_list, node)
 
-        DEBUG_PRINT(' *** CONSUME: ' + node.name + ', ' + repr(self.current_fuzz_vt_list))
+        DEBUG_PRINT(' *** CONSUME: ' + node.name + ', ' + repr(self.current_fuzz_vt_list), level=0)
 
         if self.current_fuzz_vt_list:
             vt_obj = self.current_fuzz_vt_list.pop(0)

@@ -71,8 +71,9 @@ corresponding outputs for a data generated from them:
 String
 ------
 
-The type :class:`fuzzfmk.value_types.String` takes the following
-parameters:
+All string types listed below provide the same interface
+(:class:`fuzzfmk.value_types.String`). Their constructor take the
+following parameters:
 
 ``val_list`` [optional, default value: **None**]
   List of the character strings that are considered valid for the node
@@ -116,6 +117,15 @@ parameters:
   The alphabet to use for generating data, in case no ``val_list`` is
   provided. Also use during absorption to validate the contents. It is
   checked if there is no ``val_list``.
+
+
+Below the different currently defined string types:
+
+- :class:`fuzzfmk.value_types.String`: General purpose character
+  string.
+- :class:`fuzzfmk.value_types.Filename`: Filename. Similar to the type
+  ``String``, but some disruptors like ``tTYPE`` will generate more specific
+  test cases.
 
 
 BitField

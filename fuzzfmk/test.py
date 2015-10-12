@@ -1606,11 +1606,12 @@ class TestModelWalker(unittest.TestCase):
                    'contents': [
 
                        {'name': 'body',
+                        'mode' : MH.NotMutableClone,
                         'separator': {'contents': {'name': 'sep2',
                                                    'contents': String(val_list=['::'])}},
                         'shape_type': MH.Random, # ignored in determnist mode
                         'contents': [
-                            {'contents': String(val_list=['AAA']),
+                            {'contents': Filename(val_list=['AAA']),
                              'qty': (0, 4),
                              'name': 'str'},
                             {'contents': UINT8(int_list=[0x3E]), # chr(0x3E) == '>'
@@ -1639,6 +1640,13 @@ class TestModelWalker(unittest.TestCase):
             ' [!] ++++++++++ [!] ::\x01:: [!] ',
             ' [!] ++++++++++ [!] ::\x80:: [!] ',
             ' [!] ++++++++++ [!] ::\x7f:: [!] ',
+            ' [!] ++++++++++ [!] ::AA\xc3::AA\xc3::>:: [!] ',  # [8] could change has it is a random corrupt_bit
+            ' [!] ++++++++++ [!] ::AAAA::AAAA::>:: [!] ',
+            ' [!] ++++++++++ [!] ::::::>:: [!] ',
+            ' [!] ++++++++++ [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAAXXXXXXXXXXXXXXXXXXXXXXXX::>:: [!] ',
+            ' [!] ++++++++++ [!] ::../../../../../../etc/password::../../../../../../etc/password::>:: [!] ',
+            ' [!] ++++++++++ [!] ::../../../../../../Windows/system.ini::../../../../../../Windows/system.ini::>:: [!] ',
+            ' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::file%n%n%n%nname.txt::>:: [!] ',
             ' [!] ++++++++++ [!] ::AAA::AAA::=:: [!] ',
             ' [!] ++++++++++ [!] ::AAA::AAA::?:: [!] ',
             ' [!] ++++++++++ [!] ::AAA::AAA::\xff:: [!] ',
@@ -1646,6 +1654,13 @@ class TestModelWalker(unittest.TestCase):
             ' [!] ++++++++++ [!] ::AAA::AAA::\x01:: [!] ',
             ' [!] ++++++++++ [!] ::AAA::AAA::\x80:: [!] ',
             ' [!] ++++++++++ [!] ::AAA::AAA::\x7f:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::\xc9AA::\xc9AA::>:: [!] ',  # [22] could change has it is a random corrupt_bit
+            ' [!] >>>>>>>>>> [!] ::AAAA::AAAA::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::::::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAAXXXXXXXXXXXXXXXXXXXXXXXX::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::../../../../../../etc/password::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::../../../../../../Windows/system.ini::../../../../../../Windows/system.ini::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::file%n%n%n%nname.txt::>:: [!] ',
             ' [!] >>>>>>>>>> [!] ::AAA::AAA::=:: [!] ',
             ' [!] >>>>>>>>>> [!] ::AAA::AAA::?:: [!] ',
             ' [!] >>>>>>>>>> [!] ::AAA::AAA::\xff:: [!] ',
@@ -1656,14 +1671,18 @@ class TestModelWalker(unittest.TestCase):
         ]
 
         tn_consumer = TypedNodeDisruption()
-        ic = NodeInternalsCriteria(negative_attrs=[NodeInternals.Separator],negative_node_subkinds=[String])
+        ic = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
+                                   negative_attrs=[NodeInternals.Separator],
+                                   node_kinds=[NodeInternals_TypedValue],
+                                   negative_node_subkinds=[String])
         tn_consumer.set_node_interest(internals_criteria=ic)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, tn_consumer, make_determinist=True, max_steps=100):
             val = rnode.to_str()
             print(colorize('[%d] '%idx + repr(val), rgb=Color.INFO))
-            self.assertEqual(val, raw_vals[idx-1])
+            if idx not in [8, 22]: 
+                self.assertEqual(val, raw_vals[idx-1])
 
-        self.assertEqual(idx, 21)
+        self.assertEqual(idx, 35)
 
 
     def test_TypedNodeDisruption_1(self):
