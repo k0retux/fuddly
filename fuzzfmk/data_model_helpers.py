@@ -89,23 +89,28 @@ class MH:
     ###########################
 
     @staticmethod
-    def LEN(vt=fvt.INT_str):
+    def LEN(vt=fvt.INT_str,
+            set_attrs=[], clear_attrs=[]):
         '''
         Return a *generator* that returns the length of a node parameter.
 
         Args:
           vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+          set_attrs (list): attributes that will be set on the generated node.
+          clear_attrs (list): attributes that will be cleared on the generated node.
         '''
-        def length(vt, node):
+        def length(vt, set_attrs, clear_attrs, node):
             n = Node('cts', value_type=vt(int_list=[len(node.to_bytes())]))
             n.set_semantics(NodeSemantics(['len']))
+            MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
 
         vt = MH._validate_int_vt(vt)
-        return functools.partial(length, vt)
+        return functools.partial(length, vt, set_attrs, clear_attrs)
 
     @staticmethod
-    def QTY(node_name, vt=fvt.INT_str):
+    def QTY(node_name, vt=fvt.INT_str,
+            set_attrs=[], clear_attrs=[]):
         '''Return a *generator* that returns the quantity of child node instances (referenced
         by name) of the node parameter provided to the *generator*.
 
@@ -113,25 +118,31 @@ class MH:
           vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
           node_name (str): name of the child node whose instance amount will be returned
             by the generator
+          set_attrs (list): attributes that will be set on the generated node.
+          clear_attrs (list): attributes that will be cleared on the generated node.
         '''
-        def qty(node_name, vt, node):
+        def qty(node_name, vt, set_attrs, clear_attrs, node):
             nb = node.cc.get_drawn_node_qty(node_name)
             n = Node('cts', value_type=vt(int_list=[nb]))
             n.set_semantics(NodeSemantics(['qty']))
+            MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
 
         vt = MH._validate_int_vt(vt)
-        return functools.partial(qty, node_name, vt)
+        return functools.partial(qty, node_name, vt, set_attrs, clear_attrs)
 
     @staticmethod
-    def TIMESTAMP(time_format="%H%M%S", utc=False):
+    def TIMESTAMP(time_format="%H%M%S", utc=False,
+                  set_attrs=[], clear_attrs=[]):
         '''
         Return a *generator* that returns the current time (in a String node).
 
         Args:
           time_format (str): time format to be used by the generator.
+          set_attrs (list): attributes that will be set on the generated node.
+          clear_attrs (list): attributes that will be cleared on the generated node.
         '''
-        def timestamp(time_format, utc):
+        def timestamp(time_format, utc, set_attrs, clear_attrs):
             if utc:
                 now = datetime.datetime.utcnow()
             else:
@@ -139,12 +150,14 @@ class MH:
             ts = now.strftime(time_format)
             n = Node('cts', value_type=fvt.String(val_list=[ts], size=len(ts)))
             n.set_semantics(NodeSemantics(['timestamp']))
+            MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
         
-        return functools.partial(timestamp, time_format, utc)
+        return functools.partial(timestamp, time_format, utc, set_attrs, clear_attrs)
 
     @staticmethod
-    def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=True):
+    def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=True,
+            set_attrs=[], clear_attrs=[]):
         '''Return a *generator* that returns the CRC (in the chosen type) of
         all the node parameters. (Default CRC is PKZIP CRC32)
 
@@ -154,8 +167,10 @@ class MH:
           init_crc (int): initial value used to start the CRC calculation.
           xor_out (int): final value to XOR with the calculated CRC value.
           rev (bool): bit reversed algorithm when `True`.
+          set_attrs (list): attributes that will be set on the generated node.
+          clear_attrs (list): attributes that will be cleared on the generated node.
         '''
-        def crc(vt, poly, init_crc, xor_out, rev, nodes):
+        def crc(vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs, nodes):
             crc_func = crcmod.mkCrcFun(poly, initCrc=init_crc, xorOut=xor_out, rev=rev)
             if isinstance(nodes, Node):
                 s = nodes.to_bytes()
@@ -172,17 +187,19 @@ class MH:
 
             n = Node('cts', value_type=vt(int_list=[result]))
             n.set_semantics(NodeSemantics(['crc']))
+            MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
 
         if not crcmod_module:
             raise NotImplementedError('the CRC template has been disabled because python-crcmod module is not installed!')
 
         vt = MH._validate_int_vt(vt)
-        return functools.partial(crc, vt, poly, init_crc, xor_out, rev)
+        return functools.partial(crc, vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs)
 
 
     @staticmethod
-    def WRAP(func, vt=fvt.INT_str):
+    def WRAP(func, vt=fvt.INT_str,
+             set_attrs=[], clear_attrs=[]):
         '''Return a *generator* that returns the result (in the chosen type)
         of the provided function applied on the concatenation of all
         the node parameters.
@@ -190,9 +207,10 @@ class MH:
         Args:
           func (function): function applied on the concatenation
           vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
-
+          set_attrs (list): attributes that will be set on the generated node.
+          clear_attrs (list): attributes that will be cleared on the generated node.
         '''
-        def map_func(vt, func, nodes):
+        def map_func(vt, func, set_attrs, clear_attrs, nodes):
             if isinstance(nodes, Node):
                 s = nodes.to_bytes()
             else:
@@ -207,13 +225,15 @@ class MH:
             result = func(s)
 
             n = Node('cts', value_type=vt(int_list=[result]))
+            MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
 
         vt = MH._validate_int_vt(vt)
-        return functools.partial(map_func, vt, func)
+        return functools.partial(map_func, vt, func, set_attrs, clear_attrs)
 
     @staticmethod
-    def CYCLE(vals, depth=1, vt=fvt.String):
+    def CYCLE(vals, depth=1, vt=fvt.String,
+              set_attrs=[], clear_attrs=[]):
         '''Return a *generator* that iterates other the provided value list
         and returns at each step a `vt` node corresponding to the
         current value.
@@ -225,15 +245,19 @@ class MH:
             of parent nodes, the position within the grand-parent determines the index
             of the value to use in the provided list, modulo the quantity.
           vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
+          set_attrs (list): attributes that will be set on the generated node.
+          clear_attrs (list): attributes that will be cleared on the generated node.
         '''
         class Cycle(object):
             provide_helpers = True
             
-            def __init__(self, vals, depth, vt):
+            def __init__(self, vals, depth, vt, set_attrs, clear_attrs):
                 self.vals = vals
                 self.vals_sz = len(vals)
                 self.vt = vt
                 self.depth = depth
+                self.set_attrs = set_attrs
+                self.clear_attrs = clear_attrs
 
             def __call__(self, helper):
                 info = helper.graph_info
@@ -252,14 +276,16 @@ class MH:
                     raise NotImplementedError('Value type not supported')
 
                 n = Node('cts', value_type=vtype)
+                MH._handle_attrs(n, set_attrs, clear_attrs)
                 return n
 
         assert(not issubclass(vt, fvt.BitField))
-        return Cycle(vals, depth, vt)
+        return Cycle(vals, depth, vt, set_attrs, clear_attrs)
 
 
     @staticmethod
-    def OFFSET(use_current_position=True, depth=1, vt=fvt.INT_str):
+    def OFFSET(use_current_position=True, depth=1, vt=fvt.INT_str,
+               set_attrs=[], clear_attrs=[]):
         '''Return a *generator* that computes the offset of a child node
         within its parent node.
 
@@ -282,20 +308,25 @@ class MH:
           depth (int): depth of our nth-ancestor used as a reference to compute automatically
             the targeted child node position. Only relevant if `use_current_position` is True.
           vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
+          set_attrs (list): attributes that will be set on the generated node.
+          clear_attrs (list): attributes that will be cleared on the generated node.
         '''
         class Offset(object):
             provide_helpers = True
             
-            def __init__(self, use_current_position, depth, vt):
+            def __init__(self, use_current_position, depth, vt, set_attrs, clear_attrs):
                 self.vt = vt
                 self.use_current_position = use_current_position
                 self.depth = depth
+                self.set_attrs = set_attrs
+                self.clear_attrs = clear_attrs
 
             def __call__(self, nodes, helper):
                 if self.use_current_position:
                     info = helper.graph_info
                     try:
-                        idx, total = info[self.depth]
+                        clone_info, name = info[self.depth]
+                        idx, total = clone_info
                     except:
                         idx = 0
 
@@ -323,10 +354,88 @@ class MH:
                     off = nodes[-1].get_subnode_off(idx)
 
                 n = Node('cts', value_type=self.vt(int_list=[base+off]))
+                MH._handle_attrs(n, set_attrs, clear_attrs)
                 return n
 
         vt = MH._validate_int_vt(vt)
-        return Offset(use_current_position, depth, vt)
+        return Offset(use_current_position, depth, vt, set_attrs, clear_attrs)
+
+
+    @staticmethod
+    def COPY_VALUE(path, depth=None, vt=None,
+                   set_attrs=[], clear_attrs=[]):
+        '''Return a *generator* that retrieves the value of another node, and
+        then return a `vt` node with this value. The other node is
+        selected:
+
+        - either directly by following the provided relative `path` from
+          the given generator-parameter node.
+
+        - or indirectly (if `depth` is provided) where a *base* node is
+          first selected automatically, based on our current index
+          within our own parent node (or the nth-ancestor, depending
+          on the parameter `depth`), and then the targeted node is selected
+          by following the provided relative `path` from the *base* node.
+
+        Args:
+          path (str): relative path to the node whose value will be picked.
+          depth (int): depth of our nth-ancestor used as a reference to compute automatically
+            the targeted base node position.
+          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
+          set_attrs (list): attributes that will be set on the generated node.
+          clear_attrs (list): attributes that will be cleared on the generated node.
+
+        '''
+        class CopyValue(object):
+            provide_helpers = True
+            
+            def __init__(self, path, depth, vt, set_attrs, clear_attrs):
+                self.vt = vt
+                self.path = path
+                self.depth = depth
+                self.set_attrs = set_attrs
+                self.clear_attrs = clear_attrs
+
+            def __call__(self, node, helper):
+                if self.depth is not None:
+                    info = helper.graph_info
+                    # print('INFO: ', info)
+                    try:
+                        clone_info, name = info[self.depth]
+                        idx, total = clone_info
+                    except:
+                        # print('\n*** WARNING[Pick Generator]: incorrect depth ({:d})!\n' \
+                        #       '  (Normal behavior if used during absorption.)'.format(self.depth))
+                        idx = 0
+                    base_node = node.get_subnode(idx)
+                else:
+                    base_node = node
+
+                tg_node = base_node[self.path]
+                raw = tg_node.to_bytes()
+
+                if tg_node.is_nonterm():
+                    n = Node('cts', base_node=tg_node, ignore_frozen_state=False)
+                else:
+                    if self.vt is None:
+                        assert(tg_node.is_typed_value() and not tg_node.is_typed_value(subkind=fvt.BitField))
+                        self.vt = tg_node.get_current_subkind()
+
+                    if issubclass(self.vt, fvt.INT):
+                        vtype = self.vt(int_list=[tg_node.get_raw_value()])
+                    elif issubclass(self.vt, fvt.String):
+                        vtype = self.vt(val_list=[raw])
+                    else:
+                        raise NotImplementedError('Value type not supported')
+                    n = Node('cts', value_type=vtype)
+
+                n.set_semantics(NodeSemantics(['clone']))
+                MH._handle_attrs(n, set_attrs, clear_attrs)
+                return n
+
+
+        assert(vt is None or not issubclass(vt, fvt.BitField))
+        return CopyValue(path, depth, vt, set_attrs, clear_attrs)
 
 
     @staticmethod
@@ -337,6 +446,12 @@ class MH:
             vt = fvt.INT_str             
         return vt
 
+    @staticmethod
+    def _handle_attrs(n, set_attrs, clear_attrs):
+        for sa in set_attrs:
+            n.set_attr(sa)
+        for ca in clear_attrs:
+            n.clear_attr(ca)
 
 
 class ModelHelper(object):
@@ -796,7 +911,8 @@ class ModelHelper(object):
             raise ValueError("arguments refer to an inexistent node ({:s}, {!s})!".format(ref[0], ref[1]))
 
         node = self.node_dico[ref]
-        assert(not isinstance(node.cc, NodeInternals_Empty))
+        if isinstance(node.cc, NodeInternals_Empty):
+            raise ValueError("Node ({:s}, {!s}) is Empty!".format(ref[0], ref[1]))
                
         return node
 

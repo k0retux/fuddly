@@ -547,40 +547,6 @@ class BasicVisitor(NodeConsumerStub):
             return 0
 
 
-
-# class NonTermVisitor_OLD(BasicVisitor):
-
-#     def init_specific(self, args):
-#         self.consumed = False
-#         self._internals_criteria = None
-#         self._internals_criteria = dm.NodeInternalsCriteria(negative_node_kinds=[dm.NodeInternals_NonTerm],
-#                                                             negative_attrs=[dm.NodeInternals.Separator])
-
-#     def need_reset(self, node):
-#         if node.is_nonterm():
-#             self.consumed = False
-#             return True
-#         else:
-#             return False
-
-#     def consume_node(self, node):
-#         DEBUG_PRINT('--(in consumer)-> Node:' + node.name)
-#         if not self.consumed and not node.is_nonterm():
-#             self.consumed = True
-#             return True
-#         else:
-#             return False
-
-#     def still_interested_by(self, node):
-#         return False
-
-#     def wait_for_exhaustion(self, node):
-#         if node.is_nonterm():
-#             return -1 # wait until exhaustion
-#         else:
-#             return 0
-
-
 class NonTermVisitor(BasicVisitor):
 
     def init_specific(self, args):
@@ -722,7 +688,8 @@ class TermNodeDisruption(NodeConsumerStub):
 
     def init_specific(self, base_list):
         self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable],
-                                                        node_kinds=[dm.NodeInternals_Term])
+                                                            negative_attrs=[dm.NodeInternals.Separator],
+                                                            node_kinds=[dm.NodeInternals_Term])
         self.enforce_ascii = False
         self.determinist = True
 
@@ -787,7 +754,8 @@ class TypedNodeDisruption(NodeConsumerStub):
 
     def init_specific(self, args):
         self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable],
-                                                        node_kinds=[dm.NodeInternals_TypedValue])
+                                                            negative_attrs=[dm.NodeInternals.Separator],
+                                                            node_kinds=[dm.NodeInternals_TypedValue])
         self.orig_value = None
         self.current_fuzz_vt_list = None
         self.current_node = None

@@ -868,14 +868,11 @@ class DynNode_Helpers(object):
 
     def set_graph_info(self, node, info):
         if id(node) not in self._node_pos.keys():
-            # print(node.name, id(node))
             self._curr_pos -= 1
             self._node_pos[id(node)] = self._curr_pos
-
-        if -self._node_pos[id(node)] <= len(self._graph_info):
-            self._graph_info[self._node_pos[id(node)]] = (info, node.name)
-        else:
             self._graph_info.insert(0,(info, node.name))
+        else:
+            self._graph_info[self._node_pos[id(node)]] = (info, node.name)
 
 
     def make_private(self, env=None):
@@ -919,7 +916,7 @@ class NodeInternals_Empty(NodeInternals):
 
 class NodeInternals_GenFunc(NodeInternals):
     def _init_specific(self, arg):
-        self.__generated_node = None
+        self._generated_node = None
         self.generator_func = None
         self.generator_arg = None
         self.node_arg = None
@@ -949,13 +946,13 @@ class NodeInternals_GenFunc(NodeInternals):
         # because these attributes are used to change the behaviour of
         # the GenFunc.
         if name not in [NodeInternals.Mutable, NodeInternals.Freezable]:
-            if self.__generated_node is not None:
+            if self._generated_node is not None:
                 self.generated_node.set_attr(name)
         return True
 
     def _unmake_specific(self, name):
         if name not in [NodeInternals.Mutable, NodeInternals.Freezable]:
-            if self.__generated_node is not None:
+            if self._generated_node is not None:
                 self.generated_node.clear_attr(name)
         return True
 
@@ -964,15 +961,15 @@ class NodeInternals_GenFunc(NodeInternals):
         # Node.__init__() during copy (which calls self.make_args_private()),
         # because the new Node to point to is unknown at this local
         # stage.
-        if self.__generated_node is None or ignore_frozen_state:
-            self.__generated_node = None
+        if self._generated_node is None or ignore_frozen_state:
+            self._generated_node = None
             self._trigger_registered = False
         else:
-            self.__generated_node = Node(self.__generated_node.name, base_node=self.__generated_node,
+            self._generated_node = Node(self._generated_node.name, base_node=self._generated_node,
                                        ignore_frozen_state=ignore_frozen_state,
                                        accept_external_entanglement=accept_external_entanglement)
-            self.__generated_node._reset_depth(parent_depth=self.pdepth)
-            self.__generated_node.set_env(self.env)
+            self._generated_node._reset_depth(parent_depth=self.pdepth)
+            self._generated_node.set_env(self.env)
         self.generator_arg = copy.copy(self.generator_arg)
         self._node_helpers = copy.copy(self._node_helpers)
         # The call to 'self._node_helpers.make_private()' is performed
@@ -1060,10 +1057,10 @@ class NodeInternals_GenFunc(NodeInternals):
 
 
     def reset_generator(self):
-        self.__generated_node = None
+        self._generated_node = None
 
-    def __get_generated_node(self):
-        if self.__generated_node is None:
+    def _get_generated_node(self):
+        if self._generated_node is None:
             
             if self.generator_arg is not None and self.node_arg is not None:
                 if self.provide_helpers:
@@ -1091,18 +1088,18 @@ class NodeInternals_GenFunc(NodeInternals):
                 ret, private_val = ret
                 self.set_private(private_val)
 
-            self.__generated_node = ret
-            self.__generated_node._reset_depth(parent_depth=self.pdepth)
-            self.__generated_node.set_env(self.env)
+            self._generated_node = ret
+            self._generated_node._reset_depth(parent_depth=self.pdepth)
+            self._generated_node.set_env(self.env)
 
             if self.is_attr_set(NodeInternals.Determinist):
-                self.__generated_node.make_determinist(all_conf=True, recursive=True)
+                self._generated_node.make_determinist(all_conf=True, recursive=True)
             if self.is_attr_set(NodeInternals.Finite):
-                self.__generated_node.make_finite(all_conf=True, recursive=True)
+                self._generated_node.make_finite(all_conf=True, recursive=True)
 
-        return self.__generated_node
+        return self._generated_node
 
-    generated_node = property(fget=__get_generated_node)
+    generated_node = property(fget=_get_generated_node)
 
     def import_generator_func(self, generator_func,
                               generator_node_arg=None, generator_arg=None,
@@ -1197,7 +1194,7 @@ class NodeInternals_GenFunc(NodeInternals):
 
     def is_frozen(self):
         if self.is_attr_set(NodeInternals.Mutable):
-            if self.__generated_node is None:
+            if self._generated_node is None:
                 return False
             else:
                 return True
@@ -1227,35 +1224,35 @@ class NodeInternals_GenFunc(NodeInternals):
 
     def reset_fuzz_weight(self, recursive):
         if recursive:
-            if self.__generated_node is not None:
+            if self._generated_node is not None:
                 self.generated_node.reset_fuzz_weight(recursive=recursive)
 
     def set_child_env(self, env):
-        # if self.__generated_node is not None:
-        #     self.__generated_node.set_env(env)
+        # if self._generated_node is not None:
+        #     self._generated_node.set_env(env)
         # self.env = env
         self.set_env(env)
 
     def set_env(self, env):
         self.env = env
-        if self.__generated_node is not None:
-            self.__generated_node.set_env(env)
+        if self._generated_node is not None:
+            self._generated_node.set_env(env)
 
     def set_child_attr(self, name, conf=None, all_conf=False, recursive=False):
         if recursive:
-            if self.__generated_node is not None:
+            if self._generated_node is not None:
                 self.generated_node.set_attr(name, conf=conf, all_conf=all_conf, recursive=recursive)
 
     def clear_child_attr(self, name, conf=None, all_conf=False, recursive=False):
         if recursive:
-            if self.__generated_node is not None:
+            if self._generated_node is not None:
                 self.generated_node.clear_attr(name, conf=conf, all_conf=all_conf, recursive=recursive)
 
 
     def reset_depth_specific(self, depth):
         self.pdepth = depth
-        if self.__generated_node is not None:
-            self.__generated_node._reset_depth(parent_depth=self.pdepth)
+        if self._generated_node is not None:
+            self._generated_node._reset_depth(parent_depth=self.pdepth)
 
     def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria, owned_conf, conf, path_regexp, 
                                exclude_self, respect_order, relative_depth, top_node):
@@ -1265,7 +1262,7 @@ class NodeInternals_GenFunc(NodeInternals):
 
     def set_child_current_conf(self, node, conf, reverse, ignore_entanglement):
         if self.is_attr_set(NodeInternals.AcceptConfChange):
-            if self.__generated_node is not None:
+            if self._generated_node is not None:
                 node._set_subtrees_current_conf(self.generated_node,
                                                conf, reverse,
                                                ignore_entanglement=ignore_entanglement)
@@ -5124,7 +5121,8 @@ class Node(object):
             return getattr(internals, name)
         else:
             return object.__getattribute__(self, name)
-    
+
+
 class Env4NT(object):
     ''' 
     Define methods for non-terminal nodes

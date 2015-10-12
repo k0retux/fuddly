@@ -54,45 +54,7 @@ class ZIP_DataModel(DataModel):
 
     def build_data_model(self):
 
-        crc32_func = crcmod.mkCrcFun(0x104C11DB7, initCrc=0x00000000, xorOut=0xFFFFFFFF)
-
-        def g_crc32(node):
-            # crc32 = zlib.crc32(node.get_flatten_value())
-            val = crc32_func(node.get_flatten_value()) & 0xFFFFFFFF
-            n = Node('cts', value_type=UINT32_le(int_list=[val]))
-            n.clear_attr(NodeInternals.Mutable)
-            return n
-
-
-        def g_fhdr_off(nodes, helpers):
-            info = helpers.graph_info
-            try:
-                clone_info, name = info[1]
-                num, total = clone_info
-            except:
-                num = 0
-            padd_len = len(nodes[0].get_flatten_value())
-            off = nodes[1].get_subnode_off(num)
-            return Node('cts', value_type=UINT32_le(int_list=[padd_len+off]))
-
-        def g_data_desc(nodes):
-            # check 3rd bit of gp_flag
-            if nodes[0].get_raw_value() & (1<<2):
-                desc = \
-                {'name': 'data_desc',
-                 'contents': [
-                     [nodes[1].get_clone('crc32'), 1],
-                     [nodes[2].get_clone('compressed_size'), 1],
-                     [nodes[3].get_clone('uncompressed_size'), 1]
-                 ]}
-                n = ModelHelper().create_graph_from_desc(desc) 
-            else:
-                n = Node('no_data_desc', value_type=String(size=0))
-
-            return n
-
-
-        MIN_FILE = 0
+        MIN_FILE = 1
         MAX_FILE = -1
 
         zip_desc = \
@@ -125,7 +87,9 @@ class ZIP_DataModel(DataModel):
                                  {'name': 'version_needed',
                                   'contents': UINT16_le()},
                                  {'name': 'gp_bit_flag',
-                                  'contents': UINT16_le()},
+                                  'contents': BitField(subfield_sizes=[2,1,13], endian=VT.LittleEndian,
+                                                       subfield_val_lists=[None, [0,1], None],
+                                                       subfield_val_extremums=[[0,3], None, [0, 8191]])},
                                  {'name': 'compression_method',
                                   'contents': UINT16_le()},
                                  {'name': 'last_mod_time',
@@ -133,10 +97,9 @@ class ZIP_DataModel(DataModel):
                                  {'name': 'last_mod_date',
                                   'contents': UINT16_le()},
                                  {'name': 'crc32',
-                                  'type': MH.Generator,
-                                  'contents': g_crc32,
+                                  'contents': MH.CRC(vt=UINT32_le, clear_attrs=[NodeInternals.Mutable]),
                                   'node_args': 'data',
-                                  'clear_attrs': [NodeInternals.Freezable],
+                                  # 'clear_attrs': [NodeInternals.Freezable],
                                   'alt': [
                                       {'conf': 'ABS',
                                        'contents': UINT32_le(maxi=2**10)}
@@ -144,7 +107,7 @@ class ZIP_DataModel(DataModel):
                                  {'name': 'compressed_size',
                                   'type': MH.Generator,
                                   'contents': lambda x: Node('cts', value_type=\
-                                                            UINT32_le(int_list=[len(x.get_flatten_value())])),
+                                                            UINT32_le(int_list=[len(x.to_bytes())])),
                                   'node_args': 'data',
                                   'alt': [
                                       {'conf': 'ABS',
@@ -161,7 +124,7 @@ class ZIP_DataModel(DataModel):
                              'type': MH.Generator,
                              'clear_attrs': [NodeInternals.Freezable],
                              'contents': lambda x: Node('cts', value_type=\
-                                                       String(size=x.get_raw_value())),
+                                                        String(size=x.get_raw_value(), alphabet='ABC')),
                              'node_args': 'file_name_length'},
                             {'name': 'extra_field',
                              'type': MH.Generator,
@@ -183,9 +146,18 @@ class ZIP_DataModel(DataModel):
                              'node_args': 'compressed_size'}
                         ]},
                        {'name': 'data_desc',
-                        'type': MH.Generator,
-                        'contents': g_data_desc,
-                        'node_args': ['gp_bit_flag', 'crc32', 'compressed_size', 'uncompressed_size']}
+                        'exists_if': (BitFieldCondition(sf=1, val=1), 'gp_bit_flag'), # check 3rd bit of gp_flag
+                        'contents': [
+                            {'name': ('crc32', 2),
+                             'clone': 'crc32'},
+                            {'name': ('compressed_size', 2),
+                             'clone': 'compressed_size'},
+                            {'name': ('uncompressed_size', 2),
+                             'clone': 'uncompressed_size'}
+                        ]},
+                       {'name': 'no_data_desc',
+                        'exists_if': (BitFieldCondition(sf=1, val=0), 'gp_bit_flag'),
+                        'contents': String(size=0)}
                    ]}
               ]},
              {'name': 'archive_desc_header',
@@ -228,11 +200,15 @@ class ZIP_DataModel(DataModel):
                        {'name': 'version_made_by',
                         'contents': UINT16_le()},
                        {'name': ('common_attrs', 2),
-                        'clone': 'common_attrs'},
+                        'contents': MH.COPY_VALUE(path='header/common_attrs$', depth=1),
+                        'node_args': 'file_list',
+                        'clear_attrs': [NodeInternals.Mutable]},
                        {'name': ('file_name_length', 2),
-                        'contents': UINT16_le(maxi=2**10)},
+                        'contents': MH.COPY_VALUE(path='header/file_name_length', depth=1),
+                        'node_args': 'file_list'},
                        {'name': ('extra_field_length', 2),
-                        'contents': UINT16_le(maxi=2**10)},
+                        'contents': MH.COPY_VALUE(path='header/extra_field_length', depth=1),
+                        'node_args': 'file_list'},
                        {'name': 'file_comment_length',
                         'contents': UINT16_le(maxi=2**10)},
                        {'name': 'disk_number_start',
@@ -243,21 +219,24 @@ class ZIP_DataModel(DataModel):
                         'contents': UINT32_le()},
                        {'name': 'file_hdr_off',
                         'fuzz_weight': 10,
-                        'type': MH.Generator,
-                        'contents': g_fhdr_off,
-                        'provide_helpers': True,
+                        'contents': MH.OFFSET(vt=UINT32_le),
                         'node_args': ['start_padding', 'file_list']},
                        {'name': ('file_name', 2),
-                        'type': MH.Generator,
-                        'clear_attrs': [NodeInternals.Freezable],
-                        'contents': lambda x: Node('cts', value_type=\
-                                                  String(size=x.get_raw_value())),
-                        'node_args': ('file_name_length', 2)},
+                        'contents': MH.COPY_VALUE(path='header/file_name/cts$', depth=1),
+                        'node_args': 'file_list',
+                        'alt': [
+                            {'conf': 'ABS',
+                             'contents': lambda x: Node('cts', value_type=\
+                                                        String(size=x.cc.generated_node.get_raw_value())),
+                             'node_args': ('file_name_length', 2)} ]},
                        {'name': ('extra_field', 2),
-                        'type': MH.Generator,
-                        'contents': lambda x: Node('cts', value_type=\
-                                                  String(size=x.get_raw_value())),
-                        'node_args': ('extra_field_length', 2)},
+                        'contents': MH.COPY_VALUE(path='header/extra_field/cts$', depth=1),
+                        'node_args': 'file_list',
+                        'alt': [
+                            {'conf': 'ABS',
+                             'contents': lambda x: Node('cts', value_type=\
+                                                        String(size=x.cc.generated_node.get_raw_value())),
+                             'node_args': ('extra_field_length', 2)} ]},
                        {'name': 'file_comment',
                         'type': MH.Generator,
                         'contents': lambda x: Node('cts', value_type=\
@@ -318,7 +297,6 @@ class ZIP_DataModel(DataModel):
                   {'name': 'disk_number_with_cdir_start',
                    'contents': UINT16_le()},
                   {'name': 'total_nb_of_cdir_entries_in_this_disk',
-                   'type': MH.Generator,
                    'contents': lambda x: Node('cts', value_type=\
                                               UINT16_le(int_list=[x.get_subnode_qty()])),
                    'node_args': 'cdir'},
@@ -329,9 +307,9 @@ class ZIP_DataModel(DataModel):
                   {'name': 'off_of_cdir',
                    'type': MH.Generator,
                    'contents': lambda x: Node('cts', value_type=\
-                                              UINT32_le(int_list=[len(x[0].get_flatten_value()) \
-                                                                 + len(x[1].get_flatten_value()) \
-                                                                 + len(x[2].get_flatten_value())])),
+                                              UINT32_le(int_list=[len(x[0].to_bytes()) \
+                                                                 + len(x[1].to_bytes()) \
+                                                                 + len(x[2].to_bytes())])),
                    'node_args': ['start_padding', 'file_list', 'archive_desc_header']},
                   {'name': 'optional',
                    'qty': (0,1),
@@ -339,9 +317,8 @@ class ZIP_DataModel(DataModel):
                        {'name': 'ZIP_comment_len',
                         'contents': UINT32_le(maxi=2**10)},
                        {'name': 'ZIP_comment',
-                        'type': MH.Generator,
                         'contents': lambda x: Node('cts', value_type=\
-                                                  String(size=x.get_raw_value())),
+                                                   String(size=x.get_raw_value())),
                         'node_args': 'ZIP_comment_len'}
                    ]}
               ]},
@@ -356,7 +333,7 @@ class ZIP_DataModel(DataModel):
         ]}
 
 
-        mh = ModelHelper()
+        mh = ModelHelper(delayed_jobs=True)
         self.pkzip = mh.create_graph_from_desc(zip_desc)
 
         self.zip_dict = self.import_file_contents(extension='zip')

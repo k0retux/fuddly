@@ -285,7 +285,9 @@ all defined as static methods of
       Return a *generator* that computes the offset of a child node
       within its parent node.
 
-
+:meth:`fuzzfmk.data_model_helpers.MH.COPY_VALUE()`
+      Return a *generator* that retrieves the value of another node,
+      and then return a `vt` node with this value.
 
 
 .. _dm:keywords:
