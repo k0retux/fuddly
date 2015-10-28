@@ -1606,7 +1606,7 @@ class TestModelWalker(unittest.TestCase):
                    'contents': [
 
                        {'name': 'body',
-                        'mode' : MH.NotMutableClone,
+                        'mode' : MH.Mode.ImmutableClone,
                         'separator': {'contents': {'name': 'sep2',
                                                    'contents': String(val_list=['::'])}},
                         'shape_type': MH.Random, # ignored in determnist mode
@@ -2466,7 +2466,7 @@ class TestHLAPI(unittest.TestCase):
                            {'name': 'val2'},
 
                            {'name': 'middle',
-                            'mode': MH.NotMutableClone,
+                            'mode': MH.Mode.ImmutableClone,
                             'contents': [{
                                 'section_type': MH.Ordered,
                                 'contents': [
@@ -2485,7 +2485,7 @@ class TestHLAPI(unittest.TestCase):
                                      'contents': lambda x: x[0] + x[1],
                                      'name': 'val22',
                                      'node_args': ['val1', 'val3'],
-                                     'mode': MH.FrozenArgs}
+                                     'mode': MH.Mode.FrozenArgs}
                                 ]}]},
 
                            {'contents': String(max_sz = 10),

@@ -34,7 +34,7 @@ class MyDF_DataModel(DataModel):
                   {'name': 'val2'},
                   
                   {'name': 'middle',
-                   'mode': MH.NotMutableClone,
+                   'mode': MH.Mode.ImmutableClone,
                    'separator': {'contents': {'name': 'sep',
                                               'contents': String(val_list=['\n'], absorb_regexp=b'\n+'),
                                               'absorb_csts': AbsNoCsts(regexp=True)}},

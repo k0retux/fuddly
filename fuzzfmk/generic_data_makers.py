@@ -49,7 +49,9 @@ tactics = Tactics()
 
 @disruptor(tactics, dtype="tWALK", weight=1,
            gen_args = GENERIC_ARGS,
-           args={'nt_only': ('walk through non-terminal nodes only', False, bool),
+           args={'path': ('graph path regexp to select nodes on which' \
+                          ' the disruptor should apply', None, str),
+                 'nt_only': ('walk through non-terminal nodes only', False, bool),
                  'singleton': ('consume also terminal nodes with only one possible value', False, bool)})
 class sd_iter_over_data(StatefulDisruptor):
     '''
@@ -71,6 +73,7 @@ class sd_iter_over_data(StatefulDisruptor):
             consumer = NonTermVisitor()
         else:
             consumer = BasicVisitor(specific_args=self.singleton)
+        consumer.set_node_interest(path_regexp=self.path)
         self.walker = iter(ModelWalker(prev_data.node, consumer, max_steps=self.max_steps, initial_step=self.init))
 
 
@@ -85,9 +88,12 @@ class sd_iter_over_data(StatefulDisruptor):
         data.add_info('model walking index: {:d}'.format(idx))
         data.add_info('current node:     %s' % consumed_node.get_path_from(rnode))
 
-        exported_node = Node(rnode.name, base_node=rnode)
-        data.update_from_node(exported_node)
-
+        if self.clone_node:
+            exported_node = Node(rnode.name, base_node=rnode)
+            data.update_from_node(exported_node)
+        else:
+            data.update_from_node(rnode)
+            
         return data
 
 

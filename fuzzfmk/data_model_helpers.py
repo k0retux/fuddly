@@ -61,10 +61,21 @@ def modelwalker_inputs_handling_helper(dmaker, user_generic_input):
 #####################
 
 class MH(object):
-    # node type attribute
+    '''Define constants and generator templates for data
+    model description.
+    '''
+
+    #################
+    ### Node Type ###
+    #################
+
     NonTerminal = 1
     Generator = 2
     Leaf = 3
+
+    ##################################
+    ### Non-Terminal Node Specific ###
+    ##################################
 
     # shape_type & section_type attribute
     Ordered = '>'
@@ -76,19 +87,24 @@ class MH(object):
     Copy = 'u'
     ZeroCopy = 's'
 
-    # Function node (leaf) mode
-    FrozenArgs = 1
-    RawArgs = 2
+    ###################
+    ### Node Modes  ###
+    ###################
 
-    # NonTerminal node mode
-    NotMutableClone = 1
-    MutableClone = 2
+    class Mode:
+        # Function node (leaf) mode
+        FrozenArgs = 1
+        RawArgs = 2
+
+        # NonTerminal node mode
+        ImmutableClone = 1
+        MutableClone = 2
 
     #######################
     ### Node Attributes ###
     #######################
 
-    class Attr(object):
+    class Attr:
         Freezable = NodeInternals.Freezable
         Mutable = NodeInternals.Mutable
         Determinist = NodeInternals.Determinist
@@ -701,7 +717,7 @@ class ModelHelper(object):
 
         n.set_subnodes_with_csts(shapes, conf=conf)
 
-        mode = desc.get('mode', MH.MutableClone)
+        mode = desc.get('mode', MH.Mode.ImmutableClone)
         internals = n.cc if conf is None else n.c[conf]
         internals.set_mode(mode)
 
@@ -797,7 +813,7 @@ class ModelHelper(object):
             n.set_func(contents, func_arg=other_args,
                        provide_helpers=provide_helpers, conf=conf)
 
-            mode = desc.get('mode', 1)
+            mode = desc.get('mode', MH.Mode.FrozenArgs)
             internals = n.cc if conf is None else n.c[conf]
             internals.set_mode(mode)
 

@@ -1156,7 +1156,7 @@ various constructions, and value types.
 	      {'name': 'val2'},
 
 	      {'name': 'middle',
-	       'mode': MH.NotMutableClone,
+	       'mode': MH.Mode.ImmutableClone,
 	       'contents': [{
 		   'section_type': MH.Random,
 		   'contents': [

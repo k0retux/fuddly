@@ -79,6 +79,7 @@ class ModelWalker(object):
 
     def set_consumer(self, node_consumer):
         self._consumer = node_consumer
+        self._consumer._root_node = self._root_node
 
 
     def __iter__(self):

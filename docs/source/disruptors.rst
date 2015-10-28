@@ -370,6 +370,10 @@ Parameters:
 	 |      |       the end)
 	 |      | default: -1 [type: int]
        specific args: 
+	 |_ path
+	 |      | desc: graph path regexp to select nodes on which the disruptor should 
+	 |      |       apply
+	 |      | default: None [type: str]
 	 |_ singleton
 	 |      | desc: consume also terminal nodes with only one possible value
 	 |      | default: False [type: bool]
