@@ -727,10 +727,103 @@ post_freeze
 Data Model Patterns
 ===================
 
+
+How to Describe Different Shapes for Some Parts of Data
+-------------------------------------------------------
+
+To describe different forms for a non-terminal node, you can define
+it in terms of shapes like illustrated by the example below:
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 6, 20-22, 30
+
+        {'name': 'shape',
+         'separator': {'contents': {'name': 'sep',
+                                    'contents': String(val_list=[' [!] '])}},
+         'contents': [
+
+	     ### SHAPE 1 ####
+             {'weight': 20,
+              'contents': [
+                  {'name': 'prefix1',
+                   'contents': String(size=10, alphabet='+')},
+
+                  {'name': 'body_top',
+                   'contents': [
+
+                       {'name': 'body',
+                        'separator': {'contents': {'name': 'sep2',
+                                                   'contents': String(val_list=['::'])}},
+                        'shape_type': MH.Random,
+                        'contents': [
+                            {'contents': String(val_list=['AAA']),
+                             'qty': (0, 4),
+                             'name': 'str1'},
+                            {'contents': String(val_list=['42']),
+                             'name': 'str2'}
+                        ]}
+                   ]}
+
+              ]},
+
+	     ### SHAPE 2 ###
+             {'weight': 20,
+              'contents': [
+                  {'name': 'prefix2',
+                   'contents': String(size=10, alphabet='>')},
+
+                  {'name': 'body'}
+              ]}
+         ]}
+
+The shapes are ordered by their weight. In *deterministic* mode (refer
+to :ref:`dm:keywords`) that means a non terminal-node will be
+sequentially resolved from its heavier shape to its lighter shape. In
+*random* mode, the weight are used in a probabilistic way.
+
+The example above also illustrates how to represent an *optional part*
+in the description of a data format (within the first shape of the
+example, line 20-22). You only have to set the minimum quantity of a
+node to ``0`` (line 21), and it will be considered as an optional
+part.
+
+If you iterate over this data model with ``tWALK(nt_ony=True)`` (refer
+to :ref:`dis:generic-disruptors`) you will see the various data forms
+understood by ``fuddly`` which would be leveraged by most of the
+generic stateful disruptors.
+
+.. code-block:: none
+
+   # First Form
+   [!] ++++++++++ [!] ::42:: [!] 
+
+   # Second Form
+   [!] ++++++++++ [!] ::AAA::AAA::42:: [!] 
+
+   # Third Form
+   [!] >>>>>>>>>> [!] ::AAA::AAA::42:: [!]
+
+As you can see, the first and second forms are from ``SHAPE 1``. The
+differences between them comes from the optional part: the first form
+does not have the optional part while the second one includes it.
+Finally, the third form is from the ``SHAPE 2``.
+
+.. seealso:: Refer to :ref:`tuto:modelwalker` for more information on
+             the *Model Walker* infrastructure which makes really easy
+             the implementation of stateful disruptors leveraging the
+             different forms of a data.
+
+.. seealso:: Refer to :ref:`dm:pattern:existence-cond` if you need
+             to change the data format depending on the existence of
+             optional parts.
+
+
+
 .. _dm:pattern:separator:
 
-How to Describe the Separators Used within a Data Format
---------------------------------------------------------
+How to Describe the Separators of a Data Format
+-----------------------------------------------
 
 The example below shows how to define the separators for delimiting
 lines of an imaginary data model (line 2-7), and for delimiting
@@ -1154,3 +1247,4 @@ Which correspond to the following data::
              to set the generator-specific keyword ``trigger_last`` to
              `True`. Refer to :ref:`dm:keywords` for more information
              on the available keywords.
+

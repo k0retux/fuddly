@@ -1708,6 +1708,7 @@ way to access the parameters within the disruptor methods.
 	  do_other_stuff(self.param_2)
 
 
+.. _tuto:modelwalker:
 
 The Model Walker Infrastructure
 +++++++++++++++++++++++++++++++
@@ -1725,6 +1726,19 @@ takes a modeled data as a parameter and an instance of a subclass of
 interested in and it has to implement the method
 :meth:`fuzzfmk.fuzzing_primitives.NodeConsumerStub.consume_node` to
 perform the intended modification on such nodes.
+
+.. note:: The *Model Walker* infrastructure will by default also
+          consider the non-terminal nodes. And if the consumer is not
+          interested on them, it will iterates on the different
+          possible forms they can take (optional parts, various
+          defined shapes, ...), in order for the consumer to have the
+          opportunity to act on the different shapes the data may
+          have.
+
+	  Also, note that if you want to iterate on the different
+	  forms of a modeled data, you can use the disruptor ``tWALK``
+	  with the specific parameter ``nt_only`` set to
+	  ``True``. Refer to :ref:`dis:generic-disruptors`.
 
 Let's take the following generic consumer
 :class:`fuzzfmk.fuzzing_primitives.SeparatorDisruption`, that

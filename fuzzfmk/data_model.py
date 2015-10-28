@@ -946,7 +946,6 @@ class NodeInternals_GenFunc(NodeInternals):
         # We don't propagate Mutable & Freezable to the generated_node,
         # because these attributes are used to change the behaviour of
         # the GenFunc.
-        # if name not in [NodeInternals.Mutable, NodeInternals.Freezable]:
         if name in [NodeInternals.Determinist, NodeInternals.Finite, NodeInternals.Abs_Postpone,
                     NodeInternals.Separator]:
             if self._generated_node is not None:
@@ -954,7 +953,6 @@ class NodeInternals_GenFunc(NodeInternals):
         return True
 
     def _unmake_specific(self, name):
-        # if name not in [NodeInternals.Mutable, NodeInternals.Freezable]:
         if name in [NodeInternals.Determinist, NodeInternals.Finite, NodeInternals.Abs_Postpone,
                     NodeInternals.Separator]:
             if self._generated_node is not None:
