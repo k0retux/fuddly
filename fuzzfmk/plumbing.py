@@ -1170,6 +1170,10 @@ class Fuzzer(object):
         # access the feedback from Target directly
         tg_fbk = self.tg.get_feedback()
         if tg_fbk is not None:
+            err_code = tg_fbk.get_error_code()
+            if err_code != 0:
+                self.lg.log_comment('Error detected with the target (error code: {:d}) !'.format(err_code))
+
             if tg_fbk.has_fbk_collector():
                 for ref, fbk in tg_fbk:
                     self.lg.log_target_feedback_from(fbk, preamble=preamble, epilogue=epilogue,

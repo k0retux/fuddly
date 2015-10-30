@@ -32,6 +32,9 @@ import socket
 import threading
 import copy
 
+import errno
+from socket import error as socket_error
+
 from libs.external_modules import *
 import data_models
 from fuzzfmk.global_resources import *
@@ -133,8 +136,8 @@ class Target(object):
 class TargetFeedback(object):
 
     def __init__(self, bstring=b''):
+        self.cleanup()
         self.set_bytes(bstring)
-        self._feedback_collector = {}
 
     def add_fbk_from(self, ref, fbk):
         self._feedback_collector[ref] = fbk
@@ -142,8 +145,10 @@ class TargetFeedback(object):
     def has_fbk_collector(self):
         return len(self._feedback_collector) > 0
 
-    def cleanup_collector(self):
+    def cleanup(self):
         self._feedback_collector = {}
+        self.set_bytes(b'')
+        self.set_error_code(0)
 
     def __iter__(self):
         for ref, fbk in self._feedback_collector.items():
@@ -202,11 +207,12 @@ class NetworkTarget(Target):
         self.sending_delay = 10
 
         self._default_fbk_socket_id = 'Default Feedback Socket'
+        self._default_fbk_id = {}
         self._additional_fbk_desc = {}
-        self._additional_fbk_sockets = []
-        self._additional_fbk_ids = {}
-        self._additional_fbk_lengths = {}
         self._default_additional_fbk_id = 1
+
+        self._default_fbk_id[(host, port)] = self._default_fbk_socket_id + ' - {:s}:{:d}'.format(host, port)
+
 
     def register_new_interface(self, host, port, socket_type, data_semantic):
         self.multiple_destination = True
@@ -214,6 +220,7 @@ class NetworkTarget(Target):
         self.port[data_semantic] = port
         self.socket_type[data_semantic] = socket_type
         self.known_semantics.append(data_semantic)
+        self._default_fbk_id[(host, port)] = self._default_fbk_socket_id + ' - {:s}:{:d}'.format(host, port)
 
     def set_feedback_timeout(self, timeout):
         self._feedback_timeout = timeout
@@ -251,9 +258,12 @@ class NetworkTarget(Target):
         if self._additional_fbk_desc:
             for host, port, socket_type, fbk_id, fbk_length in self._additional_fbk_desc.values():
                 s = self._connect_to_target(host, port, socket_type)
-                self._additional_fbk_sockets.append(s)
-                self._additional_fbk_ids[s] = fbk_id
-                self._additional_fbk_lengths[s] = fbk_length
+                if s is None:
+                    self._logger.log_comment('WARNING: Feedback not available from {:s}:{:d}'.format(host, port))
+                else:
+                    self._additional_fbk_sockets.append(s)
+                    self._additional_fbk_ids[s] = fbk_id
+                    self._additional_fbk_lengths[s] = fbk_length
 
 
     def get_additional_feedback_sockets(self):
@@ -276,6 +286,9 @@ class NetworkTarget(Target):
 
 
     def start(self):
+        self._additional_fbk_sockets = []
+        self._additional_fbk_ids = {}
+        self._additional_fbk_lengths = {}
         self._feedback_handled = None
         self.feedback_thread_qty = 0
         self.feedback_complete_cpt = 0
@@ -293,21 +306,31 @@ class NetworkTarget(Target):
         return True
 
     def send_data(self, data):
-        self._feedback.cleanup_collector()
+        self._feedback.cleanup()
         host, port, socket_type = self._get_net_info_from(data)
         s = self._connect_to_target(host, port, socket_type)
-        self._send_data([s], {s:(data, host, port)})
+        if s is None:
+            self._feedback.set_error_code(-1)
+            err_msg = '>>> WARNING: unable to send data to {:s}:{:d} <<<'.format(host, port)
+            self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
+        else:
+            self._send_data([s], {s:(data, host, port)})
 
     def send_multiple_data(self, data_list):
-        self._feedback.cleanup_collector()
+        self._feedback.cleanup()
         sockets = []
         data_refs = {}
         for data in data_list:
             host, port, socket_type = self._get_net_info_from(data)
             s = self._connect_to_target(host, port, socket_type)
-            sockets.append(s)
-            data_refs[s] = (data, host, port)
-            self._send_data(sockets, data_refs)
+            if s is None:
+                self._feedback.set_error_code(-1)
+                err_msg = '>>> WARNING: unable to send data to {:s}:{:d} <<<'.format(host, port)
+                self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
+            else:
+                sockets.append(s)
+                data_refs[s] = (data, host, port)
+                self._send_data(sockets, data_refs)
 
     def _get_data_semantic_key(self, data):
         semantics = data.node.get_semantics()
@@ -329,7 +352,13 @@ class NetworkTarget(Target):
 
     def _connect_to_target(self, host, port, socket_type):
         s = socket.socket(*socket_type)
-        s.connect((host, port))
+        try:
+            s.connect((host, port))
+        except socket_error as serr:
+            # if serr.errno != errno.ECONNREFUSED:
+            print('\n*** ERROR: ' + str(serr))
+            return None
+
         s.setblocking(0)
         return s
 
@@ -410,8 +439,6 @@ class NetworkTarget(Target):
                         raise TargetStuck("socket connection broken")
                     totalsent = totalsent + sent
 
-                default_fbk_id = self._default_fbk_socket_id + ' - {:s}:{:d}'.format(host, port)
-
                 if fbk_sockets is None:
                     assert(fbk_ids is None)
                     assert(fbk_lengths is None)
@@ -419,9 +446,9 @@ class NetworkTarget(Target):
                     fbk_ids = {}
                     fbk_lengths = {}
                 else:
-                    assert(default_fbk_id not in fbk_ids.values())
+                    assert(self._default_fbk_id[(host, port)] not in fbk_ids.values())
                 fbk_sockets.append(s)
-                fbk_ids[s] = default_fbk_id
+                fbk_ids[s] = self._default_fbk_id[(host, port)]
                 fbk_lengths[s] = self.feedback_length
 
             first_pass = False

@@ -418,7 +418,7 @@ class Logger(object):
         now = datetime.datetime.now()
         current_date = now.strftime("%H:%M:%S")
 
-        self.log_fn("### Comments [{date:s}]:\n".format(date=current_date), rgb=Color.COMMENTS)
+        self.log_fn("### Comments [{date:s}]:".format(date=current_date), rgb=Color.COMMENTS)
         self.log_fn(comment)
         self.print_console('\n')
 
