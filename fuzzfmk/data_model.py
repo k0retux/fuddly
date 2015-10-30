@@ -3589,6 +3589,15 @@ class NodeSemantics(object):
         return True
 
 
+    def what_match_from(self, raw_criteria_list):
+        matching = []
+        for c in raw_criteria_list:
+            if c in self.__attrs:
+                matching.append(c)
+
+        return matching
+
+
     def make_private(self):
         '''
         This method is called during Node copy process. It aims to make
@@ -4460,8 +4469,12 @@ class Node(object):
         conf = self.__check_conf(conf)
         return self.internals[conf].get_private()
 
-    def set_semantics(self, val):
-        self.semantics = val
+    def set_semantics(self, sem):
+        if isinstance(sem, NodeSemantics):
+            self.semantics = sem
+        else:
+            assert(isinstance(sem, list))
+            self.semantics = NodeSemantics(sem)
 
     def get_semantics(self):
         return self.semantics

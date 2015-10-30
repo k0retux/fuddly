@@ -63,7 +63,7 @@ class health_check(Probe):
         pass
 
     def main(self, target, logger):
-        fb = target.get_target_feedback()
+        fb = target.get_feedback()
         byte_string = fb.get_bytes()
         self.status.set_private_info(byte_string)
         self.status.set_status(0)

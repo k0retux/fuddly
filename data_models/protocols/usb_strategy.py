@@ -43,6 +43,9 @@ except ImportError:
 
 class Pandaboard(Target):
 
+    def __init__(self, args):
+        self.args = args
+
     def start(self):
         self.cnx = rpyc.connect(self.args.ip, self.args.port, config={'allow_all_attrs':True, 'allow_pickle': True})
         return True

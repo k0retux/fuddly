@@ -345,9 +345,15 @@ class MyDF_DataModel(DataModel):
          ]}
 
 
+        for_network_tg1 = Node('4tg1', vt=String(val_list=['FOR_TARGET_1']))
+        for_network_tg1.set_semantics(['TG1'])
+
+        for_network_tg2 = Node('4tg2', vt=String(val_list=['FOR_TARGET_2']))
+        for_network_tg2.set_semantics(['TG2'])
+
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
-                      shape_desc)
+                      shape_desc, for_network_tg1, for_network_tg2)
 
 
 data_model = MyDF_DataModel()

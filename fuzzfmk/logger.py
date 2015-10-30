@@ -206,7 +206,7 @@ class Logger(object):
 
         return True
         
-    def log_target_feedback_from(self, feedback, preamble=None, epilogue=None):
+    def log_target_feedback_from(self, feedback, preamble=None, epilogue=None, source=None):
         feedback = self._decode_target_feedback(feedback)
 
         if preamble is not None:
@@ -215,7 +215,8 @@ class Logger(object):
         if not feedback:
             self.log_fn("### No Target Feedback!", rgb=Color.FEEDBACK)
         else:
-            self.log_fn("### Target Feedback:", rgb=Color.FEEDBACK)
+            msg_hdr = "### Target Feedback:" if source is None else "### Target Feedback [%s]:" % source
+            self.log_fn(msg_hdr, rgb=Color.FEEDBACK)
             self.log_fn(feedback)
 
         if epilogue is not None:

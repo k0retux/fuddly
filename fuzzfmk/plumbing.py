@@ -282,7 +282,12 @@ class Fuzzer(object):
         self.cleanup_all_dmakers(reset_existing_seed)
         self.set_fuzz_delay(0)
         self.set_fuzz_burst(1)
-        self.set_timeout(10)
+
+        base_timeout = self.tg._time_beetwen_data_emission
+        if base_timeout is not None:
+            self.set_timeout(base_timeout + 5)
+        else:
+            self.set_timeout(10)
 
     def _handle_user_code_exception(self, msg='', context=None):
         self.set_error(msg, code=Error.UserCodeError, context=context)
@@ -1012,6 +1017,9 @@ class Fuzzer(object):
                 else:
                     raise ValueError
 
+            except TargetStuck as e:
+                self.lg.log_comment("*** WARNING: Unable to send data to the target! [reason: %s]" % str(e))
+
             except:
                 self._handle_user_code_exception()
 
@@ -1160,9 +1168,14 @@ class Fuzzer(object):
         # This method is to be used when the target does not make use
         # of Logger.collect_target_feedback() facility. We thus try to
         # access the feedback from Target directly
-        tg_fbk = self.tg.get_target_feedback()
+        tg_fbk = self.tg.get_feedback()
         if tg_fbk is not None:
-            self.lg.log_target_feedback_from(tg_fbk.get_bytes(), preamble=preamble, epilogue=epilogue)
+            if tg_fbk.has_fbk_collector():
+                for ref, fbk in tg_fbk:
+                    self.lg.log_target_feedback_from(fbk, preamble=preamble, epilogue=epilogue,
+                                                     source=ref)
+            else:
+                self.lg.log_target_feedback_from(tg_fbk.get_bytes(), preamble=preamble, epilogue=epilogue)
 
     @EnforceOrder(accepted_states=['S2'])
     def check_target_readiness(self):
@@ -1178,7 +1191,7 @@ class Fuzzer(object):
                     time.sleep(0.2)
                     now = datetime.datetime.now()
                     if (now - t0).total_seconds() > self._timeout:
-                        self.lg.log_comment("*** Timeout! The target seems not to be ready.\n")
+                        self.lg.log_comment("*** Timeout! The target does not seem to be ready.\n")
                         ret = -1
                         break
             except KeyboardInterrupt:
