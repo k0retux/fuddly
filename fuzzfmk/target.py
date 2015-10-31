@@ -501,7 +501,13 @@ class NetworkTarget(Target):
             bytes_recd[s] = 0
 
         while dont_stop:
-            for s in fbk_sockets:
+            # This loop is to check if a socket is in error (because
+            # it seems that resources could have been reclaimed by the
+            # OS at this step). Without it, the next call to select()
+            # could trigger a 'bad descriptor Error', even if after
+            # the select(), the code take care of removing the closed sockets.
+            # TODO: investigate, to see if we are not missing something.
+            for s in list(fbk_sockets):
                 try:
                     s.fileno()
                 except socket.error:
@@ -509,6 +515,7 @@ class NetworkTarget(Target):
                     with socket_desc_lock:
                         if s in additional_fbk_sockets:
                             additional_fbk_sockets.remove(s)
+
             ready_to_read, ready_to_write, in_error = select.select(fbk_sockets, [], [], 1)
             now = datetime.datetime.now()
             duration = (now - t0).total_seconds()
@@ -538,10 +545,12 @@ class NetworkTarget(Target):
                         with socket_desc_lock:
                             if s in additional_fbk_sockets:
                                 additional_fbk_sockets.remove(s)
-                    bytes_recd[s] = bytes_recd[s] + len(chunk)
-                    if s not in chunks:
-                        chunks[s] = []
-                    chunks[s].append(chunk)
+                        continue
+                    else:
+                        bytes_recd[s] = bytes_recd[s] + len(chunk)
+                        if s not in chunks:
+                            chunks[s] = []
+                        chunks[s].append(chunk)
 
             for s in fbk_sockets:
                 if s in ready_to_read:
