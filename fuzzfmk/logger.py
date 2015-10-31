@@ -232,7 +232,7 @@ class Logger(object):
 
     def _decode_target_feedback(self, feedback):
         if sys.version_info[0] > 2 and isinstance(feedback, bytes):
-            feedback = feedback.decode('latin_1')        
+            feedback = feedback.decode('latin_1')
         return feedback.strip()
 
     def start_new_log_entry(self, preamble=''):

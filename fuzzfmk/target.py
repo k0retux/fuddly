@@ -31,6 +31,7 @@ import datetime
 import socket
 import threading
 import copy
+import struct
 
 import errno
 from socket import error as socket_error
@@ -96,9 +97,12 @@ class Target(object):
         '''
         raise NotImplementedError
 
-    def do_before_sending_data(self):
+    def do_before_sending_data(self, data_list):
         '''
         Called by the framework before sending data
+
+        Args:
+          data_list (list): list of Data objects that will be sent to the target.
         '''
         pass
 
@@ -187,13 +191,17 @@ class NetworkTarget(Target):
     CHUNK_SZ = 2048
 
     def __init__(self, host='localhost', port=12345, socket_type=(socket.AF_INET, socket.SOCK_STREAM),
-                 data_semantics=UNKNOWN_SEMANTIC):
+                 data_semantics=UNKNOWN_SEMANTIC, server_mode=False):
         self.host = {}
         self.port = {}
         self.socket_type = {}
+        self.server_mode = {}
         self.host[self.UNKNOWN_SEMANTIC] = self.host[data_semantics] = host
         self.port[self.UNKNOWN_SEMANTIC] = self.port[data_semantics] = port
         self.socket_type[self.UNKNOWN_SEMANTIC] = self.socket_type[data_semantics] = socket_type
+        self.server_mode[self.UNKNOWN_SEMANTIC] = self.server_mode[data_semantics] = server_mode
+        self._server_sockets = {}
+
         self.known_semantics = []
         self.sending_sockets = []
         self.multiple_destination = False
@@ -201,10 +209,11 @@ class NetworkTarget(Target):
         self._feedback = TargetFeedback()
 
         self._fbk_handling_lock = threading.Lock()
-        self.set_feedback_timeout(10)
+        self.socket_desc_lock = threading.Lock()
+
+        self.set_timeout(fbk_timeout=6, sending_delay=4)
 
         self.feedback_length = None  # if specified, timeout will be ignored
-        self.sending_delay = 10
 
         self._default_fbk_socket_id = 'Default Feedback Socket'
         self._default_fbk_id = {}
@@ -213,20 +222,48 @@ class NetworkTarget(Target):
 
         self._default_fbk_id[(host, port)] = self._default_fbk_socket_id + ' - {:s}:{:d}'.format(host, port)
 
+        self.stop_event = threading.Event()
 
-    def register_new_interface(self, host, port, socket_type, data_semantic):
+
+    def register_new_interface(self, host, port, socket_type, data_semantics, server_mode=False):
         self.multiple_destination = True
-        self.host[data_semantic] = host
-        self.port[data_semantic] = port
-        self.socket_type[data_semantic] = socket_type
-        self.known_semantics.append(data_semantic)
+        self.host[data_semantics] = host
+        self.port[data_semantics] = port
+        self.socket_type[data_semantics] = socket_type
+        self.server_mode[data_semantics] = server_mode
+        self.known_semantics.append(data_semantics)
         self._default_fbk_id[(host, port)] = self._default_fbk_socket_id + ' - {:s}:{:d}'.format(host, port)
 
-    def set_feedback_timeout(self, timeout):
-        self._feedback_timeout = timeout
-        self._time_beetwen_data_emission = self._feedback_timeout
+    def set_timeout(self, fbk_timeout, sending_delay):
+        self._feedback_timeout = max(fbk_timeout, 0.2)
+        self._sending_delay = min(sending_delay, max(self._feedback_timeout-0.2, 0))
+        self._time_beetwen_data_emission = self._feedback_timeout + 2
 
-    def feedback_handling(self, fbk, ref):
+    def add_additional_feedback_interface(self, host, port,
+                                          socket_type=(socket.AF_INET, socket.SOCK_STREAM),
+                                          fbk_id=None, fbk_length=None, server_mode=False):
+        '''Allows to register additional socket to get feedback
+        from. Connection is attempted be when target starts, that is
+        when :meth:`NetworkTarget.start()` is called.
+        '''
+        self._default_additional_fbk_id += 1
+        if fbk_id is None:
+            fbk_id = 'Default Additional Feedback ID %d' % self._default_additional_fbk_id
+        else:
+            assert(not str(fbk_id).startswith('Default Additional Feedback ID'))
+        self._additional_fbk_desc[fbk_id] = (host, port, socket_type, fbk_id, fbk_length, server_mode)
+
+
+    def _custom_data_handling_before_emission(self, data_list):
+        '''To be overloaded if you want to perform some operation before
+        sending `data_list` to the target.
+
+        Args:
+          data_list (list): list of Data objects that will be sent to the target.
+        '''
+        pass
+
+    def _feedback_handling(self, fbk, ref):
         '''To be overloaded if feedback from the target need to be filtered
         before being logged and/or collected in some way and/or for
         any other reasons.
@@ -237,36 +274,32 @@ class NetworkTarget(Target):
         '''
         return fbk, ref
 
-    def add_additional_feedback_interface(self, host, port,
-                                          socket_type=(socket.AF_INET, socket.SOCK_STREAM),
-                                          fbk_id=None, fbk_length=None):
-        '''Allows to register additional socket to get feedback
-        from. Connection is attempted be when target starts, that is
-        when :meth:`NetworkTarget.start()` is called.
-        '''
-        self._default_additional_fbk_id += 1
-        if fbk_id is None:
-            fbk_id = 'Default Additional Feedback ID %d' % self._default_additional_fbk_id
-        else:
-            assert(not str(fbk_id).startswith('Default Additional Feedback ID'))
-        self._additional_fbk_desc[fbk_id] = (host, port, socket_type, fbk_id, fbk_length)
 
-    def connect_to_additional_feedback_sockets(self):
+    def _connect_to_additional_feedback_sockets(self):
         '''
         Connection to additional feedback sockets, if any.
         '''
         if self._additional_fbk_desc:
-            for host, port, socket_type, fbk_id, fbk_length in self._additional_fbk_desc.values():
-                s = self._connect_to_target(host, port, socket_type)
-                if s is None:
-                    self._logger.log_comment('WARNING: Feedback not available from {:s}:{:d}'.format(host, port))
+            for host, port, socket_type, fbk_id, fbk_length, server_mode in self._additional_fbk_desc.values():
+                if server_mode:
+                    connected_client_event = threading.Event()
+                    self._listen_to_target(host, port, socket_type,
+                                           self._handle_connection_to_fbk_server, args=(fbk_id, fbk_length, connected_client_event))
+                    connected_client_event.wait(3)
+                    if not connected_client_event.is_set():
+                        self._logger.log_comment('WARNING: Feedback not available as no client connects to us ({:s}:{:d})'.format(host, port))
                 else:
-                    self._additional_fbk_sockets.append(s)
-                    self._additional_fbk_ids[s] = fbk_id
-                    self._additional_fbk_lengths[s] = fbk_length
+                    s = self._connect_to_target(host, port, socket_type)
+                    if s is None:
+                        self._logger.log_comment('WARNING: Feedback not available from {:s}:{:d}'.format(host, port))
+                    else:
+                        with self.socket_desc_lock:
+                            self._additional_fbk_sockets.append(s)
+                            self._additional_fbk_ids[s] = fbk_id
+                            self._additional_fbk_lengths[s] = fbk_length
 
 
-    def get_additional_feedback_sockets(self):
+    def _get_additional_feedback_sockets(self):
         '''Used if any additional socket to get feedback from has been added
         by :meth:`NetworkTarget.add_additional_feedback_interface()`,
         related to the data emitted if needed.
@@ -278,14 +311,16 @@ class NetworkTarget(Target):
           tuple: list of sockets, dict of associated ids/names,
             dict of associated length (a length can be None)
         '''
-        fbk_sockets = copy.copy(self._additional_fbk_sockets) if self._additional_fbk_sockets else None
-        fbk_ids = copy.copy(self._additional_fbk_ids) if self._additional_fbk_sockets else None
-        fbk_lengths = copy.copy(self._additional_fbk_lengths) if self._additional_fbk_sockets else None
+        with self.socket_desc_lock:
+            fbk_sockets = copy.copy(self._additional_fbk_sockets) if self._additional_fbk_sockets else None
+            fbk_ids = copy.copy(self._additional_fbk_ids) if self._additional_fbk_sockets else None
+            fbk_lengths = copy.copy(self._additional_fbk_lengths) if self._additional_fbk_sockets else None
 
         return fbk_sockets, fbk_ids, fbk_lengths
 
 
     def start(self):
+        self._server_sockets = {}
         self._additional_fbk_sockets = []
         self._additional_fbk_ids = {}
         self._additional_fbk_lengths = {}
@@ -297,40 +332,84 @@ class NetworkTarget(Target):
                                     # could be updated many times if
                                     # self.send_multiple_data() is
                                     # used.
-        self.connect_to_additional_feedback_sockets()
+        self._connect_to_additional_feedback_sockets()
         return True
 
     def stop(self):
+        self.stop_event.set()
+        for s in self._server_sockets.keys():
+            s.close()
         for s in self._additional_fbk_sockets:
             s.close()
         return True
 
     def send_data(self, data):
-        self._feedback.cleanup()
-        host, port, socket_type = self._get_net_info_from(data)
-        s = self._connect_to_target(host, port, socket_type)
-        if s is None:
-            self._feedback.set_error_code(-1)
-            err_msg = '>>> WARNING: unable to send data to {:s}:{:d} <<<'.format(host, port)
-            self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
+        connected_client_event = None
+        host, port, socket_type, server_mode = self._get_net_info_from(data)
+        if server_mode:
+            connected_client_event = threading.Event()
+            self._listen_to_target(host, port, socket_type,
+                                   self._handle_target_connection, args=(data, host, port, connected_client_event))
+            connected_client_event.wait(self._sending_delay)
+            if not connected_client_event.is_set():
+                self._feedback.set_error_code(-2)
+                err_msg = ">>> WARNING: unable to send data because the target did not connect to us <<<".format(host, port)
+                self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
         else:
-            self._send_data([s], {s:(data, host, port)})
-
-    def send_multiple_data(self, data_list):
-        self._feedback.cleanup()
-        sockets = []
-        data_refs = {}
-        for data in data_list:
-            host, port, socket_type = self._get_net_info_from(data)
             s = self._connect_to_target(host, port, socket_type)
             if s is None:
                 self._feedback.set_error_code(-1)
                 err_msg = '>>> WARNING: unable to send data to {:s}:{:d} <<<'.format(host, port)
                 self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
             else:
-                sockets.append(s)
-                data_refs[s] = (data, host, port)
-                self._send_data(sockets, data_refs)
+                self._send_data([s], {s:(data, host, port)})
+
+
+    def send_multiple_data(self, data_list):
+        sockets = []
+        data_refs = {}
+        connected_client_event = {}
+        client_event = None
+        for data in data_list:
+            host, port, socket_type, server_mode = self._get_net_info_from(data)
+            if server_mode:
+                client_event = connected_client_event[(host, port)] = threading.Event()
+                self._listen_to_target(host, port, socket_type,
+                                       self._handle_target_connection, args=(data, host, port, connected_client_event))
+            else:
+                s = self._connect_to_target(host, port, socket_type)
+                if s is None:
+                    self._feedback.set_error_code(-2)
+                    err_msg = '>>> WARNING: unable to send data to {:s}:{:d} <<<'.format(host, port)
+                    self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
+                else:
+                    sockets.append(s)
+                    data_refs[s] = (data, host, port)
+
+        t0 = datetime.datetime.now()
+
+        self._send_data(sockets, data_refs)
+
+        if connected_client_event:
+            duration = 0
+            client_event_copy = copy.copy(connected_client_event)
+            while duration < self._sending_delay:
+                if len(client_event) != len(client_event_copy):
+                    client_event = copy.copy(client_event_copy)
+                for ref, event in client_event.items():
+                    event.wait(0.2)
+                    if event.is_set():
+                        del client_event_copy[ref]
+                now = datetime.datetime.now()
+                duration = (now - t0).total_seconds()
+
+            for ref, event in connected_client_event.items():
+                host, port = ref
+                if not event.is_set():
+                    self._feedback.set_error_code(-1)
+                    err_msg = ">>> WARNING: unable to send data to because the target did not connect to us <<<"
+                    self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
+
 
     def _get_data_semantic_key(self, data):
         semantics = data.node.get_semantics()
@@ -348,7 +427,7 @@ class NetworkTarget(Target):
 
     def _get_net_info_from(self, data):
         key = self._get_data_semantic_key(data)
-        return self.host[key], self.port[key], self.socket_type[key]
+        return self.host[key], self.port[key], self.socket_type[key], self.server_mode[key]
 
     def _connect_to_target(self, host, port, socket_type):
         s = socket.socket(*socket_type)
@@ -362,9 +441,54 @@ class NetworkTarget(Target):
         s.setblocking(0)
         return s
 
+
+    def _listen_to_target(self, host, port, socket_type, func, args=None):
+        if (host, port) in self._server_sockets.values():
+            return False
+
+        serversocket = socket.socket(*socket_type)
+        serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        serversocket.settimeout(0.2)
+        try:
+            serversocket.bind((host, port))
+        except socket.error as serr:
+            print('\n*** ERROR: ' + str(serr))
+            return False
+
+        self._server_sockets[serversocket] = (host, port)
+
+        serversocket.listen(5)
+
+        server_thread = threading.Thread(None, self._server_main, name='SRV-' + '',
+                                         args=(serversocket, host, port, func, args))
+        server_thread.start()
+
+    def _server_main(self, serversocket, host, port, func, args):
+        while not self.stop_event.is_set():
+            try:
+                # accept connections from outside
+                (clientsocket, address) = serversocket.accept()
+            except socket.timeout:
+                pass
+            else:
+                func(clientsocket, address, args)
+
+    def _handle_connection_to_fbk_server(self, clientsocket, address, args):
+        fbk_id, fbk_length, connected_client_event = args
+        with self.socket_desc_lock:
+            self._additional_fbk_sockets.append(clientsocket)
+            self._additional_fbk_ids[clientsocket] = fbk_id
+            self._additional_fbk_lengths[clientsocket] = fbk_length
+        connected_client_event.set()
+
+    def _handle_target_connection(self, clientsocket, address, args):
+        data, host, port, connected_client_event = args
+        self._send_data([clientsocket], {clientsocket:(data, host, port)})
+        connected_client_event.set()
+
     @staticmethod
     def _collect_feedback_from(fbk_sockets, fbk_ids, fbk_lengths, fbk_lock, fbk_handling, fbk_collect, fbk_complete,
-                               send_id, fbk_timeout, register_ack):
+                               send_id, fbk_timeout, register_ack, socket_desc_lock, additional_fbk_sockets):
         chunks = {}
         bytes_recd = {}
         t0 = datetime.datetime.now()
@@ -372,11 +496,19 @@ class NetworkTarget(Target):
         first_pass = True
         ack_date = None
         dont_stop = True
-        
+
         for s in fbk_sockets:
             bytes_recd[s] = 0
 
         while dont_stop:
+            for s in fbk_sockets:
+                try:
+                    s.fileno()
+                except socket.error:
+                    fbk_sockets.remove(s)
+                    with socket_desc_lock:
+                        if s in additional_fbk_sockets:
+                            additional_fbk_sockets.remove(s)
             ready_to_read, ready_to_write, in_error = select.select(fbk_sockets, [], [], 1)
             now = datetime.datetime.now()
             duration = (now - t0).total_seconds()
@@ -391,12 +523,21 @@ class NetworkTarget(Target):
                         sz = min(fbk_lengths[s] - bytes_recd[s], NetworkTarget.CHUNK_SZ)
                     try:
                         chunk = s.recv(sz)
-                    except Exception as e:
+                    except socket.error as e:
                         print('\n*** WARNING: ' + str(e))
+                        fbk_sockets.remove(s)
+                        with socket_desc_lock:
+                            if s in additional_fbk_sockets:
+                                additional_fbk_sockets.remove(s)
                         continue
                     if chunk == b'':
-                        # Ok nothing more to receive
-                        break
+                        # Ok, nothing more to receive
+                        print('\n*** NOTE: Nothing more to receive' + repr(s))
+                        s.close()
+                        fbk_sockets.remove(s)
+                        with socket_desc_lock:
+                            if s in additional_fbk_sockets:
+                                additional_fbk_sockets.remove(s)
                     bytes_recd[s] = bytes_recd[s] + len(chunk)
                     if s not in chunks:
                         chunks[s] = []
@@ -425,11 +566,11 @@ class NetworkTarget(Target):
 
 
     def _send_data(self, sockets, data_refs):
-        ready_to_read, ready_to_write, in_error = select.select([], sockets, [], self.sending_delay)
+        ready_to_read, ready_to_write, in_error = select.select([], sockets, [], self._sending_delay)
         if ready_to_write:
             for s in ready_to_write:
                 data, host, port = data_refs[s]
-                fbk_sockets, fbk_ids, fbk_lengths = self.get_additional_feedback_sockets()
+                fbk_sockets, fbk_ids, fbk_lengths = self._get_additional_feedback_sockets()
                 raw_data = data.to_bytes()
                 totalsent = 0
                 while totalsent < len(raw_data):
@@ -455,9 +596,10 @@ class NetworkTarget(Target):
             self.feedback_thread_qty += 1
             feedback_thread = threading.Thread(None, self._collect_feedback_from, name='FBK-' + repr(self._sending_id),
                                                args=(fbk_sockets, fbk_ids, fbk_lengths, self._fbk_handling_lock,
-                                                     self.feedback_handling, self._feedback_collect,
+                                                     self._feedback_handling, self._feedback_collect,
                                                      self._feedback_complete, self._sending_id,
-                                                     self._feedback_timeout, self._register_last_ack_date))
+                                                     self._feedback_timeout, self._register_last_ack_date,
+                                                     self.socket_desc_lock, self._additional_fbk_sockets))
             feedback_thread.start()
 
         else:
@@ -477,9 +619,10 @@ class NetworkTarget(Target):
     def get_feedback(self):
         return self._feedback
 
-    def do_before_sending_data(self):
+    def do_before_sending_data(self, data_list):
         self._feedback_handled = False
         self._sending_id += 1
+        self._custom_data_handling_before_emission(data_list)
 
     def is_target_ready_for_new_data(self):
         # We answer we are ready if at least one receiver has

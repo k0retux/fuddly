@@ -285,7 +285,7 @@ class Fuzzer(object):
 
         base_timeout = self.tg._time_beetwen_data_emission
         if base_timeout is not None:
-            self.set_timeout(base_timeout + 5)
+            self.set_timeout(base_timeout + 2.0)
         else:
             self.set_timeout(10)
 
@@ -947,19 +947,13 @@ class Fuzzer(object):
                 else:
                     self.__current.append((None, dt))
 
-        # Allow the Target object to act before the FMK send data
-        self.tg.do_before_sending_data()
-
         if self._burst_countdown == self._burst:
             # log residual just before sending new data to avoid
             # polluting feedback logs of the next emission
             self.log_target_residual_feedback()
 
         self.new_transfer_preamble()
-        if multiple_data:
-            self.send_data(data_list)
-        else:
-            self.send_data(data_list[0])
+        self.send_data(data_list)
 
         ret = self.check_target_readiness()
         if ret < 0:
@@ -1006,13 +1000,13 @@ class Fuzzer(object):
             # Monitor hook function before sending
             self.__mon.do_before_sending_data()
 
-            # Target hook function before sending
             try:
-                self.tg.do_before_sending_data()
+                # Allow the Target object to act before the FMK send data
+                self.tg.do_before_sending_data(data_list)
 
-                if isinstance(data_list, Data):
-                    self.tg.send_data(data_list)
-                elif isinstance(data_list, list):
+                if len(data_list) == 1:
+                    self.tg.send_data(data_list[0])
+                elif len(data_list) > 1:
                     self.tg.send_multiple_data(data_list)
                 else:
                     raise ValueError
@@ -1180,6 +1174,8 @@ class Fuzzer(object):
                                                      source=ref)
             else:
                 self.lg.log_target_feedback_from(tg_fbk.get_bytes(), preamble=preamble, epilogue=epilogue)
+
+            tg_fbk.cleanup()
 
     @EnforceOrder(accepted_states=['S2'])
     def check_target_readiness(self):
@@ -1519,8 +1515,6 @@ class Fuzzer(object):
 
                 fmk_feedback.clear_flag(FmkFeedback.NeedChange)
 
-                self.tg.do_before_sending_data()
-
                 if self._burst_countdown == self._burst:
                     # log residual just before sending new data to avoid
                     # polluting feedback logs of the next emission
@@ -1528,10 +1522,7 @@ class Fuzzer(object):
 
                 self.new_transfer_preamble()
 
-                if multiple_data:
-                    self.send_data(data_list)
-                else:
-                    self.send_data(data_list[0])
+                self.send_data(data_list)
 
                 ret = self.check_target_readiness()
                 # Note: the condition (ret = -1) is supposed to be managed by the operator
