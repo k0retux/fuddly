@@ -25,7 +25,7 @@ import time
 
 from fuzzfmk.project import *
 from fuzzfmk.monitor import *
-from fuzzfmk.operator import *
+from fuzzfmk.operator_helper import *
 from fuzzfmk.plumbing import *
 from fuzzfmk.target import *
 from fuzzfmk.logger import *

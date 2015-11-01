@@ -23,7 +23,7 @@
 
 from fuzzfmk.project import *
 from fuzzfmk.monitor import *
-from fuzzfmk.operator import *
+from fuzzfmk.operator_helper import *
 from fuzzfmk.plumbing import *
 import fuzzfmk.global_resources as gr
 

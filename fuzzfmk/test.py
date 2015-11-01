@@ -24,7 +24,7 @@
 from __future__ import print_function
 
 import sys
-# import copy
+import copy
 import re
 import functools
 import binascii
@@ -32,8 +32,6 @@ import unittest
 import collections
 
 import argparse
-
-import json, collections
 
 sys.path.append('.')
 
@@ -50,6 +48,7 @@ from fuzzfmk.basic_primitives import *
 from fuzzfmk.plumbing import *
 from fuzzfmk.target import *
 from fuzzfmk.logger import *
+from fuzzfmk.operator_helper import *
 
 from fuzzfmk.data_model_helpers import *
 
@@ -2847,7 +2846,3 @@ if __name__ == "__main__":
     args = [sys.argv[0]] + test_args[1]
 
     unittest.main(verbosity=2, argv=args)
-
-
-
-

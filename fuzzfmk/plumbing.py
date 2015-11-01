@@ -43,6 +43,7 @@ from fuzzfmk.data_model import *
 from fuzzfmk.target import *
 from fuzzfmk.logger import *
 from fuzzfmk.monitor import *
+from fuzzfmk.operator_helper import *
 from fuzzfmk.project import *
 
 import fuzzfmk.generic_data_makers
@@ -1368,7 +1369,7 @@ class Fuzzer(object):
         tg_fbk = self.tg.get_feedback()
         if tg_fbk is not None:
             err_code = tg_fbk.get_error_code()
-            if err_code != 0:
+            if err_code is not None and err_code != 0:
                 self.lg.log_comment('Error detected with the target (error code: {:d}) !'.format(err_code))
 
             if tg_fbk.has_fbk_collector():
