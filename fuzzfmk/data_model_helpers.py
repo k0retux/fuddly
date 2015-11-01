@@ -989,7 +989,7 @@ class DataModel(object):
             self.build_data_model()
             self.__built = True
 
-    def unload_data_model(self):
+    def cleanup(self):
         pass
 
 

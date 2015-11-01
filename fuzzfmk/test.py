@@ -24,7 +24,7 @@
 from __future__ import print_function
 
 import sys
-import copy
+# import copy
 import re
 import functools
 import binascii
@@ -2788,8 +2788,8 @@ class TestFMK(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        fmk.enable_data_model(name='mydf')
-
+        fuzzer.run_project(name='tuto', dm_name='mydf')
+    
     def setUp(self):
         pass
 
@@ -2837,7 +2837,7 @@ if __name__ == "__main__":
 
     fuzzer = Fuzzer()
 
-    fuzzer.enable_data_model(name='example')
+    fuzzer.run_project(name='tuto', dm_name='example')
     fmk = fuzzer
 
     dm = example.data_model

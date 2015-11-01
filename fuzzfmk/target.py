@@ -174,7 +174,6 @@ class TargetFeedback(object):
 class EmptyTarget(Target):
 
     def send_data(self, data):
-        print(self._logger)
         pass
 
     def send_multiple_data(self, data_list):
@@ -649,9 +648,13 @@ class NetworkTarget(Target):
         return self._last_ack_date
 
     def get_description(self):
+        desc_added = []
         desc = ''
         for key, host in self.host.items():
             port = self.port[key]
+            if (host, port) in desc_added:
+                continue
+            desc_added.append((host, port))
             desc += '{:s}:{:d}, '.format(host, port)
 
         return desc[:-2]
@@ -670,11 +673,14 @@ class PrinterTarget(Target):
     def __init__(self, tmpfile_ext):
         self.__suffix = '{:0>12d}'.format(random.randint(2**16, 2**32))
         self.__feedback = TargetFeedback()
-        self.__tmpfile_ext = tmpfile_ext
         self.__target_ip = None
         self.__target_port = None
         self.__printer_name = None
         self.__cpt = None
+        self.set_tmp_file_extension(tmpfile_ext)
+
+    def set_tmp_file_extension(self, tmpfile_ext):
+        self._tmpfile_ext = tmpfile_ext
 
     def set_target_ip(self, target_ip):
         self.__target_ip = target_ip
@@ -736,7 +742,7 @@ class PrinterTarget(Target):
 
         data = data.to_bytes()
         wkspace = os.path.join(app_folder, 'workspace')
-        file_name = os.path.join(wkspace, 'fuzz_test_' + self.__suffix + self.__tmpfile_ext)
+        file_name = os.path.join(wkspace, 'fuzz_test_' + self.__suffix + self._tmpfile_ext)
 
         with open(file_name, 'wb') as f:
              f.write(data)
@@ -759,7 +765,10 @@ class LocalTarget(Target):
         self.__pre_args = None
         self.__post_args = None
         self.__feedback = TargetFeedback()
-        self.__tmpfile_ext = tmpfile_ext
+        self.set_tmp_file_extension(tmpfile_ext)
+
+    def set_tmp_file_extension(self, tmpfile_ext):
+        self._tmpfile_ext = tmpfile_ext
 
     def set_target_path(self, target_path):
         self.__target_path = target_path
@@ -791,7 +800,7 @@ class LocalTarget(Target):
         data = data.to_bytes()
         wkspace = os.path.join(app_folder, 'workspace')
 
-        name = os.path.join(wkspace, 'fuzz_test_' + self.__suffix + self.__tmpfile_ext)
+        name = os.path.join(wkspace, 'fuzz_test_' + self.__suffix + self._tmpfile_ext)
         with open(name, 'wb') as f:
              f.write(data)
 
