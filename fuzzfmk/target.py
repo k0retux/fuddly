@@ -60,11 +60,11 @@ class Target(object):
         self._logger = logger
 
     def _start(self):
-        self._logger.print_console('*** Target initialization\n', nl_before=False, rgb=Color.COMPONENT_START)
+        self._logger.print_console('*** Target initialization ***\n', nl_before=False, rgb=Color.COMPONENT_START)
         return self.start()
 
     def _stop(self):
-        self._logger.print_console('*** Target cleanup procedure\n', nl_before=False, rgb=Color.COMPONENT_STOP)
+        self._logger.print_console('*** Target cleanup procedure ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
         return self.stop()
 
     def start(self):

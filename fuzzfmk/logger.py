@@ -152,7 +152,7 @@ class Logger(object):
 
             self.log_fn = intern_func
 
-        self.print_console('*** Logger is started\n', nl_before=False, rgb=Color.COMPONENT_START)
+        self.print_console('*** Logger is started ***\n', nl_before=False, rgb=Color.COMPONENT_START)
 
 
     def stop(self):
@@ -162,7 +162,7 @@ class Logger(object):
 
         self.log_stats()
 
-        self.print_console('*** Logger is stopped\n', nl_before=False, rgb=Color.COMPONENT_STOP)
+        self.print_console('*** Logger is stopped ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
 
 
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO):

@@ -75,7 +75,7 @@ class ExportableFMKOps(object):
         self.cleanup_dmaker = fmk.cleanup_dmaker
         self.dynamic_generator_ids = fmk.dynamic_generator_ids
         self.set_error = fmk.set_error
-
+        self.load_data_model = fmk.load_data_model
 
 class FmkFeedback(object):
     
@@ -341,6 +341,7 @@ class Fuzzer(object):
 
         self.dm = dm_params['dm']
         self._cleanup_dm_attrs_from_fmk()
+        self._load_data_model()
         return True
 
     def _cleanup_dm_attrs_from_fmk(self):
@@ -420,9 +421,11 @@ class Fuzzer(object):
 
         rexp_strategy = re.compile("(.*)_strategy\.py$")
 
+        print(colorize(FontStyle.BOLD + "="*63+"[ Data Models ]==", rgb=Color.FMKINFOGROUP))
+
         for dname, file_list in data_models.items():
-            print(colorize(FontStyle.BOLD + ">>> Look for Data Models within '%s' directory" % dname,
-                           rgb=Color.FMKINFOGROUP))
+            print(colorize(">>> Look for Data Models within '%s' directory" % dname,
+                           rgb=Color.FMKINFOSUBGROUP))
             prefix = dname.replace(os.sep, '.') + '.'
             for f in file_list:
                 res = rexp_strategy.match(f)
@@ -484,9 +487,9 @@ class Fuzzer(object):
             self._name2dm[dm_params['dm'].name] = dm_params['dm']
 
             if reload_dm:
-                print(colorize("*** Data Model '%s' reloaded ***" % dm_params['dm'].name, rgb=Color.FMKINFO))
+                print(colorize("*** Data Model '%s' updated ***" % dm_params['dm'].name, rgb=Color.DATA_MODEL_LOADED))
             else:
-                print(colorize("*** Loaded Data Model: '%s' ***" % dm_params['dm'].name, rgb=Color.FMKINFO))
+                print(colorize("*** Found Data Model: '%s' ***" % dm_params['dm'].name, rgb=Color.FMKSUBINFO))
 
             return dm_params
 
@@ -549,9 +552,11 @@ class Fuzzer(object):
 
         rexp_proj = re.compile("(.*)_proj\.py$")
 
+        print(colorize(FontStyle.BOLD + "="*66+"[ Projects ]==", rgb=Color.FMKINFOGROUP))
+
         for dname, file_list in projects.items():
-            print(colorize(FontStyle.BOLD + ">>> Look for Projects within '%s' Directory" % dname,
-                           rgb=Color.FMKINFOGROUP))
+            print(colorize(">>> Look for Projects within '%s' Directory" % dname,
+                           rgb=Color.FMKINFOSUBGROUP))
             prefix = dname.replace(os.sep, '.') + '.'
             for f in file_list:
                 res = rexp_proj.match(f)
@@ -564,6 +569,8 @@ class Fuzzer(object):
                                       prj_params['target'], prj_params['logger'],
                                       prj_params['prj_rld_args'],
                                       reload_prj=False)
+
+        print(colorize(FontStyle.BOLD + "="*80, rgb=Color.FMKINFOGROUP))
 
 
     def _import_project(self, prefix, name, reload_prj=False):
@@ -620,9 +627,9 @@ class Fuzzer(object):
             self._name2prj[prj_params['project'].name] = prj_params['project']
 
             if reload_prj:
-                print(colorize("*** Project '%s' reloaded ***" % prj_params['project'].name, rgb=Color.FMKINFO))
+                print(colorize("*** Project '%s' updated ***" % prj_params['project'].name, rgb=Color.FMKSUBINFO))
             else:
-                print(colorize("*** Loaded Project: '%s' ***" % prj_params['project'].name, rgb=Color.FMKINFO))
+                print(colorize("*** Found Project: '%s' ***" % prj_params['project'].name, rgb=Color.FMKSUBINFO))
 
             return prj_params
 
@@ -707,6 +714,8 @@ class Fuzzer(object):
                     self._tactics.register_new_generator(gen_cls_name, gen, weight=1,
                                                           dmaker_type=dmaker_type, valid=True)
                     self.__dynamic_generator_ids[self.dm].append(dmaker_type)
+
+            print(colorize("*** Data Model '%s' loaded ***" % self.dm.name, rgb=Color.DATA_MODEL_LOADED))
 
         except:
             self._handle_user_code_exception()
@@ -951,8 +960,9 @@ class Fuzzer(object):
         if self.__is_started():
             self.cleanup_all_dmakers()
         self.dm = dm
-        self._cleanup_dm_attrs_from_fmk()
-        self._load_data_model()
+        if self.__is_started():
+            self._cleanup_dm_attrs_from_fmk()
+            self._load_data_model()
 
         return True
 

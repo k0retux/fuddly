@@ -11,6 +11,9 @@ disruptors,
 Using ``fuddly`` simple UI: ``FuzzShell``
 =========================================
 
+.. todo:: To be updated further to new project-centric fuddly
+          reorganization
+
 A simple UI---called FuzzShell---allows to interact with ``fuddly`` in
 an easy way. In this tutorial we present the usual commands that can
 be used during a fuzzing session. But first we have to launch it by
@@ -709,6 +712,10 @@ chain, basically ``JPG<finite=True> tTYPE``.
 Using ``fuddly`` Through Advanced Python Interpreter
 ====================================================
 
+.. todo:: To be updated further to new project-centric fuddly
+          reorganization
+
+
 To use ``fuddly`` within any python interpreter like ``ipython``, you
 will need to issue the following commands:
 
@@ -833,8 +840,8 @@ refer to the section :ref:`tuto:disruptors`
 
 
 
-Implementing a Data Model and Defining the Associated Fuzzing Environment
-=========================================================================
+Implementing a Data Model and Defining a Project Environment
+============================================================
 
 .. _data-model:
 
@@ -1026,14 +1033,12 @@ files need to be created within ``<root of
 fuddly>/data_models/[file_formats|protocol]/``:
 
 ``mydf.py``
-  Should contain the implementation of the data model related to
+  Contain the implementation of the data model related to
   ``MyDF`` data format, **which is the topic of the current section**.
 
 ``mydf_strategy.py``
-  Should contain everything else that you need for your purpose
-  like: targets (:ref:`targets-def`), logger (:ref:`logger-def`),
-  operators & probes (:ref:`tuto:operator`), specific
-  disruptors (:ref:`tuto:disruptors`).
+  Contain optional disruptors specific to the data model
+  (:ref:`tuto:disruptors`)
 
 By default, ``fuddly`` will use the prefix ``mydf`` for referencing
 the data model. But it can be overloaded within the data model
@@ -1563,57 +1568,6 @@ or because you don't want to for letting more freedom during data
 generation).
 
 
-
-Initiating the Fuzzing Environment
-----------------------------------
-
-The fuzzing environment is defined within ``mydf_strategy.py``. It
-starts with:
-
-.. code-block:: python
-   :linenos:
-
-   from fuzzfmk.plumbing import *
-   from fuzzfmk.tactics_helper import *
-
-   tactics = Tactics()
-
-``Fuddly`` registers for each data model the related
-dynamically-created generators, and if defined, specific disruptors,
-specific operators and specific probes.  For that purpose, an object
-:class:`fuzzfmk.tactics_helper.Tactics` has to be instantiated and
-referenced by the global variable ``tactics``.
-
-
-.. _targets-def:
-
-Defining the Targets
---------------------
-
-.. todo:: Write the section on Target()
-
-
-
-Generic Targets
-+++++++++++++++
-
-
-Specific Targets
-++++++++++++++++
-
-
-
-
-
-.. _logger-def:
-
-Defining the Logger
--------------------
-
-.. todo:: Write the section on Logger()
-
-
-
 .. _tuto:disruptors:
 
 Defining Specific Disruptors
@@ -1626,9 +1580,27 @@ Defining Specific Disruptors
 Overview
 ++++++++
 
-To define a specific disruptor for your data model you basically have
-to define a subclass of :class:`fuzzfmk.tactics_helper.Disruptor` or
-:class:`fuzzfmk.tactics_helper.StatefulDisruptor`, and use the
+Specific disruptors have to be implemented within ``mydf_strategy.py``. This file should
+starts with:
+
+.. code-block:: python
+   :linenos:
+
+   from fuzzfmk.plumbing import *
+   from fuzzfmk.tactics_helper import *
+
+   tactics = Tactics()
+
+.. note::
+   ``Fuddly`` registers for each data model the related
+   dynamically-created generators, and if defined, specific
+   disruptors. For that purpose, an object
+   :class:`fuzzfmk.tactics_helper.Tactics` has to be instantiated and
+   referenced by the global variable ``tactics``.
+
+Then, to define a specific disruptor for your data model you basically
+have to define a subclass of :class:`fuzzfmk.tactics_helper.Disruptor`
+or :class:`fuzzfmk.tactics_helper.StatefulDisruptor`, and use the
 decorator ``@disruptor`` on it to register it. The first parameter of
 this decorator has to be the :class:`fuzzfmk.tactics_helper.Tactics`
 object you declare at the beginning of ``mydf_strategy.py``.
@@ -1846,11 +1818,123 @@ like this (which is a simpler version of the generic disruptor
 
 
 
+Defining a Project Environment
+------------------------------
+
+The environment---composed of at least one target, a logger, some
+monitoring materials, and optionnaly virtual operators---is setup
+within a project file located within ``<root of
+fuddly>/projects/``. To illustrate that let's show the beginning of
+``generic/standard_proj.py``:
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 7, 10, 32
+
+   from fuzzfmk.project import *
+   from fuzzfmk.monitor import *
+   from fuzzfmk.operator_helper import *
+   from fuzzfmk.plumbing import *
+   import fuzzfmk.global_resources as gr
+
+   project = Project()
+   project.default_dm = 'mydf'
+
+   logger = Logger('tuto', data_in_seperate_file=False, explicit_export=False, export_orig=False, export_raw_data=False)
+
+   printer1_tg = PrinterTarget(tmpfile_ext='.png')
+   printer1_tg.set_target_ip('127.0.0.1')
+   printer1_tg.set_printer_name('PDF')
+
+   local_tg = LocalTarget(tmpfile_ext='.png')
+   local_tg.set_target_path('display')
+
+   local2_tg = LocalTarget(tmpfile_ext='.pdf')
+   local2_tg.set_target_path('okular')
+
+   local3_tg = LocalTarget(tmpfile_ext='.zip')
+   local3_tg.set_target_path('unzip')
+   local3_tg.set_post_args('-d ' + gr.workspace_folder)
+
+   net_tg = NetworkTarget(host='localhost', port=12345, data_semantics='TG1')
+   net_tg.register_new_interface('localhost', 54321, (socket.AF_INET, socket.SOCK_STREAM), 'TG2', server_mode=True)
+   net_tg.add_additional_feedback_interface('localhost', 7777, (socket.AF_INET, socket.SOCK_STREAM),
+					fbk_id='My Feedback Source', server_mode=True)
+   net_tg.set_timeout(fbk_timeout=5, sending_delay=3)
+
+   targets = [local_tg, local2_tg, local3_tg, printer1_tg, net_tg]
+
+
+A project file should contain at a minimum a
+:class:`fuzzfmk.project.Project` object (referenced by a variable
+``project``), a :class:`fuzzfmk.project.Logger` object
+(:ref:`logger-def`, referenced by a variable ``logger``), and
+optionally target objects (referenced by a variable ``targets``,
+:ref:`targets-def`), and operators & probes (:ref:`tuto:operator`).
+
+.. note:: An :class:`fuzzfmk.target.EmptyTarget` is automatically
+          added by ``fuddly`` to any project, for dry runs.
+
+
+.. _targets-def:
+
+Defining the Targets
+++++++++++++++++++++
+
+.. todo:: To be completed
+
+Within the tutorial project (``projects/tuto_proj.py``), a
+:class:`fuzzfmk.target.NetworkTarget` has been setup with two
+interfaces from which data can be sent to (and feedback retrieved
+from), plus an additional feedback source:
+
+.. code-block:: python
+   :linenos:
+
+   tg = NetworkTarget(host='localhost', port=12345, data_semantics='TG1')
+   tg.register_new_interface('localhost', 54321, (socket.AF_INET, socket.SOCK_STREAM), 'TG2', server_mode=True)
+   tg.add_additional_feedback_interface('localhost', 7777, (socket.AF_INET, socket.SOCK_STREAM),
+					fbk_id='My Other Feedback Source', server_mode=True)
+   tg.set_timeout(fbk_timeout=5, sending_delay=3)
+
+Also, this target can route data depending on their semantics (``TG1``,
+``TG2``) through the two created interfaces. And for data without
+semantics it defaults to the first interface (``TG1``).
+
+The simplest way to play with this target is use ``netcat`` as the
+real target. Note that some interfaces has been setup in server mode,
+that means that fuddly will send data when the target connects to
+it. The following ``netcat`` instances will cover our needs::
+
+  [term1] # nc -k -l 12345
+
+  [term2] # nc localhost 54321
+
+  [term3] # nc localhost 7777
+
+
+Note, to play with the routing you can use the specific data ``4TG1`` and
+``4TG2`` implemented for this purpose within the data model ``mydf``.
+
+.. note:: Refer to :ref:`targets` for details on the available generic
+          targets, that you can use directly or inherit from.
+
+
+
+.. _logger-def:
+
+Defining the Logger
++++++++++++++++++++
+
+.. todo:: Write the section on Logger()
+
+
+
 
 .. _tuto:operator:
 
 Defining Operators and Probes
------------------------------
++++++++++++++++++++++++++++++
 
 .. todo:: Write the section on Operators
 
@@ -1883,7 +1967,7 @@ process.
 
 
 Operators
-+++++++++
+'''''''''
 
 
 
@@ -1892,7 +1976,7 @@ Operators
 .. _tuto:probes:
 
 Probes & The Monitoring Subsystem
-+++++++++++++++++++++++++++++++++
+'''''''''''''''''''''''''''''''''
 
 
 

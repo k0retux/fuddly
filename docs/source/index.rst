@@ -22,6 +22,8 @@ Contents:
 
    disruptors
 
+   targets
+
    examples
 
    api

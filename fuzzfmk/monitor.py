@@ -76,7 +76,7 @@ class Monitor(object):
         self._logger = logger
 
     def set_strategy(self, strategy):
-        self._logger.print_console('*** Monitor refresh in progress...\n', nl_before=False, rgb=Color.COMPONENT_INFO)
+        self._logger.print_console('*** Monitor refresh in progress... ***\n', nl_before=False, rgb=Color.COMPONENT_INFO)
         self.stop_all_probes()
         self._prj = strategy
         self.probes = self._prj.get_probes()
@@ -84,12 +84,12 @@ class Monitor(object):
     def start(self):
         self.__enable = True
         self.monitor_conditions = {}
-        self._logger.print_console('*** Monitor is started\n', nl_before=False, rgb=Color.COMPONENT_START)
+        self._logger.print_console('*** Monitor is started ***\n', nl_before=False, rgb=Color.COMPONENT_START)
         
     def stop(self):
-        self._logger.print_console('*** Monitor stopping in progress...\n', nl_before=False, rgb=Color.COMPONENT_INFO)
+        self._logger.print_console('*** Monitor stopping in progress... ***\n', nl_before=False, rgb=Color.COMPONENT_INFO)
         self.stop_all_probes()
-        self._logger.print_console('*** Monitor is stopped\n', nl_before=False, rgb=Color.COMPONENT_STOP)
+        self._logger.print_console('*** Monitor is stopped ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
 
 
     def enable_hooks(self):
