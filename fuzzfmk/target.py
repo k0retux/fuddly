@@ -372,9 +372,9 @@ class NetworkTarget(Target):
         for data in data_list:
             host, port, socket_type, server_mode = self._get_net_info_from(data)
             if server_mode:
-                client_event = connected_client_event[(host, port)] = threading.Event()
+                connected_client_event[(host, port)] = threading.Event()
                 self._listen_to_target(host, port, socket_type,
-                                       self._handle_target_connection, args=(data, host, port, connected_client_event))
+                                       self._handle_target_connection, args=(data, host, port, connected_client_event[(host, port)]))
             else:
                 s = self._connect_to_target(host, port, socket_type)
                 if s is None:
@@ -391,6 +391,7 @@ class NetworkTarget(Target):
 
         if connected_client_event:
             duration = 0
+            client_event = connected_client_event
             client_event_copy = copy.copy(connected_client_event)
             while duration < self._sending_delay:
                 if len(client_event) != len(client_event_copy):
