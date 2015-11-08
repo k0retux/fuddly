@@ -11,9 +11,6 @@ disruptors,
 Using ``fuddly`` simple UI: ``FuzzShell``
 =========================================
 
-.. todo:: To be updated further to new project-centric fuddly
-          reorganization
-
 A simple UI---called FuzzShell---allows to interact with ``fuddly`` in
 an easy way. In this tutorial we present the usual commands that can
 be used during a fuzzing session. But first we have to launch it by
@@ -40,50 +37,58 @@ this:
 
 .. code-block:: none
    :linenos:
-   :emphasize-lines: 10
+   :emphasize-lines: 21
 
-   ...
+   ===============================================================[ Data Models ]==
+   >>> Look for Data Models within 'data_models' directory
+   *** Found Data Model: 'mydf' ***
+   *** Found Data Model: 'example' ***
+   >>> Look for Data Models within 'data_models/protocols' directory
+   *** Found Data Model: 'usb' ***
    >>> Look for Data Models within 'data_models/file_formats' directory
-   *** Loaded Data Model: 'png' ***
-   *** Loaded Data Model: 'jpg' ***
-   *** Loaded Data Model: 'pdf' ***
-   *** Loaded Data Model: 'zip' ***
+   *** Found Data Model: 'zip' ***
+   *** Found Data Model: 'png' ***
+   *** Found Data Model: 'pdf' ***
+   *** Found Data Model: 'jpg' ***
+   ==================================================================[ Projects ]==
+   >>> Look for Projects within 'projects/specific' Directory
+   *** Found Project: 'usb' ***
+   >>> Look for Projects within 'projects/generic' Directory
+   *** Found Project: 'standard' ***
+   ================================================================================
 
-   -=[ FuzzShell ]=- (with Fuzzer FmK 0.18)
+   -=[ FuzzShell ]=- (with Fuddly FmK 0.20)
 
-   >>
+   >> 
 
 .. note:: The ``help`` command shows you every defined command within
    ``FuzzShell``. You can also look at a brief command description and
    syntax by typing ``help <command_name>``
 
-You can first list the available data models:
+Note that ``fuddly`` looks for *Data Model* files (within
+``data_models/``) and *Project* files (within ``projects/``) during
+its initialization. A *Project* file is used to describe the targets
+that can be tested, the logger behaviour, and optionally specific
+monitoring means as well as some virtual operators.
+
+.. seealso:: To create a new project file, and to describe the
+             associated components refer to :ref:`tuto:project`.
+
+Once loaded, a project can be used with any data models. Basically,
+that means you can send any kind of data (among the defined ones) to
+any target described within your project file.
+
+Let's start by loading the ``standard`` project which define some
+targets to play with:
+
 
 .. code-block:: none
    :linenos:
    :emphasize-lines: 1
 
-   >> show_data_models
+   >> load_project standard
 
-   -=[ Data Models ]=-
-
-   [0] example
-   [1] usb
-   [2] png
-   [3] jpg
-   [4] pdf
-   [5] zip
-
-Let's say you want to perform ZIP fuzzing. You can select this data
-model thanks to the following command:
-
-.. code-block:: none
-   :linenos:
-   :emphasize-lines: 1
-
-   >> use_data_model zip
-
-Now, you want to choose the target to fuzz among the defined ones:
+You can look at the defined targets by issuing the following command:
 
 .. code-block:: none
    :linenos:
@@ -94,58 +99,109 @@ Now, you want to choose the target to fuzz among the defined ones:
    -=[ Available Targets ]=-
 
    [0] EmptyTarget
-   [1] LocalTarget [Program: unzip]
+   [1] LocalTarget [Program: display]
+   [2] LocalTarget [Program: okular]
+   [3] LocalTarget [Program: unzip, Args: -d /home/tuxico/Projets/fuddly/workspace/]
+   [4] PrinterTarget [IP: 127.0.0.1, Name: PDF]
+   [5] NetworkTarget [localhost:54321, localhost:12345]
+
 
 By default, the ``EmptyTarget`` is selected in order to let you
 experiment without a real target. But let's say you want to fuzz the
-``unzip`` program. You first have to select it, then you can go on
-with your fuzzing session:
+``unzip`` program. You first have to select it:
 
 .. code-block:: none
    :linenos:
    :emphasize-lines: 1
 
-   >> set_target 1
+   >> set_target 3
 
-   >> enable_fuzzing
-   *** Logger is started
-   *** Target initialization
-   *** Monitor is started
+
+.. seealso::
+   In order to define new targets, look at :ref:`targets-def`.
+
+.. seealso::   
+   ``Target`` (\ :class:`fuzzfmk.target.Target`) configuration cannot
+   be changed dynamically within ``FuzzShell``. But you can do it
+   through any python interpreter, by directly manipulating the
+   related ``Target`` object. Look at :ref:`fuddly-advanced`.
+
+
+You also need to choose a *Data Model* that you want to use with the
+selected target. For that purpose you can first list the available
+data models:
+
+.. code-block:: none
+   :linenos:
+   :emphasize-lines: 1
+
+   >> show_data_models
+
+   -=[ Data Models ]=-
+
+   [0] mydf
+   [1] example
+   [2] usb
+   [3] zip
+   [4] png
+   [5] pdf
+   [6] jpg
+
+
+As we select the ``unzip`` program as a target, we may want to
+perform ZIP fuzzing ;) Thus we select this data model by issuing the
+following command:
+
+.. code-block:: none
+   :linenos:
+   :emphasize-lines: 1
+
+   >> load_data_model zip
+
+And then we launch the loaded project and all the components by
+issuing the following command:
+
+.. code-block:: none
+   :linenos:
+   :emphasize-lines: 1
+
+   >> launch
+
+   *** Data Model 'zip' loaded ***
+   *** Logger is started ***
+   *** Target initialization ***
+   *** Monitor is started ***
 
    *** [ Fuzz delay = 0 ] ***
    *** [ Number of data sent in burst = 1 ] ***
    *** [ Target health-check timeout = 10 ] ***
    >> 
 
-.. seealso::
-
-   In order to define new targets, look at :ref:`targets-def`.
-
-.. seealso::
-   
-   ``Target`` (\ :class:`fuzzfmk.target.Target`) configuration cannot be changed within ``FuzzShell``, but you
-   can do it through any python interpreter, by directly manipulating
-   the related ``Target`` object. Look at :ref:`fuddly-advanced`.
 
 .. note::
+   Note that just after the project is launched, some internal parameters
+   are displayed, namely:
 
-   If you already know the data model and the target to use, you can
-   directly launch your session thanks to the command
-   ``enable_data_model``. The previous commands collapse then to
-   ``enable_data_model zip 1``.
+   - The fuzzing delay, which allows you to set a minimum delay between
+     two data emission. (Can be changed through the command
+     ``set_delay``).
+   - The maximum number of data that will be sent in burst, thus
+     ignoring the fuzzing delay. (Can be changed through the command
+     ``set_burst``)
+   - The timeout value for checking target's health. (Can be changed
+     through the command ``set_timeout``)
 
-We see that internal parameters take default values, namely:
 
-- The fuzzing delay, which allows you to set a minimum delay between
-  two data emission. (Can be changed through the command
-  ``set_delay``).
-
-- The maximum number of data that will be sent in burst, thus
-  ignoring the fuzzing delay. (Can be changed through the command
-  ``set_burst``)
-
-- The timeout value for checking target's health. (Can be changed
-  through the command ``set_timeout``)
+Finally, note that if you know the target from the project file you
+want to interact with, you can directly launch your project thanks to
+the command ``run_project``. Basically by issuing ``run_project
+standard 1``, you will automatically trigger the commands we just
+talked about. Note this command will initially load the default data
+model defined in the ``standard`` project file, which is the imaginary
+data model used by our tutorial (``mydf``). If you want to load
+another data model at any time while your project is launched, use
+simply the command ``load_data_model`` with the name of the data model
+you want to use, and that's all.
 
 
 Send malformed ZIP files to the target (manually)
@@ -352,7 +408,6 @@ expression that selects the root paths from which the terminal nodes
 to corrupt can be chosen.
 
 .. note::
-
    As the data model of ``fuddly`` is built on directed graphs, we
    call *paths* in ``fuddly`` the graph paths of the graph
    representing the data. For more information on fuddly data model
@@ -374,7 +429,7 @@ can see on lines 16 & 19.
 .. seealso:: If you want to see an ASCII representation of the data,
              in order to grasp the way the graph is built, issue the
              command ``show_data`` after the generation process. It
-             will depict something like what is presented `hereunder
+             will depict something like what is shown `here under
              <#zip-show-cmd>`_.
 
 	     .. _zip-show-cmd:
@@ -634,7 +689,7 @@ model with your favorite editor, and after saving it, issue the
 command ``reload_data_model`` at the ``FuzzShell`` prompt.
 
 If you also want to modify the target abstraction or operators or
-probes, ..., you have to reload every fuddly subsystem. To do so, you
+probes, ..., you have to reload every fuddly subsystems. To do so, you
 only need to issue the command ``reload_all``.
 
 Now, imagine that you want to switch to a new target already
@@ -642,8 +697,8 @@ registered, simply issue the command ``reload_all <target_id>``, where
 ``<target_id>`` is picked up through the IDs displayed by the command
 ``show_targets``
 
-Finally, if you want to switch to a new data model while a data model
-is already loaded, simply issue the command ``enable_data_model
+Finally, if you want to switch to a new data model while a project is
+already launched, simply issue the command ``load_data_model
 <data_model_name>`` to let fuddly do the job for you.
 
 
@@ -656,27 +711,32 @@ target feedback when its worth it, to automatically save test cases
 that affect the target and to automatically decide on the following
 steps based on thoughtful criteria.
 
-Let's take the example of an already defined operator that
-targets programs handling JPG files.
+Let's take the example of a fuzzing operator defined in the
+``standard`` project, and use it to fuzz JPG files and send them to
+the ``display`` program---target number 3.
 
 .. seealso:: To define your own operators refer to
              :ref:`tuto:operator`.
 
-First, we need to load the JPG data model and select a target we want
-to fuzz, for instance the ``display`` program. You can do it in one
-line by issuing the following command::
+First, we need to launch the project ``standard`` and to specify the
+target number 3. You can do it in one line by issuing the following
+command::
 
-  >> enable_data_model jpg 1
+  >> run_project standard 3
 
-The last parameter is the identifier of the target. It's a shortcut to
-what have been presented in section :ref:`tuto:start-fuzzshell`. If
-you issue the command ``show_targets`` you will notice the enabled
-target as it is highlighted in the console, like you can see in the
-figure `bellow <#target-enabled>`_.
+The last parameter of is the identifier of the
+target. It's a shortcut to what have been presented in section
+:ref:`tuto:start-fuzzshell`. If you issue the command ``show_targets``
+you will notice the enabled target as it is highlighted in the
+console, like you can see in the figure `bellow <#target-enabled>`_.
 
 .. _target-enabled:
 .. figure::  images/target_enabled.png
    :align:   center
+
+You can now load the JPG data model::
+
+  >> load_data_model jpg
 
 Then, you can look at the available operators and learn about their
 parameters by issuing the command::
@@ -712,10 +772,6 @@ chain, basically ``JPG<finite=True> tTYPE``.
 Using ``fuddly`` Through Advanced Python Interpreter
 ====================================================
 
-.. todo:: To be updated further to new project-centric fuddly
-          reorganization
-
-
 To use ``fuddly`` within any python interpreter like ``ipython``, you
 will need to issue the following commands:
 
@@ -738,28 +794,51 @@ object ``fmk``. Every commands defined by ``FuzzShell`` (refer to
 :ref:`tuto:start-fuzzshell`) are backed by a method of the class
 :class:`fuzzfmk.plumbing.Fuzzer`.
 
-Below we demonstrate some commands:
+Here under some basic commands to start with:
 
 .. code-block:: python
    :linenos:
 
-   # To show the available data models
+
+   # To show the available projects
+   fmk.show_projects()
+
+   # Contains the list of all the Project objects available
+   fmk.prj_list
+
+   # Load the ``standard`` project by name
+   fmk.load_project(name='standard')
+
+   # Show available targets for this project
+   fmk.show_targets()
+
+   # Select the target with ID ``3``
+   fmk.set_target(3)
+
+   # To show all the available data models
    fmk.show_data_models()
 
    # Contains the list of all the DataModel objects available
    fmk.dm_list
 
-   # Enable the ZIP data model by name, and select the target with ID ``1``
-   fmk.enable_data_model(name='zip', tg=1)
+   # Load the ZIP data model by name
+   fmk.load_data_model(name='zip')
 
-   # Reference to the currently loaded data model, in this case the ZIP one
+   # Reference to the currently loaded data model, in our case the ZIP one
    fmk.dm
 
-   # Reload all sub-systems and data model definitions and choose the target 0
-   fmk.reload_all(tg_num=0)
+   # Launch the project and all the related components
+   fmk.launch()
 
-   # Show available targets for this data model
-   fmk.show_targets()
+   # Reference to the currently launched project, in our case ``standard``
+   fmk.prj
+
+   # To launch the ``standard`` project with the target number ``3``
+   # and the ZIP data model in one line
+   fmk.run_project(name='standard', tg=3, dm_name='zip')
+
+   # Reload all sub-systems and data model definitions and choose the target ``0``
+   fmk.reload_all(tg_num=0)
 
    # Show a list of the registered data type within the data model
    fmk.show_dm_data_identifiers()
@@ -1817,6 +1896,7 @@ like this (which is a simpler version of the generic disruptor
 	return data
 
 
+.. _tuto:project:
 
 Defining a Project Environment
 ------------------------------

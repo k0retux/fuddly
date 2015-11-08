@@ -985,11 +985,11 @@ class Fuzzer(object):
            return False
 
         if dm_name is None:
-            if prj.default_dm is None:
+            if self.prj.default_dm is None:
                 self.set_error("The attribute 'default_dm' is not set!")
                 return False
             else:
-                dm_name = prj.default_dm
+                dm_name = self.prj.default_dm
 
         ok = self.load_data_model(name=dm_name)
         if not ok:
@@ -999,11 +999,12 @@ class Fuzzer(object):
             assert(isinstance(tg, int))
             self.__set_target(tg)
 
-        ok = self.enable_fuzzing()
+        ok = self.launch()
         if not ok:
             return False
 
         return True
+
 
     @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'], final_state='25_load_dm')
     def load_project(self, prj=None, name=None):
@@ -1024,7 +1025,7 @@ class Fuzzer(object):
 
 
     @EnforceOrder(accepted_states=['S1'], final_state='S2')
-    def enable_fuzzing(self):
+    def launch(self):
         if not self.__prj_to_be_reloaded:
             self.__init_fmk_internals_step1(self.prj, self.dm)
             self.__start_fuzzing()
@@ -2445,7 +2446,7 @@ class FuzzShell(cmd.Cmd):
         self.intro = colorize(FontStyle.BOLD + "\n-=[ %s ]=- (with Fuddly FmK %s)\n" % (title, fuddly_version), rgb=Color.TITLE)
 
         self.__allowed_cmd = re.compile(
-            '^quit$|^show_projects$|^show_data_models$|^load_project|^load_data_model|^set_target|^show_targets$|^enable_fuzzing$' \
+            '^quit$|^show_projects$|^show_data_models$|^load_project|^load_data_model|^set_target|^show_targets$|^launch$' \
             '|^run_project|^display_color_theme$|^help'
             )
 
@@ -2544,7 +2545,7 @@ class FuzzShell(cmd.Cmd):
         return False
 
     def do_load_data_model(self, line):
-        '''Load an available Data Model'''
+        '''Load a Data Model by name'''
         self.__error = True
 
         arg = line.strip()
@@ -2592,7 +2593,11 @@ class FuzzShell(cmd.Cmd):
 
     def do_run_project(self, line):
         '''
-        Load an available project & Enable Fuzzing
+        Load a Project by name & Launch it:
+        1. Enable the specified target
+        2. Load the default data model of the project file
+        3. Launch the project by starting fuddly subsystems
+
         |_ syntax: run_project <project_name> [target_number]
         '''
 
@@ -2636,6 +2641,7 @@ class FuzzShell(cmd.Cmd):
         return False
 
 
+
     def do_set_target(self, line):
         '''
         Set the target number to use
@@ -2673,11 +2679,11 @@ class FuzzShell(cmd.Cmd):
         return False
 
 
-    def do_enable_fuzzing(self, line):
-        '''Enable fuzzing by starting every needed components'''
+    def do_launch(self, line):
+        '''Launch the loaded project by starting every needed components'''
         self.__error = True
 
-        self.fz.enable_fuzzing()
+        self.fz.launch()
 
         self.__error = False
         return False
