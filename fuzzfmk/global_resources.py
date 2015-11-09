@@ -32,5 +32,6 @@ fuzzfmk_folder  = '.' if fuzzfmk_folder == '' else fuzzfmk_folder
 app_folder = os.path.dirname(os.path.dirname(fuzzfmk.__file__))
 app_folder = '.' if app_folder == '' else app_folder
 
-workspace_folder = app_folder + os.sep + 'workspace/'
-external_libs_folder = app_folder + os.sep + 'external_libs/'
+workspace_folder = app_folder + os.sep + 'workspace' + os.sep
+external_libs_folder = app_folder + os.sep + 'external_libs' + os.sep
+external_tools_folder = app_folder + os.sep + 'external_tools' + os.sep

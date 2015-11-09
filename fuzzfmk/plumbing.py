@@ -951,6 +951,8 @@ class Fuzzer(object):
         if name is not None:
             dm = self.get_data_model_by_name(name)
             if dm is None:
+                self.set_error("Data model '{:s}' has not been found!".format(name), 
+                               code=Error.CommandError)
                 return False
 
         elif dm is not None:
@@ -2630,10 +2632,10 @@ class FuzzShell(cmd.Cmd):
                 break
 
         self.__error_msg = "Project '%s' is not available" % prj_name
-
         if not ok:
             return False
 
+        self.__error_msg = "Unable to launch the project '%s'" % prj_name
         if not self.fz.run_project(prj=prj, tg=tg_id):
             return False
 
