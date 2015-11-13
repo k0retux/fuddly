@@ -669,15 +669,20 @@ class d_corrupt_bits_by_position(Disruptor):
         return prev_data
 
 
-@disruptor(tactics, dtype="FREE", weight=4,
+@disruptor(tactics, dtype="FIX", weight=4,
            args={'path': ('graph path regexp to select nodes on which ' \
                           'the disruptor should apply', None, str),
                  'clone_node': ('if True the dmaker will always return a copy ' \
                                 'of the node. (for stateless diruptors dealing with ' \
                                 'big data it can be usefull to it to False)', False, bool)})
-class d_release_constraints(Disruptor):
-    '''
-    Release constraints from the data, or from only a piece of it.
+class d_fix_constraints(Disruptor):
+    '''Fix data constraints.
+
+    Release constraints from input data or from only a piece of it (if
+    the parameter `path` is provided), then recompute them. By
+    constraints we mean every generator (or function) nodes that may
+    embeds constraints between nodes, and every node *existence
+    conditions*.
     '''
     def setup(self, dm, user_input):
         return True

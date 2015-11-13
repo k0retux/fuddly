@@ -9,14 +9,21 @@ sections.
 Stateless Disruptors
 ====================
 
-FREE - Release Data Constraints
--------------------------------
+FIX - Fix Data Constraints
+--------------------------
 
 Description:
-  Release constraints from the data, or from only a piece of it.
+  Release constraints from input data or from only a piece of it (if
+  the parameter `path` is provided), then recompute them. By
+  constraints we mean every generator (or function) nodes that may
+  embeds constraints between nodes, and every node *existence
+  conditions*.
+
+  .. seealso:: Refer to :ref:`dm:pattern:existence-cond` for insight
+	       into existence conditions.
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.d_release_constraints`
+  :class:`fuzzfmk.generic_data_makers.d_fix_constraints`
 
 Parameters:
   .. code-block:: none
