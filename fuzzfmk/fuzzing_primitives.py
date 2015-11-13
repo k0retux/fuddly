@@ -557,6 +557,7 @@ class NonTermVisitor(BasicVisitor):
         self.current_nt_node = None
 
     def need_reset(self, node):
+        # DEBUG_PRINT('--(1)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()), level=0)
         if node.is_nonterm() and node is not self.current_nt_node and node.cc.structure_will_change():
             # this case is called outside node_consumer_helper(),
             # because we declared to only be interested with other

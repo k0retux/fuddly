@@ -97,11 +97,14 @@ class Logger(object):
 
         def init_logfn(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False):
             if issubclass(x.__class__, Data):
-                data = repr(x) if self.__export_raw_data else str(x)
+                if sys.version_info[0] > 2:
+                    data = repr(x) if self.__export_raw_data else x.to_bytes().decode('latin-1')
+                else:
+                    data = repr(x) if self.__export_raw_data else str(x)
                 rgb = None
                 style = None
             elif issubclass(x.__class__, bytes) and sys.version_info[0] > 2:
-                data = repr(x)
+                data = repr(x) if self.__export_raw_data else x.decode('latin-1')
             else:
                 data = x
             self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)
@@ -131,11 +134,14 @@ class Logger(object):
 
             def intern_func(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False):
                 if issubclass(x.__class__, Data):
-                    data = repr(x) if self.__export_raw_data else str(x)
+                    if sys.version_info[0] > 2:
+                        data = repr(x) if self.__export_raw_data else x.to_bytes().decode('latin-1')
+                    else:
+                        data = repr(x) if self.__export_raw_data else str(x)
                     rgb = None
                     style = None
                 elif issubclass(x.__class__, bytes) and sys.version_info[0] > 2:
-                    data = repr(x)
+                    data = repr(x) if self.__export_raw_data else x.decode('latin-1')
                 else:
                     data = x
                 self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)

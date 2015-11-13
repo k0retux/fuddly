@@ -9,6 +9,30 @@ sections.
 Stateless Disruptors
 ====================
 
+FREE - Release Data Constraints
+-------------------------------
+
+Description:
+  Release constraints from the data, or from only a piece of it.
+
+Reference:
+  :class:`fuzzfmk.generic_data_makers.d_release_constraints`
+
+Parameters:
+  .. code-block:: none
+
+	specific args: 
+	  |_ path
+	  |      | desc: graph path regexp to select nodes on which the disruptor should 
+	  |      |       apply
+	  |      | default: None [type: str]
+	  |_ clone_node
+	  |      | desc: if True the dmaker will always return a copy of the node. (for 
+	  |      |       stateless diruptors dealing with big data it can be usefull 
+	  |      |       to it to False)
+	  |      | default: False [type: bool]
+
+
 ALT - Alternative Node Configuration
 ------------------------------------
 

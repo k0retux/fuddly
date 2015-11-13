@@ -646,7 +646,7 @@ class d_corrupt_node_bits(Disruptor):
                  'ascii': ('enforce all outputs to be ascii 7bits', False, bool)})
 class d_corrupt_bits_by_position(Disruptor):
     '''
-    Corrupt bit at a specific byte .
+    Corrupt bit at a specific byte.
     '''
     def setup(self, dm, user_input):
         return True
@@ -665,6 +665,49 @@ class d_corrupt_bits_by_position(Disruptor):
         msg = val[:self.idx-1]+new_value+val[self.idx:]
 
         prev_data.update_from_str_or_bytes(msg)
+
+        return prev_data
+
+
+@disruptor(tactics, dtype="FREE", weight=4,
+           args={'path': ('graph path regexp to select nodes on which ' \
+                          'the disruptor should apply', None, str),
+                 'clone_node': ('if True the dmaker will always return a copy ' \
+                                'of the node. (for stateless diruptors dealing with ' \
+                                'big data it can be usefull to it to False)', False, bool)})
+class d_release_constraints(Disruptor):
+    '''
+    Release constraints from the data, or from only a piece of it.
+    '''
+    def setup(self, dm, user_input):
+        return True
+
+    def disrupt_data(self, dm, target, prev_data):
+        if prev_data.node is None:
+            prev_data.add_info('INVALID INPUT')
+            return prev_data
+
+        if self.path:
+            c = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable])
+            l = prev_data.node.get_reachable_nodes(path_regexp=self.path,
+                                                   internals_criteria=c)
+            if not l:
+                prev_data.add_info('INVALID INPUT')
+                return prev_data
+
+            for n in l:
+                n.unfreeze(recursive=True, reevaluate_exist_cond=True)
+                prev_data.add_info("release constraints from the node '%s'" % n.name)
+
+        else:
+            prev_data.node.unfreeze(recursive=True, reevaluate_exist_cond=True)
+            prev_data.add_info('release constraints from the root')
+
+        prev_data.node.freeze()
+
+        if self.clone_node:
+            exported_node = Node(prev_data.node.name, base_node=prev_data.node)
+            prev_data.update_from_node(exported_node)
 
         return prev_data
 
