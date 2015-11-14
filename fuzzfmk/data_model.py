@@ -750,6 +750,13 @@ class NodeInternals(object):
         '''
         pass
 
+    def clear_clone_info_since(self, node):
+        '''
+        Cleanup obsolete graph internals information prior to what has been
+        registered with the node given as parameter.
+        '''
+        pass
+
     def is_exhausted(self):
         return False
 
@@ -856,19 +863,18 @@ class DynNode_Helpers(object):
     
     def __init__(self):
         self.reset_graph_info()
-        # self._graph_info = []
-        # self._node_pos = {}
-        # self._curr_pos = 0
 
     def __copy__(self):
         new_obj = type(self)()
         new_obj._graph_info = copy.copy(self._graph_info)
+        # new_obj._node_ids = copy.copy(self._node_ids)
         new_obj._node_pos = copy.copy(self._node_pos)
         new_obj._curr_pos = self._curr_pos
         return new_obj
 
     def reset_graph_info(self):
         self._graph_info = []
+        # self._node_ids = []
         self._node_pos = {}
         self._curr_pos = 0
 
@@ -877,9 +883,45 @@ class DynNode_Helpers(object):
             self._curr_pos -= 1
             self._node_pos[id(node)] = self._curr_pos
             self._graph_info.insert(0,(info, node.name))
+            # self._node_ids.insert(0,id(node))
         else:
-            self._graph_info[self._node_pos[id(node)]] = (info, node.name)
+            pos = self._node_pos[id(node)]
+            self._graph_info[pos] = (info, node.name)
+            # self._node_ids[pos] = id(node)
 
+    def clear_graph_info_since(self, node):
+        # TOFIX: node.name is not a reliable ID. Should use id(node),
+        # but some bug prevent it from working. (self._node_ids was
+        # used for this purpose)
+
+        # nids = self._node_ids
+        # if id(node) in nids:
+        #     idx = nids.index(id(node))
+        # else:
+        #     print('\nNot present here!', node.name, id(node), nids)
+        #     return
+
+        curr_len = len(self._graph_info)
+        nids = [y for x, y in reversed(self._graph_info)]
+        if node.name in nids:
+            # print('\nD:',  node.name, id(node), self._node_ids)
+            # print('Pos:', self._node_pos)
+            # print('Name:', self._graph_info)
+            # if id(node) not in self._node_ids:
+            #     raise ValueError
+            idx = nids.index(node.name)
+            idx = curr_len - idx - 1
+        else:
+            return
+
+        self._graph_info = self._graph_info[idx+1:]
+        # self._node_ids = self._node_ids[idx+1:]
+        node_pos = {}
+        for id_node, pos in self._node_pos.items():
+            if pos > -(curr_len-idx):
+                node_pos[id_node] = pos
+        self._node_pos = node_pos
+        self._curr_pos += idx+1
 
     def make_private(self, env=None):
         if env and env.id_list is None:
@@ -894,19 +936,25 @@ class DynNode_Helpers(object):
         if env.id_list is not None:
             # print('*** DynHelper: delayed update')
             new_node_pos = {}
+            # new_node_ids = {}
             for old_id, new_id in env.id_list:
                 pos = self._node_pos.get(old_id, None)
                 if pos is not None:
                     # print('*** DynHelper: updated')
                     new_node_pos[new_id] = pos
-            self._node_pos = new_node_pos
+                    # idx = self._node_ids.index(old_id)
+                    # new_node_ids[idx] = new_id
+
+            # new_node_ids = [new_node_ids[k] for k in sorted(new_node_ids.keys())]
+            if new_node_pos:
+                self._node_pos = new_node_pos
+                # self._node_ids = new_node_ids
         else:
             pass
 
 
     def _get_graph_info(self):
         return self._graph_info
-        # return list(reversed(self._graph_info))
 
     graph_info = property(fget=_get_graph_info)
 
@@ -1284,8 +1332,8 @@ class NodeInternals_GenFunc(NodeInternals):
         self._node_helpers.set_graph_info(node, info)
         # self._node_helpers.graph_info.insert(0, info)
 
-    def clear_all_clone_info(self):
-        self._node_helpers.reset_graph_info()
+    def clear_clone_info_since(self, node):
+        self._node_helpers.clear_graph_info_since(node)
 
 
 class NodeInternals_Term(NodeInternals):
@@ -1590,8 +1638,8 @@ class NodeInternals_Func(NodeInternals_Term):
     def set_clone_info(self, info, node):
         self._node_helpers.set_graph_info(node, info)
 
-    def clear_all_clone_info(self):
-        self._node_helpers.reset_graph_info()
+    def clear_clone_info_since(self, node):
+        self._node_helpers.clear_graph_info_since(node)
 
     def make_args_private(self, node_dico, entangled_set, ignore_frozen_state, accept_external_entanglement):
         self._node_helpers.make_private(self.env)
@@ -3353,7 +3401,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 # cpu will be necessarily wasted if
                 # 'reevaluate_exist_cond' is not used), that's why we
                 # recompute it.
-                iterable = copy.copy(self.frozen_node_list)
+                iterable = self.frozen_node_list
                 determinist = self.is_attr_set(NodeInternals.Determinist)
                 finite = self.is_attr_set(NodeInternals.Finite)
                 if finite or determinist:
@@ -3391,6 +3439,18 @@ class NodeInternals_NonTerm(NodeInternals):
                     # don't bother trying to recover the previous one
                     pass
 
+                for n in self.subnodes_set:
+                    n.clear_clone_info_since(n)
+
+                for e in iterable:
+                    self._cleanup_entangled_nodes_from(e)
+                    if e.is_frozen(conf) and (e.is_nonterm(conf) or e.is_genfunc(conf) or e.is_func(conf)):
+                        e.unfreeze(conf=conf, recursive=True, dont_change_state=dont_change_state,
+                                   ignore_entanglement=ignore_entanglement, only_generators=only_generators,
+                                   reevaluate_exist_cond=reevaluate_exist_cond)
+
+                self.frozen_node_list = None
+
             elif dont_change_state or only_generators:
                 iterable = self.frozen_node_list
             else:
@@ -3398,18 +3458,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 if self.separator is not None:
                     iterable.add(self.separator.node)
 
-            if reevaluate_exist_cond:
-                for e in iterable:
-                    if e.is_frozen(conf) and (e.is_nonterm(conf) or e.is_genfunc(conf) or e.is_func(conf)):
-                        e.unfreeze(conf=conf, recursive=True, dont_change_state=dont_change_state,
-                                   ignore_entanglement=ignore_entanglement, only_generators=only_generators,
-                                   reevaluate_exist_cond=reevaluate_exist_cond)
-                        if e.is_genfunc(conf) or e.is_func(conf):
-                            e.clear_all_clone_info()
-                        self._cleanup_entangled_nodes_from(e)
-
-                self.frozen_node_list = None
-            else:
+            if not reevaluate_exist_cond:
                 for e in iterable:
                     if e.is_frozen(conf):
                         e.unfreeze(conf=conf, recursive=True, dont_change_state=dont_change_state,
@@ -3422,8 +3471,7 @@ class NodeInternals_NonTerm(NodeInternals):
             self._nodes_drawn_qty = {}
             for n in self.subnodes_set:
                 self._clear_drawn_node_attrs(n)
-                if n.is_genfunc(conf) or n.is_func(conf):
-                    n.clear_all_clone_info()
+                n.clear_clone_info_since(n)
 
         if self.exhausted:
             self.excluded_components = []
@@ -3444,8 +3492,7 @@ class NodeInternals_NonTerm(NodeInternals):
         self._nodes_drawn_qty = {}
         for n in self.subnodes_set:
             self._clear_drawn_node_attrs(n)
-            if n.is_genfunc() or n.is_func():
-                n.clear_all_clone_info()
+            n.clear_clone_info_since(n)
 
         if self.exhausted:
             self.excluded_components = []
@@ -3525,6 +3572,17 @@ class NodeInternals_NonTerm(NodeInternals):
 
         for e in iterable:
             e._set_clone_info(info, node)
+
+    def clear_clone_info_since(self, node):
+        iterable = self.subnodes_set
+        if self.frozen_node_list:
+            # union() performs a copy, so we don't touch subnodes_set
+            iterable = iterable.union(self.frozen_node_list)
+        if self.separator is not None:
+            iterable.add(self.separator.node)
+
+        for n in iterable:
+            n.clear_clone_info_since(node)
 
 
     def reset_depth_specific(self, depth):
