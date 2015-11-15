@@ -4117,19 +4117,21 @@ class Node(object):
             else:
                 self.make_empty()
 
-    def get_clone(self, name, ignore_frozen_state=False):
+    def get_clone(self, name, ignore_frozen_state=False, new_env=False):
         '''Create a new node. To be used wihtin a graph-based data model.
         
         Args:
           name (str): name of the new Node instance
           ignore_frozen_state (bool): if set to False, the clone function will produce
             a Node with the same state as the duplicated Node. Otherwise, the only the state won't be kept.
+          new_env (bool): If True, the current :class:`Env()` will be copied.
+            Otherwise, the same will be used.
 
         Returns:
           Node: duplicated Node object
         '''
 
-        return Node(name, base_node=self, ignore_frozen_state=ignore_frozen_state)
+        return Node(name, base_node=self, ignore_frozen_state=ignore_frozen_state, new_env=new_env)
 
 
     def set_contents(self, base_node,

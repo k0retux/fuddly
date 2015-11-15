@@ -305,9 +305,10 @@ class Fuzzer(object):
 
     def _handle_user_code_exception(self, msg='', context=None):
         self.set_error(msg, code=Error.UserCodeError, context=context)
-        self.lg.log_error("Exception in user code detected! Outcomes " \
-                                "of this log entry has to be considered with caution.\n" \
-                                "    (_ cause: '%s' _)" % msg)
+        if hasattr(self, 'lg'):
+            self.lg.log_error("Exception in user code detected! Outcomes " \
+                              "of this log entry has to be considered with caution.\n" \
+                              "    (_ cause: '%s' _)" % msg)
         print("Exception in user code:")
         print('-'*60)
         traceback.print_exc(file=sys.stdout)

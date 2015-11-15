@@ -39,7 +39,7 @@ class ZIP_DataModel(DataModel):
     def absorb(self, data, idx):
         
         nm = 'ZIP_{:0>2d}'.format(idx)
-        pkzip = self.pkzip.get_clone(nm)
+        pkzip = self.pkzip.get_clone(nm, new_env=True)
         print("--> Create %s from provided ZIP samples." % nm)
         pkzip.set_current_conf('ABS', recursive=True)
         status, off, size, name = pkzip.absorb(data, constraints=AbsNoCsts(size=True,struct=True))
