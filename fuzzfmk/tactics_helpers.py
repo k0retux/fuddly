@@ -28,7 +28,7 @@ import random
 import threading
 
 import fuzzfmk.data_model as fdm
-from fuzzfmk.data_model_helpers import modelwalker_inputs_handling_helper
+from fuzzfmk.data_model_helpers import modelwalker_inputs_handling_helper, GENERIC_ARGS
 
 DEBUG = False
 
@@ -433,7 +433,8 @@ def _handle_user_inputs(dmaker, ui):
                 setattr(dmaker, k, ui_val)
 
     if dmaker._gen_args_desc and \
-       (issubclass(dmaker.__class__, Disruptor) or issubclass(dmaker.__class__, StatefulDisruptor)):
+       (issubclass(dmaker.__class__, Disruptor) or issubclass(dmaker.__class__, StatefulDisruptor)) and \
+       dmaker._gen_args_desc == GENERIC_ARGS:
         modelwalker_inputs_handling_helper(dmaker, generic_ui)
 
     if specific_ui is None:

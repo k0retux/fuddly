@@ -45,7 +45,6 @@ GENERIC_ARGS = {
 }
 
 def modelwalker_inputs_handling_helper(dmaker, user_generic_input):
-
     assert(dmaker.runs_per_node > 0 or dmaker.runs_per_node == -1)
 
     if dmaker.runs_per_node == -1:

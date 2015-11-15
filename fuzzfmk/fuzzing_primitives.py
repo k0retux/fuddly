@@ -55,7 +55,7 @@ class ModelWalker(object):
 
     def __init__(self, root_node, node_consumer, make_determinist=False, make_random=False,
                  max_steps=-1, initial_step=1):
-        self._root_node = root_node #Elt(root_node.name, base_node=root_node)
+        self._root_node = root_node
         self._root_node.make_finite(all_conf=True, recursive=True)
         
         if make_determinist:
@@ -65,7 +65,7 @@ class ModelWalker(object):
             assert(not make_determinist)
             self._root_node.make_random(all_conf=True, recursive=True)
 
-        self._root_node.get_value()
+        self._root_node.freeze()
 
         self._max_steps = int(max_steps)
         self._initial_step = int(initial_step)
@@ -143,6 +143,11 @@ class ModelWalker(object):
                     value_not_yielded_yet = self._consumer.yield_original_val
 
                 ### STEP 1 ###
+
+                # We freeze the node before making a research on it,
+                # otherwise we could catch some nodes that won't exist
+                # in the node we will finally output.
+                node.freeze()
 
                 # For each node we look for direct subnodes
                 fnodes = node.get_reachable_nodes(internals_criteria=self.ic, exclude_self=True,
@@ -635,7 +640,7 @@ class AltConfConsumer(NodeConsumerStub):
 
         # case 1
         if node.is_conf_existing(new_conf):
-            DEBUG_PRINT(' *** CONSUME: ' + node.name + ', ' + repr(node.c.keys()))
+            DEBUG_PRINT(' *** CONSUME: ' + node.name + ', ' + repr(node.c.keys()), level=0)
             self.orig_conf = node.get_current_conf()
             self.current_consumed_node = node
             node.set_current_conf(conf=new_conf, recursive=False)

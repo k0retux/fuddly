@@ -187,11 +187,13 @@ class Data(object):
 
         return contents
 
-    def pretty_print(self, log_func=lambda x: x):
+    def show(self, log_func=lambda x: x):
         if self.node is not None:
             self.node.show(raw_limit=200, log_func=log_func)
         else:
             print(self.raw)
+
+    pretty_print = show
 
     def __copy__(self):
         new_data = type(self)()
@@ -709,6 +711,24 @@ class NodeInternals(object):
 
         return ret
 
+
+    def _match_node_constraints(self, criteria):
+        # precond: criteria is not empty
+
+        if self._sync_with is None:
+            return False
+
+        for scope, required in criteria.items():
+            if required is None:
+                continue
+            if scope in self._sync_with and not required:
+                return False
+            elif scope not in self._sync_with and required:
+                return False
+
+        return True
+
+
     def match(self, internals_criteria):
         c1 = self._match_mandatory_attrs(internals_criteria.get_mandatory_attrs())
         if not c1:
@@ -733,6 +753,11 @@ class NodeInternals(object):
         c6 = self._match_negative_node_subkinds(internals_criteria.get_negative_node_subkinds())
         if not c6:
             return False
+
+        if internals_criteria.has_node_constraints():
+            c7 = self._match_node_constraints(internals_criteria.get_all_node_constraints())
+            if not c7:
+                return False
 
         return True
 
@@ -776,13 +801,26 @@ class NodeInternals(object):
 class NodeInternalsCriteria(object):
 
     def __init__(self, mandatory_attrs=None, negative_attrs=None, node_kinds=None,
-                 negative_node_kinds=None, node_subkinds=None, negative_node_subkinds=None):
+                 negative_node_kinds=None, node_subkinds=None, negative_node_subkinds=None,
+                 required_csts=[], negative_csts=[]):
         self.set_mandatory_attrs(mandatory_attrs)
         self.set_negative_attrs(negative_attrs)
         self.set_node_kinds(node_kinds)
         self.set_negative_node_kinds(negative_node_kinds)
         self.set_node_subkinds(node_subkinds)
         self.set_negative_node_subkinds(negative_node_subkinds)
+        self._node_constraints = None
+        if required_csts or negative_csts:
+            for cst in required_csts:
+                self.set_node_constraint(cst, True)
+            for cst in negative_csts:
+                self.set_node_constraint(cst, False)
+
+            # # If Existence constraint is required, Inexistence constraint is also required
+            # exist_cst = self.get_node_constraint(SyncScope.Existence)
+            # if exist_cst is not None:
+            #     self.set_node_constraint(SyncScope.Inexistence, exist_cst)
+
 
     def extend(self, ic):
         crit = ic.get_mandatory_attrs()
@@ -821,6 +859,39 @@ class NodeInternalsCriteria(object):
                 self.__negative_node_subkinds = []
             self.__negative_node_subkinds.extend(crit)
 
+        crit = ic.get_all_node_constraints()
+        if crit:
+            for cst, required in crit.items():
+                self.set_node_constraint(cst, required)
+
+    def set_node_constraint(self, cst, required):
+        if self._node_constraints is None:
+            self._node_constraints = {}
+        self._node_constraints[cst] = required
+
+    def get_node_constraint(self, cst):
+        if cst in self._node_constraints:
+            return self._node_constraints[cst]
+        else:
+            return None
+
+    def clear_node_constraint(self, cst):
+        if self._node_constraints is None:
+            self._node_constraints = {}
+        self._node_constraints[cst] = None
+
+    def get_all_node_constraints(self):
+        return self._node_constraints
+
+    def has_node_constraints(self):
+        if self._node_constraints is None:
+            return False
+
+        for k, v in self._node_constraints.items():
+            if v is not None:
+                return True
+
+        return False
 
     def set_mandatory_attrs(self, attrs):
         self.__mandatory_attrs = attrs
@@ -1258,7 +1329,7 @@ class NodeInternals_GenFunc(NodeInternals):
             return self.generated_node.is_frozen()
 
     def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False,
-                 only_generators=False, reevaluate_exist_cond=False):
+                 only_generators=False, reevaluate_constraints=False):
         # if self.is_attr_set(NodeInternals.Mutable):
         if self.is_attr_set(NodeInternals.ResetOnUnfreeze):
             # 'dont_change_state' is not supported in this case. But
@@ -1269,7 +1340,7 @@ class NodeInternals_GenFunc(NodeInternals):
         else:
             self.generated_node.unfreeze(conf, recursive=recursive, dont_change_state=dont_change_state,
                                          ignore_entanglement=ignore_entanglement, only_generators=only_generators,
-                                         reevaluate_exist_cond=reevaluate_exist_cond)
+                                         reevaluate_constraints=reevaluate_constraints)
 
     def unfreeze_all(self, recursive=True, ignore_entanglement=False):
         # if self.is_attr_set(NodeInternals.Mutable):
@@ -1445,7 +1516,7 @@ class NodeInternals_Term(NodeInternals):
         return self.frozen_node is not None
 
     def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False,
-                 reevaluate_exist_cond=False):
+                 reevaluate_constraints=False):
         if only_generators:
             return
         if dont_change_state and self.frozen_node is not None:
@@ -2021,27 +2092,34 @@ class NodeInternals_NonTerm(NodeInternals):
         self.reset(nodes_drawn_qty=nodes_drawn_qty, mode=mode, exhaust_info=exhaust_info)
 
         if internals is not None:
+            # This case is only for Node.set_contents() usage
+
             self.subnodes_csts = internals.subnodes_csts
             self.frozen_node_list = internals.frozen_node_list
-            self.separator =  internals.separator    
+            self.separator =  internals.separator
+            self.subnodes_set = internals.subnodes_set
+
         elif subnodes_csts is not None:
+            # This case is used by self.make_private_subnodes()
+
             self.subnodes_csts = subnodes_csts
             self.frozen_node_list = frozen_node_list
             if separator is not None:
                 self.separator = separator
+        
+            for weight, lnode_list in split_with(lambda x: isinstance(x, int), self.subnodes_csts):
+                self.subnodes_csts_total_weight += weight
+                for delim, sublist in self.__iter_csts(lnode_list[0]):
+                    if delim[:3] == 'u=+' or delim[:3] == 's=+':
+                        for w, etp in split_with(lambda x: isinstance(x, int), sublist[1]):
+                            for n in etp:
+                                self.subnodes_set.add(n[0])
+                    else:
+                        for e in sublist:
+                            self.subnodes_set.add(e[0])
+
         else:
             raise ValueError
-        
-        for weight, lnode_list in split_with(lambda x: isinstance(x, int), self.subnodes_csts):
-            self.subnodes_csts_total_weight += weight
-            for delim, sublist in self.__iter_csts(lnode_list[0]):
-                if delim[:3] == 'u=+' or delim[:3] == 's=+':
-                    for w, etp in split_with(lambda x: isinstance(x, int), sublist[1]):
-                        for n in etp:
-                            self.subnodes_set.add(n[0])
-                else:
-                    for e in sublist:
-                        self.subnodes_set.add(e[0])
 
 
     def change_subnodes_csts(self, csts_ch):
@@ -2873,7 +2951,7 @@ class NodeInternals_NonTerm(NodeInternals):
         if sync_node is not None:
             nb = node.env.get_drawn_node_qty(id(sync_node))
             if nb is not None:
-                return nb
+                return NodeInternals_NonTerm.qty_corrupt_hook(node, nb)
             else:
                 print("\n*** WARNING: synchronization is not possible " \
                       "for node '{:s}' (id: {:d})!".format(node.name, id(node)))
@@ -2896,15 +2974,34 @@ class NodeInternals_NonTerm(NodeInternals):
                           "for node '{:s}' (id: {:d})!\n" \
                           "*** The condition checker raise an exception!".format(node.name, id(node)))
                     raise
-
-            return crit_1 and crit_2
+            correct_reply = crit_1 and crit_2
+            return NodeInternals_NonTerm.existence_corrupt_hook(node, correct_reply)
 
         sync_node, condition = node.synchronized_with(SyncScope.Inexistence)
         if sync_node is not None:
             inexist = not node.env.node_exists(id(sync_node))
-            return True if inexist else False
+            correct_reply = True if inexist else False
+            return NodeInternals_NonTerm.existence_corrupt_hook(node, correct_reply)
 
         return None
+
+    @staticmethod
+    def existence_corrupt_hook(node, exist):
+        # print('\n** corrupt list', node.entangled_nodes, node.env.nodes_to_corrupt)
+        # if node.env.nodes_to_corrupt:
+        #     for n in node.env.nodes_to_corrupt.keys():
+        #         print('entangled: ', n.entangled_nodes)
+        if node in node.env.nodes_to_corrupt:
+            return not exist
+        else:
+            return exist
+
+    @staticmethod
+    def qty_corrupt_hook(node, qty):
+        if node in node.env.nodes_to_corrupt:
+            return node.env.nodes_to_corrupt[node](qty)
+        else:
+            return qty
 
 
     def absorb(self, blob, constraints, conf):
@@ -3388,9 +3485,9 @@ class NodeInternals_NonTerm(NodeInternals):
 
 
     def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False,
-                 reevaluate_exist_cond=False):
+                 reevaluate_constraints=False):
         if recursive:
-            if reevaluate_exist_cond:
+            if reevaluate_constraints:
                 # In order to re-evaluate existence condition of
                 # child node we have to recompute the previous state,
                 # which is the purpose of the following code. We also
@@ -3399,7 +3496,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 # SIDE NOTE: the previous state cannot be saved during
                 # a node copy in an efficient manner (as memory and
                 # cpu will be necessarily wasted if
-                # 'reevaluate_exist_cond' is not used), that's why we
+                # 'reevaluate_constraints' is not used), that's why we
                 # recompute it.
                 iterable = self.frozen_node_list
                 determinist = self.is_attr_set(NodeInternals.Determinist)
@@ -3444,7 +3541,7 @@ class NodeInternals_NonTerm(NodeInternals):
                     if e.is_frozen(conf) and (e.is_nonterm(conf) or e.is_genfunc(conf) or e.is_func(conf)):
                         e.unfreeze(conf=conf, recursive=True, dont_change_state=dont_change_state,
                                    ignore_entanglement=ignore_entanglement, only_generators=only_generators,
-                                   reevaluate_exist_cond=reevaluate_exist_cond)
+                                   reevaluate_constraints=reevaluate_constraints)
 
                 self.frozen_node_list = None
                 for n in self.subnodes_set:
@@ -3457,14 +3554,14 @@ class NodeInternals_NonTerm(NodeInternals):
                 if self.separator is not None:
                     iterable.add(self.separator.node)
 
-            if not reevaluate_exist_cond:
+            if not reevaluate_constraints:
                 for e in iterable:
                     if e.is_frozen(conf):
                         e.unfreeze(conf=conf, recursive=True, dont_change_state=dont_change_state,
                                    ignore_entanglement=ignore_entanglement, only_generators=only_generators,
-                                   reevaluate_exist_cond=reevaluate_exist_cond)
+                                   reevaluate_constraints=reevaluate_constraints)
 
-        if not dont_change_state and not only_generators and not reevaluate_exist_cond:
+        if not dont_change_state and not only_generators and not reevaluate_constraints:
             self._cleanup_entangled_nodes()
             self.frozen_node_list = None
             self._nodes_drawn_qty = {}
@@ -3599,8 +3696,9 @@ class NodeInternals_NonTerm(NodeInternals):
         if self.frozen_node_list is not None:
             iterable = self.frozen_node_list
         else:
-            self.get_subnodes_with_csts()
-            iterable = self.frozen_node_list
+            iterable = self.subnodes_set
+            # self.get_subnodes_with_csts()
+            # iterable = self.frozen_node_list
 
         if respect_order:
             s = []
@@ -4681,6 +4779,7 @@ class Node(object):
 
             return cond1 and cond2 and cond3
 
+
         def get_reachable_nodes_rec(node, config, rdepth, top_node):
             s = []
             # if respect_order:
@@ -4965,7 +5064,7 @@ class Node(object):
 
 
     def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False,
-                 reevaluate_exist_cond=False):
+                 reevaluate_constraints=False):
         self._delayed_jobs_called = False
 
         if conf is not None:
@@ -4979,13 +5078,13 @@ class Node(object):
         if self.is_frozen(conf):
             self.internals[conf].unfreeze(next_conf, recursive=recursive, dont_change_state=dont_change_state,
                                           ignore_entanglement=ignore_entanglement, only_generators=only_generators,
-                                          reevaluate_exist_cond=reevaluate_exist_cond)
+                                          reevaluate_constraints=reevaluate_constraints)
 
         if not ignore_entanglement and self.entangled_nodes is not None:
             for e in self.entangled_nodes:
                 e.unfreeze(conf=next_conf, recursive=recursive, dont_change_state=dont_change_state,
                            ignore_entanglement=True, only_generators=only_generators,
-                           reevaluate_exist_cond=reevaluate_exist_cond)
+                           reevaluate_constraints=reevaluate_constraints)
 
 
     def unfreeze_all(self, recursive=True, ignore_entanglement=False):
@@ -5365,6 +5464,7 @@ class Env(object):
 
     def __init__(self):
         self.exhausted_nodes = []
+        self.nodes_to_corrupt = {}
         self.env4NT = Env4NT()
         self.delayed_jobs_enabled = True
         self._sorted_jobs = None
@@ -5381,13 +5481,28 @@ class Env(object):
             raise AttributeError
 
     def is_empty(self):
-        return not self.exhausted_nodes and self.env4NT.is_empty()
+        return not self.exhausted_nodes and not self.nodes_to_corrupt and self.env4NT.is_empty()
 
     def set_data_model(self, dm):
         self._dm = dm
 
     def get_data_model(self):
         return self._dm
+
+    def add_node_to_corrupt(self, node, corrupt_op=lambda x: x):
+        if node.entangled_nodes:
+            for n in node.entangled_nodes:
+                self.nodes_to_corrupt[n] = corrupt_op
+        else:
+            self.nodes_to_corrupt[node] = corrupt_op
+
+    def remove_node_to_corrupt(self, node):
+        if node in self.nodes_to_corrupt:
+            if node.entangled_nodes:
+                for n in node.entangled_nodes:
+                    del self.nodes_to_corrupt[n]
+            else:
+                del self.nodes_to_corrupt[node]
 
     def exhausted_node_exists(self):
         return False if len(self.exhausted_nodes) == 0 else True
@@ -5428,22 +5543,28 @@ class Env(object):
     def update_node_refs(self, node_dico, ignore_frozen_state):
 
         exh_nodes = []
+        new_nodes_to_corrupt = {}
         self.id_list = []
         for old_node, new_node in node_dico.items():
             self.id_list.append((id(old_node), id(new_node)))
             if old_node in self.exhausted_nodes:
                 exh_nodes.append(new_node)
+            if old_node in self.nodes_to_corrupt.keys():
+                op = self.nodes_to_corrupt[old_node]
+                del self.nodes_to_corrupt[old_node]
+                new_nodes_to_corrupt[new_node] = op
 
         if self.is_empty():
             return
 
+        self.nodes_to_corrupt = new_nodes_to_corrupt
+
         if ignore_frozen_state:
             self.exhausted_nodes = []
             self.env4NT.reset()
-            return
-
-        self.exhausted_nodes = exh_nodes
-        self.env4NT.update_node_ids(self.id_list)
+        else:
+            self.exhausted_nodes = exh_nodes
+            self.env4NT.update_node_ids(self.id_list)
 
     # def update_id_list(self):
     #     self.id_list = []
@@ -5547,6 +5668,7 @@ class Env(object):
         new_env = type(self)()
         new_env.__dict__.update(self.__dict__)
         new_env.exhausted_nodes = copy.copy(self.exhausted_nodes)
+        new_env.nodes_to_corrupt = copy.copy(self.nodes_to_corrupt)
         new_env.env4NT = copy.copy(self.env4NT)
         new_env._dm = copy.copy(self._dm)
         new_env._sorted_jobs = copy.copy(self._sorted_jobs)

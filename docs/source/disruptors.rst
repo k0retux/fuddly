@@ -192,6 +192,46 @@ Parameters:
 Stateful Disruptors
 ===================
 
+
+tSTRUCT - Alter Data Structure
+------------------------------
+
+Description:
+  For each node associated to existence constraints or quantity
+  constraints, alter the constraint, one at a time, after each call
+  to this disruptor.
+
+Reference:
+  :class:`fuzzfmk.generic_data_makers.sd_struct_constraints`
+
+Parameters:
+  .. code-block:: none
+
+       generic args: 
+	 |_ init
+	 |      | desc: make the model walker ignore all the steps until the provided 
+	 |      |       one
+	 |      | default: 1 [type: int]
+	 |_ max_steps
+	 |      | desc: maximum number of steps (-1 means until the end)
+	 |      | default: -1 [type: int]
+       specific args: 
+	 |_ path
+	 |      | desc: graph path regexp to select nodes on which the disruptor should 
+	 |      |       apply
+	 |      | default: None [type: str]
+
+Usage Example:
+   A typical *disruptor chain* for leveraging this disruptor could be:
+
+   .. code-block:: none
+
+      <DATA> tWALK FIX tSTRUCT
+
+   .. seealso:: Refer to :ref:`tuto:dmaker-chain` for insight
+	       into *disruptor chains*.
+
+
 tALT - Walk Through Alternative Node Configurations
 ---------------------------------------------------
 

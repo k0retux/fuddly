@@ -2206,6 +2206,40 @@ class TestNodeFeatures(unittest.TestCase):
         self.assertEqual(result, raw)
 
 
+    def test_search_primitive(self):
+
+        data = fmk.dm.get_external_node(dm_name='mydf', data_id='exist_cond')
+        data.freeze()
+        data.unfreeze()
+        data.freeze()
+        data.unfreeze()
+        data.freeze()
+        # At this step the data should exhibit 'command_A3'
+
+        ic = NodeInternalsCriteria(required_csts=[SyncScope.Existence])
+
+        l1 = data.get_reachable_nodes(internals_criteria=ic)
+        print("\n*** {:d} nodes with existence condition found".format(len(l1)))
+
+        res = []
+        for n in l1:
+            print(' |_ ' + n.name)
+            res.append(n.name)
+        
+        self.assertEqual(len(res), 3)
+        self.assertTrue('command_A3' in res)
+
+        # node_to_corrupt = l1[1]
+        # print('\n*** Node that will be corrupted: {:s}'.format(node_to_corrupt.name))
+
+        # data.env.add_node_to_corrupt(node_to_corrupt)
+        # corrupted_data = Node(data.name, base_node=data, ignore_frozen_state=False, new_env=True)
+        # data.env.remove_node_to_corrupt(node_to_corrupt)
+        
+        # corrupted_data.unfreeze(recursive=True, reevaluate_constraints=True)
+        # corrupted_data.show()
+
+
 class TestNode_NonTerm(unittest.TestCase):
 
     @classmethod
@@ -2549,7 +2583,13 @@ class TestDataModel(unittest.TestCase):
     def test_data_makers(self):
 
         for dm in fmk.dm_list:
-            dm.load_data_model(fuzzer._name2dm)
+            try:
+                dm.load_data_model(fuzzer._name2dm)
+            except:
+                print("\n*** WARNING: Data Model '{:s}' not tested because" \
+                      " the loading process has failed ***\n".format(dm.name))
+                continue
+
             print("Test '%s' Data Model" % dm.name)
             for data_id in dm.data_identifiers():
                 print("Try to get '%s'" % data_id)
@@ -2828,6 +2868,34 @@ class TestFMK(unittest.TestCase):
             fmk.log_data(d)
 
         self.assertGreater(i, 2)
+
+
+    def test_struct_disruptor(self):
+
+        idx = 0
+        expected_idx = 6
+        expected_outcomes = [b'A1', b'A2', b'A3T\x0f\xa0\x00\n*1*0*', b'A3T\x0f\xa0\x00\n$ A32_VALID $',
+                             b'A3$ A32_VALID $', b'A1']
+        expected_outcomes_35_alt = [b'A3T\x0f\xa0\x00\n$ A32_INVALID $', b'A3$ A32_INVALID $']
+        outcomes = []
+
+        act = [('EXIST_COND', UI(determinist=True)), 'tWALK', 'FIX', 'tSTRUCT']
+        for i in range(4):
+            for j in range(10):
+                d = fmk.get_data(act)
+                if d is None:
+                    print('--> Exiting (need new input)')
+                    break
+                fmk.new_transfer_preamble()
+                fmk.log_data(d)
+                outcomes.append(d.to_bytes())
+                d.show()
+                idx += 1
+
+        self.assertEqual(outcomes[:3], expected_outcomes[:3])
+        self.assertTrue(outcomes[3:5] == expected_outcomes[3:5] or outcomes[3:5] == expected_outcomes_35_alt)
+        self.assertEqual(outcomes[-1], expected_outcomes[-1])
+        self.assertEqual(idx, expected_idx)
 
 
 if __name__ == "__main__":
