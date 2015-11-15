@@ -29,7 +29,7 @@ from copy import *
 from fuzzfmk.plumbing import *
 
 from fuzzfmk.data_model import *
-from fuzzfmk.tactics_helper import *
+from fuzzfmk.tactics_helpers import *
 from fuzzfmk.fuzzing_primitives import *
 from fuzzfmk.basic_primitives import *
 

@@ -25,12 +25,11 @@ import time
 
 from fuzzfmk.project import *
 from fuzzfmk.monitor import *
-from fuzzfmk.operator_helper import *
+from fuzzfmk.operator_helpers import *
 from fuzzfmk.plumbing import *
 from fuzzfmk.target import *
 from fuzzfmk.logger import *
 from fuzzfmk.data_model import *
-from fuzzfmk.tactics_helper import *
 from fuzzfmk.fuzzing_primitives import *
 
 project = Project()

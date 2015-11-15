@@ -23,12 +23,14 @@
 
 from fuzzfmk.project import *
 from fuzzfmk.monitor import *
-from fuzzfmk.operator_helper import *
+from fuzzfmk.operator_helpers import *
 from fuzzfmk.plumbing import *
 import fuzzfmk.global_resources as gr
 
 project = Project()
-project.default_dm = 'mydf'
+project.default_dm = ['mydf','zip']
+# If you only want one default DM, provide its name directly as follows:
+# project.default_dm = 'mydf'
 
 logger = Logger('standard', data_in_seperate_file=True, explicit_export=True, export_orig=False)
 

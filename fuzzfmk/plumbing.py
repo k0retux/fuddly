@@ -38,12 +38,13 @@ import signal
 
 from libs.external_modules import *
 
-from fuzzfmk.tactics_helper import *
+from fuzzfmk.tactics_helpers import *
 from fuzzfmk.data_model import *
+from fuzzfmk.data_model_helpers import DataModel
 from fuzzfmk.target import *
 from fuzzfmk.logger import *
 from fuzzfmk.monitor import *
-from fuzzfmk.operator_helper import *
+from fuzzfmk.operator_helpers import *
 from fuzzfmk.project import *
 
 import fuzzfmk.generic_data_makers
@@ -330,18 +331,39 @@ class Fuzzer(object):
         prefix = self.__dm_rld_args_dict[self.dm][0]
         name = self.__dm_rld_args_dict[self.dm][1]
 
-        self.cleanup_all_dmakers()
-        self.dm.cleanup()
+        if prefix is None:
+            # In this case we face a composed DM, name is in fact a dm_list
+            dm_list = name
+            name_list = []
 
-        dm_params = self.__import_dm(prefix, name, reload_dm=True)
-        if dm_params is not None:
-            self.__add_data_model(dm_params['dm'], dm_params['tactics'],
-                                  dm_params['dm_rld_args'], reload_dm=True)
-            self.__dyngenerators_created[dm_params['dm']] = False
+            self.cleanup_all_dmakers()
 
-        self.dm = dm_params['dm']
-        self._cleanup_dm_attrs_from_fmk()
-        self._load_data_model()
+            for dm in dm_list:
+                name_list.append(dm.name)
+                self.dm = dm
+                self.reload_dm()
+
+            # reloading is based on name because DM objects have changed
+            ok = self.load_multiple_data_model(name_list=name_list, reload_dm=True)
+            if not ok:
+                self.set_error("Error encountered while reloading the composed Data Model")
+
+        else:
+            self.cleanup_all_dmakers()
+            self.dm.cleanup()
+
+            dm_params = self.__import_dm(prefix, name, reload_dm=True)
+            if dm_params is not None:
+                self.__add_data_model(dm_params['dm'], dm_params['tactics'],
+                                      dm_params['dm_rld_args'], reload_dm=True)
+                self.__dyngenerators_created[dm_params['dm']] = False
+
+            self.dm = dm_params['dm']
+            self._cleanup_dm_attrs_from_fmk()
+            ok = self._load_data_model()
+            if not ok:
+                return False
+
         return True
 
     def _cleanup_dm_attrs_from_fmk(self):
@@ -375,12 +397,19 @@ class Fuzzer(object):
             self._add_project(prj_params['project'], prj_params['target'], prj_params['logger'],
                               prj_params['prj_rld_args'], reload_prj=True)
 
-            dm_params = self.__import_dm(dm_prefix, dm_name, reload_dm=True)
-            if dm_params is not None:
-                self.__add_data_model(dm_params['dm'], dm_params['tactics'],
-                                      dm_params['dm_rld_args'], reload_dm=True)
-                self.__dyngenerators_created[dm_params['dm']] = False
-                self.__init_fmk_internals_step1(prj_params['project'], dm_params['dm'])
+            if dm_prefix is None:
+                # it is ok to call reload_dm() here because it is a
+                # composed DM, and it won't call the methods used within
+                # __init_fmk_internals_step1().
+                self.reload_dm()
+                self.__init_fmk_internals_step1(prj_params['project'], self.dm)
+            else:
+                dm_params = self.__import_dm(dm_prefix, dm_name, reload_dm=True)
+                if dm_params is not None:
+                    self.__add_data_model(dm_params['dm'], dm_params['tactics'],
+                                          dm_params['dm_rld_args'], reload_dm=True)
+                    self.__dyngenerators_created[dm_params['dm']] = False
+                    self.__init_fmk_internals_step1(prj_params['project'], dm_params['dm'])
 
         self.__start_fuzzing()
         if self.is_not_ok():
@@ -388,7 +417,7 @@ class Fuzzer(object):
             return False
 
         if prj_params is not None:
-            self.__init_fmk_internals_step2(prj_params['project'], dm_params['dm'])
+            self.__init_fmk_internals_step2(prj_params['project'], self.dm)
 
         return True
 
@@ -722,12 +751,18 @@ class Fuzzer(object):
             self.__prj_to_be_reloaded = True
             self.set_error("Error encountered while loading the data model. (checkup" \
                            " the associated '%s.py' file)" % self.dm.name)
+            return False
+
+        return True
 
     def __start_fuzzing(self):
         if not self.__is_started():
             signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-            self._load_data_model()
+            ok = self._load_data_model()
+            if not ok:
+                self.set_error("Project cannot be launched because of data model loading error")
+                return
 
             self.lg.start()
             try:
@@ -964,7 +999,71 @@ class Fuzzer(object):
         self.dm = dm
         if self.__is_started():
             self._cleanup_dm_attrs_from_fmk()
-            self._load_data_model()
+            ok = self._load_data_model()
+            if not ok:
+                return False
+
+        return True
+
+    @EnforceOrder(accepted_states=['25_load_dm','S1','S2'], transition=['25_load_dm','S1'])
+    def load_multiple_data_model(self, dm_list=None, name_list=None, reload_dm=False):
+        if name_list is not None:
+            dm_list = []
+            for name in name_list:
+                dm = self.get_data_model_by_name(name)
+                if dm is None:
+                    self.set_error("Data model '{:s}' has not been found!".format(name), 
+                                   code=Error.CommandError)
+                    return False
+                dm_list.append(dm)
+            
+        elif dm_list is not None:
+            for dm in dm_list:
+                if dm not in self.dm_list:
+                    return False
+
+        if self.__is_started():
+            self.cleanup_all_dmakers()
+
+        new_dm = DataModel()
+        new_tactics = Tactics()
+        name = ''
+        for dm in dm_list:
+            name += dm.name + '+'
+            if not reload_dm:
+                self.dm = dm
+                self._cleanup_dm_attrs_from_fmk()
+                ok = self._load_data_model()
+                if not ok:
+                    return False
+            new_dm.merge_with(dm)
+            tactics = self.__st_dict[dm]
+            for k, v in tactics.disruptors.items():
+                if k in new_tactics.disruptors:
+                    raise ValueError("the disruptor '{:s}' exists already".format(k))
+                else:
+                    new_tactics.disruptors[k] = v
+            for k, v in tactics.generators.items():
+                if k in new_tactics.disruptors:
+                    raise ValueError("the generator '{:s}' exists already".format(k))
+                else:
+                    new_tactics.generators[k] = v
+
+        new_dm.name = name[:-1]
+        self.__add_data_model(new_dm, new_tactics,
+                              (None, dm_list),
+                              reload_dm=reload_dm)
+
+        # In this case DynGens have already been generated through
+        # the reloading of the included DMs
+        self.__dyngenerators_created[new_dm] = True
+        self.dm = new_dm
+
+        if self.__is_started():
+            self._cleanup_dm_attrs_from_fmk()
+            ok = self._load_data_model()
+            if not ok:
+                return False
 
         return True
 
@@ -993,7 +1092,11 @@ class Fuzzer(object):
             else:
                 dm_name = self.prj.default_dm
 
-        ok = self.load_data_model(name=dm_name)
+        if isinstance(dm_name, list):
+            ok = self.load_multiple_data_model(name_list=dm_name)
+        else:
+            ok = self.load_data_model(name=dm_name)
+
         if not ok:
             return False
  
@@ -2569,6 +2672,35 @@ class FuzzShell(cmd.Cmd):
         self.__error = False
         return False
 
+    def do_load_multiple_data_model(self, line):
+        '''
+        Load a multiple Data Model by name
+        |_ syntax: load_multiple_data_model <dm_name_1> <dm_name_2> ... [dm_name_n]
+        '''
+        self.__error = True
+
+        args = line.split()
+
+        ok = True
+        dm_name_list = [x.name for x in self.fz.dm_list]
+        for dm_name in args:
+            if dm_name not in dm_name_list:
+                ok = False
+                break
+
+        self.__error_msg = "Data Model '%s' is not available" % dm_name
+
+        if not ok:
+            return False
+
+        if not self.fz.load_multiple_data_model(name_list=args):
+            return False
+
+        self.__error = False
+        return False
+
+
+    
     def do_load_project(self, line):
         '''Load an available Project'''
         self.__error = True

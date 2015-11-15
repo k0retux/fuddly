@@ -48,7 +48,7 @@ from fuzzfmk.basic_primitives import *
 from fuzzfmk.plumbing import *
 from fuzzfmk.target import *
 from fuzzfmk.logger import *
-from fuzzfmk.operator_helper import *
+from fuzzfmk.operator_helpers import *
 
 from fuzzfmk.data_model_helpers import *
 

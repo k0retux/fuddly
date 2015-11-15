@@ -28,7 +28,7 @@ import random
 import threading
 
 from fuzzfmk.global_resources import *
-from fuzzfmk.tactics_helper import _handle_user_inputs, _user_input_conformity, _restore_dmaker_internals
+from fuzzfmk.tactics_helpers import _handle_user_inputs, _user_input_conformity, _restore_dmaker_internals
 
 class Operation(object):
     

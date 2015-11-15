@@ -965,6 +965,15 @@ class DataModel(object):
         self.__built = False
         self.__confs = set()
 
+
+    def merge_with(self, data_model):
+        for k, v in data_model.__dm_hashtable.items():
+            if k in self.__dm_hashtable:
+                raise ValueError("the data ID {:s} exists already".format(k))
+            else:
+                self.__dm_hashtable[k] = v
+
+        
     def pre_build(self):
         '''
         This method is called when a data model is loaded.

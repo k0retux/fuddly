@@ -21,6 +21,6 @@
 #
 ################################################################################
 
-from fuzzfmk.tactics_helper import *
+from fuzzfmk.tactics_helpers import *
 
 tactics = Tactics()

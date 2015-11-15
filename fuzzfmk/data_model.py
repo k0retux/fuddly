@@ -3439,9 +3439,6 @@ class NodeInternals_NonTerm(NodeInternals):
                     # don't bother trying to recover the previous one
                     pass
 
-                for n in self.subnodes_set:
-                    n.clear_clone_info_since(n)
-
                 for e in iterable:
                     self._cleanup_entangled_nodes_from(e)
                     if e.is_frozen(conf) and (e.is_nonterm(conf) or e.is_genfunc(conf) or e.is_func(conf)):
@@ -3450,6 +3447,8 @@ class NodeInternals_NonTerm(NodeInternals):
                                    reevaluate_exist_cond=reevaluate_exist_cond)
 
                 self.frozen_node_list = None
+                for n in self.subnodes_set:
+                    n.clear_clone_info_since(n)
 
             elif dont_change_state or only_generators:
                 iterable = self.frozen_node_list

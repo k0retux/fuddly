@@ -198,10 +198,17 @@ the command ``run_project``. Basically by issuing ``run_project
 standard 1``, you will automatically trigger the commands we just
 talked about. Note this command will initially load the default data
 model defined in the ``standard`` project file, which is the imaginary
-data model used by our tutorial (``mydf``). If you want to load
-another data model at any time while your project is launched, use
-simply the command ``load_data_model`` with the name of the data model
-you want to use, and that's all.
+data model used by our tutorial (``mydf``). 
+
+.. note::
+   If you want to load another data model at any time while your
+   project is launched, use simply the command ``load_data_model``
+   with the name of the data model you want to use, and that's all.
+
+   You can also load multiple data models through the command
+   ``load_multiple_data_model <dm_name_1> <dm_name_2>
+   ... [dm_name_n]``, if you want to interact with a target with
+   different data models simultaneously. 
 
 
 Send malformed ZIP files to the target (manually)
@@ -1909,7 +1916,7 @@ fuddly>/projects/``. To illustrate that let's show the beginning of
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 7, 10, 32
+   :emphasize-lines: 7, 12, 34
 
    from fuzzfmk.project import *
    from fuzzfmk.monitor import *
@@ -1918,7 +1925,9 @@ fuddly>/projects/``. To illustrate that let's show the beginning of
    import fuzzfmk.global_resources as gr
 
    project = Project()
-   project.default_dm = 'mydf'
+   project.default_dm = ['mydf', 'zip']
+   # If you only want one default DM, provide its name directly as follows:
+   # project.default_dm = 'mydf'
 
    logger = Logger('tuto', data_in_seperate_file=False, explicit_export=False, export_orig=False, export_raw_data=False)
 
@@ -1947,10 +1956,17 @@ fuddly>/projects/``. To illustrate that let's show the beginning of
 
 A project file should contain at a minimum a
 :class:`fuzzfmk.project.Project` object (referenced by a variable
-``project``), a :class:`fuzzfmk.project.Logger` object
+``project``), a :class:`fuzzfmk.logger.Logger` object
 (:ref:`logger-def`, referenced by a variable ``logger``), and
 optionally target objects (referenced by a variable ``targets``,
 :ref:`targets-def`), and operators & probes (:ref:`tuto:operator`).
+
+A default data model or a list of data models can be added to the
+project through its attribute ``default_dm``. ``fuddly`` will use this
+if the project is directly launched, that is either by issuing the
+command ``run_project`` in the ``fuddly`` shell or by using the
+method :meth:`fuzzfmk.plumbing.Fuzzer.run_project()` through any
+``python`` interpreter.
 
 .. note:: An :class:`fuzzfmk.target.EmptyTarget` is automatically
           added by ``fuddly`` to any project, for dry runs.
