@@ -226,7 +226,7 @@ Usage Example:
 
    .. code-block:: none
 
-      <DATA> tWALK FIX tSTRUCT
+      <DATA> tWALK tSTRUCT
 
    .. seealso:: Refer to :ref:`tuto:dmaker-chain` for insight
 	       into *disruptor chains*.
@@ -451,3 +451,6 @@ Parameters:
 	 |_ nt_only
 	 |      | desc: walk through non-terminal nodes only
 	 |      | default: False [type: bool]
+	 |_ fix
+	 |      | desc: fix constraints while walking
+	 |      | default: True [type: bool]

@@ -313,7 +313,6 @@ We use for this example, the generic disruptor ``tWALK`` whose purpose
 is to simply walk through the data model.  Note that disruptors are
 chainable, each one consuming what comes from the left.
 
-
 .. _tuto:dmaker-chain:
 
 How to perform automatic modification on data

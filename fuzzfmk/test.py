@@ -2879,7 +2879,7 @@ class TestFMK(unittest.TestCase):
         expected_outcomes_35_alt = [b'A3T\x0f\xa0\x00\n$ A32_INVALID $', b'A3$ A32_INVALID $']
         outcomes = []
 
-        act = [('EXIST_COND', UI(determinist=True)), 'tWALK', 'FIX', 'tSTRUCT']
+        act = [('EXIST_COND', UI(determinist=True)), 'tWALK', 'tSTRUCT']
         for i in range(4):
             for j in range(10):
                 d = fmk.get_data(act)

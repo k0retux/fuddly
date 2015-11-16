@@ -52,7 +52,8 @@ tactics = Tactics()
            args={'path': ('graph path regexp to select nodes on which' \
                           ' the disruptor should apply', None, str),
                  'nt_only': ('walk through non-terminal nodes only', False, bool),
-                 'singleton': ('consume also terminal nodes with only one possible value', False, bool)})
+                 'singleton': ('consume also terminal nodes with only one possible value', False, bool),
+                 'fix': ('fix constraints while walking', True, bool)})
 class sd_iter_over_data(StatefulDisruptor):
     '''
     Walk through the provided data and for each visited node, iterates
@@ -90,10 +91,16 @@ class sd_iter_over_data(StatefulDisruptor):
 
         if self.clone_node:
             exported_node = Node(rnode.name, base_node=rnode, new_env=True)
-            data.update_from_node(exported_node)
         else:
-            data.update_from_node(rnode)
-            
+            exported_node = rnode
+
+        if self.fix:
+            exported_node.unfreeze(recursive=True, reevaluate_constraints=True)
+            exported_node.freeze()
+            data.add_info('fix constraints, if any')
+
+        data.update_from_node(exported_node)
+
         return data
 
 
