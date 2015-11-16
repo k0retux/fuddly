@@ -4852,6 +4852,25 @@ class Node(object):
             return l1 + sorted(l2, key=lambda x: x.name)
 
 
+    @staticmethod
+    def filter_out_entangled_nodes(node_list):
+        ret = []
+        while True:
+            if node_list:
+                n = node_list.pop()
+                if n.entangled_nodes:
+                    for en in n.entangled_nodes:
+                        if en in node_list:
+                            node_list.remove(en)
+                ret.append(n)
+            else:
+                break
+        # print('\n*** FILTERED nodes')
+        # for n in ret:
+        #     print(' |_ ' + n.name)
+        return ret
+
+
     def get_node_by_path(self, path_regexp=None, path=None, conf=None):
         '''
         The set of nodes that is used to perform the search include

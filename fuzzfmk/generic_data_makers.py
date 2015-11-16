@@ -375,38 +375,14 @@ class sd_struct_constraints(StatefulDisruptor):
         ic_exist_cst = NodeInternalsCriteria(required_csts=[SyncScope.Existence])
         ic_qty_cst = NodeInternalsCriteria(required_csts=[SyncScope.Qty])
 
-        self.exist_cst_nodelist = []
-        exist_cst_nodelist_tmp = self.seed.get_reachable_nodes(internals_criteria=ic_exist_cst, path_regexp=self.path)
+        self.exist_cst_nodelist = self.seed.get_reachable_nodes(internals_criteria=ic_exist_cst, path_regexp=self.path)
         # print('\n*** NOT FILTERED nodes')
         # for n in exist_cst_nodelist_tmp:
         #     print(' |_ ' + n.name)
+        self.exist_cst_nodelist = self.seed.filter_out_entangled_nodes(self.exist_cst_nodelist)
 
-        while True:
-            if exist_cst_nodelist_tmp:
-                n = exist_cst_nodelist_tmp.pop()
-                if n.entangled_nodes:
-                    for en in n.entangled_nodes:
-                        if en in exist_cst_nodelist_tmp:
-                            exist_cst_nodelist_tmp.remove(en)
-                self.exist_cst_nodelist.append(n)
-            else:
-                break
-        # print('\n*** FILTERED NODE')
-        # for n in self.exist_cst_nodelist:
-        #     print(' |_ ' + n.name)
-
-        self.qty_cst_nodelist_1 = []
-        qty_cst_nodelist_tmp = self.seed.get_reachable_nodes(internals_criteria=ic_qty_cst, path_regexp=self.path)
-        while True:
-            if qty_cst_nodelist_tmp:
-                n = qty_cst_nodelist_tmp.pop()
-                if n.entangled_nodes:
-                    for en in n.entangled_nodes:
-                        if en in qty_cst_nodelist_tmp:
-                            qty_cst_nodelist_tmp.remove(en)
-                self.qty_cst_nodelist_1.append(n)
-            else:
-                break
+        self.qty_cst_nodelist_1 = self.seed.get_reachable_nodes(internals_criteria=ic_qty_cst, path_regexp=self.path)
+        self.qty_cst_nodelist_1 = self.seed.filter_out_entangled_nodes(self.qty_cst_nodelist_1)
 
         self.qty_cst_nodelist_2 = copy.copy(self.qty_cst_nodelist_1)
         self.max_runs = len(self.exist_cst_nodelist) + 2*len(self.qty_cst_nodelist_1)
