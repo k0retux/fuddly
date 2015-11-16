@@ -77,6 +77,7 @@ class ExportableFMKOps(object):
         self.dynamic_generator_ids = fmk.dynamic_generator_ids
         self.set_error = fmk.set_error
         self.load_data_model = fmk.load_data_model
+        self.load_multiple_data_model = fmk.load_multiple_data_model
 
 class FmkFeedback(object):
     
@@ -3471,7 +3472,8 @@ class FuzzShell(cmd.Cmd):
 
             self.fz.send_data_and_log(data_list)
 
-        print("\nThe loop has terminated normally, but it remains non exhausted " \
+        if exhausted_data_cpt > 0:
+            print("\nThe loop has terminated normally, but it remains non exhausted " \
                   "data (number of exhausted data: %d)" % exhausted_data_cpt)
 
         self.__error = False
