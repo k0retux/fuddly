@@ -605,7 +605,7 @@ class NodeInternals(object):
             raise ValueError
         if self._make_specific(name):
             self.__attrs[name] = True
-           
+
     def clear_attr(self, name):
         if name not in self.__attrs:
             raise ValueError
@@ -1521,9 +1521,14 @@ class NodeInternals_Term(NodeInternals):
             return
         if dont_change_state and self.frozen_node is not None:
             self._unfreeze_without_state_change(self.frozen_node)
+        elif reevaluate_constraints and self.frozen_node is not None:
+            self._unfreeze_reevaluate_constraints(self.frozen_node)
         self.frozen_node = None
 
     def _unfreeze_without_state_change(self, current_val):
+        pass
+
+    def _unfreeze_reevaluate_constraints(self, current_val):
         pass
 
     def unfreeze_all(self, recursive=True, ignore_entanglement=False):
@@ -1622,6 +1627,9 @@ class NodeInternals_TypedValue(NodeInternals_Term):
         self.value_type.do_cleanup_absorb()
 
     def _unfreeze_without_state_change(self, current_val):
+        self.value_type.rewind()
+
+    def _unfreeze_reevaluate_constraints(self, current_val):
         self.value_type.rewind()
 
     def _reset_state_specific(self, recursive, exclude_self, conf, ignore_entanglement):
@@ -1832,6 +1840,9 @@ class NodeInternals_Func(NodeInternals_Term):
     def _unfreeze_without_state_change(self, current_val):
         # 'dont_change_state' is not supported in this case. But
         # if the function is stateless, it should not be a problem
+        pass
+
+    def _unfreeze_reevaluate_constraints(self, current_val):
         pass
 
     def _reset_state_specific(self, recursive, exclude_self, conf, ignore_entanglement):
@@ -4117,7 +4128,7 @@ class Node(object):
             else:
                 self.make_empty()
 
-    def get_clone(self, name, ignore_frozen_state=False, new_env=False):
+    def get_clone(self, name, ignore_frozen_state=False, new_env=True):
         '''Create a new node. To be used wihtin a graph-based data model.
         
         Args:

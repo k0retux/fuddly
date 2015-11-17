@@ -274,6 +274,79 @@ class NetworkTarget(Target):
         return fbk, ref
 
 
+    def listen_to(self, host, port, ref_id,
+                  socket_type=(socket.AF_INET, socket.SOCK_STREAM),
+                  chk_size=CHUNK_SZ, wait_time=3, managed_indepently=True):
+        '''
+        To be used while the target is already started.
+        '''
+        # self.add_additional_feedback_interface(host, port, socket_type,
+        #                                        fbk_id=ref_id, server_mode=True)
+        connected_client_event = threading.Event()
+        self._listen_to_target(host, port, socket_type,
+                               self._handle_connection_to_fbk_server, args=(ref_id, chk_size, connected_client_event))
+        connected_client_event.wait(wait_time)
+        if not connected_client_event.is_set():
+            self._logger.log_comment('WARNING: Feedback not available as no client connects to us ({:s}:{:d})'.format(host, port))
+
+        if managed_indepently:
+            self._dynamic_interfaces.append((host, port, ref_id))
+
+
+    def connect_to(self, host, port, ref_id,
+                  socket_type=(socket.AF_INET, socket.SOCK_STREAM),
+                  chk_size=CHUNK_SZ, managed_indepently=True):
+        '''
+        To be used while the target is already started.
+        '''
+        # self.add_additional_feedback_interface(host, port, socket_type,
+        #                                        fbk_id=ref_id, server_mode=True)
+        s = self._connect_to_target(host, port, socket_type)
+        if s is None:
+            self._logger.log_comment('WARNING: Feedback not available from {:s}:{:d}'.format(host, port))
+        else:
+            with self.socket_desc_lock:
+                self._additional_fbk_sockets.append(s)
+                self._additional_fbk_ids[s] = ref_id
+                self._additional_fbk_lengths[s] = chk_size
+
+        if managed_indepently:
+            self._dynamic_interfaces[(host, port)] = s
+
+
+    def remove_dynamic_interface(self, host, port):
+        ref = (host, port)
+        for r, s in self._dynamic_interfaces.items():
+            if r == ref:
+                req_sock = s
+                break
+        else:
+            req_sock = None
+
+        if req_sock:
+            del self._dynamic_interfaces[req_sock]
+            with self.socket_desc_lock:
+                if req_sock in self._additional_fbk_sockets:
+                    self._additional_fbk_sockets.remove(req_sock)
+                    del self._additional_fbk_ids[req_sock]
+                    del self._additional_fbk_lengths[req_sock]
+            req_sock.close()
+        else:
+            print('\n*** WARNING: Unable to remove inexistent interface ({:s}:{:d})'.format(host,port))
+
+
+    def remove_all_dynamic_interfaces(self):
+        dyn_interface = copy.copy(self._dynamic_interfaces)
+        with self.socket_desc_lock:
+            for r, req_sock in dyn_interface.items():
+                del self._dynamic_interfaces[req_sock]
+                if req_sock in self._additional_fbk_sockets:
+                    self._additional_fbk_sockets.remove(req_sock)
+                    del self._additional_fbk_ids[req_sock]
+                    del self._additional_fbk_lengths[req_sock]
+                req_sock.close()
+
+
     def _connect_to_additional_feedback_sockets(self):
         '''
         Connection to additional feedback sockets, if any.
@@ -281,21 +354,11 @@ class NetworkTarget(Target):
         if self._additional_fbk_desc:
             for host, port, socket_type, fbk_id, fbk_length, server_mode in self._additional_fbk_desc.values():
                 if server_mode:
-                    connected_client_event = threading.Event()
-                    self._listen_to_target(host, port, socket_type,
-                                           self._handle_connection_to_fbk_server, args=(fbk_id, fbk_length, connected_client_event))
-                    connected_client_event.wait(3)
-                    if not connected_client_event.is_set():
-                        self._logger.log_comment('WARNING: Feedback not available as no client connects to us ({:s}:{:d})'.format(host, port))
+                    self.listen_to(host, port, fbk_id, socket_type, chk_size=fbk_length, wait_time=3,
+                                   managed_indepently=False)
                 else:
-                    s = self._connect_to_target(host, port, socket_type)
-                    if s is None:
-                        self._logger.log_comment('WARNING: Feedback not available from {:s}:{:d}'.format(host, port))
-                    else:
-                        with self.socket_desc_lock:
-                            self._additional_fbk_sockets.append(s)
-                            self._additional_fbk_ids[s] = fbk_id
-                            self._additional_fbk_lengths[s] = fbk_length
+                    self.connect_to(host, port, fbk_id, socket_type, chk_size=fbk_length,
+                                    managed_indepently=False)
 
 
     def _get_additional_feedback_sockets(self):
@@ -324,6 +387,7 @@ class NetworkTarget(Target):
         self._additional_fbk_sockets = []
         self._additional_fbk_ids = {}
         self._additional_fbk_lengths = {}
+        self._dynamic_interfaces = []
         self._feedback_handled = None
         self.feedback_thread_qty = 0
         self.feedback_complete_cpt = 0
@@ -344,6 +408,14 @@ class NetworkTarget(Target):
             s.close()
         for s in self._additional_fbk_sockets:
             s.close()
+
+        self._server_sockets = None
+        self._server_thread_share = None
+        self._additional_fbk_sockets = None
+        self._additional_fbk_ids = None
+        self._additional_fbk_lengths = None
+        self._dynamic_interfaces = None
+
         return True
 
     def send_data(self, data):
@@ -434,7 +506,9 @@ class NetworkTarget(Target):
         return self.host[key], self.port[key], self.socket_type[key], self.server_mode[key]
 
     def _connect_to_target(self, host, port, socket_type):
-        s = socket.socket(*socket_type)
+        family, sock_type = socket_type
+        s = socket.socket(family, sock_type)
+
         try:
             s.connect((host, port))
         except socket_error as serr:
@@ -452,7 +526,9 @@ class NetworkTarget(Target):
                 self._server_thread_share[(host, port)] = args
             return True
 
-        serversocket = socket.socket(*socket_type)
+        family, sock_type = socket_type
+
+        serversocket = socket.socket(family, sock_type)
         serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         serversocket.settimeout(0.2)
         try:
@@ -465,11 +541,17 @@ class NetworkTarget(Target):
         with self._server_thread_lock:
             self._server_thread_share[(host, port)] = args
 
-        serversocket.listen(5)
+        if sock_type == socket.SOCK_STREAM:
+            serversocket.listen(5)
+            server_thread = threading.Thread(None, self._server_main, name='SRV-' + '',
+                                             args=(serversocket, host, port, func))
+            server_thread.start()
 
-        server_thread = threading.Thread(None, self._server_main, name='SRV-' + '',
-                                         args=(serversocket, host, port, func))
-        server_thread.start()
+        elif sock_type == socket.SOCK_DGRAM:
+            self._handle_connection_to_fbk_server(serversocket, None, args)
+
+        else:
+            raise ValueError("Unrecognized socket type")
 
     def _server_main(self, serversocket, host, port, func):
         while not self.stop_event.is_set():

@@ -219,9 +219,10 @@ class Logger(object):
             self.log_fn(preamble)
 
         if not feedback:
-            self.log_fn("### No Target Feedback!", rgb=Color.FEEDBACK)
+            msg_hdr = "### Target Feedback!" if source is None else '### Target Feedback from "{!s}"!'.format(source)
+            self.log_fn(msg_hdr, rgb=Color.FEEDBACK)
         else:
-            msg_hdr = "### Target Feedback:" if source is None else "### Target Feedback [%s]:" % source
+            msg_hdr = "### Target Feedback:" if source is None else "### Target Feedback ({!s}):".format(source)
             self.log_fn(msg_hdr, rgb=Color.FEEDBACK)
             self.log_fn(feedback)
 
@@ -239,6 +240,7 @@ class Logger(object):
     def _decode_target_feedback(self, feedback):
         if sys.version_info[0] > 2 and isinstance(feedback, bytes):
             feedback = feedback.decode('latin_1')
+            feedback = '{!a}'.format(feedback)
         return feedback.strip()
 
     def start_new_log_entry(self, preamble=''):
