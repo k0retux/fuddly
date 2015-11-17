@@ -3003,14 +3003,22 @@ class NodeInternals_NonTerm(NodeInternals):
         #     for n in node.env.nodes_to_corrupt.keys():
         #         print('entangled: ', n.entangled_nodes)
         if node in node.env.nodes_to_corrupt:
-            return not exist
+            corrupt_type, corrupt_op = node.env.nodes_to_corrupt[node]
+            if corrupt_type == Node.CORRUPT_EXIST_COND or corrupt_type is None:
+                return not exist
+            else:
+                return exist
         else:
             return exist
 
     @staticmethod
     def qty_corrupt_hook(node, qty):
         if node in node.env.nodes_to_corrupt:
-            return node.env.nodes_to_corrupt[node](qty)
+            corrupt_type, corrupt_op = node.env.nodes_to_corrupt[node]
+            if corrupt_type == Node.CORRUPT_QTY_SYNC or corrupt_type is None:
+                return corrupt_op(qty)
+            else:
+                return qty
         else:
             return qty
 
@@ -4038,6 +4046,10 @@ class Node(object):
     DJOBS_PRIO_nterm_existence = 100
     DJOBS_PRIO_dynhelpers = 200
     DJOBS_PRIO_genfunc = 300
+
+    CORRUPT_EXIST_COND = 5
+    CORRUPT_QTY_SYNC = 6
+    CORRUPT_NODE_QTY = 7
 
     def __init__(self, name, base_node=None, copy_dico=None, ignore_frozen_state=False,
                  accept_external_entanglement=False, acceptance_set=None,
@@ -5521,12 +5533,12 @@ class Env(object):
     def get_data_model(self):
         return self._dm
 
-    def add_node_to_corrupt(self, node, corrupt_op=lambda x: x):
+    def add_node_to_corrupt(self, node, corrupt_type=None, corrupt_op=lambda x: x):
         if node.entangled_nodes:
             for n in node.entangled_nodes:
-                self.nodes_to_corrupt[n] = corrupt_op
+                self.nodes_to_corrupt[n] = (corrupt_type, corrupt_op)
         else:
-            self.nodes_to_corrupt[node] = corrupt_op
+            self.nodes_to_corrupt[node] = (corrupt_type, corrupt_op)
 
     def remove_node_to_corrupt(self, node):
         if node in self.nodes_to_corrupt:

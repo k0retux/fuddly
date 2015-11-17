@@ -408,15 +408,17 @@ class sd_struct_constraints(StatefulDisruptor):
         else:
             if self.exist_cst_nodelist:
                 consumed_node = self.exist_cst_nodelist.pop()
-                self.seed.env.add_node_to_corrupt(consumed_node)
+                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_EXIST_COND)
                 op_performed = 'existence condition switched'
             elif self.qty_cst_nodelist_1:
                 consumed_node = self.qty_cst_nodelist_1.pop()
-                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_op=lambda x: x+1)
+                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_QTY_SYNC,
+                                                  corrupt_op=lambda x: x+1)
                 op_performed = 'increase quantity constraint by 1'
             elif self.qty_cst_nodelist_2:
                 consumed_node = self.qty_cst_nodelist_2.pop()
-                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_op=lambda x: max(x-1, 0))
+                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_QTY_SYNC,
+                                                  corrupt_op=lambda x: max(x-1, 0))
                 op_performed = 'decrease quantity constraint by 1'
             else:
                 stop = True
