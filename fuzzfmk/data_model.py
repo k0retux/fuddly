@@ -403,16 +403,18 @@ class RawCondition(NodeCondition):
             self.val = convert_to_internal_repr(val)
 
     def check(self, node):
+        node_val = node._tobytes()
+        node_val = node_val.replace(Node.DEFAULT_DISABLED_VALUE, b'')
         if self.positive_mode:
             if isinstance(self.val, tuple) or isinstance(self.val, list):
-                result = node._tobytes() in self.val
+                result = node_val in self.val
             else:
-                result = node._tobytes() == self.val
+                result = node_val == self.val
         else:
             if isinstance(self.val, tuple) or isinstance(self.val, list):
-                result = node._tobytes() not in self.val
+                result = node_val not in self.val
             else:
-                result = node._tobytes() != self.val
+                result = node_val != self.val
 
         return result
 
@@ -1260,7 +1262,7 @@ class NodeInternals_GenFunc(NodeInternals):
                                          args=[conf, recursive],
                                          prio=Node.DJOBS_PRIO_genfunc)
 
-            return (b'**TO_REMOVE**', False)
+            return (Node.DEFAULT_DISABLED_VALUE, False)
 
         if not self.is_attr_set(NodeInternals.Freezable):
             self.reset_generator()
@@ -1383,10 +1385,11 @@ class NodeInternals_GenFunc(NodeInternals):
             self._generated_node._reset_depth(parent_depth=self.pdepth)
 
     def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria, owned_conf, conf, path_regexp, 
-                               exclude_self, respect_order, relative_depth, top_node):
+                               exclude_self, respect_order, relative_depth, top_node, ignore_fstate):
         return self.generated_node.get_reachable_nodes(internals_criteria, semantics_criteria, owned_conf, conf,
                                                       path_regexp=path_regexp, exclude_self=exclude_self,
-                                                      respect_order=respect_order, relative_depth=relative_depth, top_node=top_node)
+                                                      respect_order=respect_order, relative_depth=relative_depth,
+                                                       top_node=top_node, ignore_fstate=ignore_fstate)
 
     def set_child_current_conf(self, node, conf, reverse, ignore_entanglement):
         if self.is_attr_set(NodeInternals.AcceptConfChange):
@@ -1550,7 +1553,7 @@ class NodeInternals_Term(NodeInternals):
         pass
 
     def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria, owned_conf, conf, path_regexp,
-                               exclude_self, respect_order, relative_depth, top_node):
+                               exclude_self, respect_order, relative_depth, top_node, ignore_fstate):
         return None
 
     def set_child_current_conf(self, node, conf, reverse, ignore_entanglement):
@@ -2787,6 +2790,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                         prio=Node.DJOBS_PRIO_nterm_existence)
             else:
                 val = n._get_value(conf=conf, recursive=recursive)
+
             l.append(val)
 
         ret = (l, was_not_frozen)
@@ -2796,14 +2800,28 @@ class NodeInternals_NonTerm(NodeInternals):
         else:
             return ret
 
+        # We avoid reentrancy that could trigger recursive loop with
+        # self._existence_from_node()
+        if node_env and node_env._reentrancy_cpt > 0:
+            node_env._reentrancy_cpt = 0
+            return ret
+
         if node_env and node_env.delayed_jobs_enabled and \
            node_env.djobs_exists(Node.DJOBS_PRIO_nterm_existence):
             groups = node_env.get_all_djob_groups(prio=Node.DJOBS_PRIO_nterm_existence)
             if groups is not None:
+
                 for gr in groups:
                     for n in gr:
                         if n.is_attr_set(NodeInternals.DISABLED):
+
+                            # Reentrancy is counted at this location,
+                            # because self._existence_from_node() can
+                            # trigger a recursive loop
+                            node_env._reentrancy_cpt += 1
                             shall_exist = self._existence_from_node(n)
+                            node_env._reentrancy_cpt = 0
+
                             if shall_exist:
                                 djobs = node_env.get_djobs_by_gid(id(gr), prio=Node.DJOBS_PRIO_nterm_existence)
                                 func, args, cleanup = djobs[id(n)]
@@ -3710,10 +3728,12 @@ class NodeInternals_NonTerm(NodeInternals):
             e._reset_depth(depth)
 
     def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria, owned_conf, conf, path_regexp,
-                               exclude_self, respect_order, relative_depth, top_node):
+                               exclude_self, respect_order, relative_depth, top_node, ignore_fstate):
 
-        if self.frozen_node_list is not None:
+        if self.frozen_node_list is not None and not ignore_fstate:
             iterable = self.frozen_node_list
+            # iterable = set(self.frozen_node_list)
+            # iterable = iterable.union(self.subnodes_set)
         else:
             iterable = self.subnodes_set
             # self.get_subnodes_with_csts()
@@ -3728,7 +3748,8 @@ class NodeInternals_NonTerm(NodeInternals):
             ret = e.get_reachable_nodes(internals_criteria, semantics_criteria, owned_conf, conf,
                                         path_regexp=path_regexp,
                                         exclude_self=exclude_self, respect_order=respect_order,
-                                        relative_depth=relative_depth, top_node=top_node)
+                                        relative_depth=relative_depth, top_node=top_node,
+                                        ignore_fstate=ignore_fstate)
             if respect_order:
                 for e in ret:
                     if e not in s:
@@ -4046,6 +4067,8 @@ class Node(object):
     DJOBS_PRIO_nterm_existence = 100
     DJOBS_PRIO_dynhelpers = 200
     DJOBS_PRIO_genfunc = 300
+
+    DEFAULT_DISABLED_VALUE = b'**TO_REMOVE**'
 
     CORRUPT_EXIST_COND = 5
     CORRUPT_QTY_SYNC = 6
@@ -4772,7 +4795,7 @@ class Node(object):
 
     def get_reachable_nodes(self, internals_criteria=None, semantics_criteria=None,
                             owned_conf=None, conf=None, path_regexp=None, exclude_self=False,
-                            respect_order=False, relative_depth=-1, top_node=None):
+                            respect_order=False, relative_depth=-1, top_node=None, ignore_fstate=False):
         
         def __compliant(node, config, top_node):
             if node is top_node and exclude_self:
@@ -4839,7 +4862,7 @@ class Node(object):
                                                       exclude_self=exclude_self,
                                                       respect_order=respect_order,
                                                       relative_depth = rdepth - 1,
-                                                      top_node=top_node)
+                                                      top_node=top_node, ignore_fstate=ignore_fstate)
                 if s2:
                     for e in s2:
                         if e not in s:
@@ -4855,10 +4878,10 @@ class Node(object):
 
         if top_node is None:
             nodes = get_reachable_nodes_rec(node=self, config=conf, rdepth=relative_depth,
-                                                    top_node=self)
+                                            top_node=self)
         else:
             nodes = get_reachable_nodes_rec(node=self, config=conf, rdepth=relative_depth,
-                                                    top_node=top_node)
+                                            top_node=top_node)
 
         if respect_order:
             return nodes
@@ -4965,8 +4988,9 @@ class Node(object):
             if e == self:
                 return n
         else:
-            return "*** ERROR: get_path_from() --> Node '{:s}' " \
-                "not reachable from '{:s}'***".format(self.name, node.name)
+            return None
+        # "*** ERROR: get_path_from() --> Node '{:s}' " \
+        #         "not reachable from '{:s}'***".format(self.name, node.name)
 
 
     def get_all_paths_from(self, node, conf=None):
@@ -5516,6 +5540,7 @@ class Env(object):
         self._djob_groups = None
         self._dm = None
         self.id_list = None
+        self._reentrancy_cpt = 0
         # self.cpt = 0
 
     def __getattr__(self, name):

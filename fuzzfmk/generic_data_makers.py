@@ -97,7 +97,7 @@ class sd_iter_over_data(StatefulDisruptor):
         if self.fix:
             exported_node.unfreeze(recursive=True, reevaluate_constraints=True)
             exported_node.freeze()
-            data.add_info('fix constraints, if any')
+            data.add_info('fix constraints (if any)')
 
         data.update_from_node(exported_node)
 
@@ -375,14 +375,27 @@ class sd_struct_constraints(StatefulDisruptor):
         ic_exist_cst = NodeInternalsCriteria(required_csts=[SyncScope.Existence])
         ic_qty_cst = NodeInternalsCriteria(required_csts=[SyncScope.Qty])
 
-        self.exist_cst_nodelist = self.seed.get_reachable_nodes(internals_criteria=ic_exist_cst, path_regexp=self.path)
+        self.exist_cst_nodelist = self.seed.get_reachable_nodes(internals_criteria=ic_exist_cst, path_regexp=self.path,
+                                                                ignore_fstate=True)
         # print('\n*** NOT FILTERED nodes')
-        # for n in exist_cst_nodelist_tmp:
+        # for n in self.exist_cst_nodelist:
         #     print(' |_ ' + n.name)
         self.exist_cst_nodelist = self.seed.filter_out_entangled_nodes(self.exist_cst_nodelist)
+        # print('\n*** FILTERED nodes')
+        # for n in self.exist_cst_nodelist:
+        #     print(' |_ ' + n.name)
+        nodelist = copy.copy(self.exist_cst_nodelist)
+        for n in nodelist:
+            if n.get_path_from(self.seed) is None:
+                self.exist_cst_nodelist.remove(n)
 
-        self.qty_cst_nodelist_1 = self.seed.get_reachable_nodes(internals_criteria=ic_qty_cst, path_regexp=self.path)
+        self.qty_cst_nodelist_1 = self.seed.get_reachable_nodes(internals_criteria=ic_qty_cst, path_regexp=self.path,
+                                                                ignore_fstate=True)
         self.qty_cst_nodelist_1 = self.seed.filter_out_entangled_nodes(self.qty_cst_nodelist_1)
+        nodelist = copy.copy(self.qty_cst_nodelist_1)
+        for n in nodelist:
+            if n.get_path_from(self.seed) is None:
+                self.qty_cst_nodelist_1.remove(n)
 
         self.qty_cst_nodelist_2 = copy.copy(self.qty_cst_nodelist_1)
         self.max_runs = len(self.exist_cst_nodelist) + 2*len(self.qty_cst_nodelist_1)
@@ -390,22 +403,8 @@ class sd_struct_constraints(StatefulDisruptor):
 
     def disrupt_data(self, dm, target, data):
 
-        for i in range(self.init-1):
-            if self.exist_cst_nodelist:
-                self.exist_cst_nodelist.pop()
-            elif self.qty_cst_nodelist_1:
-                self.qty_cst_nodelist_1.pop()
-            elif self.qty_cst_nodelist_2:
-                self.qty_cst_nodelist_2.pop()
-            else:
-                break
-            self.idx += 1
-
         stop = False
-        self.idx += 1
-        if self.idx > self.max_steps and self.max_steps != -1:
-            stop = True
-        else:
+        for i in range(self.init):
             if self.exist_cst_nodelist:
                 consumed_node = self.exist_cst_nodelist.pop()
                 self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_EXIST_COND)
@@ -422,15 +421,17 @@ class sd_struct_constraints(StatefulDisruptor):
                 op_performed = 'decrease quantity constraint by 1'
             else:
                 stop = True
+                break
 
-            if not stop:
-                corrupted_seed = Node(self.seed.name, base_node=self.seed, ignore_frozen_state=False, new_env=True)
-                self.seed.env.remove_node_to_corrupt(consumed_node)
+            self.idx += 1
 
-        if stop:
+        if stop or (self.idx > self.max_steps and self.max_steps != -1):
             data.make_unusable()
             self.handover()
             return data
+
+        corrupted_seed = Node(self.seed.name, base_node=self.seed, ignore_frozen_state=False, new_env=True)
+        self.seed.env.remove_node_to_corrupt(consumed_node)
 
         corrupted_seed.unfreeze(recursive=True, reevaluate_constraints=True)
         corrupted_seed.freeze()

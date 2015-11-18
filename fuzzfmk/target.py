@@ -32,6 +32,7 @@ import socket
 import threading
 import copy
 import struct
+import time
 
 import errno
 from socket import error as socket_error
@@ -652,7 +653,7 @@ class NetworkTarget(Target):
                     dont_stop = False
 
         for s, chks in chunks.items():
-            fbk = b''.join(chks)
+            fbk = b'\n'.join(chks)
             with fbk_lock:
                 fbk, fbkid = fbk_handling(fbk, fbk_ids[s])
                 fbk_collect(fbk, fbkid)
@@ -681,8 +682,16 @@ class NetworkTarget(Target):
                     fbk_sockets, fbk_ids, fbk_lengths = None, None, None
                 raw_data = data.to_bytes()
                 totalsent = 0
-                while totalsent < len(raw_data):
-                    sent = s.send(raw_data[totalsent:])
+                send_retry = 0
+                while totalsent < len(raw_data) and send_retry < 10:
+                    try:
+                        sent = s.send(raw_data[totalsent:])
+                    except socket.error as serr:
+                        send_retry += 1
+                        print('\n*** ERROR: ' + str(serr))
+                        time.sleep(0.1)
+                        continue
+
                     if sent == 0:
                         s.close()
                         raise TargetStuck("socket connection broken")
