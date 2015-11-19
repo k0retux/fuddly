@@ -219,7 +219,7 @@ class Logger(object):
             self.log_fn(preamble)
 
         if not feedback:
-            msg_hdr = "### Target Feedback!" if source is None else '### Target Feedback from "{!s}"!'.format(source)
+            msg_hdr = "### No Target Feedback!" if source is None else '### No Target Feedback from "{!s}"!'.format(source)
             self.log_fn(msg_hdr, rgb=Color.FEEDBACK)
         else:
             msg_hdr = "### Target Feedback:" if source is None else "### Target Feedback ({!s}):".format(source)

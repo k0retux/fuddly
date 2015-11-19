@@ -411,16 +411,19 @@ class sd_struct_constraints(StatefulDisruptor):
                                                             ignore_fstate=True)
         self.minmax_cst_nodelist_1 = set()
 
-        print('\n*** NON-TERM nodes')
         for n in minmax_cst_nodelist:
-            # print(' |_ ' + n.name)
             for sn in n.subnodes_set:
                 minmax = n.get_subnode_minmax(sn)
                 if minmax:
                     mini, maxi = minmax
                     if sn.is_nonterm():
                         self.minmax_cst_nodelist_1.add((sn, mini, maxi))
-                        print('   |_ ' + sn.name + ' ' + repr(mini) + ',' + repr(maxi))
+
+        nodedesclist = copy.copy(self.minmax_cst_nodelist_1)
+        for n_desc in nodedesclist:
+            n, mini, maxi = n_desc
+            if n.get_path_from(self.seed) is None:
+                self.minmax_cst_nodelist_1.remove((n, mini, maxi))
 
         self.minmax_cst_nodelist_2 = copy.copy(self.minmax_cst_nodelist_1)
 

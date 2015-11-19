@@ -674,6 +674,7 @@ class NetworkTarget(Target):
         ready_to_read, ready_to_write, in_error = select.select([], sockets, [], self._sending_delay)
         if ready_to_write:
             for s in ready_to_write:
+                add_main_socket = True
                 data, host, port = data_refs[s]
                 if self._first_send_data_call:
                     self._first_send_data_call = False
@@ -688,14 +689,18 @@ class NetworkTarget(Target):
                         sent = s.send(raw_data[totalsent:])
                     except socket.error as serr:
                         send_retry += 1
-                        print('\n*** ERROR: ' + str(serr))
-                        time.sleep(0.1)
-                        continue
-
-                    if sent == 0:
-                        s.close()
-                        raise TargetStuck("socket connection broken")
-                    totalsent = totalsent + sent
+                        if serr.errno == socket.errno.EWOULDBLOCK:
+                            print('\n*** ERROR: ' + str(serr))
+                            time.sleep(0.2)
+                            continue
+                        else:
+                            add_main_socket = False
+                            break
+                    else:
+                        if sent == 0:
+                            s.close()
+                            raise TargetStuck("socket connection broken")
+                        totalsent = totalsent + sent
 
                 if fbk_sockets is None:
                     assert(fbk_ids is None)
@@ -705,9 +710,11 @@ class NetworkTarget(Target):
                     fbk_lengths = {}
                 else:
                     assert(self._default_fbk_id[(host, port)] not in fbk_ids.values())
-                fbk_sockets.append(s)
-                fbk_ids[s] = self._default_fbk_id[(host, port)]
-                fbk_lengths[s] = self.feedback_length
+
+                if add_main_socket:
+                    fbk_sockets.append(s)
+                    fbk_ids[s] = self._default_fbk_id[(host, port)]
+                    fbk_lengths[s] = self.feedback_length
 
             self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths)
 
