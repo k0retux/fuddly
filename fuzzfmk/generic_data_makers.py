@@ -359,6 +359,10 @@ class sd_struct_constraints(StatefulDisruptor):
     For each node associated to existence constraints or quantity
     constraints, alter the constraint, one at a time, after each call
     to this disruptor.
+
+    If `deep` is set, enable new structure corruption cases, based on
+    the minimum and maximum amount of non-terminal nodes (within the
+    input data) specified in the data model.
     '''
     def setup(self, dm, user_input):
         return True

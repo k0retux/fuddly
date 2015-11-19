@@ -266,6 +266,9 @@ Description:
   For each node associated to existence constraints or quantity
   constraints, alter the constraint, one at a time, after each call
   to this disruptor.
+  If `deep` is set, enable new structure corruption cases, based on
+  the minimum and maximum amount of non-terminal nodes (within the
+  input data) specified in the data model.
 
 Reference:
   :class:`fuzzfmk.generic_data_makers.sd_struct_constraints`
@@ -286,16 +289,25 @@ Parameters:
 	 |      | desc: graph path regexp to select nodes on which the disruptor should 
 	 |      |       apply
 	 |      | default: None [type: str]
+	 |_ deep
+	 |      | desc: if True, enable corruption of minimum and maxium amount of non-terminal 
+	 |      |       nodes
+	 |      | default: False [type: bool]
 
 Usage Example:
    A typical *disruptor chain* for leveraging this disruptor could be:
 
    .. code-block:: none
 
-      <DATA> tWALK tSTRUCT
+      <DATA> tWALK(path='path/to/some/node') tSTRUCT
+
+   .. note:: Test this chain with the data example found at
+             :ref:`dm:pattern:existence-cond`, and set the path to the
+             ``opcode`` node path.
 
    .. seealso:: Refer to :ref:`tuto:dmaker-chain` for insight
-	       into *disruptor chains*.
+		into *disruptor chains*.
+
 
 
 tALT - Walk Through Alternative Node Configurations
