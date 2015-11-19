@@ -2000,6 +2000,7 @@ class NodeInternals_NonTerm(NodeInternals):
         self.subnodes_set = set()
         self.subnodes_csts = []
         self.subnodes_csts_total_weight = 0
+        self.subnodes_minmax = {}
         self.separator = None
 
         if exhaust_info is None:
@@ -2078,8 +2079,11 @@ class NodeInternals_NonTerm(NodeInternals):
             subnode_list = []
             for delim, sublist in split_with(lambda x: isinstance(x, str), lnode_list[0]):
 
-                for e in sublist:
-                    self.subnodes_set.add(e[0])
+                for n in sublist:
+                    node, mini, maxi = self._handle_node_desc(n)
+                    self.subnodes_set.add(node)
+                    # self.subnodes_set.add(n[0])
+                    self.subnodes_minmax[node] = (mini, maxi)
 
                 chunk = []
 
@@ -2143,10 +2147,14 @@ class NodeInternals_NonTerm(NodeInternals):
                     if delim[:3] == 'u=+' or delim[:3] == 's=+':
                         for w, etp in split_with(lambda x: isinstance(x, int), sublist[1]):
                             for n in etp:
-                                self.subnodes_set.add(n[0])
+                                node, mini, maxi = self._handle_node_desc(n)
+                                self.subnodes_set.add(node)
+                                self.subnodes_minmax[node] = (mini, maxi)
                     else:
-                        for e in sublist:
-                            self.subnodes_set.add(e[0])
+                        for n in sublist:
+                            node, mini, maxi = self._handle_node_desc(n)
+                            self.subnodes_set.add(node)
+                            self.subnodes_minmax[node] = (mini, maxi)
 
         else:
             raise ValueError
@@ -2323,7 +2331,6 @@ class NodeInternals_NonTerm(NodeInternals):
     def get_subnodes_collection(self):
         return self.subnodes_set
 
-
     def _set_drawn_node_attrs(self, node, nb, sz):
         self._nodes_drawn_qty[node.name] = nb
         if node.env is not None:
@@ -2361,6 +2368,11 @@ class NodeInternals_NonTerm(NodeInternals):
             else:
                 raise ValueError("Node with name '%s' has not been drawn" % name)
 
+    def get_subnode_minmax(self, node):
+        if node in self.subnodes_minmax:
+            return self.subnodes_minmax[node]
+        else:
+            return None
 
     @staticmethod
     def _get_random_component(comp_list, total_weight):
@@ -2527,6 +2539,8 @@ class NodeInternals_NonTerm(NodeInternals):
         node_attrs = node_desc[1:]
         # node = node_desc[0]
         node, mini, maxi = self._handle_node_desc(node_desc)
+
+        mini, maxi = self.nodeqty_corrupt_hook(node, mini, maxi)
 
         if self.is_attr_set(NodeInternals.Determinist):
             nb = (mini + maxi) // 2
@@ -2996,7 +3010,7 @@ class NodeInternals_NonTerm(NodeInternals):
         if sync_node is not None:
             nb = node.env.get_drawn_node_qty(id(sync_node))
             if nb is not None:
-                return NodeInternals_NonTerm.qty_corrupt_hook(node, nb)
+                return NodeInternals_NonTerm.qtysync_corrupt_hook(node, nb)
             else:
                 print("\n*** WARNING: synchronization is not possible " \
                       "for node '{:s}' (id: {:d})!".format(node.name, id(node)))
@@ -3046,7 +3060,7 @@ class NodeInternals_NonTerm(NodeInternals):
             return exist
 
     @staticmethod
-    def qty_corrupt_hook(node, qty):
+    def qtysync_corrupt_hook(node, qty):
         if node in node.env.nodes_to_corrupt:
             corrupt_type, corrupt_op = node.env.nodes_to_corrupt[node]
             if corrupt_type == Node.CORRUPT_QTY_SYNC or corrupt_type is None:
@@ -3055,6 +3069,19 @@ class NodeInternals_NonTerm(NodeInternals):
                 return qty
         else:
             return qty
+
+
+    @staticmethod
+    def nodeqty_corrupt_hook(node, mini, maxi):
+        if node.env and node in node.env.nodes_to_corrupt:
+            corrupt_type, corrupt_op = node.env.nodes_to_corrupt[node]
+            if corrupt_type == Node.CORRUPT_NODE_QTY or corrupt_type is None:
+                return corrupt_op(mini, maxi)
+            else:
+                return mini, maxi
+        else:
+            return mini, maxi
+
 
 
     def absorb(self, blob, constraints, conf):
@@ -3748,8 +3775,6 @@ class NodeInternals_NonTerm(NodeInternals):
 
         if self.frozen_node_list is not None and not ignore_fstate:
             iterable = self.frozen_node_list
-            # iterable = set(self.frozen_node_list)
-            # iterable = iterable.union(self.subnodes_set)
         else:
             iterable = self.subnodes_set
             # self.get_subnodes_with_csts()

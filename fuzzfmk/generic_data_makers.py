@@ -351,7 +351,9 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
            gen_args={'init': ('make the model walker ignore all the steps until the provided one', 1, int),
                      'max_steps': ('maximum number of steps (-1 means until the end)', -1, int) },
            args={'path': ('graph path regexp to select nodes on which' \
-                          ' the disruptor should apply', None, str) })
+                          ' the disruptor should apply', None, str),
+                 'deep': ('if True, enable corruption of minimum and maxium amount of non-terminal nodes',
+                          False, bool) })
 class sd_struct_constraints(StatefulDisruptor):
     '''
     For each node associated to existence constraints or quantity
@@ -374,13 +376,14 @@ class sd_struct_constraints(StatefulDisruptor):
 
         ic_exist_cst = NodeInternalsCriteria(required_csts=[SyncScope.Existence])
         ic_qty_cst = NodeInternalsCriteria(required_csts=[SyncScope.Qty])
+        ic_minmax_cst = NodeInternalsCriteria(node_kinds=[NodeInternals_NonTerm])
 
         self.exist_cst_nodelist = self.seed.get_reachable_nodes(internals_criteria=ic_exist_cst, path_regexp=self.path,
                                                                 ignore_fstate=True)
         # print('\n*** NOT FILTERED nodes')
         # for n in self.exist_cst_nodelist:
         #     print(' |_ ' + n.name)
-        self.exist_cst_nodelist = self.seed.filter_out_entangled_nodes(self.exist_cst_nodelist)
+        # self.exist_cst_nodelist = self.seed.filter_out_entangled_nodes(self.exist_cst_nodelist)
         # print('\n*** FILTERED nodes')
         # for n in self.exist_cst_nodelist:
         #     print(' |_ ' + n.name)
@@ -391,14 +394,33 @@ class sd_struct_constraints(StatefulDisruptor):
 
         self.qty_cst_nodelist_1 = self.seed.get_reachable_nodes(internals_criteria=ic_qty_cst, path_regexp=self.path,
                                                                 ignore_fstate=True)
-        self.qty_cst_nodelist_1 = self.seed.filter_out_entangled_nodes(self.qty_cst_nodelist_1)
+        # self.qty_cst_nodelist_1 = self.seed.filter_out_entangled_nodes(self.qty_cst_nodelist_1)
         nodelist = copy.copy(self.qty_cst_nodelist_1)
         for n in nodelist:
             if n.get_path_from(self.seed) is None:
                 self.qty_cst_nodelist_1.remove(n)
 
         self.qty_cst_nodelist_2 = copy.copy(self.qty_cst_nodelist_1)
-        self.max_runs = len(self.exist_cst_nodelist) + 2*len(self.qty_cst_nodelist_1)
+
+
+        minmax_cst_nodelist = self.seed.get_reachable_nodes(internals_criteria=ic_minmax_cst, path_regexp=self.path,
+                                                            ignore_fstate=True)
+        self.minmax_cst_nodelist_1 = set()
+
+        print('\n*** NON-TERM nodes')
+        for n in minmax_cst_nodelist:
+            # print(' |_ ' + n.name)
+            for sn in n.subnodes_set:
+                minmax = n.get_subnode_minmax(sn)
+                if minmax:
+                    mini, maxi = minmax
+                    if sn.is_nonterm():
+                        self.minmax_cst_nodelist_1.add((sn, mini, maxi))
+                        print('   |_ ' + sn.name + ' ' + repr(mini) + ',' + repr(maxi))
+
+        self.minmax_cst_nodelist_2 = copy.copy(self.minmax_cst_nodelist_1)
+
+        self.max_runs = len(self.exist_cst_nodelist) + 2*len(self.qty_cst_nodelist_1) + 2*len(self.minmax_cst_nodelist_1)
         
 
     def disrupt_data(self, dm, target, data):
@@ -419,6 +441,18 @@ class sd_struct_constraints(StatefulDisruptor):
                 self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_QTY_SYNC,
                                                   corrupt_op=lambda x: max(x-1, 0))
                 op_performed = 'decrease quantity constraint by 1'
+            elif self.deep and self.minmax_cst_nodelist_1:
+                consumed_node, mini, maxi = self.minmax_cst_nodelist_1.pop()
+                new_mini = max(0, mini-1)
+                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
+                                                  corrupt_op=lambda x, y: (new_mini, new_mini))
+                op_performed = "set node amount to its minimum minus one"
+            elif self.deep and self.minmax_cst_nodelist_2:
+                consumed_node, mini, maxi = self.minmax_cst_nodelist_2.pop()
+                new_maxi = (maxi+1)
+                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
+                                                  corrupt_op=lambda x, y: (new_maxi, new_maxi))
+                op_performed = "set node amount to its maximum plus one"
             else:
                 stop = True
                 break
@@ -436,7 +470,7 @@ class sd_struct_constraints(StatefulDisruptor):
         corrupted_seed.unfreeze(recursive=True, reevaluate_constraints=True)
         corrupted_seed.freeze()
 
-        data.add_info('sample index: {:d}'.format(self.idx))        
+        data.add_info('sample index: {:d}'.format(self.idx))
         data.add_info(' |_ run: {:d} / {:d}'.format(self.idx, self.max_runs))
         data.add_info('current fuzzed node:    {:s}'.format(consumed_node.get_path_from(self.seed)))
         data.add_info(' |_ {:s}'.format(op_performed))

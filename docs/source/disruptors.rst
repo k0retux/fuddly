@@ -37,7 +37,7 @@ Parameters:
 	  |      | default: False [type: bool]
 	  |_ value
 	  |      | desc: the new value to inject within the data
-	  |      | default:  [type: str]
+	  |      | default: '' [type: str]
 	  |_ constraints
 	  |      | desc: constraints for the absorption of the new value
 	  |      | default: AbsNoCsts() [type: AbsCsts]

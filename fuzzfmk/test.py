@@ -2874,12 +2874,14 @@ class TestFMK(unittest.TestCase):
 
         idx = 0
         expected_idx = 6
-        expected_outcomes = [b'A1', b'A2', b'A3T\x0f\xa0\x00\n*1*0*', b'A3T\x0f\xa0\x00\n$ A32_VALID $',
-                             b'A3$ A32_VALID $', b'A1']
-        expected_outcomes_35_alt = [b'A3T\x0f\xa0\x00\n$ A32_INVALID $', b'A3$ A32_INVALID $']
+
+        expected_outcomes = [b'A1', b'A2', b'A3$ A32_VALID $', b'A3T\x0f\xa0\x00\n$ A32_VALID $',
+                             b'A3T\x0f\xa0\x00\n*1*0*', b'A1']
+        expected_outcomes_24_alt = [b'A3$ A32_INVALID $', b'A3T\x0f\xa0\x00\n$ A32_INVALID $']
+
         outcomes = []
 
-        act = [('EXIST_COND', UI(determinist=True)), 'tWALK', 'tSTRUCT']
+        act = [('EXIST_COND', UI(determinist=True)), 'tWALK', ('tSTRUCT', None)]
         for i in range(4):
             for j in range(10):
                 d = fmk.get_data(act)
@@ -2892,9 +2894,27 @@ class TestFMK(unittest.TestCase):
                 d.show()
                 idx += 1
 
-        self.assertEqual(outcomes[:3], expected_outcomes[:3])
-        self.assertTrue(outcomes[3:5] == expected_outcomes[3:5] or outcomes[3:5] == expected_outcomes_35_alt)
-        self.assertEqual(outcomes[-1], expected_outcomes[-1])
+        self.assertEqual(outcomes[:2], expected_outcomes[:2])
+        self.assertTrue(outcomes[2:4] == expected_outcomes[2:4] or outcomes[2:4] == expected_outcomes_24_alt)
+        self.assertEqual(outcomes[-2:], expected_outcomes[-2:])
+        self.assertEqual(idx, expected_idx)
+
+        print('\n****\n')
+
+        expected_idx = 6
+        idx = 0
+        act = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', None, UI(deep=True))]
+        for j in range(10):
+            d = fmk.get_data(act)
+            if d is None:
+                print('--> Exiting (need new input)')
+                break
+            fmk.new_transfer_preamble()
+            fmk.log_data(d)
+            outcomes.append(d.to_bytes())
+            d.show()
+            idx += 1
+
         self.assertEqual(idx, expected_idx)
 
 
