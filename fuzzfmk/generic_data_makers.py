@@ -783,7 +783,8 @@ class d_corrupt_bits_by_position(Disruptor):
                                 'of the node. (for stateless diruptors dealing with ' \
                                 'big data it can be usefull to it to False)', False, bool)})
 class d_fix_constraints(Disruptor):
-    '''Fix data constraints.
+    '''
+    Fix data constraints.
 
     Release constraints from input data or from only a piece of it (if
     the parameter `path` is provided), then recompute them. By
@@ -823,6 +824,115 @@ class d_fix_constraints(Disruptor):
 
         return prev_data
 
+
+@disruptor(tactics, dtype="NEXT", weight=4,
+           args={'path': ('graph path regexp to select nodes on which ' \
+                          'the disruptor should apply', None, str),
+                 'recursive': ('apply the disruptor recursively', True, str),
+                 'clone_node': ('if True the dmaker will always return a copy ' \
+                                'of the node. (for stateless diruptors dealing with ' \
+                                'big data it can be usefull to it to False)', False, bool)})
+class d_next_node_content(Disruptor):
+    '''
+    Move to the next content of the nodes from input data or from only
+    a piece of it (if the parameter `path` is provided). Basically,
+    unfreeze the nodes then freeze them again, which will consequently
+    produce a new data.
+    '''
+    def setup(self, dm, user_input):
+        return True
+
+    def disrupt_data(self, dm, target, prev_data):
+        if prev_data.node is None:
+            prev_data.add_info('INVALID INPUT')
+            return prev_data
+
+        prev_data.node.freeze()
+
+        if self.path:
+            l = prev_data.node.get_reachable_nodes(path_regexp=self.path)
+            if not l:
+                prev_data.add_info('INVALID INPUT')
+                return prev_data
+
+            for n in l:
+                n.unfreeze(recursive=self.recursive)
+                n.freeze()
+                prev_data.add_info("unfreeze the node '{:s}'".format(n.get_path_from(prev_data.node)))
+                prev_data.add_info("new value:        '{:s}'".format(n.to_bytes()))
+
+        else:
+            prev_data.node.unfreeze(recursive=self.recursive)
+            prev_data.add_info('unfreeze the root node')
+
+        prev_data.node.freeze()
+
+        if self.clone_node:
+            exported_node = Node(prev_data.node.name, base_node=prev_data.node, new_env=True)
+            prev_data.update_from_node(exported_node)
+
+        return prev_data
+
+
+@disruptor(tactics, dtype="MOD", weight=4,
+           args={'path': ('graph path regexp to select nodes on which ' \
+                          'the disruptor should apply', None, str),
+                 'value': ('the new value to inject within the data', '', str),
+                 'constraints': ('constraints for the absorption of the new value', AbsNoCsts(), AbsCsts),
+                 'clone_node': ('if True the dmaker will always return a copy ' \
+                                'of the node. (for stateless diruptors dealing with ' \
+                                'big data it can be usefull to it to False)', False, bool)})
+class d_modify_nodes(Disruptor):
+    '''
+    Change the content of the nodes specified by the regexp path with
+    the value privided as a parameter (use *node absorption*
+    infrastructure). If no path is provided, the root node will be
+    used.
+
+    Constraints can also be provided for absorption of the new value.
+    '''
+    def setup(self, dm, user_input):
+        return True
+
+    def disrupt_data(self, dm, target, prev_data):
+        if prev_data.node is None:
+            prev_data.add_info('INVALID INPUT')
+            return prev_data
+
+        if self.path:
+            l = prev_data.node.get_reachable_nodes(path_regexp=self.path)
+            if not l:
+                prev_data.add_info('INVALID INPUT')
+                return prev_data
+
+            for n in l:
+                status, off, size, name = n.absorb(self.value, constraints=self.constraints)
+                self._add_info(prev_data, n, status, size)
+        else:
+            status, off, size, name = prev_data.node.absorb(self.value, constraints=self.constraints)
+            self._add_info(prev_data, prev_data.node, status, size)
+
+        prev_data.node.freeze()
+
+        if self.clone_node:
+            exported_node = Node(prev_data.node.name, base_node=prev_data.node, new_env=True)
+            prev_data.update_from_node(exported_node)
+
+        return prev_data
+
+    def _add_info(self, prev_data, n, status, size):
+        val_len = len(self.value)
+        prev_data.add_info("changed node:     '{:s}'".format(n.name))
+        prev_data.add_info("absorption status: {:s}".format(AbsorbStatus.DESC[status]))
+        prev_data.add_info("value provided:   '{:s}'".format(self.value))
+        prev_data.add_info("__ length:         {:d}".format(val_len))
+        if status != AbsorbStatus.FullyAbsorbed:
+            prev_data.add_info("absorbed size:     {:d}".format(size))
+            if val_len - size > 100:
+                remaining = self.value[size:size+100] + ' ...'
+            else:
+                remaining = self.value[size:]
+            prev_data.add_info("remaining:      '{:s}'".format(remaining))
 
 
 

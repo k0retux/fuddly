@@ -2422,7 +2422,7 @@ class Fuzzer(object):
                 args_type_desc = arg_type.__name__
             msg += '    |' + ' '*prefix_len + \
                    ' | ' + colorize('default: ', rgb=Color.SUBINFO_ALT) + \
-                   colorize(str(default), rgb=Color.SUBINFO_ALT_HLIGHT) + ' [type: {:s}]'.format(args_type_desc)
+                   colorize(repr(default), rgb=Color.SUBINFO_ALT_HLIGHT) + ' [type: {:s}]'.format(args_type_desc)
             return msg
 
         if obj.__doc__:

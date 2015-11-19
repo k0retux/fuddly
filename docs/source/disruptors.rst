@@ -9,6 +9,72 @@ sections.
 Stateless Disruptors
 ====================
 
+
+MOD - Modify Node Contents
+--------------------------
+
+Description:
+  Change the content of the nodes specified by the regexp path with
+  the value privided as a parameter (use *node absorption*
+  infrastructure). If no path is provided, the root node will be
+  used.
+
+Reference:
+  :class:`fuzzfmk.generic_data_makers.d_modify_nodes`
+
+Parameters:
+  .. code-block:: none
+
+	specific args: 
+	  |_ path
+	  |      | desc: graph path regexp to select nodes on which the disruptor should 
+	  |      |       apply
+	  |      | default: None [type: str]
+	  |_ clone_node
+	  |      | desc: if True the dmaker will always return a copy of the node. (for 
+	  |      |       stateless diruptors dealing with big data it can be usefull 
+	  |      |       to it to False)
+	  |      | default: False [type: bool]
+	  |_ value
+	  |      | desc: the new value to inject within the data
+	  |      | default:  [type: str]
+	  |_ constraints
+	  |      | desc: constraints for the absorption of the new value
+	  |      | default: AbsNoCsts() [type: AbsCsts]
+
+
+
+NEXT - Next Node Content
+------------------------
+
+Description:
+  Move to the next content of the nodes from input data or from only
+  a piece of it (if the parameter `path` is provided). Basically,
+  unfreeze the nodes then freeze them again, which will consequently
+  produce a new data.
+
+Reference:
+  :class:`fuzzfmk.generic_data_makers.d_next_node_content`
+
+Parameters:
+  .. code-block:: none
+
+	specific args: 
+	  |_ path
+	  |      | desc: graph path regexp to select nodes on which the disruptor should 
+	  |      |       apply
+	  |      | default: None [type: str]
+	  |_ clone_node
+	  |      | desc: if True the dmaker will always return a copy of the node. (for 
+	  |      |       stateless diruptors dealing with big data it can be usefull 
+	  |      |       to it to False)
+	  |      | default: False [type: bool]
+	  |_ recursive
+	  |      | desc: apply the disruptor recursively
+	  |      | default: True [type: str]
+
+
+
 FIX - Fix Data Constraints
 --------------------------
 

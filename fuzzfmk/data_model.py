@@ -302,6 +302,13 @@ class AbsorbStatus:
     Absorbed = 3
     FullyAbsorbed = 4
 
+    DESC = {
+        Accept: 'Accept',
+        Reject: 'Reject',
+        Absorbed: 'Absorbed',
+        FullyAbsorbed: 'FullyAbsorbed'
+    }
+
 
 # List of constraints that rules blob absorption
 class AbsCsts(object):
@@ -347,10 +354,17 @@ class AbsCsts(object):
     def __getitem__(self, key):
         return self.constraints[key]
 
+    def __repr__(self):
+        return 'AbsCsts()'
+
+
 class AbsNoCsts(AbsCsts):
 
     def __init__(self, size=False, contents=False, regexp=False, struct=False):
         AbsCsts.__init__(self, size=size, contents=contents, regexp=regexp, struct=struct)
+
+    def __repr__(self):
+        return 'AbsNoCsts()'
 
 
 class AbsFullCsts(AbsCsts):
@@ -358,6 +372,8 @@ class AbsFullCsts(AbsCsts):
     def __init__(self, size=True, contents=True, regexp=True, struct=True):
         AbsCsts.__init__(self, size=size, contents=contents, regexp=regexp, struct=struct)
 
+    def __repr__(self):
+        return 'AbsFullCsts()'
 
 ### Materials for Node Synchronization ###
 
@@ -404,7 +420,7 @@ class RawCondition(NodeCondition):
 
     def check(self, node):
         node_val = node._tobytes()
-        node_val = node_val.replace(Node.DEFAULT_DISABLED_VALUE, b'')
+        # node_val = node_val.replace(Node.DEFAULT_DISABLED_VALUE, b'')
         if self.positive_mode:
             if isinstance(self.val, tuple) or isinstance(self.val, list):
                 result = node_val in self.val
@@ -2777,7 +2793,7 @@ class NodeInternals_NonTerm(NodeInternals):
         djob_group_created = False        
         for n in node_list:
             if n.is_attr_set(NodeInternals.DISABLED):
-                val = b'**TO_REMOVE**'
+                val = Node.DEFAULT_DISABLED_VALUE
                 if not n.env.is_djob_registered(key=id(n), prio=Node.DJOBS_PRIO_nterm_existence):
                     if not djob_group_created:
                         djob_group_created = True
@@ -4068,7 +4084,7 @@ class Node(object):
     DJOBS_PRIO_dynhelpers = 200
     DJOBS_PRIO_genfunc = 300
 
-    DEFAULT_DISABLED_VALUE = b'**TO_REMOVE**'
+    DEFAULT_DISABLED_VALUE = b'' #b'**TO_REMOVE**'
 
     CORRUPT_EXIST_COND = 5
     CORRUPT_QTY_SYNC = 6
