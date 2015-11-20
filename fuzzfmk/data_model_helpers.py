@@ -716,7 +716,8 @@ class ModelHelper(object):
 
         n.set_subnodes_with_csts(shapes, conf=conf)
 
-        mode = desc.get('mode', MH.Mode.ImmutableClone)
+        mode = desc.get('mode', MH.Mode.MutableClone)
+
         internals = n.cc if conf is None else n.c[conf]
         internals.set_mode(mode)
 

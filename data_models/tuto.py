@@ -246,11 +246,13 @@ class MyDF_DataModel(DataModel):
 
         offset_gen_desc = \
         {'name': 'off_gen',
+         'mode': MH.Mode.MutableClone,
          'contents': [
              {'name': 'prefix',
               'contents': String(size=10, alphabet='*+')},
 
              {'name': 'body',
+              # 'mode': MH.Mode.MutableClone,
               'shape_type': MH.FullyRandom,
               'contents': [
                   {'contents': String(val_list=['AAA']),

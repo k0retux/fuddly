@@ -304,7 +304,6 @@ class Example_DataModel(DataModel):
                 1, ['u>', [prefix1, 1], [prefix2, 1], [sep_top, 1], [val1_top, 1], [sep_top, 1], [middle, 1]]
                 ])
 
-
         ### NonTerm
 
         e = Node('TV2')

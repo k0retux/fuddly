@@ -1403,8 +1403,8 @@ class NodeInternals_GenFunc(NodeInternals):
     def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria, owned_conf, conf, path_regexp, 
                                exclude_self, respect_order, relative_depth, top_node, ignore_fstate):
         return self.generated_node.get_reachable_nodes(internals_criteria, semantics_criteria, owned_conf, conf,
-                                                      path_regexp=path_regexp, exclude_self=exclude_self,
-                                                      respect_order=respect_order, relative_depth=relative_depth,
+                                                       path_regexp=path_regexp, exclude_self=False,
+                                                       respect_order=respect_order, relative_depth=relative_depth,
                                                        top_node=top_node, ignore_fstate=ignore_fstate)
 
     def set_child_current_conf(self, node, conf, reverse, ignore_entanglement):
@@ -2023,9 +2023,9 @@ class NodeInternals_NonTerm(NodeInternals):
             self._perform_first_step = exhaust_info[6]
 
         if mode is None:
-            self.mode = 1
+            self.set_mode(2)
         else:
-            self.mode = mode
+            self.set_mode(mode)
         if nodes_drawn_qty is None:
             self._nodes_drawn_qty = {}
         else:
@@ -2132,6 +2132,7 @@ class NodeInternals_NonTerm(NodeInternals):
             self.frozen_node_list = internals.frozen_node_list
             self.separator =  internals.separator
             self.subnodes_set = internals.subnodes_set
+            self.set_mode(internals.mode)
 
         elif subnodes_csts is not None:
             # This case is used by self.make_private_subnodes()
@@ -2581,8 +2582,8 @@ class NodeInternals_NonTerm(NodeInternals):
                         ignore_fstate = True
 
                     new_node = Node(nid, base_node=base_node, ignore_frozen_state=ignore_fstate,
-                                  accept_external_entanglement=True,
-                                  acceptance_set=(external_entangled_nodes + subnode_list))
+                                    accept_external_entanglement=True,
+                                    acceptance_set=(external_entangled_nodes + subnode_list))
                     new_node._reset_depth(parent_depth=base_node.depth-1)
 
                     # For dynamically created Node(), don't propagate the fuzz weight
@@ -2590,10 +2591,12 @@ class NodeInternals_NonTerm(NodeInternals):
                         new_node.reset_fuzz_weight(recursive=True)
                         new_node.clear_attr(NodeInternals.Mutable, all_conf=True, recursive=True)
                     elif self.mode == 2:
-                        if new_node.is_nonterm():
-                            new_node.cc.set_mode(2)
+                        pass
                     else:
                         raise ValueError
+
+                if new_node.is_nonterm():
+                    new_node.cc.set_mode(self.mode)
 
                 new_node._set_clone_info((base_node.tmp_ref_count-1, nb), base_node)
 
@@ -3781,22 +3784,26 @@ class NodeInternals_NonTerm(NodeInternals):
             # iterable = self.frozen_node_list
 
         if respect_order:
+            # if the node is not frozen, the order will not be
+            # preserved as self.subnodes_set will be used as a base,
+            # and it is a set()
             s = []
         else:
             s = set()
 
         for e in iterable:
-            ret = e.get_reachable_nodes(internals_criteria, semantics_criteria, owned_conf, conf,
-                                        path_regexp=path_regexp,
-                                        exclude_self=exclude_self, respect_order=respect_order,
-                                        relative_depth=relative_depth, top_node=top_node,
-                                        ignore_fstate=ignore_fstate)
+            nlist = e.get_reachable_nodes(internals_criteria, semantics_criteria, owned_conf, conf,
+                                          path_regexp=path_regexp,
+                                          exclude_self=False, respect_order=respect_order,
+                                          relative_depth=relative_depth, top_node=top_node,
+                                          ignore_fstate=ignore_fstate)
+
             if respect_order:
-                for e in ret:
+                for e in nlist:
                     if e not in s:
                         s.append(e)
             else:
-                s = s.union(ret)
+                s = s.union(nlist)
 
         return s
 
@@ -4288,7 +4295,6 @@ class Node(object):
                 self.internals[conf].make_private(ignore_frozen_state=ignore_frozen_state,
                                                   accept_external_entanglement=accept_external_entanglement,
                                                   delayed_node_internals=delayed_node_internals)
-
                 self._finalize_nonterm_node(conf)
 
             elif base_node.is_genfunc(conf) or base_node.is_func(conf):
@@ -4900,7 +4906,7 @@ class Node(object):
                                                       semantics_criteria=semantics_criteria,
                                                       owned_conf=owned_conf, conf=next_conf,
                                                       path_regexp=path_regexp,
-                                                      exclude_self=exclude_self,
+                                                      exclude_self=False,
                                                       respect_order=respect_order,
                                                       relative_depth = rdepth - 1,
                                                       top_node=top_node, ignore_fstate=ignore_fstate)
