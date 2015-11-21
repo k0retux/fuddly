@@ -124,12 +124,12 @@ class ZIP_DataModel(DataModel):
                              'type': MH.Generator,
                              'clear_attrs': [MH.Attr.Freezable],
                              'contents': lambda x: Node('cts', value_type=\
-                                                        String(size=x.get_raw_value(), alphabet='ABC')),
+                                                        Filename(size=x.get_raw_value(), alphabet='ABC')),
                              'node_args': 'file_name_length'},
                             {'name': 'extra_field',
                              'type': MH.Generator,
                              'contents': lambda x: Node('cts', value_type=\
-                                                       String(size=x.get_raw_value())),
+                                                        String(size=x.get_raw_value())),
                              'node_args': 'extra_field_length'}
                         ]},
                        {'name': 'data',

@@ -250,6 +250,7 @@ class MyDF_DataModel(DataModel):
          'contents': [
              {'name': 'prefix',
               'contents': String(size=10, alphabet='*+')},
+              # 'contents': String(max_sz=10, min_sz=1, alphabet='*+')},
 
              {'name': 'body',
               # 'mode': MH.Mode.MutableClone,

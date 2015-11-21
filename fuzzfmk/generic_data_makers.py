@@ -904,7 +904,7 @@ class d_next_node_content(Disruptor):
 
         else:
             prev_data.node.unfreeze(recursive=self.recursive)
-            prev_data.add_info('unfreeze the root node')
+            prev_data.add_info('unfreeze from the root node')
 
         prev_data.node.freeze()
 
@@ -976,6 +976,27 @@ class d_modify_nodes(Disruptor):
             prev_data.add_info("remaining:      '{:s}'".format(remaining))
 
 
+@disruptor(tactics, dtype="COPY", weight=4,
+           args={})
+class d_shallow_copy(Disruptor):
+    '''
+    Shallow copy of the input data, which means: ignore its frozen
+    state during the copy.
+    '''
+    def setup(self, dm, user_input):
+        return True
+
+    def disrupt_data(self, dm, target, prev_data):
+        if prev_data.node is None:
+            prev_data.add_info('INVALID INPUT')
+            return prev_data
+
+        prev_data.add_info('shallow copy of input data has been done')
+        exported_node = Node(prev_data.node.name, base_node=prev_data.node, new_env=True,
+                             ignore_frozen_state=True)
+        prev_data.update_from_node(exported_node)
+
+        return prev_data
 
 
 #######################

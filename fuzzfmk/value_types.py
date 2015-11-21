@@ -283,6 +283,8 @@ class String(VT_Alt):
         self.val_list_fuzzy = None
         self.val_list_save = None
 
+        self.is_val_list_provided = None
+
         self.min_sz = None
         self.max_sz = None
 
@@ -293,7 +295,7 @@ class String(VT_Alt):
 
     def make_private(self, forget_current_state):
         if forget_current_state:
-            if self.val_list_provided:
+            if self.is_val_list_provided:
                 self.val_list = copy.copy(self.val_list)
             else:
                 self._populate_val_list()
@@ -375,7 +377,7 @@ class String(VT_Alt):
             val = self._read_value_from(blob, constraints)
             val_sz = len(val)
 
-        if constraints[AbsCsts.Contents] and self.val_list_provided:
+        if constraints[AbsCsts.Contents] and self.is_val_list_provided:
             for v in self.val_list:
                 if val.startswith(v):
                     val = v
@@ -535,11 +537,11 @@ class String(VT_Alt):
                             raise ValueError("The value '%s' does not conform to the alphabet!" % val)
 
             self.val_list_copy = copy.copy(self.val_list)
-            self.val_list_provided = True  # distinguish cases where
+            self.is_val_list_provided = True  # distinguish cases where
                                            # val_list is provided or
                                            # created based on size
         else:
-            self.val_list_provided = False
+            self.is_val_list_provided = False
             
 
         if size is not None:
@@ -590,7 +592,7 @@ class String(VT_Alt):
             self.val_list.append(bp.rand_string(size=self.max_sz, str_set=alpbt))
 
         if self.min_sz+1 < self.max_sz:
-            self.val_list += [bp.rand_string(mini=self.min_sz+1, maxi=self.max_sz-1) for i in range(3)]
+            self.val_list += [bp.rand_string(mini=self.min_sz+1, maxi=self.max_sz-1, str_set=alpbt) for i in range(3)]
 
     def get_current_raw_val(self):
         if self.drawn_val is None:

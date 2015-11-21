@@ -40,7 +40,7 @@ class TutoTarget(NetworkTarget):
     def _feedback_handling(self, fbk, ref):
         return fbk, ref
 
-tg = TutoTarget(host='localhost', port=12345, data_semantics='TG1')
+tg = TutoTarget(host='localhost', port=12345, data_semantics='TG1', hold_connection=True)
 tg.register_new_interface('localhost', 54321, (socket.AF_INET, socket.SOCK_STREAM), 'TG2', server_mode=True)
 tg.add_additional_feedback_interface('localhost', 7777, (socket.AF_INET, socket.SOCK_STREAM),
                                      fbk_id='My Feedback Source', server_mode=True)

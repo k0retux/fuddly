@@ -255,6 +255,22 @@ Parameters:
 	 |      | default: None [type: str]
 
 
+
+COPY - Shallow Copy Data
+------------------------
+
+Description:
+  Shallow copy of the input data, which means: ignore its frozen
+  state during the copy.
+
+Reference:
+  :class:`fuzzfmk.generic_data_makers.d_shallow_copy`
+
+.. note:: Random seeds are generally set while loading the data
+          model. This disruptor enables you to reset the seeds for the
+          input data.
+
+
 Stateful Disruptors
 ===================
 

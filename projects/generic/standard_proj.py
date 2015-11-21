@@ -48,7 +48,7 @@ local3_tg = LocalTarget(tmpfile_ext='.zip')
 local3_tg.set_target_path('unzip')
 local3_tg.set_post_args('-d ' + gr.workspace_folder)
 
-net_tg = NetworkTarget(host='localhost', port=12345, data_semantics='TG1')
+net_tg = NetworkTarget(host='localhost', port=12345, data_semantics='TG1', hold_connection=True)
 net_tg.register_new_interface('localhost', 54321, (socket.AF_INET, socket.SOCK_STREAM), 'TG2', server_mode=True)
 net_tg.add_additional_feedback_interface('localhost', 7777, (socket.AF_INET, socket.SOCK_STREAM),
                                      fbk_id='My Feedback Source', server_mode=True)

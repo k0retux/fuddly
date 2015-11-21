@@ -113,9 +113,9 @@ class ModelWalker(object):
         last_gen = self._root_node.get_reachable_nodes(internals_criteria=self.triglast_ic)
         for n in last_gen:
             n.unfreeze()
-        # node.unfreeze(recursive=True, dont_change_state=True)
         node.unfreeze(recursive=False)
-        self._root_node.unfreeze(recursive=True, dont_change_state=True)
+        # self._root_node.unfreeze(recursive=True, dont_change_state=True)
+        node.unfreeze(recursive=True, dont_change_state=True)
         self._consumer.do_after_reset(node)
 
     def walk_graph_rec(self, node_list, value_not_yielded_yet, structure_has_changed, consumed_nodes):
