@@ -193,9 +193,6 @@ class NetworkTarget(Target):
     def __init__(self, host='localhost', port=12345, socket_type=(socket.AF_INET, socket.SOCK_STREAM),
                  data_semantics=UNKNOWN_SEMANTIC, server_mode=False, hold_connection=False):
 
-        if server_mode and hold_connection:
-            raise ValueError('No support for holding connection in server mode')
-
         self.host = {}
         self.port = {}
         self.socket_type = {}
@@ -234,9 +231,6 @@ class NetworkTarget(Target):
 
     def register_new_interface(self, host, port, socket_type, data_semantics, server_mode=False,
                                hold_connection=False):
-        if server_mode and hold_connection:
-            raise ValueError('No support for holding connection in server mode')
-
         self.multiple_destination = True
         self.host[data_semantics] = host
         self.port[data_semantics] = port
@@ -367,7 +361,7 @@ class NetworkTarget(Target):
                     self._additional_fbk_sockets.remove(req_sock)
                     del self._additional_fbk_ids[req_sock]
                     del self._additional_fbk_lengths[req_sock]
-            if req_sock != -1:
+            if req_sock != -1 and req_sock is not None:
                 req_sock.close()
         else:
             print('\n*** WARNING: Unable to remove inexistent interface ({:s}:{:d})'.format(host,port))
@@ -412,10 +406,15 @@ class NetworkTarget(Target):
 
 
     def start(self):
+        # Used by _raw_listen_to()
         self._server_sock2hp = {}
         self._server_thread_share = {}
-        self._hclient_sock2hp = {}
-        self._hclient_hp2sock = {}
+        self._last_client_sock2hp = {}  # only for hold_connection
+        self._last_client_hp2sock = {}  # only for hold_connection
+
+        # Used by _raw_connect_to()
+        self._hclient_sock2hp = {}  # only for hold_connection
+        self._hclient_hp2sock = {}  # only for hold_connection
 
         self._additional_fbk_sockets = []
         self._additional_fbk_ids = {}
@@ -439,6 +438,8 @@ class NetworkTarget(Target):
         self.stop_event.set()
         for s in self._server_sock2hp.keys():
             s.close()
+        for s in self._last_client_sock2hp.keys():
+            s.close()
         for s in self._hclient_sock2hp.keys():
             s.close()
         for s in self._additional_fbk_sockets:
@@ -446,6 +447,8 @@ class NetworkTarget(Target):
 
         self._server_sock2hp = None
         self._server_thread_share = None
+        self._last_client_sock2hp = None
+        self._last_client_hp2sock = None
         self._hclient_sock2hp = None
         self._hclient_hp2sock = None
         self._additional_fbk_sockets = None
@@ -569,8 +572,19 @@ class NetworkTarget(Target):
 
     def _listen_to_target(self, host, port, socket_type, func, args=None):
         if (host, port) in self._server_sock2hp.values():
+            # After data has been sent to the target that first
+            # connect to us, new data is sent through the same socket
+            # if hold_connection is set for this interface. And new
+            # connection will always receive the most recent data to
+            # send.
             with self._server_thread_lock:
                 self._server_thread_share[(host, port)] = args
+                if self.hold_connection[(host, port)] and (host, port) in self._last_client_hp2sock:
+                    csocket, addr = self._last_client_hp2sock[(host, port)]
+                else:
+                    csocket = None
+            if csocket:
+                func(csocket, addr, args)
             return True
 
         family, sock_type = socket_type
@@ -623,13 +637,42 @@ class NetworkTarget(Target):
 
     def _handle_target_connection(self, clientsocket, address, args):
         data, host, port, connected_client_event = args
+        if self.hold_connection[(host, port)]:
+            with self._server_thread_lock:
+                self._last_client_hp2sock[(host, port)] = (clientsocket, address)
+                self._last_client_sock2hp[clientsocket] = (host, port)
         connected_client_event.set()
         self._send_data([clientsocket], {clientsocket:(data, host, port)}, self._sending_id)
 
-    @staticmethod
-    def _collect_feedback_from(fbk_sockets, fbk_ids, fbk_lengths, fbk_lock, fbk_handling, fbk_collect, fbk_complete,
-                               send_id, fbk_timeout, register_ack, socket_desc_lock, additional_fbk_sockets,
-                               additional_fbk_ids, additional_fbk_lengths, hclient_sock2hp, hclient_hp2sock):
+
+    def _collect_feedback_from(self, fbk_sockets, fbk_ids, fbk_lengths, send_id, fbk_timeout):
+
+        def _check_and_handle_obsolete_socket(socket, error=None, error_list=None):
+            self._server_thread_lock.acquire()
+            if socket in self._last_client_sock2hp.keys():
+                if error is not None:
+                    error_list.append((fbk_ids[socket], error))
+                host, port = self._last_client_sock2hp[socket]
+                del self._last_client_sock2hp[socket]
+                del self._last_client_hp2sock[(host, port)]
+                self._server_thread_lock.release()
+            else:
+                self._server_thread_lock.release()
+                with self.socket_desc_lock:
+                    if socket in self._hclient_sock2hp.keys():
+                        if error is not None:
+                            error_list.append((fbk_ids[socket], error))
+                        host, port = self._hclient_sock2hp[socket]
+                        del self._hclient_sock2hp[socket]
+                        del self._hclient_hp2sock[(host, port)]
+                    if socket in self._additional_fbk_sockets:
+                        if error is not None:
+                            error_list.append((self._additional_fbk_ids[socket], error))
+                        self._additional_fbk_sockets.remove(socket)
+                        del self._additional_fbk_ids[socket]
+                        del self._additional_fbk_lengths[socket]
+
+
         chunks = {}
         bytes_recd = {}
         t0 = datetime.datetime.now()
@@ -639,13 +682,12 @@ class NetworkTarget(Target):
         dont_stop = True
 
         fileno2fd = {}
-        for s in fbk_sockets:
-            fileno2fd[s.fileno()] = s
-            bytes_recd[s] = 0
 
         epobj = select.epoll()
         for fd in fbk_sockets:
             epobj.register(fd, select.EPOLLIN | select.EPOLLERR)
+            fileno2fd[fd.fileno()] = fd
+            bytes_recd[fd] = 0
 
         socket_errors = []
 
@@ -654,18 +696,7 @@ class NetworkTarget(Target):
             for fd, ev in epobj.poll(timeout=0.2):
                 socket = fileno2fd[fd]
                 if ev != select.EPOLLIN:
-                    with socket_desc_lock:
-                        if socket in hclient_sock2hp.keys():
-                            host, port = hclient_sock2hp[socket]
-                            del hclient_sock2hp[socket]
-                            del hclient_hp2sock[(host, port)]
-                        if socket in additional_fbk_sockets:
-                            socket_errors.append((additional_fbk_ids[socket], ev))
-                            additional_fbk_sockets.remove(socket)
-                            del additional_fbk_ids[socket]
-                            del additional_fbk_lengths[socket]
-                        else:
-                            socket_errors.append((fbk_ids[socket], ev))
+                    _check_and_handle_obsolete_socket(socket, error=ev, error_list=socket_errors)
                     if socket in fbk_sockets:
                         fbk_sockets.remove(socket)
                     continue
@@ -676,7 +707,7 @@ class NetworkTarget(Target):
             if ready_to_read:
                 if first_pass:
                     first_pass = False
-                    register_ack(now)
+                    self._register_last_ack_date(now)
                 for s in ready_to_read:
                     if fbk_lengths[s] is None:
                         sz = NetworkTarget.CHUNK_SZ
@@ -688,15 +719,7 @@ class NetworkTarget(Target):
                         print('\n*** NOTE: Nothing more to receive from : {!r}'.format(fbk_ids[s]))
                         fbk_sockets.remove(s)
                         s.close()
-                        with socket_desc_lock:
-                            if s in hclient_sock2hp:
-                                host, port = hclient_sock2hp[s]
-                                del hclient_sock2hp[s]
-                                del hclient_hp2sock[(host, port)]
-                            if s in additional_fbk_sockets:
-                                additional_fbk_sockets.remove(s)
-                                del additional_fbk_ids[s]
-                                del additional_fbk_lengths[s]
+                        _check_and_handle_obsolete_socket(s)
                         continue
                     else:
                         bytes_recd[s] = bytes_recd[s] + len(chunk)
@@ -719,16 +742,18 @@ class NetworkTarget(Target):
 
         for s, chks in chunks.items():
             fbk = b'\n'.join(chks)
-            with fbk_lock:
-                fbk, fbkid = fbk_handling(fbk, fbk_ids[s])
-                fbk_collect(fbk, fbkid)
-                if s not in additional_fbk_sockets and s not in hclient_sock2hp.keys():
+            with self._fbk_handling_lock:
+                fbk, fbkid = self._feedback_handling(fbk, fbk_ids[s])
+                self._feedback_collect(fbk, fbkid)
+                if s not in self._additional_fbk_sockets and \
+                   s not in self._hclient_sock2hp.keys() and \
+                   s not in self._last_client_sock2hp.keys():
                     s.close()
 
-        with fbk_lock:
+        with self._fbk_handling_lock:
             for fbkid, ev in socket_errors:
-                fbk_collect(">>> ERROR[{:d}]: unable to interact with '{:s}' <<<".format(ev,fbkid), fbkid, error=-ev)
-            fbk_complete(send_id)
+                self._feedback_collect(">>> ERROR[{:d}]: unable to interact with '{:s}' <<<".format(ev,fbkid), fbkid, error=-ev)
+            self._feedback_complete(send_id)
 
         return
 
@@ -794,13 +819,9 @@ class NetworkTarget(Target):
         self.feedback_thread_qty += 1
         feedback_thread = threading.Thread(None, self._collect_feedback_from,
                                            name='FBK-' + repr(self._sending_id) + '#' + repr(self._thread_cpt),
-                                           args=(fbk_sockets, fbk_ids, fbk_lengths, self._fbk_handling_lock,
-                                                 self._feedback_handling, self._feedback_collect,
-                                                 self._feedback_complete, self._sending_id,
-                                                 self._feedback_timeout, self._register_last_ack_date,
-                                                 self.socket_desc_lock, self._additional_fbk_sockets,
-                                                 self._additional_fbk_ids, self._additional_fbk_lengths,
-                                                 self._hclient_sock2hp, self._hclient_hp2sock))
+                                           args=(fbk_sockets, fbk_ids, fbk_lengths,
+                                                 self._sending_id,
+                                                 self._feedback_timeout))
         feedback_thread.start()
 
 
@@ -821,8 +842,7 @@ class NetworkTarget(Target):
 
     def do_before_sending_data(self, data_list):
         self._feedback_handled = False
-        # self.feedback_complete_cpt = 0
-        # self.feedback_thread_qty = 0
+        self._first_send_data_call = True
         self._sending_id += 1
         self._thread_cpt = 0
         self._custom_data_handling_before_emission(data_list)

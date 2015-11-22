@@ -36,14 +36,14 @@ class TutoNetTarget(NetworkTarget):
 
     def _custom_data_handling_before_emission(self, data_list):
         self.listen_to('localhost', 64001, 'Dynamic server interface')
-        self.connect_to('localhost', 64002, 'Dynamic client interface')
+        # self.connect_to('localhost', 64002, 'Dynamic client interface')
 
     def _feedback_handling(self, fbk, ref):
-        self.remove_all_dynamic_interfaces()
+        # self.remove_all_dynamic_interfaces()
         return fbk, ref
 
 tg = TutoNetTarget(host='localhost', port=12345, data_semantics='TG1', hold_connection=True)
-tg.register_new_interface('localhost', 54321, (socket.AF_INET, socket.SOCK_STREAM), 'TG2', server_mode=True)
+tg.register_new_interface('localhost', 54321, (socket.AF_INET, socket.SOCK_STREAM), 'TG2', server_mode=True, hold_connection=True)
 tg.add_additional_feedback_interface('localhost', 7777, (socket.AF_INET, socket.SOCK_STREAM),
                                      fbk_id='My Feedback Source', server_mode=True)
 tg.set_timeout(fbk_timeout=5, sending_delay=3)
