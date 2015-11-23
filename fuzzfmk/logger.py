@@ -76,11 +76,28 @@ class Stats:
 
 class Logger(object):
     '''
-    All log_* function is to be used internally by the framework
+    The Logger is used for keeping the history of the communication
+    with the Target. The methods are used by the framework, but can
+    also be leveraged by an Operator.
     '''
-    def __init__(self, name, prefix='', data_in_seperate_file=False, explicit_export=False, export_orig=True,
+    def __init__(self, name=None, prefix='', data_in_seperate_file=False, explicit_export=False, export_orig=True,
                  export_raw_data=True):
-
+        '''
+        Args:
+          name (str): Name to be used in the log filenames. If not specified, the name of the project
+            in which the logger is embedded will be used.
+          data_in_seperate_file (bool): If True, each emitted data will be stored separetely in a specific
+            file within `exported_data/`.
+          explicit_export (bool): Used for logging outcomes further to an Operator instruction. If True,
+            the operator would have to state explicitly if it wants the just emitted data to be logged.
+            Such notification is possible when the framework call its method
+            :meth:`fuzzfmk.operator_helpers.do_after_all()`, where the Operator can take its decision
+            after the observation of the target feedback and/or probes outputs.
+          export_orig (bool): If True, will also log the original data on which disruptors have been called.
+          export_raw_data (bool): If True, will log the data as it is, without trying to interpret it
+            as human readable text.
+          prefix (str): prefix to use for printing on the console
+        '''
         self.name = name
         self.p = prefix
         self.__seperate_file = data_in_seperate_file

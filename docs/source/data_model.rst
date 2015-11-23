@@ -601,12 +601,15 @@ data_id
 Keywords to Describe Node Properties
 ------------------------------------
 
-
 determinist
   Make the node behave in a deterministic way.
 
 random
   Make the node behave in a random way.
+
+mutable
+  Make the node mutable. It is a shortcut for the node attribute
+  ``MH.Attr.Mutable``.
 
 set_attrs
   List of attributes to set on the node. The current generic

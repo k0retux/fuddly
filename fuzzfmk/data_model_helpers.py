@@ -504,7 +504,7 @@ class ModelHelper(object):
         # Import description keys
         'import_from', 'data_id',        
         # node properties description keys
-        'determinist', 'random', 'clear_attrs', 'set_attrs',
+        'determinist', 'random', 'mutable', 'clear_attrs', 'set_attrs',
         'absorb_csts', 'absorb_helper',
         'semantics', 'fuzz_weight',
         'sync_qty_with', 'exists_if', 'exists_if_not',
@@ -829,6 +829,12 @@ class ModelHelper(object):
         return n
 
     def _handle_common_attr(self, node, desc, conf):
+        param = desc.get('mutable', None)
+        if param is not None:
+            if param:
+                node.set_attr(MH.Attr.Mutable, conf=conf)
+            else:
+                node.clear_attr(MH.Attr.Mutable, conf=conf)
         param = desc.get('determinist', None)
         if param is not None:
             node.make_determinist(conf=conf)

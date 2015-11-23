@@ -1,10 +1,11 @@
 [NEW FEATURES]
 
 - implement new disruptors (syntactic & semantic)
-- implement new node types that leverage python-constraint
+- implement new node types that leverage python-constraint, or more
+  powerfull constraint programming library
 - PIN DBI integration for x86 targets
 
 [ENHANCEMENT]
 
 - clean up test.py
-- complete documentation (don't forget to gather all comments tagged '### DOC ###')
+- complete documentation

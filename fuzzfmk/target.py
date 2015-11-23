@@ -83,7 +83,13 @@ class Target(object):
     def send_data(self, data):
         '''
         To be overloaded.
-        Note: Use data.to_bytes() to get binary data
+
+        Note: use data.to_bytes() to get binary data.
+
+        Args:
+          data (Data): data container that embeds generally a
+            modeled data accessible through `data.node`. However if the
+            latter is None, it only embeds the raw data.
         '''
         raise NotImplementedError
 

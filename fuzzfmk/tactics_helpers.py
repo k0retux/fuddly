@@ -351,7 +351,7 @@ class Tactics(object):
 
 class UI(object):
     '''
-    Once initialized attributes cannot be modified
+    Once initialized, attributes cannot be modified
     '''
     def __init__(self, **kwargs):
         self.inputs = {}

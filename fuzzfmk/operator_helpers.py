@@ -116,21 +116,22 @@ class Operator(object):
 
     def start(self, fmk_ops, dm, monitor, target, logger, user_input):
         '''
-        --> Specific code
-        return True if setup has succeeded, otherwise return False
+        To be overloaded if specific initialization code is needed.
+        Shall return True if setup has succeeded, otherwise shall
+        return False.
         '''
         return True
 
     def stop(self, fmk_ops, dm, monitor, target, logger):
         '''
-        --> Specific code
+        To be overloaded if specific termination code is needed.
         '''
         pass
 
     def plan_next_operation(self, fmk_ops, dm, monitor, target, logger, fmk_feedback):
         '''
-        Shall return a Operation object that contains the fuzzing
-        action to carry out.
+        Shall return a Operation object that contains the operations
+        that you want fuddly to perform.
         '''
         raise NotImplementedError('Operators shall implement this method!')
 

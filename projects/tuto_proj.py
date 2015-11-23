@@ -30,7 +30,7 @@ import fuzzfmk.global_resources as gr
 project = Project()
 project.default_dm = 'mydf'
 
-logger = Logger('tuto', data_in_seperate_file=False, explicit_export=False, export_orig=False, export_raw_data=False)
+logger = Logger(data_in_seperate_file=False, explicit_export=False, export_orig=False, export_raw_data=False)
 
 class TutoNetTarget(NetworkTarget):
 

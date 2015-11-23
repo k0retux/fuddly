@@ -1915,7 +1915,7 @@ fuddly>/projects/``. To illustrate that let's show the beginning of
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 7, 12, 34
+   :emphasize-lines: 7, 12-13, 38
 
    from fuzzfmk.project import *
    from fuzzfmk.monitor import *
@@ -1928,7 +1928,8 @@ fuddly>/projects/``. To illustrate that let's show the beginning of
    # If you only want one default DM, provide its name directly as follows:
    # project.default_dm = 'mydf'
 
-   logger = Logger('tuto', data_in_seperate_file=False, explicit_export=False, export_orig=False, export_raw_data=False)
+   logger = Logger(data_in_seperate_file=False, explicit_export=False,
+		   export_orig=False, export_raw_data=False)
 
    printer1_tg = PrinterTarget(tmpfile_ext='.png')
    printer1_tg.set_target_ip('127.0.0.1')
@@ -1944,10 +1945,13 @@ fuddly>/projects/``. To illustrate that let's show the beginning of
    local3_tg.set_target_path('unzip')
    local3_tg.set_post_args('-d ' + gr.workspace_folder)
 
-   net_tg = NetworkTarget(host='localhost', port=12345, data_semantics='TG1')
-   net_tg.register_new_interface('localhost', 54321, (socket.AF_INET, socket.SOCK_STREAM), 'TG2', server_mode=True)
-   net_tg.add_additional_feedback_interface('localhost', 7777, (socket.AF_INET, socket.SOCK_STREAM),
-					fbk_id='My Feedback Source', server_mode=True)
+   net_tg = NetworkTarget(host='localhost', port=12345, data_semantics='TG1',
+                          hold_connection=True)
+   net_tg.register_new_interface('localhost', 54321, (socket.AF_INET, socket.SOCK_STREAM),
+		                 'TG2', server_mode=True, hold_connection=True)
+   net_tg.add_additional_feedback_interface('localhost', 7777,
+		                            (socket.AF_INET, socket.SOCK_STREAM),
+					    fbk_id='My Feedback Source', server_mode=True)
    net_tg.set_timeout(fbk_timeout=5, sending_delay=3)
 
    targets = [local_tg, local2_tg, local3_tg, printer1_tg, net_tg]
@@ -1976,12 +1980,20 @@ method :meth:`fuzzfmk.plumbing.Fuzzer.run_project()` through any
 Defining the Targets
 ++++++++++++++++++++
 
-.. todo:: To be completed
+Many targets can be defined in a project file. They have to be
+referenced within a list pointed by the global variable ``targets`` of
+the project file.
 
-Within the tutorial project (``projects/tuto_proj.py``), a
-:class:`fuzzfmk.target.NetworkTarget` has been setup with two
-interfaces from which data can be sent to (and feedback retrieved
-from), plus an additional feedback source:
+Within the tutorial project (``projects/tuto_proj.py``), multiple
+targets have been defined:
+
+- three different :class:`fuzzfmk.target.LocalTarget` for interacting with local programs;
+- a :class:`fuzzfmk.target.PrinterTarget` to communicating with a CUPS server;
+- and finally a :class:`fuzzfmk.target.NetworkTarget` that is setup
+  with two interfaces from which data can be sent to (and feedback
+  retrieved from), plus an additional feedback source.
+
+Let's go on with this network target:
 
 .. code-block:: python
    :linenos:
@@ -2001,7 +2013,7 @@ real target. Note that some interfaces has been setup in server mode,
 that means that fuddly will send data when the target connects to
 it. The following ``netcat`` instances will cover our needs::
 
-  [term1] # nc -k -l 12345
+  [term1] # nc -l 12345
 
   [term2] # nc localhost 54321
 
@@ -2011,9 +2023,21 @@ it. The following ``netcat`` instances will cover our needs::
 Note, to play with the routing you can use the specific data ``4TG1`` and
 ``4TG2`` implemented for this purpose within the data model ``mydf``.
 
-.. note:: Refer to :ref:`targets` for details on the available generic
-          targets, that you can use directly or inherit from.
+.. seealso:: Refer to :ref:`targets` for details on the available generic
+             targets that you can use directly or inherit from.
 
+If you need to implement your own ``Target`` you have at least to
+inherit from :class:`fuzzfmk.target.Target` and overload the method
+:meth:`fuzzfmk.target.Target.send_data()` which is called by
+``fuddly`` each time data is sent to the target. Additionally,
+implementing :meth:`fuzzfmk.target.Target.send_multiple_data()`
+enables to send various data simultaneously to the target. If we take
+the previous ``NetworkTarget`` example, all the registered interfaces can be
+stimulated at once through this method.
+
+.. seealso:: Other methods of :class:`fuzzfmk.target.Target` are
+             defined to be overloaded. Look at their descriptions to
+             learn more about what can be customized.
 
 
 .. _logger-def:
@@ -2021,8 +2045,46 @@ Note, to play with the routing you can use the specific data ``4TG1`` and
 Defining the Logger
 +++++++++++++++++++
 
-.. todo:: Write the section on Logger()
+You should declare a :class:`fuzzfmk.logger.Logger` in your project
+file, and specify the parameters that make sense for your
+situation. The ``Logger`` will then be used by ``fuddly`` for keeping
+history of your interaction with the target (e.g., data sent, feedback
+received, ...). Statistics about data emission will also be maintained
+and kept in sync with the log files.
 
+The outputs of the logger are of three types:
+
+- ``<root of fuddly>/trace/*<project_name>_logs``: the history of your
+  test session for the project named ``project_name``. The files are
+  prefixed with the test session starting time. A new one is created
+  each time you run a new project or you reload the current one.
+
+- ``<root of fuddly>/trace/*<project_name>_stats``: some statistics of
+  the kind of data that has been emitted during the session
+
+- ``<root of fuddly>/exported_data/<data model name>/*.<dm
+  extension>``: the data emitted during a session are stored within
+  the their data model directory. Each one is prefixed by the date of
+  emission, and each one is uniquely identified within the log files.
+
+Some parameters allows to customize the behavior of the logger, such as:
+
+- ``data_in_seperate_file`` which control the location of where data
+  will be stored. If set to `False`, instead of being stored in
+  separate files as explained previously, they will be written
+  directly within the log files.
+
+- ``explicit_export``: which is used for logging outcomes further to
+  an :class:`fuzzfmk.operator_helpers.Operator` instruction. If set to
+  ``True``, the operator would have to state explicitly if it wants
+  the just emitted data to be logged. Such instruction could be
+  requested through its method
+  :meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`, where the Operator
+  can take its decision after the observation of the target feedback
+  and/or probes outputs.
+
+.. seealso:: Refer to :ref:`tuto:operator` to learn more about the
+             interaction between an Operator and the Logger.
 
 
 
@@ -2031,11 +2093,9 @@ Defining the Logger
 Defining Operators and Probes
 +++++++++++++++++++++++++++++
 
-.. todo:: Write the section on Operators
-
 In order to automatize what a human operator could perform to interact
 with one or more targets, the abstracted class
-:class:`fuzzfmk.tactics_helper.Operator` can be inherited. The purpose
+:class:`fuzzfmk.operator_helpers.Operator` can be inherited. The purpose
 of this class is to give you the opportunity to plan the operations
 you want to perform on the target (data type to send, type of
 modifications to perform on data before sending it, and so on). Thus,
@@ -2064,8 +2124,120 @@ process.
 Operators
 '''''''''
 
+To define an operator you have to define a class that inherits from
+:class:`fuzzfmk.operator_helpers.Operator`. Then to register it within
+your project the decorator ``@operator`` has to be used with at least
+the reference of the project as the first parameter.
+
+.. seealso:: Parameters can be defined for an operator, in order to
+             make it more customizable. The way to describe them is
+             the same as for *disruptors*. Look into the file
+             ``projects/generic/standard_proj.py`` for some examples.
+
+Here under is presented a skeleton of an Operator:
+
+.. code-block:: python
+   :linenos:
+
+   @operator(project)
+   class MyOperator(Operator):
+
+       def start(self, fmk_ops, dm, monitor, target, logger, user_input):
+           # Do some initialization stuff
+	   return True
+
+       def stop(self, fmk_ops, dm, monitor, target, logger):
+           # Do some termination stuff
+
+       def plan_next_operation(self, fmk_ops, dm, monitor, target, logger, fmk_feedback):
+	   op = Operation()
+	   
+	   # Do some planning stuff and decide what would be the next
+	   # operations you want fuddly to perform
+
+	   return op
+
+       def do_after_all(self, fmk_ops, dm, monitor, target, logger):
+	   linst = LastInstruction()
+
+	   # Do some stuff after the planned Operation() has been
+	   # executed and request fuddly to perform some last-minute
+	   # instructions.
+
+	   return linst
 
 
+
+The methods :meth:`fuzzfmk.operator_helpers.Operator.start()` and
+:meth:`fuzzfmk.operator_helpers.Operator.stop()` are the obvious ones
+that you have to implement if you want to customized the
+initialization and termination of your operator.
+
+The core of your operator will be implemented within the method
+:meth:`fuzzfmk.operator_helpers.Operator.plan_next_operation()` which
+will order ``fuddly`` to perform some operations based on the
+:meth:`fuzzfmk.operator_helpers.Operation` object that you will return
+to it. A basic example illustrating the implementation of this method
+is given here under:
+
+.. code-block:: python
+   :linenos:
+
+   def plan_next_operation(self, fmk_ops, dm, monitor, target, logger, fmk_feedback):
+       op = Operation()
+
+       if fmk_feedback.is_flag_set(FmkFeedback.NeedChange):
+	   op.set_flag(Operation.Stop)
+       else:
+	   actions = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', None, UI(deep=True))]
+	   op.add_instruction(actions)
+
+       return op
+
+We instruct ``fuddly`` to execute a *disruptor chain* made of the
+``SEPARATOR`` *generator* (transparently created by ``fuddly`` from
+the eponymous data of the data model ``mydf``) and the ``tSTRUCT``
+*disruptor* with some parameters (given through
+:class:`fuzzfmk.tactics_helpers.UI`). And we handle the case when the
+*chain* has been drained. More precisely, we give up after fuddly
+inform us that the stateful disruptor ``tSTRUCT`` has fully consumed
+its input, and cannot provide more outputs without re-enabling a
+previous stateful disruptor or in our case the *generator* from the
+chain (as our chain is so short).
+
+.. seealso:: refer to :ref:`tuto:dmaker-chain` for information about
+             disruptor chains. And refer to :ref:`tuto:disruptors` for
+             insight into disruptors.
+
+Finally, the method
+:meth:`fuzzfmk.operator_helpers.Operator.do_after_all()` is executed
+by ``fuddly`` after the planned operation has been handled, in order
+for the operator to provide some last-minute instructions related to
+the previous operation. Typically, it is the moment where the operator
+can investigate on the impact of its last operation, before going on
+with the next one. An example leveraging this method is discussed in
+the following section :ref:`tuto:probes`.
+
+.. note:: The methods described in this section come with some useful
+          parameters provided by ``fuddly`` when it calls them:
+
+	  - ``fmk_ops``: an object that exports ``fuddly``'s specific
+            methods to the operator, more precisely it is a reference
+            to :class:`fuzzfmk.plumbing.ExportableFMKOps`.
+
+	  - ``dm``: a reference to the current data model.
+
+	  - ``monitor``: a reference to the monitor subsystem, in
+            order to start/stop probes and get status from them.
+
+	  - ``target``: a reference to the current target.
+
+	  - ``logger``: a reference to the logger.
+
+	  - ``fmk_feedback``: an object that provides feedback from
+            ``fuddly`` to the operator about the last operation it
+            performed. The class of this object is
+            :class:`fuzzfmk.plumbing.FmkFeedback`.
 
 
 .. _tuto:probes:
@@ -2073,6 +2245,119 @@ Operators
 Probes & The Monitoring Subsystem
 '''''''''''''''''''''''''''''''''
 
+Probes are special objects that have to implement the method
+:meth:`fuzzfmk.monitor.Probe.main()` to be called either continuously
+(the basic *probe*) or after each data emission (the *blocking
+probes*) by ``fuddly`` when an
+:class:`fuzzfmk.operator_helpers.Operator` requests it. Each probe is
+executed independently from the other ones in their own thread. They
+can interact with the target, and also use the logger. Any usage
+matching your expectation should be fine. Their purpose is to help you
+getting feedback from the target you interact with, but they can also
+be part of the interaction if they seem useful in your setup.
+
+Depending on the kind of probes you want, you will have to choose
+between two decorators:
+
+- ``@probe`` for basic probes which run continuously once started.
+
+- ``@blocking_probe`` for probe which will be run just once after each
+  data emission.
+
+This *decorators* have to take the reference of the project as
+parameter, in order to register them within it. A really basic
+example (not really useful ;) of a basic probe is presented below:
+
+.. code-block:: python
+   :linenos:
+
+   @probe(project)
+   class myfirst_probe(Probe):
+
+       def start(self, target, logger):
+	   self.cpt = 10
+
+       def main(self, target, logger):
+	   self.cpt += 1
+	   return ProbeStatus(self.cpt)
 
 
+A more useful one (a *blocking probe* in this case) that tries to get
+information from the target is given here under:
 
+.. code-block:: python
+   :linenos:
+
+   @blocking_probe(project)
+   class health_check(Probe):
+
+       def start(self, target, logger):
+	   self.status = ProbeStatus(0)
+
+       def stop(self, target, logger):
+	   pass
+
+       def main(self, target, logger):
+	   fb = target.get_feedback()
+	   byte_string = fb.get_bytes()
+	   self.status.set_private_info(byte_string)
+	   self.status.set_status(0)
+
+	   if target.is_damaged():
+	       self.status.set_status(-1)
+
+	   if not target.is_alive():
+	       self.status.set_status(-2)
+
+	   return self.status
+
+
+Note that you can implement :meth:`fuzzfmk.monitor.Probe.start`
+and/or :meth:`fuzzfmk.monitor.Probe.stop` methods if you need to do
+some stuff during their initialization and termination.
+
+The typical place to start a probe is within the initialization method
+of an Operator, that is
+:meth:`fuzzfmk.operator_helpers.Operator.start()`. Then, you will
+typically want to get a status from them each time your planned
+operation has been executed by ``fuddly``, that is within the method
+:meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`. Let's
+illustrate this in the following example:
+
+.. code-block:: python
+   :linenos:
+
+   class MyOperator(Operator):
+
+       def start(self, fmk_ops, dm, monitor, target, logger, user_input):
+	   monitor.start_probe('health_check')
+
+       def stop(self, fmk_ops, dm, monitor, target, logger):
+           monitor.stop_probe('health_check')
+
+       def plan_next_operation(self, fmk_ops, dm, monitor, target, logger, fmk_feedback):
+	   op = Operation()
+	   return op
+
+       def do_after_all(self, fmk_ops, dm, monitor, target, logger):
+            linst = LastInstruction()
+
+            health_status = monitor.get_probe_status('health_check')
+            info = health_status.get_private_info()
+            linst.set_target_feedback_info(info)
+
+            if health_status.get_status() < 0:
+	        linst.set_instruction(LastInstruction.ExportData)
+                linst.set_comments('This input has triggered an error!')
+
+	    return linst
+
+
+In this example, we basically retrieve the status of our
+*health-check* probe. If it is negative, we first order ``fuddly`` to
+export the data. In the case the logger has its parameter
+``explicit_export`` set to ``True`` (refer to :ref:`logger-def`), you
+have to instruct explicitly ``fuddly`` to do it if you want to keep
+the data, otherwise it will never be logged. Finally, we also order
+``fuddly`` to log a specific comment related to this data and more
+generally related to the last performed operation.

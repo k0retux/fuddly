@@ -641,6 +641,8 @@ class Fuzzer(object):
                 logger = eval(prefix + name + '_proj' + '.logger')
             except:
                 logger = Logger(name, prefix=' || ')
+            if logger.name is None:
+                logger.name = name
             prj_params['logger'] = logger
             try:
                 targets = eval(prefix + name + '_proj' + '.targets')
