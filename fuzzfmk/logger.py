@@ -81,7 +81,7 @@ class Logger(object):
     also be leveraged by an Operator.
     '''
     def __init__(self, name=None, prefix='', data_in_seperate_file=False, explicit_export=False, export_orig=True,
-                 export_raw_data=True):
+                 export_raw_data=True, console_display_limit=800):
         '''
         Args:
           name (str): Name to be used in the log filenames. If not specified, the name of the project
@@ -96,6 +96,8 @@ class Logger(object):
           export_orig (bool): If True, will also log the original data on which disruptors have been called.
           export_raw_data (bool): If True, will log the data as it is, without trying to interpret it
             as human readable text.
+          console_display_limit (int): maximum amount of characters to display on the console at once.
+            If this threshold is overrun, the message to print on the console will be truncated.
           prefix (str): prefix to use for printing on the console
         '''
         self.name = name
@@ -103,6 +105,7 @@ class Logger(object):
         self.__seperate_file = data_in_seperate_file
         self.__explicit_export = explicit_export
         self.__export_orig = export_orig
+        self._console_display_limit = console_display_limit
 
         now = datetime.datetime.now()
         self.__prev_export_date = now.strftime("%Y%m%d_%H%M%S")
@@ -466,7 +469,10 @@ class Logger(object):
 
 
     def print_console(self, msg, nl_before=True, nl_after=False, rgb=None, style=None,
-                      raw_limit=800, limit_output=True):
+                      raw_limit=None, limit_output=True):
+
+        if raw_limit is None:
+            raw_limit = self._console_display_limit
 
         if nl_before:
             p = '\n'

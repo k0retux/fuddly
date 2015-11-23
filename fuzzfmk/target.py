@@ -534,6 +534,10 @@ class NetworkTarget(Target):
 
 
     def _get_data_semantic_key(self, data):
+        if data.node is None:
+            print('\n*** ERROR: None data has been received!')
+            return self.UNKNOWN_SEMANTIC
+
         semantics = data.node.get_semantics()
         if semantics is not None:
             matching_crit = semantics.what_match_from(self.known_semantics)
@@ -651,10 +655,12 @@ class NetworkTarget(Target):
         self._send_data([clientsocket], {clientsocket:(data, host, port)}, self._sending_id)
 
 
-    def _collect_feedback_from(self, fbk_sockets, fbk_ids, fbk_lengths, send_id, fbk_timeout):
+    def _collect_feedback_from(self, fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd,
+                               send_id, fbk_timeout):
 
         def _check_and_handle_obsolete_socket(socket, error=None, error_list=None):
             self._server_thread_lock.acquire()
+            epobj.unregister(socket)
             if socket in self._last_client_sock2hp.keys():
                 if error is not None:
                     error_list.append((fbk_ids[socket], error))
@@ -667,7 +673,12 @@ class NetworkTarget(Target):
                 with self.socket_desc_lock:
                     if socket in self._hclient_sock2hp.keys():
                         if error is not None:
-                            error_list.append((fbk_ids[socket], error))
+                            if socket not in fbk_ids:
+                                print('\n*** DEBUG')
+                                print(self._hclient_sock2hp[socket])
+                                print(fbk_ids)
+                            else:
+                                error_list.append((fbk_ids[socket], error))
                         host, port = self._hclient_sock2hp[socket]
                         del self._hclient_sock2hp[socket]
                         del self._hclient_hp2sock[(host, port)]
@@ -680,19 +691,14 @@ class NetworkTarget(Target):
 
 
         chunks = {}
-        bytes_recd = {}
         t0 = datetime.datetime.now()
         duration = 0
         first_pass = True
         ack_date = None
         dont_stop = True
 
-        fileno2fd = {}
-
-        epobj = select.epoll()
+        bytes_recd = {}
         for fd in fbk_sockets:
-            epobj.register(fd, select.EPOLLIN | select.EPOLLERR)
-            fileno2fd[fd.fileno()] = fd
             bytes_recd[fd] = 0
 
         socket_errors = []
@@ -724,8 +730,8 @@ class NetworkTarget(Target):
                         # Ok, nothing more to receive
                         print('\n*** NOTE: Nothing more to receive from : {!r}'.format(fbk_ids[s]))
                         fbk_sockets.remove(s)
-                        s.close()
                         _check_and_handle_obsolete_socket(s)
+                        s.close()
                         continue
                     else:
                         bytes_recd[s] = bytes_recd[s] + len(chunk)
@@ -737,12 +743,15 @@ class NetworkTarget(Target):
                 for s in fbk_sockets:
                     if s in ready_to_read:
                         s_fbk_len = fbk_lengths[s]
-                        if (s_fbk_len is None and duration > fbk_timeout) or \
-                           (s_fbk_len is not None and bytes_recd[s] >= s_fbk_len):
-                            dont_stop = False
+                        if s_fbk_len is None or bytes_recd[s] < s_fbk_len:
+                            dont_stop = True
                             break
-                    elif duration > fbk_timeout:
-                        dont_stop = False
+                else:
+                    dont_stop = False
+
+                if duration > fbk_timeout:
+                    dont_stop = False
+
             else:
                 dont_stop = False
 
@@ -767,18 +776,31 @@ class NetworkTarget(Target):
     def _send_data(self, sockets, data_refs, sid):
         if sid != self._initial_sending_id:
             self._initial_sending_id = sid
-            self._first_send_data_call = True
+            # self._first_send_data_call = True
 
         ready_to_read, ready_to_write, in_error = select.select([], sockets, [], self._sending_delay)
         if ready_to_write:
+
+            epobj = select.epoll()
+            fileno2fd = {}
+
+            if self._first_send_data_call:
+                self._first_send_data_call = False
+
+                fbk_sockets, fbk_ids, fbk_lengths = self._get_additional_feedback_sockets()
+                for fd in fbk_sockets:
+                    epobj.register(fd, select.EPOLLIN)
+                    fileno2fd[fd.fileno()] = fd
+            else:
+                fbk_sockets, fbk_ids, fbk_lengths = None, None, None
+
             for s in ready_to_write:
                 add_main_socket = True
                 data, host, port = data_refs[s]
-                if self._first_send_data_call:
-                    self._first_send_data_call = False
-                    fbk_sockets, fbk_ids, fbk_lengths = self._get_additional_feedback_sockets()
-                else:
-                    fbk_sockets, fbk_ids, fbk_lengths = None, None, None
+
+                epobj.register(s, select.EPOLLIN)
+                fileno2fd[s.fileno()] = s
+
                 raw_data = data.to_bytes()
                 totalsent = 0
                 send_retry = 0
@@ -787,13 +809,14 @@ class NetworkTarget(Target):
                         sent = s.send(raw_data[totalsent:])
                     except socket.error as serr:
                         send_retry += 1
+                        print('\n*** ERROR: ' + str(serr))
                         if serr.errno == socket.errno.EWOULDBLOCK:
-                            print('\n*** ERROR: ' + str(serr))
                             time.sleep(0.2)
                             continue
                         else:
                             add_main_socket = False
-                            break
+                            raise TargetStuck("system not ready for sending data!")
+                            # break
                     else:
                         if sent == 0:
                             s.close()
@@ -814,20 +837,19 @@ class NetworkTarget(Target):
                     fbk_ids[s] = self._default_fbk_id[(host, port)]
                     fbk_lengths[s] = self.feedback_length
 
-            self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths)
+            self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd)
 
         else:
             raise TargetStuck("system not ready for sending data!")
 
 
-    def _start_fbk_collector(self, fbk_sockets, fbk_ids, fbk_lengths):
+    def _start_fbk_collector(self, fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd):
         self._thread_cpt += 1
         self.feedback_thread_qty += 1
         feedback_thread = threading.Thread(None, self._collect_feedback_from,
                                            name='FBK-' + repr(self._sending_id) + '#' + repr(self._thread_cpt),
-                                           args=(fbk_sockets, fbk_ids, fbk_lengths,
-                                                 self._sending_id,
-                                                 self._feedback_timeout))
+                                           args=(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd,
+                                                 self._sending_id, self._feedback_timeout))
         feedback_thread.start()
 
 
