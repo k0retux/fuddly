@@ -1993,20 +1993,10 @@ targets have been defined:
   with two interfaces from which data can be sent to (and feedback
   retrieved from), plus an additional feedback source.
 
-Let's go on with this network target:
-
-.. code-block:: python
-   :linenos:
-
-   tg = NetworkTarget(host='localhost', port=12345, data_semantics='TG1')
-   tg.register_new_interface('localhost', 54321, (socket.AF_INET, socket.SOCK_STREAM), 'TG2', server_mode=True)
-   tg.add_additional_feedback_interface('localhost', 7777, (socket.AF_INET, socket.SOCK_STREAM),
-					fbk_id='My Other Feedback Source', server_mode=True)
-   tg.set_timeout(fbk_timeout=5, sending_delay=3)
-
-Also, this target can route data depending on their semantics (``TG1``,
-``TG2``) through the two created interfaces. And for data without
-semantics it defaults to the first interface (``TG1``).
+Note that the network target can route data depending on their
+semantics (``TG1``, ``TG2``) through the two created interfaces. And
+for data without semantics it defaults to the first interface
+(``TG1``).
 
 The simplest way to play with this target is use ``netcat`` as the
 real target. Note that some interfaces has been setup in server mode,
@@ -2020,7 +2010,7 @@ it. The following ``netcat`` instances will cover our needs::
   [term3] # nc localhost 7777
 
 
-Note, to play with the routing you can use the specific data ``4TG1`` and
+In order to play with the routing you can use the specific data ``4TG1`` and
 ``4TG2`` implemented for this purpose within the data model ``mydf``.
 
 .. seealso:: Refer to :ref:`targets` for details on the available generic
