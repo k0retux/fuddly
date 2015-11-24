@@ -21,6 +21,8 @@
 #
 ################################################################################
 
+from __future__ import print_function
+
 import os
 import random
 import subprocess
@@ -33,6 +35,7 @@ import threading
 import copy
 import struct
 import time
+import collections
 
 import errno
 from socket import error as socket_error
@@ -157,7 +160,7 @@ class TargetFeedback(object):
         return len(self._feedback_collector) > 0
 
     def cleanup(self):
-        self._feedback_collector = {}
+        self._feedback_collector = collections.OrderedDict()
         self.set_bytes(b'')
         self.set_error_code(0)
 
@@ -659,6 +662,7 @@ class NetworkTarget(Target):
                                send_id, fbk_timeout):
 
         def _check_and_handle_obsolete_socket(socket, error=None, error_list=None):
+            # print('\n*** NOTE: Remove obsolete socket {!r}'.format(socket))
             epobj.unregister(socket)
             self._server_thread_lock.acquire()
             if socket in self._last_client_sock2hp.keys():
@@ -673,12 +677,7 @@ class NetworkTarget(Target):
                 with self.socket_desc_lock:
                     if socket in self._hclient_sock2hp.keys():
                         if error is not None:
-                            if socket not in fbk_ids:
-                                print('\n*** DEBUG')
-                                print(self._hclient_sock2hp[socket])
-                                print(fbk_ids)
-                            else:
-                                error_list.append((fbk_ids[socket], error))
+                            error_list.append((fbk_ids[socket], error))
                         host, port = self._hclient_sock2hp[socket]
                         del self._hclient_sock2hp[socket]
                         del self._hclient_hp2sock[(host, port)]
@@ -690,7 +689,7 @@ class NetworkTarget(Target):
                         del self._additional_fbk_lengths[socket]
 
 
-        chunks = {}
+        chunks = collections.OrderedDict()
         t0 = datetime.datetime.now()
         duration = 0
         first_pass = True
@@ -700,6 +699,7 @@ class NetworkTarget(Target):
         bytes_recd = {}
         for fd in fbk_sockets:
             bytes_recd[fd] = 0
+            chunks[fd] = []
 
         socket_errors = []
 
@@ -727,16 +727,13 @@ class NetworkTarget(Target):
                         sz = min(fbk_lengths[s] - bytes_recd[s], NetworkTarget.CHUNK_SZ)
                     chunk = s.recv(sz)
                     if chunk == b'':
-                        # Ok, nothing more to receive
-                        print('\n*** NOTE: Nothing more to receive from : {!r}'.format(fbk_ids[s]))
+                        # print('\n*** NOTE: Nothing more to receive from : {!r}'.format(fbk_ids[s]))
                         fbk_sockets.remove(s)
                         _check_and_handle_obsolete_socket(s)
                         s.close()
                         continue
                     else:
                         bytes_recd[s] = bytes_recd[s] + len(chunk)
-                        if s not in chunks:
-                            chunks[s] = []
                         chunks[s].append(chunk)
 
             if fbk_sockets:
@@ -746,6 +743,9 @@ class NetworkTarget(Target):
                         if s_fbk_len is None or bytes_recd[s] < s_fbk_len:
                             dont_stop = True
                             break
+                    else:
+                        dont_stop = True
+                        break
                 else:
                     dont_stop = False
 
@@ -788,9 +788,10 @@ class NetworkTarget(Target):
                 self._first_send_data_call = False
 
                 fbk_sockets, fbk_ids, fbk_lengths = self._get_additional_feedback_sockets()
-                for fd in fbk_sockets:
-                    epobj.register(fd, select.EPOLLIN)
-                    fileno2fd[fd.fileno()] = fd
+                if fbk_sockets:
+                    for fd in fbk_sockets:
+                        epobj.register(fd, select.EPOLLIN)
+                        fileno2fd[fd.fileno()] = fd
             else:
                 fbk_sockets, fbk_ids, fbk_lengths = None, None, None
 

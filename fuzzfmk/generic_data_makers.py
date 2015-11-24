@@ -406,26 +406,29 @@ class sd_struct_constraints(StatefulDisruptor):
 
         self.qty_cst_nodelist_2 = copy.copy(self.qty_cst_nodelist_1)
 
+        if self.deep:
+            minmax_cst_nodelist = self.seed.get_reachable_nodes(internals_criteria=ic_minmax_cst, path_regexp=self.path,
+                                                                ignore_fstate=True)
+            self.minmax_cst_nodelist_1 = set()
 
-        minmax_cst_nodelist = self.seed.get_reachable_nodes(internals_criteria=ic_minmax_cst, path_regexp=self.path,
-                                                            ignore_fstate=True)
-        self.minmax_cst_nodelist_1 = set()
+            for n in minmax_cst_nodelist:
+                for sn in n.subnodes_set:
+                    minmax = n.get_subnode_minmax(sn)
+                    if minmax:
+                        mini, maxi = minmax
+                        if sn.is_nonterm():
+                            self.minmax_cst_nodelist_1.add((sn, mini, maxi))
 
-        for n in minmax_cst_nodelist:
-            for sn in n.subnodes_set:
-                minmax = n.get_subnode_minmax(sn)
-                if minmax:
-                    mini, maxi = minmax
-                    if sn.is_nonterm():
-                        self.minmax_cst_nodelist_1.add((sn, mini, maxi))
+            nodedesclist = copy.copy(self.minmax_cst_nodelist_1)
+            for n_desc in nodedesclist:
+                n, mini, maxi = n_desc
+                if n.get_path_from(self.seed) is None:
+                    self.minmax_cst_nodelist_1.remove((n, mini, maxi))
 
-        nodedesclist = copy.copy(self.minmax_cst_nodelist_1)
-        for n_desc in nodedesclist:
-            n, mini, maxi = n_desc
-            if n.get_path_from(self.seed) is None:
-                self.minmax_cst_nodelist_1.remove((n, mini, maxi))
+            self.minmax_cst_nodelist_2 = copy.copy(self.minmax_cst_nodelist_1)
 
-        self.minmax_cst_nodelist_2 = copy.copy(self.minmax_cst_nodelist_1)
+        else:
+            self.minmax_cst_nodelist_1 = self.minmax_cst_nodelist_2 = []
 
         self.max_runs = len(self.exist_cst_nodelist) + 2*len(self.qty_cst_nodelist_1) + 2*len(self.minmax_cst_nodelist_1)
         

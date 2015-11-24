@@ -1907,8 +1907,8 @@ like this (which is a simpler version of the generic disruptor
 Defining a Project Environment
 ------------------------------
 
-The environment---composed of at least one target, a logger, some
-monitoring materials, and optionnaly virtual operators---is setup
+The environment---composed of at least one target, a logger, and
+optionnaly some monitoring means and virtual operators---is setup
 within a project file located within ``<root of
 fuddly>/projects/``. To illustrate that let's show the beginning of
 ``generic/standard_proj.py``:
@@ -1972,7 +1972,8 @@ method :meth:`fuzzfmk.plumbing.Fuzzer.run_project()` through any
 ``python`` interpreter.
 
 .. note:: An :class:`fuzzfmk.target.EmptyTarget` is automatically
-          added by ``fuddly`` to any project, for dry runs.
+          added by ``fuddly`` to any project, for dry runs. So it does
+          not matter if you don't define a target at the beginning.
 
 
 .. _targets-def:
@@ -1988,7 +1989,7 @@ Within the tutorial project (``projects/tuto_proj.py``), multiple
 targets have been defined:
 
 - three different :class:`fuzzfmk.target.LocalTarget` for interacting with local programs;
-- a :class:`fuzzfmk.target.PrinterTarget` to communicating with a CUPS server;
+- a :class:`fuzzfmk.target.PrinterTarget` to communicate with a CUPS server;
 - and finally a :class:`fuzzfmk.target.NetworkTarget` that is setup
   with two interfaces from which data can be sent to (and feedback
   retrieved from), plus an additional feedback source.
@@ -1998,7 +1999,7 @@ semantics (``TG1``, ``TG2``) through the two created interfaces. And
 for data without semantics it defaults to the first interface
 (``TG1``).
 
-The simplest way to play with this target is use ``netcat`` as the
+The simplest way to play with this target is to use ``netcat`` as the
 real target. Note that some interfaces has been setup in server mode,
 that means that fuddly will send data when the target connects to
 it. The following ``netcat`` instances will cover our needs::
