@@ -91,7 +91,7 @@ class Logger(object):
           explicit_export (bool): Used for logging outcomes further to an Operator instruction. If True,
             the operator would have to state explicitly if it wants the just emitted data to be logged.
             Such notification is possible when the framework call its method
-            :meth:`fuzzfmk.operator_helpers.do_after_all()`, where the Operator can take its decision
+            :meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`, where the Operator can take its decision
             after the observation of the target feedback and/or probes outputs.
           export_orig (bool): If True, will also log the original data on which disruptors have been called.
           export_raw_data (bool): If True, will log the data as it is, without trying to interpret it

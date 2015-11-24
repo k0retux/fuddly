@@ -132,6 +132,9 @@ class Operator(object):
         '''
         Shall return a Operation object that contains the operations
         that you want fuddly to perform.
+
+        Returns:
+          Operation: Operation you want fuddly to perform.
         '''
         raise NotImplementedError('Operators shall implement this method!')
 
@@ -141,7 +144,9 @@ class Operator(object):
         AND that all blocking probes have returned.
         BUT just before data is logged.
 
-        Return Value: LastInstruction object
+        Returns:
+          LastInstruction: Last-minute instructions you request fuddly
+            to perform.
         '''
 
         linst = LastInstruction()

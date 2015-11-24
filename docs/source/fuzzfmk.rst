@@ -82,6 +82,9 @@ fuzzfmk.logger module
    :members:
    :undoc-members:
    :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
 
 fuzzfmk.monitor module
 ----------------------

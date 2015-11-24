@@ -659,8 +659,8 @@ class NetworkTarget(Target):
                                send_id, fbk_timeout):
 
         def _check_and_handle_obsolete_socket(socket, error=None, error_list=None):
-            self._server_thread_lock.acquire()
             epobj.unregister(socket)
+            self._server_thread_lock.acquire()
             if socket in self._last_client_sock2hp.keys():
                 if error is not None:
                     error_list.append((fbk_ids[socket], error))
