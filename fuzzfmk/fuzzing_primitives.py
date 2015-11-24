@@ -75,6 +75,8 @@ class ModelWalker(object):
         self.ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable, dm.NodeInternals.Finite])
         self.triglast_ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.TriggerLast])
 
+        self.consumed_node_path = None
+
         self.set_consumer(node_consumer)
 
     def set_consumer(self, node_consumer):
@@ -92,6 +94,18 @@ class ModelWalker(object):
             self._root_node.get_value()
 
             if self._cpt >= self._initial_step:
+                self.consumed_node_path = consumed_node.get_path_from(self._root_node)
+                if self.consumed_node_path == None:
+                    # 'consumed_node_path' can be None if
+                    # consumed_node is not part of the frozen rnode
+                    # (it may however exist when rnode is not
+                    # frozen). This situation can trigger in some
+                    # specific situations related to the use of
+                    # existence conditions within a data model. Thus,
+                    # in this case we skip the just generated case as
+                    # nothing is visible.
+                    continue
+
                 yield self._root_node, consumed_node, orig_node_val, self._cpt
 
             if self._max_steps != -1 and self._cpt >= (self._max_steps+self._initial_step-1):
@@ -104,7 +118,11 @@ class ModelWalker(object):
             self._initial_step = 1
             print("\n*** DEBUG: initial_step idx ({:d}) is after" \
                       " the last idx ({:d})!\n".format(self._initial_step, self._cpt-1))
-            yield self._root_node, consumed_node, orig_node_val, self._cpt-1
+            self.consumed_node_path = consumed_node.get_path_from(self._root_node)
+            if self.consumed_node_path == None:
+                return
+            else:
+                yield self._root_node, consumed_node, orig_node_val, self._cpt-1
 
         return
 

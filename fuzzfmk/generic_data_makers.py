@@ -75,7 +75,8 @@ class sd_iter_over_data(StatefulDisruptor):
         else:
             consumer = BasicVisitor(specific_args=self.singleton)
         consumer.set_node_interest(path_regexp=self.path)
-        self.walker = iter(ModelWalker(prev_data.node, consumer, max_steps=self.max_steps, initial_step=self.init))
+        self.modelwalker = ModelWalker(prev_data.node, consumer, max_steps=self.max_steps, initial_step=self.init)
+        self.walker = iter(self.modelwalker)
 
 
     def disrupt_data(self, dm, target, data):
@@ -87,7 +88,7 @@ class sd_iter_over_data(StatefulDisruptor):
             return data
 
         data.add_info('model walking index: {:d}'.format(idx))
-        data.add_info('current node:     %s' % consumed_node.get_path_from(rnode))
+        data.add_info('current node:     %s' % self.modelwalker.consumed_node_path)
 
         if self.clone_node:
             exported_node = Node(rnode.name, base_node=rnode, new_env=True)
@@ -135,7 +136,8 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
                                             respect_order=self.order)
         self.consumer.need_reset_when_structure_change = self.deep
         self.consumer.set_node_interest(path_regexp=self.path)
-        self.walker = iter(ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init))
+        self.modelwalker = ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init)
+        self.walker = iter(self.modelwalker)
 
         self.max_runs = None
         self.current_node = None
@@ -159,7 +161,7 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
 
         data.add_info('model walking index: {:d}'.format(idx))        
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
-        data.add_info('current fuzzed node:     %s' % consumed_node.get_path_from(rnode))
+        data.add_info('current fuzzed node:     %s' % self.modelwalker.consumed_node_path)
         data.add_info(' |_ value type:         %s' % consumed_node.cc.get_value_type())
         data.add_info(' |_ original node value: %s (ascii: %s)' % \
                       (binascii.b2a_hex(orig_node_val), orig_node_val))
@@ -227,7 +229,8 @@ class sd_switch_to_alternate_conf(StatefulDisruptor):
                                         min_runs_per_node=self.min_runs_per_node,
                                         respect_order=False)
         self.consumer.set_node_interest(owned_confs=self.confs_list)
-        self.walker = iter(ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init))
+        self.modelwalker = ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init)
+        self.walker = iter(self.modelwalker)
 
         self.max_runs = None
         self.current_node = None
@@ -253,7 +256,7 @@ class sd_switch_to_alternate_conf(StatefulDisruptor):
 
         data.add_info('model walking index: {:d}'.format(idx))        
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
-        data.add_info('current node with alternate conf: %s' % consumed_node.get_path_from(rnode))
+        data.add_info('current node with alternate conf: %s' % self.modelwalker.consumed_node_path)
         data.add_info(' |_ associated value: %s' % repr(consumed_node.get_flatten_value()))
         data.add_info(' |_ original node value: %s' % orig_node_val)
 
@@ -305,7 +308,8 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
                                             specific_args=sep_list)
         self.consumer.need_reset_when_structure_change = self.deep
         self.consumer.set_node_interest(path_regexp=self.path)
-        self.walker = iter(ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init))
+        self.modelwalker = ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init)
+        self.walker = iter(self.modelwalker)
 
         self.max_runs = None
         self.current_node = None
@@ -329,7 +333,7 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
 
         data.add_info('model walking index: {:d}'.format(idx))        
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
-        data.add_info('current fuzzed separator:     %s' % consumed_node.get_path_from(rnode))
+        data.add_info('current fuzzed separator:     %s' % self.modelwalker.consumed_node_path)
         data.add_info(' |_ value type:         %s' % consumed_node.cc.get_value_type())
         data.add_info(' |_ original separator: %s (ascii: %s)' % \
                       (binascii.b2a_hex(orig_node_val), orig_node_val))
@@ -486,7 +490,7 @@ class sd_struct_constraints(StatefulDisruptor):
         data.add_info(' |_ {:s}'.format(op_performed))
 
         data.update_from_node(corrupted_seed)
-            
+
         return data
 
 
