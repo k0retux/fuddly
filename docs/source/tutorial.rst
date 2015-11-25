@@ -2051,9 +2051,9 @@ The outputs of the logger are of three types:
   each time you run a new project or you reload the current one.
 
 - ``<root of fuddly>/trace/*<project_name>_stats``: some statistics of
-  the kind of data that has been emitted during the session
+  the kind of data that has been emitted during the session.
 
-- ``<root of fuddly>/exported_data/<data model name>/*.<dm
+- ``<root of fuddly>/exported_data/<data model name>/*.<data
   extension>``: the data emitted during a session are stored within
   the their data model directory. Each one is prefixed by the date of
   emission, and each one is uniquely identified within the log files.
@@ -2068,11 +2068,11 @@ Some parameters allows to customize the behavior of the logger, such as:
 - ``explicit_export``: which is used for logging outcomes further to
   an :class:`fuzzfmk.operator_helpers.Operator` instruction. If set to
   ``True``, the operator would have to state explicitly if it wants
-  the just emitted data to be logged. Such instruction could be
-  requested through its method
-  :meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`, where the Operator
-  can take its decision after the observation of the target feedback
-  and/or probes outputs.
+  the just emitted data to be logged. Such instruction is typically
+  used within its method
+  :meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`, where the
+  Operator can take its decision after the observation of the target
+  feedback and/or probes outputs.
 
 .. seealso:: Refer to :ref:`tuto:operator` to learn more about the
              interaction between an Operator and the Logger.
@@ -2116,8 +2116,8 @@ Operators
 '''''''''
 
 To define an operator you have to define a class that inherits from
-:class:`fuzzfmk.operator_helpers.Operator`. Then to register it within
-your project the decorator ``@operator`` has to be used with at least
+:class:`fuzzfmk.operator_helpers.Operator`. Then, to register it within
+your project, the decorator ``@operator`` has to be used with at least
 the reference of the project as the first parameter.
 
 .. seealso:: Parameters can be defined for an operator, in order to
@@ -2161,7 +2161,7 @@ Here under is presented a skeleton of an Operator:
 
 The methods :meth:`fuzzfmk.operator_helpers.Operator.start()` and
 :meth:`fuzzfmk.operator_helpers.Operator.stop()` are the obvious ones
-that you have to implement if you want to customized the
+that you have to implement if you want to customize the
 initialization and termination of your operator.
 
 The core of your operator will be implemented within the method
@@ -2187,17 +2187,17 @@ is given here under:
 
 We instruct ``fuddly`` to execute a *disruptor chain* made of the
 ``SEPARATOR`` *generator* (transparently created by ``fuddly`` from
-the eponymous data of the data model ``mydf``) and the ``tSTRUCT``
-*disruptor* with some parameters (given through
+the eponymous data type in the data model ``mydf``) and the
+``tSTRUCT`` *disruptor* with some parameters (given through
 :class:`fuzzfmk.tactics_helpers.UI`). And we handle the case when the
-*chain* has been drained. More precisely, we give up after fuddly
-inform us that the stateful disruptor ``tSTRUCT`` has fully consumed
-its input, and cannot provide more outputs without re-enabling a
-previous stateful disruptor or in our case the *generator* from the
-chain (as our chain is so short).
+*chain* has been drained. More precisely, we decide to give up when
+``fuddly`` inform us that the stateful disruptor ``tSTRUCT`` has fully
+consumed its input, and cannot provide more outputs without
+re-enabling a previous stateful disruptor or in our case the
+*generator* from the chain.
 
 .. seealso:: refer to :ref:`tuto:dmaker-chain` for information about
-             disruptor chains. And refer to :ref:`tuto:disruptors` for
+             *disruptor chains*. And refer to :ref:`tuto:disruptors` for
              insight into disruptors.
 
 Finally, the method
@@ -2216,7 +2216,8 @@ the following section :ref:`tuto:probes`.
             methods to the operator, more precisely it is a reference
             to :class:`fuzzfmk.plumbing.ExportableFMKOps`.
 
-	  - ``dm``: a reference to the current data model.
+	  - ``dm``: a reference to the current
+            :class:`fuzzfmk.data_model_helpers.DataModel`.
 
 	  - ``monitor``: a reference to the monitor subsystem, in
             order to start/stop probes and get status from them.
@@ -2245,7 +2246,7 @@ executed independently from the other ones in their own thread. They
 can interact with the target, and also use the logger. Any usage
 matching your expectation should be fine. Their purpose is to help you
 getting feedback from the target you interact with, but they can also
-be part of the interaction if they seem useful in your setup.
+be part of the interaction if that seems useful in your setup.
 
 Depending on the kind of probes you want, you will have to choose
 between two decorators:
@@ -2255,15 +2256,15 @@ between two decorators:
 - ``@blocking_probe`` for probe which will be run just once after each
   data emission.
 
-This *decorators* have to take the reference of the project as
-parameter, in order to register them within it. A really basic
+These *decorators* have to take the reference of the project as
+parameter, in order to register them within. A really basic
 example (not really useful ;) of a basic probe is presented below:
 
 .. code-block:: python
    :linenos:
 
    @probe(project)
-   class myfirst_probe(Probe):
+   class my_first_probe(Probe):
 
        def start(self, target, logger):
 	   self.cpt = 10

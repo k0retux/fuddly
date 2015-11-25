@@ -131,7 +131,7 @@ class Target(object):
         '''
         return None
 
-    def stop_target(self):
+    def cleanup(self):
         raise NotImplementedError
 
     def is_alive(self):
@@ -201,6 +201,28 @@ class NetworkTarget(Target):
 
     def __init__(self, host='localhost', port=12345, socket_type=(socket.AF_INET, socket.SOCK_STREAM),
                  data_semantics=UNKNOWN_SEMANTIC, server_mode=False, hold_connection=False):
+        '''
+        Args:
+          host (str): the IP address of the target to connect to, or
+            the IP address on which we will wait for target connecting
+            to us (if `server_mode` is True).
+          port (int): the port for communicating with the target, or
+            the port to listen to.
+          socket_type (tuple): tuple composed of the socket address family
+            and socket type
+          data_semantics (str): string of characters that will be used for
+            data routing decision. Useful only when more than one interface
+            are defined. In such case, the data semantics will be checked in
+            order to find a matching interface to which data will be sent. If
+            the data have no semantic, it will be routed to the default first
+            declared interface.
+          server_mode (bool): If `True`, the interface will be set in server mode,
+            which means we will wait for the real target to connect to us for sending
+            it data.
+          hold_connection (bool): If `True`, we will maintain the connection while
+            sending data to the real target. Otherwise, after each data emission,
+            we close the related socket.
+        '''
 
         self.host = {}
         self.port = {}
@@ -253,6 +275,18 @@ class NetworkTarget(Target):
         self._feedback_timeout = max(fbk_timeout, 0.2)
         self._sending_delay = min(sending_delay, max(self._feedback_timeout-0.2, 0))
         self._time_beetwen_data_emission = self._feedback_timeout + 2
+
+    def initialize(self):
+        '''
+        To be overloaded if some intial setup for the target is necessary. 
+        '''
+        return True
+
+    def terminate(self):
+        '''
+        To be overloaded if some cleanup is necessary for stopping the target. 
+        '''
+        return True
 
     def add_additional_feedback_interface(self, host, port,
                                           socket_type=(socket.AF_INET, socket.SOCK_STREAM),
@@ -441,7 +475,7 @@ class NetworkTarget(Target):
                                     # self.send_multiple_data() is
                                     # used.
         self._connect_to_additional_feedback_sockets()
-        return True
+        return self.initialize()
 
     def stop(self):
         self.stop_event.set()
@@ -465,7 +499,7 @@ class NetworkTarget(Target):
         self._additional_fbk_lengths = None
         self._dynamic_interfaces = None
 
-        return True
+        return self.terminate()
 
     def send_data(self, data):
         connected_client_event = None
@@ -905,7 +939,7 @@ class NetworkTarget(Target):
 
         return desc[:-2]
 
-    def stop_target(self): # cleanup_target()
+    def cleanup(self):
         raise NotImplementedError
 
     def is_alive(self):
@@ -1004,13 +1038,13 @@ class PrinterTarget(Target):
 
 class LocalTarget(Target):
 
-    def __init__(self, tmpfile_ext):
+    def __init__(self, tmpfile_ext, target_path=None):
         self.__suffix = '{:0>12d}'.format(random.randint(2**16, 2**32))
         self.__app = None
-        self.__target_path = None
         self.__pre_args = None
         self.__post_args = None
         self.__feedback = TargetFeedback()
+        self.set_target_path(target_path)
         self.set_tmp_file_extension(tmpfile_ext)
 
     def set_tmp_file_extension(self, tmpfile_ext):
@@ -1034,12 +1068,26 @@ class LocalTarget(Target):
     def get_post_args(self):
         return self.__post_args
 
+    def initialize(self):
+        '''
+        To be overloaded if some intial setup for the target is necessary.
+        '''
+        return True
+
+    def terminate(self):
+        '''
+        To be overloaded if some cleanup is necessary for stopping the target.
+        '''
+        return True
+
     def start(self):
         if not self.__target_path:
             print('/!\\ ERROR /!\\: the LocalTarget path has not been set')
             return False
+        return self.initialize()
 
-        return True
+    def stop(self):
+        return self.terminate()
 
     def send_data(self, data):
 
@@ -1067,9 +1115,8 @@ class LocalTarget(Target):
         fl = fcntl.fcntl(self.__app.stdout, fcntl.F_GETFL)
         fcntl.fcntl(self.__app.stdout, fcntl.F_SETFL, fl | os.O_NONBLOCK)
         
-    def stop_target(self):
+    def cleanup(self):
         os.kill(self.__app.pid, signal.SIGTERM)
-
 
     def get_feedback(self, delay=0.2):
         if self.__app is None:

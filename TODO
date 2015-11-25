@@ -1,5 +1,6 @@
 [NEW FEATURES]
 
+- add support for logging in DB
 - implement new disruptors (syntactic & semantic)
 - implement new node types that leverage python-constraint, or more
   powerfull constraint programming library

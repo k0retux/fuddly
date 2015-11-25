@@ -176,12 +176,12 @@ class Op1(Operator):
                 if export:
                     linst.set_instruction(LastInstruction.ExportData)
                 linst.set_comments('This input has triggered an error, but not a crash!')
-                target.stop_target()
+                target.cleanup()
             elif health_status.get_status() == -2:
                 linst.set_instruction(LastInstruction.ExportData)
                 linst.set_comments('This input has crashed the target!')
             else:
-                target.stop_target()
+                target.cleanup()
         else:
             linst.set_instruction(LastInstruction.ExportData)
         
