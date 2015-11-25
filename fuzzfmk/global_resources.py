@@ -24,7 +24,7 @@
 import os
 import fuzzfmk
 
-fuddly_version = '0.20'
+fuddly_version = '0.21'
 
 fuzzfmk_folder = os.path.dirname(fuzzfmk.__file__)
 fuzzfmk_folder  = '.' if fuzzfmk_folder == '' else fuzzfmk_folder
