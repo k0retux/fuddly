@@ -1,18 +1,14 @@
 fuzzfmk package
 ===============
 
-..
-   Submodules
-   ----------
 
-..
-   fuzzfmk.basic_primitives module
-   -------------------------------
+fuzzfmk.basic_primitives module
+-------------------------------
 
-   .. automodule:: fuzzfmk.basic_primitives
-       :members:
-       :undoc-members:
-       :show-inheritance:
+.. automodule:: fuzzfmk.basic_primitives
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 fuzzfmk.data_model module
 -------------------------
@@ -59,12 +55,53 @@ fuzzfmk.target module
     :members:
     :undoc-members:
     :show-inheritance:
+    :private-members:
+    :special-members:
+    :exclude-members: __dict__, __weakref__
 
 
-fuzzfmk.tactics_helper module
------------------------------
+fuzzfmk.project module
+----------------------
 
-.. automodule:: fuzzfmk.tactics_helper
+.. automodule:: fuzzfmk.project
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
+fuzzfmk.operator_helpers module
+-------------------------------
+
+.. automodule:: fuzzfmk.operator_helpers
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
+fuzzfmk.logger module
+---------------------
+
+.. automodule:: fuzzfmk.logger
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
+
+fuzzfmk.monitor module
+----------------------
+
+.. automodule:: fuzzfmk.monitor
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
+fuzzfmk.tactics_helpers module
+------------------------------
+
+.. automodule:: fuzzfmk.tactics_helpers
     :members:
     :undoc-members:
     :show-inheritance:
@@ -97,21 +134,6 @@ fuzzfmk.fuzzing_primitives module
        :show-inheritance:
 
 
-   fuzzfmk.logger module
-   ---------------------
-
-   .. automodule:: fuzzfmk.logger
-       :members:
-       :undoc-members:
-       :show-inheritance:
-
-   fuzzfmk.monitor module
-   ----------------------
-
-   .. automodule:: fuzzfmk.monitor
-       :members:
-       :undoc-members:
-       :show-inheritance:
 
    fuzzfmk.test module
    -------------------

@@ -67,8 +67,8 @@ class MonitorCondition(object):
 
 class Monitor(object):
     def __init__(self, st, fmk_ops):
-        self.__st = st
-        self.probes = self.__st.get_probes()
+        self._prj = st
+        self.probes = self._prj.get_probes()
         self.fmk_ops = fmk_ops
         self._logger=None
 
@@ -76,20 +76,20 @@ class Monitor(object):
         self._logger = logger
 
     def set_strategy(self, strategy):
-        self._logger.print_console('*** Monitor refresh in progress...\n', nl_before=False, rgb=Color.COMPONENT_INFO)
+        self._logger.print_console('*** Monitor refresh in progress... ***\n', nl_before=False, rgb=Color.COMPONENT_INFO)
         self.stop_all_probes()
-        self.__st = strategy
-        self.probes = self.__st.get_probes()
+        self._prj = strategy
+        self.probes = self._prj.get_probes()
 
     def start(self):
         self.__enable = True
         self.monitor_conditions = {}
-        self._logger.print_console('*** Monitor is started\n', nl_before=False, rgb=Color.COMPONENT_START)
+        self._logger.print_console('*** Monitor is started ***\n', nl_before=False, rgb=Color.COMPONENT_START)
         
     def stop(self):
-        self._logger.print_console('*** Monitor stopping in progress...\n', nl_before=False, rgb=Color.COMPONENT_INFO)
+        self._logger.print_console('*** Monitor stopping in progress... ***\n', nl_before=False, rgb=Color.COMPONENT_INFO)
         self.stop_all_probes()
-        self._logger.print_console('*** Monitor is stopped\n', nl_before=False, rgb=Color.COMPONENT_STOP)
+        self._logger.print_console('*** Monitor is stopped ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
 
 
     def enable_hooks(self):
@@ -99,13 +99,13 @@ class Monitor(object):
         self.__enable = False
 
     def quick_reset_probe(self, name, *args):
-        return self.__st.quick_reset_probe(name, *args)
+        return self._prj.quick_reset_probe(name, *args)
 
     def start_probe(self, name):
-        return self.__st.launch_probe(name)
+        return self._prj.launch_probe(name)
 
     def stop_probe(self, name):
-        ok = self.__st.stop_probe(name)
+        ok = self._prj.stop_probe(name)
         if not ok:
             self.fmk_ops.set_error("Probe '%s' does not exist" % name,
                                    code=Error.CommandError)
@@ -135,8 +135,8 @@ class Monitor(object):
         return ret
 
     def stop_all_probes(self):
-        for p in self.__st.get_probes():
-            self.__st.stop_probe(p)
+        for p in self._prj.get_probes():
+            self._prj.stop_probe(p)
             if p in self.monitor_conditions:
                 self.monitor_conditions[p].notify_data_ready()
                 self.monitor_conditions[p].notify_data_emission()
@@ -151,14 +151,14 @@ class Monitor(object):
 
     def _wait_for_probe_termination(self, p=None):
         if p is None:
-            plist = self.__st.get_probes()
+            plist = self._prj.get_probes()
         else:
             plist = [p]
 
         t0 = datetime.datetime.now()
         while True:
             for p in plist:
-                if self.__st.is_probe_launched(p):
+                if self._prj.is_probe_launched(p):
                     break
             else:
                 break
@@ -171,13 +171,13 @@ class Monitor(object):
 
 
     def get_probe_status(self, name):
-        return self.__st.get_probe_status(name)
+        return self._prj.get_probe_status(name)
 
     def get_probe_delay(self, name):
-        return self.__st.get_probe_delay(name)
+        return self._prj.get_probe_delay(name)
 
     def set_probe_delay(self, name, delay):
-        return self.__st.set_probe_delay(name, delay)
+        return self._prj.set_probe_delay(name, delay)
 
     def do_before_sending_data(self):
         if self.monitor_conditions:
@@ -206,8 +206,115 @@ class Monitor(object):
             return True
 
         for n, p in self.probes.items():
-            if self.__st.is_probe_launched(n):
-                if self.__st.get_probe_status(n).get_status() < 0:
+            if self._prj.is_probe_launched(n):
+                if self._prj.get_probe_status(n).get_status() < 0:
                     return False
 
         return True
+
+
+class Probe(object):
+
+    def __init__(self):
+        pass
+
+    def _start(self, target, logger):
+        logger.log_fmk_info("Probe is starting (%s)" % self.__class__.__name__, nl_before=True, nl_after=True)
+        self.start(target, logger)
+
+    def _stop(self, target, logger):
+        logger.log_fmk_info("Probe is stopping (%s)" % self.__class__.__name__, nl_before=True, nl_after=True)
+        self.stop(target, logger)
+
+    def start(self, target, logger):
+        pass
+
+    def stop(self, target, logger):
+        pass
+
+    def quick_reset(self, target, logger):
+        pass
+
+    def arm_probe(self, target, logger):
+        pass
+
+    def main(self, target, logger):
+        pass
+
+
+class ProbeStatus(object):
+
+    def __init__(self, status=None):
+        self.__status = status
+        self.__private = None
+
+    def set_status(self, status):
+        '''
+        @status shall be an integer
+        '''
+        self.__status = status
+
+    def get_status(self):
+        return self.__status
+
+    def set_private_info(self, pv):
+        self.__private = pv
+
+    def get_private_info(self):
+        return self.__private
+
+
+def probe(prj):
+    def internal_func(probe_cls):
+        probe = probe_cls()
+
+        def probe_func(stop_event, evts, *args, **kargs):
+            probe._start(*args, **kargs)
+            while not stop_event.is_set():
+                delay = prj.get_probe_delay(probe.__class__.__name__)
+                status = probe.main(*args, **kargs)
+                prj.set_probe_status(probe.__class__.__name__, status)
+
+                stop_event.wait(delay)
+
+            probe._stop(*args, **kargs)
+            prj.reset_probe(probe.__class__.__name__)
+
+        prj.register_new_probe(probe.__class__.__name__, probe_func, obj=probe, blocking=False)
+
+        return probe_cls
+
+    return internal_func
+
+
+
+def blocking_probe(prj):
+    def internal_func(probe_cls):
+        probe = probe_cls()
+
+        def probe_func(stop_event, evts, *args, **kargs):
+            probe._start(*args, **kargs)
+            while not stop_event.is_set():
+                delay = prj.get_probe_delay(probe.__class__.__name__)
+                
+                evts.wait_for_data_ready()
+
+                probe.arm_probe(*args, **kargs)
+
+                evts.wait_until_data_is_emitted()
+
+                status = probe.main(*args, **kargs)
+                prj.set_probe_status(probe.__class__.__name__, status)
+
+                evts.lets_fuzz_continue()
+
+                stop_event.wait(delay)
+
+            probe._stop(*args, **kargs)
+            prj.reset_probe(probe.__class__.__name__)
+
+        prj.register_new_probe(probe.__class__.__name__, probe_func, obj=probe, blocking=True)
+
+        return probe_cls
+
+    return internal_func

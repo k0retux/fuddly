@@ -33,8 +33,6 @@ import collections
 
 import argparse
 
-import json, collections
-
 sys.path.append('.')
 
 from fuzzfmk.data_model import *
@@ -50,6 +48,7 @@ from fuzzfmk.basic_primitives import *
 from fuzzfmk.plumbing import *
 from fuzzfmk.target import *
 from fuzzfmk.logger import *
+from fuzzfmk.operator_helpers import *
 
 from fuzzfmk.data_model_helpers import *
 
@@ -992,7 +991,7 @@ class TestMisc(unittest.TestCase):
                 break
 
         print('\nTurn number when Node has changed: %r, number of test cases: %d' % (turn_nb_list, i))
-        good_list = [1, 9, 17, 28, 36, 44, 52, 61, 67, 76, 82, 95]
+        good_list = [1, 9, 17, 25, 33, 44, 55, 63, 71, 79, 87, 95, 103, 111, 119, 128, 136, 144, 152, 158, 167, 173, 186]
 
         msg = "If Fuzzy_<TypedValue>.int_list have been modified in size, the good_list should be updated.\n" \
               "If BitField are in random mode [currently put in determinist mode], the fuzzy_mode can produce more" \
@@ -1545,20 +1544,20 @@ class TestModelWalker(unittest.TestCase):
         default_consumer = NodeConsumerStub(max_runs_per_node=-1, min_runs_per_node=2)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True, max_steps=70):
             print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
-        self.assertEqual(idx, 26)
+        self.assertEqual(idx, 28)
 
     def test_BasicVisitor(self):
         nt  = self.dm.get_data('Simple')
         default_consumer = BasicVisitor()
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True, max_steps=70):
             print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
-        self.assertEqual(idx, 29)
+        self.assertEqual(idx, 37)
 
     def test_NonTermVisitor(self):
         print('***')
         simple  = self.dm.get_data('Simple')
         nonterm_consumer = NonTermVisitor(respect_order=True)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True, max_steps=10):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True, max_steps=20):
             print(colorize('[%d] '%idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 4)
 
@@ -1566,7 +1565,7 @@ class TestModelWalker(unittest.TestCase):
 
         simple  = self.dm.get_data('Simple')
         nonterm_consumer = NonTermVisitor(respect_order=False)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True, max_steps=10):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True, max_steps=20):
             print(colorize('[%d] '%idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 4)
 
@@ -1593,6 +1592,7 @@ class TestModelWalker(unittest.TestCase):
         # data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')
         shape_desc = \
         {'name': 'shape',
+         'mode': MH.Mode.ImmutableClone,
          'separator': {'contents': {'name': 'sep',
                                     'contents': String(val_list=[' [!] '])}},
          'contents': [
@@ -1606,7 +1606,7 @@ class TestModelWalker(unittest.TestCase):
                    'contents': [
 
                        {'name': 'body',
-                        'mode' : MH.NotMutableClone,
+                        'mode' : MH.Mode.ImmutableClone,
                         'separator': {'contents': {'name': 'sep2',
                                                    'contents': String(val_list=['::'])}},
                         'shape_type': MH.Random, # ignored in determnist mode
@@ -1690,9 +1690,9 @@ class TestModelWalker(unittest.TestCase):
         tn_consumer = TypedNodeDisruption()
         ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         tn_consumer.set_node_interest(internals_criteria=ic)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True, max_steps=100):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True, max_steps=300):
             print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
-        self.assertEqual(idx, 23) # 23 when no String()
+        self.assertEqual(idx, 23)
 
 
     def test_TypedNodeDisruption_2(self):
@@ -1704,6 +1704,18 @@ class TestModelWalker(unittest.TestCase):
             print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
         self.assertEqual(idx, 9)
 
+    def test_TypedNodeDisruption_3(self):
+        '''
+        Test case similar to test_TermNodeDisruption_1() but with more
+        powerfull TypedNodeDisruption.
+        '''
+        nt  = self.dm.get_data('Simple')
+        tn_consumer = TypedNodeDisruption(max_runs_per_node=1)
+        # ic = NodeInternalsCriteria(negative_node_subkinds=[String])
+        # tn_consumer.set_node_interest(internals_criteria=ic)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True, max_steps=-1):
+            print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
+        self.assertEqual(idx, 282)
 
     def test_TermNodeDisruption_1(self):
         simple  = self.dm.get_data('Simple')
@@ -1712,21 +1724,21 @@ class TestModelWalker(unittest.TestCase):
             print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
             # print('original val: %s' % repr(orig_node_val))
             # print('corrupted val: %s' % repr(consumed_node.get_flatten_value()))
-        self.assertEqual(idx, 245)
+        self.assertEqual(idx, 266)
 
     def test_TermNodeDisruption_2(self):
         simple  = self.dm.get_data('Simple')
         consumer = TermNodeDisruption(max_runs_per_node=-1, min_runs_per_node=2)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=78):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=-1):
             print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
-        self.assertEqual(idx, 78)
+        self.assertEqual(idx, 91)
 
     def test_TermNodeDisruption_3(self):
         simple  = self.dm.get_data('Simple')
         consumer = TermNodeDisruption(specific_args=['1_BANG_1', '2_PLOUF_2'])
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=-1):
             print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
-        self.assertEqual(idx, 140)
+        self.assertEqual(idx, 152)
 
 
     def test_AltConfConsumer_1(self):
@@ -1734,27 +1746,27 @@ class TestModelWalker(unittest.TestCase):
         consumer = AltConfConsumer(max_runs_per_node=-1, min_runs_per_node=-1)
         consumer.set_node_interest(owned_confs=['ALT'])
 
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=50):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=100):
             print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
-        self.assertEqual(idx, 11)
+        self.assertEqual(idx, 15)
 
     def test_AltConfConsumer_2(self):
         simple  = self.dm.get_data('Simple')
         consumer = AltConfConsumer(max_runs_per_node=2, min_runs_per_node=1)
         consumer.set_node_interest(owned_confs=['ALT'])
 
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=50):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=100):
             print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
-        self.assertEqual(idx, 6)
+        self.assertEqual(idx, 8)
 
     def test_AltConfConsumer_3(self):
         simple  = self.dm.get_data('Simple')
         consumer = AltConfConsumer(max_runs_per_node=-1, min_runs_per_node=-1)
         consumer.set_node_interest(owned_confs=['ALT', 'ALT_2'])
 
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=50):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=100):
             print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
-        self.assertEqual(idx, 17)
+        self.assertEqual(idx, 21)
 
     def test_AltConfConsumer_4(self):
         simple  = self.dm.get_data('Simple')
@@ -1763,7 +1775,7 @@ class TestModelWalker(unittest.TestCase):
 
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=50):
             print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
-        self.assertEqual(idx, 17)
+        self.assertEqual(idx, 22)
 
 
     def test_JPG(self):
@@ -2207,6 +2219,40 @@ class TestNodeFeatures(unittest.TestCase):
         self.assertEqual(result, raw)
 
 
+    def test_search_primitive(self):
+
+        data = fmk.dm.get_external_node(dm_name='mydf', data_id='exist_cond')
+        data.freeze()
+        data.unfreeze()
+        data.freeze()
+        data.unfreeze()
+        data.freeze()
+        # At this step the data should exhibit 'command_A3'
+
+        ic = NodeInternalsCriteria(required_csts=[SyncScope.Existence])
+
+        l1 = data.get_reachable_nodes(internals_criteria=ic)
+        print("\n*** {:d} nodes with existence condition found".format(len(l1)))
+
+        res = []
+        for n in l1:
+            print(' |_ ' + n.name)
+            res.append(n.name)
+        
+        self.assertEqual(len(res), 3)
+        self.assertTrue('command_A3' in res)
+
+        # node_to_corrupt = l1[1]
+        # print('\n*** Node that will be corrupted: {:s}'.format(node_to_corrupt.name))
+
+        # data.env.add_node_to_corrupt(node_to_corrupt)
+        # corrupted_data = Node(data.name, base_node=data, ignore_frozen_state=False, new_env=True)
+        # data.env.remove_node_to_corrupt(node_to_corrupt)
+        
+        # corrupted_data.unfreeze(recursive=True, reevaluate_constraints=True)
+        # corrupted_data.show()
+
+
 class TestNode_NonTerm(unittest.TestCase):
 
     @classmethod
@@ -2466,7 +2512,7 @@ class TestHLAPI(unittest.TestCase):
                            {'name': 'val2'},
 
                            {'name': 'middle',
-                            'mode': MH.NotMutableClone,
+                            'mode': MH.Mode.ImmutableClone,
                             'contents': [{
                                 'section_type': MH.Ordered,
                                 'contents': [
@@ -2485,7 +2531,7 @@ class TestHLAPI(unittest.TestCase):
                                      'contents': lambda x: x[0] + x[1],
                                      'name': 'val22',
                                      'node_args': ['val1', 'val3'],
-                                     'mode': MH.FrozenArgs}
+                                     'mode': MH.Mode.FrozenArgs}
                                 ]}]},
 
                            {'contents': String(max_sz = 10),
@@ -2550,7 +2596,13 @@ class TestDataModel(unittest.TestCase):
     def test_data_makers(self):
 
         for dm in fmk.dm_list:
-            dm.load_data_model(fuzzer._name2dm)
+            try:
+                dm.load_data_model(fuzzer._name2dm)
+            except:
+                print("\n*** WARNING: Data Model '{:s}' not tested because" \
+                      " the loading process has failed ***\n".format(dm.name))
+                continue
+
             print("Test '%s' Data Model" % dm.name)
             for data_id in dm.data_identifiers():
                 print("Try to get '%s'" % data_id)
@@ -2788,8 +2840,8 @@ class TestFMK(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        fmk.enable_data_model(name='mydf')
-
+        fuzzer.run_project(name='tuto', dm_name='mydf')
+    
     def setUp(self):
         pass
 
@@ -2831,13 +2883,84 @@ class TestFMK(unittest.TestCase):
         self.assertGreater(i, 2)
 
 
+    def test_struct_disruptor(self):
+
+        idx = 0
+        expected_idx = 6
+
+        expected_outcomes = [b'A1', b'A2', b'A3$ A32_VALID $', b'A3T\x0f\xa0\x00\n$ A32_VALID $',
+                             b'A3T\x0f\xa0\x00\n*1*0*', b'A1']
+        expected_outcomes_24_alt = [b'A3$ A32_INVALID $', b'A3T\x0f\xa0\x00\n$ A32_INVALID $']
+
+        outcomes = []
+
+        act = [('EXIST_COND', UI(determinist=True)), 'tWALK', ('tSTRUCT', None)]
+        for i in range(4):
+            for j in range(10):
+                d = fmk.get_data(act)
+                if d is None:
+                    print('--> Exiting (need new input)')
+                    break
+                fmk.new_transfer_preamble()
+                fmk.log_data(d)
+                outcomes.append(d.to_bytes())
+                d.show()
+                idx += 1
+
+        self.assertEqual(outcomes[:2], expected_outcomes[:2])
+        self.assertTrue(outcomes[2:4] == expected_outcomes[2:4] or outcomes[2:4] == expected_outcomes_24_alt)
+        self.assertEqual(outcomes[-2:], expected_outcomes[-2:])
+        self.assertEqual(idx, expected_idx)
+
+        print('\n****\n')
+
+        expected_idx = 6
+        idx = 0
+        act = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', None, UI(deep=True))]
+        for j in range(10):
+            d = fmk.get_data(act)
+            if d is None:
+                print('--> Exiting (need new input)')
+                break
+            fmk.new_transfer_preamble()
+            fmk.log_data(d)
+            outcomes.append(d.to_bytes())
+            d.show()
+            idx += 1
+
+        self.assertEqual(idx, expected_idx)
+
+    def test_typednode_disruptor(self):
+
+        idx = 0
+        expected_idx = 13
+
+        expected_outcomes = []
+        outcomes = []
+
+        act = ['OFF_GEN', ('tTYPE', UI(runs_per_node=1))]
+        for j in range(100):
+            d = fmk.get_data(act)
+            if d is None:
+                print('--> Exiting (need new input)')
+                break
+            fmk.new_transfer_preamble()
+            fmk.log_data(d)
+            outcomes.append(d.to_bytes())
+            d.show()
+            idx += 1
+
+        self.assertEqual(idx, expected_idx)
+
+
+
 if __name__ == "__main__":
 
     results = collections.OrderedDict()
 
     fuzzer = Fuzzer()
 
-    fuzzer.enable_data_model(name='example')
+    fuzzer.run_project(name='tuto', dm_name='example')
     fmk = fuzzer
 
     dm = example.data_model
@@ -2847,7 +2970,3 @@ if __name__ == "__main__":
     args = [sys.argv[0]] + test_args[1]
 
     unittest.main(verbosity=2, argv=args)
-
-
-
-

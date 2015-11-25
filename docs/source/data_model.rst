@@ -312,9 +312,6 @@ format in a JSON-like fashion, and will automatically translate this
 description to ``fuddly``'s internal data representation.
 
 
-.. todo:: Describe all the keywords
-
-
 Generic Description Keywords
 ----------------------------
 
@@ -399,7 +396,22 @@ conf
 
 
 mode
-  [to be explained]
+  This attribute is used to change the behavior of the described node.
+  For non-terminal node this attribute can be set to:
+
+  - ``MH.Mode.ImmutableClone``: When a child node is instantiated more
+    than once, only the first instance is set *mutable*, the others
+    have this attribute cleared to prevent generic disruptors from
+    altering them. This mode aims at limiting the number of test
+    cases, by pruning what is assumed to be redundant.
+  - ``MH.Mode.MutableClone``: Opposite of the previous mode.
+
+  For *function* node this attribute can be set to:
+
+  - ``MH.Mode.FrozenArgs``: The node parameters are frozen before
+    being provided to the *function* node.
+  - ``MH.Mode.RawArgs``: The node parameters are directly provided to
+    the *function* node (without being frozen first).
 
 
 
@@ -493,10 +505,14 @@ section_type
      ]}
 
 
-
-
 duplicate_mode
-  [to be explained]
+  Modify the behavior of the instantiating procedure when a child node
+  is instantiated more than once. This can be set to:
+  
+  - ``MH.Copy``: A new instance corresponds to a full copy operation.
+  - ``MH.ZeroCopy``: A new instance corresponds to a new reference of
+    the child node.
+
 
 weights
   To be used optionally in the frame of a non-terminal node along with
@@ -506,16 +522,38 @@ weights
   the non-terminal nodes, if it has a ``MH.Pick`` type.
 
 separator
-  [to be explained]
+  When specified, the non-terminal will add a separator between each
+  one of its children. This attribute has to be filled with a
+  *separator descriptor* such as what is illustrated below:
+
+  .. code-block:: python
+
+     'separator': {'contents': {'name': 'sep',
+				'contents': String(val_list=['\n'])},
+		   'prefix': False,
+		   'suffix': False,
+		   'unique': True},
+
+  The keys ``prefix``, ``suffix`` and ``unique`` are optional. They are
+  described below.
+
+  .. seealso:: Refer to :ref:`dm:pattern:separator` for an example using
+	       separators.
+
 
 prefix
-  [to be explained]
+  Used optionally within a *separator descriptor*. If set to ``True``,
+  a separator will be placed just before the first child.
 
 suffix
-  [to be explained]
+  Used optionally within a *separator descriptor*. If set to ``True``,
+  a separator will be placed just after the last child.
 
 unique
-  [to be explained]
+  Used optionally within a *separator descriptor*. If set to ``True``,
+  the inserted separators will be independent from each other (full
+  node copy). Otherwise, the separators will be references to a
+  unique node (zero copy).
 
 
 
@@ -524,13 +562,22 @@ Keywords to Describe Generator Node
 
 
 node_args
-  [to be explained]
+  List of node parameters to be provided to a *generator* node or a
+  *function* node.
 
 other_args
-  [to be explained]
+  List of parameters (which are not a
+  :class:`fuzzfmk.data_model.Node`) to be provided to a *generator*
+  node or a *function* node.
 
 provide_helpers
-  [to be explained]
+  (Optional) If set to `True`, a special object will be provided to
+  the user-defined function (last parameter) of the *generator* node
+  or the *function* node. Otherwise, this object won't be passed
+  (default behavior). This object is an instance of the class
+  :class:`fuzzfmk.data_model.DynNode_Helpers`, which enable the
+  user-defined function to have some insight on the current structure
+  of the modeled data.
 
 trigger_last
   The triggering of a generator is postpone until everything else has
@@ -545,56 +592,137 @@ Keywords to Import External Data Description
 --------------------------------------------
 
 import_from
-  Name of the data model to import a data description from
+  Name of the data model to import a data description from.
 
 data_id
-  Name of the data description to import
+  Name of the data description to import.
 
 
 Keywords to Describe Node Properties
 ------------------------------------
 
-
 determinist
-  make the node behave in a deterministic way
+  Make the node behave in a deterministic way.
 
 random
-  make the node behave in a random way
+  Make the node behave in a random way.
 
-clear_attrs
-  [to be explained]
+mutable
+  Make the node mutable. It is a shortcut for the node attribute
+  ``MH.Attr.Mutable``.
 
 set_attrs
-  [to be explained]
+  List of attributes to set on the node. The current generic
+  attributes are:
+
+  - ``MH.Attr.Freezable``: If set, the node will be freezable (default
+    behavior), which means that once the node has provided a value
+    (through for instance :meth:`fuzzfmk.data_model.Node.to_bytes()`),
+    the method :meth:`fuzzfmk.data_model.Node.unfreeze()` need to be
+    called on it to get new values, otherwise it won't change. If
+    unset, the node will always be recomputed. Can be useful for
+    *function* node, if it needs to be recomputed each time a
+    modification has been performed on its associated graph (e.g., CRC
+    function).
+  - ``MH.Attr.Mutable``: If set, generic disruptors will consider the
+    node as being mutable, meaning that it can be altered (default
+    behavior). Otherwise, it will be ignored.
+  - ``MH.Attr.Determinist``: This attribute can be set directly
+    through the keywords ``determinist`` or ``random``. Refer to them
+    for details. By default, it is set.
+  - ``MH.Attr.Finite``: If set, a node will provide a finite number of
+    values and then will notify it has exhausted. Otherwise,
+    exhaustion will never be notified (default behavior).
+  - ``MH.Attr.Abs_Postpone``: Used to postpone absorption by the
+    node. Refer to :ref:`tuto:dm-absorption` for more information on
+    that topic.
+  - ``MH.Attr.Separator``: Used to distinguish a separator. Some
+    disruptors can leverage this attribute to perform their
+    alteration.
+
+  The current specific attributes are:
+
+  - ``MH.Attr.AcceptConfChange``: Used for *generator* node. If set, a
+    call to :meth:`fuzzfmk.data_model.Node.set_current_conf()` will be
+    called on the generated node (default behavior).
+  - ``MH.Attr.CloneExtNodeArgs``: Used for *generator* node and
+    *function* node. If set, during a cloning operation (e.g., full copy
+    of the modeled data containing this node) if the node parameters do
+    not belong to the graph representing the data, they will be cloned (full
+    copy). Otherwise, they will just be referenced (default
+    behavior). Rationale for default behavior: When a *generator* or
+    *function* node is duplicated within a non terminal node, the node
+    parameters may be unknown to it, thus considered as external, while
+    still belonging to the full data.
+  - ``MH.Attr.ResetOnUnfreeze``: Used for *generator* node. If set, a
+    call to :meth:`fuzzfmk.data_model.Node.unfreeze()` on the node will
+    provoke the reset of the *generator* itself, meaning that the next
+    time its value will be asked for, it will be recomputed (default
+    behaviour). If unset, a call to the method
+    :meth:`fuzzfmk.data_model.Node.unfreeze()` will provoke the call of
+    this method on the already existing generated node (and if it
+    didn't exist by this time it would have been computed first).
+  - ``MH.Attr.TriggerLast``: This attribute can be set directly
+    through the keyword ``trigger_last``. Refer to it for details.
+
+
+  .. note:: Most of the generic stateful disruptors will recursively
+	    set the attributes ``MH.Attr.Determinist`` and ``MH.Attr.Finite``
+	    on the provided data before performing any alteration.
+
+  .. note:: *Generator* node will transfer the generic attributes to
+            the generated node, except for ``MH.Attr.Freezable``, and
+            ``MH.Attr.Mutable`` which are used to change the
+            *generator* behavior. (If such attributes need to be set
+            or cleared on the generated node, it has to be done
+            directly on it and not on its generator.) Specific
+            attributes related to generators won't be passed to the
+            generated node.
+
+  .. seealso:: The attributes are defined within
+               :class:`fuzzfmk.data_model.NodeInternals`.
+
+clear_attrs
+  List of attributes to clear on the node. The current attributes are
+  the same than for the ``set_attrs`` keyword.
 
 absorb_csts
-  [to be explained]
+  Used to specify some absorption constraints on the node. Refer to
+  :ref:`tuto:dm-absorption` for more information on that topic.
 
 absorb_helper
-  [to be explained]
+  Used to specify an absorption helper function for the node. Refer to
+  :ref:`tuto:dm-absorption` for more information on that topic.
 
 semantics
-  [to be explained]
+  Used to specify semantics to the node, by way of a list of
+  meaningful strings. Nodes can be searched for and selected based on
+  semantics. Refer to :ref:`data-manip` for more information on that
+  topic.
 
 fuzz_weight
-  [to be explained]
+  Used by some stateful disruptors to order their test cases. The
+  heavier the weight, the higher the priority of handling the node.
 
 sync_qty_with
   Allows to synchronize the number of node instances to generate or to
   absorb with the one specified by reference.
 
-
 exists_if
-  [to be explained]
+  Enable to determine the existence of this node based on given
+  conditions.
+
+  .. seealso:: Refer to :ref:`dm:pattern:existence-cond` for how to use existence
+	       conditions.
 
 exists_if_not
-  [to be explained]
+  Enable to determine the existence of this node based on the
+  non-existence of another one.
 
 post_freeze
-  [to be explained]
-
-
-
+  To be filled with a function. If specified, the function will be
+  called just after the node has been frozen. It takes the node
+  internals as argument (:class:`fuzzfmk.data_model.NodeInternals`).
 
 
 .. _dm:patterns:
@@ -603,8 +731,102 @@ Data Model Patterns
 ===================
 
 
-How to Describe the Separators Used within a Data Format
---------------------------------------------------------
+How to Describe Different Shapes for Some Parts of Data
+-------------------------------------------------------
+
+To describe different forms for a non-terminal node, you can define
+it in terms of shapes like illustrated by the example below:
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 6, 20-22, 30
+
+        {'name': 'shape',
+         'separator': {'contents': {'name': 'sep',
+                                    'contents': String(val_list=[' [!] '])}},
+         'contents': [
+
+	     ### SHAPE 1 ####
+             {'weight': 20,
+              'contents': [
+                  {'name': 'prefix1',
+                   'contents': String(size=10, alphabet='+')},
+
+                  {'name': 'body_top',
+                   'contents': [
+
+                       {'name': 'body',
+                        'separator': {'contents': {'name': 'sep2',
+                                                   'contents': String(val_list=['::'])}},
+                        'shape_type': MH.Random,
+                        'contents': [
+                            {'contents': String(val_list=['AAA']),
+                             'qty': (0, 4),
+                             'name': 'str1'},
+                            {'contents': String(val_list=['42']),
+                             'name': 'str2'}
+                        ]}
+                   ]}
+
+              ]},
+
+	     ### SHAPE 2 ###
+             {'weight': 20,
+              'contents': [
+                  {'name': 'prefix2',
+                   'contents': String(size=10, alphabet='>')},
+
+                  {'name': 'body'}
+              ]}
+         ]}
+
+The shapes are ordered by their weight. In *deterministic* mode (refer
+to :ref:`dm:keywords`) that means a non terminal-node will be
+sequentially resolved from its heavier shape to its lighter shape. In
+*random* mode, the weight are used in a probabilistic way.
+
+The example above also illustrates how to represent an *optional part*
+in the description of a data format (within the first shape of the
+example, line 20-22). You only have to set the minimum quantity of a
+node to ``0`` (line 21), and it will be considered as an optional
+part.
+
+If you iterate over this data model with ``tWALK(nt_ony=True)`` (refer
+to :ref:`dis:generic-disruptors`) you will see the various data forms
+understood by ``fuddly`` which would be leveraged by most of the
+generic stateful disruptors.
+
+.. code-block:: none
+
+   # First Form
+   [!] ++++++++++ [!] ::42:: [!] 
+
+   # Second Form
+   [!] ++++++++++ [!] ::AAA::AAA::42:: [!] 
+
+   # Third Form
+   [!] >>>>>>>>>> [!] ::AAA::AAA::42:: [!]
+
+As you can see, the first and second forms are from ``SHAPE 1``. The
+differences between them comes from the optional part: the first form
+does not have the optional part while the second one includes it.
+Finally, the third form is from the ``SHAPE 2``.
+
+.. seealso:: Refer to :ref:`tuto:modelwalker` for more information on
+             the *Model Walker* infrastructure which makes really easy
+             the implementation of stateful disruptors leveraging the
+             different forms of a data.
+
+.. seealso:: Refer to :ref:`dm:pattern:existence-cond` if you need
+             to change the data format depending on the existence of
+             optional parts.
+
+
+
+.. _dm:pattern:separator:
+
+How to Describe the Separators of a Data Format
+-----------------------------------------------
 
 The example below shows how to define the separators for delimiting
 lines of an imaginary data model (line 2-7), and for delimiting
@@ -679,6 +901,8 @@ From this data model you could get a data like that:
           the specific attribute
           :const:`fuzzfmk.data_model.NodeInternals.Separator` set.
 
+
+.. _dm:pattern:existence-cond:
 
 How to Describe a Data Format Whose Parts Change Depending on Some Fields
 -------------------------------------------------------------------------
@@ -1026,3 +1250,4 @@ Which correspond to the following data::
              to set the generator-specific keyword ``trigger_last`` to
              `True`. Refer to :ref:`dm:keywords` for more information
              on the available keywords.
+

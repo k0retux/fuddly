@@ -37,50 +37,58 @@ this:
 
 .. code-block:: none
    :linenos:
-   :emphasize-lines: 10
+   :emphasize-lines: 21
 
-   ...
+   ===============================================================[ Data Models ]==
+   >>> Look for Data Models within 'data_models' directory
+   *** Found Data Model: 'mydf' ***
+   *** Found Data Model: 'example' ***
+   >>> Look for Data Models within 'data_models/protocols' directory
+   *** Found Data Model: 'usb' ***
    >>> Look for Data Models within 'data_models/file_formats' directory
-   *** Loaded Data Model: 'png' ***
-   *** Loaded Data Model: 'jpg' ***
-   *** Loaded Data Model: 'pdf' ***
-   *** Loaded Data Model: 'zip' ***
+   *** Found Data Model: 'zip' ***
+   *** Found Data Model: 'png' ***
+   *** Found Data Model: 'pdf' ***
+   *** Found Data Model: 'jpg' ***
+   ==================================================================[ Projects ]==
+   >>> Look for Projects within 'projects/specific' Directory
+   *** Found Project: 'usb' ***
+   >>> Look for Projects within 'projects/generic' Directory
+   *** Found Project: 'standard' ***
+   ================================================================================
 
-   -=[ FuzzShell ]=- (with Fuzzer FmK 0.18)
+   -=[ FuzzShell ]=- (with Fuddly FmK 0.20)
 
-   >>
+   >> 
 
 .. note:: The ``help`` command shows you every defined command within
    ``FuzzShell``. You can also look at a brief command description and
    syntax by typing ``help <command_name>``
 
-You can first list the available data models:
+Note that ``fuddly`` looks for *Data Model* files (within
+``data_models/``) and *Project* files (within ``projects/``) during
+its initialization. A *Project* file is used to describe the targets
+that can be tested, the logger behaviour, and optionally specific
+monitoring means as well as some virtual operators.
+
+.. seealso:: To create a new project file, and to describe the
+             associated components refer to :ref:`tuto:project`.
+
+Once loaded, a project can be used with any data models. Basically,
+that means you can send any kind of data (among the defined ones) to
+any target described within your project file.
+
+Let's start by loading the ``standard`` project which define some
+targets to play with:
+
 
 .. code-block:: none
    :linenos:
    :emphasize-lines: 1
 
-   >> show_data_models
+   >> load_project standard
 
-   -=[ Data Models ]=-
-
-   [0] example
-   [1] usb
-   [2] png
-   [3] jpg
-   [4] pdf
-   [5] zip
-
-Let's say you want to perform ZIP fuzzing. You can select this data
-model thanks to the following command:
-
-.. code-block:: none
-   :linenos:
-   :emphasize-lines: 1
-
-   >> use_data_model zip
-
-Now, you want to choose the target to fuzz among the defined ones:
+You can look at the defined targets by issuing the following command:
 
 .. code-block:: none
    :linenos:
@@ -91,58 +99,116 @@ Now, you want to choose the target to fuzz among the defined ones:
    -=[ Available Targets ]=-
 
    [0] EmptyTarget
-   [1] LocalTarget [Program: unzip]
+   [1] LocalTarget [Program: display]
+   [2] LocalTarget [Program: okular]
+   [3] LocalTarget [Program: unzip, Args: -d /home/tuxico/Projets/fuddly/workspace/]
+   [4] PrinterTarget [IP: 127.0.0.1, Name: PDF]
+   [5] NetworkTarget [localhost:54321, localhost:12345]
+
 
 By default, the ``EmptyTarget`` is selected in order to let you
 experiment without a real target. But let's say you want to fuzz the
-``unzip`` program. You first have to select it, then you can go on
-with your fuzzing session:
+``unzip`` program. You first have to select it:
 
 .. code-block:: none
    :linenos:
    :emphasize-lines: 1
 
-   >> set_target 1
+   >> set_target 3
 
-   >> enable_fuzzing
-   *** Logger is started
-   *** Target initialization
-   *** Monitor is started
+
+.. seealso::
+   In order to define new targets, look at :ref:`targets-def`.
+
+.. seealso::   
+   ``Target`` (\ :class:`fuzzfmk.target.Target`) configuration cannot
+   be changed dynamically within ``FuzzShell``. But you can do it
+   through any python interpreter, by directly manipulating the
+   related ``Target`` object. Look at :ref:`fuddly-advanced`.
+
+
+You also need to choose a *Data Model* that you want to use with the
+selected target. For that purpose you can first list the available
+data models:
+
+.. code-block:: none
+   :linenos:
+   :emphasize-lines: 1
+
+   >> show_data_models
+
+   -=[ Data Models ]=-
+
+   [0] mydf
+   [1] example
+   [2] usb
+   [3] zip
+   [4] png
+   [5] pdf
+   [6] jpg
+
+
+As we select the ``unzip`` program as a target, we may want to
+perform ZIP fuzzing ;) Thus we select this data model by issuing the
+following command:
+
+.. code-block:: none
+   :linenos:
+   :emphasize-lines: 1
+
+   >> load_data_model zip
+
+And then we launch the loaded project and all the components by
+issuing the following command:
+
+.. code-block:: none
+   :linenos:
+   :emphasize-lines: 1
+
+   >> launch
+
+   *** Data Model 'zip' loaded ***
+   *** Logger is started ***
+   *** Target initialization ***
+   *** Monitor is started ***
 
    *** [ Fuzz delay = 0 ] ***
    *** [ Number of data sent in burst = 1 ] ***
    *** [ Target health-check timeout = 10 ] ***
    >> 
 
-.. seealso::
-
-   In order to define new targets, look at :ref:`targets-def`.
-
-.. seealso::
-   
-   ``Target`` (\ :class:`fuzzfmk.target.Target`) configuration cannot be changed within ``FuzzShell``, but you
-   can do it through any python interpreter, by directly manipulating
-   the related ``Target`` object. Look at :ref:`fuddly-advanced`.
 
 .. note::
+   Note that just after the project is launched, some internal parameters
+   are displayed, namely:
 
-   If you already know the data model and the target to use, you can
-   directly launch your session thanks to the command
-   ``enable_data_model``. The previous commands collapse then to
-   ``enable_data_model zip 1``.
+   - The fuzzing delay, which allows you to set a minimum delay between
+     two data emission. (Can be changed through the command
+     ``set_delay``).
+   - The maximum number of data that will be sent in burst, thus
+     ignoring the fuzzing delay. (Can be changed through the command
+     ``set_burst``)
+   - The timeout value for checking target's health. (Can be changed
+     through the command ``set_timeout``)
 
-We see that internal parameters take default values, namely:
 
-- The fuzzing delay, which allows you to set a minimum delay between
-  two data emission. (Can be changed through the command
-  ``set_delay``).
+Finally, note that if you know the target from the project file you
+want to interact with, you can directly launch your project thanks to
+the command ``run_project``. Basically by issuing ``run_project
+standard 1``, you will automatically trigger the commands we just
+talked about. Note this command will initially load the default data
+model defined in the ``standard`` project file, which is the imaginary
+data model used by our tutorial (``mydf``). 
 
-- The maximum number of data that will be sent in burst, thus
-  ignoring the fuzzing delay. (Can be changed through the command
-  ``set_burst``)
+.. note::
+   If you want to load another data model at any time while your
+   project is launched, use simply the command ``load_data_model``
+   with the name of the data model you want to use, and that's all.
 
-- The timeout value for checking target's health. (Can be changed
-  through the command ``set_timeout``)
+   You can also load multiple data models through the command
+   ``load_multiple_data_model <dm_name_1> <dm_name_2>
+   ... [dm_name_n]``, if you want to interact with a target with
+   different data models simultaneously. 
 
 
 Send malformed ZIP files to the target (manually)
@@ -247,7 +313,6 @@ We use for this example, the generic disruptor ``tWALK`` whose purpose
 is to simply walk through the data model.  Note that disruptors are
 chainable, each one consuming what comes from the left.
 
-
 .. _tuto:dmaker-chain:
 
 How to perform automatic modification on data
@@ -349,7 +414,6 @@ expression that selects the root paths from which the terminal nodes
 to corrupt can be chosen.
 
 .. note::
-
    As the data model of ``fuddly`` is built on directed graphs, we
    call *paths* in ``fuddly`` the graph paths of the graph
    representing the data. For more information on fuddly data model
@@ -371,7 +435,7 @@ can see on lines 16 & 19.
 .. seealso:: If you want to see an ASCII representation of the data,
              in order to grasp the way the graph is built, issue the
              command ``show_data`` after the generation process. It
-             will depict something like what is presented `hereunder
+             will depict something like what is shown `here under
              <#zip-show-cmd>`_.
 
 	     .. _zip-show-cmd:
@@ -631,7 +695,7 @@ model with your favorite editor, and after saving it, issue the
 command ``reload_data_model`` at the ``FuzzShell`` prompt.
 
 If you also want to modify the target abstraction or operators or
-probes, ..., you have to reload every fuddly subsystem. To do so, you
+probes, ..., you have to reload every fuddly subsystems. To do so, you
 only need to issue the command ``reload_all``.
 
 Now, imagine that you want to switch to a new target already
@@ -639,8 +703,8 @@ registered, simply issue the command ``reload_all <target_id>``, where
 ``<target_id>`` is picked up through the IDs displayed by the command
 ``show_targets``
 
-Finally, if you want to switch to a new data model while a data model
-is already loaded, simply issue the command ``enable_data_model
+Finally, if you want to switch to a new data model while a project is
+already launched, simply issue the command ``load_data_model
 <data_model_name>`` to let fuddly do the job for you.
 
 
@@ -653,27 +717,32 @@ target feedback when its worth it, to automatically save test cases
 that affect the target and to automatically decide on the following
 steps based on thoughtful criteria.
 
-Let's take the example of an already defined operator that
-targets programs handling JPG files.
+Let's take the example of a fuzzing operator defined in the
+``standard`` project, and use it to fuzz JPG files and send them to
+the ``display`` program---target number 3.
 
 .. seealso:: To define your own operators refer to
              :ref:`tuto:operator`.
 
-First, we need to load the JPG data model and select a target we want
-to fuzz, for instance the ``display`` program. You can do it in one
-line by issuing the following command::
+First, we need to launch the project ``standard`` and to specify the
+target number 3. You can do it in one line by issuing the following
+command::
 
-  >> enable_data_model jpg 1
+  >> run_project standard 3
 
-The last parameter is the identifier of the target. It's a shortcut to
-what have been presented in section :ref:`tuto:start-fuzzshell`. If
-you issue the command ``show_targets`` you will notice the enabled
-target as it is highlighted in the console, like you can see in the
-figure `bellow <#target-enabled>`_.
+The last parameter of is the identifier of the
+target. It's a shortcut to what have been presented in section
+:ref:`tuto:start-fuzzshell`. If you issue the command ``show_targets``
+you will notice the enabled target as it is highlighted in the
+console, like you can see in the figure `bellow <#target-enabled>`_.
 
 .. _target-enabled:
 .. figure::  images/target_enabled.png
    :align:   center
+
+You can now load the JPG data model::
+
+  >> load_data_model jpg
 
 Then, you can look at the available operators and learn about their
 parameters by issuing the command::
@@ -731,28 +800,51 @@ object ``fmk``. Every commands defined by ``FuzzShell`` (refer to
 :ref:`tuto:start-fuzzshell`) are backed by a method of the class
 :class:`fuzzfmk.plumbing.Fuzzer`.
 
-Below we demonstrate some commands:
+Here under some basic commands to start with:
 
 .. code-block:: python
    :linenos:
 
-   # To show the available data models
+
+   # To show the available projects
+   fmk.show_projects()
+
+   # Contains the list of all the Project objects available
+   fmk.prj_list
+
+   # Load the ``standard`` project by name
+   fmk.load_project(name='standard')
+
+   # Show available targets for this project
+   fmk.show_targets()
+
+   # Select the target with ID ``3``
+   fmk.set_target(3)
+
+   # To show all the available data models
    fmk.show_data_models()
 
    # Contains the list of all the DataModel objects available
    fmk.dm_list
 
-   # Enable the ZIP data model by name, and select the target with ID ``1``
-   fmk.enable_data_model(name='zip', tg=1)
+   # Load the ZIP data model by name
+   fmk.load_data_model(name='zip')
 
-   # Reference to the currently loaded data model, in this case the ZIP one
+   # Reference to the currently loaded data model, in our case the ZIP one
    fmk.dm
 
-   # Reload all sub-systems and data model definitions and choose the target 0
-   fmk.reload_all(tg_num=0)
+   # Launch the project and all the related components
+   fmk.launch()
 
-   # Show available targets for this data model
-   fmk.show_targets()
+   # Reference to the currently launched project, in our case ``standard``
+   fmk.prj
+
+   # To launch the ``standard`` project with the target number ``3``
+   # and the ZIP data model in one line
+   fmk.run_project(name='standard', tg=3, dm_name='zip')
+
+   # Reload all sub-systems and data model definitions and choose the target ``0``
+   fmk.reload_all(tg_num=0)
 
    # Show a list of the registered data type within the data model
    fmk.show_dm_data_identifiers()
@@ -833,8 +925,8 @@ refer to the section :ref:`tuto:disruptors`
 
 
 
-Implementing a Data Model and Defining the Associated Fuzzing Environment
-=========================================================================
+Implementing a Data Model and Defining a Project Environment
+============================================================
 
 .. _data-model:
 
@@ -1026,14 +1118,12 @@ files need to be created within ``<root of
 fuddly>/data_models/[file_formats|protocol]/``:
 
 ``mydf.py``
-  Should contain the implementation of the data model related to
+  Contain the implementation of the data model related to
   ``MyDF`` data format, **which is the topic of the current section**.
 
 ``mydf_strategy.py``
-  Should contain everything else that you need for your purpose
-  like: targets (:ref:`targets-def`), logger (:ref:`logger-def`),
-  operators & probes (:ref:`tuto:operator`), specific
-  disruptors (:ref:`tuto:disruptors`).
+  Contain optional disruptors specific to the data model
+  (:ref:`tuto:disruptors`)
 
 By default, ``fuddly`` will use the prefix ``mydf`` for referencing
 the data model. But it can be overloaded within the data model
@@ -1156,7 +1246,7 @@ various constructions, and value types.
 	      {'name': 'val2'},
 
 	      {'name': 'middle',
-	       'mode': MH.NotMutableClone,
+	       'mode': MH.Mode.ImmutableClone,
 	       'contents': [{
 		   'section_type': MH.Random,
 		   'contents': [
@@ -1563,57 +1653,6 @@ or because you don't want to for letting more freedom during data
 generation).
 
 
-
-Initiating the Fuzzing Environment
-----------------------------------
-
-The fuzzing environment is defined within ``mydf_strategy.py``. It
-starts with:
-
-.. code-block:: python
-   :linenos:
-
-   from fuzzfmk.plumbing import *
-   from fuzzfmk.tactics_helper import *
-
-   tactics = Tactics()
-
-``Fuddly`` registers for each data model the related
-dynamically-created generators, and if defined, specific disruptors,
-specific operators and specific probes.  For that purpose, an object
-:class:`fuzzfmk.tactics_helper.Tactics` has to be instantiated and
-referenced by the global variable ``tactics``.
-
-
-.. _targets-def:
-
-Defining the Targets
---------------------
-
-.. todo:: Write the section on Target()
-
-
-
-Generic Targets
-+++++++++++++++
-
-
-Specific Targets
-++++++++++++++++
-
-
-
-
-
-.. _logger-def:
-
-Defining the Logger
--------------------
-
-.. todo:: Write the section on Logger()
-
-
-
 .. _tuto:disruptors:
 
 Defining Specific Disruptors
@@ -1626,9 +1665,27 @@ Defining Specific Disruptors
 Overview
 ++++++++
 
-To define a specific disruptor for your data model you basically have
-to define a subclass of :class:`fuzzfmk.tactics_helper.Disruptor` or
-:class:`fuzzfmk.tactics_helper.StatefulDisruptor`, and use the
+Specific disruptors have to be implemented within ``mydf_strategy.py``. This file should
+starts with:
+
+.. code-block:: python
+   :linenos:
+
+   from fuzzfmk.plumbing import *
+   from fuzzfmk.tactics_helper import *
+
+   tactics = Tactics()
+
+.. note::
+   ``Fuddly`` registers for each data model the related
+   dynamically-created generators, and if defined, specific
+   disruptors. For that purpose, an object
+   :class:`fuzzfmk.tactics_helper.Tactics` has to be instantiated and
+   referenced by the global variable ``tactics``.
+
+Then, to define a specific disruptor for your data model you basically
+have to define a subclass of :class:`fuzzfmk.tactics_helper.Disruptor`
+or :class:`fuzzfmk.tactics_helper.StatefulDisruptor`, and use the
 decorator ``@disruptor`` on it to register it. The first parameter of
 this decorator has to be the :class:`fuzzfmk.tactics_helper.Tactics`
 object you declare at the beginning of ``mydf_strategy.py``.
@@ -1708,6 +1765,7 @@ way to access the parameters within the disruptor methods.
 	  do_other_stuff(self.param_2)
 
 
+.. _tuto:modelwalker:
 
 The Model Walker Infrastructure
 +++++++++++++++++++++++++++++++
@@ -1725,6 +1783,19 @@ takes a modeled data as a parameter and an instance of a subclass of
 interested in and it has to implement the method
 :meth:`fuzzfmk.fuzzing_primitives.NodeConsumerStub.consume_node` to
 perform the intended modification on such nodes.
+
+.. note:: The *Model Walker* infrastructure will by default also
+          consider the non-terminal nodes. And if the consumer is not
+          interested on them, it will iterates on the different
+          possible forms they can take (optional parts, various
+          defined shapes, ...), in order for the consumer to have the
+          opportunity to act on the different shapes the data may
+          have.
+
+	  Also, note that if you want to iterate on the different
+	  forms of a modeled data, you can use the disruptor ``tWALK``
+	  with the specific parameter ``nt_only`` set to
+	  ``True``. Refer to :ref:`dis:generic-disruptors`.
 
 Let's take the following generic consumer
 :class:`fuzzfmk.fuzzing_primitives.SeparatorDisruption`, that
@@ -1831,18 +1902,191 @@ like this (which is a simpler version of the generic disruptor
 	return data
 
 
+.. _tuto:project:
+
+Defining a Project Environment
+------------------------------
+
+The environment---composed of at least one target, a logger, and
+optionnaly some monitoring means and virtual operators---is setup
+within a project file located within ``<root of
+fuddly>/projects/``. To illustrate that let's show the beginning of
+``generic/standard_proj.py``:
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 7, 12-13, 38
+
+   from fuzzfmk.project import *
+   from fuzzfmk.monitor import *
+   from fuzzfmk.operator_helper import *
+   from fuzzfmk.plumbing import *
+   import fuzzfmk.global_resources as gr
+
+   project = Project()
+   project.default_dm = ['mydf', 'zip']
+   # If you only want one default DM, provide its name directly as follows:
+   # project.default_dm = 'mydf'
+
+   logger = Logger(data_in_seperate_file=False, explicit_export=False,
+		   export_orig=False, export_raw_data=False)
+
+   printer1_tg = PrinterTarget(tmpfile_ext='.png')
+   printer1_tg.set_target_ip('127.0.0.1')
+   printer1_tg.set_printer_name('PDF')
+
+   local_tg = LocalTarget(tmpfile_ext='.png')
+   local_tg.set_target_path('display')
+
+   local2_tg = LocalTarget(tmpfile_ext='.pdf')
+   local2_tg.set_target_path('okular')
+
+   local3_tg = LocalTarget(tmpfile_ext='.zip')
+   local3_tg.set_target_path('unzip')
+   local3_tg.set_post_args('-d ' + gr.workspace_folder)
+
+   net_tg = NetworkTarget(host='localhost', port=12345, data_semantics='TG1',
+                          hold_connection=True)
+   net_tg.register_new_interface('localhost', 54321, (socket.AF_INET, socket.SOCK_STREAM),
+		                 'TG2', server_mode=True, hold_connection=True)
+   net_tg.add_additional_feedback_interface('localhost', 7777,
+		                            (socket.AF_INET, socket.SOCK_STREAM),
+					    fbk_id='My Feedback Source', server_mode=True)
+   net_tg.set_timeout(fbk_timeout=5, sending_delay=3)
+
+   targets = [local_tg, local2_tg, local3_tg, printer1_tg, net_tg]
+
+
+A project file should contain at a minimum a
+:class:`fuzzfmk.project.Project` object (referenced by a variable
+``project``), a :class:`fuzzfmk.logger.Logger` object
+(:ref:`logger-def`, referenced by a variable ``logger``), and
+optionally target objects (referenced by a variable ``targets``,
+:ref:`targets-def`), and operators & probes (:ref:`tuto:operator`).
+
+A default data model or a list of data models can be added to the
+project through its attribute ``default_dm``. ``fuddly`` will use this
+if the project is directly launched, that is either by issuing the
+command ``run_project`` in the ``fuddly`` shell or by using the
+method :meth:`fuzzfmk.plumbing.Fuzzer.run_project()` through any
+``python`` interpreter.
+
+.. note:: An :class:`fuzzfmk.target.EmptyTarget` is automatically
+          added by ``fuddly`` to any project, for dry runs. So it does
+          not matter if you don't define a target at the beginning.
+
+
+.. _targets-def:
+
+Defining the Targets
+++++++++++++++++++++
+
+Many targets can be defined in a project file. They have to be
+referenced within a list pointed by the global variable ``targets`` of
+the project file.
+
+Within the tutorial project (``projects/tuto_proj.py``), multiple
+targets have been defined:
+
+- three different :class:`fuzzfmk.target.LocalTarget` for interacting with local programs;
+- a :class:`fuzzfmk.target.PrinterTarget` to communicate with a CUPS server;
+- and finally a :class:`fuzzfmk.target.NetworkTarget` that is setup
+  with two interfaces from which data can be sent to (and feedback
+  retrieved from), plus an additional feedback source.
+
+Note that the network target can route data depending on their
+semantics (``TG1``, ``TG2``) through the two created interfaces. And
+for data without semantics it defaults to the first interface
+(``TG1``).
+
+The simplest way to play with this target is to use ``netcat`` as the
+real target. Note that some interfaces has been setup in server mode,
+that means that fuddly will send data when the target connects to
+it. The following ``netcat`` instances will cover our needs::
+
+  [term1] # nc -l 12345
+
+  [term2] # nc localhost 54321
+
+  [term3] # nc localhost 7777
+
+
+In order to play with the routing you can use the specific data ``4TG1`` and
+``4TG2`` implemented for this purpose within the data model ``mydf``.
+
+.. seealso:: Refer to :ref:`targets` for details on the available generic
+             targets that you can use directly or inherit from.
+
+If you need to implement your own ``Target`` you have at least to
+inherit from :class:`fuzzfmk.target.Target` and overload the method
+:meth:`fuzzfmk.target.Target.send_data()` which is called by
+``fuddly`` each time data is sent to the target. Additionally,
+implementing :meth:`fuzzfmk.target.Target.send_multiple_data()`
+enables to send various data simultaneously to the target. If we take
+the previous ``NetworkTarget`` example, all the registered interfaces can be
+stimulated at once through this method.
+
+.. seealso:: Other methods of :class:`fuzzfmk.target.Target` are
+             defined to be overloaded. Look at their descriptions to
+             learn more about what can be customized.
+
+
+.. _logger-def:
+
+Defining the Logger
++++++++++++++++++++
+
+You should declare a :class:`fuzzfmk.logger.Logger` in your project
+file, and specify the parameters that make sense for your
+situation. The ``Logger`` will then be used by ``fuddly`` for keeping
+history of your interaction with the target (e.g., data sent, feedback
+received, ...). Statistics about data emission will also be maintained
+and kept in sync with the log files.
+
+The outputs of the logger are of three types:
+
+- ``<root of fuddly>/trace/*<project_name>_logs``: the history of your
+  test session for the project named ``project_name``. The files are
+  prefixed with the test session starting time. A new one is created
+  each time you run a new project or you reload the current one.
+
+- ``<root of fuddly>/trace/*<project_name>_stats``: some statistics of
+  the kind of data that has been emitted during the session.
+
+- ``<root of fuddly>/exported_data/<data model name>/*.<data
+  extension>``: the data emitted during a session are stored within
+  the their data model directory. Each one is prefixed by the date of
+  emission, and each one is uniquely identified within the log files.
+
+Some parameters allows to customize the behavior of the logger, such as:
+
+- ``data_in_seperate_file`` which control the location of where data
+  will be stored. If set to `False`, instead of being stored in
+  separate files as explained previously, they will be written
+  directly within the log files.
+
+- ``explicit_export``: which is used for logging outcomes further to
+  an :class:`fuzzfmk.operator_helpers.Operator` instruction. If set to
+  ``True``, the operator would have to state explicitly if it wants
+  the just emitted data to be logged. Such instruction is typically
+  used within its method
+  :meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`, where the
+  Operator can take its decision after the observation of the target
+  feedback and/or probes outputs.
+
+.. seealso:: Refer to :ref:`tuto:operator` to learn more about the
+             interaction between an Operator and the Logger.
+
 
 
 .. _tuto:operator:
 
 Defining Operators and Probes
------------------------------
-
-.. todo:: Write the section on Operators
++++++++++++++++++++++++++++++
 
 In order to automatize what a human operator could perform to interact
 with one or more targets, the abstracted class
-:class:`fuzzfmk.tactics_helper.Operator` can be inherited. The purpose
+:class:`fuzzfmk.operator_helpers.Operator` can be inherited. The purpose
 of this class is to give you the opportunity to plan the operations
 you want to perform on the target (data type to send, type of
 modifications to perform on data before sending it, and so on). Thus,
@@ -1869,17 +2113,243 @@ process.
 
 
 Operators
-+++++++++
+'''''''''
+
+To define an operator you have to define a class that inherits from
+:class:`fuzzfmk.operator_helpers.Operator`. Then, to register it within
+your project, the decorator ``@operator`` has to be used with at least
+the reference of the project as the first parameter.
+
+.. seealso:: Parameters can be defined for an operator, in order to
+             make it more customizable. The way to describe them is
+             the same as for *disruptors*. Look into the file
+             ``projects/generic/standard_proj.py`` for some examples.
+
+Here under is presented a skeleton of an Operator:
+
+.. code-block:: python
+   :linenos:
+
+   @operator(project)
+   class MyOperator(Operator):
+
+       def start(self, fmk_ops, dm, monitor, target, logger, user_input):
+           # Do some initialization stuff
+	   return True
+
+       def stop(self, fmk_ops, dm, monitor, target, logger):
+           # Do some termination stuff
+
+       def plan_next_operation(self, fmk_ops, dm, monitor, target, logger, fmk_feedback):
+	   op = Operation()
+	   
+	   # Do some planning stuff and decide what would be the next
+	   # operations you want fuddly to perform
+
+	   return op
+
+       def do_after_all(self, fmk_ops, dm, monitor, target, logger):
+	   linst = LastInstruction()
+
+	   # Do some stuff after the planned Operation() has been
+	   # executed and request fuddly to perform some last-minute
+	   # instructions.
+
+	   return linst
 
 
 
+The methods :meth:`fuzzfmk.operator_helpers.Operator.start()` and
+:meth:`fuzzfmk.operator_helpers.Operator.stop()` are the obvious ones
+that you have to implement if you want to customize the
+initialization and termination of your operator.
+
+The core of your operator will be implemented within the method
+:meth:`fuzzfmk.operator_helpers.Operator.plan_next_operation()` which
+will order ``fuddly`` to perform some operations based on the
+:meth:`fuzzfmk.operator_helpers.Operation` object that you will return
+to it. A basic example illustrating the implementation of this method
+is given here under:
+
+.. code-block:: python
+   :linenos:
+
+   def plan_next_operation(self, fmk_ops, dm, monitor, target, logger, fmk_feedback):
+       op = Operation()
+
+       if fmk_feedback.is_flag_set(FmkFeedback.NeedChange):
+	   op.set_flag(Operation.Stop)
+       else:
+	   actions = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', None, UI(deep=True))]
+	   op.add_instruction(actions)
+
+       return op
+
+We instruct ``fuddly`` to execute a *disruptor chain* made of the
+``SEPARATOR`` *generator* (transparently created by ``fuddly`` from
+the eponymous data type in the data model ``mydf``) and the
+``tSTRUCT`` *disruptor* with some parameters (given through
+:class:`fuzzfmk.tactics_helpers.UI`). And we handle the case when the
+*chain* has been drained. More precisely, we decide to give up when
+``fuddly`` inform us that the stateful disruptor ``tSTRUCT`` has fully
+consumed its input, and cannot provide more outputs without
+re-enabling a previous stateful disruptor or in our case the
+*generator* from the chain.
+
+.. seealso:: refer to :ref:`tuto:dmaker-chain` for information about
+             *disruptor chains*. And refer to :ref:`tuto:disruptors` for
+             insight into disruptors.
+
+Finally, the method
+:meth:`fuzzfmk.operator_helpers.Operator.do_after_all()` is executed
+by ``fuddly`` after the planned operation has been handled, in order
+for the operator to provide some last-minute instructions related to
+the previous operation. Typically, it is the moment where the operator
+can investigate on the impact of its last operation, before going on
+with the next one. An example leveraging this method is discussed in
+the following section :ref:`tuto:probes`.
+
+.. note:: The methods described in this section come with some useful
+          parameters provided by ``fuddly`` when it calls them:
+
+	  - ``fmk_ops``: an object that exports ``fuddly``'s specific
+            methods to the operator, more precisely it is a reference
+            to :class:`fuzzfmk.plumbing.ExportableFMKOps`.
+
+	  - ``dm``: a reference to the current
+            :class:`fuzzfmk.data_model_helpers.DataModel`.
+
+	  - ``monitor``: a reference to the monitor subsystem, in
+            order to start/stop probes and get status from them.
+
+	  - ``target``: a reference to the current target.
+
+	  - ``logger``: a reference to the logger.
+
+	  - ``fmk_feedback``: an object that provides feedback from
+            ``fuddly`` to the operator about the last operation it
+            performed. The class of this object is
+            :class:`fuzzfmk.plumbing.FmkFeedback`.
 
 
 .. _tuto:probes:
 
 Probes & The Monitoring Subsystem
-+++++++++++++++++++++++++++++++++
+'''''''''''''''''''''''''''''''''
+
+Probes are special objects that have to implement the method
+:meth:`fuzzfmk.monitor.Probe.main()` to be called either continuously
+(the basic *probe*) or after each data emission (the *blocking
+probes*) by ``fuddly`` when an
+:class:`fuzzfmk.operator_helpers.Operator` requests it. Each probe is
+executed independently from the other ones in their own thread. They
+can interact with the target, and also use the logger. Any usage
+matching your expectation should be fine. Their purpose is to help you
+getting feedback from the target you interact with, but they can also
+be part of the interaction if that seems useful in your setup.
+
+Depending on the kind of probes you want, you will have to choose
+between two decorators:
+
+- ``@probe`` for basic probes which run continuously once started.
+
+- ``@blocking_probe`` for probe which will be run just once after each
+  data emission.
+
+These *decorators* have to take the reference of the project as
+parameter, in order to register them within. A really basic
+example (not really useful ;) of a basic probe is presented below:
+
+.. code-block:: python
+   :linenos:
+
+   @probe(project)
+   class my_first_probe(Probe):
+
+       def start(self, target, logger):
+	   self.cpt = 10
+
+       def main(self, target, logger):
+	   self.cpt += 1
+	   return ProbeStatus(self.cpt)
 
 
+A more useful one (a *blocking probe* in this case) that tries to get
+information from the target is given here under:
+
+.. code-block:: python
+   :linenos:
+
+   @blocking_probe(project)
+   class health_check(Probe):
+
+       def start(self, target, logger):
+	   self.status = ProbeStatus(0)
+
+       def stop(self, target, logger):
+	   pass
+
+       def main(self, target, logger):
+	   fb = target.get_feedback()
+	   byte_string = fb.get_bytes()
+	   self.status.set_private_info(byte_string)
+	   self.status.set_status(0)
+
+	   if target.is_damaged():
+	       self.status.set_status(-1)
+
+	   if not target.is_alive():
+	       self.status.set_status(-2)
+
+	   return self.status
 
 
+Note that you can implement :meth:`fuzzfmk.monitor.Probe.start`
+and/or :meth:`fuzzfmk.monitor.Probe.stop` methods if you need to do
+some stuff during their initialization and termination.
+
+The typical place to start a probe is within the initialization method
+of an Operator, that is
+:meth:`fuzzfmk.operator_helpers.Operator.start()`. Then, you will
+typically want to get a status from them each time your planned
+operation has been executed by ``fuddly``, that is within the method
+:meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`. Let's
+illustrate this in the following example:
+
+.. code-block:: python
+   :linenos:
+
+   class MyOperator(Operator):
+
+       def start(self, fmk_ops, dm, monitor, target, logger, user_input):
+	   monitor.start_probe('health_check')
+
+       def stop(self, fmk_ops, dm, monitor, target, logger):
+           monitor.stop_probe('health_check')
+
+       def plan_next_operation(self, fmk_ops, dm, monitor, target, logger, fmk_feedback):
+	   op = Operation()
+	   return op
+
+       def do_after_all(self, fmk_ops, dm, monitor, target, logger):
+            linst = LastInstruction()
+
+            health_status = monitor.get_probe_status('health_check')
+            info = health_status.get_private_info()
+            linst.set_target_feedback_info(info)
+
+            if health_status.get_status() < 0:
+	        linst.set_instruction(LastInstruction.ExportData)
+                linst.set_comments('This input has triggered an error!')
+
+	    return linst
+
+
+In this example, we basically retrieve the status of our
+*health-check* probe. If it is negative, we first order ``fuddly`` to
+export the data. In the case the logger has its parameter
+``explicit_export`` set to ``True`` (refer to :ref:`logger-def`), you
+have to instruct explicitly ``fuddly`` to do it if you want to keep
+the data, otherwise it will never be logged. Finally, we also order
+``fuddly`` to log a specific comment related to this data and more
+generally related to the last performed operation.

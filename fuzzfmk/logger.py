@@ -76,16 +76,36 @@ class Stats:
 
 class Logger(object):
     '''
-    All log_* function is to be used internally by the framework
+    The Logger is used for keeping the history of the communication
+    with the Target. The methods are used by the framework, but can
+    also be leveraged by an Operator.
     '''
-    def __init__(self, name, prefix='', data_in_seperate_file=False, explicit_export=False, export_orig=True,
-                 export_raw_data=True):
-
+    def __init__(self, name=None, prefix='', data_in_seperate_file=False, explicit_export=False, export_orig=True,
+                 export_raw_data=True, console_display_limit=800):
+        '''
+        Args:
+          name (str): Name to be used in the log filenames. If not specified, the name of the project
+            in which the logger is embedded will be used.
+          data_in_seperate_file (bool): If True, each emitted data will be stored separetely in a specific
+            file within `exported_data/`.
+          explicit_export (bool): Used for logging outcomes further to an Operator instruction. If True,
+            the operator would have to state explicitly if it wants the just emitted data to be logged.
+            Such notification is possible when the framework call its method
+            :meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`, where the Operator can take its decision
+            after the observation of the target feedback and/or probes outputs.
+          export_orig (bool): If True, will also log the original data on which disruptors have been called.
+          export_raw_data (bool): If True, will log the data as it is, without trying to interpret it
+            as human readable text.
+          console_display_limit (int): maximum amount of characters to display on the console at once.
+            If this threshold is overrun, the message to print on the console will be truncated.
+          prefix (str): prefix to use for printing on the console
+        '''
         self.name = name
         self.p = prefix
         self.__seperate_file = data_in_seperate_file
         self.__explicit_export = explicit_export
         self.__export_orig = export_orig
+        self._console_display_limit = console_display_limit
 
         now = datetime.datetime.now()
         self.__prev_export_date = now.strftime("%Y%m%d_%H%M%S")
@@ -97,11 +117,14 @@ class Logger(object):
 
         def init_logfn(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False):
             if issubclass(x.__class__, Data):
-                data = repr(x) if self.__export_raw_data else str(x)
+                if sys.version_info[0] > 2:
+                    data = repr(x) if self.__export_raw_data else x.to_bytes().decode('latin-1')
+                else:
+                    data = repr(x) if self.__export_raw_data else str(x)
                 rgb = None
                 style = None
             elif issubclass(x.__class__, bytes) and sys.version_info[0] > 2:
-                data = repr(x)
+                data = repr(x) if self.__export_raw_data else x.decode('latin-1')
             else:
                 data = x
             self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)
@@ -131,11 +154,14 @@ class Logger(object):
 
             def intern_func(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False):
                 if issubclass(x.__class__, Data):
-                    data = repr(x) if self.__export_raw_data else str(x)
+                    if sys.version_info[0] > 2:
+                        data = repr(x) if self.__export_raw_data else x.to_bytes().decode('latin-1')
+                    else:
+                        data = repr(x) if self.__export_raw_data else str(x)
                     rgb = None
                     style = None
                 elif issubclass(x.__class__, bytes) and sys.version_info[0] > 2:
-                    data = repr(x)
+                    data = repr(x) if self.__export_raw_data else x.decode('latin-1')
                 else:
                     data = x
                 self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)
@@ -152,7 +178,7 @@ class Logger(object):
 
             self.log_fn = intern_func
 
-        self.print_console('*** Logger is started\n', nl_before=False, rgb=Color.COMPONENT_START)
+        self.print_console('*** Logger is started ***\n', nl_before=False, rgb=Color.COMPONENT_START)
 
 
     def stop(self):
@@ -162,7 +188,7 @@ class Logger(object):
 
         self.log_stats()
 
-        self.print_console('*** Logger is stopped\n', nl_before=False, rgb=Color.COMPONENT_STOP)
+        self.print_console('*** Logger is stopped ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
 
 
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO):
@@ -206,16 +232,18 @@ class Logger(object):
 
         return True
         
-    def log_target_feedback_from(self, feedback, preamble=None, epilogue=None):
+    def log_target_feedback_from(self, feedback, preamble=None, epilogue=None, source=None):
         feedback = self._decode_target_feedback(feedback)
 
         if preamble is not None:
             self.log_fn(preamble)
 
         if not feedback:
-            self.log_fn("### No Target Feedback!", rgb=Color.FEEDBACK)
+            msg_hdr = "### No Target Feedback!" if source is None else '### No Target Feedback from "{!s}"!'.format(source)
+            self.log_fn(msg_hdr, rgb=Color.FEEDBACK)
         else:
-            self.log_fn("### Target Feedback:", rgb=Color.FEEDBACK)
+            msg_hdr = "### Target Feedback:" if source is None else "### Target Feedback ({!s}):".format(source)
+            self.log_fn(msg_hdr, rgb=Color.FEEDBACK)
             self.log_fn(feedback)
 
         if epilogue is not None:
@@ -231,7 +259,8 @@ class Logger(object):
 
     def _decode_target_feedback(self, feedback):
         if sys.version_info[0] > 2 and isinstance(feedback, bytes):
-            feedback = feedback.decode('latin_1')        
+            feedback = feedback.decode('latin_1')
+            feedback = '{!a}'.format(feedback)
         return feedback.strip()
 
     def start_new_log_entry(self, preamble=''):
@@ -417,7 +446,7 @@ class Logger(object):
         now = datetime.datetime.now()
         current_date = now.strftime("%H:%M:%S")
 
-        self.log_fn("### Comments [{date:s}]:\n".format(date=current_date), rgb=Color.COMMENTS)
+        self.log_fn("### Comments [{date:s}]:".format(date=current_date), rgb=Color.COMMENTS)
         self.log_fn(comment)
         self.print_console('\n')
 
@@ -440,7 +469,10 @@ class Logger(object):
 
 
     def print_console(self, msg, nl_before=True, nl_after=False, rgb=None, style=None,
-                      raw_limit=800, limit_output=True):
+                      raw_limit=None, limit_output=True):
+
+        if raw_limit is None:
+            raw_limit = self._console_display_limit
 
         if nl_before:
             p = '\n'

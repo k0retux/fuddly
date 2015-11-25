@@ -34,7 +34,7 @@ class MyDF_DataModel(DataModel):
                   {'name': 'val2'},
                   
                   {'name': 'middle',
-                   'mode': MH.NotMutableClone,
+                   'mode': MH.Mode.ImmutableClone,
                    'separator': {'contents': {'name': 'sep',
                                               'contents': String(val_list=['\n'], absorb_regexp=b'\n+'),
                                               'absorb_csts': AbsNoCsts(regexp=True)}},
@@ -246,11 +246,14 @@ class MyDF_DataModel(DataModel):
 
         offset_gen_desc = \
         {'name': 'off_gen',
+         'mode': MH.Mode.MutableClone,
          'contents': [
              {'name': 'prefix',
               'contents': String(size=10, alphabet='*+')},
+              # 'contents': String(max_sz=10, min_sz=1, alphabet='*+')},
 
              {'name': 'body',
+              # 'mode': MH.Mode.MutableClone,
               'shape_type': MH.FullyRandom,
               'contents': [
                   {'contents': String(val_list=['AAA']),
@@ -345,9 +348,15 @@ class MyDF_DataModel(DataModel):
          ]}
 
 
+        for_network_tg1 = Node('4tg1', vt=String(val_list=['FOR_TARGET_1']))
+        for_network_tg1.set_semantics(['TG1'])
+
+        for_network_tg2 = Node('4tg2', vt=String(val_list=['FOR_TARGET_2']))
+        for_network_tg2.set_semantics(['TG2'])
+
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
-                      shape_desc)
+                      shape_desc, for_network_tg1, for_network_tg2)
 
 
 data_model = MyDF_DataModel()

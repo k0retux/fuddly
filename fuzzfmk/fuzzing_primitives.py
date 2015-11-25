@@ -55,7 +55,7 @@ class ModelWalker(object):
 
     def __init__(self, root_node, node_consumer, make_determinist=False, make_random=False,
                  max_steps=-1, initial_step=1):
-        self._root_node = root_node #Elt(root_node.name, base_node=root_node)
+        self._root_node = root_node
         self._root_node.make_finite(all_conf=True, recursive=True)
         
         if make_determinist:
@@ -65,7 +65,7 @@ class ModelWalker(object):
             assert(not make_determinist)
             self._root_node.make_random(all_conf=True, recursive=True)
 
-        self._root_node.get_value()
+        self._root_node.freeze()
 
         self._max_steps = int(max_steps)
         self._initial_step = int(initial_step)
@@ -75,10 +75,13 @@ class ModelWalker(object):
         self.ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable, dm.NodeInternals.Finite])
         self.triglast_ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.TriggerLast])
 
+        self.consumed_node_path = None
+
         self.set_consumer(node_consumer)
 
     def set_consumer(self, node_consumer):
         self._consumer = node_consumer
+        self._consumer._root_node = self._root_node
 
 
     def __iter__(self):
@@ -91,6 +94,18 @@ class ModelWalker(object):
             self._root_node.get_value()
 
             if self._cpt >= self._initial_step:
+                self.consumed_node_path = consumed_node.get_path_from(self._root_node)
+                if self.consumed_node_path == None:
+                    # 'consumed_node_path' can be None if
+                    # consumed_node is not part of the frozen rnode
+                    # (it may however exist when rnode is not
+                    # frozen). This situation can trigger in some
+                    # specific situations related to the use of
+                    # existence conditions within a data model. Thus,
+                    # in this case we skip the just generated case as
+                    # nothing is visible.
+                    continue
+
                 yield self._root_node, consumed_node, orig_node_val, self._cpt
 
             if self._max_steps != -1 and self._cpt >= (self._max_steps+self._initial_step-1):
@@ -103,7 +118,11 @@ class ModelWalker(object):
             self._initial_step = 1
             print("\n*** DEBUG: initial_step idx ({:d}) is after" \
                       " the last idx ({:d})!\n".format(self._initial_step, self._cpt-1))
-            yield self._root_node, consumed_node, orig_node_val, self._cpt-1
+            self.consumed_node_path = consumed_node.get_path_from(self._root_node)
+            if self.consumed_node_path == None:
+                return
+            else:
+                yield self._root_node, consumed_node, orig_node_val, self._cpt-1
 
         return
 
@@ -112,8 +131,9 @@ class ModelWalker(object):
         last_gen = self._root_node.get_reachable_nodes(internals_criteria=self.triglast_ic)
         for n in last_gen:
             n.unfreeze()
-        node.unfreeze(recursive=True, dont_change_state=True)
         node.unfreeze(recursive=False)
+        # self._root_node.unfreeze(recursive=True, dont_change_state=True)
+        node.unfreeze(recursive=True, dont_change_state=True)
         self._consumer.do_after_reset(node)
 
     def walk_graph_rec(self, node_list, value_not_yielded_yet, structure_has_changed, consumed_nodes):
@@ -142,6 +162,11 @@ class ModelWalker(object):
                     value_not_yielded_yet = self._consumer.yield_original_val
 
                 ### STEP 1 ###
+
+                # We freeze the node before making a research on it,
+                # otherwise we could catch some nodes that won't exist
+                # in the node we will finally output.
+                node.freeze()
 
                 # For each node we look for direct subnodes
                 fnodes = node.get_reachable_nodes(internals_criteria=self.ic, exclude_self=True,
@@ -556,6 +581,7 @@ class NonTermVisitor(BasicVisitor):
         self.current_nt_node = None
 
     def need_reset(self, node):
+        # DEBUG_PRINT('--(1)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()), level=0)
         if node.is_nonterm() and node is not self.current_nt_node and node.cc.structure_will_change():
             # this case is called outside node_consumer_helper(),
             # because we declared to only be interested with other
@@ -633,7 +659,7 @@ class AltConfConsumer(NodeConsumerStub):
 
         # case 1
         if node.is_conf_existing(new_conf):
-            DEBUG_PRINT(' *** CONSUME: ' + node.name + ', ' + repr(node.c.keys()))
+            DEBUG_PRINT(' *** CONSUME: ' + node.name + ', ' + repr(node.c.keys()), level=0)
             self.orig_conf = node.get_current_conf()
             self.current_consumed_node = node
             node.set_current_conf(conf=new_conf, recursive=False)

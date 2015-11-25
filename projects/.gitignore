@@ -1,0 +1,8 @@
+*
+!.gitignore
+!generic
+!generic/*.py
+!specific
+!specific/*.py
+!tuto_proj.py
+!__init__.py

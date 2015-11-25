@@ -304,7 +304,6 @@ class Example_DataModel(DataModel):
                 1, ['u>', [prefix1, 1], [prefix2, 1], [sep_top, 1], [val1_top, 1], [sep_top, 1], [middle, 1]]
                 ])
 
-
         ### NonTerm
 
         e = Node('TV2')
@@ -355,7 +354,7 @@ class Example_DataModel(DataModel):
                    {'name': 'val2'},
 
                    {'name': 'middle',
-                    'mode': MH.NotMutableClone,
+                    'mode': MH.Mode.ImmutableClone,
                     'separator': {'contents': {'name': 'sep',
                                                'contents': String(val_list=['\n'], absorb_regexp=b'\n+'),
                                                'absorb_csts': AbsNoCsts(regexp=True)}},

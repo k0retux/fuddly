@@ -9,6 +9,103 @@ sections.
 Stateless Disruptors
 ====================
 
+
+MOD - Modify Node Contents
+--------------------------
+
+Description:
+  Change the content of the nodes specified by the regexp path with
+  the value privided as a parameter (use *node absorption*
+  infrastructure). If no path is provided, the root node will be
+  used.
+
+Reference:
+  :class:`fuzzfmk.generic_data_makers.d_modify_nodes`
+
+Parameters:
+  .. code-block:: none
+
+	specific args: 
+	  |_ path
+	  |      | desc: graph path regexp to select nodes on which the disruptor should 
+	  |      |       apply
+	  |      | default: None [type: str]
+	  |_ clone_node
+	  |      | desc: if True the dmaker will always return a copy of the node. (for 
+	  |      |       stateless diruptors dealing with big data it can be usefull 
+	  |      |       to it to False)
+	  |      | default: False [type: bool]
+	  |_ value
+	  |      | desc: the new value to inject within the data
+	  |      | default: '' [type: str]
+	  |_ constraints
+	  |      | desc: constraints for the absorption of the new value
+	  |      | default: AbsNoCsts() [type: AbsCsts]
+
+
+
+NEXT - Next Node Content
+------------------------
+
+Description:
+  Move to the next content of the nodes from input data or from only
+  a piece of it (if the parameter `path` is provided). Basically,
+  unfreeze the nodes then freeze them again, which will consequently
+  produce a new data.
+
+Reference:
+  :class:`fuzzfmk.generic_data_makers.d_next_node_content`
+
+Parameters:
+  .. code-block:: none
+
+	specific args: 
+	  |_ path
+	  |      | desc: graph path regexp to select nodes on which the disruptor should 
+	  |      |       apply
+	  |      | default: None [type: str]
+	  |_ clone_node
+	  |      | desc: if True the dmaker will always return a copy of the node. (for 
+	  |      |       stateless diruptors dealing with big data it can be usefull 
+	  |      |       to it to False)
+	  |      | default: False [type: bool]
+	  |_ recursive
+	  |      | desc: apply the disruptor recursively
+	  |      | default: True [type: str]
+
+
+
+FIX - Fix Data Constraints
+--------------------------
+
+Description:
+  Release constraints from input data or from only a piece of it (if
+  the parameter `path` is provided), then recompute them. By
+  constraints we mean every generator (or function) nodes that may
+  embeds constraints between nodes, and every node *existence
+  conditions*.
+
+  .. seealso:: Refer to :ref:`dm:pattern:existence-cond` for insight
+	       into existence conditions.
+
+Reference:
+  :class:`fuzzfmk.generic_data_makers.d_fix_constraints`
+
+Parameters:
+  .. code-block:: none
+
+	specific args: 
+	  |_ path
+	  |      | desc: graph path regexp to select nodes on which the disruptor should 
+	  |      |       apply
+	  |      | default: None [type: str]
+	  |_ clone_node
+	  |      | desc: if True the dmaker will always return a copy of the node. (for 
+	  |      |       stateless diruptors dealing with big data it can be usefull 
+	  |      |       to it to False)
+	  |      | default: False [type: bool]
+
+
 ALT - Alternative Node Configuration
 ------------------------------------
 
@@ -158,8 +255,76 @@ Parameters:
 	 |      | default: None [type: str]
 
 
+
+COPY - Shallow Copy Data
+------------------------
+
+Description:
+  Shallow copy of the input data, which means: ignore its frozen
+  state during the copy.
+
+Reference:
+  :class:`fuzzfmk.generic_data_makers.d_shallow_copy`
+
+.. note:: Random seeds are generally set while loading the data
+          model. This disruptor enables you to reset the seeds for the
+          input data.
+
+
 Stateful Disruptors
 ===================
+
+
+tSTRUCT - Alter Data Structure
+------------------------------
+
+Description:
+  For each node associated to existence constraints or quantity
+  constraints, alter the constraint, one at a time, after each call
+  to this disruptor.
+  If `deep` is set, enable new structure corruption cases, based on
+  the minimum and maximum amount of non-terminal nodes (within the
+  input data) specified in the data model.
+
+Reference:
+  :class:`fuzzfmk.generic_data_makers.sd_struct_constraints`
+
+Parameters:
+  .. code-block:: none
+
+       generic args: 
+	 |_ init
+	 |      | desc: make the model walker ignore all the steps until the provided 
+	 |      |       one
+	 |      | default: 1 [type: int]
+	 |_ max_steps
+	 |      | desc: maximum number of steps (-1 means until the end)
+	 |      | default: -1 [type: int]
+       specific args: 
+	 |_ path
+	 |      | desc: graph path regexp to select nodes on which the disruptor should 
+	 |      |       apply
+	 |      | default: None [type: str]
+	 |_ deep
+	 |      | desc: if True, enable corruption of minimum and maxium amount of non-terminal 
+	 |      |       nodes
+	 |      | default: False [type: bool]
+
+Usage Example:
+   A typical *disruptor chain* for leveraging this disruptor could be:
+
+   .. code-block:: none
+
+      <DATA> tWALK(path='path/to/some/node') tSTRUCT
+
+   .. note:: Test this chain with the data example found at
+             :ref:`dm:pattern:existence-cond`, and set the path to the
+             ``opcode`` node path.
+
+   .. seealso:: Refer to :ref:`tuto:dmaker-chain` for insight
+		into *disruptor chains*.
+
+
 
 tALT - Walk Through Alternative Node Configurations
 ---------------------------------------------------
@@ -370,9 +535,16 @@ Parameters:
 	 |      |       the end)
 	 |      | default: -1 [type: int]
        specific args: 
+	 |_ path
+	 |      | desc: graph path regexp to select nodes on which the disruptor should 
+	 |      |       apply
+	 |      | default: None [type: str]
 	 |_ singleton
 	 |      | desc: consume also terminal nodes with only one possible value
 	 |      | default: False [type: bool]
 	 |_ nt_only
 	 |      | desc: walk through non-terminal nodes only
 	 |      | default: False [type: bool]
+	 |_ fix
+	 |      | desc: fix constraints while walking
+	 |      | default: True [type: bool]

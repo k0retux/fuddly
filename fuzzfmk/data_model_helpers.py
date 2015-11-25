@@ -45,7 +45,6 @@ GENERIC_ARGS = {
 }
 
 def modelwalker_inputs_handling_helper(dmaker, user_generic_input):
-
     assert(dmaker.runs_per_node > 0 or dmaker.runs_per_node == -1)
 
     if dmaker.runs_per_node == -1:
@@ -61,10 +60,21 @@ def modelwalker_inputs_handling_helper(dmaker, user_generic_input):
 #####################
 
 class MH(object):
-    # node type attribute
+    '''Define constants and generator templates for data
+    model description.
+    '''
+
+    #################
+    ### Node Type ###
+    #################
+
     NonTerminal = 1
     Generator = 2
     Leaf = 3
+
+    ##################################
+    ### Non-Terminal Node Specific ###
+    ##################################
 
     # shape_type & section_type attribute
     Ordered = '>'
@@ -76,19 +86,24 @@ class MH(object):
     Copy = 'u'
     ZeroCopy = 's'
 
-    # Function node (leaf) mode
-    FrozenArgs = 1
-    RawArgs = 2
+    ###################
+    ### Node Modes  ###
+    ###################
 
-    # NonTerminal node mode
-    NotMutableClone = 1
-    MutableClone = 2
+    class Mode:
+        # Function node (leaf) mode
+        FrozenArgs = 1
+        RawArgs = 2
+
+        # NonTerminal node mode
+        ImmutableClone = 1
+        MutableClone = 2
 
     #######################
     ### Node Attributes ###
     #######################
 
-    class Attr(object):
+    class Attr:
         Freezable = NodeInternals.Freezable
         Mutable = NodeInternals.Mutable
         Determinist = NodeInternals.Determinist
@@ -489,7 +504,7 @@ class ModelHelper(object):
         # Import description keys
         'import_from', 'data_id',        
         # node properties description keys
-        'determinist', 'random', 'clear_attrs', 'set_attrs',
+        'determinist', 'random', 'mutable', 'clear_attrs', 'set_attrs',
         'absorb_csts', 'absorb_helper',
         'semantics', 'fuzz_weight',
         'sync_qty_with', 'exists_if', 'exists_if_not',
@@ -701,7 +716,8 @@ class ModelHelper(object):
 
         n.set_subnodes_with_csts(shapes, conf=conf)
 
-        mode = desc.get('mode', MH.MutableClone)
+        mode = desc.get('mode', MH.Mode.MutableClone)
+
         internals = n.cc if conf is None else n.c[conf]
         internals.set_mode(mode)
 
@@ -797,7 +813,7 @@ class ModelHelper(object):
             n.set_func(contents, func_arg=other_args,
                        provide_helpers=provide_helpers, conf=conf)
 
-            mode = desc.get('mode', 1)
+            mode = desc.get('mode', MH.Mode.FrozenArgs)
             internals = n.cc if conf is None else n.c[conf]
             internals.set_mode(mode)
 
@@ -813,6 +829,12 @@ class ModelHelper(object):
         return n
 
     def _handle_common_attr(self, node, desc, conf):
+        param = desc.get('mutable', None)
+        if param is not None:
+            if param:
+                node.set_attr(MH.Attr.Mutable, conf=conf)
+            else:
+                node.clear_attr(MH.Attr.Mutable, conf=conf)
         param = desc.get('determinist', None)
         if param is not None:
             node.make_determinist(conf=conf)
@@ -949,6 +971,15 @@ class DataModel(object):
         self.__built = False
         self.__confs = set()
 
+
+    def merge_with(self, data_model):
+        for k, v in data_model.__dm_hashtable.items():
+            if k in self.__dm_hashtable:
+                raise ValueError("the data ID {:s} exists already".format(k))
+            else:
+                self.__dm_hashtable[k] = v
+
+        
     def pre_build(self):
         '''
         This method is called when a data model is loaded.
@@ -973,7 +1004,7 @@ class DataModel(object):
             self.build_data_model()
             self.__built = True
 
-    def unload_data_model(self):
+    def cleanup(self):
         pass
 
 
