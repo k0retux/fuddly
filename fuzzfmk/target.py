@@ -326,17 +326,20 @@ class NetworkTarget(Target):
 
     def listen_to(self, host, port, ref_id,
                   socket_type=(socket.AF_INET, socket.SOCK_STREAM),
-                  chk_size=CHUNK_SZ, wait_time=3, hold_connection=True):
+                  chk_size=CHUNK_SZ, wait_time=None, hold_connection=True):
         '''
         Used for collecting feedback from the target while it is already started.
         '''
         self.hold_connection[(host, port)] = hold_connection
-        self._raw_listen_to(host, port, ref_id, socket_type, chk_size)
+        self._raw_listen_to(host, port, ref_id, socket_type, chk_size, wait_time=wait_time)
         self._dynamic_interfaces[(host, port)] = (-1, ref_id)
 
     def _raw_listen_to(self, host, port, ref_id,
                        socket_type=(socket.AF_INET, socket.SOCK_STREAM),
-                       chk_size=CHUNK_SZ, wait_time=3):
+                       chk_size=CHUNK_SZ, wait_time=None):
+
+        if wait_time is None:
+            wait_time = self._feedback_timeout
 
         initial_call = False
         if (host, port) not in self._server_sock2hp.values():
@@ -423,7 +426,7 @@ class NetworkTarget(Target):
         if self._additional_fbk_desc:
             for host, port, socket_type, fbk_id, fbk_length, server_mode in self._additional_fbk_desc.values():
                 if server_mode:
-                    self._raw_listen_to(host, port, fbk_id, socket_type, chk_size=fbk_length, wait_time=3)
+                    self._raw_listen_to(host, port, fbk_id, socket_type, chk_size=fbk_length)
                 else:
                     self._raw_connect_to(host, port, fbk_id, socket_type, chk_size=fbk_length)
 
