@@ -29,6 +29,7 @@ import threading
 from libs.external_modules import *
 from fuzzfmk.data_model import Data
 from fuzzfmk.global_resources import *
+from fuzzfmk.database import Database
 
 import data_models
 
@@ -133,6 +134,7 @@ class Logger(object):
 
         self.log_fn = init_logfn
 
+        self._db = Database()
 
     def start(self):
 
@@ -178,6 +180,8 @@ class Logger(object):
 
             self.log_fn = intern_func
 
+        self._db.start()
+
         self.print_console('*** Logger is started ***\n', nl_before=False, rgb=Color.COMPONENT_START)
 
 
@@ -187,6 +191,8 @@ class Logger(object):
             self._fd.close()
 
         self.log_stats()
+
+        self._db.stop()
 
         self.print_console('*** Logger is stopped ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
 

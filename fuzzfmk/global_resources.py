@@ -35,3 +35,5 @@ app_folder = '.' if app_folder == '' else app_folder
 workspace_folder = app_folder + os.sep + 'workspace' + os.sep
 external_libs_folder = app_folder + os.sep + 'external_libs' + os.sep
 external_tools_folder = app_folder + os.sep + 'external_tools' + os.sep
+trace_folder = app_folder + os.sep + 'trace' + os.sep
+fmk_folder = app_folder + os.sep + 'fuzzfmk' + os.sep

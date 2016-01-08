@@ -79,13 +79,19 @@ class FontStyle:
     END = '\033[0m'
 
 
+sqlite_module = True
+try:
+    import sqlite3 as sqlite
+except ImportError:
+    sqlite_module = False
+    print('WARNING [FMK]: python-sqlite3 module is not installed, LogDB will not be available!')
+
 cups_module = True
 try:
     import cups
 except ImportError:
     cups_module = False
     print('WARNING [FMK]: python-cups module is not installed, Printer targets will not be available!')
-
 
 crcmod_module = True
 try:
