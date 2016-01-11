@@ -38,6 +38,7 @@ import signal
 
 from libs.external_modules import *
 
+from fuzzfmk.database import Database
 from fuzzfmk.tactics_helpers import *
 from fuzzfmk.data_model import *
 from fuzzfmk.data_model_helpers import DataModel
@@ -277,6 +278,8 @@ class Fuzzer(object):
 
         self.fmkDB = Database()
         self.fmkDB.start()
+        self._fmkDB_insert_dm_and_disruptors('generic', self._generic_tactics)
+        self.fmkDB.commit()
 
         self.enable_wkspace()
         self.get_data_models()
@@ -426,6 +429,18 @@ class Fuzzer(object):
         return True
 
 
+    def _fmkDB_insert_dm_and_disruptors(self, dm_name, tactics):
+        self.fmkDB.insert_data_model(dm_name)
+        disruptor_types = tactics.get_disruptors().keys()
+        if disruptor_types:
+            for dis_type in sorted(disruptor_types):
+                disruptor_names = tactics.get_disruptors_list(dis_type)
+                for dis_name in disruptor_names:
+                    dis_obj = tactics.get_disruptor_obj(dis_type, dis_name)
+                    stateful = True if issubclass(dis_obj.__class__, StatefulDisruptor) else False
+                    self.fmkDB.insert_disruptor(dm_name, dis_type, dis_name, stateful)
+
+
     @EnforceOrder(initial_func=True, final_state='get_projs')
     def get_data_models(self):
         dm_dir = 'data_models'
@@ -472,7 +487,10 @@ class Fuzzer(object):
                                               dm_params['dm_rld_args'],
                                               reload_dm=False)
                         self.__dyngenerators_created[dm_params['dm']] = False
-                        self.fmkDB.insert_data_model(dm_params['dm'].name)
+                        # populate FMK DB
+                        self._fmkDB_insert_dm_and_disruptors(dm_params['dm'].name, dm_params['tactics'])
+
+        self.fmkDB.commit()
 
 
     def __import_dm(self, prefix, name, reload_dm=False):
@@ -644,7 +662,7 @@ class Fuzzer(object):
                 logger = eval(prefix + name + '_proj' + '.logger')
             except:
                 logger = Logger(name, prefix=' || ')
-            logger.logDB = self.fmkDB
+            logger.fmkDB = self.fmkDB
             if logger.name is None:
                 logger.name = name
             prj_params['logger'] = logger
@@ -1058,9 +1076,11 @@ class Fuzzer(object):
                     new_tactics.generators[k] = v
 
         new_dm.name = name[:-1]
+        self.fmkDB.insert_data_model(new_dm.name)
         self.__add_data_model(new_dm, new_tactics,
                               (None, dm_list),
                               reload_dm=reload_dm)
+        self.fmkDB.commit()
 
         # In this case DynGens have already been generated through
         # the reloading of the included DMs

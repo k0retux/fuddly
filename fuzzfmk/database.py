@@ -11,7 +11,7 @@ class Database(object):
     DDL_fname = 'fmk_db.sql'
 
     def __init__(self):
-        self.name = 'logDB.db'
+        self.name = 'fmkDB.db'
         self.log_db = os.path.join(gr.trace_folder, self.name)
         self._con = None
         self._cur = None
@@ -47,20 +47,20 @@ class Database(object):
         self._cur = None
         self.enabled = False
 
+    def commit(self):
+        self._con.commit()
+
     def insert_data_model(self, dm_name):
         self._cur.execute(
                 "INSERT INTO DATAMODEL(DM_NAME) VALUES(?)",
                 (dm_name,))
-        self._con.commit()
         return self._cur.lastrowid
 
-    def insert_disruptors(self, dm_name, name, disruptor, stateful):
+    def insert_disruptor(self, dm_name, dtype, name, stateful):
         self._cur.execute(
-                "INSERT INTO DMAKERS(DM_NAME,NAME,DISRUPTOR,STATEFUL) VALUES(?,?,?,?)",
-                (dm_name, name, disruptor, stateful))
-        self._con.commit()
+                "INSERT INTO DISRUPTORS(DM_NAME,TYPE,NAME,STATEFUL) VALUES(?,?,?,?)",
+                (dm_name, dtype, name, stateful))
         return self._cur.lastrowid
-
 
     def insert_data(self, type, dm_name, raw_data, sz, sent_date, ack_date):
         blob = sqlite.Binary(raw_data)
@@ -75,8 +75,3 @@ class Database(object):
 
     def insert_feedback(self):
         pass
-
-    def insert_steps(self):
-        pass
-
-

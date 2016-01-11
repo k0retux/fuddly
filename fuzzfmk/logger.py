@@ -81,7 +81,7 @@ class Logger(object):
     also be leveraged by an Operator.
     '''
 
-    logDB = None
+    fmkDB = None
 
     def __init__(self, name=None, prefix='', data_in_seperate_file=False, explicit_export=False, export_orig=True,
                  export_raw_data=True, console_display_limit=800, enable_file_logging=True):
@@ -216,7 +216,7 @@ class Logger(object):
         self.print_console('*** Logger is stopped ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
 
     def commit_log_entry(self):
-        data_id = self.logDB.insert_data(self._current_data.get_initial_dmaker()[0],
+        data_id = self.fmkDB.insert_data(self._current_data.get_initial_dmaker()[0],
                                          self._current_data.get_data_model().name,
                                          self._current_data.to_bytes(), self._current_size,
                                          self._current_sent_date, self._current_ack_date)
