@@ -275,10 +275,12 @@ class Fuzzer(object):
         self._name2dm = {}
         self._name2prj = {}
 
+        self.fmkDB = Database()
+        self.fmkDB.start()
+
         self.enable_wkspace()
         self.get_data_models()
         self.get_projects()
-
 
     def set_error(self, msg='', context=None, code=Error.Reserved):
         self.error = True
@@ -470,6 +472,7 @@ class Fuzzer(object):
                                               dm_params['dm_rld_args'],
                                               reload_dm=False)
                         self.__dyngenerators_created[dm_params['dm']] = False
+                        self.fmkDB.insert_data_model(dm_params['dm'].name)
 
 
     def __import_dm(self, prefix, name, reload_dm=False):
@@ -641,6 +644,7 @@ class Fuzzer(object):
                 logger = eval(prefix + name + '_proj' + '.logger')
             except:
                 logger = Logger(name, prefix=' || ')
+            logger.logDB = self.fmkDB
             if logger.name is None:
                 logger.name = name
             prj_params['logger'] = logger
@@ -818,7 +822,7 @@ class Fuzzer(object):
     @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
     def exit_fuzzer(self):
         self.__stop_fuzzing()
-
+        self.fmkDB.stop()
 
     @EnforceOrder(accepted_states=['25_load_dm','S1','S2'])
     def set_target(self, num):
@@ -1209,7 +1213,7 @@ class Fuzzer(object):
         return False if the user want to stop fuzzing (action possible if
         delay is set to -1)
         '''
-        ret = True, False
+        ret = True
         if self._burst_countdown <= 1:
             self._burst_countdown = self._burst
 
@@ -1222,7 +1226,7 @@ class Fuzzer(object):
                         else:
                             cont = input("\n*** Press [ENTER] to continue ('q' to exit).")
                         if cont == 'q':
-                            ret = Fals
+                            ret = False
                     except KeyboardInterrupt:
                         ret = False
                         self.set_error("The operation has been cancelled by the user (while in delay step)!",
@@ -1380,9 +1384,10 @@ class Fuzzer(object):
                  self.lg.log_fmk_info("MULTIPLE DATA EMISSION", nl_after=True)
 
             if get_target_ack:
-                self.lg.log_target_ack_date(self.tg.get_last_target_ack_date())
+                ack_date = self.tg.get_last_target_ack_date()
             else:
-                self.lg.log_target_ack_date(None)
+                ack_date = None
+            self.lg.log_target_ack_date(ack_date)
 
             for idx, dt in zip(range(len(data_list)), data_list):
                 dt_mk_h = dt.get_history()
@@ -1452,6 +1457,8 @@ class Fuzzer(object):
                 self.lg.log_data(dt, verbose=verbose)
                 if multiple_data:
                     self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
+
+            self.lg.commit_log_entry()
 
 
     @EnforceOrder(accepted_states=['S2'])
@@ -2175,7 +2182,7 @@ class Fuzzer(object):
                         if dmobj.is_attr_set(DataMakerAttr.Controller):
                             dmobj.set_attr(DataMakerAttr.Active)
                             if dmobj.is_attr_set(DataMakerAttr.HandOver):
-                                _handle_disruptor_handover(dmlist[:dmlist_mangled_size-idx])
+                                _handle_disruptors_handover(dmlist[:dmlist_mangled_size-idx])
                             break
                         else:
                             dmobj.set_attr(DataMakerAttr.Active)

@@ -33,6 +33,7 @@ from fuzzfmk.database import Database
 
 import data_models
 
+
 class Stats:
     def __init__(self, generic_generators):
         self.reset()
@@ -61,7 +62,6 @@ class Stats:
 
         self.__stats[dt_full]['bygen'][generator_name] += 1
 
-
     def get_formated_stats(self):
         stats = ""
         for generator_type, val in self.__stats.items():
@@ -74,15 +74,17 @@ class Stats:
         return stats
 
 
-
 class Logger(object):
     '''
     The Logger is used for keeping the history of the communication
     with the Target. The methods are used by the framework, but can
     also be leveraged by an Operator.
     '''
+
+    logDB = None
+
     def __init__(self, name=None, prefix='', data_in_seperate_file=False, explicit_export=False, export_orig=True,
-                 export_raw_data=True, console_display_limit=800):
+                 export_raw_data=True, console_display_limit=800, enable_file_logging=True):
         '''
         Args:
           name (str): Name to be used in the log filenames. If not specified, the name of the project
@@ -100,6 +102,8 @@ class Logger(object):
           console_display_limit (int): maximum amount of characters to display on the console at once.
             If this threshold is overrun, the message to print on the console will be truncated.
           prefix (str): prefix to use for printing on the console
+          enable_file_logging (bool): If True, file logging will be enabled
+          logdb (Database): the database to be used for logging
         '''
         self.name = name
         self.p = prefix
@@ -112,6 +116,9 @@ class Logger(object):
         self.__prev_export_date = now.strftime("%Y%m%d_%H%M%S")
         self.__export_cpt = 0
         self.__export_raw_data = export_raw_data
+
+        self._enable_file_logging = enable_file_logging
+        self._fd = None
 
         self._tg_fbk = []
         self._tg_fbk_lck = threading.Lock()
@@ -132,21 +139,27 @@ class Logger(object):
             if verbose and issubclass(x.__class__, Data) and x.node is not None:
                 x.pretty_print()
 
-        self.log_fn = init_logfn
+            return data
 
-        self._db = Database()
+        self.log_fn = init_logfn
 
     def start(self):
 
         self.__idx = 0
         self.__tmp = False
 
+        self._current_data = None
+        self._current_size = None
+        self._current_sent_date = None
+        self._current_ack_date = None
+
         with self._tg_fbk_lck:
             self._tg_fbk = []
 
         if self.name is None:
-            self.log_fn = lambda x:x
-        else:
+            self.log_fn = lambda x: x
+
+        elif self._enable_file_logging:
             self.now = datetime.datetime.now()
             self.now = self.now.strftime("%Y_%m_%d_%H%M%S")
 
@@ -178,12 +191,15 @@ class Logger(object):
                                        ' (Maybe because the Logger has been stopped and has not been restarted yet.)',
                                        rgb=Color.ERROR)
 
+                return data
+
             self.log_fn = intern_func
 
-        self._db.start()
+        else:
+            # No file logging
+            pass
 
         self.print_console('*** Logger is started ***\n', nl_before=False, rgb=Color.COMPONENT_START)
-
 
     def stop(self):
 
@@ -192,10 +208,18 @@ class Logger(object):
 
         self.log_stats()
 
-        self._db.stop()
+        self._current_data = None
+        self._current_size = None
+        self._current_sent_date = None
+        self._current_ack_date = None
 
         self.print_console('*** Logger is stopped ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
 
+    def commit_log_entry(self):
+        data_id = self.logDB.insert_data(self._current_data.get_initial_dmaker()[0],
+                                         self._current_data.get_data_model().name,
+                                         self._current_data.to_bytes(), self._current_size,
+                                         self._current_sent_date, self._current_ack_date)
 
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO):
         if nl_before:
@@ -237,7 +261,7 @@ class Logger(object):
         self.print_console('\n')
 
         return True
-        
+
     def log_target_feedback_from(self, feedback, preamble=None, epilogue=None, source=None):
         feedback = self._decode_target_feedback(feedback)
 
@@ -245,7 +269,8 @@ class Logger(object):
             self.log_fn(preamble)
 
         if not feedback:
-            msg_hdr = "### No Target Feedback!" if source is None else '### No Target Feedback from "{!s}"!'.format(source)
+            msg_hdr = "### No Target Feedback!" if source is None else '### No Target Feedback from "{!s}"!'.format(
+                source)
             self.log_fn(msg_hdr, rgb=Color.FEEDBACK)
         else:
             msg_hdr = "### Target Feedback:" if source is None else "### Target Feedback ({!s}):".format(source)
@@ -271,11 +296,10 @@ class Logger(object):
 
     def start_new_log_entry(self, preamble=''):
         self.__idx += 1
-        now = datetime.datetime.now()
-        now = now.strftime("%d/%m/%Y - %H:%M:%S")
+        self._current_sent_date = datetime.datetime.now()
+        now = self._current_sent_date.strftime("%d/%m/%Y - %H:%M:%S")
         msg = preamble + "========[ %d ]==[ %s ]=======================" % \
-              (self.__idx, now)
-
+                         (self.__idx, now)
         self.log_fn(msg, rgb=Color.NEWLOGENTRY, style=FontStyle.BOLD)
 
     def log_fuzzing_step(self, num):
@@ -294,7 +318,7 @@ class Logger(object):
     def log_generator_info(self, dmaker_type, name, user_input):
         if user_input:
             msg = " |- generator type: %s | generator name: %s | User input: %s" % \
-                (dmaker_type, name, user_input)
+                  (dmaker_type, name, user_input)
         else:
             msg = " |- generator type: %s | generator name: %s | No user input" % (dmaker_type, name)
 
@@ -303,7 +327,7 @@ class Logger(object):
     def log_disruptor_info(self, dmaker_type, name, user_input):
         if user_input:
             msg = " |- disruptor type: %s | disruptor name: %s | User input: %s" % \
-                (dmaker_type, name, user_input)
+                  (dmaker_type, name, user_input)
         else:
             msg = " |- disruptor type: %s | disruptor name: %s | No user input" % (dmaker_type, name)
 
@@ -320,22 +344,17 @@ class Logger(object):
 
             self.log_fn('    |_ ' + msg, rgb=Color.DATAINFO)
 
-
     def log_info(self, info):
         msg = "### Info: %s" % info
 
         self.log_fn(msg, rgb=Color.INFO)
 
     def log_target_ack_date(self, date):
-        if date is None:
-            ack_date = 'None'
-        else:
-            ack_date = str(date)
+        self._current_ack_date = date
+
         msg = "### Target ack received at: "
-
         self.log_fn(msg, nl_after=False, rgb=Color.LOGSECTION)
-        self.log_fn(ack_date, nl_before=False)
-
+        self.log_fn(str(self._current_ack_date), nl_before=False)
 
     def log_orig_data(self, data):
 
@@ -378,15 +397,17 @@ class Logger(object):
 
         return ret
 
-
     def log_data(self, data, verbose=False):
 
         self.log_fn("### Data size: ", rgb=Color.LOGSECTION, nl_after=False)
-        self.log_fn("%d bytes" % data.get_length(), nl_before=False)
+        self._current_size = data.get_length()
+        self.log_fn("%d bytes" % self._current_size, nl_before=False)
 
         if self.__explicit_export and not data.is_exportable():
             self.log_fn("### Data emitted but not exported", rgb=Color.LOGSECTION)
             return False
+
+        self._current_data = data
 
         if not self.__seperate_file:
             self.log_fn("### Data emitted:", rgb=Color.LOGSECTION)
@@ -403,7 +424,6 @@ class Logger(object):
                 ret = False
 
         return True
-
 
     def __export_data(self, data, suffix=''):
 
@@ -442,11 +462,9 @@ class Logger(object):
 
         fd = open(export_full_fn, 'wb')
         fd.write(data.to_bytes())
-        # self._fd.flush()
         fd.close()
 
         return export_full_fn
-
 
     def log_comment(self, comment):
         now = datetime.datetime.now()
@@ -456,23 +474,19 @@ class Logger(object):
         self.log_fn(comment)
         self.print_console('\n')
 
-
     def log_error(self, err_msg):
         msg = "\n/!\\ ERROR: %s /!\\\n" % err_msg
         self.log_fn(msg, rgb=Color.ERROR)
-
 
     def set_stats(self, stats):
         self.stats = stats
 
     def log_stats(self):
-        fd = open(app_folder + '/trace/' + self.now + '_' + self.name + '_stats', 'w+')
-
-        stats = self.stats.get_formated_stats()
-
-        fd.write(stats + '\n')
-        fd.close()
-
+        if self._enable_file_logging:
+            fd = open(app_folder + '/trace/' + self.now + '_' + self.name + '_stats', 'w+')
+            stats = self.stats.get_formated_stats()
+            fd.write(stats + '\n')
+            fd.close()
 
     def print_console(self, msg, nl_before=True, nl_after=False, rgb=None, style=None,
                       raw_limit=None, limit_output=True):
@@ -507,7 +521,7 @@ class Logger(object):
 
         if rgb is not None:
             msg = colorize(msg, rgb=rgb)
-            
+
         if style is None:
             style = ''
 
