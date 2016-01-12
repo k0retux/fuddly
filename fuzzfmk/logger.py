@@ -25,6 +25,7 @@ import os
 import sys
 import datetime
 import threading
+import itertools
 
 from libs.external_modules import *
 from fuzzfmk.data_model import Data
@@ -148,10 +149,8 @@ class Logger(object):
         self.__idx = 0
         self.__tmp = False
 
-        self._current_data = None
-        self._current_size = None
-        self._current_sent_date = None
-        self._current_ack_date = None
+        self._reset_current_state()
+        self.last_data_id = None
 
         with self._tg_fbk_lck:
             self._tg_fbk = []
@@ -208,20 +207,47 @@ class Logger(object):
 
         self.log_stats()
 
+        self._reset_current_state()
+        self.last_data_id = None
+
+        self.print_console('*** Logger is stopped ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
+
+
+    def _reset_current_state(self):
         self._current_data = None
         self._current_size = None
         self._current_sent_date = None
         self._current_ack_date = None
+        self._current_dmaker_list= []
+        self._current_dmaker_info = {}
 
-        self.print_console('*** Logger is stopped ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
 
-    def commit_log_entry(self):
-        data_id = self.fmkDB.insert_data(self._current_data.get_initial_dmaker()[0],
-                                         self._current_data.get_data_model().name,
-                                         self._current_data.to_bytes(), self._current_size,
-                                         self._current_sent_date, self._current_ack_date)
+    def commit_log_entry(self, group_id):
+        if self._current_data is not None:
+            self.last_data_id = self.fmkDB.insert_data(self._current_data.get_initial_dmaker()[0],
+                                                       self._current_data.get_data_model().name,
+                                                       self._current_data.to_bytes(), self._current_size,
+                                                       self._current_sent_date, self._current_ack_date,
+                                                       group_id=group_id)
+
+            for step_id, dmaker in enumerate(self._current_dmaker_list, start=1):
+                dmaker_type, dmaker_name, user_input = dmaker
+                info = self._current_dmaker_info.get((dmaker_type,dmaker_name), None)
+                if info is not None:
+                    info = '\n'.join(info)
+                    if sys.version_info[0] > 2:
+                        info = bytes(info, 'latin_1')
+                    else:
+                        info = bytes(info)
+                self.fmkDB.insert_steps(self.last_data_id, step_id, dmaker_type, dmaker_name,
+                                        str(user_input), info)
+
+        self.fmkDB.commit()
+        self._reset_current_state()
+
 
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO):
+        now = datetime.datetime.now()
         if nl_before:
             p = '\n'
         else:
@@ -232,6 +258,7 @@ class Logger(object):
             s = ''
         msg = p + "*** [ %s ] ***" % info + s
         self.log_fn(msg, rgb=rgb)
+        self.fmkDB.insert_fmk_info(self.last_data_id, msg, now)
 
     def collect_target_feedback(self, fbk):
         if sys.version_info[0] > 2 and isinstance(fbk, bytes):
@@ -254,6 +281,7 @@ class Logger(object):
         for m, idx in zip(fbk_list, range(len(fbk_list))):
             self.log_fn("### Target feedback [%d]: " % idx, rgb=Color.FEEDBACK)
             self.log_fn(m)
+            self.fmkDB.insert_feedback(self.last_data_id, str(idx), self._encode_target_feedback(m))
 
         if epilogue is not None:
             self.log_fn(epilogue)
@@ -263,36 +291,47 @@ class Logger(object):
         return True
 
     def log_target_feedback_from(self, feedback, preamble=None, epilogue=None, source=None):
-        feedback = self._decode_target_feedback(feedback)
+        decoded_feedback = self._decode_target_feedback(feedback)
 
         if preamble is not None:
             self.log_fn(preamble)
 
-        if not feedback:
+        if not decoded_feedback:
             msg_hdr = "### No Target Feedback!" if source is None else '### No Target Feedback from "{!s}"!'.format(
                 source)
             self.log_fn(msg_hdr, rgb=Color.FEEDBACK)
         else:
             msg_hdr = "### Target Feedback:" if source is None else "### Target Feedback ({!s}):".format(source)
             self.log_fn(msg_hdr, rgb=Color.FEEDBACK)
-            self.log_fn(feedback)
+            self.log_fn(decoded_feedback)
+            if self.last_data_id is not None:
+                src = 'Default' if source is None else source
+                self.fmkDB.insert_feedback(self.last_data_id, src, self._encode_target_feedback(feedback))
 
         if epilogue is not None:
             self.log_fn(epilogue)
 
     def log_target_feedback_from_operator(self, feedback):
-        feedback = self._decode_target_feedback(feedback)
-        if not feedback:
+        decoded_feedback = self._decode_target_feedback(feedback)
+        if not decoded_feedback:
             self.log_fn("### No Target Feedback!", rgb=Color.FEEDBACK)
         else:
             self.log_fn("### Target Feedback (collected from the Operator):", rgb=Color.FEEDBACK)
-            self.log_fn(feedback)
+            self.log_fn(decoded_feedback)
+            if self.last_data_id is not None:
+                self.fmkDB.insert_feedback(self.last_data_id, 'Operator', self._encode_target_feedback(feedback))
 
     def _decode_target_feedback(self, feedback):
-        if sys.version_info[0] > 2 and isinstance(feedback, bytes):
+        feedback = feedback.strip()
+        if sys.version_info[0] > 2 and feedback and isinstance(feedback, bytes):
             feedback = feedback.decode('latin_1')
             feedback = '{!a}'.format(feedback)
-        return feedback.strip()
+        return feedback
+
+    def _encode_target_feedback(self, feedback):
+        if sys.version_info[0] > 2 and not isinstance(feedback, bytes):
+            feedback = bytes(feedback, 'latin_1')
+        return feedback
 
     def start_new_log_entry(self, preamble=''):
         self.__idx += 1
@@ -321,7 +360,7 @@ class Logger(object):
                   (dmaker_type, name, user_input)
         else:
             msg = " |- generator type: %s | generator name: %s | No user input" % (dmaker_type, name)
-
+        self._current_dmaker_list.append((dmaker_type, name, user_input))
         self.log_fn(msg, rgb=Color.DATAINFO)
 
     def log_disruptor_info(self, dmaker_type, name, user_input):
@@ -331,11 +370,14 @@ class Logger(object):
         else:
             msg = " |- disruptor type: %s | disruptor name: %s | No user input" % (dmaker_type, name)
 
+        self._current_dmaker_list.append((dmaker_type, name, user_input))
         self.log_fn(msg, rgb=Color.DATAINFO)
 
-    def log_data_info(self, data_info):
+    def log_data_info(self, data_info, dmaker_type, data_maker_name):
         if not data_info:
             return
+
+        self._current_dmaker_info[(dmaker_type,data_maker_name)] = data_info
 
         self.log_fn(" |- data info:", rgb=Color.DATAINFO)
         for msg in data_info:
@@ -472,11 +514,14 @@ class Logger(object):
 
         self.log_fn("### Comments [{date:s}]:".format(date=current_date), rgb=Color.COMMENTS)
         self.log_fn(comment)
+        self.fmkDB.insert_comment(self.last_data_id, comment, now)
         self.print_console('\n')
 
     def log_error(self, err_msg):
+        now = datetime.datetime.now()
         msg = "\n/!\\ ERROR: %s /!\\\n" % err_msg
         self.log_fn(msg, rgb=Color.ERROR)
+        self.fmkDB.insert_fmk_info(self.last_data_id, msg, now, error=True)
 
     def set_stats(self, stats):
         self.stats = stats

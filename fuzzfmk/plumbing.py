@@ -278,8 +278,10 @@ class Fuzzer(object):
 
         self.fmkDB = Database()
         self.fmkDB.start()
-        self._fmkDB_insert_dm_and_disruptors('generic', self._generic_tactics)
+        self._fmkDB_insert_dm_and_dmakers('generic', self._generic_tactics)
         self.fmkDB.commit()
+
+        self.group_id = 0
 
         self.enable_wkspace()
         self.get_data_models()
@@ -371,6 +373,9 @@ class Fuzzer(object):
             if not ok:
                 return False
 
+            self._fmkDB_insert_dm_and_dmakers(self.dm.name, dm_params['tactics'])
+            self.fmkDB.commit()
+
         return True
 
     def _cleanup_dm_attrs_from_fmk(self):
@@ -429,7 +434,7 @@ class Fuzzer(object):
         return True
 
 
-    def _fmkDB_insert_dm_and_disruptors(self, dm_name, tactics):
+    def _fmkDB_insert_dm_and_dmakers(self, dm_name, tactics):
         self.fmkDB.insert_data_model(dm_name)
         disruptor_types = tactics.get_disruptors().keys()
         if disruptor_types:
@@ -438,7 +443,14 @@ class Fuzzer(object):
                 for dis_name in disruptor_names:
                     dis_obj = tactics.get_disruptor_obj(dis_type, dis_name)
                     stateful = True if issubclass(dis_obj.__class__, StatefulDisruptor) else False
-                    self.fmkDB.insert_disruptor(dm_name, dis_type, dis_name, stateful)
+                    self.fmkDB.insert_dmaker(dm_name, dis_type, dis_name, False, stateful)
+        generator_types = tactics.get_generators().keys()
+        if generator_types:
+            for gen_type in sorted(generator_types):
+                generator_names = tactics.get_generators_list(gen_type)
+                for gen_name in generator_names:
+                    gen_obj = tactics.get_generator_obj(gen_type, gen_name)
+                    self.fmkDB.insert_dmaker(dm_name, gen_type, gen_name, True, True)
 
 
     @EnforceOrder(initial_func=True, final_state='get_projs')
@@ -488,7 +500,7 @@ class Fuzzer(object):
                                               reload_dm=False)
                         self.__dyngenerators_created[dm_params['dm']] = False
                         # populate FMK DB
-                        self._fmkDB_insert_dm_and_disruptors(dm_params['dm'].name, dm_params['tactics'])
+                        self._fmkDB_insert_dm_and_dmakers(dm_params['dm'].name, dm_params['tactics'])
 
         self.fmkDB.commit()
 
@@ -769,6 +781,7 @@ class Fuzzer(object):
                     self._tactics.register_new_generator(gen_cls_name, gen, weight=1,
                                                           dmaker_type=dmaker_type, valid=True)
                     self.__dynamic_generator_ids[self.dm].append(dmaker_type)
+                    self.fmkDB.insert_dmaker(self.dm.name, dmaker_type, gen_cls_name, True, True)
 
             print(colorize("*** Data Model '%s' loaded ***" % self.dm.name, rgb=Color.DATA_MODEL_LOADED))
 
@@ -808,7 +821,7 @@ class Fuzzer(object):
             self.__current = []
             self.__db_idx = 0
             self.__data_bank = {}
-            
+
             self.__start()
 
 
@@ -1383,6 +1396,7 @@ class Fuzzer(object):
     def log_data(self, data_list, original_data=None, get_target_ack=True, verbose=False):
 
         if self.__send_enabled:
+            self.group_id += 1
             gen = self.__current_gen
 
             if original_data is None:
@@ -1469,7 +1483,7 @@ class Fuzzer(object):
                             self.lg.log_disruptor_info(dmaker_type, data_maker_name, ui)
 
                         info = dt.read_info(data_maker_name, dmaker_type)
-                        self.lg.log_data_info(info)
+                        self.lg.log_data_info(info, dmaker_type, data_maker_name)
 
                 else:
                     self.lg.log_info("RAW DATA (data makers not provided)")
@@ -1478,7 +1492,7 @@ class Fuzzer(object):
                 if multiple_data:
                     self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
 
-            self.lg.commit_log_entry()
+                self.lg.commit_log_entry(self.group_id)
 
 
     @EnforceOrder(accepted_states=['S2'])
@@ -1911,17 +1925,18 @@ class Fuzzer(object):
                     exit_operator = True
                     self.lg.log_fmk_info("Operator will shutdown because waiting has been cancelled by the user")
 
-                # Target fbk is logged only at the end of a burst
-                if self._burst_countdown == self._burst:
-                    self.log_target_feedback()
+                if linst.is_instruction_set(LastInstruction.ExportData):
+                    # Target fbk is logged only at the end of a burst
+                    if self._burst_countdown == self._burst:
+                        self.log_target_feedback()
 
-                feedback = linst.get_target_feedback_info()
-                if feedback:
-                    self.lg.log_target_feedback_from_operator(feedback)
+                    feedback = linst.get_target_feedback_info()
+                    if feedback:
+                        self.lg.log_target_feedback_from_operator(feedback)
 
-                comments = linst.get_comments()
-                if comments:
-                    self.lg.log_comment(comments)
+                    comments = linst.get_comments()
+                    if comments:
+                        self.lg.log_comment(comments)
 
         try:
             operator.stop(self._exportable_fmk_ops, self.dm, self.__mon, self.tg, self.lg)
@@ -2033,18 +2048,30 @@ class Fuzzer(object):
                     err_msg = "Can't clone: invalid generator/disruptor IDs (%s)" % dmaker_ref
 
                     if cloned_dmaker_type in get_dmakers():
-                        ok = clone_dmaker(cloned_dmaker_type, new_dmaker_type=dmaker_type, dmaker_name=provided_dmaker_name)
+                        ok, cloned_dmaker_name = clone_dmaker(cloned_dmaker_type, new_dmaker_type=dmaker_type, dmaker_name=provided_dmaker_name)
                         self._recompute_current_generators()
+                        dmaker_obj = get_dmaker_obj(dmaker_type, cloned_dmaker_name)
                     elif cloned_dmaker_type in get_gen_dmakers():
-                        ok = clone_gen_dmaker(cloned_dmaker_type, new_dmaker_type=dmaker_type, dmaker_name=provided_dmaker_name)
+                        ok, cloned_dmaker_name = clone_gen_dmaker(cloned_dmaker_type, new_dmaker_type=dmaker_type, dmaker_name=provided_dmaker_name)
                         self._recompute_current_generators()
+                        dmaker_obj = get_generic_dmaker_obj(dmaker_type, cloned_dmaker_name)
                     else:
                         self.set_error(err_msg, code=Error.CloneError)
                         return None
 
+                    assert(dmaker_obj is not None)
+                    is_gen = True if issubclass(dmaker_obj.__class__, Generator) else False
+                    if is_gen:
+                        stateful = True
+                    else:
+                        stateful = True if issubclass(dmaker_obj.__class__, StatefulDisruptor) else False
+
                     if not ok:
                         self.set_error(err_msg, code=Error.CloneError)
                         return None
+
+                    self.fmkDB.insert_dmaker(self.dm.name, dmaker_type, cloned_dmaker_name, is_gen,
+                                             stateful, clone_type=cloned_dmaker_type)
 
 
             if provided_dmaker_name is None:

@@ -87,7 +87,7 @@ class Tactics(object):
 
     def __clone_dmaker(self, dmaker, dmaker_clones, dmaker_type, new_dmaker_type, dmaker_name=None, register_func=None):
         if dmaker_type not in dmaker:
-            return False
+            return False, None
 
         if dmaker_type not in dmaker_clones:
             dmaker_clones[dmaker_type] = []
@@ -111,7 +111,7 @@ class Tactics(object):
             break
 
         else:
-            return False
+            return False, None
 
 
         if new_dmaker_type is None:
@@ -123,7 +123,7 @@ class Tactics(object):
         register_func(name, new_obj, weight, new_dmaker_type, valid)
         dmaker_clones[dmaker_type].append(new_dmaker_type)
 
-        return True
+        return True, name
 
 
     def __clear_dmaker_clones(self, dmaker, dmaker_clones):

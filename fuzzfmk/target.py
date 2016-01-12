@@ -1129,7 +1129,7 @@ class LocalTarget(Target):
         if ret[0]:
             byte_string = b''
             for fd in ret[0][:-1]:
-                byte_string += fd.read() + '\n\n'
+                byte_string += fd.read() + b'\n\n'
             byte_string += ret[0][-1].read()
         else:
             byte_string = b''
