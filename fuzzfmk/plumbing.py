@@ -633,6 +633,9 @@ class Fuzzer(object):
                                       prj_params['target'], prj_params['logger'],
                                       prj_params['prj_rld_args'],
                                       reload_prj=False)
+                    self.fmkDB.insert_project(prj_params['project'].name)
+
+        self.fmkDB.commit()
 
         print(colorize(FontStyle.BOLD + "="*80, rgb=Color.FMKINFOGROUP))
 
@@ -1492,8 +1495,13 @@ class Fuzzer(object):
                 if multiple_data:
                     self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
 
-                self.lg.commit_log_entry(self.group_id)
-
+                data_id = self.lg.commit_log_entry(self.group_id)
+                if data_id is not None:
+                    tg_name = self.tg.__class__.__name__
+                    tg_desc = self.tg.get_description()
+                    if tg_desc is not None:
+                        tg_name += ' [' + tg_desc + ']'
+                    self.fmkDB.insert_project_record(self.prj.name, data_id, tg_name)
 
     @EnforceOrder(accepted_states=['S2'])
     def new_transfer_preamble(self):

@@ -52,10 +52,19 @@ class Database(object):
         else:
             return 0
 
+    def rollback(self):
+        try:
+            self._con.rollback()
+        except sqlite.Error as e:
+            return -1
+        else:
+            return 0
+
+
     def insert_data_model(self, dm_name):
         try:
             self._cur.execute(
-                    "INSERT INTO DATAMODEL(DM_NAME) VALUES(?)",
+                    "INSERT INTO DATAMODEL(NAME) VALUES(?)",
                     (dm_name,))
         except sqlite.Error as e:
             self._con.rollback()
@@ -63,6 +72,19 @@ class Database(object):
             return -1
         else:
             return self._cur.lastrowid
+
+    def insert_project(self, prj_name):
+        try:
+            self._cur.execute(
+                    "INSERT INTO PROJECT(NAME) VALUES(?)",
+                    (prj_name,))
+        except sqlite.Error as e:
+            self._con.rollback()
+            print("\n*** ERROR[SQL:{:s}] while inserting a value into table PROJECT!".format(e.args[0]))
+            return -1
+        else:
+            return self._cur.lastrowid
+
 
     def insert_dmaker(self, dm_name, dtype, name, is_gen, stateful, clone_type=None):
         clone_name = None if clone_type is None else name
@@ -89,7 +111,7 @@ class Database(object):
         except sqlite.Error as e:
             self._con.rollback()
             print("\n*** ERROR[SQL:{:s}] while inserting a value into table DATA!".format(e.args[0]))
-            return -1
+            return None
         else:
             return self._cur.lastrowid
 
@@ -154,5 +176,19 @@ class Database(object):
                 print("\n*** ERROR[SQLite]: {:s}".format(e.args[0]))
                 print("*** Not currently handled by fuddly.")
                 return -1
+        else:
+            return self._cur.lastrowid
+
+    def insert_project_record(self, prj_name, data_id, target):
+        self._cur.execute(
+                "INSERT INTO PROJECT_RECORDS(PRJ_NAME,DATA_ID,TARGET)"
+                " VALUES(?,?,?)",
+                (prj_name, data_id, target))
+        try:
+            self._con.commit()
+        except sqlite.Error as e:
+            self._con.rollback()
+            print("\n*** ERROR[SQL:{:s}] while inserting a value into table PROJECT_RECORDS!".format(e.args[0]))
+            return -1
         else:
             return self._cur.lastrowid

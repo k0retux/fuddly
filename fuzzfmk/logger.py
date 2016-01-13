@@ -230,6 +230,13 @@ class Logger(object):
                                                        self._current_sent_date, self._current_ack_date,
                                                        group_id=group_id)
 
+            if self.last_data_id is None:
+                print("\n*** ERROR: Cannot insert the data record in FMKDB!")
+                self.fmkDB.rollback()
+                self.last_data_id = None
+                self._reset_current_state()
+                return self.last_data_id
+
             for step_id, dmaker in enumerate(self._current_dmaker_list, start=1):
                 dmaker_type, dmaker_name, user_input = dmaker
                 info = self._current_dmaker_info.get((dmaker_type,dmaker_name), None)
@@ -244,6 +251,8 @@ class Logger(object):
 
         self.fmkDB.commit()
         self._reset_current_state()
+
+        return self.last_data_id
 
 
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO):
