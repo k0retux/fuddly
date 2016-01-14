@@ -107,5 +107,27 @@ CREATE TABLE PROJECT_RECORDS (
     )
 );
 
+CREATE VIEW STATS AS
+    SELECT TYPE, sum(CPT) as TOTAL
+    FROM (
+            WITH joint AS (
+                     SELECT DATA.TYPE,
+                          DMAKERS.clone_type
+                     FROM DATA
+                          LEFT JOIN
+                          DMAKERS ON DATA.TYPE = DMAKERS.TYPE
+            )
+            SELECT CLONE_TYPE AS type, count(*) AS cpt
+            FROM joint
+            WHERE CLONE_TYPE IS NOT NULL
+            GROUP BY CLONE_TYPE
+               UNION
+            SELECT TYPE, count(*) AS cpt
+            FROM joint
+            WHERE CLONE_TYPE IS NULL
+            GROUP BY TYPE
+    )
+    GROUP BY TYPE;
+
 COMMIT TRANSACTION;
 PRAGMA foreign_keys = on;
