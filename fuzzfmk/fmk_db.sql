@@ -121,13 +121,31 @@ CREATE VIEW STATS AS
             FROM joint
             WHERE CLONE_TYPE IS NOT NULL
             GROUP BY CLONE_TYPE
-               UNION
+               UNION ALL
             SELECT TYPE, count(*) AS cpt
             FROM joint
             WHERE CLONE_TYPE IS NULL
             GROUP BY TYPE
     )
     GROUP BY TYPE;
+
+CREATE VIEW STATS_BY_TARGET AS
+  with joint as (
+      select TARGET, TYPE, count(*) as CPT, CLONE_TYPE from (
+          select PROJECT_RECORDS.TARGET, DATA.TYPE, DMAKERS.CLONE_TYPE
+          from PROJECT_RECORDS inner join DATA inner join DMAKERS
+              on PROJECT_RECORDS.DATA_ID = DATA.ID and DATA.TYPE = DMAKERS.TYPE
+      )
+      group by TARGET, TYPE
+  )
+  select TARGET, TYPE, sum(CPT) as TOTAL from (
+      select TARGET, CLONE_TYPE as TYPE, CPT from joint
+      where CLONE_TYPE is not null
+      union all
+      select TARGET, TYPE, CPT from joint
+      where CLONE_TYPE is null
+  )
+  group by TARGET, TYPE;
 
 COMMIT TRANSACTION;
 PRAGMA foreign_keys = on;
