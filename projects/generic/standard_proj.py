@@ -136,13 +136,15 @@ class Op1(Operator):
                                         nl_before=True, nl_after=False)
 
             clone_tag = "#{:d}".format(len(self.gen_ids) + 1)
-            clone_tag2 = "#{:d}".format(self.init_gen_len + len(self.gen_ids) + 1)
 
             actions = [(self.current_gen_id + clone_tag, UI(finite=True)), ('tTYPE' + clone_tag, UI(init=self.init))]
 
             self.max_steps -= 1
 
         elif self.mode == 1 and self.nb_gen_val_cpt > 0:
+
+            clone_tag2 = "#{:d}".format(self.init_gen_len + len(self.gen_ids) + 1)
+
             actions = [(self.current_gen_id + clone_tag2, UI(finite=True)), ('tALT' + clone_tag2, UI(init=self.init))]
 
             self.nb_gen_val_cpt -= 1

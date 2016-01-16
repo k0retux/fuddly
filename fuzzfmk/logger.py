@@ -104,7 +104,6 @@ class Logger(object):
             If this threshold is overrun, the message to print on the console will be truncated.
           prefix (str): prefix to use for printing on the console
           enable_file_logging (bool): If True, file logging will be enabled
-          logdb (Database): the database to be used for logging
         '''
         self.name = name
         self.p = prefix
@@ -162,8 +161,7 @@ class Logger(object):
             self.now = datetime.datetime.now()
             self.now = self.now.strftime("%Y_%m_%d_%H%M%S")
 
-            trace_folder = os.path.join(app_folder, 'trace')
-            log_file = os.path.join(trace_folder, self.now + '_' + self.name + '_log')
+            log_file = os.path.join(logs_folder, self.now + '_' + self.name + '_log')
             self._fd = open(log_file, 'w')
 
             def intern_func(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False):
@@ -215,6 +213,7 @@ class Logger(object):
 
     def _reset_current_state(self):
         self._current_data = None
+        self._current_orig_data_id = None
         self._current_size = None
         self._current_sent_date = None
         self._current_ack_date = None
@@ -224,10 +223,16 @@ class Logger(object):
 
     def commit_log_entry(self, group_id):
         if self._current_data is not None:
-            self.last_data_id = self.fmkDB.insert_data(self._current_data.get_initial_dmaker()[0],
-                                                       self._current_data.get_data_model().name,
-                                                       self._current_data.to_bytes(), self._current_size,
-                                                       self._current_sent_date, self._current_ack_date,
+            init_dmaker = self._current_data.get_initial_dmaker()
+            init_dmaker = Database.DEFAULT_GTYPE_NAME if init_dmaker is None else init_dmaker[0]
+            dm = self._current_data.get_data_model()
+            dm_name = Database.DEFAULT_DM_NAME if dm is None else dm.name
+
+            self.last_data_id = self.fmkDB.insert_data(init_dmaker, dm_name,
+                                                       self._current_data.to_bytes(),
+                                                       self._current_size,
+                                                       self._current_sent_date,
+                                                       self._current_ack_date,
                                                        group_id=group_id)
 
             if self.last_data_id is None:
@@ -237,7 +242,17 @@ class Logger(object):
                 self._reset_current_state()
                 return self.last_data_id
 
-            for step_id, dmaker in enumerate(self._current_dmaker_list, start=1):
+            self._current_data.set_data_id(self.last_data_id)
+
+            if self._current_orig_data_id is not None:
+                self.fmkDB.insert_steps(self.last_data_id, 1, None, None,
+                                        self._current_orig_data_id,
+                                        None, None)
+                step_id_start = 2
+            else:
+                step_id_start = 1
+
+            for step_id, dmaker in enumerate(self._current_dmaker_list, start=step_id_start):
                 dmaker_type, dmaker_name, user_input = dmaker
                 info = self._current_dmaker_info.get((dmaker_type,dmaker_name), None)
                 if info is not None:
@@ -247,6 +262,7 @@ class Logger(object):
                     else:
                         info = bytes(info)
                 self.fmkDB.insert_steps(self.last_data_id, step_id, dmaker_type, dmaker_name,
+                                        None,
                                         str(user_input), info)
 
         self.fmkDB.commit()
@@ -417,6 +433,9 @@ class Logger(object):
         if self.__explicit_export and not exportable:
             return False
 
+        if data is not None:
+            self._current_orig_data_id = data.get_data_id()
+
         if self.__export_orig and not self.__seperate_file:
             if data is None:
                 msgs = ("### No Original Data",)
@@ -537,7 +556,7 @@ class Logger(object):
 
     def log_stats(self):
         if self._enable_file_logging:
-            fd = open(app_folder + '/trace/' + self.now + '_' + self.name + '_stats', 'w+')
+            fd = open(logs_folder + self.now + '_' + self.name + '_stats', 'w+')
             stats = self.stats.get_formated_stats()
             fd.write(stats + '\n')
             fd.close()

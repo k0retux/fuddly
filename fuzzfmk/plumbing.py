@@ -502,6 +502,9 @@ class Fuzzer(object):
                         # populate FMK DB
                         self._fmkDB_insert_dm_and_dmakers(dm_params['dm'].name, dm_params['tactics'])
 
+        self.fmkDB.insert_data_model(Database.DEFAULT_DM_NAME)
+        self.fmkDB.insert_dmaker(Database.DEFAULT_DM_NAME, Database.DEFAULT_GTYPE_NAME,
+                                 Database.DEFAULT_GEN_NAME, True, True)
         self.fmkDB.commit()
 
 

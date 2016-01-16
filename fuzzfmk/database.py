@@ -10,9 +10,13 @@ class Database(object):
 
     DDL_fname = 'fmk_db.sql'
 
+    DEFAULT_DM_NAME = '__DEFAULT_DATAMODEL'
+    DEFAULT_GTYPE_NAME = '__DEFAULT_GTYPE'
+    DEFAULT_GEN_NAME = '__DEFAULT_GNAME'
+
     def __init__(self):
         self.name = 'fmkDB.db'
-        self.log_db = os.path.join(gr.trace_folder, self.name)
+        self.log_db = os.path.join(gr.app_folder, self.name)
         self._con = None
         self._cur = None
         self.enabled = False
@@ -115,14 +119,15 @@ class Database(object):
         else:
             return self._cur.lastrowid
 
-    def insert_steps(self, data_id, step_id, dmaker_type, dmaker_name, user_input, info):
+    def insert_steps(self, data_id, step_id, dmaker_type, dmaker_name, data_id_src,
+                     user_input, info):
         if info:
             info = sqlite.Binary(info)
         try:
             self._cur.execute(
-                    "INSERT INTO STEPS(DATA_ID,STEP_ID,DMAKER_TYPE,DMAKER_NAME,USER_INPUT,INFO)"
-                    " VALUES(?,?,?,?,?,?)",
-                    (data_id, step_id, dmaker_type, dmaker_name, user_input, info))
+                    "INSERT INTO STEPS(DATA_ID,STEP_ID,DMAKER_TYPE,DMAKER_NAME,DATA_ID_SRC,USER_INPUT,INFO)"
+                    " VALUES(?,?,?,?,?,?,?)",
+                    (data_id, step_id, dmaker_type, dmaker_name, data_id_src, user_input, info))
         except sqlite.Error as e:
             self._con.rollback()
             print("\n*** ERROR[SQL:{:s}] while inserting a value into table STEPS!".format(e.args[0]))

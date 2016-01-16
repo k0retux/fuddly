@@ -48,8 +48,8 @@ class Data(object):
         self.node = None
         self.raw = None
         self.__type = None
-
         self._dm = None
+        self._data_id = None
 
         self.__exportable = False
         self.__unusable = False
@@ -66,6 +66,12 @@ class Data(object):
             self.update_from_node(data)
         else:
             self.update_from_str_or_bytes(data)
+
+    def set_data_id(self, data_id):
+        self._data_id = data_id
+
+    def get_data_id(self):
+        return self._data_id
 
     def set_initial_dmaker(self, t):
         self.__type = t

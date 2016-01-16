@@ -764,7 +764,7 @@ This will trigger the Operator that will execute the ``display``
 program with the first generated JPG file. It will look at ``stdout``
 and ``stderr`` for error messages, or look for any crashes, and if
 such a situation occurs, will save the related JPG file under
-``exported_data/jpg/`` and log everything under ``trace/``. It will
+``exported_data/jpg/`` and log everything under ``logs/``. It will
 also try to avoid saving JPG files that trigger errors whose type has
 already been seen. Once the operator is all done with this first test
 case, it can plan the next actions it needs ``fuddly`` to perform for
@@ -2043,20 +2043,27 @@ history of your interaction with the target (e.g., data sent, feedback
 received, ...). Statistics about data emission will also be maintained
 and kept in sync with the log files.
 
-The outputs of the logger are of three types:
+The outputs of the logger are of four types:
 
-- ``<root of fuddly>/trace/*<project_name>_logs``: the history of your
+- ``<root of fuddly>/logs/*<project_name>_logs``: the history of your
   test session for the project named ``project_name``. The files are
   prefixed with the test session starting time. A new one is created
   each time you run a new project or you reload the current one.
+  Note these files are created only if the parameter ``enable_file_logging``
+  is set to True.
 
-- ``<root of fuddly>/trace/*<project_name>_stats``: some statistics of
+- ``<root of fuddly>/logs/*<project_name>_stats``: some statistics of
   the kind of data that has been emitted during the session.
+  Note these files are created only if the parameter ``enable_file_logging``
+  is set to True.
 
 - ``<root of fuddly>/exported_data/<data model name>/*.<data
   extension>``: the data emitted during a session are stored within
   the their data model directory. Each one is prefixed by the date of
   emission, and each one is uniquely identified within the log files.
+
+- records within the database ``<root of fuddly>/fmkDB.db``. Every piece of
+  information from the previous files are recorder with this database.
 
 Some parameters allows to customize the behavior of the logger, such as:
 
@@ -2073,6 +2080,9 @@ Some parameters allows to customize the behavior of the logger, such as:
   :meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`, where the
   Operator can take its decision after the observation of the target
   feedback and/or probes outputs.
+
+- ``enable_file_logging`` which is used to control the production of log files.
+  If set to ``False``, the Logger will only commit records to the fmkDB.
 
 .. seealso:: Refer to :ref:`tuto:operator` to learn more about the
              interaction between an Operator and the Logger.
