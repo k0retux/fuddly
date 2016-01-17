@@ -84,7 +84,7 @@ try:
     import sqlite3 as sqlite
 except ImportError:
     sqlite_module = False
-    print('WARNING [FMK]: python-sqlite3 module is not installed, LogDB will not be available!')
+    print('WARNING [FMK]: SQLite3 not installed, FMKDB will not be available!')
 
 cups_module = True
 try:

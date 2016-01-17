@@ -102,6 +102,9 @@ class Data(object):
     def get_data_model(self):
         return self._dm
 
+    def set_data_model(self, dm):
+        self._dm = dm
+
     def to_bytes(self):
         if self.node:
             val = self.node.to_bytes()

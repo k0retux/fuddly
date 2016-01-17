@@ -1448,6 +1448,16 @@ class Fuzzer(object):
 
                 self.__stats.inc_stat(gen_type, gen_name, gen_ui)
 
+                num = 1
+
+                data_id = dt.get_data_id()
+                # if data_id is not None, the data has been created from fmkDB
+                # because new data have not a data_id yet at this point in the code.
+                if data_id is not None:
+                    self.lg.log_fuzzing_step(num)
+                    self.lg.log_generator_info(gen_type_initial, gen_name, None, data_id=data_id)
+                    self.lg.log_data_info(("Data fetched from FMKDB",), gen_type_initial, gen_name)
+
                 if dt_mk_h is not None:
                     if orig_data_provided:
                         self.lg.log_orig_data(original_data[idx])
@@ -1456,13 +1466,14 @@ class Fuzzer(object):
 
                     dt.init_read_info()
 
-                    num = 0
                     for dmaker_type, data_maker_name, user_input in dt_mk_h:
                         num += 1
-                        
-                        if num == 1:
+
+                        if num == 1 and data_id is None:
+                            # if data_id is not None then no need to log an initial generator
+                            # because data comes from FMKDB
                             if dmaker_type != gen_type_initial:
-                                self.lg.log_fuzzing_initial_generator(gen_type_initial, gen_name, gen_ui)
+                                self.lg.log_initial_generator(gen_type_initial, gen_name, gen_ui)
 
                         self.lg.log_fuzzing_step(num)
 
@@ -1492,7 +1503,13 @@ class Fuzzer(object):
                         self.lg.log_data_info(info, dmaker_type, data_maker_name)
 
                 else:
-                    self.lg.log_info("RAW DATA (data makers not provided)")
+                    if gen_type_initial is None:
+                        self.lg.log_fuzzing_step(1)
+                        self.lg.log_generator_info(Database.DEFAULT_GTYPE_NAME,
+                                                   Database.DEFAULT_GEN_NAME,
+                                                   None)
+                        self.lg.log_data_info(("RAW DATA (data makers not provided)",),
+                                              Database.DEFAULT_GTYPE_NAME, Database.DEFAULT_GEN_NAME)
 
                 self.lg.log_data(dt, verbose=verbose)
                 if multiple_data:
@@ -1612,10 +1629,16 @@ class Fuzzer(object):
         self.__data_bank[self.__db_idx] = (data_orig, data)
 
     @EnforceOrder(accepted_states=['S2'])
-    def fill_data_bank_from_list(self, l):
-        if l:
-            for data in l:
-                self.__register_in_data_bank(None, Data(data))
+    def fmkdb_fetch_data(self, start_id=1, end_id=-1):
+        for record in self.fmkDB.fetch_data(start_id=start_id, end_id=end_id):
+            data_id, content, dtype, dmk_name, dm_name = record
+            data = Data(content)
+            data.set_data_id(data_id)
+            data.set_initial_dmaker((str(dtype), str(dmk_name), None))
+            if dm_name != Database.DEFAULT_DM_NAME:
+                dm = self.get_data_model_by_name(dm_name)
+                data.set_data_model(dm)
+            self.__register_in_data_bank(None, data)
 
     @EnforceOrder(accepted_states=['S2'])
     def get_last_data(self):
@@ -1656,18 +1679,19 @@ class Fuzzer(object):
             self.lg.print_console('|_ !IN', rgb=Color.SUBINFO)
 
         gen = self.__current_gen
-        
+
+        data_id  = data.get_data_id()
         data_makers_history = data.get_history()
         if data_makers_history:
             data.init_read_info()
             for dmaker_type, data_maker_name, user_input in data_makers_history:
                 if dmaker_type in gen:
                     if user_input:
-                        msg = "|- generator type: %s | generator name: %s | User input: %s" % \
-                            (dmaker_type, data_maker_name, user_input)
+                        msg = "|- data id: %d | generator type: %s | generator name: %s | User input: %s" % \
+                            (data_id, dmaker_type, data_maker_name, user_input)
                     else:
-                        msg = "|- generator type: %s | generator name: %s | No user input" % \
-                            (dmaker_type, data_maker_name)
+                        msg = "|- data id: %d | generator type: %s | generator name: %s | No user input" % \
+                            (data_id, dmaker_type, data_maker_name)
                 else:
                     if user_input:
                         msg = "|- disruptor type: %s | data_maker name: %s | User input: %s" % \
@@ -1681,6 +1705,18 @@ class Fuzzer(object):
                 data_info = data.read_info(data_maker_name, dmaker_type)
                 for msg in data_info:
                     self.lg.print_console('   |_ ' + msg, rgb=Color.SUBINFO)
+        else:
+            init_dmaker = data.get_initial_dmaker()
+            if init_dmaker is None:
+                dtype, dmk_name = Database.DEFAULT_GTYPE_NAME, Database.DEFAULT_GEN_NAME
+            else:
+                dtype, dmk_name, _ = init_dmaker
+            dm = data.get_data_model()
+            dm_name = None if dm is None else dm.name
+            msg = "|- data id: {:d} | type: {:s} | data model: {:s}".format(
+                data_id, dtype, dm_name
+            )
+            self.lg.print_console(msg, rgb=Color.SUBINFO)
 
         self.lg.print_console('|_ OUT > ', rgb=Color.SUBINFO)
         self.lg.print_console(data, nl_before=False)
@@ -3861,6 +3897,42 @@ class FuzzShell(cmd.Cmd):
         self.fz.register_last_in_data_bank()
 
         return False
+
+    def do_fmkdb_fetch_data(self, line):
+        '''
+        Fetch the data from the FMKDB and fill the Data Bank with it. If data IDs are given,
+        only fetch the data between the two references.
+        |_ syntax: fmkdb_fetch_data [first_data_id] [last_data_id]
+        '''
+
+        self.__error = True
+        self.__error_msg = "Syntax Error!"
+
+        args = line.split()
+
+        if len(args) > 2:
+            return False
+        elif len(args) == 2:
+            try:
+                sid = int(args[0])
+                eid = int(args[1])
+            except ValueError:
+                return False
+        elif len(args) == 1:
+            try:
+                sid = int(args[0])
+                eid = -1
+            except ValueError:
+                return False
+        else:
+            sid = 1
+            eid = -1
+
+        self.fz.fmkdb_fetch_data(start_id=sid, end_id=eid)
+
+        self.__error = False
+        return False
+
 
 
     def do_dump_db_to_file(self, line):

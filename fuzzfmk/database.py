@@ -185,11 +185,11 @@ class Database(object):
             return self._cur.lastrowid
 
     def insert_project_record(self, prj_name, data_id, target):
-        self._cur.execute(
+        try:
+            self._cur.execute(
                 "INSERT INTO PROJECT_RECORDS(PRJ_NAME,DATA_ID,TARGET)"
                 " VALUES(?,?,?)",
                 (prj_name, data_id, target))
-        try:
             self._con.commit()
         except sqlite.Error as e:
             self._con.rollback()
@@ -197,3 +197,26 @@ class Database(object):
             return -1
         else:
             return self._cur.lastrowid
+
+    def fetch_data(self, start_id=1, end_id=-1):
+        ign_end_id = '--' if end_id < 1 else ''
+        try:
+            self._cur.execute(
+                '''
+                SELECT DATA.ID, DATA.CONTENT, DATA.TYPE, DMAKERS.NAME, DATA.DM_NAME
+                FROM DATA INNER JOIN DMAKERS
+                  ON DATA.TYPE = DMAKERS.TYPE AND DMAKERS.CLONE_TYPE IS NULL
+                WHERE DATA.ID >= {sid:d} {ign_eid:s} AND DATA.ID <= {eid:d}
+                UNION ALL
+                SELECT DATA.ID, DATA.CONTENT, DMAKERS.CLONE_TYPE AS TYPE, DMAKERS.CLONE_NAME AS NAME,
+                       DATA.DM_NAME
+                FROM DATA INNER JOIN DMAKERS
+                  ON DATA.TYPE = DMAKERS.TYPE AND DMAKERS.CLONE_TYPE IS NOT NULL
+                WHERE DATA.ID >= {sid:d} {ign_eid:s} AND DATA.ID <= {eid:d}
+                '''.format(sid = start_id, eid = end_id, ign_eid = ign_end_id)
+            )
+        except sqlite.Error as e:
+            print("\n*** ERROR[SQL]: {:s}".format(e.args[0]))
+            return
+        else:
+            return self._cur.fetchall()

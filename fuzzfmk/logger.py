@@ -219,7 +219,7 @@ class Logger(object):
         self._current_ack_date = None
         self._current_dmaker_list= []
         self._current_dmaker_info = {}
-
+        self._current_src_data_id = None
 
     def commit_log_entry(self, group_id):
         if self._current_data is not None:
@@ -262,7 +262,7 @@ class Logger(object):
                     else:
                         info = bytes(info)
                 self.fmkDB.insert_steps(self.last_data_id, step_id, dmaker_type, dmaker_name,
-                                        None,
+                                        self._current_src_data_id,
                                         str(user_input), info)
 
         self.fmkDB.commit()
@@ -271,7 +271,7 @@ class Logger(object):
         return self.last_data_id
 
 
-    def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO):
+    def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO, data_id=None):
         now = datetime.datetime.now()
         if nl_before:
             p = '\n'
@@ -283,7 +283,8 @@ class Logger(object):
             s = ''
         msg = p + "*** [ %s ] ***" % info + s
         self.log_fn(msg, rgb=rgb)
-        self.fmkDB.insert_fmk_info(self.last_data_id, msg, now)
+        data_id = self.last_data_id if data_id is None else data_id
+        self.fmkDB.insert_fmk_info(data_id, msg, now)
 
     def collect_target_feedback(self, fbk):
         if sys.version_info[0] > 2 and isinstance(fbk, bytes):
@@ -370,7 +371,7 @@ class Logger(object):
         msg = "### Fuzzing (step %d):" % num
         self.log_fn(msg, rgb=Color.FUZZSTEP)
 
-    def log_fuzzing_initial_generator(self, dmaker_type, dmaker_name, dmaker_ui):
+    def log_initial_generator(self, dmaker_type, dmaker_name, dmaker_ui):
         msgs = []
         msgs.append("### Initial Generator (currently disabled):")
         msgs.append(" |- generator type: %s | generator name: %s | User input: %s" % \
@@ -379,13 +380,15 @@ class Logger(object):
         for m in msgs:
             self.log_fn(m, rgb=Color.DISABLED)
 
-    def log_generator_info(self, dmaker_type, name, user_input):
+    def log_generator_info(self, dmaker_type, name, user_input, data_id=None):
+        msg = '' if data_id is None else " |- retrieved from data id: {:d}\n".format(data_id)
         if user_input:
-            msg = " |- generator type: %s | generator name: %s | User input: %s" % \
+            msg += " |- generator type: %s | generator name: %s | User input: %s" % \
                   (dmaker_type, name, user_input)
         else:
-            msg = " |- generator type: %s | generator name: %s | No user input" % (dmaker_type, name)
+            msg += " |- generator type: %s | generator name: %s | No user input" % (dmaker_type, name)
         self._current_dmaker_list.append((dmaker_type, name, user_input))
+        self._current_src_data_id = data_id
         self.log_fn(msg, rgb=Color.DATAINFO)
 
     def log_disruptor_info(self, dmaker_type, name, user_input):
@@ -413,7 +416,6 @@ class Logger(object):
 
     def log_info(self, info):
         msg = "### Info: %s" % info
-
         self.log_fn(msg, rgb=Color.INFO)
 
     def log_target_ack_date(self, date):
