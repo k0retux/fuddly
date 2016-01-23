@@ -211,10 +211,10 @@ data model used by our tutorial (``mydf``).
    different data models simultaneously. 
 
 
-Send malformed ZIP files to the target (manually)
+Send Malformed ZIP Files to the Target (Manually)
 -------------------------------------------------
 
-How to send a ZIP file
+How to Send a ZIP File
 ++++++++++++++++++++++
 
 In order to send a ZIP file to the target, type the following::
@@ -315,7 +315,7 @@ chainable, each one consuming what comes from the left.
 
 .. _tuto:dmaker-chain:
 
-How to perform automatic modification on data
+How to Perform Automatic Modification on Data
 +++++++++++++++++++++++++++++++++++++++++++++
 
 In order to perform modification on a generated data, you can use
@@ -708,7 +708,7 @@ already launched, simply issue the command ``load_data_model
 <data_model_name>`` to let fuddly do the job for you.
 
 
-Use an Operator to send malformed data
+Use an Operator to Send Malformed Data
 --------------------------------------
 
 ``Operators`` (\ :class:`fuzzfmk.tactics_helper.Operator`) are useful
@@ -771,6 +771,45 @@ case, it can plan the next actions it needs ``fuddly`` to perform for
 it. In our case, it will go on with the next iteration of a disruptor
 chain, basically ``JPG<finite=True> tTYPE``.
 
+
+Replay Data From a Previous Session
+-----------------------------------
+
+If you want to replay some data previously sent, you can either use the `workspace` where each
+emitted data are registered (in memory only) during a ``fuddly`` session, or if you quit ``fuddly``
+in-between you can reload data from the ``fuddly`` database ``fmkDB.db`` (SQLite3).
+
+To resend the data you just sent, issue the following command::
+
+  >> replay_last
+
+But if you want to resend any data from the `workspace` you first have to store it to the `Data Bank`. To save the data
+you just sent, issue the following command::
+
+  >> register_last
+
+To save all the `workspace` in the `Data Bank`, issue the following command::
+
+  >> register_wkspace
+
+Then, if you want to look at the `Data Bank`, issue the command::
+
+  >> show_db
+
+You will then be able to resend any data from the `Data Bank` thanks to its entry number (that is displayed by the
+previous command). For instance, if you want to resend the data registered in the 5th entry of the `Data Bank`, issue
+the command::
+
+  >> replay_db 5
+
+Finally, if you want to resend data from previous sessions, you can do it by looking at the
+``DATA`` table of the ``fmkDB.db``, looking for the IDs that match the data you want to resend and use the command
+``fmkdb_fetch_data``. Let's say you want to load the data from ID 32 to ID 105, you will issue the following command::
+
+  >> fmkdb_fetch_data 32 105
+
+That command will store these data to the `Data Bank`. From then on, you could use ``show_db`` and ``replay_db``
+as previously explained.
 
 
 .. _fuddly-advanced:
