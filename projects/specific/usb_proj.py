@@ -35,7 +35,7 @@ from fuzzfmk.fuzzing_primitives import *
 project = Project()
 project.default_dm = 'usb'
 
-logger = Logger('bin', data_in_seperate_file=False, explicit_export=True, export_orig=False)
+logger = Logger('bin', export_data=False, explicit_data_recording=True, export_orig=False)
 
 rpyc_module = True
 try:

@@ -30,7 +30,7 @@ import fuzzfmk.global_resources as gr
 project = Project()
 project.default_dm = 'mydf'
 
-logger = Logger(data_in_seperate_file=False, explicit_export=False, export_orig=False,
+logger = Logger(export_data=False, explicit_data_recording=False, export_orig=False,
                 export_raw_data=False, enable_file_logging=False)
 
 class TutoNetTarget(NetworkTarget):
@@ -49,8 +49,7 @@ tg.add_additional_feedback_interface('localhost', 7777, (socket.AF_INET, socket.
                                      fbk_id='My Feedback Source', server_mode=True)
 tg.set_timeout(fbk_timeout=5, sending_delay=3)
 
-targets = [tg]
-
+### PROBE DEFINITION ###
 
 @probe(project)
 class P1(Probe):
@@ -68,7 +67,7 @@ class P1(Probe):
 class P2(Probe):
 
     def start(self, target, logger):
-        self.cpt = 0
+        self.cpt = 5
 
     def main(self, target, logger):
         self.cpt -= 1
@@ -97,31 +96,34 @@ class health_check(Probe):
         return ProbeStatus(status)
 
 
-@operator(project)
-class Op1(Operator):
+### TARGETS ALLOCATION ###
+
+targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
+           tg]
+
+### OPERATOR DEFINITION ###
+
+@operator(project,
+          args={'mode': ('strategy mode (0 or 1)', 0, int)})
+class MyOp(Operator):
 
     def start(self, fmk_ops, dm, monitor, target, logger, user_input):
-        monitor.start_probe('P1')
         monitor.set_probe_delay('P1', 0.3)
-        monitor.start_probe('P2')
         monitor.set_probe_delay('P2', 0.1)
-        monitor.start_probe('health_check')
+        if not monitor.is_probe_launched('P1'):
+            monitor.start_probe('P1')
+        if not monitor.is_probe_launched('P2'):
+            monitor.start_probe('P2')
+
         self.new = True
         self.cpt = 0
+        fmk_ops.set_fuzz_delay(0.5)
 
-        specific_ui = user_input.get_specific()
-
-        if specific_ui is None:
-            self.strategy_mode = 0
-        else:
-            val = specific_ui.mode
-            assert(type(val) == int or val is None)
-            self.strategy_mode = 0 if val is None else val
+        return True
 
     def stop(self, fmk_ops, dm, monitor, target, logger):
         monitor.stop_probe('P1')
         monitor.stop_probe('P2')
-        monitor.stop_probe('health_check')
         self.new = False
 
     def plan_next_operation(self, fmk_ops, dm, monitor, target, logger, fmk_feedback):
@@ -142,16 +144,18 @@ class Op1(Operator):
             return op
 
         if p1_ret + p2_ret > 0:
-            actions = ['TVE', ('TVE/basic', 't_fuzz_tve_01'), ('Cp', None, [1]), ('Cp#1', None, [3])]
+            actions = [('SEPARATOR', UI(determinist=True)),
+                       ('tSTRUCT', None, UI(deep=True)),
+                       ('Cp', None, UI(idx=1)), ('Cp#1', None, UI(idx=3))]
         elif -5 < p1_ret + p2_ret <= 0:
-            actions = [('TVE_w#specific', 'g_typed_value_example_01'), (('Ce', 'd_corrupt_bits_node'), None, ['EVT1']), ('Cp#2', None, [1])]
+            actions = ['SHAPE#specific', ('C', None, UI(path='.*prefix.$')), ('Cp#2', None, UI(idx=1))]
         else:
-            actions = ['TVE#2', 'tTYPE']
+            actions = ['SHAPE#2', 'tTYPE']
 
         op.add_instruction(actions)
 
-        if self.strategy_mode == 1:
-            actions_sup = ['TVE#2', ('SIZE', None, [10])]
+        if self.mode == 1:
+            actions_sup = ['SHAPE#3', ('SIZE', None, UI(idx=10))]
             op.add_instruction(actions_sup)
 
         self.cpt += 1
@@ -162,12 +166,10 @@ class Op1(Operator):
     def do_after_all(self, fmk_ops, dm, monitor, target, logger):
         linst = LastInstruction()
 
-        health_status = monitor.get_probe_status('health_check')
-
-        if health_status.get_status() == -1:
+        if not monitor.is_target_ok():
             linst.set_instruction(LastInstruction.ExportData)
             linst.set_comments('This input has crashed the target!')
 
-            # TODO: restart the target
+            # Restart the target
 
         return linst

@@ -84,15 +84,15 @@ class Logger(object):
 
     fmkDB = None
 
-    def __init__(self, name=None, prefix='', data_in_seperate_file=False, explicit_export=False, export_orig=True,
-                 export_raw_data=True, console_display_limit=800, enable_file_logging=True):
+    def __init__(self, name=None, prefix='', export_data=False, explicit_data_recording=False, export_orig=True,
+                 export_raw_data=True, console_display_limit=800, enable_file_logging=False):
         '''
         Args:
           name (str): Name to be used in the log filenames. If not specified, the name of the project
             in which the logger is embedded will be used.
-          data_in_seperate_file (bool): If True, each emitted data will be stored separetely in a specific
+          export_data (bool): If True, each emitted data will be stored separetely in a specific
             file within `exported_data/`.
-          explicit_export (bool): Used for logging outcomes further to an Operator instruction. If True,
+          explicit_data_recording (bool): Used for logging outcomes further to an Operator instruction. If True,
             the operator would have to state explicitly if it wants the just emitted data to be logged.
             Such notification is possible when the framework call its method
             :meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`, where the Operator can take its decision
@@ -107,8 +107,8 @@ class Logger(object):
         '''
         self.name = name
         self.p = prefix
-        self.__seperate_file = data_in_seperate_file
-        self.__explicit_export = explicit_export
+        self.__seperate_file = export_data
+        self.__explicit_export = explicit_data_recording
         self.__export_orig = export_orig
         self._console_display_limit = console_display_limit
 
@@ -271,6 +271,11 @@ class Logger(object):
         return self.last_data_id
 
 
+    def commit_project_record(self, data, prj_name, tg_name):
+        if not self.__explicit_export or data.is_exportable():
+            self.fmkDB.insert_project_record(prj_name, data.get_data_id(), tg_name)
+
+
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO, data_id=None):
         now = datetime.datetime.now()
         if nl_before:
@@ -358,6 +363,17 @@ class Logger(object):
         if sys.version_info[0] > 2 and not isinstance(feedback, bytes):
             feedback = bytes(feedback, 'latin_1')
         return feedback
+
+    def log_probe_feedback(self, source, content, status_code):
+        if content is None:
+            self.log_fn("### {:s} Status: {:d}".format(source, status_code), rgb=Color.FEEDBACK)
+        else:
+            self.log_fn("### {:s} Feedback (status={:d}):".format(source, status_code), rgb=Color.FEEDBACK)
+            self.log_fn(self._decode_target_feedback(content))
+        if self.last_data_id is not None:
+            content = None if content is None else self._encode_target_feedback(content)
+            self.fmkDB.insert_feedback(self.last_data_id, source, content,
+                                       status_code=status_code)
 
     def start_new_log_entry(self, preamble=''):
         self.__idx += 1

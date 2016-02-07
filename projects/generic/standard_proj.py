@@ -32,7 +32,7 @@ project.default_dm = ['mydf','zip']
 # If you only want one default DM, provide its name directly as follows:
 # project.default_dm = 'mydf'
 
-logger = Logger('standard', data_in_seperate_file=True, explicit_export=True, export_orig=False)
+logger = Logger('standard', export_data=True, explicit_data_recording=True, export_orig=False)
 
 printer1_tg = PrinterTarget(tmpfile_ext='.png')
 printer1_tg.set_target_ip('127.0.0.1')
@@ -54,8 +54,6 @@ net_tg.add_additional_feedback_interface('localhost', 7777, (socket.AF_INET, soc
                                      fbk_id='My Feedback Source', server_mode=True)
 net_tg.set_timeout(fbk_timeout=5, sending_delay=3)
 
-targets = [local_tg, local2_tg, local3_tg, printer1_tg, net_tg]
-
 
 @blocking_probe(project)
 class health_check(Probe):
@@ -68,8 +66,9 @@ class health_check(Probe):
 
     def main(self, target, logger):
         fb = target.get_feedback()
-        byte_string = fb.get_bytes()
-        self.status.set_private_info(byte_string)
+        if fb is not None:
+            byte_string = fb.get_bytes()
+            self.status.set_private_info(byte_string)
         self.status.set_status(0)
 
         if target.is_damaged():
@@ -79,6 +78,13 @@ class health_check(Probe):
             self.status.set_status(-2)
 
         return self.status
+
+
+targets = [(local_tg, health_check),
+           (local2_tg, health_check),
+           (local3_tg, health_check),
+           printer1_tg, net_tg]
+
 
 @operator(project,
           gen_args={'init': ('make the model walker ignore all the steps until the provided one', 1, int),
@@ -105,15 +111,11 @@ class Op1(Operator):
         self.init_gen_len = len(self.gen_ids)
         self.current_gen_id = self.gen_ids.pop(0)
 
-        if isinstance(target, LocalTarget):
-            monitor.start_probe('health_check')
-
         # fmk_ops.set_fuzz_delay(5)
         return True
 
     def stop(self, fmk_ops, dm, monitor, target, logger):
         if isinstance(target, LocalTarget):
-            monitor.stop_probe('health_check')
             self._last_feedback = None
 
     def plan_next_operation(self, fmk_ops, dm, monitor, target, logger, fmk_feedback):
@@ -166,7 +168,7 @@ class Op1(Operator):
         if isinstance(target, LocalTarget):
             health_status = monitor.get_probe_status('health_check')
             info = health_status.get_private_info()
-            linst.set_target_feedback_info(info)
+            # linst.set_target_feedback_info(info)
 
             export = True
             if info in self._last_feedback:
@@ -178,12 +180,9 @@ class Op1(Operator):
                 if export:
                     linst.set_instruction(LastInstruction.ExportData)
                 linst.set_comments('This input has triggered an error, but not a crash!')
-                target.cleanup()
             elif health_status.get_status() == -2:
                 linst.set_instruction(LastInstruction.ExportData)
                 linst.set_comments('This input has crashed the target!')
-            else:
-                target.cleanup()
         else:
             linst.set_instruction(LastInstruction.ExportData)
         

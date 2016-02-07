@@ -1967,7 +1967,7 @@ fuddly>/projects/``. To illustrate that let's show the beginning of
    # If you only want one default DM, provide its name directly as follows:
    # project.default_dm = 'mydf'
 
-   logger = Logger(data_in_seperate_file=False, explicit_export=False,
+   logger = Logger(export_data=False, explicit_data_recording=False,
 		   export_orig=False, export_raw_data=False)
 
    printer1_tg = PrinterTarget(tmpfile_ext='.png')
@@ -2106,12 +2106,13 @@ The outputs of the logger are of four types:
 
 Some parameters allows to customize the behavior of the logger, such as:
 
-- ``data_in_seperate_file`` which control the location of where data
-  will be stored. If set to `False`, instead of being stored in
+- ``export_data`` which control the location of where data
+  will be stored. If set to ``False``, instead of being stored in
   separate files as explained previously, they will be written
-  directly within the log files.
+  directly within the log files (if ``enable_file_logging`` is set to ``True``).
+  This parameter does not interfere with data recording within ``fmkDB``.
 
-- ``explicit_export``: which is used for logging outcomes further to
+- ``explicit_data_recording``: which is used for logging outcomes further to
   an :class:`fuzzfmk.operator_helpers.Operator` instruction. If set to
   ``True``, the operator would have to state explicitly if it wants
   the just emitted data to be logged. Such instruction is typically
@@ -2121,7 +2122,7 @@ Some parameters allows to customize the behavior of the logger, such as:
   feedback and/or probes outputs.
 
 - ``enable_file_logging`` which is used to control the production of log files.
-  If set to ``False``, the Logger will only commit records to the fmkDB.
+  If set to ``False``, the Logger will only commit records to the ``fmkDB``.
 
 .. seealso:: Refer to :ref:`tuto:operator` to learn more about the
              interaction between an Operator and the Logger.
@@ -2130,8 +2131,8 @@ Some parameters allows to customize the behavior of the logger, such as:
 
 .. _tuto:operator:
 
-Defining Operators and Probes
-+++++++++++++++++++++++++++++
+Defining Operators
+++++++++++++++++++
 
 In order to automatize what a human operator could perform to interact
 with one or more targets, the abstracted class
@@ -2159,10 +2160,6 @@ process.
              machine library as `toysm
              <https://github.com/willakat/toysm>`_ can be helpful.
 
-
-
-Operators
-'''''''''
 
 To define an operator you have to define a class that inherits from
 :class:`fuzzfmk.operator_helpers.Operator`. Then, to register it within
@@ -2283,15 +2280,17 @@ the following section :ref:`tuto:probes`.
 
 .. _tuto:probes:
 
-Probes & The Monitoring Subsystem
-'''''''''''''''''''''''''''''''''
+Defining Probes
++++++++++++++++
 
 Probes are special objects that have to implement the method
-:meth:`fuzzfmk.monitor.Probe.main()` to be called either continuously
+:meth:`fuzzfmk.monitor.Probe.main()` which is called either continuously
 (the basic *probe*) or after each data emission (the *blocking
-probes*) by ``fuddly`` when an
-:class:`fuzzfmk.operator_helpers.Operator` requests it. Each probe is
-executed independently from the other ones in their own thread. They
+probes*). In order to be started, they have to be first associated to one or more
+:class:`fuzzfmk.target.Target` of the project. Then, when such a target is started,
+``fuddly`` take care of running the probes.
+
+Probes are executed independently from each other (they run within their own thread). They
 can interact with the target, and also use the logger. Any usage
 matching your expectation should be fine. Their purpose is to help you
 getting feedback from the target you interact with, but they can also
@@ -2300,7 +2299,8 @@ be part of the interaction if that seems useful in your setup.
 Depending on the kind of probes you want, you will have to choose
 between two decorators:
 
-- ``@probe`` for basic probes which run continuously once started.
+- ``@probe`` for basic probes which run continuously once started. Note there is a delay between each
+  call to :meth:`fuzzfmk.monitor.Probe.main()` which is configurable.
 
 - ``@blocking_probe`` for probe which will be run just once after each
   data emission.
@@ -2316,11 +2316,11 @@ example (not really useful ;) of a basic probe is presented below:
    class my_first_probe(Probe):
 
        def start(self, target, logger):
-	   self.cpt = 10
+           self.cpt = 10
 
        def main(self, target, logger):
-	   self.cpt += 1
-	   return ProbeStatus(self.cpt)
+           self.cpt -= 1
+           return ProbeStatus(self.cpt)
 
 
 A more useful one (a *blocking probe* in this case) that tries to get
@@ -2333,37 +2333,65 @@ information from the target is given here under:
    class health_check(Probe):
 
        def start(self, target, logger):
-	   self.status = ProbeStatus(0)
+           self.pstatus = ProbeStatus(0)
 
        def stop(self, target, logger):
-	   pass
+           pass
 
        def main(self, target, logger):
-	   fb = target.get_feedback()
-	   byte_string = fb.get_bytes()
-	   self.status.set_private_info(byte_string)
-	   self.status.set_status(0)
 
-	   if target.is_damaged():
-	       self.status.set_status(-1)
+           def check(target):
+               status = 0
+               # Do some monitoring of the target
+               return status
 
-	   if not target.is_alive():
-	       self.status.set_status(-2)
+           status_code = check(target)
 
-	   return self.status
+           self.pstatus.set_status(status_code)
+
+           if status_code < 0:
+               self.status.set_private_info("Something is wrong with the target!")
+
+           return self.pstatus
 
 
-Note that you can implement :meth:`fuzzfmk.monitor.Probe.start`
-and/or :meth:`fuzzfmk.monitor.Probe.stop` methods if you need to do
-some stuff during their initialization and termination.
+The return status of a probe has to comply with some rules in order to get ``fuddly``
+handle status as expected. Status rules are described below:
 
-The typical place to start a probe is within the initialization method
-of an Operator, that is
-:meth:`fuzzfmk.operator_helpers.Operator.start()`. Then, you will
-typically want to get a status from them each time your planned
-operation has been executed by ``fuddly``, that is within the method
-:meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`. Let's
-illustrate this in the following example:
+- if the status is positive or null, ``fuddly`` will consider that the target is OK;
+- if the status is negative, ``fuddly`` will consider that something happen to the target and will act accordingly
+  (log feedback from the probes and try to restart the target).
+
+.. note::
+    that you can implement :meth:`fuzzfmk.monitor.Probe.start` and/or :meth:`fuzzfmk.monitor.Probe.stop` methods if
+    you need to do some stuff during their initialization and termination.
+
+
+In order to associate one or more probe to a target, you have to add them within the ``targets``
+global variable of the related project file (refer to :ref:`tuto:project`). More precisely, for a target ``A``,
+instead of putting it directly within the ``targets`` list, you have to put a tuple containing first the target itself,
+then all the needed probes. Here under an example with the target ``A`` associated to the probe ``health_check``, and
+the target ``B`` with no probe:
+
+.. code-block:: python
+   :linenos:
+
+   targets = [(A, health_check), B]
+
+You can use any number of probes with any target, and use the same probes for several targets. Moreover, if you want
+to specify a specific delay for a basic probe, you can do it by replacing the probe within ``targets`` with a tuple
+containing the probe itself and the delay expressed in seconds. Here under an example:
+
+.. code-block:: python
+   :linenos:
+
+   targets = [ (A, health_check, (my_first_probe, 1.4)),
+               (B, (my_first_probe, 0.6)) ]
+
+
+Finally, you can also leverage probes from within an Operator. If you want to get a status from probes each time
+your planned operation has been executed by ``fuddly``, you can to do it within the method
+:meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`. Let's illustrate this in the following example:
 
 .. code-block:: python
    :linenos:
@@ -2371,27 +2399,26 @@ illustrate this in the following example:
    class MyOperator(Operator):
 
        def start(self, fmk_ops, dm, monitor, target, logger, user_input):
-	   monitor.start_probe('health_check')
+           if not monitor.is_probe_launched('health_check'):
+               # This case occurs if the probe is not associated to the target
+               monitor.start_probe('health_check')
 
        def stop(self, fmk_ops, dm, monitor, target, logger):
            monitor.stop_probe('health_check')
 
        def plan_next_operation(self, fmk_ops, dm, monitor, target, logger, fmk_feedback):
-	   op = Operation()
-	   return op
+           op = Operation()
+           return op
 
-       def do_after_all(self, fmk_ops, dm, monitor, target, logger):
-            linst = LastInstruction()
+           def do_after_all(self, fmk_ops, dm, monitor, target, logger):
+                linst = LastInstruction()
 
-            health_status = monitor.get_probe_status('health_check')
-            info = health_status.get_private_info()
-            linst.set_target_feedback_info(info)
+                health_status = monitor.get_probe_status('health_check')
+                if health_status.get_status() < 0:
+                linst.set_instruction(LastInstruction.ExportData)
+                    linst.set_comments('This input has triggered an error!')
 
-            if health_status.get_status() < 0:
-	        linst.set_instruction(LastInstruction.ExportData)
-                linst.set_comments('This input has triggered an error!')
-
-	    return linst
+            return linst
 
 
 In this example, we basically retrieve the status of our

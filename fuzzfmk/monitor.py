@@ -70,7 +70,8 @@ class Monitor(object):
         self._prj = st
         self.probes = self._prj.get_probes()
         self.fmk_ops = fmk_ops
-        self._logger=None
+        self._logger = None
+        self._target_status = None
 
     def set_logger(self, logger):
         self._logger = logger
@@ -83,6 +84,7 @@ class Monitor(object):
 
     def start(self):
         self.__enable = True
+        self._target_status = None
         self.monitor_conditions = {}
         self._logger.print_console('*** Monitor is started ***\n', nl_before=False, rgb=Color.COMPONENT_START)
         
@@ -90,7 +92,6 @@ class Monitor(object):
         self._logger.print_console('*** Monitor stopping in progress... ***\n', nl_before=False, rgb=Color.COMPONENT_INFO)
         self.stop_all_probes()
         self._logger.print_console('*** Monitor is stopped ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
-
 
     def enable_hooks(self):
         self.__enable = True
@@ -103,6 +104,9 @@ class Monitor(object):
 
     def start_probe(self, name):
         return self._prj.launch_probe(name)
+
+    def is_probe_launched(self, pname):
+        return self._prj.is_probe_launched(pname)
 
     def stop_probe(self, name):
         ok = self._prj.stop_probe(name)
@@ -125,6 +129,9 @@ class Monitor(object):
 
 
     def get_evts(self, name):
+        '''
+        This method is called by the project each time a probe is launched.
+        '''
         if name in self.monitor_conditions:
             # this branch is a priori useless
             ret = self.monitor_conditions[name]
@@ -144,7 +151,7 @@ class Monitor(object):
 
         try:
             self._wait_for_probe_termination()
-        except eh.Timeout:
+        except TimeoutError:
             self.fmk_ops.set_error("Timeout! At least one probe seems to be stuck in its 'main()' method.",
                                    code=Error.OperationCancelled)
 
@@ -165,7 +172,7 @@ class Monitor(object):
 
             now = datetime.datetime.now()
             if (now - t0).total_seconds() > 10:
-                raise eh.Timeout
+                raise TimeoutError
 
             time.sleep(0.1)
 
@@ -180,6 +187,7 @@ class Monitor(object):
         return self._prj.set_probe_delay(name, delay)
 
     def do_before_sending_data(self):
+        self._target_status = None
         if self.monitor_conditions:
             for name, mobj in self.monitor_conditions.items():
                 mobj.notify_data_ready()
@@ -205,12 +213,32 @@ class Monitor(object):
         if not self.__enable:
             return True
 
-        for n, p in self.probes.items():
-            if self._prj.is_probe_launched(n):
-                if self._prj.get_probe_status(n).get_status() < 0:
-                    return False
+        return self.is_target_ok()
 
-        return True
+        # for n, p in self.probes.items():
+        #     if self._prj.is_probe_launched(n):
+        #         pstatus = self._prj.get_probe_status(n)
+        #         if pstatus.get_status() < 0:
+        #             return False
+        #
+        # return True
+
+    @property
+    def target_status(self):
+        if self._target_status is None:
+            for n, _ in self.probes.items():
+                if self._prj.is_probe_launched(n):
+                    pstatus = self._prj.get_probe_status(n)
+                    if pstatus.get_status() < 0:
+                        self._target_status = -1
+                        break
+            else:
+                self._target_status = 1
+
+        return self._target_status
+
+    def is_target_ok(self):
+        return False if self.target_status < 0 else True
 
 
 class Probe(object):
@@ -219,11 +247,11 @@ class Probe(object):
         pass
 
     def _start(self, target, logger):
-        logger.log_fmk_info("Probe is starting (%s)" % self.__class__.__name__, nl_before=True, nl_after=True)
+        logger.print_console("__ probe '{:s}' is starting __".format(self.__class__.__name__), nl_before=True, nl_after=True)
         self.start(target, logger)
 
     def _stop(self, target, logger):
-        logger.log_fmk_info("Probe is stopping (%s)" % self.__class__.__name__, nl_before=True, nl_after=True)
+        logger.print_console("__ probe '{:s}' is stopping __".format(self.__class__.__name__), nl_before=True, nl_after=True)
         self.stop(target, logger)
 
     def start(self, target, logger):

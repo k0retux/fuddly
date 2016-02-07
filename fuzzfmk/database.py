@@ -135,14 +135,14 @@ class Database(object):
         else:
             return self._cur.lastrowid
 
-    def insert_feedback(self, data_id, source, content):
+    def insert_feedback(self, data_id, source, content, status_code=None):
         if content:
             content = sqlite.Binary(content)
         try:
             self._cur.execute(
-                    "INSERT INTO FEEDBACK(DATA_ID,SOURCE,CONTENT)"
-                    " VALUES(?,?,?)",
-                    (data_id, source, content))
+                    "INSERT INTO FEEDBACK(DATA_ID,SOURCE,CONTENT,STATUS)"
+                    " VALUES(?,?,?,?)",
+                    (data_id, source, content, status_code))
             self._con.commit()
         except sqlite.Error as e:
             self._con.rollback()

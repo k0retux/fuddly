@@ -50,9 +50,9 @@ class Target(object):
     '''
     Class abstracting the target we interact with.
     '''
-    
     _logger=None
     _time_beetwen_data_emission = None
+    _probes = None
 
     def __init__(self):
         '''
@@ -132,9 +132,17 @@ class Target(object):
         return None
 
     def cleanup(self):
-        raise NotImplementedError
+        '''
+        To be overloaded if something needs to be performed after each data emission.
+        It is called after any feedback has been retrieved.
+        '''
+        pass
 
-    def is_alive(self):
+    def recover_target(self):
+        '''
+        Implementation of target recovering operations, when a target problem has been detected
+        (i.e. a negative feedback from a probe or an operator)
+        '''
         raise NotImplementedError
 
     def get_feedback(self):
@@ -145,6 +153,19 @@ class Target(object):
 
     def get_description(self):
         return None
+
+
+    def add_probe(self, probe):
+        if self._probes is None:
+            self._probes = []
+        self._probes.append(probe)
+
+    def remove_probes(self):
+        self._probes = None
+
+    @property
+    def probes(self):
+        return self._probes if self._probes is not None else []
 
 
 class TargetFeedback(object):
@@ -1119,7 +1140,10 @@ class LocalTarget(Target):
         fcntl.fcntl(self.__app.stdout, fcntl.F_SETFL, fl | os.O_NONBLOCK)
         
     def cleanup(self):
-        os.kill(self.__app.pid, signal.SIGTERM)
+        try:
+            os.kill(self.__app.pid, signal.SIGTERM)
+        except:
+            print("\n*** WARNING: cannot kill application with PID {:d}".format(self.__app.pid))
 
     def get_feedback(self, delay=0.2):
         if self.__app is None:

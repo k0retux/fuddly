@@ -49,7 +49,6 @@ from fuzzfmk.operator_helpers import *
 from fuzzfmk.project import *
 
 import fuzzfmk.generic_data_makers
-import fuzzfmk.error_handling as eh
 
 import data_models
 import projects
@@ -123,79 +122,6 @@ class FmkFeedback(object):
 
     def get_produced_data(self):
         return self.__data_list
-
-
-class Error(object):
-
-    Reserved = -1
-
-    # Generic error code
-    FmkError = -2
-    CommandError = -3
-    UserCodeError = -4
-    UnrecoverableError = -5
-    FmkWarning = -6
-    OperationCancelled = -7
-
-    # Fuzzer.get_data() error code
-    CloneError = -10
-    InvalidDmaker = -11
-    HandOver = -12
-    DataUnusable = -13
-
-    # Fuzzer.launch_operator() error code
-    InvalidOp = -20
-    WrongOpPlan = -21
-
-    _code_info = {
-        Reserved: {'name': 'Reserved', 'color': 0xFFFFFF},
-
-        FmkError: {'name': 'FmkError', 'color': 0xA00000},
-        CommandError: {'name': 'CommandError', 'color': 0xB00000},
-        UserCodeError: {'name': 'UserCodeError', 'color': 0xE00000},
-        UnrecoverableError: {'name': 'UnrecoverableError', 'color': 0xFF0000},
-        FmkWarning: {'name': 'FmkWarning', 'color': 0xFFA500},
-        OperationCancelled: {'name': 'OperationCancelled', 'color': 0xFC00F4},
-
-        CloneError: {'name': 'CloneError', 'color': 0xA00000},
-        InvalidDmaker: {'name': 'InvalidDmaker', 'color': 0xB00000},
-        HandOver: {'name': 'HandOver', 'color': 0x00B500},
-        DataUnusable: {'name': 'DataUnusable', 'color': 0x009500},
-
-        InvalidOp: {'name': 'InvalidOp', 'color': 0xB00000},
-        WrongOpPlan: {'name': 'WrongOpPlan', 'color': 0xE00000},
-        }
-
-
-    def __init__(self, msg='', context=None, code=Reserved):
-        self.__msg = msg
-        self.__ctx = context
-        self.__code = code
-
-    def set(self, msg, context=None, code=Reserved):
-        self.__msg = msg
-        self.__ctx = context
-        self.__code = code
-
-    def __get_msg(self):
-        return self.__msg
-
-    def __get_context(self):
-        return self.__ctx
-
-    def __get_code(self):
-        return self.__code
-
-    def __get_color(self):
-        return self._code_info[self.code]['color']
-
-    msg = property(fget=__get_msg)
-    context = property(fget=__get_context)
-    code = property(fget=__get_code)
-    color = property(fget=__get_color)
-
-    def __str__(self):
-        return self._code_info[self.code]['name']
 
 
 class EnforceOrder(object):
@@ -302,7 +228,9 @@ class Fuzzer(object):
 
     def __reset_fmk_internals(self, reset_existing_seed=True):
         self.cleanup_all_dmakers(reset_existing_seed)
-        self.set_fuzz_delay(0)
+        # Warning: fuzz delay is not set to 0 by default in order to have a time frame
+        # where SIGINT is accepted from user
+        self.set_fuzz_delay(0.5)
         self.set_fuzz_burst(1)
 
         base_timeout = self.tg._time_beetwen_data_emission
@@ -451,6 +379,39 @@ class Fuzzer(object):
                 for gen_name in generator_names:
                     gen_obj = tactics.get_generator_obj(gen_type, gen_name)
                     self.fmkDB.insert_dmaker(dm_name, gen_type, gen_name, True, True)
+
+    def monitor_probes(self):
+        probes = self.prj.get_probes()
+        ok = True
+        for pname in probes:
+            if self.prj.is_probe_launched(pname):
+                pstatus = self.prj.get_probe_status(pname)
+                err = pstatus.get_status()
+                if err < 0:
+                    ok = False
+                    priv = pstatus.get_private_info()
+                    self.lg.log_probe_feedback(source="Probe '{:s}'".format(pname), content=priv, status_code=err)
+
+        if not ok:
+            target_recovered = False
+            try:
+                target_recovered = self.tg.recover_target()
+            except NotImplementedError:
+                self.lg.log_fmk_info("No method to recover the target is implemented! (assumption: no need "
+                                     "to recover)")
+                target_recovered = True  # assumption: no need to recover
+            except:
+                self.lg.log_fmk_info("Exception raised while trying to recover the target!")
+            else:
+                if target_recovered:
+                    self.lg.log_fmk_info("The target has been recovered!")
+                else:
+                    self.lg.log_fmk_info("The target has not been recovered! All further operations "
+                                         "will be terminated.")
+            return target_recovered
+
+        else:
+            return True
 
 
     @EnforceOrder(initial_func=True, final_state='get_projs')
@@ -689,6 +650,21 @@ class Fuzzer(object):
                 targets.insert(0, EmptyTarget())
             except:
                 targets = [EmptyTarget()]
+            else:
+                new_targets = []
+                for obj in targets:
+                    if isinstance(obj, list) or isinstance(obj, tuple):
+                        tg = obj[0]
+                        obj = obj[1:]
+                        tg.remove_probes()
+                        for p in obj:
+                            tg.add_probe(p)
+                    else:
+                        assert(issubclass(obj.__class__, Target))
+                        tg = obj
+                        tg.remove_probes()
+                    new_targets.append(tg)
+                targets = new_targets
 
             if self.__current_tg >= len(targets):
                 self.__current_tg = 0
@@ -820,6 +796,13 @@ class Fuzzer(object):
                 if ok:
                     self.__enable_target()
                     self.__mon.start()
+                    for p in self.tg.probes:
+                        pname, delay = self._extract_info_from_probe(p)
+                        if delay is None:
+                            self.__mon.start_probe(pname)
+                        else:
+                            self.__mon.set_probe_delay(pname, delay)
+                            self.__mon.start_probe(pname)
                     self.prj.start()
                 else:
                     self.set_error("The Target has not been initialized correctly")
@@ -879,6 +862,17 @@ class Fuzzer(object):
         for tg in self.__target_dict[self.prj]:
             yield tg
 
+
+    def _extract_info_from_probe(self, p):
+        if isinstance(p, list) or isinstance(p, tuple):
+            assert(len(p) == 2)
+            pname = p[0].__name__
+            delay = p[1]
+        else:
+            pname = p.__name__
+            delay = None
+        return pname, delay
+
     @EnforceOrder(accepted_states=['25_load_dm','S1','S2'])
     def show_targets(self):
         print(colorize(FontStyle.BOLD + '\n-=[ Available Targets ]=-\n', rgb=Color.INFO))
@@ -908,7 +902,19 @@ class Fuzzer(object):
                     desc = ' [' + desc + ']'
                 name = tg.__class__.__name__ + desc
                 
-            msg = "[{:d}] {:s}".format(idx, name) 
+            msg = "[{:d}] {:s}".format(idx, name)
+
+            probes = tg.probes
+            if probes:
+                msg += '\n     \-- monitored by:'
+                for p in probes:
+                    pname, delay = self._extract_info_from_probe(p)
+                    if delay:
+                        msg += " {:s}(refresh={:.2f}s),".format(pname, delay)
+                    else:
+                        msg += " {:s},".format(pname)
+                msg = msg[:-1]
+
             if self.__current_tg == idx:
                 msg = colorize(FontStyle.BOLD + msg, rgb=Color.SELECTED)
             else:
@@ -1072,6 +1078,7 @@ class Fuzzer(object):
 
         new_dm = DataModel()
         new_tactics = Tactics()
+        dyn_gen_ids = []
         name = ''
         for dm in dm_list:
             name += dm.name + '+'
@@ -1093,6 +1100,8 @@ class Fuzzer(object):
                     raise ValueError("the generator '{:s}' exists already".format(k))
                 else:
                     new_tactics.generators[k] = v
+            for dmk_id in self.__dynamic_generator_ids[dm]:
+                dyn_gen_ids.append(dmk_id)
 
         new_dm.name = name[:-1]
         self.fmkDB.insert_data_model(new_dm.name)
@@ -1104,6 +1113,7 @@ class Fuzzer(object):
         # In this case DynGens have already been generated through
         # the reloading of the included DMs
         self.__dyngenerators_created[new_dm] = True
+        self.__dynamic_generator_ids[new_dm] = dyn_gen_ids
         self.dm = new_dm
 
         if self.__is_started():
@@ -1352,13 +1362,17 @@ class Fuzzer(object):
         else:
             cont1 = False
 
+        cont3 = True
         # That means this is the end of a burst
         if self._burst_countdown == self._burst:
             self.log_target_feedback()
+            # We handle probe feedback if any
+            cont3 = self.monitor_probes()
+            self.tg.cleanup()
 
         cont2 = self.__mon.do_after_sending_and_logging_data()
 
-        return cont0 and cont1 and cont2
+        return cont0 and cont1 and cont2 and cont3
 
     @EnforceOrder(accepted_states=['S2'])
     def send_data(self, data_list):
@@ -1521,7 +1535,8 @@ class Fuzzer(object):
                     tg_desc = self.tg.get_description()
                     if tg_desc is not None:
                         tg_name += ' [' + tg_desc + ']'
-                    self.fmkDB.insert_project_record(self.prj.name, data_id, tg_name)
+                    self.lg.commit_project_record(dt, self.prj.name, tg_name)
+                    # self.fmkDB.insert_project_record(self.prj.name, data_id, tg_name)
 
     @EnforceOrder(accepted_states=['S2'])
     def new_transfer_preamble(self):
@@ -1976,15 +1991,22 @@ class Fuzzer(object):
                     # Target fbk is logged only at the end of a burst
                     if self._burst_countdown == self._burst:
                         self.log_target_feedback()
+                        cont = self.monitor_probes()
+                        if not cont:
+                            exit_operator = True
+                            self.lg.log_fmk_info("Operator will shutdown because something is going wrong with "
+                                                 "the target and the recovering procedure did not succeed...")
 
                     feedback = linst.get_target_feedback_info()
                     if feedback:
                         self.lg.log_target_feedback_from_operator(feedback)
 
-                    comments = linst.get_comments()
-                    if comments:
-                        self.lg.log_comment(comments)
+                comments = linst.get_comments()
+                if comments:
+                    self.lg.log_comment(comments)
 
+                if self._burst_countdown == self._burst:
+                    self.tg.cleanup()
         try:
             operator.stop(self._exportable_fmk_ops, self.dm, self.__mon, self.tg, self.lg)
         except:
