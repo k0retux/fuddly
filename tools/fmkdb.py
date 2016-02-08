@@ -27,6 +27,7 @@ import os
 import sys
 import inspect
 import datetime
+import math
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
@@ -40,7 +41,9 @@ from libs.fs_utils import ensure_dir
 import argparse
 
 parser = argparse.ArgumentParser(description='Process arguments.')
+parser.add_argument('--fmkdb', metavar='fmkdb_path', help='path to an alternative fmkdb.db')
 parser.add_argument('--no-color', action='store_true', help='do not use colors')
+parser.add_argument('-v', '--verbose', action='store_true', help='verbose mode')
 
 group = parser.add_argument_group('Fuddly Database Statistics')
 group.add_argument('-s', '--all-stats', action='store_true', help='show all statistics')
@@ -52,14 +55,20 @@ group.add_argument('-e', '--export-one-data', type=int, metavar='data_id',
                    help='extract data from the provided data ID')
 
 group = parser.add_argument_group('Fuddly Database Analysis')
-group.add_argument('--data-with-impact', nargs=2, metavar=('project_name','target_name'),
-                   help="retrieve data that negatively impacted the target")
+group.add_argument('--data-with-impact', action='store_true',
+                   help="retrieve data that negatively impacted a target")
 
 
 if __name__ == "__main__":
 
     args = parser.parse_known_args()
 
+    fmkdb = args[0].fmkdb
+    if fmkdb is not None and not os.path.isfile(fmkdb):
+        print(colorize("*** ERROR: '{:s}' does not exist ***".format(fmkdb), rgb=Color.ERROR))
+        sys.exit(-1)
+
+    verbose = args[0].verbose
     no_color = args[0].no_color
     if no_color:
         def colorize(string, rgb=None, ansi=None, bg=None, ansi_bg=None, fd=1):
@@ -72,11 +81,7 @@ if __name__ == "__main__":
 
     impact_analysis = args[0].data_with_impact
 
-    # print(export_one_data)
-    #
-    # sys.exit(0)
-
-    fmkdb = Database()
+    fmkdb = Database(fmkdb_path=fmkdb)
     fmkdb.start()
 
     if display_stats:
@@ -160,6 +165,36 @@ if __name__ == "__main__":
             print(colorize("*** ERROR: provided data IDs are incorrect ***", rgb=Color.ERROR))
 
     elif impact_analysis:
-        raise NotImplementedError
+        fbk_records = fmkdb.execute_sql_statement(
+            "SELECT DATA_ID, STATUS, SOURCE FROM FEEDBACK "
+            "WHERE STATUS < 0;"
+        )
+        prj_records = fmkdb.execute_sql_statement(
+            "SELECT PRJ_NAME, DATA_ID, TARGET FROM PROJECT_RECORDS;"
+        )
+
+        if fbk_records and prj_records:
+            data_ids = {}
+            for rec in fbk_records:
+                data_ids[rec[0]] = (rec[1], rec[2])
+
+            data_id_pattern = "{:>"+str(int(math.log10(len(prj_records)))+2)+"s}"
+
+            current_prj = None
+            for rec in prj_records:
+                prj, data_id, target = rec
+                if data_id in data_ids.keys():
+                    if prj != current_prj:
+                        current_prj = prj
+                        print(colorize("*** Project '{:s}' ***".format(prj), rgb=Color.FMKINFOGROUP))
+                    format_string = "     [DataID " + data_id_pattern + "] --> {:s}"
+                    print(colorize(format_string.format('#'+str(data_id), target),
+                                   rgb=Color.DATAINFO))
+                    if verbose:
+                        print(colorize("       |_ status={:d} from {:s}".format(data_ids[data_id][0], data_ids[data_id][1]),
+                                       rgb=Color.FMKSUBINFO))
+
+        else:
+            print(colorize("*** No data has negatively impacted a target ***", rgb=Color.FMKINFO))
 
     fmkdb.stop()

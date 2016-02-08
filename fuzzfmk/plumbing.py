@@ -1120,7 +1120,7 @@ class Fuzzer(object):
 
         new_dm.name = name[:-1]
 
-        if new_dm.name not in map(lambda x: x.name, self.dm_list):
+        if reload_dm or new_dm.name not in map(lambda x: x.name, self.dm_list):
             self.fmkDB.insert_data_model(new_dm.name)
             self.__add_data_model(new_dm, new_tactics,
                                   (None, dm_list),

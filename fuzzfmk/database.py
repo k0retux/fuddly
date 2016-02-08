@@ -14,9 +14,12 @@ class Database(object):
     DEFAULT_GTYPE_NAME = '__DEFAULT_GTYPE'
     DEFAULT_GEN_NAME = '__DEFAULT_GNAME'
 
-    def __init__(self):
+    def __init__(self, fmkdb_path=None):
         self.name = 'fmkDB.db'
-        self.fmk_db = os.path.join(gr.app_folder, self.name)
+        if fmkdb_path is None:
+            self.fmk_db = os.path.join(gr.app_folder, self.name)
+        else:
+            self.fmk_db = fmkdb_path
         self._con = None
         self._cur = None
         self.enabled = False
