@@ -32,7 +32,8 @@ project.default_dm = ['mydf','zip']
 # If you only want one default DM, provide its name directly as follows:
 # project.default_dm = 'mydf'
 
-logger = Logger('standard', export_data=True, explicit_data_recording=True, export_orig=False)
+logger = Logger('standard', export_data=False, explicit_data_recording=True, export_orig=False,
+                enable_file_logging=False)
 
 printer1_tg = PrinterTarget(tmpfile_ext='.png')
 printer1_tg.set_target_ip('127.0.0.1')

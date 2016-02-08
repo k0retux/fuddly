@@ -883,35 +883,40 @@ class Fuzzer(object):
             delay = None
         return pname, delay
 
+
+    def _get_detailed_target_desc(self, tg):
+        if isinstance(tg, PrinterTarget):
+            printer_name = tg.get_printer_name()
+            printer_name = ', Name: ' + printer_name if printer_name is not None else ''
+            detailed_desc = tg.__class__.__name__ + ' [IP: ' + tg.get_target_ip() + printer_name + ']'
+        elif isinstance(tg, LocalTarget):
+            pre_args = tg.get_pre_args()
+            post_args = tg.get_post_args()
+            args = ''
+            if pre_args or post_args:
+                if pre_args is not None:
+                    args += pre_args
+                if post_args is not None:
+                    args += post_args
+                args = ', Args: ' + args
+            detailed_desc = tg.__class__.__name__ + ' [Program: ' + tg.get_target_path() + args + ']'
+        else:
+            desc = tg.get_description()
+            if desc is None:
+                desc = ''
+            else:
+                desc = ' [' + desc + ']'
+            detailed_desc = tg.__class__.__name__ + desc
+
+        return detailed_desc
+
     @EnforceOrder(accepted_states=['25_load_dm','S1','S2'])
     def show_targets(self):
         print(colorize(FontStyle.BOLD + '\n-=[ Available Targets ]=-\n', rgb=Color.INFO))
         idx = 0
         for tg in self.get_available_targets():
-            if isinstance(tg, PrinterTarget):
-                printer_name = tg.get_printer_name()
-                printer_name = ', Name: ' + printer_name if printer_name is not None else ''
-                name = tg.__class__.__name__ + ' [IP: ' + tg.get_target_ip() + printer_name + ']'
-            elif isinstance(tg, LocalTarget):
-                pre_args = tg.get_pre_args()
-                post_args = tg.get_post_args()
-                args = ''
-                if pre_args or post_args:
-                    if pre_args is not None:
-                        args += pre_args
-                    if post_args is not None:
-                        args += post_args
-                    args = ', Args: ' + args
+            name = self._get_detailed_target_desc(tg)
 
-                name = tg.__class__.__name__ + ' [Program: ' + tg.get_target_path() + args + ']'
-            else:
-                desc = tg.get_description()
-                if desc is None:
-                    desc = ''
-                else:
-                    desc = ' [' + desc + ']'
-                name = tg.__class__.__name__ + desc
-                
             msg = "[{:d}] {:s}".format(idx, name)
 
             probes = tg.probes
@@ -1114,17 +1119,19 @@ class Fuzzer(object):
                 dyn_gen_ids.append(dmk_id)
 
         new_dm.name = name[:-1]
-        self.fmkDB.insert_data_model(new_dm.name)
-        self.__add_data_model(new_dm, new_tactics,
-                              (None, dm_list),
-                              reload_dm=reload_dm)
-        self.fmkDB.commit()
 
-        # In this case DynGens have already been generated through
-        # the reloading of the included DMs
-        self.__dyngenerators_created[new_dm] = True
-        self.__dynamic_generator_ids[new_dm] = dyn_gen_ids
-        self.dm = new_dm
+        if new_dm.name not in map(lambda x: x.name, self.dm_list):
+            self.fmkDB.insert_data_model(new_dm.name)
+            self.__add_data_model(new_dm, new_tactics,
+                                  (None, dm_list),
+                                  reload_dm=reload_dm)
+            self.fmkDB.commit()
+
+            # In this case DynGens have already been generated through
+            # the reloading of the included DMs
+            self.__dyngenerators_created[new_dm] = True
+            self.__dynamic_generator_ids[new_dm] = dyn_gen_ids
+            self.dm = new_dm
 
         if self.__is_started():
             self._cleanup_dm_attrs_from_fmk()
@@ -1544,10 +1551,7 @@ class Fuzzer(object):
 
                 data_id = self.lg.commit_log_entry(self.group_id)
                 if data_id is not None:
-                    tg_name = self.tg.__class__.__name__
-                    tg_desc = self.tg.get_description()
-                    if tg_desc is not None:
-                        tg_name += ' [' + tg_desc + ']'
+                    tg_name = self._get_detailed_target_desc(self.tg)
                     self.lg.commit_project_record(dt, self.prj.name, tg_name)
 
     @EnforceOrder(accepted_states=['S2'])

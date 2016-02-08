@@ -79,11 +79,11 @@ class FontStyle:
     END = '\033[0m'
 
 
-sqlite_module = True
+sqlite3_module = True
 try:
-    import sqlite3 as sqlite
+    import sqlite3
 except ImportError:
-    sqlite_module = False
+    sqlite3_module = False
     print('WARNING [FMK]: SQLite3 not installed, FMKDB will not be available!')
 
 cups_module = True

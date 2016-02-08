@@ -29,7 +29,7 @@ import time
 from libs.external_modules import *
 import data_models
 from fuzzfmk.global_resources import *
-
+import fuzzfmk.error_handling as eh
 
 class MonitorCondition(object):
     def __init__(self):
@@ -151,7 +151,7 @@ class Monitor(object):
 
         try:
             self._wait_for_probe_termination()
-        except TimeoutError:
+        except eh.Timeout:
             self.fmk_ops.set_error("Timeout! At least one probe seems to be stuck in its 'main()' method.",
                                    code=Error.OperationCancelled)
 
@@ -172,7 +172,7 @@ class Monitor(object):
 
             now = datetime.datetime.now()
             if (now - t0).total_seconds() > 10:
-                raise TimeoutError
+                raise eh.Timeout
 
             time.sleep(0.1)
 

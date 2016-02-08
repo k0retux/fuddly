@@ -301,6 +301,7 @@ class Logger(object):
 
         Args:
             fbk: feedback record
+            status_code (int): should be negative for error
         """
         if sys.version_info[0] > 2 and isinstance(fbk, bytes):
             fbk = fbk.decode('latin_1')
@@ -590,7 +591,7 @@ class Logger(object):
         else:
             self.__export_cpt += 1
 
-        export_fname = '{date:s}_{cpt:0>2d}{suff:s}.{ext:s}'.format(date=self.__prev_export_date,
+        export_fname = '{date:s}_{cpt:0>2d}{suff:s}.{ext:s}'.format(date=current_export_date,
                                                                     cpt=self.__export_cpt,
                                                                     ext=file_extension,
                                                                     suff=suffix)

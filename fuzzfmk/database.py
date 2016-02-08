@@ -16,22 +16,22 @@ class Database(object):
 
     def __init__(self):
         self.name = 'fmkDB.db'
-        self.log_db = os.path.join(gr.app_folder, self.name)
+        self.fmk_db = os.path.join(gr.app_folder, self.name)
         self._con = None
         self._cur = None
         self.enabled = False
 
     def start(self):
-        if not sqlite_module:
-            print("/!\\ WARNING /!\\: Fuddly's LogDB unavailable because python-sqlite3 is not installed!")
+        if not sqlite3_module:
+            print("/!\\ WARNING /!\\: Fuddly's FmkDB unavailable because python-sqlite3 is not installed!")
             return False
 
-        if os.path.isfile(self.log_db):
-            self._con = sqlite.connect(self.log_db)
+        if os.path.isfile(self.fmk_db):
+            self._con = sqlite3.connect(self.fmk_db, detect_types=sqlite3.PARSE_DECLTYPES)
             self._cur = self._con.cursor()
 
         else:
-            self._con = sqlite.connect(self.log_db)
+            self._con = sqlite3.connect(self.fmk_db, detect_types=sqlite3.PARSE_DECLTYPES)
             fmk_db_sql = open(gr.fmk_folder + self.DDL_fname).read()
             with self._con:
                 self._cur = self._con.cursor()
@@ -50,7 +50,7 @@ class Database(object):
     def commit(self):
         try:
             self._con.commit()
-        except sqlite.Error as e:
+        except sqlite3.Error as e:
             self._con.rollback()
             return -1
         else:
@@ -59,18 +59,24 @@ class Database(object):
     def rollback(self):
         try:
             self._con.rollback()
-        except sqlite.Error as e:
+        except sqlite3.Error as e:
             return -1
         else:
             return 0
 
+    def execute_sql_statement(self, sql_stmt):
+        with self._con:
+            self._cur.execute(sql_stmt)
+            rows = self._cur.fetchall()
+
+            return rows
 
     def insert_data_model(self, dm_name):
         try:
             self._cur.execute(
                     "INSERT INTO DATAMODEL(NAME) VALUES(?)",
                     (dm_name,))
-        except sqlite.Error as e:
+        except sqlite3.Error as e:
             self._con.rollback()
             print("\n*** ERROR[SQL:{:s}] while inserting a value into table DATAMODEL!".format(e.args[0]))
             return -1
@@ -82,7 +88,7 @@ class Database(object):
             self._cur.execute(
                     "INSERT INTO PROJECT(NAME) VALUES(?)",
                     (prj_name,))
-        except sqlite.Error as e:
+        except sqlite3.Error as e:
             self._con.rollback()
             print("\n*** ERROR[SQL:{:s}] while inserting a value into table PROJECT!".format(e.args[0]))
             return -1
@@ -97,7 +103,7 @@ class Database(object):
                     "INSERT INTO DMAKERS(DM_NAME,TYPE,NAME,CLONE_TYPE,CLONE_NAME,GENERATOR,STATEFUL)"
                     " VALUES(?,?,?,?,?,?,?)",
                     (dm_name, dtype, name, clone_type, clone_name, is_gen, stateful))
-        except sqlite.Error as e:
+        except sqlite3.Error as e:
             self._con.rollback()
             print("\n*** ERROR[SQL:{:s}] while inserting a value into table DMAKERS!".format(e.args[0]))
             return -1
@@ -105,14 +111,14 @@ class Database(object):
             return self._cur.lastrowid
 
     def insert_data(self, dtype, dm_name, raw_data, sz, sent_date, ack_date, group_id=None):
-        blob = sqlite.Binary(raw_data)
+        blob = sqlite3.Binary(raw_data)
         try:
             self._cur.execute(
                     "INSERT INTO DATA(GROUP_ID,TYPE,DM_NAME,CONTENT,SIZE,SENT_DATE,ACK_DATE)"
                     " VALUES(?,?,?,?,?,?,?)",
                     (group_id, dtype, dm_name, blob, sz, sent_date, ack_date))
             self._con.commit()
-        except sqlite.Error as e:
+        except sqlite3.Error as e:
             self._con.rollback()
             print("\n*** ERROR[SQL:{:s}] while inserting a value into table DATA!".format(e.args[0]))
             return None
@@ -122,13 +128,13 @@ class Database(object):
     def insert_steps(self, data_id, step_id, dmaker_type, dmaker_name, data_id_src,
                      user_input, info):
         if info:
-            info = sqlite.Binary(info)
+            info = sqlite3.Binary(info)
         try:
             self._cur.execute(
                     "INSERT INTO STEPS(DATA_ID,STEP_ID,DMAKER_TYPE,DMAKER_NAME,DATA_ID_SRC,USER_INPUT,INFO)"
                     " VALUES(?,?,?,?,?,?,?)",
                     (data_id, step_id, dmaker_type, dmaker_name, data_id_src, user_input, info))
-        except sqlite.Error as e:
+        except sqlite3.Error as e:
             self._con.rollback()
             print("\n*** ERROR[SQL:{:s}] while inserting a value into table STEPS!".format(e.args[0]))
             return -1
@@ -137,14 +143,14 @@ class Database(object):
 
     def insert_feedback(self, data_id, source, content, status_code=None):
         if content:
-            content = sqlite.Binary(content)
+            content = sqlite3.Binary(content)
         try:
             self._cur.execute(
                     "INSERT INTO FEEDBACK(DATA_ID,SOURCE,CONTENT,STATUS)"
                     " VALUES(?,?,?,?)",
                     (data_id, source, content, status_code))
             self._con.commit()
-        except sqlite.Error as e:
+        except sqlite3.Error as e:
             self._con.rollback()
             print("\n*** ERROR[SQL:{:s}] while inserting a value into table FEEDBACK!".format(e.args[0]))
             return -1
@@ -158,7 +164,7 @@ class Database(object):
                     " VALUES(?,?,?)",
                     (data_id, content, date))
             self._con.commit()
-        except sqlite.Error as e:
+        except sqlite3.Error as e:
             self._con.rollback()
             print("\n*** ERROR[SQL:{:s}] while inserting a value into table COMMENTS!".format(e.args[0]))
             return -1
@@ -172,13 +178,13 @@ class Database(object):
                     " VALUES(?,?,?,?)",
                     (data_id, content, date, error))
             self._con.commit()
-        except sqlite.Error as e:
+        except sqlite3.Error as e:
             try:
                 self._con.rollback()
                 print("\n*** ERROR[SQL:{:s}] while inserting a value into table FMKINFO!".format(e.args[0]))
                 return -1
-            except sqlite.ProgrammingError as e:
-                print("\n*** ERROR[SQLite]: {:s}".format(e.args[0]))
+            except sqlite3.ProgrammingError as e:
+                print("\n*** ERROR[sqlite3]: {:s}".format(e.args[0]))
                 print("*** Not currently handled by fuddly.")
                 return -1
         else:
@@ -191,7 +197,7 @@ class Database(object):
                 " VALUES(?,?,?)",
                 (prj_name, data_id, target))
             self._con.commit()
-        except sqlite.Error as e:
+        except sqlite3.Error as e:
             self._con.rollback()
             print("\n*** ERROR[SQL:{:s}] while inserting a value into table PROJECT_RECORDS!".format(e.args[0]))
             return -1
@@ -215,7 +221,7 @@ class Database(object):
                 WHERE DATA.ID >= {sid:d} {ign_eid:s} AND DATA.ID <= {eid:d}
                 '''.format(sid = start_id, eid = end_id, ign_eid = ign_end_id)
             )
-        except sqlite.Error as e:
+        except sqlite3.Error as e:
             print("\n*** ERROR[SQL]: {:s}".format(e.args[0]))
             return
         else:

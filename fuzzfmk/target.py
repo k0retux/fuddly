@@ -1168,6 +1168,9 @@ class LocalTarget(Target):
         return self.__feedback
 
     def is_alive(self):
+        if self.__app is None:
+            return True
+
         target_exit_status = self.__app.poll()
 
         self.__feedback.set_error_code(target_exit_status)

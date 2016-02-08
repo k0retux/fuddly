@@ -23,18 +23,22 @@
 
 import os
 import fuzzfmk
+import sys
+import inspect
 
 fuddly_version = '0.21'
 
-fuzzfmk_folder = os.path.dirname(fuzzfmk.__file__)
+fuzzfmk_folder = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+# fuzzfmk_folder = os.path.dirname(fuzzfmk.__file__)
 fuzzfmk_folder  = '.' if fuzzfmk_folder == '' else fuzzfmk_folder
 
-app_folder = os.path.dirname(os.path.dirname(fuzzfmk.__file__))
+app_folder = os.path.dirname(fuzzfmk_folder)
 app_folder = '.' if app_folder == '' else app_folder
 
 workspace_folder = app_folder + os.sep + 'workspace' + os.sep
 external_libs_folder = app_folder + os.sep + 'external_libs' + os.sep
 external_tools_folder = app_folder + os.sep + 'external_tools' + os.sep
+exported_data_folder = app_folder + os.sep + 'exported_data' + os.sep
 logs_folder = app_folder + os.sep + 'logs' + os.sep
 fmk_folder = app_folder + os.sep + 'fuzzfmk' + os.sep
 
