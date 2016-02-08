@@ -208,6 +208,7 @@ class Fuzzer(object):
         self.fmkDB.commit()
 
         self.group_id = 0
+        self._saved_group_id = None  # used by self._recover_target()
 
         self.enable_wkspace()
         self.get_data_models()
@@ -380,6 +381,31 @@ class Fuzzer(object):
                     gen_obj = tactics.get_generator_obj(gen_type, gen_name)
                     self.fmkDB.insert_dmaker(dm_name, gen_type, gen_name, True, True)
 
+    def _recover_target(self):
+        if self.group_id == self._saved_group_id:
+            # This method can be called after checking target feedback or checking
+            # probes status. However, we have to avoid to recover the target twice.
+            return True
+        else:
+            self._saved_group_id = self.group_id
+
+        target_recovered = False
+        try:
+            target_recovered = self.tg.recover_target()
+        except NotImplementedError:
+            self.lg.log_fmk_info("No method to recover the target is implemented! (assumption: no need "
+                                 "to recover)")
+            target_recovered = True  # assumption: no need to recover
+        except:
+            self.lg.log_fmk_info("Exception raised while trying to recover the target!")
+        else:
+            if target_recovered:
+                self.lg.log_fmk_info("The target has been recovered!")
+            else:
+                self.lg.log_fmk_info("The target has not been recovered! All further operations "
+                                     "will be terminated.")
+        return target_recovered
+
     def monitor_probes(self):
         probes = self.prj.get_probes()
         ok = True
@@ -393,23 +419,7 @@ class Fuzzer(object):
                     self.lg.log_probe_feedback(source="Probe '{:s}'".format(pname), content=priv, status_code=err)
 
         if not ok:
-            target_recovered = False
-            try:
-                target_recovered = self.tg.recover_target()
-            except NotImplementedError:
-                self.lg.log_fmk_info("No method to recover the target is implemented! (assumption: no need "
-                                     "to recover)")
-                target_recovered = True  # assumption: no need to recover
-            except:
-                self.lg.log_fmk_info("Exception raised while trying to recover the target!")
-            else:
-                if target_recovered:
-                    self.lg.log_fmk_info("The target has been recovered!")
-                else:
-                    self.lg.log_fmk_info("The target has not been recovered! All further operations "
-                                         "will be terminated.")
-            return target_recovered
-
+            return self._recover_target()
         else:
             return True
 
@@ -1228,7 +1238,7 @@ class Fuzzer(object):
     def set_fuzz_delay(self, delay):
         if delay >= 0 or delay == -1:
             self._delay = delay
-            self.lg.log_fmk_info('Fuzz delay = %d' % self._delay)
+            self.lg.log_fmk_info('Fuzz delay = {:.1f}s'.format(self._delay))
             return True
         else:
             self.lg.log_fmk_info('Wrong delay value!')
@@ -1249,7 +1259,7 @@ class Fuzzer(object):
     def set_timeout(self, timeout):
         if timeout >= 0:
             self._timeout = timeout
-            self.lg.log_fmk_info('Target health-check timeout = %d' % self._timeout)
+            self.lg.log_fmk_info('Target health-check timeout = {:.1f}s'.format(self._timeout))
             return True
         else:
             self.lg.log_fmk_info('Wrong timeout value!')
@@ -1330,7 +1340,9 @@ class Fuzzer(object):
         if self._burst_countdown == self._burst:
             # log residual just before sending new data to avoid
             # polluting feedback logs of the next emission
-            self.log_target_residual_feedback()
+            cont = self.log_target_residual_feedback()
+            if not cont:
+                return False
 
         self.new_transfer_preamble()
         self.send_data(data_list)
@@ -1363,16 +1375,17 @@ class Fuzzer(object):
             cont1 = False
 
         cont3 = True
+        cont4 = True
         # That means this is the end of a burst
         if self._burst_countdown == self._burst:
-            self.log_target_feedback()
+            cont3 = self.log_target_feedback()
             # We handle probe feedback if any
-            cont3 = self.monitor_probes()
+            cont4 = self.monitor_probes()
             self.tg.cleanup()
 
         cont2 = self.__mon.do_after_sending_and_logging_data()
 
-        return cont0 and cont1 and cont2 and cont3
+        return cont0 and cont1 and cont2 and cont3 and cont4
 
     @EnforceOrder(accepted_states=['S2'])
     def send_data(self, data_list):
@@ -1536,7 +1549,6 @@ class Fuzzer(object):
                     if tg_desc is not None:
                         tg_name += ' [' + tg_desc + ']'
                     self.lg.commit_project_record(dt, self.prj.name, tg_name)
-                    # self.fmkDB.insert_project_record(self.prj.name, data_id, tg_name)
 
     @EnforceOrder(accepted_states=['S2'])
     def new_transfer_preamble(self):
@@ -1548,42 +1560,65 @@ class Fuzzer(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def log_target_feedback(self):
+        err_detected1, err_detected2 = False, False
         if self.__send_enabled:
             if self._burst > 1:
                 p = "::[ END BURST ]::\n"
             else:
                 p = None
-            ok = self.lg.log_current_target_feedback(preamble=p)
-            if not ok:
-                self._log_directly_retrieved_target_feedback(preamble=p)
+            try:
+                err_detected1 = self.lg.log_collected_target_feedback(preamble=p)
+            except NotImplementedError:
+                pass
+            finally:
+                err_detected2 = self._log_directly_retrieved_target_feedback(preamble=p)
+
+        go_on = self._recover_target() if err_detected1 or err_detected2 else True
+
+        return go_on
 
     @EnforceOrder(accepted_states=['S2'])
     def log_target_residual_feedback(self):
+        err_detected1, err_detected2 = False, False
         if self.__send_enabled:
             p = "\n::[ RESIDUAL TARGET FEEDBACK ]::"
             e = "::[ ------------------------ ]::\n"
-            ok = self.lg.log_current_target_feedback(preamble=p, epilogue=e)
-            if not ok:
-                self._log_directly_retrieved_target_feedback(preamble=p, epilogue=e)
+            try:
+                err_detected1 = self.lg.log_collected_target_feedback(preamble=p, epilogue=e)
+            except NotImplementedError:
+                pass
+            finally:
+                err_detected2 = self._log_directly_retrieved_target_feedback(preamble=p, epilogue=e)
+
+        go_on = self._recover_target() if err_detected1 or err_detected2 else True
+
+        return go_on
 
     def _log_directly_retrieved_target_feedback(self, preamble=None, epilogue=None):
-        # This method is to be used when the target does not make use
-        # of Logger.collect_target_feedback() facility. We thus try to
-        # access the feedback from Target directly
+        """
+        This method is to be used when the target does not make use
+        of Logger.collect_target_feedback() facility. We thus try to
+        access the feedback from Target directly
+        """
+        err_detected = False
         tg_fbk = self.tg.get_feedback()
         if tg_fbk is not None:
             err_code = tg_fbk.get_error_code()
-            if err_code is not None and err_code != 0:
+            if err_code is not None and err_code < 0:
                 self.lg.log_comment('Error detected with the target (error code: {:d}) !'.format(err_code))
+                err_detected = True
 
             if tg_fbk.has_fbk_collector():
                 for ref, fbk in tg_fbk:
                     self.lg.log_target_feedback_from(fbk, preamble=preamble, epilogue=epilogue,
-                                                     source=ref)
+                                                     source=ref, status_code=err_code)
             else:
-                self.lg.log_target_feedback_from(tg_fbk.get_bytes(), preamble=preamble, epilogue=epilogue)
+                self.lg.log_target_feedback_from(tg_fbk.get_bytes(), preamble=preamble,
+                                                 epilogue=epilogue, status_code=err_code)
 
             tg_fbk.cleanup()
+
+        return err_detected
 
     @EnforceOrder(accepted_states=['S2'])
     def check_target_readiness(self):
@@ -1945,7 +1980,11 @@ class Fuzzer(object):
                 if self._burst_countdown == self._burst:
                     # log residual just before sending new data to avoid
                     # polluting feedback logs of the next emission
-                    self.log_target_residual_feedback()
+                    cont = self.log_target_residual_feedback()
+                    if not cont:
+                        self.lg.log_fmk_info("Operator will shutdown because residual target "
+                                             "feedback indicate a negative status code")
+                        break
 
                 self.new_transfer_preamble()
 
@@ -1990,20 +2029,28 @@ class Fuzzer(object):
                 if linst.is_instruction_set(LastInstruction.ExportData):
                     # Target fbk is logged only at the end of a burst
                     if self._burst_countdown == self._burst:
-                        self.log_target_feedback()
-                        cont = self.monitor_probes()
-                        if not cont:
+                        cont1 = self.log_target_feedback()
+                        cont2 = self.monitor_probes()
+                        if not cont1 or not cont2:
                             exit_operator = True
                             self.lg.log_fmk_info("Operator will shutdown because something is going wrong with "
                                                  "the target and the recovering procedure did not succeed...")
 
-                    feedback = linst.get_target_feedback_info()
-                    if feedback:
-                        self.lg.log_target_feedback_from_operator(feedback)
+                    op_feedback = linst.get_operator_feedback()
+                    op_status = linst.get_operator_status()
+                    if op_feedback or op_status:
+                        self.lg.log_operator_feedback(op_feedback,
+                                                      status_code=op_status)
+                else:
+                    op_status = None
 
                 comments = linst.get_comments()
                 if comments:
                     self.lg.log_comment(comments)
+
+                if op_status is not None and op_status < 0:
+                    exit_operator = True
+                    self.lg.log_fmk_info("Operator will shutdown because it returns a negative status")
 
                 if self._burst_countdown == self._burst:
                     self.tg.cleanup()

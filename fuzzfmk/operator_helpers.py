@@ -80,6 +80,7 @@ class LastInstruction(object):
     def __init__(self):
         self.comments = None
         self.feedback_info = None
+        self._status_code = None
         self.instructions = {
             LastInstruction.ExportData: False
             }
@@ -101,10 +102,16 @@ class LastInstruction(object):
     def get_comments(self):
         return self.comments
 
-    def set_target_feedback_info(self, info):
+    def set_operator_status(self, status_code):
+        self._status_code = status_code
+
+    def get_operator_status(self):
+        return self._status_code
+
+    def set_operator_feedback(self, info):
         self.feedback_info = info
 
-    def get_target_feedback_info(self):
+    def get_operator_feedback(self):
         return self.feedback_info
 
 

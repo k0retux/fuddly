@@ -38,6 +38,7 @@ class TutoNetTarget(NetworkTarget):
     def _custom_data_handling_before_emission(self, data_list):
         self.listen_to('localhost', 64001, 'Dynamic server interface')
         # self.connect_to('localhost', 64002, 'Dynamic client interface')
+        # self._logger.collect_target_feedback('TEST', status_code=random.randint(-2,2))
 
     def _feedback_handling(self, fbk, ref):
         # self.remove_all_dynamic_interfaces()

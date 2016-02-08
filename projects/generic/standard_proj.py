@@ -168,7 +168,6 @@ class Op1(Operator):
         if isinstance(target, LocalTarget):
             health_status = monitor.get_probe_status('health_check')
             info = health_status.get_private_info()
-            # linst.set_target_feedback_info(info)
 
             export = True
             if info in self._last_feedback:
@@ -176,13 +175,18 @@ class Op1(Operator):
             else:
                 self._last_feedback.append(info)
 
-            if health_status.get_status() == -1:
+            err_code = health_status.get_status()
+            if  err_code == -1:
                 if export:
                     linst.set_instruction(LastInstruction.ExportData)
-                linst.set_comments('This input has triggered an error, but not a crash!')
-            elif health_status.get_status() == -2:
+                linst.set_operator_feedback('This input has triggered an error, but not a crash!')
+                linst.set_operator_status(-err_code) # does not prevent operator to continue so
+                                                     # provide a value > 0
+            elif err_code == -2:
                 linst.set_instruction(LastInstruction.ExportData)
-                linst.set_comments('This input has crashed the target!')
+                linst.set_operator_feedback('This input has crashed the target!')
+                linst.set_operator_status(-err_code) # does not prevent operator to continue so
+                                                     # provide a value > 0
         else:
             linst.set_instruction(LastInstruction.ExportData)
         

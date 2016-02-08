@@ -101,7 +101,8 @@ class Target(object):
         Used to send multiple data to the target, or to stimulate several
         target's inputs in one shot.
 
-        @data_list: list of data to be sent
+        Args:
+            data_list (list): list of data to be sent
 
         Note: Use data.to_bytes() to get binary data
         '''
@@ -142,6 +143,9 @@ class Target(object):
         '''
         Implementation of target recovering operations, when a target problem has been detected
         (i.e. a negative feedback from a probe or an operator)
+
+        Returns:
+            bool: True if the target has been recovered. False otherwise.
         '''
         raise NotImplementedError
 
@@ -692,6 +696,14 @@ class NetworkTarget(Target):
                 (clientsocket, address) = serversocket.accept()
             except socket.timeout:
                 pass
+            except OSError as e:
+                if e.errno == 9: # [Errno 9] Bad file descriptor
+                    # TOFIX: It may occur with python3.
+                    # In this case the resource seem to have been released by
+                    # the OS whereas there is still a reference on it.
+                    pass
+                else:
+                    raise
             else:
                 with self._server_thread_lock:
                     args = self._server_thread_share[(host, port)]
@@ -963,13 +975,6 @@ class NetworkTarget(Target):
 
         return desc[:-2]
 
-    def cleanup(self):
-        raise NotImplementedError
-
-    def is_alive(self):
-        raise NotImplementedError
-
-
 
 
 class PrinterTarget(Target):
@@ -1161,7 +1166,6 @@ class LocalTarget(Target):
         self.__feedback.set_bytes(byte_string)
 
         return self.__feedback
-
 
     def is_alive(self):
         target_exit_status = self.__app.poll()

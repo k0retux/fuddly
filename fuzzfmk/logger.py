@@ -291,37 +291,71 @@ class Logger(object):
         data_id = self.last_data_id if data_id is None else data_id
         self.fmkDB.insert_fmk_info(data_id, msg, now)
 
-    def collect_target_feedback(self, fbk):
+    def collect_target_feedback(self, fbk, status_code=None):
+        """
+        Used within the scope of the Logger feedback-collector infrastructure.
+        If your target implement the interface :meth:`Target.get_feedback`, no need to
+        use this infrastructure.
+
+        To be called by the target each time feedback need to be registered.
+
+        Args:
+            fbk: feedback record
+        """
         if sys.version_info[0] > 2 and isinstance(fbk, bytes):
             fbk = fbk.decode('latin_1')
         with self._tg_fbk_lck:
-            self._tg_fbk.append(str(fbk))
+            self._tg_fbk.append((str(fbk), status_code))
 
-    def log_current_target_feedback(self, preamble=None, epilogue=None):
+    def log_collected_target_feedback(self, preamble=None, epilogue=None):
+        """
+        Used within the scope of the Logger feedback-collector feature.
+        If your target implement the interface :meth:`Target.get_feedback`, no need to
+        use this infrastructure.
+
+        It allows to retrieve the collected feedback, that has been populated
+        by the target (through call to :meth:`Logger.collect_target_feedback`).
+
+        Args:
+            preamble (str): prefix added to each collected feedback
+            epilogue (str): suffix added to each collected feedback
+
+        Returns:
+            bool: True if target feedback has been collected through logger infrastructure
+              :meth:`Logger.collect_target_feedback`, False otherwise.
+        """
+        error_detected = False
+
         with self._tg_fbk_lck:
             fbk_list = self._tg_fbk
             self._tg_fbk = []
 
         if not fbk_list:
             # self.log_fn("\n::[ NO TARGET FEEDBACK ]::\n") 
-            return False
+            raise NotImplementedError
 
         if preamble is not None:
             self.log_fn(preamble)
 
-        for m, idx in zip(fbk_list, range(len(fbk_list))):
-            self.log_fn("### Target feedback [%d]: " % idx, rgb=Color.FEEDBACK)
+        for fbk, idx in zip(fbk_list, range(len(fbk_list))):
+            m, status = fbk
+            self.log_fn("### Collected Target Feedback [{:d}] (status={!s}): ".format(idx, status),
+                        rgb=Color.FEEDBACK)
             self.log_fn(m)
-            self.fmkDB.insert_feedback(self.last_data_id, str(idx), self._encode_target_feedback(m))
+            self.fmkDB.insert_feedback(self.last_data_id, "Collector [record #{:d}]".format(idx),
+                                       self._encode_target_feedback(m),
+                                       status_code=status)
+            if status < 0:
+                error_detected = True
 
         if epilogue is not None:
             self.log_fn(epilogue)
 
-        self.print_console('\n')
+        return error_detected
 
-        return True
-
-    def log_target_feedback_from(self, feedback, preamble=None, epilogue=None, source=None):
+    def log_target_feedback_from(self, feedback, preamble=None, epilogue=None,
+                                 source=None,
+                                 status_code=None):
         decoded_feedback = self._decode_target_feedback(feedback)
 
         if preamble is not None:
@@ -332,25 +366,42 @@ class Logger(object):
                 source)
             self.log_fn(msg_hdr, rgb=Color.FEEDBACK)
         else:
-            msg_hdr = "### Target Feedback:" if source is None else "### Target Feedback ({!s}):".format(source)
+            msg_hdr = "### Target Feedback (status={!s}):".format(status_code) if source is None \
+                else "### Target Feedback from '{!s}' (status={!s}):".format(source, status_code)
             self.log_fn(msg_hdr, rgb=Color.FEEDBACK)
             self.log_fn(decoded_feedback)
             if self.last_data_id is not None:
                 src = 'Default' if source is None else source
-                self.fmkDB.insert_feedback(self.last_data_id, src, self._encode_target_feedback(feedback))
+                self.fmkDB.insert_feedback(self.last_data_id, src,
+                                           self._encode_target_feedback(feedback),
+                                           status_code=status_code)
 
         if epilogue is not None:
             self.log_fn(epilogue)
 
-    def log_target_feedback_from_operator(self, feedback):
-        decoded_feedback = self._decode_target_feedback(feedback)
-        if not decoded_feedback:
-            self.log_fn("### No Target Feedback!", rgb=Color.FEEDBACK)
+    def log_operator_feedback(self, feedback, status_code=None):
+        if feedback is None:
+            decoded_feedback = None
         else:
-            self.log_fn("### Target Feedback (collected from the Operator):", rgb=Color.FEEDBACK)
-            self.log_fn(decoded_feedback)
+            decoded_feedback = self._decode_target_feedback(feedback)
+            # decoded_feedback can be the empty string
+
+        if not decoded_feedback and status_code is None:
+            self.log_fn("### No Operator Feedback!", rgb=Color.FEEDBACK)
+        else:
+            if decoded_feedback:
+                self.log_fn("### Operator Feedback (status={!s}):".format(status_code),
+                            rgb=Color.FEEDBACK)
+                self.log_fn(decoded_feedback)
+            else: # status_code is not None
+                self.log_fn("### Operator Status: {:d}".format(status_code),
+                            rgb=Color.FEEDBACK)
+
             if self.last_data_id is not None:
-                self.fmkDB.insert_feedback(self.last_data_id, 'Operator', self._encode_target_feedback(feedback))
+                feedback = None if feedback is None else self._encode_target_feedback(feedback)
+                self.fmkDB.insert_feedback(self.last_data_id, 'Operator',
+                                           feedback,
+                                           status_code=status_code)
 
     def _decode_target_feedback(self, feedback):
         feedback = feedback.strip()
