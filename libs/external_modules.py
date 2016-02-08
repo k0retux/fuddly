@@ -29,12 +29,14 @@ except ImportError:
         return string
 
 class Color(object):
-    TITLE = 0x1947D1
+    TITLE = 0x0099FF #0x1947D1
     PROMPT = 0x6699FF
 
     SELECTED = 0x0030FF
-    FMKINFOGROUP = 0x1947D1
+    FMKINFOGROUP = 0x1975FF
+    FMKINFOSUBGROUP = 0x66CCFF
     FMKINFO = 0x66FFFF
+    FMKSUBINFO = 0xD0D0C0
     INFO = 0xFF9900
     SUBINFO = 0xE6E68A
     INFO_ALT = 0x0055FF
@@ -47,6 +49,7 @@ class Color(object):
     COMPONENT_INFO = 0x339966
     COMPONENT_START = 0x00FF00
     COMPONENT_STOP = 0x4775A3
+    DATA_MODEL_LOADED = 0xB03BB0
     FEEDBACK = 0x800080
     NEWLOGENTRY = 0x1975FF
     FUZZSTEP = 0x009D9D
@@ -62,6 +65,7 @@ class Color(object):
     ND_NAME = 0x1975FF
     ND_TYPE = 0x66FFFF
     ND_DUPLICATED = 0x800080
+    ND_SEPARATOR = 0x008000
 
     @staticmethod
     def display():
@@ -75,9 +79,24 @@ class FontStyle:
     END = '\033[0m'
 
 
+sqlite3_module = True
+try:
+    import sqlite3
+except ImportError:
+    sqlite3_module = False
+    print('WARNING [FMK]: SQLite3 not installed, FMKDB will not be available!')
+
 cups_module = True
 try:
     import cups
 except ImportError:
     cups_module = False
     print('WARNING [FMK]: python-cups module is not installed, Printer targets will not be available!')
+
+crcmod_module = True
+try:
+    import crcmod
+except ImportError:
+    crcmod_module = False
+    print('WARNING [FMK]: python-crcmod module is not installed, the MH.CRC()' \
+          ' generator template will not be available!')

@@ -22,7 +22,7 @@
 ################################################################################
 
 DEBUG = False
-LEVEL = 1
+LEVEL = 0
 
 try:
     from xtermcolor import colorize
@@ -33,6 +33,7 @@ except ImportError:
 
 class DebugColor:
     LEVEL = {
+        0: 0xFF0000,
         1: 0x66FF00,
         2: 0xB1FF7D
         }

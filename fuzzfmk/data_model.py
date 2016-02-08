@@ -42,15 +42,14 @@ from fuzzfmk.global_resources import *
 
 DEBUG = False
 
-
 class Data(object):
 
     def __init__(self, data=''):
         self.node = None
         self.raw = None
         self.__type = None
-
         self._dm = None
+        self._data_id = None
 
         self.__exportable = False
         self.__unusable = False
@@ -67,6 +66,12 @@ class Data(object):
             self.update_from_node(data)
         else:
             self.update_from_str_or_bytes(data)
+
+    def set_data_id(self, data_id):
+        self._data_id = data_id
+
+    def get_data_id(self):
+        return self._data_id
 
     def set_initial_dmaker(self, t):
         self.__type = t
@@ -97,13 +102,15 @@ class Data(object):
     def get_data_model(self):
         return self._dm
 
+    def set_data_model(self, dm):
+        self._dm = dm
+
     def to_bytes(self):
         if self.node:
             val = self.node.to_bytes()
             self.raw = val
 
         return self.raw
-
 
     def make_unusable(self):
         self.__unusable = True
@@ -189,11 +196,13 @@ class Data(object):
 
         return contents
 
-    def pretty_print(self, log_func=lambda x: x):
+    def show(self, log_func=lambda x: x):
         if self.node is not None:
             self.node.show(raw_limit=200, log_func=log_func)
         else:
             print(self.raw)
+
+    pretty_print = show
 
     def __copy__(self):
         new_data = type(self)()
@@ -285,6 +294,12 @@ def convert_to_internal_repr(val):
             val = bytes(val, 'latin_1')
     return val
 
+def unconvert_from_internal_repr(val):
+    assert(isinstance(val, bytes))
+    if sys.version_info[0] > 2:
+        val = val.decode('latin_1')
+    return val
+
 
 nodes_weight_re = re.compile('(.*?)\((.*)\)')
 
@@ -295,6 +310,13 @@ class AbsorbStatus:
     Reject = 2
     Absorbed = 3
     FullyAbsorbed = 4
+
+    DESC = {
+        Accept: 'Accept',
+        Reject: 'Reject',
+        Absorbed: 'Absorbed',
+        FullyAbsorbed: 'FullyAbsorbed'
+    }
 
 
 # List of constraints that rules blob absorption
@@ -341,10 +363,17 @@ class AbsCsts(object):
     def __getitem__(self, key):
         return self.constraints[key]
 
+    def __repr__(self):
+        return 'AbsCsts()'
+
+
 class AbsNoCsts(AbsCsts):
 
     def __init__(self, size=False, contents=False, regexp=False, struct=False):
         AbsCsts.__init__(self, size=size, contents=contents, regexp=regexp, struct=struct)
+
+    def __repr__(self):
+        return 'AbsNoCsts()'
 
 
 class AbsFullCsts(AbsCsts):
@@ -352,11 +381,128 @@ class AbsFullCsts(AbsCsts):
     def __init__(self, size=True, contents=True, regexp=True, struct=True):
         AbsCsts.__init__(self, size=size, contents=contents, regexp=regexp, struct=struct)
 
+    def __repr__(self):
+        return 'AbsFullCsts()'
+
+### Materials for Node Synchronization ###
 
 class SyncScope:
     Qty = 1
     Existence = 2
     Inexistence = 3
+
+class NodeCondition(object):
+    '''
+    Base class for every node-related conditions. (Note that NodeCondition
+    may be copied many times. If some attributes need to be fully copied,
+    handle this through __copy__() overriding).
+    '''
+    def check(self, node):
+        raise NotImplementedError
+
+
+class RawCondition(NodeCondition):
+
+    def __init__(self, val=None, neg_val=None):
+        '''
+        Args:
+          val (bytes): byte representation (or list of byte representations)
+            that satisfies the condition
+          neg_val (bytes): byte representation (or list of byte representations)
+            that does NOT satisfy the condition
+        '''
+        assert((val is not None and neg_val is None) or (val is None and neg_val is not None))
+        if val is not None:
+            self.positive_mode = True
+            self._handle_cond(val)
+        elif neg_val is not None:
+            self.positive_mode = False
+            self._handle_cond(neg_val)
+
+    def _handle_cond(self, val):
+        if isinstance(val, tuple) or isinstance(val, list):
+            self.val = []
+            for v in val:
+                self.val.append(convert_to_internal_repr(v))
+        else:
+            self.val = convert_to_internal_repr(val)
+
+    def check(self, node):
+        node_val = node._tobytes()
+        # node_val = node_val.replace(Node.DEFAULT_DISABLED_VALUE, b'')
+        if self.positive_mode:
+            if isinstance(self.val, tuple) or isinstance(self.val, list):
+                result = node_val in self.val
+            else:
+                result = node_val == self.val
+        else:
+            if isinstance(self.val, tuple) or isinstance(self.val, list):
+                result = node_val not in self.val
+            else:
+                result = node_val != self.val
+
+        return result
+
+
+class IntCondition(NodeCondition):
+
+    def __init__(self, val=None, neg_val=None):
+        '''
+        Args:
+          val (int): integer (or integer list) that satisfies the condition
+          neg_val (int): integer (or integer list) that does NOT satisfy the condition
+        '''
+        assert((val is not None and neg_val is None) or (val is None and neg_val is not None))
+        if val is not None:
+            self.positive_mode = True
+            self.val = val
+        elif neg_val is not None:
+            self.positive_mode = False
+            self.val = neg_val
+
+    def check(self, node):
+        from fuzzfmk.value_types import INT
+        assert(node.is_typed_value(subkind=INT))
+
+        if isinstance(self.val, tuple) or isinstance(self.val, list):
+            if self.positive_mode:
+                result = node.get_current_raw_val() in self.val
+            else:
+                result = node.get_current_raw_val() not in self.val
+        else:
+            assert(isinstance(self.val, int))
+            if self.positive_mode:
+                result = node.get_current_raw_val() == self.val
+            else:
+                result = node.get_current_raw_val() != self.val
+
+        return result
+
+
+class BitFieldCondition(NodeCondition):
+
+    def __init__(self, sf, val):
+        '''
+        Args:
+          sf (int): subfield of the BitField() on which the condition apply
+          val (int): integer (or integer list) that satisfy the condition
+        '''
+        self.sf = sf
+        self.val = val
+
+    def check(self, node):
+        from fuzzfmk.value_types import BitField
+        assert(node.is_typed_value(subkind=BitField))
+
+        if isinstance(self.val, tuple) or isinstance(self.val, list):
+            result = node.get_subfield(idx=self.sf) in self.val
+        else:
+            assert(isinstance(self.val, int))
+            result = node.get_subfield(idx=self.sf) == self.val
+
+        return result
+
+
 
 class NodeInternals(object):
     '''Base class for implementing the contents of a node.
@@ -372,6 +518,10 @@ class NodeInternals(object):
 
     CloneExtNodeArgs = 7
     ResetOnUnfreeze = 8
+    TriggerLast = 9
+
+    Separator = 15
+    DISABLED = 100
 
     def __init__(self, defaults=True, arg=None):
         self.private = None
@@ -379,18 +529,26 @@ class NodeInternals(object):
         self.absorb_constraints = None
 
         self.__attrs = {
+            ### GENERIC ###
             NodeInternals.Freezable: True,
             NodeInternals.Mutable: True,
             NodeInternals.Determinist: False,
             NodeInternals.Finite: False,
-            NodeInternals.AcceptConfChange: True,
-
             # Used for absorption
             NodeInternals.Abs_Postpone: False,
+            # Used to distinguish separator
+            NodeInternals.Separator: False,
+
+            ### SPECIFIC ###
+            NodeInternals.AcceptConfChange: True,
             # Used for Gen and Func
             NodeInternals.CloneExtNodeArgs: False,
             # Used for Gen
-            NodeInternals.ResetOnUnfreeze: True
+            NodeInternals.ResetOnUnfreeze: True,
+            NodeInternals.TriggerLast: False,
+
+            ### INTERNAL USAGE ###
+            NodeInternals.DISABLED: False
             }
 
         self._sync_with = None
@@ -405,10 +563,10 @@ class NodeInternals(object):
     def get_current_subkind(self):
         raise NotImplementedError
 
-    def set_node_sync(self, node, scope):
+    def set_node_sync(self, node, scope, param=None):
         if self._sync_with is None:
             self._sync_with = {}
-        self._sync_with[scope] = node
+        self._sync_with[scope] = (node, param)
 
     def get_node_sync(self, scope):
         if self._sync_with is None:
@@ -433,15 +591,17 @@ class NodeInternals(object):
     def _update_node_refs(self, node_dico, debug):
         sync_nodes = copy.copy(self._sync_with)
 
-        for scope, node in sync_nodes.items():
+        for scope, obj in sync_nodes.items():
+            node, param = obj
             new_node = node_dico.get(node, None)
+            new_param = copy.copy(param)
             if new_node is not None:
-                self._sync_with[scope] = new_node
+                self._sync_with[scope] = (new_node, new_param)
             else:
                 # this case only triggers during a call to
                 # NonTerm.get_subnodes_with_csts(), that is when new
                 # subnodes are created during a
-                # Node.get_value(). Indeed, when making copies of a
+                # Node._get_value(). Indeed, when making copies of a
                 # node within the NonTerm.subnodes_set, the node_dico
                 # of the copies may miss upper nodes. In such a case,
                 # no update needs to be done, as the node ref exist
@@ -472,7 +632,7 @@ class NodeInternals(object):
             raise ValueError
         if self._make_specific(name):
             self.__attrs[name] = True
-           
+
     def clear_attr(self, name):
         if name not in self.__attrs:
             raise ValueError
@@ -578,6 +738,24 @@ class NodeInternals(object):
 
         return ret
 
+
+    def _match_node_constraints(self, criteria):
+        # precond: criteria is not empty
+
+        if self._sync_with is None:
+            return False
+
+        for scope, required in criteria.items():
+            if required is None:
+                continue
+            if scope in self._sync_with and not required:
+                return False
+            elif scope not in self._sync_with and required:
+                return False
+
+        return True
+
+
     def match(self, internals_criteria):
         c1 = self._match_mandatory_attrs(internals_criteria.get_mandatory_attrs())
         if not c1:
@@ -603,6 +781,11 @@ class NodeInternals(object):
         if not c6:
             return False
 
+        if internals_criteria.has_node_constraints():
+            c7 = self._match_node_constraints(internals_criteria.get_all_node_constraints())
+            if not c7:
+                return False
+
         return True
 
     def set_private(self, val):
@@ -611,11 +794,18 @@ class NodeInternals(object):
     def get_private(self):
         return self.private
 
-    def set_clone_info(self, info):
+    def set_clone_info(self, info, node):
         '''
         Report to Node._set_clone_info() some information about graph
         internals
 
+        '''
+        pass
+
+    def clear_clone_info_since(self, node):
+        '''
+        Cleanup obsolete graph internals information prior to what has been
+        registered with the node given as parameter.
         '''
         pass
 
@@ -628,7 +818,7 @@ class NodeInternals(object):
     def pretty_print(self):
         return None
 
-    def get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True):
         raise NotImplementedError
 
     def reset_depth_specific(self, depth):
@@ -638,13 +828,26 @@ class NodeInternals(object):
 class NodeInternalsCriteria(object):
 
     def __init__(self, mandatory_attrs=None, negative_attrs=None, node_kinds=None,
-                 negative_node_kinds=None, node_subkinds=None, negative_node_subkinds=None):
+                 negative_node_kinds=None, node_subkinds=None, negative_node_subkinds=None,
+                 required_csts=[], negative_csts=[]):
         self.set_mandatory_attrs(mandatory_attrs)
         self.set_negative_attrs(negative_attrs)
         self.set_node_kinds(node_kinds)
         self.set_negative_node_kinds(negative_node_kinds)
         self.set_node_subkinds(node_subkinds)
         self.set_negative_node_subkinds(negative_node_subkinds)
+        self._node_constraints = None
+        if required_csts or negative_csts:
+            for cst in required_csts:
+                self.set_node_constraint(cst, True)
+            for cst in negative_csts:
+                self.set_node_constraint(cst, False)
+
+            # # If Existence constraint is required, Inexistence constraint is also required
+            # exist_cst = self.get_node_constraint(SyncScope.Existence)
+            # if exist_cst is not None:
+            #     self.set_node_constraint(SyncScope.Inexistence, exist_cst)
+
 
     def extend(self, ic):
         crit = ic.get_mandatory_attrs()
@@ -683,6 +886,39 @@ class NodeInternalsCriteria(object):
                 self.__negative_node_subkinds = []
             self.__negative_node_subkinds.extend(crit)
 
+        crit = ic.get_all_node_constraints()
+        if crit:
+            for cst, required in crit.items():
+                self.set_node_constraint(cst, required)
+
+    def set_node_constraint(self, cst, required):
+        if self._node_constraints is None:
+            self._node_constraints = {}
+        self._node_constraints[cst] = required
+
+    def get_node_constraint(self, cst):
+        if cst in self._node_constraints:
+            return self._node_constraints[cst]
+        else:
+            return None
+
+    def clear_node_constraint(self, cst):
+        if self._node_constraints is None:
+            self._node_constraints = {}
+        self._node_constraints[cst] = None
+
+    def get_all_node_constraints(self):
+        return self._node_constraints
+
+    def has_node_constraints(self):
+        if self._node_constraints is None:
+            return False
+
+        for k, v in self._node_constraints.items():
+            if v is not None:
+                return True
+
+        return False
 
     def set_mandatory_attrs(self, attrs):
         self.__mandatory_attrs = attrs
@@ -724,16 +960,105 @@ class NodeInternalsCriteria(object):
 class DynNode_Helpers(object):
     
     def __init__(self):
-        self.graph_info = []
+        self.reset_graph_info()
 
     def __copy__(self):
         new_obj = type(self)()
-        new_obj.graph_info = copy.copy(self.graph_info)
+        new_obj._graph_info = copy.copy(self._graph_info)
+        # new_obj._node_ids = copy.copy(self._node_ids)
+        new_obj._node_pos = copy.copy(self._node_pos)
+        new_obj._curr_pos = self._curr_pos
         return new_obj
+
+    def reset_graph_info(self):
+        self._graph_info = []
+        # self._node_ids = []
+        self._node_pos = {}
+        self._curr_pos = 0
+
+    def set_graph_info(self, node, info):
+        if id(node) not in self._node_pos.keys():
+            self._curr_pos -= 1
+            self._node_pos[id(node)] = self._curr_pos
+            self._graph_info.insert(0,(info, node.name))
+            # self._node_ids.insert(0,id(node))
+        else:
+            pos = self._node_pos[id(node)]
+            self._graph_info[pos] = (info, node.name)
+            # self._node_ids[pos] = id(node)
+
+    def clear_graph_info_since(self, node):
+        # TOFIX: node.name is not a reliable ID. Should use id(node),
+        # but some bug prevent it from working. (self._node_ids was
+        # used for this purpose)
+
+        # nids = self._node_ids
+        # if id(node) in nids:
+        #     idx = nids.index(id(node))
+        # else:
+        #     print('\nNot present here!', node.name, id(node), nids)
+        #     return
+
+        curr_len = len(self._graph_info)
+        nids = [y for x, y in reversed(self._graph_info)]
+        if node.name in nids:
+            # print('\nD:',  node.name, id(node), self._node_ids)
+            # print('Pos:', self._node_pos)
+            # print('Name:', self._graph_info)
+            # if id(node) not in self._node_ids:
+            #     raise ValueError
+            idx = nids.index(node.name)
+            idx = curr_len - idx - 1
+        else:
+            return
+
+        self._graph_info = self._graph_info[idx+1:]
+        # self._node_ids = self._node_ids[idx+1:]
+        node_pos = {}
+        for id_node, pos in self._node_pos.items():
+            if pos > -(curr_len-idx):
+                node_pos[id_node] = pos
+        self._node_pos = node_pos
+        self._curr_pos += idx+1
+
+    def make_private(self, env=None):
+        if env and env.id_list is None:
+            env.register_basic_djob(self._update_dyn_helper, args=[env],
+                                    prio=Node.DJOBS_PRIO_dynhelpers)
+        elif env:
+            self._update_dyn_helper(env)
+        else:
+            pass
+
+    def _update_dyn_helper(self, env):
+        if env.id_list is not None:
+            # print('*** DynHelper: delayed update')
+            new_node_pos = {}
+            # new_node_ids = {}
+            for old_id, new_id in env.id_list:
+                pos = self._node_pos.get(old_id, None)
+                if pos is not None:
+                    # print('*** DynHelper: updated')
+                    new_node_pos[new_id] = pos
+                    # idx = self._node_ids.index(old_id)
+                    # new_node_ids[idx] = new_id
+
+            # new_node_ids = [new_node_ids[k] for k in sorted(new_node_ids.keys())]
+            if new_node_pos:
+                self._node_pos = new_node_pos
+                # self._node_ids = new_node_ids
+        else:
+            pass
+
+
+    def _get_graph_info(self):
+        return self._graph_info
+
+    graph_info = property(fget=_get_graph_info)
 
 
 class NodeInternals_Empty(NodeInternals):
-    def get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True):
         return b'<EMPTY>', True
 
     def set_child_env(self, env):
@@ -743,7 +1068,7 @@ class NodeInternals_Empty(NodeInternals):
 
 class NodeInternals_GenFunc(NodeInternals):
     def _init_specific(self, arg):
-        self.__generated_node = None
+        self._generated_node = None
         self.generator_func = None
         self.generator_arg = None
         self.node_arg = None
@@ -751,6 +1076,7 @@ class NodeInternals_GenFunc(NodeInternals):
         self.pdepth = 0
         self._node_helpers = DynNode_Helpers()
         self.provide_helpers = False
+        self._trigger_registered = False
         # self._clear_attr_direct(NodeInternals.AcceptConfChange)
         # self.enforce_absorb_constraints(AbsNoCsts())
 
@@ -771,14 +1097,16 @@ class NodeInternals_GenFunc(NodeInternals):
         # We don't propagate Mutable & Freezable to the generated_node,
         # because these attributes are used to change the behaviour of
         # the GenFunc.
-        if name not in [NodeInternals.Mutable, NodeInternals.Freezable]:
-            if self.__generated_node is not None:
+        if name in [NodeInternals.Determinist, NodeInternals.Finite, NodeInternals.Abs_Postpone,
+                    NodeInternals.Separator]:
+            if self._generated_node is not None:
                 self.generated_node.set_attr(name)
         return True
 
     def _unmake_specific(self, name):
-        if name not in [NodeInternals.Mutable, NodeInternals.Freezable]:
-            if self.__generated_node is not None:
+        if name in [NodeInternals.Determinist, NodeInternals.Finite, NodeInternals.Abs_Postpone,
+                    NodeInternals.Separator]:
+            if self._generated_node is not None:
                 self.generated_node.clear_attr(name)
         return True
 
@@ -787,18 +1115,22 @@ class NodeInternals_GenFunc(NodeInternals):
         # Node.__init__() during copy (which calls self.make_args_private()),
         # because the new Node to point to is unknown at this local
         # stage.
-        if self.__generated_node is None or ignore_frozen_state:
-            self.__generated_node = None
+        if self._generated_node is None or ignore_frozen_state:
+            self._generated_node = None
+            self._trigger_registered = False
         else:
-            self.__generated_node = Node(self.__generated_node.name, base_node=self.__generated_node,
+            self._generated_node = Node(self._generated_node.name, base_node=self._generated_node,
                                        ignore_frozen_state=ignore_frozen_state,
                                        accept_external_entanglement=accept_external_entanglement)
-            self.__generated_node._reset_depth(parent_depth=self.pdepth)
-            self.__generated_node.set_env(self.env)
+            self._generated_node._reset_depth(parent_depth=self.pdepth)
+            self._generated_node.set_env(self.env)
         self.generator_arg = copy.copy(self.generator_arg)
         self._node_helpers = copy.copy(self._node_helpers)
+        # The call to 'self._node_helpers.make_private()' is performed
+        # the latest that is during self.make_args_private()
 
     def make_args_private(self, node_dico, entangled_set, ignore_frozen_state, accept_external_entanglement):
+        self._node_helpers.make_private(self.env)
 
         if self.node_arg is None:
             return
@@ -879,10 +1211,10 @@ class NodeInternals_GenFunc(NodeInternals):
 
 
     def reset_generator(self):
-        self.__generated_node = None
+        self._generated_node = None
 
-    def __get_generated_node(self):
-        if self.__generated_node is None:
+    def _get_generated_node(self):
+        if self._generated_node is None:
             
             if self.generator_arg is not None and self.node_arg is not None:
                 if self.provide_helpers:
@@ -910,18 +1242,18 @@ class NodeInternals_GenFunc(NodeInternals):
                 ret, private_val = ret
                 self.set_private(private_val)
 
-            self.__generated_node = ret
-            self.__generated_node._reset_depth(parent_depth=self.pdepth)
-            self.__generated_node.set_env(self.env)
+            self._generated_node = ret
+            self._generated_node._reset_depth(parent_depth=self.pdepth)
+            self._generated_node.set_env(self.env)
 
             if self.is_attr_set(NodeInternals.Determinist):
-                self.__generated_node.make_determinist(all_conf=True, recursive=True)
+                self._generated_node.make_determinist(all_conf=True, recursive=True)
             if self.is_attr_set(NodeInternals.Finite):
-                self.__generated_node.make_finite(all_conf=True, recursive=True)
+                self._generated_node.make_finite(all_conf=True, recursive=True)
 
-        return self.__generated_node
+        return self._generated_node
 
-    generated_node = property(fget=__get_generated_node)
+    generated_node = property(fget=_get_generated_node)
 
     def import_generator_func(self, generator_func,
                               generator_node_arg=None, generator_arg=None,
@@ -947,15 +1279,29 @@ class NodeInternals_GenFunc(NodeInternals):
             self.generator_arg = generator_arg
 
 
-    def get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True):
+        if self.is_attr_set(NodeInternals.TriggerLast) and not self._trigger_registered:
+            assert(self.env is not None)
+            self._trigger_registered = True
+            self.env.register_basic_djob(self._get_delayed_value,
+                                         args=[conf, recursive],
+                                         prio=Node.DJOBS_PRIO_genfunc)
+
+            return (Node.DEFAULT_DISABLED_VALUE, False)
+
         if not self.is_attr_set(NodeInternals.Freezable):
             self.reset_generator()
-        ret = self.generated_node.get_value(conf=conf, recursive=recursive)
+
+        ret = self.generated_node._get_value(conf=conf, recursive=recursive)
         return (ret, False)
 
+    def _get_delayed_value(self, conf=None, recursive=True):
+        self.reset_generator()
+        ret = self.generated_node._get_value(conf=conf, recursive=recursive)
+        return (ret, False)
 
     def absorb(self, blob, constraints, conf):
-        # we make the generator freezable to be sure that get_value()
+        # We make the generator freezable to be sure that _get_value()
         # won't reset it after absorption
         self.set_attr(NodeInternals.Freezable)
 
@@ -968,16 +1314,22 @@ class NodeInternals_GenFunc(NodeInternals):
             st, off, sz, name = self.generated_node.absorb(blob, constraints=constraints, conf=conf)
         except (ValueError, AssertionError) as e:
             st, off, sz = AbsorbStatus.Reject, 0, None
-            print('\n***TEST')
 
         # if st is AbsorbStatus.Reject:
         #     self.reset_generator()
 
         return st, off, sz
 
+    def cancel_absorb(self):
+        self.generated_node.reset_state()
+        # self.generated_node.cancel_absorb()
+
+    def confirm_absorb(self):
+        self.generated_node.confirm_absorb()
 
     def reset_state(self, recursive=False, exclude_self=False, conf=None, ignore_entanglement=False):
         if self.is_attr_set(NodeInternals.Mutable):
+            self._trigger_registered = False
             self.reset_generator()
         else:
             self.generated_node.reset_state(recursive, exclude_self=exclude_self, conf=conf,
@@ -996,66 +1348,77 @@ class NodeInternals_GenFunc(NodeInternals):
 
     def is_frozen(self):
         if self.is_attr_set(NodeInternals.Mutable):
-            if self.__generated_node is None:
+            if self._generated_node is None:
                 return False
             else:
                 return True
         else:
             return self.generated_node.is_frozen()
 
-    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False):
-        # if self.is_attr_set(NodeInternals.Mutable): 
+    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False,
+                 only_generators=False, reevaluate_constraints=False):
+        # if self.is_attr_set(NodeInternals.Mutable):
         if self.is_attr_set(NodeInternals.ResetOnUnfreeze):
             # 'dont_change_state' is not supported in this case. But
-            # if generator is stateless, it should not be a problem
+            # if generator is stateless, it should not be a problem.
+            # And if there is a state, ResetOnUnfreeze should be cleared anyway.
+            self._trigger_registered = False
             self.reset_generator()
         else:
             self.generated_node.unfreeze(conf, recursive=recursive, dont_change_state=dont_change_state,
-                                        ignore_entanglement=ignore_entanglement, only_generators=only_generators)
+                                         ignore_entanglement=ignore_entanglement, only_generators=only_generators,
+                                         reevaluate_constraints=reevaluate_constraints)
 
     def unfreeze_all(self, recursive=True, ignore_entanglement=False):
         # if self.is_attr_set(NodeInternals.Mutable):
         if self.is_attr_set(NodeInternals.ResetOnUnfreeze):
+            self._trigger_registered = False
             self.reset_generator()
         else:
             self.generated_node.unfreeze_all(recursive=recursive, ignore_entanglement=ignore_entanglement)
 
     def reset_fuzz_weight(self, recursive):
         if recursive:
-            if self.__generated_node is not None:
+            if self._generated_node is not None:
                 self.generated_node.reset_fuzz_weight(recursive=recursive)
 
     def set_child_env(self, env):
-        if self.__generated_node is not None:
-            self.__generated_node.set_env(env)
-        self.env = env
+        # if self._generated_node is not None:
+        #     self._generated_node.set_env(env)
+        # self.env = env
+        self.set_env(env)
 
+    def set_env(self, env):
+        self.env = env
+        if self._generated_node is not None:
+            self._generated_node.set_env(env)
 
     def set_child_attr(self, name, conf=None, all_conf=False, recursive=False):
         if recursive:
-            if self.__generated_node is not None:
+            if self._generated_node is not None:
                 self.generated_node.set_attr(name, conf=conf, all_conf=all_conf, recursive=recursive)
 
     def clear_child_attr(self, name, conf=None, all_conf=False, recursive=False):
         if recursive:
-            if self.__generated_node is not None:
+            if self._generated_node is not None:
                 self.generated_node.clear_attr(name, conf=conf, all_conf=all_conf, recursive=recursive)
 
 
     def reset_depth_specific(self, depth):
         self.pdepth = depth
-        if self.__generated_node is not None:
-            self.__generated_node._reset_depth(parent_depth=self.pdepth)
+        if self._generated_node is not None:
+            self._generated_node._reset_depth(parent_depth=self.pdepth)
 
     def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria, owned_conf, conf, path_regexp, 
-                               exclude_self, respect_order, relative_depth, top_node):
+                               exclude_self, respect_order, relative_depth, top_node, ignore_fstate):
         return self.generated_node.get_reachable_nodes(internals_criteria, semantics_criteria, owned_conf, conf,
-                                                      path_regexp=path_regexp, exclude_self=exclude_self,
-                                                      respect_order=respect_order, relative_depth=relative_depth, top_node=top_node)
+                                                       path_regexp=path_regexp, exclude_self=False,
+                                                       respect_order=respect_order, relative_depth=relative_depth,
+                                                       top_node=top_node, ignore_fstate=ignore_fstate)
 
     def set_child_current_conf(self, node, conf, reverse, ignore_entanglement):
         if self.is_attr_set(NodeInternals.AcceptConfChange):
-            if self.__generated_node is not None:
+            if self._generated_node is not None:
                 node._set_subtrees_current_conf(self.generated_node,
                                                conf, reverse,
                                                ignore_entanglement=ignore_entanglement)
@@ -1064,8 +1427,12 @@ class NodeInternals_GenFunc(NodeInternals):
         self.generated_node._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False)
 
 
-    def set_clone_info(self, info):
-        self._node_helpers.graph_info.insert(0, info)
+    def set_clone_info(self, info, node):
+        self._node_helpers.set_graph_info(node, info)
+        # self._node_helpers.graph_info.insert(0, info)
+
+    def clear_clone_info_since(self, node):
+        self._node_helpers.clear_graph_info_since(node)
 
 
 class NodeInternals_Term(NodeInternals):
@@ -1095,7 +1462,7 @@ class NodeInternals_Term(NodeInternals):
     def _set_frozen_value(self, val):
         self.frozen_node = val
 
-    def get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True):
 
         if self.frozen_node is not None:
             return (self.frozen_node, False)
@@ -1143,10 +1510,23 @@ class NodeInternals_Term(NodeInternals):
 
         return st, off, size
 
+    def cancel_absorb(self):
+        self.do_revert_absorb()
+        self.do_cleanup_absorb()
+        
+    def confirm_absorb(self):
+        self.do_cleanup_absorb()
+
     def absorb_auto_helper(self, blob, constraints):
         raise NotImplementedError
 
     def do_absorb(self, blob, constraints, off, size):
+        raise NotImplementedError
+
+    def do_revert_absorb(self):
+        raise NotImplementedError
+
+    def do_cleanup_absorb(self):
         raise NotImplementedError
 
     def reset_state(self, recursive=False, exclude_self=False, conf=None, ignore_entanglement=False):
@@ -1163,14 +1543,20 @@ class NodeInternals_Term(NodeInternals):
     def is_frozen(self):
         return self.frozen_node is not None
 
-    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False):
+    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False,
+                 reevaluate_constraints=False):
         if only_generators:
             return
         if dont_change_state and self.frozen_node is not None:
             self._unfreeze_without_state_change(self.frozen_node)
+        elif reevaluate_constraints and self.frozen_node is not None:
+            self._unfreeze_reevaluate_constraints(self.frozen_node)
         self.frozen_node = None
 
     def _unfreeze_without_state_change(self, current_val):
+        pass
+
+    def _unfreeze_reevaluate_constraints(self, current_val):
         pass
 
     def unfreeze_all(self, recursive=True, ignore_entanglement=False):
@@ -1192,7 +1578,7 @@ class NodeInternals_Term(NodeInternals):
         pass
 
     def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria, owned_conf, conf, path_regexp,
-                               exclude_self, respect_order, relative_depth, top_node):
+                               exclude_self, respect_order, relative_depth, top_node, ignore_fstate):
         return None
 
     def set_child_current_conf(self, node, conf, reverse, ignore_entanglement):
@@ -1262,7 +1648,16 @@ class NodeInternals_TypedValue(NodeInternals_Term):
     def do_absorb(self, blob, constraints, off, size):
         return self.value_type.do_absorb(blob=blob, constraints=constraints, off=off, size=size)
 
+    def do_revert_absorb(self):
+        self.value_type.do_revert_absorb()
+
+    def do_cleanup_absorb(self):
+        self.value_type.do_cleanup_absorb()
+
     def _unfreeze_without_state_change(self, current_val):
+        self.value_type.rewind()
+
+    def _unfreeze_reevaluate_constraints(self, current_val):
         self.value_type.rewind()
 
     def _reset_state_specific(self, recursive, exclude_self, conf, ignore_entanglement):
@@ -1291,7 +1686,7 @@ class NodeInternals_Func(NodeInternals_Term):
         self.fct = None
         self.node_arg = None
         self.fct_arg = None
-
+        self.env = None
         self.__mode = None
         self._node_helpers = DynNode_Helpers()
         self.provide_helpers = False
@@ -1334,6 +1729,8 @@ class NodeInternals_Func(NodeInternals_Term):
         if fct_arg is not None:
             self.fct_arg = fct_arg
 
+    def set_env(self, env):
+        self.env = env
 
     def set_mode(self, mode):
         self.__mode = mode
@@ -1345,10 +1742,15 @@ class NodeInternals_Func(NodeInternals_Term):
         else:
             raise ValueError
 
-    def set_clone_info(self, info):
-        self._node_helpers.graph_info.insert(0, info)
+    def set_clone_info(self, info, node):
+        self._node_helpers.set_graph_info(node, info)
+
+    def clear_clone_info_since(self, node):
+        self._node_helpers.clear_graph_info_since(node)
 
     def make_args_private(self, node_dico, entangled_set, ignore_frozen_state, accept_external_entanglement):
+        self._node_helpers.make_private(self.env)
+
         if self.node_arg is None:
             return
 
@@ -1440,19 +1842,25 @@ class NodeInternals_Func(NodeInternals_Term):
         self.set_mode(self.__mode)
 
         self._node_helpers = copy.copy(self._node_helpers)
-
+        # The call to 'self._node_helpers.make_private()' is performed
+        # the latest that is during self.make_args_private()
 
     def absorb(self, blob, constraints, conf):
-        # we make the generator freezable to be sure that get_value()
+        # we make the generator freezable to be sure that _get_value()
         # won't reset it after absorption
         self.set_attr(NodeInternals.Freezable)
 
-        sz = len(convert_to_internal_repr(self.get_value()))
+        sz = len(convert_to_internal_repr(self._get_value()))
 
         self._set_frozen_value(blob[:sz])
 
         return AbsorbStatus.Absorbed, 0, sz
 
+    def cancel_absorb(self):
+        self._set_frozen_value(None)
+
+    def confirm_absorb(self):
+        pass
 
     def _get_value_specific(self, conf, recursive):
         raise NotImplementedError
@@ -1460,6 +1868,9 @@ class NodeInternals_Func(NodeInternals_Term):
     def _unfreeze_without_state_change(self, current_val):
         # 'dont_change_state' is not supported in this case. But
         # if the function is stateless, it should not be a problem
+        pass
+
+    def _unfreeze_reevaluate_constraints(self, current_val):
         pass
 
     def _reset_state_specific(self, recursive, exclude_self, conf, ignore_entanglement):
@@ -1476,13 +1887,13 @@ class NodeInternals_Func(NodeInternals_Term):
                 func_node_arg = self.node_arg
 
             if isinstance(func_node_arg, Node):
-                val = func_node_arg.to_bytes(conf=conf, recursive=recursive)
+                val = func_node_arg._tobytes(conf=conf, recursive=recursive)
             # if not an Node it is either a NodeAbstraction or a list
             else:
                 val = []
                 for e in func_node_arg:
                     if e is not None:
-                        val.append(e.to_bytes(conf=conf, recursive=recursive))
+                        val.append(e._tobytes(conf=conf, recursive=recursive))
                     else:
                         val.append(b'')
 
@@ -1548,10 +1959,47 @@ class NodeInternals_Func(NodeInternals_Term):
 
 
 
+class NodeSeparator(object):
+    '''A node separator is used (optionnaly) by a non-terminal node
+    as a separator between each subnode.
+
+    Attributes:
+      make_private (function): used for full copy
+    '''
+
+    def __init__(self, node, prefix=True, suffix=True, unique=False):
+        '''
+        Args:
+          node (Node): node to be used for separation.
+          prefix (bool): if `True`, a serapator will also be placed at the begining.
+          suffix (bool): if `True`, a serapator will also be placed at the end.
+          unique (bool): if `False`, the same node will be used for each separation,
+            otherwise a new node will be generated.
+        '''
+        self.node = node
+        self.node.set_attr(NodeInternals.Separator)
+        self.prefix = prefix
+        self.suffix = suffix
+        self.unique = unique
+
+    def make_private(self, node_dico, ignore_frozen_state):
+        if self.node in node_dico:
+            self.node = node_dico[self.node]
+        else:
+            orig_node = self.node
+            self.node = Node(self.node.name, base_node=self.node, ignore_frozen_state=ignore_frozen_state)
+            node_dico[orig_node] = self.node
+
+
 class NodeInternals_NonTerm(NodeInternals):
     '''It is a kind of node internals that enable to structure the graph
     through a specific grammar...
     '''
+
+    INFINITY_LIMIT = 30  # Used to limit the number of created nodes
+                         # when the max quantity is specified to be
+                         # infinite (-1). "Infinite quantity" makes
+                         # sense only for absorption operation.
 
     def _init_specific(self, arg):
         self.reset()
@@ -1561,18 +2009,32 @@ class NodeInternals_NonTerm(NodeInternals):
         self.subnodes_set = set()
         self.subnodes_csts = []
         self.subnodes_csts_total_weight = 0
+        self.subnodes_minmax = {}
+        self.separator = None
 
         if exhaust_info is None:
             self.exhausted = False
             self.excluded_components = []
+            self.subcomp_exhausted = True
+            self.expanded_nodelist = []
+            self.expanded_nodelist_sz = None
+            self.expanded_nodelist_origsz = None
+            self.component_seed = None
+            self._perform_first_step = True
         else:
             self.exhausted = exhaust_info[0]
             self.excluded_components = exhaust_info[1]
+            self.subcomp_exhausted = exhaust_info[2]
+            self.expanded_nodelist = None
+            self.expanded_nodelist_sz = exhaust_info[3]
+            self.expanded_nodelist_origsz = exhaust_info[4]
+            self.component_seed = exhaust_info[5]
+            self._perform_first_step = exhaust_info[6]
 
         if mode is None:
-            self.mode = 1
+            self.set_mode(2)
         else:
-            self.mode = mode
+            self.set_mode(mode)
         if nodes_drawn_qty is None:
             self._nodes_drawn_qty = {}
         else:
@@ -1594,8 +2056,10 @@ class NodeInternals_NonTerm(NodeInternals):
             yield idx, delim, sublist
             idx += 1
 
-    def import_subnodes_basic(self, node_list):
+    def import_subnodes_basic(self, node_list, separator=None):
         self.reset()
+
+        self.separator = separator
 
         tmp_list = ['u>']
 
@@ -1612,8 +2076,10 @@ class NodeInternals_NonTerm(NodeInternals):
             self.subnodes_set.add(e)
 
 
-    def import_subnodes_with_csts(self, wlnode_list):
+    def import_subnodes_with_csts(self, wlnode_list, separator=None):
         self.reset()
+
+        self.separator = separator
 
         for weight, lnode_list in split_with(lambda x: isinstance(x, int), wlnode_list):
             self.subnodes_csts.append(weight)
@@ -1622,8 +2088,11 @@ class NodeInternals_NonTerm(NodeInternals):
             subnode_list = []
             for delim, sublist in split_with(lambda x: isinstance(x, str), lnode_list[0]):
 
-                for e in sublist:
-                    self.subnodes_set.add(e[0])
+                for n in sublist:
+                    node, mini, maxi = self._handle_node_desc(n)
+                    self.subnodes_set.add(node)
+                    # self.subnodes_set.add(n[0])
+                    self.subnodes_minmax[node] = (mini, maxi)
 
                 chunk = []
 
@@ -1662,28 +2131,43 @@ class NodeInternals_NonTerm(NodeInternals):
 
 
     def import_subnodes_full_format(self, subnodes_csts=None, frozen_node_list=None, internals=None,
-                                   nodes_drawn_qty=None, mode=None, exhaust_info=None):
+                                   nodes_drawn_qty=None, mode=None, exhaust_info=None, separator=None):
         self.reset(nodes_drawn_qty=nodes_drawn_qty, mode=mode, exhaust_info=exhaust_info)
 
         if internals is not None:
+            # This case is only for Node.set_contents() usage
+
             self.subnodes_csts = internals.subnodes_csts
             self.frozen_node_list = internals.frozen_node_list
+            self.separator =  internals.separator
+            self.subnodes_set = internals.subnodes_set
+            self.set_mode(internals.mode)
+
         elif subnodes_csts is not None:
+            # This case is used by self.make_private_subnodes()
+
             self.subnodes_csts = subnodes_csts
             self.frozen_node_list = frozen_node_list
+            if separator is not None:
+                self.separator = separator
+        
+            for weight, lnode_list in split_with(lambda x: isinstance(x, int), self.subnodes_csts):
+                self.subnodes_csts_total_weight += weight
+                for delim, sublist in self.__iter_csts(lnode_list[0]):
+                    if delim[:3] == 'u=+' or delim[:3] == 's=+':
+                        for w, etp in split_with(lambda x: isinstance(x, int), sublist[1]):
+                            for n in etp:
+                                node, mini, maxi = self._handle_node_desc(n)
+                                self.subnodes_set.add(node)
+                                self.subnodes_minmax[node] = (mini, maxi)
+                    else:
+                        for n in sublist:
+                            node, mini, maxi = self._handle_node_desc(n)
+                            self.subnodes_set.add(node)
+                            self.subnodes_minmax[node] = (mini, maxi)
+
         else:
             raise ValueError
-        
-        for weight, lnode_list in split_with(lambda x: isinstance(x, int), self.subnodes_csts):
-            self.subnodes_csts_total_weight += weight
-            for delim, sublist in self.__iter_csts(lnode_list[0]):
-                if delim[:3] == 'u=+' or delim[:3] == 's=+':
-                    for w, etp in split_with(lambda x: isinstance(x, int), sublist[1]):
-                        for n in etp:
-                            self.subnodes_set.add(n[0])
-                else:
-                    for e in sublist:
-                        self.subnodes_set.add(e[0])
 
 
     def change_subnodes_csts(self, csts_ch):
@@ -1720,13 +2204,21 @@ class NodeInternals_NonTerm(NodeInternals):
 
         subnodes_csts = self.get_subnodes_csts_copy(node_dico)
 
+        if self.separator is not None:
+            new_separator = copy.copy(self.separator)
+            new_separator.make_private(node_dico, ignore_frozen_state=ignore_frozen_state)
+        else:
+            new_separator = None
+
         # copy the 'frozen_node_list' if it is not None
         if self.frozen_node_list is None or ignore_frozen_state:
             new_fl = None
             new_nodes_drawn_qty = None
             new_exhaust_info = None
         else:
-            new_exhaust_info = [self.exhausted, copy.copy(self.excluded_components)]
+            new_exhaust_info = [self.exhausted, copy.copy(self.excluded_components),
+                                self.subcomp_exhausted, self.expanded_nodelist_sz, self.expanded_nodelist_origsz,
+                                self.component_seed, self._perform_first_step]
             new_nodes_drawn_qty = copy.copy(self._nodes_drawn_qty)
             new_fl = []
             for e in self.frozen_node_list:
@@ -1742,7 +2234,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
         self.import_subnodes_full_format(subnodes_csts=subnodes_csts, frozen_node_list=new_fl,
                                          nodes_drawn_qty=new_nodes_drawn_qty, mode=self.mode,
-                                         exhaust_info=new_exhaust_info)
+                                         exhaust_info=new_exhaust_info, separator=new_separator)
 
         if self.frozen_node_list is None or ignore_frozen_state:
             iterable = self.subnodes_set
@@ -1772,6 +2264,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                                 delayed_node_internals=delayed_node_internals)
 
                 elif e.is_func(c) or e.is_genfunc(c):
+                    e.internals[c].set_env(env)
                     if e.internals[c].node_arg is not None:
                         func_nodes.add(e)
                     e.internals[c].make_private(ignore_frozen_state=ignore_frozen_state,
@@ -1848,7 +2341,6 @@ class NodeInternals_NonTerm(NodeInternals):
     def get_subnodes_collection(self):
         return self.subnodes_set
 
-
     def _set_drawn_node_attrs(self, node, nb, sz):
         self._nodes_drawn_qty[node.name] = nb
         if node.env is not None:
@@ -1857,6 +2349,17 @@ class NodeInternals_NonTerm(NodeInternals):
             if DEBUG:
                 print("\n*** WARNING: no Env() is provided yet for node '%s'! " \
                       "Thus cannot call methods on it!" % node.name)
+
+    def _clear_drawn_node_attrs(self, node):
+        if self._nodes_drawn_qty and node.name in self._nodes_drawn_qty:
+            del self._nodes_drawn_qty[node.name]
+        if node.env is not None:
+            node.env.clear_drawn_node_attrs(id(node))
+        else:
+            if DEBUG:
+                print("\n*** WARNING: no Env() is provided yet for node '%s'! " \
+                      "Thus cannot call methods on it!" % node.name)
+
 
     def get_drawn_node_qty(self, node_ref):
         if isinstance(node_ref, Node):
@@ -1875,7 +2378,11 @@ class NodeInternals_NonTerm(NodeInternals):
             else:
                 raise ValueError("Node with name '%s' has not been drawn" % name)
 
-
+    def get_subnode_minmax(self, node):
+        if node in self.subnodes_minmax:
+            return self.subnodes_minmax[node]
+        else:
+            return None
 
     @staticmethod
     def _get_random_component(comp_list, total_weight):
@@ -1903,8 +2410,6 @@ class NodeInternals_NonTerm(NodeInternals):
     @staticmethod
     def _get_next_heavier_component(comp_list, excluded_idx=[]):
         current_weight = -1
-        current_comp = None
-        current_idx = None
         for idx, weight, comp in split_verbose_with(lambda x: isinstance(x, int), comp_list):
             if idx in excluded_idx:
                 continue
@@ -1914,165 +2419,316 @@ class NodeInternals_NonTerm(NodeInternals):
                 current_idx = idx
 
         if current_weight == -1:
-            return None, None
+            return [], None
         else:
             return current_comp, current_idx
 
     @staticmethod
-    def _get_next_random_component(comp_list, excluded_idx=[]):
+    def _get_next_random_component(comp_list, excluded_idx=[], seed=None):
         total_weight = 0
         for idx, weight, comp in split_verbose_with(lambda x: isinstance(x, int), comp_list):
             if idx in excluded_idx:
                 continue
             total_weight += weight
 
-        r = random.uniform(0, total_weight)
+        if seed is None:
+            r = random.uniform(0, total_weight)
+        else:
+            r = seed
         s = 0
         for idx, weight, comp in split_verbose_with(lambda x: isinstance(x, int), comp_list):
             if idx in excluded_idx:
                 continue
             s += weight
             if s >= r:
-                return comp[0], idx
+                ret = comp[0], idx, r
+                break
         else:
-            return None, None
+            ret = [], None, r
 
-    # to be used only in Finite mode
-    def count_of_possible_cases(self):
-        return len(self.subnodes_csts) // 2
+        return ret
+
+
+    # To be used only in Finite mode
+    def structure_will_change(self):
+
+        crit1 = (len(self.subnodes_csts) // 2) > 1
+
+        # assert(self.expanded_nodelist is not None) # only possible during a Node copy
+        # \-> this assert is a priori not needed because we force recomputation of 
+        #     the list in this case
+        if self.expanded_nodelist_origsz is None:
+            # in this case we have never been frozen
+            self.get_subnodes_with_csts()
+        crit2 = self.expanded_nodelist_origsz > 1
+
+        # If crit2 is False while crit1 is also False, the structure
+        # will not change. If crit2 is False at some time, crit1 is
+        # then True, thus we always return the correct answer
+
+        return crit1 or crit2
+
+
+    @staticmethod
+    def _handle_node_desc(node_desc):
+        if len(node_desc) == 3:
+            assert(node_desc[1] > -2 and node_desc[2] > -2)
+            if node_desc[2] == -1 and node_desc[1] >= 0: # infinite case
+                mini = node_desc[1]
+                # for generation we limit to min+INFINITY_LIMIT
+                maxi = mini + NodeInternals_NonTerm.INFINITY_LIMIT
+            elif node_desc[2] == -1 and node_desc[1] == -1:
+                mini = maxi = NodeInternals_NonTerm.INFINITY_LIMIT
+            else:
+                mini = node_desc[1]
+                maxi = node_desc[2]
+        else:
+            assert(node_desc[1] > -2)
+            mini = maxi = NodeInternals_NonTerm.INFINITY_LIMIT if node_desc[1] == -1 else node_desc[1]
+            
+        return node_desc[0], mini, maxi
+
+    def _copy_nodelist(self, node_list):
+        new_list = []
+        for delim, sublist in self.__iter_csts(node_list):
+            if delim[1] == '>' or delim[1:3] == '=.':
+                new_list.append([delim, copy.copy(sublist)])
+            elif delim[1:3] == '=+':
+                new_list.append([delim, [sublist[0], copy.copy(sublist[1])]])
+        return new_list
+
+    def _generate_expanded_nodelist(self, node_list):
+
+        # def _pick_qty(mini, maxi):
+        #     # node, mini, maxi = self._handle_node_desc(node_desc)
+        #     if self.is_attr_set(NodeInternals.Determinist):
+        #         nb = (mini + maxi) // 2
+        #     else:
+        #         nb = random.randint(mini, maxi)
+        #     return nb
+
+        expanded_node_list = []
+        for idx, delim, sublist in self.__iter_csts_verbose(node_list):
+            if delim[1] == '>' or delim[1:3] == '=.':
+                for i, node_desc in enumerate(sublist):
+                    node, mini, maxi = self._handle_node_desc(node_desc)
+                    if mini == 0 and maxi > 0:
+                        new_nlist = self._copy_nodelist(node_list)
+                        new_nlist[idx][1][i] = [node, 0]
+                        expanded_node_list.insert(0, new_nlist)
+                        new_nlist = self._copy_nodelist(node_list)
+                        new_nlist[idx][1][i] = [node, 1, maxi]
+                        # new_nlist[idx][1][i] = [node, _pick_qty(1, maxi)]
+                        expanded_node_list.insert(0, new_nlist)
+            elif delim[1:3] == '=+':
+                new_delim = delim[0] + '>'
+                if sublist[0] > -1:
+                    for weight, comp in split_with(lambda x: isinstance(x, int), sublist[1]):
+                        node, mini, maxi = self._handle_node_desc(comp[0])
+                        new_nlist = self._copy_nodelist(node_list)
+                        new_nlist[idx] = [new_delim, [[node, mini, maxi]]]
+                        # new_nlist[idx] = [new_delim, [[node, _pick_qty(mini, maxi)]]]
+                        expanded_node_list.insert(0, new_nlist)
+                else:
+                    for node_desc in sublist[1]:
+                        node, mini, maxi = self._handle_node_desc(node_desc)
+                        new_nlist = self._copy_nodelist(node_list)
+                        new_nlist[idx] = [new_delim, [[node, mini, maxi]]]
+                        # new_nlist[idx] = [new_delim, [[node, _pick_qty(mini, maxi)]]]
+                        expanded_node_list.insert(0, new_nlist)
+            else:
+                raise ValueError
+
+        if not expanded_node_list:
+            expanded_node_list.append(node_list)
+
+        return expanded_node_list
+
+    def _construct_subnodes(self, node_desc, subnode_list, mode, ignore_sep_fstate, ignore_separator=False, lazy_mode=True):
+        
+        node_attrs = node_desc[1:]
+        # node = node_desc[0]
+        node, mini, maxi = self._handle_node_desc(node_desc)
+
+        mini, maxi = self.nodeqty_corrupt_hook(node, mini, maxi)
+
+        if self.is_attr_set(NodeInternals.Determinist):
+            nb = (mini + maxi) // 2
+        else:
+            nb = random.randint(mini, maxi)
+
+        qty = self._qty_from_node(node)
+        if qty is not None:
+            nb = qty
+
+        shall_exist = self._existence_from_node(node)
+        if shall_exist is not None:
+            if not shall_exist:
+                if node.env and node.env.delayed_jobs_enabled and lazy_mode:
+                    node.set_attr(NodeInternals.DISABLED)
+                    node.set_private((self, node_attrs, mode, ignore_sep_fstate, ignore_separator))
+                    subnode_list.append(node)
+                return
+
+        to_entangle = set()
+
+        base_node = node
+        external_entangled_nodes = [] if base_node.entangled_nodes is None else list(base_node.entangled_nodes)
+
+        new_node = None
+
+        for i in range(nb):
+            # 'unique' mode
+            if mode == 'u':
+                if i == 0 and base_node.tmp_ref_count == 1:
+                    new_node = base_node
+                else:
+                    base_node.tmp_ref_count += 1
+                    nid = base_node.name + ':' + str(base_node.tmp_ref_count)
+                    if base_node.is_frozen():
+                        ignore_fstate = False
+                    else:
+                        ignore_fstate = True
+
+                    new_node = Node(nid, base_node=base_node, ignore_frozen_state=ignore_fstate,
+                                    accept_external_entanglement=True,
+                                    acceptance_set=(external_entangled_nodes + subnode_list))
+                    new_node._reset_depth(parent_depth=base_node.depth-1)
+
+                    # For dynamically created Node(), don't propagate the fuzz weight
+                    if self.mode == 1:
+                        new_node.reset_fuzz_weight(recursive=True)
+                        new_node.clear_attr(NodeInternals.Mutable, all_conf=True, recursive=True)
+                    elif self.mode == 2:
+                        pass
+                    else:
+                        raise ValueError
+
+                if new_node.is_nonterm():
+                    new_node.cc.set_mode(self.mode)
+
+                new_node._set_clone_info((base_node.tmp_ref_count-1, nb), base_node)
+
+            # 'same' mode
+            elif mode == 's':
+                new_node = base_node
+            else:
+                raise ValueError
+
+            subnode_list.append(new_node)
+            to_entangle.add(new_node)
+
+            if self.separator is not None and not ignore_separator:
+                new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
+                                                ignore_frozen_state=ignore_sep_fstate)
+                subnode_list.append(new_sep)
+
+        # set_clone_info() and other methods are applied for 's' mode
+        # only once as there is no node copy.
+        if new_node is not None and mode == 's':
+            if new_node.is_nonterm():
+                new_node.cc.set_mode(self.mode)
+            new_node._set_clone_info((0,nb), base_node)
+
+        if len(to_entangle) > 1:
+            make_entangled_nodes(to_entangle)
+
+        # node._tobytes() has to be called after the
+        # previous copy process, to avoid copying frozen node
+        self._set_drawn_node_attrs(node, nb, len(node._tobytes()))
+
+        return
 
 
     def get_subnodes_with_csts(self):
         '''Generate the structure of the non terminal node.
         '''
 
-        def construct_subnodes(node, subnode_list, mode):
-            if self.is_attr_set(NodeInternals.Determinist):
-                if len(node) == 3:
-                    nb = (node[1] + node[2]) // 2
-                else:
-                    nb = node[1]
-            else:
-                if len(node) == 3:
-                    nb = random.randint(node[1], node[2])
-                else:
-                    nb = node[1]
-
-            node = node[0]
-
-            qty = self._qty_from_node(node)
-            if qty is not None:
-                nb = qty
-
-            shall_exist = self._existence_from_node(node)
-            if shall_exist is not None:
-                if not shall_exist:
-                    nb = 0
-
-            to_entangle = set()
-
-            base_node = node
-            external_entangled_nodes = [] if base_node.entangled_nodes is None else list(base_node.entangled_nodes)
-
-            for i in range(nb):
-                # 'unique' mode
-                if mode == 'u':
-                    if i == 0 and base_node.tmp_ref_count == 1:
-                        new_node = base_node
-                    else:
-                        base_node.tmp_ref_count += 1
-                        nid = base_node.name + ':' + str(base_node.tmp_ref_count)
-                        if base_node.is_frozen():
-                            ignore_fstate = False
-                        else:
-                            ignore_fstate = True
-
-                        # ignore_fstate = True
-
-                        new_node = Node(nid, base_node=base_node, ignore_frozen_state=ignore_fstate,
-                                      accept_external_entanglement=True,
-                                      acceptance_set=(external_entangled_nodes + subnode_list))
-                        new_node._reset_depth(parent_depth=base_node.depth-1)
-
-                        # For dynamically created Node(), don't propagate the fuzz weight
-                        if self.mode == 1:
-                            new_node.reset_fuzz_weight(recursive=True)
-                            new_node.clear_attr(NodeInternals.Mutable, all_conf=True, recursive=True)
-                            # print('\nname: %s, %s' % (base_node.name, new_node.name),
-                            #       '\nfinite: %r, %r' % (base_node.is_attr_set(NodeInternals.Finite), new_node.is_attr_set(NodeInternals.Finite)),
-                            #       '\nmutable: %r, %r' % (base_node.is_attr_set(NodeInternals.Mutable), new_node.is_attr_set(NodeInternals.Mutable)))
-
-                            # if isinstance(base_node.cc, NodeInternals_NonTerm):
-                            #     print('contents 1: ', base_node.cc.frozen_node_list)
-                            #     print('contents 2: ', new_node.cc.frozen_node_list)
-                            #     if base_node.cc.frozen_node_list and new_node.cc.frozen_node_list:
-                            #         for e1, e2 in zip(base_node.cc.frozen_node_list, new_node.cc.frozen_node_list):
-                            #             print('name: %s, %s' % (e1.name, e2.name),
-                            #                   '\nfinite: %r, %r' % (e1.is_attr_set(NodeInternals.Finite), e2.is_attr_set(NodeInternals.Finite)),
-                            #                   '\nmutable: %r, %r' % (e1.is_attr_set(NodeInternals.Mutable), e2.is_attr_set(NodeInternals.Mutable)))
-
-                        elif self.mode == 2:
-                            if new_node.is_nonterm():
-                                new_node.cc.set_mode(2)
-                        else:
-                            raise ValueError
-
-                    new_node._set_clone_info((base_node.tmp_ref_count-1, nb))
-
-                # 'same' mode
-                elif mode == 's':
-                    new_node = base_node
-                else:
-                    raise ValueError
-
-                subnode_list.append(new_node)
-                to_entangle.add(new_node)
-
-            # We need to call set_clone_info() only once for 's' mode
-            # as there is only one instance.
-            if mode == 's':
-                new_node._set_clone_info((0,nb))
-
-            if len(to_entangle) > 1:
-                make_entangled_nodes(to_entangle)
-
-            # node.to_bytes() has to be called after the
-            # previous copy process, to avoid copying frozen node
-            self._set_drawn_node_attrs(node, nb, len(node.to_bytes()))
-
-
+        # In this case we return directly the frozen state
         if self.frozen_node_list is not None:
             return (self.frozen_node_list, False)
-        
-        self.frozen_node_list = []
+
+        if self.separator is not None:
+            if self.separator.node.is_frozen():
+                ignore_sep_fstate = False
+            else:
+                ignore_sep_fstate = True
+            if self.separator.prefix:
+                new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
+                                                ignore_frozen_state=ignore_sep_fstate)
+                self.frozen_node_list = [new_sep]
+            else:
+                self.frozen_node_list = []
+        else:
+            ignore_sep_fstate = None
+            self.frozen_node_list = []
 
         determinist = self.is_attr_set(NodeInternals.Determinist)
-        
-        if determinist:
-            node_list, idx = NodeInternals_NonTerm._get_next_heavier_component(self.subnodes_csts,
-                                                                             excluded_idx=self.excluded_components)
-            self.excluded_components.append(idx)
-            # 'len(self.subnodes_csts)' is always even
-            if len(self.excluded_components) == len(self.subnodes_csts) // 2:
-                # in this case we have exhausted all components
-                # note that self.excluded_components is reset in a lazy way (within unfreeze)
-                self.exhausted = True
-            else:
-                self.exhausted = False
 
-        else:
-            if self.is_attr_set(NodeInternals.Finite):
-                node_list, idx = NodeInternals_NonTerm._get_next_random_component(self.subnodes_csts,
-                                                                                  excluded_idx=self.excluded_components)
-                self.excluded_components.append(idx)
-                if len(self.excluded_components) == len(self.subnodes_csts) // 2:
-                    self.exhausted = True
+        if self._perform_first_step:
+            if determinist:
+
+                if self.subcomp_exhausted:
+                    self.subcomp_exhausted = False
+
+                    node_list, idx = self._get_next_heavier_component(self.subnodes_csts,
+                                                                      excluded_idx=self.excluded_components)
+                    self.excluded_components.append(idx)
+                    # 'len(self.subnodes_csts)' is always even
+                    if len(self.excluded_components) == len(self.subnodes_csts) // 2:
+                        # in this case we have exhausted all components
+                        # note that self.excluded_components is reset in a lazy way (within unfreeze)
+                        self.exhausted = True
+                    else:
+                        self.exhausted = False
+
+            else:
+                if self.is_attr_set(NodeInternals.Finite):
+                    if self.subcomp_exhausted:
+                        self.subcomp_exhausted = False
+
+                        node_list, idx, self.component_seed = self._get_next_random_component(self.subnodes_csts,
+                                                                                              excluded_idx=self.excluded_components)
+                        self.excluded_components.append(idx)
+                        if len(self.excluded_components) == len(self.subnodes_csts) // 2:
+                            self.exhausted = True
+                        else:
+                            self.exhausted = False
                 else:
-                    self.exhausted = False
-            else:
-                node_list = NodeInternals_NonTerm._get_random_component(self.subnodes_csts,
-                                                                        self.subnodes_csts_total_weight)
+                    node_list = self._get_random_component(self.subnodes_csts,
+                                                           self.subnodes_csts_total_weight)
 
+        if not self._perform_first_step:
+            self._perform_first_step = True
+
+        if self.is_attr_set(NodeInternals.Finite) or determinist:
+            if self.expanded_nodelist is None:
+                # This case occurs when we are a copy of a node and
+                # keeping the state of the original node was
+                # requested. But the state is kept to the minimum to
+                # avoid memory waste, thus we need to reconstruct
+                # dynamically some part of the state
+                if determinist:
+                    node_list, idx = self._get_next_heavier_component(self.subnodes_csts,
+                                                                      excluded_idx=self.excluded_components)
+                else:
+                    node_list, idx, self.component_seed = self._get_next_random_component(self.subnodes_csts,
+                                                                                          excluded_idx=self.excluded_components,
+                                                                                          seed=self.component_seed)
+
+                self.expanded_nodelist = self._generate_expanded_nodelist(node_list)
+            
+                self.expanded_nodelist_origsz = len(self.expanded_nodelist)
+                self.expanded_nodelist = self.expanded_nodelist[:self.expanded_nodelist_sz]
+
+            elif not self.expanded_nodelist: # that is == []
+                self.expanded_nodelist = self._generate_expanded_nodelist(node_list)
+                self.expanded_nodelist_origsz = len(self.expanded_nodelist)
+
+            node_list = self.expanded_nodelist.pop(-1)
+            self.expanded_nodelist_sz = len(self.expanded_nodelist)
+            if not self.expanded_nodelist:
+                self.subcomp_exhausted = True
 
         for delim, sublist in self.__iter_csts(node_list):
 
@@ -2080,24 +2736,25 @@ class NodeInternals_NonTerm(NodeInternals):
 
             if determinist:
                 if delim[1] == '>':
-                    for node in sublist:
-                        construct_subnodes(node, sublist_tmp, delim[0])
+                    for i, node in enumerate(sublist):
+                        self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
                 elif delim[1] == '=':
                     if delim[2] == '+':
                         if sublist[0] > -1:
                             node = NodeInternals_NonTerm._get_heavier_component(sublist[1])
                         else:
                             node = sublist[1][0]
-                        construct_subnodes(node, sublist_tmp, delim[0])
+                        self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
                     else:
-                        for node in sublist:
-                            construct_subnodes(node, sublist_tmp, delim[0])
+                        for i, node in enumerate(sublist):
+                            self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
+
                 else:
                     raise ValueError
 
             elif delim[1] == '>':
-                for node in sublist:
-                    construct_subnodes(node, sublist_tmp, delim[0])
+                for i, node in enumerate(sublist):
+                    self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
 
             elif delim[1] == '=':
 
@@ -2110,7 +2767,7 @@ class NodeInternals_NonTerm(NodeInternals):
                         for i in range(lg):
                             node = random.choice(l)
                             l.remove(node)
-                            construct_subnodes(node, sublist_tmp, delim[0])
+                            self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
 
                     # unfold all the Node and then choose randomly
                     else:
@@ -2118,13 +2775,17 @@ class NodeInternals_NonTerm(NodeInternals):
                         for i in range(lg):
                             node = random.choice(l)
                             l.remove(node)
-                            construct_subnodes(node, list_unfold, delim[0])
+                            self._construct_subnodes(node, list_unfold, delim[0], ignore_sep_fstate, ignore_separator=True)
 
                         lg = len(list_unfold)
                         for i in range(lg):
                             node = random.choice(list_unfold)
                             list_unfold.remove(node)
                             sublist_tmp.append(node)
+                            if self.separator is not None:
+                                new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
+                                                                ignore_frozen_state=ignore_sep_fstate)
+                                sublist_tmp.append(new_sep)
 
                 # choice of only one component within a list
                 elif delim[2] == '+':
@@ -2133,7 +2794,7 @@ class NodeInternals_NonTerm(NodeInternals):
                     else:
                         node = random.choice(sublist[1])
 
-                    construct_subnodes(node, sublist_tmp, delim[0])
+                    self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
 
                 else:
                     raise ValueError("delim: '%s'"%delim)
@@ -2145,18 +2806,125 @@ class NodeInternals_NonTerm(NodeInternals):
         for e in self.subnodes_set:
             e.tmp_ref_count = 1
 
+        if self.separator is not None and self.frozen_node_list and self.frozen_node_list[-1].is_attr_set(NodeInternals.Separator):
+            if not self.separator.suffix:
+                self.frozen_node_list.pop(-1)
+            self._clone_separator_cleanup()
+
         return (self.frozen_node_list, True)
 
 
-    def get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True):
         l = []
         node_list, was_not_frozen = self.get_subnodes_with_csts()
 
-        for e in node_list:
-            val = e.get_value(conf=conf, recursive=recursive)
+        djob_group_created = False        
+        for n in node_list:
+            if n.is_attr_set(NodeInternals.DISABLED):
+                val = Node.DEFAULT_DISABLED_VALUE
+                if not n.env.is_djob_registered(key=id(n), prio=Node.DJOBS_PRIO_nterm_existence):
+                    if not djob_group_created:
+                        djob_group_created = True
+                        djob_group = DJobGroup(node_list)
+                    n.env.register_djob(NodeInternals_NonTerm._expand_delayed_nodes,
+                                        group = djob_group,
+                                        key = id(n),
+                                        cleanup = NodeInternals_NonTerm._cleanup_delayed_nodes,
+                                        args=[n, node_list, len(l), conf, recursive],
+                                        prio=Node.DJOBS_PRIO_nterm_existence)
+            else:
+                val = n._get_value(conf=conf, recursive=recursive)
+
             l.append(val)
 
-        return (l, was_not_frozen)
+        ret = (l, was_not_frozen)
+
+        if node_list:
+            node_env = node_list[0].env
+        else:
+            return ret
+
+        # We avoid reentrancy that could trigger recursive loop with
+        # self._existence_from_node()
+        if node_env and node_env._reentrancy_cpt > 0:
+            node_env._reentrancy_cpt = 0
+            return ret
+
+        if node_env and node_env.delayed_jobs_enabled and \
+           node_env.djobs_exists(Node.DJOBS_PRIO_nterm_existence):
+            groups = node_env.get_all_djob_groups(prio=Node.DJOBS_PRIO_nterm_existence)
+            if groups is not None:
+
+                for gr in groups:
+                    for n in gr:
+                        if n.is_attr_set(NodeInternals.DISABLED):
+
+                            # Reentrancy is counted at this location,
+                            # because self._existence_from_node() can
+                            # trigger a recursive loop
+                            node_env._reentrancy_cpt += 1
+                            shall_exist = self._existence_from_node(n)
+                            node_env._reentrancy_cpt = 0
+
+                            if shall_exist:
+                                djobs = node_env.get_djobs_by_gid(id(gr), prio=Node.DJOBS_PRIO_nterm_existence)
+                                func, args, cleanup = djobs[id(n)]
+                                job_idx = args[2]
+                                node_qty = func(*args)
+                                if node_qty > 0:
+                                    node_env.remove_djob(gr, id(n), prio=Node.DJOBS_PRIO_nterm_existence)
+                                if node_qty > 1:
+                                    for func, args, cleanup in djobs.values():
+                                        if args[2] > job_idx:
+                                            args[2] += node_qty-1
+
+        return ret
+
+
+    @staticmethod
+    def _expand_delayed_nodes(node, node_list, idx, conf, rec):
+        node_internals, node_attrs, mode, ignore_sep_fstate, ignore_separator = node.get_private()
+        node.set_private(None)
+        node.clear_attr(NodeInternals.DISABLED)
+        node_desc = [node] + node_attrs
+        expand_list = []
+        node_internals._construct_subnodes(node_desc, expand_list, mode, ignore_sep_fstate,
+                                           ignore_separator, lazy_mode=False)
+        if expand_list:
+            if node_internals.separator is not None and len(node_list) == idx - 1:
+                if not node_internals.separator.suffix and expand_list[-1].is_attr_set(NodeInternals.Separator):
+                    expand_list.pop(-1)
+                node_internals._clone_separator_cleanup()
+
+            node_list.pop(idx)
+            for i, n in enumerate(expand_list):
+                node_list.insert(idx+i, n)
+
+        return len(expand_list)
+
+    @staticmethod
+    def _cleanup_delayed_nodes(node, node_list, idx, conf, rec):
+        node.set_private(None)
+        node.clear_attr(NodeInternals.DISABLED)
+        if idx < len(node_list):
+            node_list.pop(idx)
+
+    def set_separator_node(self, sep_node, prefix=True, suffix=True, unique=False):
+        check_err = set()
+        for n in self.subnodes_set:
+            check_err.add(n.name)
+        if sep_node.name in check_err:
+            print("\n*** The separator node name shall not be used by a subnode " + \
+                  "of this non-terminal node")
+            raise ValueError
+        self.separator = NodeSeparator(sep_node, prefix=prefix, suffix=suffix, unique=unique)
+
+    def get_separator_node(self):
+        if self.separator is not None:
+            sep = self.separator.node
+        else:
+            sep = None
+        return sep
 
     def _precondition_subnode_ops(self):
         if self.frozen_node_list is None:
@@ -2171,9 +2939,13 @@ class NodeInternals_NonTerm(NodeInternals):
         off = 0
         for idx in range(num):
             n = self.frozen_node_list[idx]
-            off += len(n.to_bytes())
+            off += len(n._tobytes())
 
         return off
+
+    def get_subnode_idx(self, node):
+        self._precondition_subnode_ops()
+        return self.frozen_node_list.index(node)
 
     def get_subnode_qty(self):
         self._precondition_subnode_ops()
@@ -2207,11 +2979,11 @@ class NodeInternals_NonTerm(NodeInternals):
 
         return node_desc[0], min_node, max_node
 
-    def _clone_node(self, base_node, node_no, force_clone=False):
+    def _clone_node(self, base_node, node_no, force_clone=False, ignore_frozen_state=True):
         if node_no > 0 or force_clone:
             base_node.tmp_ref_count += 1
             nid = base_node.name + ':' + str(base_node.tmp_ref_count)
-            node = Node(nid, base_node=base_node, ignore_frozen_state=True,
+            node = Node(nid, base_node=base_node, ignore_frozen_state=ignore_frozen_state,
                         accept_external_entanglement=False)
             node._reset_depth(parent_depth=base_node.depth-1)
             if base_node.is_nonterm() and base_node.cc.mode == 1:
@@ -2226,13 +2998,33 @@ class NodeInternals_NonTerm(NodeInternals):
         for n in self.subnodes_set:
             n.tmp_ref_count = 1
 
+
+    def _clone_separator(self, sep_node, unique, force_clone=False, ignore_frozen_state=True):
+        if (sep_node.tmp_ref_count > 1 and unique) or force_clone:
+            nid = sep_node.name + ':' + str(sep_node.tmp_ref_count)
+            sep_node.tmp_ref_count += 1
+            node = Node(nid, base_node=sep_node, ignore_frozen_state=ignore_frozen_state,
+                        accept_external_entanglement=False)
+            node._reset_depth(parent_depth=sep_node.depth-1)
+        else:
+            sep_node.tmp_ref_count += 1
+            node = sep_node
+
+        return node
+
+
+    def _clone_separator_cleanup(self):
+        if self.separator is not None:
+            self.separator.node.tmp_ref_count = 1
+
+
     @staticmethod
     def _qty_from_node(node):
-        sync_node = node.synchronized_with(SyncScope.Qty)
+        sync_node, param = node.synchronized_with(SyncScope.Qty)
         if sync_node is not None:
             nb = node.env.get_drawn_node_qty(id(sync_node))
             if nb is not None:
-                return nb
+                return NodeInternals_NonTerm.qtysync_corrupt_hook(node, nb)
             else:
                 print("\n*** WARNING: synchronization is not possible " \
                       "for node '{:s}' (id: {:d})!".format(node.name, id(node)))
@@ -2242,27 +3034,120 @@ class NodeInternals_NonTerm(NodeInternals):
 
     @staticmethod
     def _existence_from_node(node):
-        sync_node = node.synchronized_with(SyncScope.Existence)
+        sync_node, condition = node.synchronized_with(SyncScope.Existence)
         if sync_node is not None:
             exist = node.env.node_exists(id(sync_node))
-            return True if exist else False
+            crit_1 = True if exist else False
+            crit_2 = True
+            if exist and condition is not None:
+                try:
+                    crit_2 = condition.check(sync_node)
+                except Exception as e:
+                    print("\n*** ERROR: existence condition is not verifiable " \
+                          "for node '{:s}' (id: {:d})!\n" \
+                          "*** The condition checker raise an exception!".format(node.name, id(node)))
+                    raise
+            correct_reply = crit_1 and crit_2
+            return NodeInternals_NonTerm.existence_corrupt_hook(node, correct_reply)
 
-        sync_node = node.synchronized_with(SyncScope.Inexistence)
+        sync_node, condition = node.synchronized_with(SyncScope.Inexistence)
         if sync_node is not None:
             inexist = not node.env.node_exists(id(sync_node))
-            return True if inexist else False
+            correct_reply = True if inexist else False
+            return NodeInternals_NonTerm.existence_corrupt_hook(node, correct_reply)
 
         return None
 
+    @staticmethod
+    def existence_corrupt_hook(node, exist):
+        # print('\n** corrupt list', node.entangled_nodes, node.env.nodes_to_corrupt)
+        # if node.env.nodes_to_corrupt:
+        #     for n in node.env.nodes_to_corrupt.keys():
+        #         print('entangled: ', n.entangled_nodes)
+        if node in node.env.nodes_to_corrupt:
+            corrupt_type, corrupt_op = node.env.nodes_to_corrupt[node]
+            if corrupt_type == Node.CORRUPT_EXIST_COND or corrupt_type is None:
+                return not exist
+            else:
+                return exist
+        else:
+            return exist
+
+    @staticmethod
+    def qtysync_corrupt_hook(node, qty):
+        if node in node.env.nodes_to_corrupt:
+            corrupt_type, corrupt_op = node.env.nodes_to_corrupt[node]
+            if corrupt_type == Node.CORRUPT_QTY_SYNC or corrupt_type is None:
+                return corrupt_op(qty)
+            else:
+                return qty
+        else:
+            return qty
+
+
+    @staticmethod
+    def nodeqty_corrupt_hook(node, mini, maxi):
+        if node.env and node in node.env.nodes_to_corrupt:
+            corrupt_type, corrupt_op = node.env.nodes_to_corrupt[node]
+            if corrupt_type == Node.CORRUPT_NODE_QTY or corrupt_type is None:
+                return corrupt_op(mini, maxi)
+            else:
+                return mini, maxi
+        else:
+            return mini, maxi
+
+
 
     def absorb(self, blob, constraints, conf):
+        '''
+        TOFIX: Checking existence condition independently from data
+               description order is not supported. Only supported
+               within the same non-terminal node. Use delayed job
+               infrastructure to cover all cases (TBC).
+        '''
+
         abs_excluded_components = []
         abs_exhausted = False
         status = AbsorbStatus.Reject
 
         if self.absorb_constraints is not None:
             constraints = self.absorb_constraints
-            
+
+        def _try_separator_absorption_with(blob, consumed_size):
+            DEBUG = False
+
+            new_sep = self._clone_separator(self.separator.node, unique=True)
+            abort = False
+
+            orig_blob = blob
+            orig_consumed_size = consumed_size
+
+            # We try to absorb the separator
+            st, off, sz, name = new_sep.absorb(blob, constraints, conf=conf)
+
+            if st == AbsorbStatus.Reject:
+                if DEBUG:
+                    print('REJECTED: SEPARATOR, blob: %r ...' % blob[:4])
+                abort = True
+            elif st == AbsorbStatus.Absorbed or st == AbsorbStatus.FullyAbsorbed:
+                if off != 0:
+                    abort = True
+                    new_sep.cancel_absorb()
+                else:
+                    if DEBUG:
+                        print('ABSORBED: SEPARATOR, blob: %r ..., consumed: %d' % (blob[:4], sz))
+                    blob = blob[sz:]
+                    consumed_size += sz
+            else:
+                raise ValueError
+
+            if abort:
+                blob = orig_blob
+                consumed_size = orig_consumed_size
+
+            return abort, blob, consumed_size, new_sep
+
+
         # Helper function
         def _try_absorption_with(base_node, min_node, max_node, blob, consumed_size,
                                  postponed_node_desc, force_clone=False):
@@ -2282,30 +3167,29 @@ class NodeInternals_NonTerm(NodeInternals):
                         max_node = min_node = 0
 
             if max_node == 0:
-                # base_node.reset_state(recursive=True, conf=conf)
                 return None, blob, consumed_size, consumed_nb
-            elif min_node == max_node:
-                itr = range(max_node)
-            else:
-                itr = range(1, max_node+1)
 
             orig_blob = blob
             orig_consumed_size = consumed_size
+            nb_absorbed = 0
             abort = False
             tmp_list = []
-            for i, node_no in zip(itr, range(len(itr))):
-                node = self._clone_node(base_node, node_no, force_clone)
+
+            node_no = 1
+            while node_no <= max_node or max_node < 0: # max_node < 0 means infinity
+                node = self._clone_node(base_node, node_no-1, force_clone)
 
                 # We try to absorb the blob
                 st, off, sz, name = node.absorb(blob, constraints, conf=conf)
 
                 if st == AbsorbStatus.Reject:
+                    nb_absorbed = node_no-1
                     if DEBUG:
                         print('REJECT: %s, blob: %r ...' % (node.name, blob[:4]))
                     if min_node == 0:
                         # abort = False
                         break
-                    if i <= min_node:
+                    if node_no <= min_node:
                         abort = True
                         break
                     else:
@@ -2313,8 +3197,9 @@ class NodeInternals_NonTerm(NodeInternals):
                 elif st == AbsorbStatus.Absorbed or st == AbsorbStatus.FullyAbsorbed:
                     if DEBUG:
                         print('\nABSORBED: %s, abort: %r, blob: %r ... , consumed: %d' \
-                              % (node.name, abort, blob[:sz][:50], sz))
-
+                              % (node.name, abort, blob[off:sz][:100], sz))
+                        
+                    nb_absorbed = node_no
                     sz2 = 0
                     if postponed_node_desc is not None:
                         # we only support one postponed node between two nodes
@@ -2336,24 +3221,41 @@ class NodeInternals_NonTerm(NodeInternals):
                             # We need to reject this absorption as
                             # accepting it could prevent finding a
                             # good non-terminal shape.
-                            if i == 0 and min_node == 0:  # this case is OK
+                            nb_absorbed = node_no-1
+                            if node_no == 1 and min_node == 0:  # this case is OK
                                 # abort = False
                                 break
-                            elif i <= min_node: # reject in this case
+                            elif node_no <= min_node: # reject in this case
+                                if DEBUG:
+                                    print('\n--> Ignore previous absorption!')
                                 abort = True
+                                node.cancel_absorb()
                                 break
-                            else:   # no need to check max_node, the loop stop at it 
+                            else:   # no need to check max_node, the loop stop at it
                                 # abort = False
                                 break
+                            
+                    if sz2 == off:                        
+                        blob = blob[off+sz:]
+                        consumed_size += sz+sz2 # off+sz
+                        consumed_nb = nb_absorbed
+                        tmp_list.append(node)
 
-                    blob = blob[off+sz:]
-                    assert(sz2 == off)
-                    consumed_size += sz+sz2 # off+sz
-                    consumed_nb = i+1 if min_node == max_node else i
-                    tmp_list.append(node)
-                    # self.frozen_node_list.append(node)
+                        if self.separator is not None:
+                            abort, blob, consumed_size, new_sep = _try_separator_absorption_with(blob, consumed_size)
+                            if abort:
+                                if nb_absorbed >= min_node:
+                                    abort = False
+                                break
+                            else:
+                                tmp_list.append(new_sep)
+                    else:
+                        abort = True
+
                 else:
                     raise ValueError
+
+                node_no += 1
 
             if abort:
                 blob = orig_blob
@@ -2364,11 +3266,13 @@ class NodeInternals_NonTerm(NodeInternals):
                     nlist = n.get_reachable_nodes(internals_criteria=ic)
                     for nd in nlist:
                         nd.reset_state(conf=conf)
+                for n in tmp_list:
+                    n.cancel_absorb()
+                self._clear_drawn_node_attrs(base_node)
             else:
-                nb_nodes = len(tmp_list)
-                self._set_drawn_node_attrs(base_node, nb=nb_nodes, sz=len(base_node.to_bytes()))
-                for n, idx in zip(tmp_list, range(nb_nodes)):
-                    n._set_clone_info((idx, nb_nodes))
+                self._set_drawn_node_attrs(base_node, nb=nb_absorbed, sz=len(base_node._tobytes()))
+                for n, idx in zip(tmp_list, range(nb_absorbed)):
+                    n._set_clone_info((idx, nb_absorbed), base_node)
                 self.frozen_node_list += tmp_list
 
             return abort, blob, consumed_size, consumed_nb
@@ -2393,7 +3297,16 @@ class NodeInternals_NonTerm(NodeInternals):
 
             self.frozen_node_list = []
 
+            if self.separator is not None and self.separator.prefix:
+                abort, blob, consumed_size, new_sep = _try_separator_absorption_with(blob, consumed_size)
+                if abort:
+                    break
+                else:
+                    self.frozen_node_list.append(new_sep)
+
             postponed_node_desc = None
+            first_pass = True
+            # Iterate over all sub-components of the component node_list
             for delim, sublist in self.__iter_csts(node_list):
 
                 if delim[1] == '>':
@@ -2414,6 +3327,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                                                               blob, consumed_size,
                                                                               postponed_node_desc)
 
+                            # In this case max_node is 0
                             if abort is None:
                                 continue
 
@@ -2438,6 +3352,7 @@ class NodeInternals_NonTerm(NodeInternals):
                         list_sz = len(node_desc_list)
                         cpt = list_sz
 
+                        # No particular orders between each kind of nodes
                         if delim[2:] == '..':
                             while node_desc_list:
 
@@ -2461,13 +3376,15 @@ class NodeInternals_NonTerm(NodeInternals):
                                 abort, blob, consumed_size, consumed_nb = _try_absorption_with(base_node, min_node, max_node,
                                                                                         blob, consumed_size,
                                                                                         postponed_node_desc=postponed_node_desc)
-                                if abort is None:
-                                    continue
+                                # if abort is None:
+                                #     continue
 
-                                if abort:
-                                    # we give a new chance to this node because it is maybe not at the right place
+                                if abort or abort is None:
+                                    # We give a new chance to this node because it is maybe not at the right place
+                                    # Note: existence condition can be False if not checked in right order
                                     node_desc_list.append(node_desc)
 
+                        # No particular orders between all the nodes (fully random)
                         else: # case delim[2:] == '.'
 
                             l = []
@@ -2488,7 +3405,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
                                 if stop_cpt == list_sz:
                                     for node_tuple, qty_obj in zip(l, qty_list):
-                                        if node_tuple[1] > 0:
+                                        if node_tuple[1] > 0: # check for min constraint
                                             abort = True
                                             break
                                     else:
@@ -2506,15 +3423,20 @@ class NodeInternals_NonTerm(NodeInternals):
                                 
                                     if max_node != 0:
                                         # postponed_node_desc is not supported here as it does not make sense
-                                        tmp_abort, blob, consumed_size, consumed_nb = _try_absorption_with(base_node, fake_min_node,
+                                        tmp_abort, blob, consumed_size, consumed_nb = _try_absorption_with(base_node,
+                                                                                        fake_min_node,
                                                                                         max_node,
                                                                                         blob, consumed_size,
                                                                                         postponed_node_desc=postponed_node_desc,
                                                                                         force_clone=force_clone)
 
                                     if not tmp_abort and consumed_nb > 0:
-                                        assert(qty_obj[0] - consumed_nb >= 0)
+                                        # assert(qty_obj[0] - consumed_nb >= 0)
+
+                                        # Note that qty_obj[0] can be < 0 if max_node is set
+                                        # to -1 (for specifying infinity)
                                         qty_obj[0] = qty_obj[0] - consumed_nb # update max_node
+
                                         # We now set force_clone to True as we already consumed the base_node
                                         # but _try_absorption_with() will not know that if we recall it with
                                         # the same base_node at a later time
@@ -2529,7 +3451,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                     stop_cpt += 1
                                 else:
                                     stop_cpt = 0
-                                    prev_qty_list = copy.deepcopy(qty_list)
+                                    prev_qty_list = copy.deepcopy(qty_list) # deepcopy is OK here
 
 
                     elif delim[2] == '+':
@@ -2580,21 +3502,45 @@ class NodeInternals_NonTerm(NodeInternals):
                 if abort:
                     break
 
+            if self.separator is not None and self.frozen_node_list and self.frozen_node_list[-1].is_attr_set(NodeInternals.Separator):
+                if not self.separator.suffix:
+                    sep = self.frozen_node_list.pop(-1)
+                    data = sep._tobytes()
+                    consumed_size = consumed_size - len(data)
+                    blob = blob + data
+
             if not abort:
                 status = AbsorbStatus.Absorbed
 
         # clean up
         if status != AbsorbStatus.Absorbed and status != AbsorbStatus.FullyAbsorbed:
-            self.frozen_node_list = None
+            self.cancel_absorb()
 
         self._clone_node_cleanup()
+        self._clone_separator_cleanup()
 
         return status, 0, consumed_size
 
+    def cancel_absorb(self):
+        for n in self.subnodes_set:
+            n.cancel_absorb()
+        if self.separator is not None:
+            self.separator.node.cancel_absorb()
+        self.frozen_node_list = None
+
+    def confirm_absorb(self):
+        iterable = copy.copy(self.subnodes_set)
+        if self.separator is not None:
+            iterable.add(self.separator.node)
+        if self.frozen_node_list is not None:
+            iterable.update(self.frozen_node_list)
+
+        for n in iterable:
+            n.confirm_absorb()
 
     def is_exhausted(self):
         if self.is_attr_set(NodeInternals.Finite):
-            return self.exhausted
+            return self.exhausted and self.subcomp_exhausted
         else:
             return False
 
@@ -2609,6 +3555,9 @@ class NodeInternals_NonTerm(NodeInternals):
 
     def _cleanup_entangled_nodes(self):
         for n in self.subnodes_set:
+            # As self.separator.node entanglement is not done (even if
+            # self.separator.unique is set to True), no cleanup is
+            # required.
             if n.entangled_nodes is not None:
                 l = []
                 for e in n.entangled_nodes:
@@ -2618,24 +3567,101 @@ class NodeInternals_NonTerm(NodeInternals):
                 if len(n.entangled_nodes) <= 1:
                     n.entangled_nodes = None
 
+    def _cleanup_entangled_nodes_from(self, node):
+        if node.entangled_nodes is not None:
+            l = []
+            for n in node.entangled_nodes:
+                if n in self.frozen_node_list:
+                    l.append(n)
+            node.entangled_nodes.symmetric_difference_update(l)
+            if len(node.entangled_nodes) <= 1:
+                node.entangled_nodes = None
 
-    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False):
+
+    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False,
+                 reevaluate_constraints=False):
         if recursive:
-            if dont_change_state or only_generators:
+            if reevaluate_constraints:
+                # In order to re-evaluate existence condition of
+                # child node we have to recompute the previous state,
+                # which is the purpose of the following code. We also
+                # re-evaluate generator and function.
+                #
+                # SIDE NOTE: the previous state cannot be saved during
+                # a node copy in an efficient manner (as memory and
+                # cpu will be necessarily wasted if
+                # 'reevaluate_constraints' is not used), that's why we
+                # recompute it.
+                iterable = self.frozen_node_list
+                determinist = self.is_attr_set(NodeInternals.Determinist)
+                finite = self.is_attr_set(NodeInternals.Finite)
+                if finite or determinist:
+                    if self.excluded_components:
+                        self.excluded_components.pop(-1)
+                        self._perform_first_step = False
+
+                    if determinist:
+                        node_list, idx = self._get_next_heavier_component(self.subnodes_csts,
+                                                                          excluded_idx=self.excluded_components)
+                    else:
+                        # In this case we don't recover the previous
+                        # seed as the node is random and recovering
+                        # the seed would make little sense because of
+                        # the related overhead
+                        node_list, idx, self.component_seed = self._get_next_random_component(self.subnodes_csts,
+                                                                                        excluded_idx=self.excluded_components,
+                                                                                        seed=self.component_seed)
+                    if self.expanded_nodelist is None:
+                        self.expanded_nodelist = self._generate_expanded_nodelist(node_list)
+                        self.expanded_nodelist_origsz = len(self.expanded_nodelist)
+                        if self.expanded_nodelist_sz is not None:
+                            # In this case we need to go back to the previous state, thus +1
+                            self.expanded_nodelist_sz += 1
+                            self.expanded_nodelist = self.expanded_nodelist[:self.expanded_nodelist_sz]
+                        else:
+                            # This case should not exist, a priori
+                            self.expanded_nodelist_sz = len(self.expanded_nodelist)
+                    else:
+                        assert(node_list is not None)
+                        self.expanded_nodelist.append(node_list)
+                        self.expanded_nodelist_sz += 1
+                else:
+                    # In this case the states are random, thus we
+                    # don't bother trying to recover the previous one
+                    pass
+
+                for e in iterable:
+                    self._cleanup_entangled_nodes_from(e)
+                    if e.is_frozen(conf) and (e.is_nonterm(conf) or e.is_genfunc(conf) or e.is_func(conf)):
+                        e.unfreeze(conf=conf, recursive=True, dont_change_state=dont_change_state,
+                                   ignore_entanglement=ignore_entanglement, only_generators=only_generators,
+                                   reevaluate_constraints=reevaluate_constraints)
+
+                self.frozen_node_list = None
+                for n in self.subnodes_set:
+                    n.clear_clone_info_since(n)
+
+            elif dont_change_state or only_generators:
                 iterable = self.frozen_node_list
             else:
-                iterable = self.subnodes_set
+                iterable = copy.copy(self.subnodes_set)
+                if self.separator is not None:
+                    iterable.add(self.separator.node)
 
-            for e in iterable:
-                if e.is_frozen(conf):
-                    e.unfreeze(conf=conf, recursive=True, dont_change_state=dont_change_state,
-                               ignore_entanglement=ignore_entanglement, only_generators=only_generators)
+            if not reevaluate_constraints:
+                for e in iterable:
+                    if e.is_frozen(conf):
+                        e.unfreeze(conf=conf, recursive=True, dont_change_state=dont_change_state,
+                                   ignore_entanglement=ignore_entanglement, only_generators=only_generators,
+                                   reevaluate_constraints=reevaluate_constraints)
 
-        if not dont_change_state and not only_generators:
+        if not dont_change_state and not only_generators and not reevaluate_constraints:
             self._cleanup_entangled_nodes()
-
             self.frozen_node_list = None
             self._nodes_drawn_qty = {}
+            for n in self.subnodes_set:
+                self._clear_drawn_node_attrs(n)
+                n.clear_clone_info_since(n)
 
         if self.exhausted:
             self.excluded_components = []
@@ -2643,7 +3669,9 @@ class NodeInternals_NonTerm(NodeInternals):
 
     def unfreeze_all(self, recursive=True, ignore_entanglement=False):
         if recursive:
-            iterable = self.subnodes_set
+            iterable = copy.copy(self.subnodes_set)
+            if self.separator is not None:
+                iterable.add(self.separator.node)
 
             for e in iterable:
                 e.unfreeze_all(recursive=True, ignore_entanglement=ignore_entanglement)
@@ -2652,6 +3680,9 @@ class NodeInternals_NonTerm(NodeInternals):
 
         self.frozen_node_list = None
         self._nodes_drawn_qty = {}
+        for n in self.subnodes_set:
+            self._clear_drawn_node_attrs(n)
+            n.clear_clone_info_since(n)
 
         if self.exhausted:
             self.excluded_components = []
@@ -2659,10 +3690,13 @@ class NodeInternals_NonTerm(NodeInternals):
 
     def reset_state(self, recursive=False, exclude_self=False, conf=None, ignore_entanglement=False):
         if recursive:
-            iterable = self.subnodes_set
+            iterable = copy.copy(self.subnodes_set)
+            if self.separator is not None:
+                iterable.add(self.separator.node)
 
             for e in iterable:
-                e.reset_state(recursive=True, exclude_self=exclude_self, conf=conf, ignore_entanglement=ignore_entanglement)
+                e.reset_state(recursive=True, exclude_self=exclude_self, conf=conf,
+                              ignore_entanglement=ignore_entanglement)
 
         if not exclude_self:
             self._cleanup_entangled_nodes()
@@ -2675,14 +3709,21 @@ class NodeInternals_NonTerm(NodeInternals):
 
     def reset_fuzz_weight(self, recursive):
         iterable = copy.copy(self.subnodes_set)
+        if self.separator is not None:
+            iterable.add(self.separator.node)
+
         if self.frozen_node_list is not None:
             iterable.update(self.frozen_node_list)
 
         for e in iterable:
             e.reset_fuzz_weight(recursive=recursive)
 
+
     def set_child_env(self, env):
         iterable = copy.copy(self.subnodes_set)
+        if self.separator is not None:
+            iterable.add(self.separator.node)
+
         if self.frozen_node_list is not None:
             iterable.update(self.frozen_node_list)
 
@@ -2694,6 +3735,8 @@ class NodeInternals_NonTerm(NodeInternals):
             iterable = copy.copy(self.subnodes_set)
             if self.frozen_node_list is not None:
                 iterable.update(self.frozen_node_list)
+            if self.separator is not None:
+                iterable.add(self.separator.node)
 
             for e in iterable:
                 e.set_attr(name, conf=conf, all_conf=all_conf, recursive=recursive)
@@ -2703,56 +3746,83 @@ class NodeInternals_NonTerm(NodeInternals):
             iterable = copy.copy(self.subnodes_set)
             if self.frozen_node_list is not None:
                 iterable.update(self.frozen_node_list)
+            if self.separator is not None:
+                iterable.add(self.separator.node)
 
             for e in iterable:
                 e.clear_attr(name, conf=conf, all_conf=all_conf, recursive=recursive)
 
-    def set_clone_info(self, info):
+    def set_clone_info(self, info, node):
         iterable = self.subnodes_set
         if self.frozen_node_list:
+            # union() performs a copy, so we don't touch subnodes_set
             iterable = iterable.union(self.frozen_node_list)
+        if self.separator is not None:
+            iterable.add(self.separator.node)
+
         for e in iterable:
-            e._set_clone_info(info)
+            e._set_clone_info(info, node)
+
+    def clear_clone_info_since(self, node):
+        iterable = self.subnodes_set
+        if self.frozen_node_list:
+            # union() performs a copy, so we don't touch subnodes_set
+            iterable = iterable.union(self.frozen_node_list)
+        if self.separator is not None:
+            iterable.add(self.separator.node)
+
+        for n in iterable:
+            n.clear_clone_info_since(node)
+
 
     def reset_depth_specific(self, depth):
         iterable = copy.copy(self.subnodes_set)
+        if self.separator is not None:
+            iterable.add(self.separator.node)
         if self.frozen_node_list is not None:
             iterable.update(self.frozen_node_list)
         for e in iterable:
             e._reset_depth(depth)
 
     def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria, owned_conf, conf, path_regexp,
-                               exclude_self, respect_order, relative_depth, top_node):
+                               exclude_self, respect_order, relative_depth, top_node, ignore_fstate):
 
-        if self.frozen_node_list is not None:
+        if self.frozen_node_list is not None and not ignore_fstate:
             iterable = self.frozen_node_list
         else:
-            self.get_subnodes_with_csts()
-            iterable = self.frozen_node_list
+            iterable = self.subnodes_set
+            # self.get_subnodes_with_csts()
+            # iterable = self.frozen_node_list
 
         if respect_order:
+            # if the node is not frozen, the order will not be
+            # preserved as self.subnodes_set will be used as a base,
+            # and it is a set()
             s = []
         else:
             s = set()
 
         for e in iterable:
-            ret = e.get_reachable_nodes(internals_criteria, semantics_criteria, owned_conf, conf,
-                                        path_regexp=path_regexp,
-                                        exclude_self=exclude_self, respect_order=respect_order,
-                                        relative_depth=relative_depth, top_node=top_node)
+            nlist = e.get_reachable_nodes(internals_criteria, semantics_criteria, owned_conf, conf,
+                                          path_regexp=path_regexp,
+                                          exclude_self=False, respect_order=respect_order,
+                                          relative_depth=relative_depth, top_node=top_node,
+                                          ignore_fstate=ignore_fstate)
+
             if respect_order:
-                for e in ret:
+                for e in nlist:
                     if e not in s:
                         s.append(e)
             else:
-                s = s.union(ret)
+                s = s.union(nlist)
 
         return s
 
 
     def set_child_current_conf(self, node, conf, reverse, ignore_entanglement):
-        iterable = self.subnodes_set
-
+        iterable = copy.copy(self.subnodes_set)
+        if self.separator is not None:
+            iterable.add(self.separator.node)
         for e in iterable:
             node._set_subtrees_current_conf(e, conf, reverse, ignore_entanglement=ignore_entanglement)
 
@@ -2761,7 +3831,9 @@ class NodeInternals_NonTerm(NodeInternals):
         if self.frozen_node_list:
             iterable = self.frozen_node_list
         else:
-            iterable = self.subnodes_set
+            iterable = copy.copy(self.subnodes_set)
+            if self.separator is not None:
+                iterable.add(self.separator.node)
 
         for e in iterable:
             e._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False)
@@ -2879,6 +3951,15 @@ class NodeSemantics(object):
             return False
 
         return True
+
+
+    def what_match_from(self, raw_criteria_list):
+        matching = []
+        for c in raw_criteria_list:
+            if c in self.__attrs:
+                matching.append(c)
+
+        return matching
 
 
     def make_private(self):
@@ -3042,9 +4123,19 @@ class Node(object):
         freezed---e.g., at its creation).
     '''
    
+    DJOBS_PRIO_nterm_existence = 100
+    DJOBS_PRIO_dynhelpers = 200
+    DJOBS_PRIO_genfunc = 300
+
+    DEFAULT_DISABLED_VALUE = b'' #b'**TO_REMOVE**'
+
+    CORRUPT_EXIST_COND = 5
+    CORRUPT_QTY_SYNC = 6
+    CORRUPT_NODE_QTY = 7
+
     def __init__(self, name, base_node=None, copy_dico=None, ignore_frozen_state=False,
                  accept_external_entanglement=False, acceptance_set=None,
-                 subnodes=None, values=None, value_type=None):
+                 subnodes=None, values=None, value_type=None, vt=None, new_env=False):
         '''
         Args:
           name (str): Name of the node. Every children node of a node shall have a unique name.
@@ -3057,6 +4148,7 @@ class Node(object):
           value_type (VT): (Optional) The value type that characterize the node. Defined within
             `value_types.py` and inherits from either `VT` or `VT_Alt`. If provided the instantiated
             node will be a value_type-typed leaf node.
+          vt (VT): alias to `value_type`.
           base_node (Node): (Optional) If provided, it will be used as a template to create the new node.
           ignore_frozen_state (bool): [If `base_node` provided] If True, the clone process of
             base_node will ignore its current state.
@@ -3067,6 +4159,8 @@ class Node(object):
             entangled nodes that could be referenced within the new node during the cloning process.
           copy_dico (dict): [If `base_node` provided] It is used internally during the cloning process,
            and should not be used for any functional purpose.
+          new_env (bool): [If `base_node` provided] If True, the `base_node` attached :class:`Env()`
+           will be copied. Otherwise, the same will be used.
         '''
 
         self.internals = {}
@@ -3085,21 +4179,30 @@ class Node(object):
 
         if base_node is not None and subnodes is None and values is None and value_type is None:
 
-            # self.env = base_node.env
-            self.env = copy.copy(base_node.env)
+            self._delayed_jobs_called = base_node._delayed_jobs_called
+
+            if new_env:
+                self.env = copy.copy(base_node.env)
+            else:
+                self.env = base_node.env
         
             node_dico = self.set_contents(base_node,
                                           copy_dico=copy_dico, ignore_frozen_state=ignore_frozen_state,
                                           accept_external_entanglement=accept_external_entanglement,
                                           acceptance_set=acceptance_set)
-            
-            if self.env is not None:
+
+            if new_env and self.env is not None:
                 self.env.update_node_refs(node_dico, ignore_frozen_state=ignore_frozen_state)
             elif DEBUG:
                 print("\n*** WARNING: the copied node '%s' don't have an Env() " \
                       "associated with it!\n" % base_node.name)
 
+            if self.env is not None and self.env.djobs_exists(Node.DJOBS_PRIO_dynhelpers):
+                self.env.execute_basic_djobs(Node.DJOBS_PRIO_dynhelpers)
+
         else:
+            self._delayed_jobs_called = False
+
             self.add_conf('MAIN')
             self.set_current_conf('MAIN')
 
@@ -3113,23 +4216,27 @@ class Node(object):
 
             elif value_type is not None:
                 self.set_values(value_type=value_type)
+            elif vt is not None:
+                self.set_values(value_type=vt)
 
             else:
                 self.make_empty()
 
-    def get_clone(self, name, ignore_frozen_state=False):
+    def get_clone(self, name, ignore_frozen_state=False, new_env=True):
         '''Create a new node. To be used wihtin a graph-based data model.
         
         Args:
           name (str): name of the new Node instance
           ignore_frozen_state (bool): if set to False, the clone function will produce
             a Node with the same state as the duplicated Node. Otherwise, the only the state won't be kept.
+          new_env (bool): If True, the current :class:`Env()` will be copied.
+            Otherwise, the same will be used.
 
         Returns:
           Node: duplicated Node object
         '''
 
-        return Node(name, base_node=self, ignore_frozen_state=ignore_frozen_state)
+        return Node(name, base_node=self, ignore_frozen_state=ignore_frozen_state, new_env=new_env)
 
 
     def set_contents(self, base_node,
@@ -3199,8 +4306,10 @@ class Node(object):
                 self.internals[conf].make_private(ignore_frozen_state=ignore_frozen_state,
                                                   accept_external_entanglement=accept_external_entanglement,
                                                   delayed_node_internals=delayed_node_internals)
-
                 self._finalize_nonterm_node(conf)
+
+            elif base_node.is_genfunc(conf) or base_node.is_func(conf):
+                self.internals[conf].set_env(self.env)
 
         # Once node_dico has been populated from the node tree,
         # we deal with 'nodes' argument of Func and GenFunc that does not belong to this
@@ -3301,8 +4410,6 @@ class Node(object):
     def reset_fuzz_weight(self, recursive=False):
         '''Reset to standard (1) the fuzzing weight that is associated to this
         node, and all its subnodes if `recursive` parameter is set to `True`.
-
-        .. _test:
 
         Args:
           recursive (bool): if set to `True`, reset also every subnodes (all reachable nodes from this one).
@@ -3427,7 +4534,8 @@ class Node(object):
     '''Property linked to `self.internals` (read only)'''
     
     def get_internals_backup(self):
-        return Node(self.name, base_node=self, accept_external_entanglement=True)
+        return Node(self.name, base_node=self, ignore_frozen_state=False,
+                    accept_external_entanglement=True)
 
     def set_internals(self, backup):
         self.name = backup.name
@@ -3455,9 +4563,13 @@ class Node(object):
         conf = self.__check_conf(conf)
         return isinstance(self.internals[conf], NodeInternals_Func)
 
-    def is_typed_value(self, conf=None):
+    def is_typed_value(self, conf=None, subkind=None):
         conf = self.__check_conf(conf)
-        return isinstance(self.internals[conf], NodeInternals_TypedValue)
+        resp = isinstance(self.internals[conf], NodeInternals_TypedValue)
+        if resp and subkind is not None:
+            resp = (self.internals[conf].get_current_subkind() == subkind) or \
+                   issubclass(self.internals[conf].get_current_subkind(), subkind)
+        return resp
 
     def is_nonterm(self, conf=None):
         conf = self.__check_conf(conf)
@@ -3524,37 +4636,43 @@ class Node(object):
 
             raise ValueError
 
+        if self.internals[conf].separator is not None:
+            sep_name = self.internals[conf].separator.node.name
+            if sep_name in check_err:
+                print("\n*** The separator node name shall not be used by a subnode " + \
+                      "of this non-terminal node: %s in conf : '%s'." % (self.name, conf))
+                raise ValueError
 
-    def set_subnodes_basic(self, node_list, conf=None, ignore_entanglement=False):
+    def set_subnodes_basic(self, node_list, conf=None, ignore_entanglement=False, separator=None):
         conf = self.__check_conf(conf)
 
         self.internals[conf] = NodeInternals_NonTerm()
-        self.internals[conf].import_subnodes_basic(node_list)
+        self.internals[conf].import_subnodes_basic(node_list, separator=separator)
         self._finalize_nonterm_node(conf)
    
         if not ignore_entanglement and self.entangled_nodes is not None:
             for e in self.entangled_nodes:
-                e.set_subnodes_basic(node_list=node_list, conf=conf, ignore_entanglement=True)
+                e.set_subnodes_basic(node_list=node_list, conf=conf, ignore_entanglement=True, separator=separator)
 
 
 
-    def set_subnodes_with_csts(self, wlnode_list, conf=None, ignore_entanglement=False):
+    def set_subnodes_with_csts(self, wlnode_list, conf=None, ignore_entanglement=False, separator=None):
         conf = self.__check_conf(conf)
 
         self.internals[conf] = NodeInternals_NonTerm()
-        self.internals[conf].import_subnodes_with_csts(wlnode_list)
+        self.internals[conf].import_subnodes_with_csts(wlnode_list, separator=separator)
         self._finalize_nonterm_node(conf)
 
         if not ignore_entanglement and self.entangled_nodes is not None:
             for e in self.entangled_nodes:
-                e.set_subnodes_basic(wlnode_list=wlnode_list, conf=conf, ignore_entanglement=True)
+                e.set_subnodes_basic(wlnode_list=wlnode_list, conf=conf, ignore_entanglement=True, separator=separator)
 
 
-    def set_subnodes_full_format(self, full_list, conf=None):
+    def set_subnodes_full_format(self, full_list, conf=None, separator=None):
         conf = self.__check_conf(conf)
 
         self.internals[conf] = NodeInternals_NonTerm()
-        self.internals[conf].import_subnodes_full_format(subnodes_csts=full_list)
+        self.internals[conf].import_subnodes_full_format(subnodes_csts=full_list, separator=separator)
         self._finalize_nonterm_node(conf)
 
 
@@ -3617,6 +4735,9 @@ class Node(object):
         conf = self.__check_conf(conf)
         self.internals[conf] = NodeInternals_Empty()
         
+    def is_empty(self, conf=None):
+        conf = self.__check_conf(conf)
+        return isinstance(self.internals[conf], NodeInternals_Empty)
 
     def absorb(self, blob, constraints=AbsCsts(), conf=None):
         conf, next_conf = self._compute_confs(conf=conf, recursive=True)
@@ -3624,6 +4745,7 @@ class Node(object):
         status, off, sz = self.internals[conf].absorb(blob, constraints=constraints, conf=next_conf)
         if len(blob) == sz and status == AbsorbStatus.Absorbed:
             status = AbsorbStatus.FullyAbsorbed
+            self.internals[conf].confirm_absorb()
         return status, off, sz, self.name
 
     def set_absorb_helper(self, helper, conf=None):
@@ -3666,22 +4788,23 @@ class Node(object):
 
         return current_conf, next_conf
 
-    def _set_clone_info(self, info):
+    def _set_clone_info(self, info, node):
         '''Used to propagate random draw results when a NonTerm node is frozen
         to the dynamic nodes of its attached subgraphs, namely
         GenFunc/Func nodes which are the only ones which can act
         dynamically.
         '''
         for c in self.internals:
-            self.internals[c].set_clone_info(info)
+            self.internals[c].set_clone_info(info, node)
 
-    def make_synchronized_with(self, node, scope, conf=None):
+    def make_synchronized_with(self, node, scope, param=None, conf=None):
         conf = self.__check_conf(conf)
-        self.internals[conf].set_node_sync(node, scope=scope)
+        self.internals[conf].set_node_sync(node, scope=scope, param=param)
 
     def synchronized_with(self, scope, conf=None):
         conf = self.__check_conf(conf)
-        return self.internals[conf].get_node_sync(scope)
+        val = self.internals[conf].get_node_sync(scope)
+        return val if val is not None else (None, None)
 
     def set_attr(self, name, conf=None, all_conf=False, recursive=False):
         if all_conf:
@@ -3717,8 +4840,12 @@ class Node(object):
         conf = self.__check_conf(conf)
         return self.internals[conf].get_private()
 
-    def set_semantics(self, val):
-        self.semantics = val
+    def set_semantics(self, sem):
+        if isinstance(sem, NodeSemantics):
+            self.semantics = sem
+        else:
+            assert(isinstance(sem, list))
+            self.semantics = NodeSemantics(sem)
 
     def get_semantics(self):
         return self.semantics
@@ -3726,7 +4853,7 @@ class Node(object):
 
     def get_reachable_nodes(self, internals_criteria=None, semantics_criteria=None,
                             owned_conf=None, conf=None, path_regexp=None, exclude_self=False,
-                            respect_order=False, relative_depth=-1, top_node=None):
+                            respect_order=False, relative_depth=-1, top_node=None, ignore_fstate=False):
         
         def __compliant(node, config, top_node):
             if node is top_node and exclude_self:
@@ -3757,6 +4884,7 @@ class Node(object):
                 cond3 = True
 
             return cond1 and cond2 and cond3
+
 
         def get_reachable_nodes_rec(node, config, rdepth, top_node):
             s = []
@@ -3789,10 +4917,10 @@ class Node(object):
                                                       semantics_criteria=semantics_criteria,
                                                       owned_conf=owned_conf, conf=next_conf,
                                                       path_regexp=path_regexp,
-                                                      exclude_self=exclude_self,
+                                                      exclude_self=False,
                                                       respect_order=respect_order,
                                                       relative_depth = rdepth - 1,
-                                                      top_node=top_node)
+                                                      top_node=top_node, ignore_fstate=ignore_fstate)
                 if s2:
                     for e in s2:
                         if e not in s:
@@ -3808,10 +4936,10 @@ class Node(object):
 
         if top_node is None:
             nodes = get_reachable_nodes_rec(node=self, config=conf, rdepth=relative_depth,
-                                                    top_node=self)
+                                            top_node=self)
         else:
             nodes = get_reachable_nodes_rec(node=self, config=conf, rdepth=relative_depth,
-                                                    top_node=top_node)
+                                            top_node=top_node)
 
         if respect_order:
             return nodes
@@ -3826,6 +4954,25 @@ class Node(object):
             l1 = sorted(l1, key=lambda x: -x.get_fuzz_weight())
 
             return l1 + sorted(l2, key=lambda x: x.name)
+
+
+    @staticmethod
+    def filter_out_entangled_nodes(node_list):
+        ret = []
+        while True:
+            if node_list:
+                n = node_list.pop()
+                if n.entangled_nodes:
+                    for en in n.entangled_nodes:
+                        if en in node_list:
+                            node_list.remove(en)
+                ret.append(n)
+            else:
+                break
+        # print('\n*** FILTERED nodes')
+        # for n in ret:
+        #     print(' |_ ' + n.name)
+        return ret
 
 
     def get_node_by_path(self, path_regexp=None, path=None, conf=None):
@@ -3899,8 +5046,9 @@ class Node(object):
             if e == self:
                 return n
         else:
-            return "*** ERROR: get_path_from() --> Node '{:s}' " \
-                "not reachable from '{:s}'***".format(self.name, node.name)
+            return None
+        # "*** ERROR: get_path_from() --> Node '{:s}' " \
+        #         "not reachable from '{:s}'***".format(self.name, node.name)
 
 
     def get_all_paths_from(self, node, conf=None):
@@ -3926,9 +5074,27 @@ class Node(object):
     def get_env(self):
         return self.env
 
-
-    def get_value(self, conf=None, recursive=True):
+    def freeze(self, conf=None, recursive=True):
         
+        ret = self._get_value(conf=conf, recursive=recursive)
+
+        if self.env is not None and self.env.delayed_jobs_enabled and not self._delayed_jobs_called:
+            self._delayed_jobs_called = True
+
+            if self.env.djobs_exists(Node.DJOBS_PRIO_nterm_existence):
+                self.env.cleanup_remaining_djobs(Node.DJOBS_PRIO_nterm_existence)
+
+            if self.env.djobs_exists(Node.DJOBS_PRIO_genfunc):
+                self.env.execute_basic_djobs(Node.DJOBS_PRIO_genfunc)
+
+            ret = self._get_value(conf=conf, recursive=recursive)
+
+        return ret
+
+    get_value = freeze
+
+    def _get_value(self, conf=None, recursive=True):
+
         if recursive:
             next_conf = conf
         else:
@@ -3949,14 +5115,14 @@ class Node(object):
                       "been associted to the Node.)".format(self.name))
             raise ValueError
 
-        ret, was_not_frozen = internal.get_value(conf=next_conf, recursive=recursive)
+        ret, was_not_frozen = internal._get_value(conf=next_conf, recursive=recursive)
 
         if was_not_frozen:
             self._post_freeze(internal)
             # We need to test self.env because an Node can be freezed
             # before being registered in the data model. It triggers
             # for instance when a generator Node is freezed
-            # (get_value() is called on it) during data model
+            # (_get_value() is called on it) during data model
             # construction.
             if internal.is_exhausted() and self.env is not None:
                 self.env.notify_exhausted_node(self)
@@ -3980,6 +5146,7 @@ class Node(object):
         return self.internals[conf].is_frozen()
 
     def reset_state(self, recursive=False, exclude_self=False, conf=None, ignore_entanglement=False):
+        self._delayed_jobs_called = False
         current_conf, next_conf = self._compute_confs(conf=conf, recursive=recursive)
         self.internals[current_conf].reset_state(recursive=recursive, exclude_self=exclude_self, conf=next_conf,
                                                  ignore_entanglement=ignore_entanglement)
@@ -3990,8 +5157,7 @@ class Node(object):
                               ignore_entanglement=True)
 
     def to_bytes(self, conf=None, recursive=True):
-        val = self.get_value(conf=conf, recursive=recursive)
-
+        val = self.freeze(conf=conf, recursive=recursive)
         if not isinstance(val, bytes):
             val = list(flatten(val))
             val = b''.join(val)
@@ -3999,6 +5165,19 @@ class Node(object):
         return val
 
     get_flatten_value = to_bytes
+
+    def to_str(self, conf=None, recursive=True):
+        val = self.to_bytes(conf=conf, recursive=recursive)
+        return unconvert_from_internal_repr(val)
+
+
+    def _tobytes(self, conf=None, recursive=True):
+        val = self._get_value(conf=conf, recursive=recursive)
+        if not isinstance(val, bytes):
+            val = list(flatten(val))
+            val = b''.join(val)
+
+        return val
 
     def set_frozen_value(self, value, conf=None):
         conf = self.__check_conf(conf)
@@ -4010,7 +5189,10 @@ class Node(object):
             raise ValueError
 
 
-    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False):
+    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False,
+                 reevaluate_constraints=False):
+        self._delayed_jobs_called = False
+
         if conf is not None:
             next_conf = conf
         else:
@@ -4021,16 +5203,19 @@ class Node(object):
 
         if self.is_frozen(conf):
             self.internals[conf].unfreeze(next_conf, recursive=recursive, dont_change_state=dont_change_state,
-                                          ignore_entanglement=ignore_entanglement, only_generators=only_generators)
+                                          ignore_entanglement=ignore_entanglement, only_generators=only_generators,
+                                          reevaluate_constraints=reevaluate_constraints)
 
         if not ignore_entanglement and self.entangled_nodes is not None:
             for e in self.entangled_nodes:
                 e.unfreeze(conf=next_conf, recursive=recursive, dont_change_state=dont_change_state,
-                           ignore_entanglement=True, only_generators=only_generators)
+                           ignore_entanglement=True, only_generators=only_generators,
+                           reevaluate_constraints=reevaluate_constraints)
 
 
     def unfreeze_all(self, recursive=True, ignore_entanglement=False):
-        
+        self._delayed_jobs_called = False
+
         for conf in self.internals:
             if self.is_frozen(conf):
                 self.internals[conf].unfreeze_all(recursive=recursive)
@@ -4057,13 +5242,13 @@ class Node(object):
                     continue
 
             if verbose:
-                l.append((n, e.depth, e.to_bytes()))
+                l.append((n, e.depth, e._tobytes()))
             else:
                 l.append((n, e.depth))
 
             if e.env is None:
                 print(n + ' (' + str(e.depth) + ')' + ' ' + str(e.env))
-                print('Node value: ', e.to_bytes())
+                print('Node value: ', e._tobytes())
                 print("The 'env' attr of this Node is NONE")
                 raise ValueError
 
@@ -4120,6 +5305,8 @@ class Node(object):
             print_raw_func = self._print_raw
         if print_type_func is None:
             print_type_func = self._print_type
+
+        sep_deco = ' [SEP]'
 
         def get_args(node, conf):
             args = ''
@@ -4251,7 +5438,7 @@ class Node(object):
                 prev_depth = depth
 
                 if node.is_term(conf_tmp):
-                    raw = node.to_bytes()
+                    raw = node._tobytes()
                     raw_len = len(raw)
                     val = node.pretty_print()
 
@@ -4266,6 +5453,9 @@ class Node(object):
                     print_nonterm_func(prefix, nl=False, log_func=log_func)
                     print_name_func('({:d}) {:s}'.format(depth, name), nl=False, log_func=log_func)
                     print_type_func(type_and_args, nl=False, log_func=log_func)
+                    if node.is_attr_set(NodeInternals.Separator):
+                        self._print(sep_deco, rgb=Color.ND_SEPARATOR, style=FontStyle.BOLD, nl=False,
+                                    log_func=log_func)
                     self._print(graph_deco, rgb=Color.ND_DUPLICATED, style=FontStyle.BOLD,
                                 log_func=log_func)
                     if val is not None:
@@ -4305,13 +5495,13 @@ class Node(object):
         return id(self)
 
     def __str__(self):
-        # NEVER return something with self.to_bytes() as side
+        # NEVER return something with self._tobytes() as side
         # effects are not welcomed
         return repr(self)
 
 
     def __getitem__(self, key):
-        # self.get_value()
+        # self._get_value()
         if isinstance(key, str):
             return self.get_node_by_path(key)
         elif isinstance(key, NodeInternalsCriteria):
@@ -4342,7 +5532,8 @@ class Node(object):
             return getattr(internals, name)
         else:
             return object.__getattribute__(self, name)
-    
+
+
 class Env4NT(object):
     ''' 
     Define methods for non-terminal nodes
@@ -4366,9 +5557,9 @@ class Env4NT(object):
         else:
             return False
 
-    # not currently used
     def clear_drawn_node_attrs(self, node_id):
-        del self.drawn_node_attrs[node_id]
+        if node_id in self.drawn_node_attrs:
+            del self.drawn_node_attrs[node_id]
 
     def update_node_ids(self, id_list):
         if not self.drawn_node_attrs:
@@ -4399,7 +5590,16 @@ class Env(object):
 
     def __init__(self):
         self.exhausted_nodes = []
+        self.nodes_to_corrupt = {}
         self.env4NT = Env4NT()
+        self.delayed_jobs_enabled = True
+        self._sorted_jobs = None
+        self._djob_keys = None
+        self._djob_groups = None
+        self._dm = None
+        self.id_list = None
+        self._reentrancy_cpt = 0
+        # self.cpt = 0
 
     def __getattr__(self, name):
         if hasattr(self.env4NT, name):
@@ -4408,13 +5608,28 @@ class Env(object):
             raise AttributeError
 
     def is_empty(self):
-        return not self.exhausted_nodes and self.env4NT.is_empty()
+        return not self.exhausted_nodes and not self.nodes_to_corrupt and self.env4NT.is_empty()
 
     def set_data_model(self, dm):
-        self.__dm = dm
+        self._dm = dm
 
     def get_data_model(self):
-        return self.__dm
+        return self._dm
+
+    def add_node_to_corrupt(self, node, corrupt_type=None, corrupt_op=lambda x: x):
+        if node.entangled_nodes:
+            for n in node.entangled_nodes:
+                self.nodes_to_corrupt[n] = (corrupt_type, corrupt_op)
+        else:
+            self.nodes_to_corrupt[node] = (corrupt_type, corrupt_op)
+
+    def remove_node_to_corrupt(self, node):
+        if node in self.nodes_to_corrupt:
+            if node.entangled_nodes:
+                for n in node.entangled_nodes:
+                    del self.nodes_to_corrupt[n]
+            else:
+                del self.nodes_to_corrupt[node]
 
     def exhausted_node_exists(self):
         return False if len(self.exhausted_nodes) == 0 else True
@@ -4454,31 +5669,161 @@ class Env(object):
 
     def update_node_refs(self, node_dico, ignore_frozen_state):
 
+        exh_nodes = []
+        new_nodes_to_corrupt = {}
+        self.id_list = []
+        for old_node, new_node in node_dico.items():
+            self.id_list.append((id(old_node), id(new_node)))
+            if old_node in self.exhausted_nodes:
+                exh_nodes.append(new_node)
+            if old_node in self.nodes_to_corrupt.keys():
+                op = self.nodes_to_corrupt[old_node]
+                del self.nodes_to_corrupt[old_node]
+                new_nodes_to_corrupt[new_node] = op
+
         if self.is_empty():
             return
+
+        self.nodes_to_corrupt = new_nodes_to_corrupt
 
         if ignore_frozen_state:
             self.exhausted_nodes = []
             self.env4NT.reset()
+        else:
+            self.exhausted_nodes = exh_nodes
+            self.env4NT.update_node_ids(self.id_list)
+
+    # def update_id_list(self):
+    #     self.id_list = []
+    #     for old_node, new_node in node_dico.items():
+    #         self.id_list.append((id(old_node), id(new_node)))
+
+    def register_djob(self, func, group, key, cleanup=None, args=None, prio=1):
+        if self._sorted_jobs is None:
+            self._sorted_jobs = {}
+        if self._djob_keys is None: # this case trigger if basic djobs
+                                    # have been registered first
+            self._djob_keys = {}
+            self._djob_groups = {}
+
+        if self._sorted_jobs.get(prio, None) is None:
+            self._sorted_jobs[prio] = {}
+            self._djob_keys[prio] = set()
+            self._djob_groups[prio] = set()
+        if self._sorted_jobs[prio].get(id(group), None) is None:
+            self._sorted_jobs[prio][id(group)] = {}
+
+        assert(key not in self._sorted_jobs[prio][id(group)])
+        self._sorted_jobs[prio][id(group)][key] = (func, args, cleanup)
+        assert(key not in self._djob_keys[prio])
+        self._djob_keys[prio].add(key)
+        self._djob_groups[prio].add(group)
+
+
+    def register_basic_djob(self, func, args, prio=1):
+        if self._sorted_jobs is None:
+            self._sorted_jobs = {}
+        if self._sorted_jobs.get(prio, None) is None:
+            self._sorted_jobs[prio] = []
+        self._sorted_jobs[prio].append((func, args))
+
+    def execute_basic_djobs(self, prio):
+        assert(prio in self._sorted_jobs)
+        jobs = copy.copy(self._sorted_jobs[prio])
+        del self._sorted_jobs[prio] # func() may triggers this func,
+                                    # thus we cleanup before
+        for func, args in jobs:
+            func(*args)
+
+    def get_basic_djobs(self, prio):
+        assert(prio in self._sorted_jobs)
+        return self._sorted_jobs[prio]
+
+    def cleanup_basic_djobs(self, prio):
+        if prio not in self._sorted_jobs:
+            return
+        del self._sorted_jobs[prio]
+
+    def djobs_exists(self, prio):
+        if self._sorted_jobs and prio in self._sorted_jobs and \
+           self._sorted_jobs[prio]:
+            return True
+        else:
+            return False
+
+    def is_djob_registered(self, key, prio):
+        if self._djob_keys and prio in self._djob_keys:
+            return key in self._djob_keys[prio]
+        else:
+            return False
+
+    def get_all_djob_groups(self, prio):
+        assert(self._djob_groups is not None)
+        return copy.copy(self._djob_groups[prio])
+
+    def get_djobs_by_gid(self, group_id, prio):
+        assert(self._sorted_jobs[prio] is not None)
+        assert(self._sorted_jobs[prio][group_id] is not None)
+        return self._sorted_jobs[prio][group_id]
+
+    def remove_djob(self, group, key, prio):
+        self._djob_keys[prio].remove(key)
+        del self._sorted_jobs[prio][id(group)][key]
+        if not self._sorted_jobs[prio][id(group)]:
+            self._djob_groups[prio].remove(group)
+
+    def cleanup_remaining_djobs(self, prio):
+        if prio not in self._sorted_jobs:
             return
 
-        exh_nodes = []
-        id_list = []
-        for old_node, new_node in node_dico.items():
-            id_list.append((id(old_node), id(new_node)))
-            if old_node in self.exhausted_nodes:
-                exh_nodes.append(new_node)
+        groups = self.get_all_djob_groups(prio=prio)
+        if groups is not None:
+            for gr in groups:
+                gr_id = id(gr)
+                if gr_id not in self._sorted_jobs[prio]:
+                    continue
+                for n in reversed(gr):
+                    if id(n) in self._sorted_jobs[prio][gr_id]:
+                        func, args, cleanup = self._sorted_jobs[prio][gr_id][id(n)]
+                        cleanup(*args)
 
-        self.exhausted_nodes = exh_nodes
-        self.env4NT.update_node_ids(id_list)
-
+        del self._sorted_jobs[prio]
+        del self._djob_keys[prio]
+        del self._djob_groups[prio]
 
     def __copy__(self):
         new_env = type(self)()
         new_env.__dict__.update(self.__dict__)
         new_env.exhausted_nodes = copy.copy(self.exhausted_nodes)
+        new_env.nodes_to_corrupt = copy.copy(self.nodes_to_corrupt)
         new_env.env4NT = copy.copy(self.env4NT)
+        new_env._dm = copy.copy(self._dm)
+        new_env._sorted_jobs = copy.copy(self._sorted_jobs)
+        new_env._djob_keys = copy.copy(self._djob_keys)
+        new_env._djob_groups = copy.copy(self._djob_groups)
+        new_env.id_list = copy.copy(self.id_list)
+        # new_env.cpt = 0
         return new_env
+
+
+class DJobGroup(object):
+
+    def __init__(self, node_list):
+        self.node_list = node_list
+
+    def __id__(self):
+        return id(self.node_list)
+
+    def __iter__(self):
+        for n in self.node_list:
+            yield n
+
+    def __reversed__(self):
+        for n in reversed(self.node_list):
+            yield n
+
+    def __repr__(self):
+        return str([x.name for x in self.node_list]) + " ID:" + str(id(self))
 
 
 

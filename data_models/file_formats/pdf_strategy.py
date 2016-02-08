@@ -21,37 +21,9 @@
 #
 ################################################################################
 
-import subprocess
-import signal
-import select
-import fcntl
-import os
-import random
-
-from fuzzfmk.plumbing import *
-from fuzzfmk.target import *
-from fuzzfmk.logger import *
-
-from fuzzfmk.data_model import *
-from fuzzfmk.tactics_helper import *
-from fuzzfmk.fuzzing_primitives import *
+from fuzzfmk.tactics_helpers import *
 
 tactics = Tactics()
-
-logger = Logger('pdf', data_in_seperate_file=True, explicit_export=False, export_orig=False)
-
-printer_tg = PrinterTarget(tmpfile_ext='.pdf')
-printer_tg.set_target_ip('172.20.130.1')
-printer_tg.set_printer_name('OSFCprinter')
-
-printer2_tg = PrinterTarget(tmpfile_ext='.pdf')
-printer2_tg.set_target_ip('127.0.0.1')
-printer2_tg.set_printer_name('PDF')
-
-local_tg = LocalTarget(tmpfile_ext='.pdf')
-local_tg.set_target_path('okular')
-
-targets = [local_tg, printer_tg, printer2_tg]
 
 @generator(tactics, gtype="PDF_loop", weight=2)
 class g_pdf_loop01(Generator):

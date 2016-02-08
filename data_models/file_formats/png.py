@@ -36,7 +36,7 @@ class PNG_DataModel(DataModel):
     file_extension = 'png'
     name = 'png'
 
-    def dissect(self, data, idx):
+    def absorb(self, data, idx):
         
         png = self.png.get_clone('PNG_{:0>2d}'.format(idx))
         status, off, size, name = png.absorb(data, constraints=AbsNoCsts(size=True))
@@ -47,19 +47,6 @@ class PNG_DataModel(DataModel):
 
 
     def build_data_model(self):
-
-        # 0xedb88320 = 0b11101101101110001000001100100000
-        # crc32_func = crcmod.mkCrcFun(0b111011011011100010000011001000001, initCrc=0xFFFFFFFF, xorOut=0xFFFFFFFF)
-        # crc32_func = crcmod.mkCrcFun(0x104C11DB7, initCrc=0x00000000, xorOut=0xFFFFFFFF) # <-- zlib.crc32
-
-        def g_crc32(nodes):
-            s = b''
-            for n in nodes:
-                s += n.get_flatten_value()
-            crc32 = zlib.crc32(s) & 0xffffffff
-            nd = Node('CRC32', value_type=UINT32_be(int_list=[crc32]))
-            nd.clear_attr(NodeInternals.Mutable)
-            return nd
 
         png_desc = \
         {'name': 'PNG_model',
@@ -74,14 +61,12 @@ class PNG_DataModel(DataModel):
                    {'name': 'type',
                     'contents': String(val_list=['IHDR', 'IEND', 'IDAT', 'PLTE'], size=4)},
                    {'name': 'data_gen',
-                    'type': MH.Generator,
                     'contents': lambda x: Node('data', value_type=String(size=x[0].cc.get_raw_value())),
                     'node_args': ['len']},
                    {'name': 'crc32_gen',
-                    'type': MH.Generator,
-                    'contents': g_crc32,
+                    'contents': MH.CRC(vt=UINT32_be, clear_attrs=[MH.Attr.Mutable]),
                     'node_args': ['type', 'data_gen'],
-                    'clear_attrs': [NodeInternals.Freezable]}
+                    'clear_attrs': [MH.Attr.Freezable]}
               ]}
          ]}
 
@@ -122,16 +107,14 @@ class PNG_DataModel(DataModel):
                             {'name': 'type2',
                              'contents': String(val_list=['IEND', 'IDAT', 'PLTE'], size=4)},
                             {'name': 'data_gen',
-                             'type': MH.Generator,
                              'contents': lambda x: Node('data', value_type=String(size=x.get_raw_value())),
                              'node_args': 'len'}
                         ]}
                    ]},
                   {'name': 'crc32_gen',
-                   'type': MH.Generator,
-                   'contents': g_crc32,
+                   'contents': MH.CRC(vt=UINT32_be, clear_attrs=[MH.Attr.Mutable]),
                    'node_args': ['chk'],
-                   'clear_attrs': [NodeInternals.Freezable]}
+                   'clear_attrs': [MH.Attr.Freezable]}
               ]}
          ]}
 

@@ -304,7 +304,6 @@ class Example_DataModel(DataModel):
                 1, ['u>', [prefix1, 1], [prefix2, 1], [sep_top, 1], [val1_top, 1], [sep_top, 1], [middle, 1]]
                 ])
 
-
         ### NonTerm
 
         e = Node('TV2')
@@ -333,7 +332,7 @@ class Example_DataModel(DataModel):
                       'u=+(2,3,3)', [e_val1, 1], [e_val2, 1, 3], [e_val3, 1],
                       'u>', [sep2, 1],
                       'u=..', [e_val1, 1, 6], [sep, 1], [e_typedval1, 1, 6]],
-                50, ['u>', [e_val_random, 1], [sep, 1], [nt, 1]],
+                50, ['u>', [e_val_random, 0, 1], [sep, 1], [nt, 1]],
                 90, ['u>', [e_val_random, 3]]
                 ])
 
@@ -355,7 +354,10 @@ class Example_DataModel(DataModel):
                    {'name': 'val2'},
 
                    {'name': 'middle',
-                    'mode': MH.NotMutableClone,
+                    'mode': MH.Mode.ImmutableClone,
+                    'separator': {'contents': {'name': 'sep',
+                                               'contents': String(val_list=['\n'], absorb_regexp=b'\n+'),
+                                               'absorb_csts': AbsNoCsts(regexp=True)}},
                     'contents': [{
                         'section_type': MH.Random,
                         'contents': [
@@ -367,7 +369,7 @@ class Example_DataModel(DataModel):
                              'clone': 'val1'},
 
                             {'name': 'USB_desc',
-                             'export_from': 'usb',
+                             'import_from': 'usb',
                              'data_id': 'STR'},
 
                             {'type': MH.Generator,

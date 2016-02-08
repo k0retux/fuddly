@@ -16,11 +16,15 @@ Contents:
 
    tutorial
 
-   examples
+   data_model
+
+   data_manip
 
    disruptors
 
-   data_model
+   targets
+
+   examples
 
    api
 

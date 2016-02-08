@@ -40,8 +40,10 @@ from six import with_metaclass
 sys.path.append('.')
 
 import fuzzfmk.basic_primitives as bp
-from fuzzfmk.data_model import AbsorbStatus, AbsCsts, convert_to_internal_repr
+from fuzzfmk.data_model import AbsorbStatus, AbsCsts, convert_to_internal_repr, unconvert_from_internal_repr
 
+
+DEBUG = False
 
 class VT(object):
     '''
@@ -263,8 +265,16 @@ class meta_int_str(type):
 
 class String(VT_Alt):
     
-    def init_specific(self, val_list=None, size=None, min_sz=None, max_sz=None, determinist=True,
-                      ascii_mode=False, extra_fuzzy_list=None, absorb_regexp=None):
+    def __repr__(self):
+        if DEBUG:
+            return VT_Alt.__repr__(self)[:-1] + ' contents:' + str(self.val_list) + '>'
+        else:
+            return VT_Alt.__repr__(self)
+
+    def init_specific(self, val_list=None, size=None, min_sz=None,
+                      max_sz=None, determinist=True, ascii_mode=False,
+                      extra_fuzzy_list=None, absorb_regexp=None,
+                      alphabet=None):
 
         self.drawn_val = None
 
@@ -273,17 +283,19 @@ class String(VT_Alt):
         self.val_list_fuzzy = None
         self.val_list_save = None
 
+        self.is_val_list_provided = None
+
         self.min_sz = None
         self.max_sz = None
 
         self.set_description(val_list=val_list, size=size, min_sz=min_sz,
                              max_sz=max_sz, determinist=determinist,
                              ascii_mode=ascii_mode, extra_fuzzy_list=extra_fuzzy_list,
-                             absorb_regexp=absorb_regexp)
+                             absorb_regexp=absorb_regexp, alphabet=alphabet)
 
     def make_private(self, forget_current_state):
         if forget_current_state:
-            if self.val_list_provided:
+            if self.is_val_list_provided:
                 self.val_list = copy.copy(self.val_list)
             else:
                 self._populate_val_list()
@@ -298,13 +310,13 @@ class String(VT_Alt):
         size = self.max_sz
 
         # If 'Contents' constraint is set, we seek for string within
-        # val_list.
+        # val_list or conforming to the alphabet.
         # If 'Regexp' constraint is set, we seek for string matching
         # the regexp.
         # If no such constraints are provided, we assume off==0
         # and let do_absorb() decide if it's OK (via size constraints
         # for instance).
-        if constraints[AbsCsts.Contents] and self.val_list is not None:
+        if constraints[AbsCsts.Contents] and self.val_list is not None and self.alphabet is None:
             for v in self.val_list:
                 if blob.startswith(v):
                     break
@@ -314,6 +326,24 @@ class String(VT_Alt):
                     if off > -1:
                         size = len(v)
                         break
+
+        elif constraints[AbsCsts.Contents] and self.alphabet is not None:
+            size = None
+            blob = unconvert_from_internal_repr(blob)
+            alp = unconvert_from_internal_repr(self.alphabet)
+            for l in alp:
+                if blob.startswith(l):
+                    break
+            else:
+                sup_sz = len(blob)+1
+                off = sup_sz
+                for l in alp:
+                    new_off = blob.find(l)
+                    if new_off < off and new_off > -1:
+                        off = new_off
+                if off == sup_sz:
+                    off = -1
+
         elif constraints[AbsCsts.Regexp] and self.regexp is not None:
             g = re.search(self.regexp, blob, re.S)
             if g is not None:
@@ -330,47 +360,47 @@ class String(VT_Alt):
 
     def do_absorb(self, blob, constraints, off=0, size=None):
 
-        if size is not None:
-            if self.max_sz < size:
-                print("\nWARNING: Incorrect size detected! [size:%d > max_sz]" % size)
-                if constraints[AbsCsts.Size]:
-                    raise ValueError('max_sz constraint not respected by size arguments!')
-                else:
-                    self.max_sz = size
-
-            if self.min_sz > size:
-                print("\nWARNING: Incorrect size detected! [size:%d < min_sz]" % size)
-                if constraints[AbsCsts.Size]:
-                    raise ValueError('min_sz constraint not respected by size arguments!')
-                else:
-                    self.min_sz = size
+        self.orig_max_sz = self.max_sz
+        self.orig_min_sz = self.min_sz
+        self.orig_val_list = copy.copy(self.val_list)
+        self.orig_val_list_copy = copy.copy(self.val_list_copy)
+        self.orig_drawn_val = self.drawn_val
 
         if constraints[AbsCsts.Size]:
-            sz = size if size is not None else self.max_sz
-            val = self._read_value_from(blob[off:sz], constraints)
-            val_sz = sz
+            sz = size if size is not None and size < self.max_sz else self.max_sz
+            val = self._read_value_from(blob[off:sz+off], constraints)
+            val_sz = len(val) # maybe different from sz if blob is smaller
+            if val_sz < self.min_sz:
+                raise ValueError('min_sz constraint not respected!')
         else:
-            val = self._read_value_from(blob[off:], constraints)
+            blob = blob[off:] #blob[off:size+off] if size is not None else blob[off:]
+            val = self._read_value_from(blob, constraints)
             val_sz = len(val)
 
-        if constraints[AbsCsts.Contents] and self.val_list_provided:
+        if constraints[AbsCsts.Contents] and self.is_val_list_provided:
             for v in self.val_list:
                 if val.startswith(v):
                     val = v
                     val_sz = len(val)
                     break
-
-        if val_sz > self.max_sz:
-            self.max_sz = val_sz
-        elif val_sz < self.min_sz:
-            self.min_sz = val_sz
-
+            else:
+                if self.alphabet is not None:
+                    val, val_sz = self._check_alphabet(val, constraints)
+                else:
+                    raise ValueError('contents not valid!')
+        elif constraints[AbsCsts.Contents] and self.alphabet is not None:
+            val, val_sz = self._check_alphabet(val, constraints)
+            
+        # If we reach this point that means that val is accepted. Thus
+        # update max and min if necessary.
+        if not constraints[AbsCsts.Size]:
+            if val_sz > self.max_sz:
+                self.max_sz = val_sz
+            elif val_sz < self.min_sz:
+                self.min_sz = val_sz
 
         if self.val_list is None:
             self.val_list = []
-
-        if constraints[AbsCsts.Contents] and self.val_list_provided and val not in self.val_list:
-            raise ValueError('contents not valid!')
 
         self.val_list.insert(0, val)
 
@@ -378,6 +408,56 @@ class String(VT_Alt):
 
         return val, off, val_sz
 
+
+    def _check_alphabet(self, val, constraints):
+        i = -1  # to cover case where val is ''
+        for i, l in enumerate(val):
+            if l not in self.alphabet:
+                sz = i
+                break
+        else:
+            sz = i+1
+
+        if sz > 0:
+            val_sz = sz
+        else:
+            raise ValueError('contents not valid!')
+        if constraints[AbsCsts.Size]:
+            if val_sz > self.max_sz:
+                val_sz = self.max_sz
+                val = val[:val_sz]
+            elif val_sz < self.min_sz:
+                raise ValueError('contents not valid!')
+            else:
+                val = val[:sz]
+        else:
+            val = val[:sz]
+
+        return val, val_sz
+
+
+    def do_revert_absorb(self):
+        '''
+        If needed should be called just after self.do_absorb().
+        (safe to recall it more than once)
+        '''
+        if hasattr(self, 'orig_drawn_val'):
+            self.val_list = self.orig_val_list
+            self.val_list_copy = self.orig_val_list_copy
+            self.min_sz = self.orig_min_sz
+            self.max_sz = self.orig_max_sz
+            self.drawn_val = self.orig_drawn_val
+
+    def do_cleanup_absorb(self):
+        '''
+        To be called after self.do_absorb() or self.do_revert_absorb()
+        '''
+        if hasattr(self, 'orig_drawn_val'):
+            del self.orig_val_list
+            del self.orig_val_list_copy
+            del self.orig_min_sz
+            del self.orig_max_sz
+            del self.orig_drawn_val
 
     def _read_value_from(self, blob, constraints):
         if constraints[AbsCsts.Regexp]:
@@ -413,12 +493,17 @@ class String(VT_Alt):
                     assert(sz >= self.min_sz)
 
 
-    def set_description(self, val_list=None, size=None, min_sz=None, max_sz=None, determinist=True,
-                        ascii_mode=False, extra_fuzzy_list=None, absorb_regexp=None):
+    def set_description(self, val_list=None, size=None, min_sz=None,
+                        max_sz=None, determinist=True,
+                        ascii_mode=False, extra_fuzzy_list=None,
+                        absorb_regexp=None, alphabet=None):
         '''
         @size take precedence over @min_sz and @max_sz
         '''
-
+        if alphabet is not None:
+            self.alphabet = convert_to_internal_repr(alphabet)
+        else:
+            self.alphabet = None
         self.ascii_mode = ascii_mode
 
         if absorb_regexp is None:
@@ -431,6 +516,8 @@ class String(VT_Alt):
 
         if extra_fuzzy_list is not None:
             self.extra_fuzzy_list = VT._str2internal(extra_fuzzy_list)
+        elif hasattr(self, 'specific_fuzzing_list'):
+            self.extra_fuzzy_list = self.specific_fuzzing_list
         else:
             self.extra_fuzzy_list = [
                 b'',
@@ -443,10 +530,18 @@ class String(VT_Alt):
         if val_list is not None:
             assert(isinstance(val_list, list))
             self.val_list = VT._str2internal(val_list)
+            if self.alphabet is not None:
+                for val in self.val_list:
+                    for l in val:
+                        if l not in self.alphabet:
+                            raise ValueError("The value '%s' does not conform to the alphabet!" % val)
+
             self.val_list_copy = copy.copy(self.val_list)
-            self.val_list_provided = True
+            self.is_val_list_provided = True  # distinguish cases where
+                                           # val_list is provided or
+                                           # created based on size
         else:
-            self.val_list_provided = False
+            self.is_val_list_provided = False
             
 
         if size is not None:
@@ -489,14 +584,15 @@ class String(VT_Alt):
 
     def _populate_val_list(self):
         self.val_list = []
+        alpbt = string.printable if self.alphabet is None else unconvert_from_internal_repr(self.alphabet)
         if self.min_sz < self.max_sz:
-            self.val_list.append(bp.rand_string(size=self.max_sz))
-            self.val_list.append(bp.rand_string(size=self.min_sz))
+            self.val_list.append(bp.rand_string(size=self.max_sz, str_set=alpbt))
+            self.val_list.append(bp.rand_string(size=self.min_sz, str_set=alpbt))
         else:
-            self.val_list.append(bp.rand_string(size=self.max_sz))
+            self.val_list.append(bp.rand_string(size=self.max_sz, str_set=alpbt))
 
         if self.min_sz+1 < self.max_sz:
-            self.val_list += [bp.rand_string(mini=self.min_sz+1, maxi=self.max_sz-1) for i in range(3)]
+            self.val_list += [bp.rand_string(mini=self.min_sz+1, maxi=self.max_sz-1, str_set=alpbt) for i in range(3)]
 
     def get_current_raw_val(self):
         if self.drawn_val is None:
@@ -643,6 +739,11 @@ class INT(VT):
 
 
     def do_absorb(self, blob, constraints, off=0, size=None):
+
+        self.orig_int_list = copy.copy(self.int_list)
+        self.orig_int_list_copy = copy.copy(self.int_list_copy)
+        self.orig_drawn_val = self.drawn_val
+
         blob = blob[off:]
 
         val, sz = self._read_value_from(blob, size)
@@ -663,6 +764,22 @@ class INT(VT):
         self.drawn_val = orig_val
 
         return val, off, sz
+
+
+    def do_revert_absorb(self):
+        '''
+        If needed should be called just after self.do_absorb().
+        '''
+        if hasattr(self, 'orig_drawn_val'):
+            self.int_list = self.orig_int_list
+            self.int_list_copy = self.orig_int_list_copy
+            self.drawn_val = self.orig_drawn_val
+
+    def do_cleanup_absorb(self):
+        if hasattr(self, 'orig_drawn_val'):
+            del self.orig_int_list
+            del self.orig_int_list_copy
+            del self.orig_drawn_val
 
     def make_determinist(self):
         self.determinist = True
@@ -841,6 +958,15 @@ class INT(VT):
         return self.exhausted
 
 
+class Filename(String):
+    specific_fuzzing_list = [
+        b'../../../../../../etc/password',
+        b'../../../../../../Windows/system.ini',
+        b'file%n%n%n%nname.txt',
+    ]
+
+
+
 class Fuzzy_INT(INT):
     '''
     Base class to be inherited and not used directly
@@ -995,6 +1121,12 @@ class BitField(VT_Alt):
         self.idx_inuse = self.idx
         
     def set_subfield(self, idx, val):
+        '''
+        Args:
+          idx (int): subfield index, from 0 (low significant subfield) to nb_subfields-1
+            (specific index -1 is used to choose the last subfield).
+          val (int): new value for the subfield
+        '''
         if idx == -1:
             idx = len(self.subfield_sizes) - 1
         assert(self.is_compatible(val, self.subfield_sizes[idx]))
@@ -1383,6 +1515,10 @@ class BitField(VT_Alt):
 
     def do_absorb(self, blob, constraints, off=0, size=None):
 
+        self.orig_idx = copy.deepcopy(self.idx)
+        self.orig_subfield_vals = copy.deepcopy(self.subfield_vals)
+        self.orig_drawn_val = self.drawn_val
+
         self.reset_state()
 
         blob = blob[off:self.nb_bytes]
@@ -1403,10 +1539,13 @@ class BitField(VT_Alt):
                 if constraints[AbsCsts.Contents] and (mini > val or maxi < val):
                     raise ValueError("Value for subfield number {:d} does not match the constraints!".format(i+1))
                 self.idx[i] = val - mini
+                if not constraints[AbsCsts.Contents]: # update extremums if necessary
+                    extrems[0] = min(extrems[0], val)
+                    extrems[1] = max(extrems[1], val)
             else:
                 if constraints[AbsCsts.Contents] and val not in val_list:
                     raise ValueError("Value for subfield number {:d} does not match the constraints!".format(i+1))
-                val_list.insert(insert_idx, val)
+                val_list.insert(insert_idx, val)                
 
             if first_pass:
                 first_pass = False
@@ -1416,6 +1555,24 @@ class BitField(VT_Alt):
                 
         return blob, off, self.nb_bytes
 
+
+    def do_revert_absorb(self):
+        '''
+        If needed should be called just after self.do_absorb().
+        '''
+        if hasattr(self, 'orig_drawn_val'):
+            self.idx = self.orig_idx
+            self.subfield_vals = self.orig_subfield_vals
+            self.drawn_val = self.orig_drawn_val
+
+    def do_cleanup_absorb(self):
+        '''
+        To be called after self.do_absorb() or self.do_revert_absorb()
+        '''
+        if hasattr(self, 'orig_drawn_val'):
+            del self.orig_idx
+            del self.orig_subfield_vals
+            del self.orig_drawn_val
 
     def get_value(self):
         '''

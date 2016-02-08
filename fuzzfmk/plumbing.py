@@ -38,16 +38,20 @@ import signal
 
 from libs.external_modules import *
 
-from fuzzfmk.tactics_helper import *
+from fuzzfmk.database import Database
+from fuzzfmk.tactics_helpers import *
 from fuzzfmk.data_model import *
+from fuzzfmk.data_model_helpers import DataModel
 from fuzzfmk.target import *
 from fuzzfmk.logger import *
 from fuzzfmk.monitor import *
+from fuzzfmk.operator_helpers import *
+from fuzzfmk.project import *
 
 import fuzzfmk.generic_data_makers
-import fuzzfmk.error_handling as eh
 
 import data_models
+import projects
 
 from fuzzfmk.global_resources import *
 
@@ -72,7 +76,8 @@ class ExportableFMKOps(object):
         self.cleanup_dmaker = fmk.cleanup_dmaker
         self.dynamic_generator_ids = fmk.dynamic_generator_ids
         self.set_error = fmk.set_error
-
+        self.load_data_model = fmk.load_data_model
+        self.load_multiple_data_model = fmk.load_multiple_data_model
 
 class FmkFeedback(object):
     
@@ -119,92 +124,19 @@ class FmkFeedback(object):
         return self.__data_list
 
 
-class Error(object):
-
-    Reserved = -1
-
-    # Generic error code
-    FmkError = -2
-    CommandError = -3
-    UserCodeError = -4
-    UnrecoverableError = -5
-    FmkWarning = -6
-    OperationCancelled = -7
-
-    # Fuzzer.get_data() error code
-    CloneError = -10
-    InvalidDmaker = -11
-    HandOver = -12
-    DataUnusable = -13
-
-    # Fuzzer.launch_operator() error code
-    InvalidOp = -20
-    WrongOpPlan = -21
-
-    _code_info = {
-        Reserved: {'name': 'Reserved', 'color': 0xFFFFFF},
-
-        FmkError: {'name': 'FmkError', 'color': 0xA00000},
-        CommandError: {'name': 'CommandError', 'color': 0xB00000},
-        UserCodeError: {'name': 'UserCodeError', 'color': 0xE00000},
-        UnrecoverableError: {'name': 'UnrecoverableError', 'color': 0xFF0000},
-        FmkWarning: {'name': 'FmkWarning', 'color': 0xFFA500},
-        OperationCancelled: {'name': 'OperationCancelled', 'color': 0xFC00F4},
-
-        CloneError: {'name': 'CloneError', 'color': 0xA00000},
-        InvalidDmaker: {'name': 'InvalidDmaker', 'color': 0xB00000},
-        HandOver: {'name': 'HandOver', 'color': 0x00B500},
-        DataUnusable: {'name': 'DataUnusable', 'color': 0x009500},
-
-        InvalidOp: {'name': 'InvalidOp', 'color': 0xB00000},
-        WrongOpPlan: {'name': 'WrongOpPlan', 'color': 0xE00000},
-        }
-
-
-    def __init__(self, msg='', context=None, code=Reserved):
-        self.__msg = msg
-        self.__ctx = context
-        self.__code = code
-
-    def set(self, msg, context=None, code=Reserved):
-        self.__msg = msg
-        self.__ctx = context
-        self.__code = code
-
-    def __get_msg(self):
-        return self.__msg
-
-    def __get_context(self):
-        return self.__ctx
-
-    def __get_code(self):
-        return self.__code
-
-    def __get_color(self):
-        return self._code_info[self.code]['color']
-
-    msg = property(fget=__get_msg)
-    context = property(fget=__get_context)
-    code = property(fget=__get_code)
-    color = property(fget=__get_color)
-
-    def __str__(self):
-        return self._code_info[self.code]['name']
-
-
-
 class EnforceOrder(object):
 
     current_state = None
 
     def __init__(self, accepted_states=[], final_state=None,
-                 initial_func=False, always_callable=False):
+                 initial_func=False, always_callable=False, transition=None):
         if initial_func:
             self.accepted_states = accepted_states + [None]
         else:
             self.accepted_states = accepted_states
         self.final_state = final_state
         self.always_callable = always_callable
+        self.transition = transition
 
     def __call__(self, func):
         
@@ -217,6 +149,10 @@ class EnforceOrder(object):
             ok = func(*args, **kargs)
             if (ok or ok is None) and self.final_state is not None:
                 EnforceOrder.current_state = self.final_state
+
+            elif (ok or ok is None) and self.transition is not None and EnforceOrder.current_state == self.transition[0]:
+                EnforceOrder.current_state = self.transition[1]
+
             return ok
 
         return wrapped_func
@@ -237,7 +173,7 @@ class Fuzzer(object):
         self.fmk_error = []
 
         self.__tg_enabled = False
-        self.__dm_to_be_reloaded = False
+        self.__prj_to_be_reloaded = False
 
         self._exportable_fmk_ops = ExportableFMKOps(self)
 
@@ -245,6 +181,9 @@ class Fuzzer(object):
 
         self.import_text_reg = re.compile('(.*?)(#####)', re.S)
         self.check_clone_re = re.compile('(.*)#(\w{1,20})')
+
+        self.prj_list = []
+        self._prj_dict = {}
 
         self.dm_list = []
         self.__st_dict = {}
@@ -254,16 +193,26 @@ class Fuzzer(object):
         self.__monitor_dict = {}
         self.__stats_dict = {}
         self.__initialized_dmaker_dict = {}
-        self.__rld_args_dict= {}
+        self.__dm_rld_args_dict= {}
+        self.__prj_rld_args_dict= {}
 
         self.__dyngenerators_created = {}
         self.__dynamic_generator_ids = {}
 
         self._name2dm = {}
+        self._name2prj = {}
+
+        self.fmkDB = Database()
+        self.fmkDB.start()
+        self._fmkDB_insert_dm_and_dmakers('generic', self._generic_tactics)
+        self.fmkDB.commit()
+
+        self.group_id = 0
+        self._saved_group_id = None  # used by self._recover_target()
 
         self.enable_wkspace()
         self.get_data_models()
-
+        self.get_projects()
 
     def set_error(self, msg='', context=None, code=Error.Reserved):
         self.error = True
@@ -280,15 +229,23 @@ class Fuzzer(object):
 
     def __reset_fmk_internals(self, reset_existing_seed=True):
         self.cleanup_all_dmakers(reset_existing_seed)
-        self.set_fuzz_delay(0)
+        # Warning: fuzz delay is not set to 0 by default in order to have a time frame
+        # where SIGINT is accepted from user
+        self.set_fuzz_delay(0.5)
         self.set_fuzz_burst(1)
-        self.set_timeout(10)
+
+        base_timeout = self.tg._time_beetwen_data_emission
+        if base_timeout is not None:
+            self.set_timeout(base_timeout + 2.0)
+        else:
+            self.set_timeout(10)
 
     def _handle_user_code_exception(self, msg='', context=None):
         self.set_error(msg, code=Error.UserCodeError, context=context)
-        self.lg.log_error("Exception in user code detected! Outcomes " \
-                                "of this log entry has to be considered with caution.\n" \
-                                "    (_ cause: '%s' _)" % msg)
+        if hasattr(self, 'lg'):
+            self.lg.log_error("Exception in user code detected! Outcomes " \
+                              "of this log entry has to be considered with caution.\n" \
+                              "    (_ cause: '%s' _)" % msg)
         print("Exception in user code:")
         print('-'*60)
         traceback.print_exc(file=sys.stdout)
@@ -304,6 +261,222 @@ class Fuzzer(object):
         print('-'*60)
         traceback.print_exc(file=sys.stdout)
         print('-'*60)
+
+
+
+    @EnforceOrder(accepted_states=['S2'])
+    def reload_dm(self):
+        prefix = self.__dm_rld_args_dict[self.dm][0]
+        name = self.__dm_rld_args_dict[self.dm][1]
+
+        if prefix is None:
+            # In this case we face a composed DM, name is in fact a dm_list
+            dm_list = name
+            name_list = []
+
+            self.cleanup_all_dmakers()
+
+            for dm in dm_list:
+                name_list.append(dm.name)
+                self.dm = dm
+                self.reload_dm()
+
+            # reloading is based on name because DM objects have changed
+            ok = self.load_multiple_data_model(name_list=name_list, reload_dm=True)
+            if not ok:
+                self.set_error("Error encountered while reloading the composed Data Model")
+
+        else:
+            self.cleanup_all_dmakers()
+            self.dm.cleanup()
+
+            dm_params = self.__import_dm(prefix, name, reload_dm=True)
+            if dm_params is not None:
+                self.__add_data_model(dm_params['dm'], dm_params['tactics'],
+                                      dm_params['dm_rld_args'], reload_dm=True)
+                self.__dyngenerators_created[dm_params['dm']] = False
+
+            self.dm = dm_params['dm']
+            self._cleanup_dm_attrs_from_fmk()
+            ok = self._load_data_model()
+            if not ok:
+                return False
+
+            self._fmkDB_insert_dm_and_dmakers(self.dm.name, dm_params['tactics'])
+            self.fmkDB.commit()
+
+        return True
+
+    def _cleanup_dm_attrs_from_fmk(self):
+        self._generic_tactics.clear_generator_clones()
+        self._generic_tactics.clear_disruptor_clones()
+        if hasattr(self, '_tactics'):
+            self._tactics.clear_generator_clones()
+            self._tactics.clear_disruptor_clones()
+        self._tactics = self.__st_dict[self.dm]
+        self._recompute_current_generators()
+
+
+    @EnforceOrder(accepted_states=['S2'])
+    def reload_all(self, tg_num=None):
+        return self.__reload_all(tg_num=tg_num)
+
+    def __reload_all(self, tg_num=None):
+        prj_prefix = self.__prj_rld_args_dict[self.prj][0]
+        prj_name = self.__prj_rld_args_dict[self.prj][1]
+
+        dm_prefix = self.__dm_rld_args_dict[self.dm][0]
+        dm_name = self.__dm_rld_args_dict[self.dm][1]
+
+        self.__stop_fuzzing()
+
+        if tg_num is not None:
+            self.set_target(tg_num)
+
+        prj_params = self._import_project(prj_prefix, prj_name, reload_prj=True)
+        if prj_params is not None:
+            self._add_project(prj_params['project'], prj_params['target'], prj_params['logger'],
+                              prj_params['prj_rld_args'], reload_prj=True)
+
+            if dm_prefix is None:
+                # it is ok to call reload_dm() here because it is a
+                # composed DM, and it won't call the methods used within
+                # __init_fmk_internals_step1().
+                self.reload_dm()
+                self.__init_fmk_internals_step1(prj_params['project'], self.dm)
+            else:
+                dm_params = self.__import_dm(dm_prefix, dm_name, reload_dm=True)
+                if dm_params is not None:
+                    self.__add_data_model(dm_params['dm'], dm_params['tactics'],
+                                          dm_params['dm_rld_args'], reload_dm=True)
+                    self.__dyngenerators_created[dm_params['dm']] = False
+                    self.__init_fmk_internals_step1(prj_params['project'], dm_params['dm'])
+
+        self.__start_fuzzing()
+        if self.is_not_ok():
+            self.__stop_fuzzing()
+            return False
+
+        if prj_params is not None:
+            self.__init_fmk_internals_step2(prj_params['project'], self.dm)
+
+        return True
+
+
+    def _fmkDB_insert_dm_and_dmakers(self, dm_name, tactics):
+        self.fmkDB.insert_data_model(dm_name)
+        disruptor_types = tactics.get_disruptors().keys()
+        if disruptor_types:
+            for dis_type in sorted(disruptor_types):
+                disruptor_names = tactics.get_disruptors_list(dis_type)
+                for dis_name in disruptor_names:
+                    dis_obj = tactics.get_disruptor_obj(dis_type, dis_name)
+                    stateful = True if issubclass(dis_obj.__class__, StatefulDisruptor) else False
+                    self.fmkDB.insert_dmaker(dm_name, dis_type, dis_name, False, stateful)
+        generator_types = tactics.get_generators().keys()
+        if generator_types:
+            for gen_type in sorted(generator_types):
+                generator_names = tactics.get_generators_list(gen_type)
+                for gen_name in generator_names:
+                    gen_obj = tactics.get_generator_obj(gen_type, gen_name)
+                    self.fmkDB.insert_dmaker(dm_name, gen_type, gen_name, True, True)
+
+    def _recover_target(self):
+        if self.group_id == self._saved_group_id:
+            # This method can be called after checking target feedback or checking
+            # probes status. However, we have to avoid to recover the target twice.
+            return True
+        else:
+            self._saved_group_id = self.group_id
+
+        target_recovered = False
+        try:
+            target_recovered = self.tg.recover_target()
+        except NotImplementedError:
+            self.lg.log_fmk_info("No method to recover the target is implemented! (assumption: no need "
+                                 "to recover)")
+            target_recovered = True  # assumption: no need to recover
+        except:
+            self.lg.log_fmk_info("Exception raised while trying to recover the target!")
+        else:
+            if target_recovered:
+                self.lg.log_fmk_info("The target has been recovered!")
+            else:
+                self.lg.log_fmk_info("The target has not been recovered! All further operations "
+                                     "will be terminated.")
+        return target_recovered
+
+    def monitor_probes(self):
+        probes = self.prj.get_probes()
+        ok = True
+        for pname in probes:
+            if self.prj.is_probe_launched(pname):
+                pstatus = self.prj.get_probe_status(pname)
+                err = pstatus.get_status()
+                if err < 0:
+                    ok = False
+                    priv = pstatus.get_private_info()
+                    self.lg.log_probe_feedback(source="Probe '{:s}'".format(pname), content=priv, status_code=err)
+
+        if not ok:
+            return self._recover_target()
+        else:
+            return True
+
+
+    @EnforceOrder(initial_func=True, final_state='get_projs')
+    def get_data_models(self):
+        dm_dir = 'data_models'
+        path = os.path.join(app_folder, dm_dir)
+        data_models = collections.OrderedDict()
+        for (dirpath, dirnames, filenames) in os.walk(path):
+            if filenames:
+                data_models[dm_dir] = []
+                data_models[dm_dir].extend(filenames)
+            for d in dirnames:
+                full_path = os.path.join(path, d)
+                rel_path = os.path.join(dm_dir, d)
+                data_models[rel_path] = []
+                for (dth, dnames, fnm) in os.walk(full_path):
+                    data_models[rel_path].extend(fnm)
+                    break
+            break
+
+        dms = copy.copy(data_models)
+        for k in dms:
+            data_models[k] = list(filter(is_python_file, data_models[k]))
+            if '__init__.py' in data_models[k]:
+                data_models[k].remove('__init__.py')
+            if not data_models[k]:
+                del data_models[k]
+
+        rexp_strategy = re.compile("(.*)_strategy\.py$")
+
+        print(colorize(FontStyle.BOLD + "="*63+"[ Data Models ]==", rgb=Color.FMKINFOGROUP))
+
+        for dname, file_list in data_models.items():
+            print(colorize(">>> Look for Data Models within '%s' directory" % dname,
+                           rgb=Color.FMKINFOSUBGROUP))
+            prefix = dname.replace(os.sep, '.') + '.'
+            for f in file_list:
+                res = rexp_strategy.match(f)
+                if res is None:
+                    continue
+                name = res.group(1)
+                if name + '.py' in file_list:
+                    dm_params = self.__import_dm(prefix, name)
+                    if dm_params is not None:
+                        self.__add_data_model(dm_params['dm'], dm_params['tactics'],
+                                              dm_params['dm_rld_args'],
+                                              reload_dm=False)
+                        self.__dyngenerators_created[dm_params['dm']] = False
+                        # populate FMK DB
+                        self._fmkDB_insert_dm_and_dmakers(dm_params['dm'].name, dm_params['tactics'])
+
+        self.fmkDB.insert_data_model(Database.DEFAULT_DM_NAME)
+        self.fmkDB.insert_dmaker(Database.DEFAULT_DM_NAME, Database.DEFAULT_GTYPE_NAME,
+                                 Database.DEFAULT_GEN_NAME, True, True)
+        self.fmkDB.commit()
 
 
     def __import_dm(self, prefix, name, reload_dm=False):
@@ -334,7 +507,7 @@ class Fuzzer(object):
         else:
             dm_params = {}
 
-            dm_params['rld_args'] = (prefix, name)
+            dm_params['dm_rld_args'] = (prefix, name)
 
             try:
                 dm_params['dm'] = eval(prefix + name + '.data_model')
@@ -347,136 +520,20 @@ class Fuzzer(object):
                 print(colorize("*** ERROR: '%s_strategy.py' shall contain a global variable 'tactics' ***" % (name), rgb=Color.ERROR))
                 return None
 
-            try:
-                logger = eval(prefix + name + '_strategy' + '.logger')
-            except:
-                logger = Logger(name, prefix=' || ')
-            dm_params['logger'] = logger
-            try:
-                targets = eval(prefix + name + '_strategy' + '.targets')
-                targets.insert(0, EmptyTarget())
-            except:
-                targets = [EmptyTarget()]
-
-            if self.__current_tg >= len(targets):
-                self.__current_tg = 0
-            
-            dm_params['target'] = targets
-
             if dm_params['dm'].name is None:
                 dm_params['dm'].name = name
             self._name2dm[dm_params['dm'].name] = dm_params['dm']
 
             if reload_dm:
-                print(colorize("*** Data Model '%s' reloaded ***" % dm_params['dm'].name, rgb=Color.FMKINFO))
+                print(colorize("*** Data Model '%s' updated ***" % dm_params['dm'].name, rgb=Color.DATA_MODEL_LOADED))
             else:
-                print(colorize("*** Loaded Data Model: '%s' ***" % dm_params['dm'].name, rgb=Color.FMKINFO))
+                print(colorize("*** Found Data Model: '%s' ***" % dm_params['dm'].name, rgb=Color.FMKSUBINFO))
 
             return dm_params
 
-    @EnforceOrder(accepted_states=['S2'])
-    def reload_dm(self):
-        prefix = self.__rld_args_dict[self.dm][0]
-        name = self.__rld_args_dict[self.dm][1]
 
-        self.__stop_fuzzing(full_stop=False)
-
-        dm_params = self.__import_dm(prefix, name, reload_dm=True)
-        if dm_params is not None:
-            self.__add_data_model(dm_params['dm'], dm_params['tactics'], dm_params['target'], dm_params['logger'],
-                                dm_params['rld_args'], ignore_all_except_dm=True, reload_dm=True)
-            self.__dyngenerators_created[dm_params['dm']] = False
-            self.__init_fmk_internals_step1(dm_params['dm'])
-
-        self.__start_fuzzing(full_start=False)
-        if self.is_not_ok():
-            self.__stop_fuzzing(full_stop=False)
-            return False
-
-        if dm_params is not None:
-            self.__init_fmk_internals_step2(dm_params['dm'])
-
-        return True
-
-    @EnforceOrder(accepted_states=['S2'])
-    def reload_all(self, tg_num=None):
-        return self.__reload_all(tg_num=tg_num)
-
-    def __reload_all(self, tg_num=None):
-        prefix = self.__rld_args_dict[self.dm][0]
-        name = self.__rld_args_dict[self.dm][1]
-
-        self.__stop_fuzzing(full_stop=True)
-
-        if tg_num is not None:
-            self.set_target(tg_num)
-
-        dm_params = self.__import_dm(prefix, name, reload_dm=True)
-        if dm_params is not None:
-            self.__add_data_model(dm_params['dm'], dm_params['tactics'], dm_params['target'], dm_params['logger'],
-                                dm_params['rld_args'], ignore_all_except_dm=False, reload_dm=True)
-            self.__dyngenerators_created[dm_params['dm']] = False
-            self.__init_fmk_internals_step1(dm_params['dm'])
-
-        self.__start_fuzzing(full_start=True)
-        if self.is_not_ok():
-            self.__stop_fuzzing(full_stop=True)
-            return False
-
-        if dm_params is not None:
-            self.__init_fmk_internals_step2(dm_params['dm'])
-
-        return True
-
-    @EnforceOrder(initial_func=True, final_state='S0')
-    def get_data_models(self):
-        dm_dir = 'data_models'
-        path = os.path.join(app_folder, dm_dir)
-        data_models = collections.OrderedDict()
-        for (dirpath, dirnames, filenames) in os.walk(path):
-            if filenames:
-                data_models[dm_dir] = []
-                data_models[dm_dir].extend(filenames)
-            for d in dirnames:
-                full_path = os.path.join(path, d)
-                rel_path = os.path.join(dm_dir, d)
-                data_models[rel_path] = []
-                for (dth, dnames, fnm) in os.walk(full_path):
-                    data_models[rel_path].extend(fnm)
-                    break
-            break
-
-        dms = copy.copy(data_models)
-        for k in dms:
-            data_models[k] = list(filter(is_python_file, data_models[k]))
-            if '__init__.py' in data_models[k]:
-                data_models[k].remove('__init__.py')
-            if not data_models[k]:
-                del data_models[k]
-
-        rexp_strategy = re.compile("(.*)_strategy\.py$")
-
-        for dname, file_list in data_models.items():
-            print(colorize(FontStyle.BOLD + ">>> Look for Data Models within '%s' directory" % dname,
-                           rgb=Color.FMKINFOGROUP))
-            prefix = dname.replace(os.sep, '.') + '.'
-            for f in file_list:
-                res = rexp_strategy.match(f)
-                if res is None:
-                    continue
-                name = res.group(1)
-                if name + '.py' in file_list:
-                    dm_params = self.__import_dm(prefix, name)
-                    if dm_params is not None:
-                        self.__add_data_model(dm_params['dm'], dm_params['tactics'],
-                                              dm_params['target'], dm_params['logger'],
-                                              dm_params['rld_args'],
-                                              ignore_all_except_dm=False, reload_dm=False)
-                        self.__dyngenerators_created[dm_params['dm']] = False
-
-
-    def __add_data_model(self, data_model, strategy, target, logger, rld_args,
-                       ignore_all_except_dm=False, reload_dm=False):
+    def __add_data_model(self, data_model, strategy, dm_rld_args,
+                         reload_dm=False):
 
         if data_model.name not in map(lambda x: x.name, self.dm_list):
             self.dm_list.append(data_model)
@@ -494,44 +551,198 @@ class Fuzzer(object):
             raise ValueError("A data model with the name '%s' already exist!" % data_model.name)
 
         if old_dm is not None:
-            self.__rld_args_dict.pop(old_dm)
-            self.__initialized_dmaker_dict.pop(old_dm)
+            self.__dm_rld_args_dict.pop(old_dm)
             self.__st_dict.pop(old_dm)
             self.__st_dict[data_model] = strategy
-            mon = self.__monitor_dict.pop(old_dm)
-            stats = self.__stats_dict.pop(old_dm)
-            lg = self.__logger_dict.pop(old_dm)
-            tg = self.__target_dict.pop(old_dm)
-            if ignore_all_except_dm:
-                self.__logger_dict[data_model] = lg
-                self.__stats_dict[data_model] = stats
-                self.__monitor_dict[data_model] = mon
-                self.__monitor_dict[data_model].set_strategy(strategy)
-                self.__target_dict[data_model] = tg
-                self.__st_dict[data_model].set_logger(self.__logger_dict[data_model])
-                self.__st_dict[data_model].set_monitor(self.__monitor_dict[data_model])
-            else:
-                self.__target_dict[data_model] = target
-                self.__logger_dict[data_model] = logger
-                self.__stats_dict[data_model] = Stats(self._generic_tactics.get_generators())
-                self.__monitor_dict[data_model] = Monitor(self.__st_dict[data_model], fmk_ops=self._exportable_fmk_ops)
-                self.__monitor_dict[data_model].set_logger(self.__logger_dict[data_model])
-                self.__st_dict[data_model].set_logger(self.__logger_dict[data_model])
-                self.__st_dict[data_model].set_monitor(self.__monitor_dict[data_model])
-                self.__logger_dict[data_model].set_stats(self.__stats_dict[data_model])
         else:
             self.__st_dict[data_model] = strategy
-            self.__target_dict[data_model] = target
-            self.__logger_dict[data_model] = logger
-            self.__stats_dict[data_model] = Stats(self._generic_tactics.get_generators())
-            self.__monitor_dict[data_model] = Monitor(self.__st_dict[data_model], fmk_ops=self._exportable_fmk_ops)
-            self.__monitor_dict[data_model].set_logger(self.__logger_dict[data_model])
-            self.__st_dict[data_model].set_logger(self.__logger_dict[data_model])
-            self.__st_dict[data_model].set_monitor(self.__monitor_dict[data_model])
-            self.__logger_dict[data_model].set_stats(self.__stats_dict[data_model])
 
-        self.__rld_args_dict[data_model] = rld_args
-        self.__initialized_dmaker_dict[data_model] = {}
+        self.__dm_rld_args_dict[data_model] = dm_rld_args
+
+
+
+
+    @EnforceOrder(accepted_states=['get_projs'], final_state='20_load_prj')
+    def get_projects(self):
+        prj_dir = 'projects'
+        path = os.path.join(app_folder, prj_dir)
+        projects = collections.OrderedDict()
+        for (dirpath, dirnames, filenames) in os.walk(path):
+            if filenames:
+                projects[prj_dir] = []
+                projects[prj_dir].extend(filenames)
+            for d in dirnames:
+                full_path = os.path.join(path, d)
+                rel_path = os.path.join(prj_dir, d)
+                projects[rel_path] = []
+                for (dth, dnames, fnm) in os.walk(full_path):
+                    projects[rel_path].extend(fnm)
+                    break
+            break
+
+        prjs = copy.copy(projects)
+        for k in prjs:
+            projects[k] = list(filter(is_python_file, projects[k]))
+            if '__init__.py' in projects[k]:
+                projects[k].remove('__init__.py')
+            if not projects[k]:
+                del projects[k]
+
+        rexp_proj = re.compile("(.*)_proj\.py$")
+
+        print(colorize(FontStyle.BOLD + "="*66+"[ Projects ]==", rgb=Color.FMKINFOGROUP))
+
+        for dname, file_list in projects.items():
+            print(colorize(">>> Look for Projects within '%s' Directory" % dname,
+                           rgb=Color.FMKINFOSUBGROUP))
+            prefix = dname.replace(os.sep, '.') + '.'
+            for f in file_list:
+                res = rexp_proj.match(f)
+                if res is None:
+                    continue
+                name = res.group(1)
+                prj_params = self._import_project(prefix, name)
+                if prj_params is not None:
+                    self._add_project(prj_params['project'],
+                                      prj_params['target'], prj_params['logger'],
+                                      prj_params['prj_rld_args'],
+                                      reload_prj=False)
+                    self.fmkDB.insert_project(prj_params['project'].name)
+
+        self.fmkDB.commit()
+
+        print(colorize(FontStyle.BOLD + "="*80, rgb=Color.FMKINFOGROUP))
+
+
+    def _import_project(self, prefix, name, reload_prj=False):
+
+        try:
+            if reload_prj:
+                if sys.version_info[0] == 2:
+                    eval('reload(' + prefix + name + '_proj' + ')')
+                else:
+                    exec('import imp')
+                    eval('imp.reload(' + prefix + name + '_proj' + ')')
+            else:
+                exec('import ' + prefix + name + '_proj')
+        except:
+            if reload_prj:
+                print(colorize("*** Problem during reload of '%s_proj.py' ***" % (name), rgb=Color.ERROR))
+            else:
+                print(colorize("*** Problem during import of '%s_proj.py' ***" % (name), rgb=Color.ERROR))
+            print('-'*60)
+            traceback.print_exc(file=sys.stdout)
+            print('-'*60)
+
+            return None
+
+        else:
+            prj_params = {}
+
+            prj_params['prj_rld_args'] = (prefix, name)
+
+            try:
+                prj_params['project'] = eval(prefix + name + '_proj' + '.project')
+            except:
+                print(colorize("*** ERROR: '%s_proj.py' shall contain a global variable 'project' ***" % (name), rgb=Color.ERROR))
+                return None
+
+            try:
+                logger = eval(prefix + name + '_proj' + '.logger')
+            except:
+                logger = Logger(name, prefix=' || ')
+            logger.fmkDB = self.fmkDB
+            if logger.name is None:
+                logger.name = name
+            prj_params['logger'] = logger
+            try:
+                targets = eval(prefix + name + '_proj' + '.targets')
+                targets.insert(0, EmptyTarget())
+            except:
+                targets = [EmptyTarget()]
+            else:
+                new_targets = []
+                for obj in targets:
+                    if isinstance(obj, list) or isinstance(obj, tuple):
+                        tg = obj[0]
+                        obj = obj[1:]
+                        tg.remove_probes()
+                        for p in obj:
+                            tg.add_probe(p)
+                    else:
+                        assert(issubclass(obj.__class__, Target))
+                        tg = obj
+                        tg.remove_probes()
+                    new_targets.append(tg)
+                targets = new_targets
+
+            if self.__current_tg >= len(targets):
+                self.__current_tg = 0
+            
+            prj_params['target'] = targets
+
+            if prj_params['project'].name is None:
+                prj_params['project'].name = name
+            self._name2prj[prj_params['project'].name] = prj_params['project']
+
+            if reload_prj:
+                print(colorize("*** Project '%s' updated ***" % prj_params['project'].name, rgb=Color.FMKSUBINFO))
+            else:
+                print(colorize("*** Found Project: '%s' ***" % prj_params['project'].name, rgb=Color.FMKSUBINFO))
+
+            return prj_params
+
+
+    def _add_project(self, project, target, logger, prj_rld_args,
+                     reload_prj=False):
+
+        if project.name not in map(lambda x: x.name, self.prj_list):
+            self.prj_list.append(project)
+            old_prj = None
+        elif reload_prj:
+            for prj in self.prj_list:
+                if prj.name == project.name:
+                    break
+            else:
+                raise ValueError
+            old_prj = prj
+            self.prj_list.remove(prj)
+            self.prj_list.append(project)
+        else:
+            raise ValueError("A project with the name '%s' already exist!" % project.name)
+
+        if old_prj is not None:
+            self.__prj_rld_args_dict.pop(old_prj)
+            self.__initialized_dmaker_dict.pop(old_prj)
+            self._prj_dict.pop(old_prj)
+            self._prj_dict[project] = project
+            mon = self.__monitor_dict.pop(old_prj)
+            stats = self.__stats_dict.pop(old_prj)
+            lg = self.__logger_dict.pop(old_prj)
+            tg = self.__target_dict.pop(old_prj)
+            self.__target_dict[project] = target
+            self.__logger_dict[project] = logger
+            self.__stats_dict[project] = Stats(self._generic_tactics.get_generators())
+            self.__monitor_dict[project] = Monitor(project, fmk_ops=self._exportable_fmk_ops)
+            self.__monitor_dict[project].set_logger(self.__logger_dict[project])
+            self._prj_dict[project].set_logger(self.__logger_dict[project])
+            self._prj_dict[project].set_monitor(self.__monitor_dict[project])
+            self.__logger_dict[project].set_stats(self.__stats_dict[project])
+        else:
+            self._prj_dict[project] = project
+            self.__target_dict[project] = target
+            self.__logger_dict[project] = logger
+            self.__stats_dict[project] = Stats(self._generic_tactics.get_generators())
+            self.__monitor_dict[project] = Monitor(project, fmk_ops=self._exportable_fmk_ops)
+            self.__monitor_dict[project].set_logger(self.__logger_dict[project])
+            self._prj_dict[project].set_logger(self.__logger_dict[project])
+            self._prj_dict[project].set_monitor(self.__monitor_dict[project])
+            self.__logger_dict[project].set_stats(self.__stats_dict[project])
+
+        self.__prj_rld_args_dict[project] = prj_rld_args
+        self.__initialized_dmaker_dict[project] = {}
+
+
 
 
     def is_usable(self):
@@ -547,91 +758,108 @@ class Fuzzer(object):
         self.__started = False
 
 
-    def __start_fuzzing(self, full_start=True):
+    def _load_data_model(self):
+        try:
+            self.dm.load_data_model(self._name2dm)
+
+            if not self.__dyngenerators_created[self.dm]:
+                self.__dyngenerators_created[self.dm] = True
+                self.__dynamic_generator_ids[self.dm] = []
+                for di in self.dm.data_identifiers():
+                    dmaker_type = di.upper()
+                    gen_cls_name = 'g_' + di.lower()
+                    dyn_generator.data_id = di
+                    gen = dyn_generator(gen_cls_name, (DynGenerator,), {})()
+                    self._tactics.register_new_generator(gen_cls_name, gen, weight=1,
+                                                          dmaker_type=dmaker_type, valid=True)
+                    self.__dynamic_generator_ids[self.dm].append(dmaker_type)
+                    self.fmkDB.insert_dmaker(self.dm.name, dmaker_type, gen_cls_name, True, True)
+
+            print(colorize("*** Data Model '%s' loaded ***" % self.dm.name, rgb=Color.DATA_MODEL_LOADED))
+
+        except:
+            self._handle_user_code_exception()
+            self.__prj_to_be_reloaded = True
+            self.set_error("Error encountered while loading the data model. (checkup" \
+                           " the associated '%s.py' file)" % self.dm.name)
+            return False
+
+        return True
+
+    def __start_fuzzing(self):
         if not self.__is_started():
             signal.signal(signal.SIGINT, signal.SIG_IGN)
 
+            ok = self._load_data_model()
+            if not ok:
+                self.set_error("Project cannot be launched because of data model loading error")
+                return
+
+            self.lg.start()
             try:
-                self.dm.load_data_model(self._name2dm)
-
-                if not self.__dyngenerators_created[self.dm]:
-                    self.__dyngenerators_created[self.dm] = True
-                    self.__dynamic_generator_ids[self.dm] = []
-                    for di in self.dm.data_identifiers():
-                        dmaker_type = di.upper()
-                        gen_cls_name = 'g_' + di.lower()
-                        dyn_generator.data_id = di
-                        gen = dyn_generator(gen_cls_name, (DynGenerator,), {})()
-                        self.__tactics.register_new_generator(gen_cls_name, gen, weight=1,
-                                                              dmaker_type=dmaker_type, valid=True)
-                        self.__dynamic_generator_ids[self.dm].append(dmaker_type)
-
+                ok = self.tg._start()
             except:
                 self._handle_user_code_exception()
-                self.__dm_to_be_reloaded = True
-                self.set_error("Error encountered while loading the data model. (checkup" \
-                                       " the associated '%s.py' file)" % self.dm.name)
-
-            if full_start:
-                self.lg.start()
-                try:
-                    ok = self.tg._start()
-                except:
-                    self._handle_user_code_exception()
-                    self.set_error("The Target has not been initialized correctly (checkup" \
-                                   " the associated '%s_strategy.py' file)" % self.dm.name)
+                self.set_error("The Target has not been initialized correctly (checkup" \
+                               " the associated '%s_strategy.py' file)" % self.dm.name)
+            else:
+                if ok:
+                    self.__enable_target()
+                    self.__mon.start()
+                    for p in self.tg.probes:
+                        pname, delay = self._extract_info_from_probe(p)
+                        if delay is None:
+                            self.__mon.start_probe(pname)
+                        else:
+                            self.__mon.set_probe_delay(pname, delay)
+                            self.__mon.start_probe(pname)
+                    self.prj.start()
                 else:
-                    if ok:
-                        self.__enable_target()
-                        self.__mon.start()
-                    else:
-                        self.set_error("The Target has not been initialized correctly")
+                    self.set_error("The Target has not been initialized correctly")
             
             self.__current = []
             self.__db_idx = 0
             self.__data_bank = {}
-            
+
             self.__start()
 
 
-    def __stop_fuzzing(self, full_stop=True):
+    def __stop_fuzzing(self):
         if self.__is_started():
             signal.signal(signal.SIGINT, sig_int_handler)
 
             if self.is_target_enabled():
                 self.log_target_residual_feedback()
 
-            self.dm.unload_data_model()
+            if self.is_target_enabled():
+                self.__mon.stop()
+                try:
+                    self.tg._stop()
+                except:
+                    self._handle_user_code_exception()
+                finally:
+                    self.__disable_target()
 
-            if full_stop:
-                if self.is_target_enabled():
-                    self.__mon.stop()
-                    try:
-                        self.tg._stop()
-                    except:
-                        self._handle_user_code_exception()
-                    finally:
-                        self.__disable_target()
-
-                self.lg.stop()
-                self.__stats.reset()
+            self.lg.stop()
+            self.__stats.reset()
+            self.prj.stop()
 
             self.__stop()
 
         # TODO: propose to save the data bank
 
 
-    @EnforceOrder(accepted_states=['S0','S1','S2'])
+    @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
     def exit_fuzzer(self):
         self.__stop_fuzzing()
+        self.fmkDB.stop()
 
-
-    @EnforceOrder(accepted_states=['S1','S2'])
+    @EnforceOrder(accepted_states=['25_load_dm','S1','S2'])
     def set_target(self, num):
         return self.__set_target(num)
 
     def __set_target(self, num):
-        if num >= len(self.__target_dict[self.dm]):
+        if num >= len(self.__target_dict[self.prj]):
             self.set_error('The provided target number does not exist!',
                            code=Error.CommandError)
             return False
@@ -639,41 +867,69 @@ class Fuzzer(object):
         self.__current_tg = num
         return True
 
-    @EnforceOrder(accepted_states=['S1','S2'])
+    @EnforceOrder(accepted_states=['25_load_dm','S1','S2'])
     def get_available_targets(self):           
-        for tg in self.__target_dict[self.dm]:
+        for tg in self.__target_dict[self.prj]:
             yield tg
 
-    @EnforceOrder(accepted_states=['S1','S2'])
+
+    def _extract_info_from_probe(self, p):
+        if isinstance(p, list) or isinstance(p, tuple):
+            assert(len(p) == 2)
+            pname = p[0].__name__
+            delay = p[1]
+        else:
+            pname = p.__name__
+            delay = None
+        return pname, delay
+
+
+    def _get_detailed_target_desc(self, tg):
+        if isinstance(tg, PrinterTarget):
+            printer_name = tg.get_printer_name()
+            printer_name = ', Name: ' + printer_name if printer_name is not None else ''
+            detailed_desc = tg.__class__.__name__ + ' [IP: ' + tg.get_target_ip() + printer_name + ']'
+        elif isinstance(tg, LocalTarget):
+            pre_args = tg.get_pre_args()
+            post_args = tg.get_post_args()
+            args = ''
+            if pre_args or post_args:
+                if pre_args is not None:
+                    args += pre_args
+                if post_args is not None:
+                    args += post_args
+                args = ', Args: ' + args
+            detailed_desc = tg.__class__.__name__ + ' [Program: ' + tg.get_target_path() + args + ']'
+        else:
+            desc = tg.get_description()
+            if desc is None:
+                desc = ''
+            else:
+                desc = ' [' + desc + ']'
+            detailed_desc = tg.__class__.__name__ + desc
+
+        return detailed_desc
+
+    @EnforceOrder(accepted_states=['25_load_dm','S1','S2'])
     def show_targets(self):
         print(colorize(FontStyle.BOLD + '\n-=[ Available Targets ]=-\n', rgb=Color.INFO))
         idx = 0
         for tg in self.get_available_targets():
-            if isinstance(tg, PrinterTarget):
-                printer_name = tg.get_printer_name()
-                printer_name = ', Name: ' + printer_name if printer_name is not None else ''
-                name = tg.__class__.__name__ + ' [IP: ' + tg.get_target_ip() + printer_name + ']'
-            elif isinstance(tg, LocalTarget):
-                pre_args = tg.get_pre_args()
-                post_args = tg.get_post_args()
-                args = ''
-                if pre_args or post_args:
-                    if pre_args is not None:
-                        args += pre_args
-                    if post_args is not None:
-                        args += post_args
-                    args = ', Args: ' + args
+            name = self._get_detailed_target_desc(tg)
 
-                name = tg.__class__.__name__ + ' [Program: ' + tg.get_target_path() + args + ']'
-            else:
-                desc = tg.get_description()
-                if desc is None:
-                    desc = ''
-                else:
-                    desc = ' [' + desc + ']'
-                name = tg.__class__.__name__ + desc
-                
-            msg = "[{:d}] {:s}".format(idx, name) 
+            msg = "[{:d}] {:s}".format(idx, name)
+
+            probes = tg.probes
+            if probes:
+                msg += '\n     \-- monitored by:'
+                for p in probes:
+                    pname, delay = self._extract_info_from_probe(p)
+                    if delay:
+                        msg += " {:s}(refresh={:.2f}s),".format(pname, delay)
+                    else:
+                        msg += " {:s},".format(pname)
+                msg = msg[:-1]
+
             if self.__current_tg == idx:
                 msg = colorize(FontStyle.BOLD + msg, rgb=Color.SELECTED)
             else:
@@ -696,7 +952,27 @@ class Fuzzer(object):
         print(colorize('    Target health-check timeout: ', rgb=Color.SUBINFO) + str(self._timeout))
         print(colorize('              Workspace enabled: ', rgb=Color.SUBINFO) + repr(self._wkspace_enabled))
 
-    @EnforceOrder(accepted_states=['S0','S1','S2'])
+
+
+    @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
+    def projects(self):
+        for prj in self.prj_list:
+            yield prj
+
+    def _projects(self):
+        for prj in self.prj_list:
+            yield prj
+
+    @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
+    def show_projects(self):
+        print(colorize(FontStyle.BOLD + '\n-=[ Projects ]=-\n', rgb=Color.INFO))
+        idx = 0
+        for prj in self._projects():
+            print(colorize('[%d] ' % idx + prj.name, rgb=Color.SUBINFO))
+            idx += 1
+
+
+    @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
     def iter_data_models(self):
         for dm in self.dm_list:
             yield dm
@@ -705,7 +981,7 @@ class Fuzzer(object):
         for dm in self.dm_list:
             yield dm
 
-    @EnforceOrder(accepted_states=['S0','S1','S2'])
+    @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
     def show_data_models(self):
         print(colorize(FontStyle.BOLD + '\n-=[ Data Models ]=-\n', rgb=Color.INFO))
         idx = 0
@@ -720,16 +996,18 @@ class Fuzzer(object):
         print(stats)
 
 
-    def __init_fmk_internals_step1(self, dm):
+    def __init_fmk_internals_step1(self, prj, dm):
+        self.prj = prj
         self.dm = dm
-        self.lg = self.__logger_dict[dm]
+        self.lg = self.__logger_dict[prj]
         try:
-            self.tg = self.__target_dict[dm][self.__current_tg]
+            self.tg = self.__target_dict[prj][self.__current_tg]
         except IndexError:
             self.__current_tg = 0
-            self.tg = self.__target_dict[dm][self.__current_tg]
+            self.tg = self.__target_dict[prj][self.__current_tg]
             
         self.tg.set_logger(self.lg)
+        self.prj.set_target(self.tg)
 
         if self.__first_loading:
             self.__first_loading = False
@@ -737,28 +1015,29 @@ class Fuzzer(object):
             # Clear all cloned dmakers
             self._generic_tactics.clear_generator_clones()
             self._generic_tactics.clear_disruptor_clones()
-            self.__tactics.clear_generator_clones()
-            self.__tactics.clear_disruptor_clones()
+            self._tactics.clear_generator_clones()
+            self._tactics.clear_disruptor_clones()
 
-        self.__tactics = self.__st_dict[dm]
-        self.__tactics.set_target(self.tg)
+        self._tactics = self.__st_dict[dm]
+        # self._tactics.set_target(self.tg)
 
-        self.__mon = self.__monitor_dict[dm]
-        self.__stats = self.__stats_dict[dm]
-        self.__initialized_dmakers = self.__initialized_dmaker_dict[dm]
+        self.__mon = self.__monitor_dict[prj]
+        self.__stats = self.__stats_dict[prj]
+        self.__initialized_dmakers = self.__initialized_dmaker_dict[prj]
         self.__stats_countdown = 9
 
-    def __init_fmk_internals_step2(self, dm):
+    def __init_fmk_internals_step2(self, prj, dm):
         self._recompute_current_generators()
         # need the logger active
         self.__reset_fmk_internals()
 
+
     def _recompute_current_generators(self):
-        specific_gen = self.__tactics.get_generators()
+        specific_gen = self._tactics.get_generators()
         generic_gen = self._generic_tactics.get_generators()
         self.__current_gen = list(specific_gen.keys()) + list(generic_gen.keys())
 
-    @EnforceOrder(accepted_states=['S0','S1','S2'])
+    @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
     def get_data_model_by_name(self, name):
         for model in self.__iter_data_models():
             if model.name == name:
@@ -768,55 +1047,178 @@ class Fuzzer(object):
             ret = None
         return ret
 
-    @EnforceOrder(accepted_states=['S0','S1','S2'], final_state='S1')
+    @EnforceOrder(accepted_states=['25_load_dm','S1','S2'], transition=['25_load_dm','S1'])
     def load_data_model(self, dm=None, name=None):
         if name is not None:
             dm = self.get_data_model_by_name(name)
             if dm is None:
+                self.set_error("Data model '{:s}' has not been found!".format(name), 
+                               code=Error.CommandError)
                 return False
 
         elif dm is not None:
             if dm not in self.dm_list:
                 return False
 
+        if self.__is_started():
+            self.cleanup_all_dmakers()
         self.dm = dm
-
-        self.__stop_fuzzing()
+        if self.__is_started():
+            self._cleanup_dm_attrs_from_fmk()
+            ok = self._load_data_model()
+            if not ok:
+                return False
 
         return True
 
-    @EnforceOrder(accepted_states=['S1'], final_state='S2')
-    def enable_fuzzing(self):
-        if not self.__dm_to_be_reloaded:
-            self.__init_fmk_internals_step1(self.dm)
-            self.__start_fuzzing()
-            if self.is_not_ok():
-                self.__stop_fuzzing()
+    @EnforceOrder(accepted_states=['25_load_dm','S1','S2'], transition=['25_load_dm','S1'])
+    def load_multiple_data_model(self, dm_list=None, name_list=None, reload_dm=False):
+        if name_list is not None:
+            dm_list = []
+            for name in name_list:
+                dm = self.get_data_model_by_name(name)
+                if dm is None:
+                    self.set_error("Data model '{:s}' has not been found!".format(name), 
+                                   code=Error.CommandError)
+                    return False
+                dm_list.append(dm)
+            
+        elif dm_list is not None:
+            for dm in dm_list:
+                if dm not in self.dm_list:
+                    return False
+
+        if self.__is_started():
+            self.cleanup_all_dmakers()
+
+        new_dm = DataModel()
+        new_tactics = Tactics()
+        dyn_gen_ids = []
+        name = ''
+        for dm in dm_list:
+            name += dm.name + '+'
+            if not reload_dm:
+                self.dm = dm
+                self._cleanup_dm_attrs_from_fmk()
+                ok = self._load_data_model()
+                if not ok:
+                    return False
+            new_dm.merge_with(dm)
+            tactics = self.__st_dict[dm]
+            for k, v in tactics.disruptors.items():
+                if k in new_tactics.disruptors:
+                    raise ValueError("the disruptor '{:s}' exists already".format(k))
+                else:
+                    new_tactics.disruptors[k] = v
+            for k, v in tactics.generators.items():
+                if k in new_tactics.disruptors:
+                    raise ValueError("the generator '{:s}' exists already".format(k))
+                else:
+                    new_tactics.generators[k] = v
+            for dmk_id in self.__dynamic_generator_ids[dm]:
+                dyn_gen_ids.append(dmk_id)
+
+        new_dm.name = name[:-1]
+
+        if reload_dm or new_dm.name not in map(lambda x: x.name, self.dm_list):
+            self.fmkDB.insert_data_model(new_dm.name)
+            self.__add_data_model(new_dm, new_tactics,
+                                  (None, dm_list),
+                                  reload_dm=reload_dm)
+            self.fmkDB.commit()
+
+            # In this case DynGens have already been generated through
+            # the reloading of the included DMs
+            self.__dyngenerators_created[new_dm] = True
+            self.__dynamic_generator_ids[new_dm] = dyn_gen_ids
+            self.dm = new_dm
+
+        if self.__is_started():
+            self._cleanup_dm_attrs_from_fmk()
+            ok = self._load_data_model()
+            if not ok:
                 return False
 
-            self.__init_fmk_internals_step2(self.dm)
-            return True
+        return True
 
+
+    @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
+    def get_project_by_name(self, name):
+        for prj in self._projects():
+            if prj.name == name:
+                ret = prj
+                break
         else:
-            self.__dm_to_be_reloaded = False
-            self.__reload_all()
-            return True
+            ret = None
+        return ret
 
-    @EnforceOrder(accepted_states=['S0','S1','S2'], final_state='S2')
-    def enable_data_model(self, dm=None, name=None, tg=None):
-        ok = self.load_data_model(dm=dm, name=name)
+
+    @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'], final_state='S2')
+    def run_project(self, prj=None, name=None, tg=None, dm_name=None):
+        ok = self.load_project(prj=prj, name=name)
         if not ok:
            return False
+
+        if dm_name is None:
+            if self.prj.default_dm is None:
+                self.set_error("The attribute 'default_dm' is not set!")
+                return False
+            else:
+                dm_name = self.prj.default_dm
+
+        if isinstance(dm_name, list):
+            ok = self.load_multiple_data_model(name_list=dm_name)
+        else:
+            ok = self.load_data_model(name=dm_name)
+
+        if not ok:
+            return False
  
         if tg is not None:
             assert(isinstance(tg, int))
             self.__set_target(tg)
 
-        ok = self.enable_fuzzing()
+        ok = self.launch()
         if not ok:
             return False
 
         return True
+
+
+    @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'], final_state='25_load_dm')
+    def load_project(self, prj=None, name=None):
+        if name is not None:
+            prj = self.get_project_by_name(name)
+            if prj is None:
+                return False
+
+        elif prj is not None:
+            if prj not in self.prj_list:
+                return False
+
+        self.prj = prj
+
+        self.__stop_fuzzing()
+
+        return True
+
+
+    @EnforceOrder(accepted_states=['S1'], final_state='S2')
+    def launch(self):
+        if not self.__prj_to_be_reloaded:
+            self.__init_fmk_internals_step1(self.prj, self.dm)
+            self.__start_fuzzing()
+            if self.is_not_ok():
+                self.__stop_fuzzing()
+                return False
+
+            self.__init_fmk_internals_step2(self.prj, self.dm)
+            return True
+
+        else:
+            self.__prj_to_be_reloaded = False
+            self.__reload_all()
+            return True
 
     def is_target_enabled(self):
         return self.__tg_enabled
@@ -843,7 +1245,7 @@ class Fuzzer(object):
     def set_fuzz_delay(self, delay):
         if delay >= 0 or delay == -1:
             self._delay = delay
-            self.lg.log_fmk_info('Fuzz delay = %d' % self._delay)
+            self.lg.log_fmk_info('Fuzz delay = {:.1f}s'.format(self._delay))
             return True
         else:
             self.lg.log_fmk_info('Wrong delay value!')
@@ -864,7 +1266,7 @@ class Fuzzer(object):
     def set_timeout(self, timeout):
         if timeout >= 0:
             self._timeout = timeout
-            self.lg.log_fmk_info('Target health-check timeout = %d' % self._timeout)
+            self.lg.log_fmk_info('Target health-check timeout = {:.1f}s'.format(self._timeout))
             return True
         else:
             self.lg.log_fmk_info('Wrong timeout value!')
@@ -877,7 +1279,7 @@ class Fuzzer(object):
         return False if the user want to stop fuzzing (action possible if
         delay is set to -1)
         '''
-        ret = True, False
+        ret = True
         if self._burst_countdown <= 1:
             self._burst_countdown = self._burst
 
@@ -890,7 +1292,7 @@ class Fuzzer(object):
                         else:
                             cont = input("\n*** Press [ENTER] to continue ('q' to exit).")
                         if cont == 'q':
-                            ret = Fals
+                            ret = False
                     except KeyboardInterrupt:
                         ret = False
                         self.set_error("The operation has been cancelled by the user (while in delay step)!",
@@ -942,19 +1344,15 @@ class Fuzzer(object):
                 else:
                     self.__current.append((None, dt))
 
-        # Allow the Target object to act before the FMK send data
-        self.tg.do_before_sending_data()
-
         if self._burst_countdown == self._burst:
             # log residual just before sending new data to avoid
             # polluting feedback logs of the next emission
-            self.log_target_residual_feedback()
+            cont = self.log_target_residual_feedback()
+            if not cont:
+                return False
 
         self.new_transfer_preamble()
-        if multiple_data:
-            self.send_data(data_list)
-        else:
-            self.send_data(data_list[0])
+        self.send_data(data_list)
 
         ret = self.check_target_readiness()
         if ret < 0:
@@ -983,13 +1381,18 @@ class Fuzzer(object):
         else:
             cont1 = False
 
+        cont3 = True
+        cont4 = True
         # That means this is the end of a burst
         if self._burst_countdown == self._burst:
-            self.log_target_feedback()
+            cont3 = self.log_target_feedback()
+            # We handle probe feedback if any
+            cont4 = self.monitor_probes()
+            self.tg.cleanup()
 
         cont2 = self.__mon.do_after_sending_and_logging_data()
 
-        return cont0 and cont1 and cont2
+        return cont0 and cont1 and cont2 and cont3 and cont4
 
     @EnforceOrder(accepted_states=['S2'])
     def send_data(self, data_list):
@@ -1001,16 +1404,18 @@ class Fuzzer(object):
             # Monitor hook function before sending
             self.__mon.do_before_sending_data()
 
-            # Target hook function before sending
             try:
-                self.tg.do_before_sending_data()
+                # Allow the Target object to act before the FMK send data
+                self.tg.do_before_sending_data(data_list)
 
-                if isinstance(data_list, Data):
-                    self.tg.send_data(data_list)
-                elif isinstance(data_list, list):
+                if len(data_list) == 1:
+                    self.tg.send_data(data_list[0])
+                elif len(data_list) > 1:
                     self.tg.send_multiple_data(data_list)
                 else:
                     raise ValueError
+            except TargetStuck as e:
+                self.lg.log_comment("*** WARNING: Unable to send data to the target! [reason: %s]" % str(e))
 
             except:
                 self._handle_user_code_exception()
@@ -1031,6 +1436,7 @@ class Fuzzer(object):
     def log_data(self, data_list, original_data=None, get_target_ack=True, verbose=False):
 
         if self.__send_enabled:
+            self.group_id += 1
             gen = self.__current_gen
 
             if original_data is None:
@@ -1052,9 +1458,10 @@ class Fuzzer(object):
                  self.lg.log_fmk_info("MULTIPLE DATA EMISSION", nl_after=True)
 
             if get_target_ack:
-                self.lg.log_target_ack_date(self.tg.get_last_target_ack_date())
+                ack_date = self.tg.get_last_target_ack_date()
             else:
-                self.lg.log_target_ack_date(None)
+                ack_date = None
+            self.lg.log_target_ack_date(ack_date)
 
             for idx, dt in zip(range(len(data_list)), data_list):
                 dt_mk_h = dt.get_history()
@@ -1075,6 +1482,16 @@ class Fuzzer(object):
 
                 self.__stats.inc_stat(gen_type, gen_name, gen_ui)
 
+                num = 1
+
+                data_id = dt.get_data_id()
+                # if data_id is not None, the data has been created from fmkDB
+                # because new data have not a data_id yet at this point in the code.
+                if data_id is not None:
+                    self.lg.log_fuzzing_step(num)
+                    self.lg.log_generator_info(gen_type_initial, gen_name, None, data_id=data_id)
+                    self.lg.log_data_info(("Data fetched from FMKDB",), gen_type_initial, gen_name)
+
                 if dt_mk_h is not None:
                     if orig_data_provided:
                         self.lg.log_orig_data(original_data[idx])
@@ -1083,22 +1500,21 @@ class Fuzzer(object):
 
                     dt.init_read_info()
 
-                    num = 0
                     for dmaker_type, data_maker_name, user_input in dt_mk_h:
                         num += 1
-                        
-                        if num == 1:
+
+                        if num == 1 and data_id is None:
+                            # if data_id is not None then no need to log an initial generator
+                            # because data comes from FMKDB
                             if dmaker_type != gen_type_initial:
-                                self.lg.log_fuzzing_initial_generator(gen_type_initial, gen_name, gen_ui)
+                                self.lg.log_initial_generator(gen_type_initial, gen_name, gen_ui)
 
                         self.lg.log_fuzzing_step(num)
-
-                        # print(gen, dmaker_type, gen_type_initials)
 
                         if dmaker_type in gen:
                             dmaker_obj = self._generic_tactics.get_generator_obj(dmaker_type, data_maker_name)
                             if dmaker_obj is None:
-                                dmaker_obj = self.__tactics.get_generator_obj(dmaker_type, data_maker_name)
+                                dmaker_obj = self._tactics.get_generator_obj(dmaker_type, data_maker_name)
                             if dmaker_obj in self.__initialized_dmakers and self.__initialized_dmakers[dmaker_obj][0]:
                                 ui = self.__initialized_dmakers[dmaker_obj][1]
                             else:
@@ -1109,7 +1525,7 @@ class Fuzzer(object):
                         else:
                             dmaker_obj = self._generic_tactics.get_disruptor_obj(dmaker_type, data_maker_name)
                             if dmaker_obj is None:
-                                dmaker_obj = self.__tactics.get_disruptor_obj(dmaker_type, data_maker_name)
+                                dmaker_obj = self._tactics.get_disruptor_obj(dmaker_type, data_maker_name)
                             if dmaker_obj in self.__initialized_dmakers and self.__initialized_dmakers[dmaker_obj][0]:
                                 ui = self.__initialized_dmakers[dmaker_obj][1]
                             else:
@@ -1118,15 +1534,25 @@ class Fuzzer(object):
                             self.lg.log_disruptor_info(dmaker_type, data_maker_name, ui)
 
                         info = dt.read_info(data_maker_name, dmaker_type)
-                        self.lg.log_data_info(info)
+                        self.lg.log_data_info(info, dmaker_type, data_maker_name)
 
                 else:
-                    self.lg.log_info("RAW DATA (data makers not provided)")
+                    if gen_type_initial is None:
+                        self.lg.log_fuzzing_step(1)
+                        self.lg.log_generator_info(Database.DEFAULT_GTYPE_NAME,
+                                                   Database.DEFAULT_GEN_NAME,
+                                                   None)
+                        self.lg.log_data_info(("RAW DATA (data makers not provided)",),
+                                              Database.DEFAULT_GTYPE_NAME, Database.DEFAULT_GEN_NAME)
 
                 self.lg.log_data(dt, verbose=verbose)
                 if multiple_data:
                     self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
 
+                data_id = self.lg.commit_log_entry(self.group_id)
+                if data_id is not None:
+                    tg_name = self._get_detailed_target_desc(self.tg)
+                    self.lg.commit_project_record(dt, self.prj.name, tg_name)
 
     @EnforceOrder(accepted_states=['S2'])
     def new_transfer_preamble(self):
@@ -1138,31 +1564,65 @@ class Fuzzer(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def log_target_feedback(self):
+        err_detected1, err_detected2 = False, False
         if self.__send_enabled:
             if self._burst > 1:
                 p = "::[ END BURST ]::\n"
             else:
                 p = None
-            ok = self.lg.log_current_target_feedback(preamble=p)
-            if not ok:
-                self._log_directly_retrieved_target_feedback(preamble=p)
+            try:
+                err_detected1 = self.lg.log_collected_target_feedback(preamble=p)
+            except NotImplementedError:
+                pass
+            finally:
+                err_detected2 = self._log_directly_retrieved_target_feedback(preamble=p)
+
+        go_on = self._recover_target() if err_detected1 or err_detected2 else True
+
+        return go_on
 
     @EnforceOrder(accepted_states=['S2'])
     def log_target_residual_feedback(self):
+        err_detected1, err_detected2 = False, False
         if self.__send_enabled:
             p = "\n::[ RESIDUAL TARGET FEEDBACK ]::"
             e = "::[ ------------------------ ]::\n"
-            ok = self.lg.log_current_target_feedback(preamble=p, epilogue=e)
-            if not ok:
-                self._log_directly_retrieved_target_feedback(preamble=p, epilogue=e)
+            try:
+                err_detected1 = self.lg.log_collected_target_feedback(preamble=p, epilogue=e)
+            except NotImplementedError:
+                pass
+            finally:
+                err_detected2 = self._log_directly_retrieved_target_feedback(preamble=p, epilogue=e)
+
+        go_on = self._recover_target() if err_detected1 or err_detected2 else True
+
+        return go_on
 
     def _log_directly_retrieved_target_feedback(self, preamble=None, epilogue=None):
-        # This method is to be used when the target does not make use
-        # of Logger.collect_target_feedback() facility. We thus try to
-        # access the feedback from Target directly
-        tg_fbk = self.tg.get_target_feedback()
+        """
+        This method is to be used when the target does not make use
+        of Logger.collect_target_feedback() facility. We thus try to
+        access the feedback from Target directly
+        """
+        err_detected = False
+        tg_fbk = self.tg.get_feedback()
         if tg_fbk is not None:
-            self.lg.log_target_feedback_from(tg_fbk.get_bytes(), preamble=preamble, epilogue=epilogue)
+            err_code = tg_fbk.get_error_code()
+            if err_code is not None and err_code < 0:
+                self.lg.log_comment('Error detected with the target (error code: {:d}) !'.format(err_code))
+                err_detected = True
+
+            if tg_fbk.has_fbk_collector():
+                for ref, fbk in tg_fbk:
+                    self.lg.log_target_feedback_from(fbk, preamble=preamble, epilogue=epilogue,
+                                                     source=ref, status_code=err_code)
+            else:
+                self.lg.log_target_feedback_from(tg_fbk.get_bytes(), preamble=preamble,
+                                                 epilogue=epilogue, status_code=err_code)
+
+            tg_fbk.cleanup()
+
+        return err_detected
 
     @EnforceOrder(accepted_states=['S2'])
     def check_target_readiness(self):
@@ -1178,7 +1638,7 @@ class Fuzzer(object):
                     time.sleep(0.2)
                     now = datetime.datetime.now()
                     if (now - t0).total_seconds() > self._timeout:
-                        self.lg.log_comment("*** Timeout! The target seems not to be ready.\n")
+                        self.lg.log_comment("*** Timeout! The target does not seem to be ready.\n")
                         ret = -1
                         break
             except KeyboardInterrupt:
@@ -1223,10 +1683,16 @@ class Fuzzer(object):
         self.__data_bank[self.__db_idx] = (data_orig, data)
 
     @EnforceOrder(accepted_states=['S2'])
-    def fill_data_bank_from_list(self, l):
-        if l:
-            for data in l:
-                self.__register_in_data_bank(None, Data(data))
+    def fmkdb_fetch_data(self, start_id=1, end_id=-1):
+        for record in self.fmkDB.fetch_data(start_id=start_id, end_id=end_id):
+            data_id, content, dtype, dmk_name, dm_name = record
+            data = Data(content)
+            data.set_data_id(data_id)
+            data.set_initial_dmaker((str(dtype), str(dmk_name), None))
+            if dm_name != Database.DEFAULT_DM_NAME:
+                dm = self.get_data_model_by_name(dm_name)
+                data.set_data_model(dm)
+            self.__register_in_data_bank(None, data)
 
     @EnforceOrder(accepted_states=['S2'])
     def get_last_data(self):
@@ -1267,18 +1733,19 @@ class Fuzzer(object):
             self.lg.print_console('|_ !IN', rgb=Color.SUBINFO)
 
         gen = self.__current_gen
-        
+
+        data_id  = data.get_data_id()
         data_makers_history = data.get_history()
         if data_makers_history:
             data.init_read_info()
             for dmaker_type, data_maker_name, user_input in data_makers_history:
                 if dmaker_type in gen:
                     if user_input:
-                        msg = "|- generator type: %s | generator name: %s | User input: %s" % \
-                            (dmaker_type, data_maker_name, user_input)
+                        msg = "|- data id: %d | generator type: %s | generator name: %s | User input: %s" % \
+                            (data_id, dmaker_type, data_maker_name, user_input)
                     else:
-                        msg = "|- generator type: %s | generator name: %s | No user input" % \
-                            (dmaker_type, data_maker_name)
+                        msg = "|- data id: %d | generator type: %s | generator name: %s | No user input" % \
+                            (data_id, dmaker_type, data_maker_name)
                 else:
                     if user_input:
                         msg = "|- disruptor type: %s | data_maker name: %s | User input: %s" % \
@@ -1292,6 +1759,18 @@ class Fuzzer(object):
                 data_info = data.read_info(data_maker_name, dmaker_type)
                 for msg in data_info:
                     self.lg.print_console('   |_ ' + msg, rgb=Color.SUBINFO)
+        else:
+            init_dmaker = data.get_initial_dmaker()
+            if init_dmaker is None:
+                dtype, dmk_name = Database.DEFAULT_GTYPE_NAME, Database.DEFAULT_GEN_NAME
+            else:
+                dtype, dmk_name, _ = init_dmaker
+            dm = data.get_data_model()
+            dm_name = None if dm is None else dm.name
+            msg = "|- data id: {:d} | type: {:s} | data model: {:s}".format(
+                data_id, dtype, dm_name
+            )
+            self.lg.print_console(msg, rgb=Color.SUBINFO)
 
         self.lg.print_console('|_ OUT > ', rgb=Color.SUBINFO)
         self.lg.print_console(data, nl_before=False)
@@ -1392,12 +1871,12 @@ class Fuzzer(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def show_operators(self):
-        operators = self.__tactics.get_operators()
+        operators = self.prj.get_operators()
         self.lg.print_console('-=[ Operators ]=-', rgb=Color.INFO, style=FontStyle.BOLD)
         self.lg.print_console('')
         for o in operators:
             self.lg.print_console(o, rgb=Color.SUBINFO)
-            desc = self.__dmaker_desc_str(self.__tactics.get_operator_obj(o))
+            desc = self.__dmaker_desc_str(self.prj.get_operator_obj(o))
             self.lg.print_console(desc, limit_output=False)
 
         self.lg.print_console('\n\n', nl_before=False)
@@ -1406,7 +1885,7 @@ class Fuzzer(object):
     @EnforceOrder(accepted_states=['S2'])
     def launch_operator(self, name, user_input, use_existing_seed=True, verbose=False):
         
-        operator = self.__tactics.get_operator_obj(name)
+        operator = self.prj.get_operator_obj(name)
         if operator is None:
             self.set_error('Invalid operator', code=Error.InvalidOp)
             return False
@@ -1502,19 +1981,18 @@ class Fuzzer(object):
 
                 fmk_feedback.clear_flag(FmkFeedback.NeedChange)
 
-                self.tg.do_before_sending_data()
-
                 if self._burst_countdown == self._burst:
                     # log residual just before sending new data to avoid
                     # polluting feedback logs of the next emission
-                    self.log_target_residual_feedback()
+                    cont = self.log_target_residual_feedback()
+                    if not cont:
+                        self.lg.log_fmk_info("Operator will shutdown because residual target "
+                                             "feedback indicate a negative status code")
+                        break
 
                 self.new_transfer_preamble()
 
-                if multiple_data:
-                    self.send_data(data_list)
-                else:
-                    self.send_data(data_list[0])
+                self.send_data(data_list)
 
                 ret = self.check_target_readiness()
                 # Note: the condition (ret = -1) is supposed to be managed by the operator
@@ -1552,18 +2030,34 @@ class Fuzzer(object):
                     exit_operator = True
                     self.lg.log_fmk_info("Operator will shutdown because waiting has been cancelled by the user")
 
-                # Target fbk is logged only at the end of a burst
-                if self._burst_countdown == self._burst:
-                    self.log_target_feedback()
+                if linst.is_instruction_set(LastInstruction.ExportData):
+                    # Target fbk is logged only at the end of a burst
+                    if self._burst_countdown == self._burst:
+                        cont1 = self.log_target_feedback()
+                        cont2 = self.monitor_probes()
+                        if not cont1 or not cont2:
+                            exit_operator = True
+                            self.lg.log_fmk_info("Operator will shutdown because something is going wrong with "
+                                                 "the target and the recovering procedure did not succeed...")
 
-                feedback = linst.get_target_feedback_info()
-                if feedback:
-                    self.lg.log_target_feedback_from_operator(feedback)
+                    op_feedback = linst.get_operator_feedback()
+                    op_status = linst.get_operator_status()
+                    if op_feedback or op_status:
+                        self.lg.log_operator_feedback(op_feedback,
+                                                      status_code=op_status)
+                else:
+                    op_status = None
 
                 comments = linst.get_comments()
                 if comments:
                     self.lg.log_comment(comments)
 
+                if op_status is not None and op_status < 0:
+                    exit_operator = True
+                    self.lg.log_fmk_info("Operator will shutdown because it returns a negative status")
+
+                if self._burst_countdown == self._burst:
+                    self.tg.cleanup()
         try:
             operator.stop(self._exportable_fmk_ops, self.dm, self.__mon, self.tg, self.lg)
         except:
@@ -1591,17 +2085,17 @@ class Fuzzer(object):
         last = False
         dmaker_switch_performed = False
 
-        get_dmaker_obj = self.__tactics.get_generator_obj
-        get_random_dmaker_obj = self.__tactics.get_random_generator
+        get_dmaker_obj = self._tactics.get_generator_obj
+        get_random_dmaker_obj = self._tactics.get_random_generator
         get_generic_dmaker_obj = self._generic_tactics.get_generator_obj
         get_random_generic_dmaker_obj = self._generic_tactics.get_random_generator
 
-        get_dmaker_name = self.__tactics.get_generator_name
+        get_dmaker_name = self._tactics.get_generator_name
         get_generic_dmaker_name = self._generic_tactics.get_generator_name
 
-        get_dmakers = self.__tactics.get_generators
+        get_dmakers = self._tactics.get_generators
         get_gen_dmakers = self._generic_tactics.get_generators
-        clone_dmaker = self.__tactics.clone_generator
+        clone_dmaker = self._tactics.clone_generator
         clone_gen_dmaker = self._generic_tactics.clone_generator
 
         if data_orig != None:
@@ -1644,15 +2138,15 @@ class Fuzzer(object):
 
             if not first and not dmaker_switch_performed:
                 dmaker_switch_performed = True
-                get_dmaker_obj = self.__tactics.get_disruptor_obj
-                get_random_dmaker_obj = self.__tactics.get_random_disruptor
+                get_dmaker_obj = self._tactics.get_disruptor_obj
+                get_random_dmaker_obj = self._tactics.get_random_disruptor
                 get_generic_dmaker_obj = self._generic_tactics.get_disruptor_obj
                 get_random_generic_dmaker_obj = self._generic_tactics.get_random_disruptor
-                get_dmaker_name = self.__tactics.get_disruptor_name
+                get_dmaker_name = self._tactics.get_disruptor_name
                 get_generic_dmaker_name = self._generic_tactics.get_disruptor_name
-                get_dmakers = self.__tactics.get_disruptors
+                get_dmakers = self._tactics.get_disruptors
                 get_gen_dmakers = self._generic_tactics.get_disruptors
-                clone_dmaker = self.__tactics.clone_disruptor
+                clone_dmaker = self._tactics.clone_disruptor
                 clone_gen_dmaker = self._generic_tactics.clone_disruptor
 
             if isinstance(action, list) or isinstance(action, tuple):
@@ -1674,18 +2168,30 @@ class Fuzzer(object):
                     err_msg = "Can't clone: invalid generator/disruptor IDs (%s)" % dmaker_ref
 
                     if cloned_dmaker_type in get_dmakers():
-                        ok = clone_dmaker(cloned_dmaker_type, new_dmaker_type=dmaker_type, dmaker_name=provided_dmaker_name)
+                        ok, cloned_dmaker_name = clone_dmaker(cloned_dmaker_type, new_dmaker_type=dmaker_type, dmaker_name=provided_dmaker_name)
                         self._recompute_current_generators()
+                        dmaker_obj = get_dmaker_obj(dmaker_type, cloned_dmaker_name)
                     elif cloned_dmaker_type in get_gen_dmakers():
-                        ok = clone_gen_dmaker(cloned_dmaker_type, new_dmaker_type=dmaker_type, dmaker_name=provided_dmaker_name)
+                        ok, cloned_dmaker_name = clone_gen_dmaker(cloned_dmaker_type, new_dmaker_type=dmaker_type, dmaker_name=provided_dmaker_name)
                         self._recompute_current_generators()
+                        dmaker_obj = get_generic_dmaker_obj(dmaker_type, cloned_dmaker_name)
                     else:
                         self.set_error(err_msg, code=Error.CloneError)
                         return None
 
+                    assert(dmaker_obj is not None)
+                    is_gen = True if issubclass(dmaker_obj.__class__, Generator) else False
+                    if is_gen:
+                        stateful = True
+                    else:
+                        stateful = True if issubclass(dmaker_obj.__class__, StatefulDisruptor) else False
+
                     if not ok:
                         self.set_error(err_msg, code=Error.CloneError)
                         return None
+
+                    self.fmkDB.insert_dmaker(self.dm.name, dmaker_type, cloned_dmaker_name, is_gen,
+                                             stateful, clone_type=cloned_dmaker_type)
 
 
             if provided_dmaker_name is None:
@@ -1843,7 +2349,7 @@ class Fuzzer(object):
                         if dmobj.is_attr_set(DataMakerAttr.Controller):
                             dmobj.set_attr(DataMakerAttr.Active)
                             if dmobj.is_attr_set(DataMakerAttr.HandOver):
-                                _handle_disruptor_handover(dmlist[:dmlist_mangled_size-idx])
+                                _handle_disruptors_handover(dmlist[:dmlist_mangled_size-idx])
                             break
                         else:
                             dmobj.set_attr(DataMakerAttr.Active)
@@ -1925,7 +2431,7 @@ class Fuzzer(object):
             if self.__initialized_dmakers[dmaker_obj][0] or reset_existing_seed:
                 xt, n = self._generic_tactics.get_info_from_obj(dmaker_obj)
                 if xt is None:
-                    xt, n = self.__tactics.get_info_from_obj(dmaker_obj)
+                    xt, n = self._tactics.get_info_from_obj(dmaker_obj)
                     if xt is None:
                         raise ValueError('Implementation Error!')
 
@@ -1958,22 +2464,22 @@ class Fuzzer(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def set_disruptor_weight(self, dmaker_type, data_maker_name, weight):
-        self.__tactics.set_disruptor_weight(dmaker_type, data_maker_name, weight)
+        self._tactics.set_disruptor_weight(dmaker_type, data_maker_name, weight)
 
     @EnforceOrder(accepted_states=['S2'])
     def set_generator_weight(self, generator_type, data_maker_name, weight):
-        self.__tactics.set_generator_weight(generator_type, data_maker_name, weight)
+        self._tactics.set_generator_weight(generator_type, data_maker_name, weight)
 
     @EnforceOrder(accepted_states=['S2'])
     def show_probes(self):
-        probes = self.__tactics.get_probes()
+        probes = self.prj.get_probes()
         self.lg.print_console('-=[ Probes ]=-', rgb=Color.INFO, style=FontStyle.BOLD)
         self.lg.print_console('')
         for p in probes:
             msg = "name: %s (status: %s, delay: %f) --> launched: %r" % \
-                (p, repr(self.__tactics.get_probe_status(p).get_status()),
-                 self.__tactics.get_probe_delay(p),
-                 self.__tactics.is_probe_launched(p))
+                (p, repr(self.prj.get_probe_status(p).get_status()),
+                 self.prj.get_probe_delay(p),
+                 self.prj.is_probe_launched(p))
             self.lg.print_console(msg, rgb=Color.SUBINFO)
 
         self.lg.print_console('\n', nl_before=False)
@@ -2009,12 +2515,12 @@ class Fuzzer(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def show_data_maker_types(self):
-        disruptors = self.__tactics.get_disruptors()
-        generators = self.__tactics.get_generators()
+        disruptors = self._tactics.get_disruptors()
+        generators = self._tactics.get_generators()
 
         self.lg.print_console('==[ Generator types ]=====')
         l1 = []
-        for dt in self.__tactics.get_generators():
+        for dt in self._tactics.get_generators():
             l1.append(dt)
         l1 = sorted(l1)
 
@@ -2033,7 +2539,7 @@ class Fuzzer(object):
 
         self.lg.print_console('==[ Disruptor types ]========')
         l1 = []
-        for dmaker_type in self.__tactics.get_disruptors():
+        for dmaker_type in self._tactics.get_disruptors():
             l1.append(dmaker_type)
         l1 = sorted(l1)
 
@@ -2092,7 +2598,7 @@ class Fuzzer(object):
                 args_type_desc = arg_type.__name__
             msg += '    |' + ' '*prefix_len + \
                    ' | ' + colorize('default: ', rgb=Color.SUBINFO_ALT) + \
-                   colorize(str(default), rgb=Color.SUBINFO_ALT_HLIGHT) + ' [type: {:s}]'.format(args_type_desc)
+                   colorize(repr(default), rgb=Color.SUBINFO_ALT_HLIGHT) + ' [type: {:s}]'.format(args_type_desc)
             return msg
 
         if obj.__doc__:
@@ -2113,7 +2619,7 @@ class Fuzzer(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def show_generators(self, dmaker_type=None):
-        generators = self.__tactics.get_generators().keys()
+        generators = self._tactics.get_generators().keys()
         gen_generators = self._generic_tactics.get_generators().keys()
         if dmaker_type:
             if dmaker_type not in generators and dmaker_type not in gen_generators:
@@ -2129,12 +2635,12 @@ class Fuzzer(object):
             for dt in sorted(generators):
                 msg = "\n*** Available generators of type '%s' ***" % dt
                 self.lg.print_console(msg, rgb=Color.INFO)
-                generators_list = self.__tactics.get_generators_list(dt)
+                generators_list = self._tactics.get_generators_list(dt)
                 for name in generators_list:
                     msg = "  name: %s (weight: %d, valid: %r)" % \
-                        (name, self.__tactics.get_generator_weight(dt, name),
-                         self.__tactics.get_generator_validness(dt, name))
-                    msg += self.__dmaker_desc_str(self.__tactics.get_generator_obj(dt, name))
+                        (name, self._tactics.get_generator_weight(dt, name),
+                         self._tactics.get_generator_validness(dt, name))
+                    msg += self.__dmaker_desc_str(self._tactics.get_generator_obj(dt, name))
                     self.lg.print_console(msg, limit_output=False)
 
         if gen_generators:
@@ -2155,7 +2661,7 @@ class Fuzzer(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def show_disruptors(self, dmaker_type=None):
-        disruptors = self.__tactics.get_disruptors().keys()
+        disruptors = self._tactics.get_disruptors().keys()
         gen_disruptors = self._generic_tactics.get_disruptors().keys()
         if dmaker_type:
             if dmaker_type not in disruptors and dmaker_type not in gen_disruptors:
@@ -2171,17 +2677,17 @@ class Fuzzer(object):
             for dmt in sorted(disruptors):
                 msg = "\n*** Specific disruptors of type '%s' ***" % dmt
                 self.lg.print_console(msg, rgb=Color.INFO)
-                disruptors_list = self.__tactics.get_disruptors_list(dmt)
+                disruptors_list = self._tactics.get_disruptors_list(dmt)
                 for name in disruptors_list:
-                    dis_obj = self.__tactics.get_disruptor_obj(dmt, name)
+                    dis_obj = self._tactics.get_disruptor_obj(dmt, name)
                     if issubclass(dis_obj.__class__, StatefulDisruptor):
                         dis_type = 'stateful disruptor'
                     else:
                         dis_type = 'stateless disruptor'
                     msg = "  name: {:s} ".format(name) + \
                           " (weight: {:d}, valid: {!r})" \
-                              .format(self.__tactics.get_disruptor_weight(dmt, name),
-                                      self.__tactics.get_disruptor_validness(dmt, name))
+                              .format(self._tactics.get_disruptor_weight(dmt, name),
+                                      self._tactics.get_disruptor_validness(dmt, name))
                     msg += ' ' + colorize("[{:s}]".format(dis_type), rgb=Color.INFO_ALT)
                     msg += self.__dmaker_desc_str(dis_obj)
                     self.lg.print_console(msg, limit_output=False)
@@ -2208,7 +2714,7 @@ class Fuzzer(object):
 
         self.lg.print_console('\n', nl_before=False)
 
-    @EnforceOrder(accepted_states=['S0', 'S1', 'S2'])
+    @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1', 'S2'])
     def display_color_theme(self):
         Color.display()
     
@@ -2223,8 +2729,8 @@ class FuzzShell(cmd.Cmd):
         self.intro = colorize(FontStyle.BOLD + "\n-=[ %s ]=- (with Fuddly FmK %s)\n" % (title, fuddly_version), rgb=Color.TITLE)
 
         self.__allowed_cmd = re.compile(
-            '^quit$|^show_data_models$|^use_data_model|^set_target|^show_targets$|^enable_fuzzing$' \
-            '|^enable_data_model|^display_color_theme$|^help'
+            '^quit$|^show_projects$|^show_data_models$|^load_project|^load_data_model|^set_target|^show_targets$|^launch$' \
+            '|^run_project|^display_color_theme$|^help'
             )
 
         self.dmaker_name_re = re.compile('([#\-\w]+)(.*)', re.S)
@@ -2291,12 +2797,19 @@ class FuzzShell(cmd.Cmd):
 
         else:
             self.__error = True
-            self.__error_msg = 'You shall first load a data model and/or enable all fuzzing components!'
+            self.__error_msg = 'You shall first load a project and/or enable all fuzzing components!'
             return ''
 
 
+    def do_show_projects(self, line):
+        '''Show the available Projects'''
+        self.fz.show_projects()
+
+        return False
+
+
     def do_show_data_models(self, line):
-        '''Show the available Data Models for fuzzing'''
+        '''Show the available Data Models'''
         self.fz.show_data_models()
 
         return False
@@ -2314,8 +2827,8 @@ class FuzzShell(cmd.Cmd):
 
         return False
 
-    def do_use_data_model(self, line):
-        '''Load an available Data Model'''
+    def do_load_data_model(self, line):
+        '''Load a Data Model by name'''
         self.__error = True
 
         arg = line.strip()
@@ -2337,10 +2850,67 @@ class FuzzShell(cmd.Cmd):
         self.__error = False
         return False
 
-    def do_enable_data_model(self, line):
+    def do_load_multiple_data_model(self, line):
         '''
-        Load an available Data Model & Enable Fuzzing
-        |_ syntax: enable_data_model <data_model_name> [target_number]
+        Load a multiple Data Model by name
+        |_ syntax: load_multiple_data_model <dm_name_1> <dm_name_2> ... [dm_name_n]
+        '''
+        self.__error = True
+
+        args = line.split()
+
+        ok = True
+        dm_name_list = [x.name for x in self.fz.dm_list]
+        for dm_name in args:
+            if dm_name not in dm_name_list:
+                ok = False
+                break
+
+        self.__error_msg = "Data Model '%s' is not available" % dm_name
+
+        if not ok:
+            return False
+
+        if not self.fz.load_multiple_data_model(name_list=args):
+            return False
+
+        self.__error = False
+        return False
+
+
+    
+    def do_load_project(self, line):
+        '''Load an available Project'''
+        self.__error = True
+
+        arg = line.strip()
+
+        ok = False
+        for prj in self.fz.projects():
+            if prj.name == arg:
+                ok = True
+                break
+
+        self.__error_msg = "Project '%s' is not available" % arg
+
+        if not ok:
+            return False
+
+        if not self.fz.load_project(prj=prj):
+            return False
+
+        self.__error = False
+        return False
+
+
+    def do_run_project(self, line):
+        '''
+        Load a Project by name & Launch it:
+        1. Enable the specified target
+        2. Load the default data model of the project file
+        3. Launch the project by starting fuddly subsystems
+
+        |_ syntax: run_project <project_name> [target_number]
         '''
 
         self.__error = True
@@ -2352,7 +2922,7 @@ class FuzzShell(cmd.Cmd):
             self.__error_msg = "Syntax Error!"
             return False
 
-        dm_name = args[0].strip()
+        prj_name = args[0].strip()
         try:
             tg_id = args[1]
         except IndexError:
@@ -2366,21 +2936,22 @@ class FuzzShell(cmd.Cmd):
                 return False
 
         ok = False
-        for dm in self.fz.iter_data_models():
-            if dm.name == dm_name:
+        for prj in self.fz.projects():
+            if prj.name == prj_name:
                 ok = True
                 break
 
-        self.__error_msg = "Data Model '%s' is not available" % dm_name
-
+        self.__error_msg = "Project '%s' is not available" % prj_name
         if not ok:
             return False
 
-        if not self.fz.enable_data_model(dm=dm, tg=tg_id):
+        self.__error_msg = "Unable to launch the project '%s'" % prj_name
+        if not self.fz.run_project(prj=prj, tg=tg_id):
             return False
 
         self.__error = False
         return False
+
 
 
     def do_set_target(self, line):
@@ -2420,11 +2991,11 @@ class FuzzShell(cmd.Cmd):
         return False
 
 
-    def do_enable_fuzzing(self, line):
-        '''Enable fuzzing by starting every needed components'''
+    def do_launch(self, line):
+        '''Launch the loaded project by starting every needed components'''
         self.__error = True
 
-        self.fz.enable_fuzzing()
+        self.fz.launch()
 
         self.__error = False
         return False
@@ -3077,7 +3648,8 @@ class FuzzShell(cmd.Cmd):
 
             self.fz.send_data_and_log(data_list)
 
-        print("\nThe loop has terminated normally, but it remains non exhausted " \
+        if exhausted_data_cpt > 0:
+            print("\nThe loop has terminated normally, but it remains non exhausted " \
                   "data (number of exhausted data: %d)" % exhausted_data_cpt)
 
         self.__error = False
@@ -3398,6 +3970,42 @@ class FuzzShell(cmd.Cmd):
         self.fz.register_last_in_data_bank()
 
         return False
+
+    def do_fmkdb_fetch_data(self, line):
+        '''
+        Fetch the data from the FMKDB and fill the Data Bank with it. If data IDs are given,
+        only fetch the data between the two references.
+        |_ syntax: fmkdb_fetch_data [first_data_id] [last_data_id]
+        '''
+
+        self.__error = True
+        self.__error_msg = "Syntax Error!"
+
+        args = line.split()
+
+        if len(args) > 2:
+            return False
+        elif len(args) == 2:
+            try:
+                sid = int(args[0])
+                eid = int(args[1])
+            except ValueError:
+                return False
+        elif len(args) == 1:
+            try:
+                sid = int(args[0])
+                eid = -1
+            except ValueError:
+                return False
+        else:
+            sid = 1
+            eid = -1
+
+        self.fz.fmkdb_fetch_data(start_id=sid, end_id=eid)
+
+        self.__error = False
+        return False
+
 
 
     def do_dump_db_to_file(self, line):

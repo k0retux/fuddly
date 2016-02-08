@@ -22,7 +22,14 @@
 ################################################################################
 
 from fuzzfmk.data_model import *
+import fuzzfmk.value_types as fvt
 from fuzzfmk.value_types import VT
+
+from libs.external_modules import *
+
+import traceback
+import datetime
+import types
 
 ################################
 # ModelWalker Helper Functions #
@@ -38,7 +45,6 @@ GENERIC_ARGS = {
 }
 
 def modelwalker_inputs_handling_helper(dmaker, user_generic_input):
-
     assert(dmaker.runs_per_node > 0 or dmaker.runs_per_node == -1)
 
     if dmaker.runs_per_node == -1:
@@ -53,13 +59,24 @@ def modelwalker_inputs_handling_helper(dmaker, user_generic_input):
 # Data Model Helper #
 #####################
 
-class MH:
-    # node type attribute
+class MH(object):
+    '''Define constants and generator templates for data
+    model description.
+    '''
+
+    #################
+    ### Node Type ###
+    #################
+
     NonTerminal = 1
     Generator = 2
     Leaf = 3
 
-    # section_type attribute
+    ##################################
+    ### Non-Terminal Node Specific ###
+    ##################################
+
+    # shape_type & section_type attribute
     Ordered = '>'
     Random = '=..'
     FullyRandom = '=.'
@@ -69,13 +86,405 @@ class MH:
     Copy = 'u'
     ZeroCopy = 's'
 
-    # Function node (leaf) mode
-    FrozenArgs = 1
-    RawArgs = 2
+    ###################
+    ### Node Modes  ###
+    ###################
 
-    # NonTerminal node mode
-    NotMutableClone = 1
-    MutableClone = 2
+    class Mode:
+        # Function node (leaf) mode
+        FrozenArgs = 1
+        RawArgs = 2
+
+        # NonTerminal node mode
+        ImmutableClone = 1
+        MutableClone = 2
+
+    #######################
+    ### Node Attributes ###
+    #######################
+
+    class Attr:
+        Freezable = NodeInternals.Freezable
+        Mutable = NodeInternals.Mutable
+        Determinist = NodeInternals.Determinist
+        Finite = NodeInternals.Finite
+        AcceptConfChange = NodeInternals.AcceptConfChange
+        Abs_Postpone = NodeInternals.Abs_Postpone
+        CloneExtNodeArgs = NodeInternals.CloneExtNodeArgs
+        ResetOnUnfreeze = NodeInternals.ResetOnUnfreeze
+        TriggerLast = NodeInternals.TriggerLast
+
+        Separator = NodeInternals.Separator
+
+    ###########################
+    ### Generator Templates ###
+    ###########################
+
+    @staticmethod
+    def LEN(vt=fvt.INT_str,
+            set_attrs=[], clear_attrs=[]):
+        '''
+        Return a *generator* that returns the length of a node parameter.
+
+        Args:
+          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+          set_attrs (list): attributes that will be set on the generated node.
+          clear_attrs (list): attributes that will be cleared on the generated node.
+        '''
+        def length(vt, set_attrs, clear_attrs, node):
+            n = Node('cts', value_type=vt(int_list=[len(node.to_bytes())]))
+            n.set_semantics(NodeSemantics(['len']))
+            MH._handle_attrs(n, set_attrs, clear_attrs)
+            return n
+
+        vt = MH._validate_int_vt(vt)
+        return functools.partial(length, vt, set_attrs, clear_attrs)
+
+    @staticmethod
+    def QTY(node_name, vt=fvt.INT_str,
+            set_attrs=[], clear_attrs=[]):
+        '''Return a *generator* that returns the quantity of child node instances (referenced
+        by name) of the node parameter provided to the *generator*.
+
+        Args:
+          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+          node_name (str): name of the child node whose instance amount will be returned
+            by the generator
+          set_attrs (list): attributes that will be set on the generated node.
+          clear_attrs (list): attributes that will be cleared on the generated node.
+        '''
+        def qty(node_name, vt, set_attrs, clear_attrs, node):
+            nb = node.cc.get_drawn_node_qty(node_name)
+            n = Node('cts', value_type=vt(int_list=[nb]))
+            n.set_semantics(NodeSemantics(['qty']))
+            MH._handle_attrs(n, set_attrs, clear_attrs)
+            return n
+
+        vt = MH._validate_int_vt(vt)
+        return functools.partial(qty, node_name, vt, set_attrs, clear_attrs)
+
+    @staticmethod
+    def TIMESTAMP(time_format="%H%M%S", utc=False,
+                  set_attrs=[], clear_attrs=[]):
+        '''
+        Return a *generator* that returns the current time (in a String node).
+
+        Args:
+          time_format (str): time format to be used by the generator.
+          set_attrs (list): attributes that will be set on the generated node.
+          clear_attrs (list): attributes that will be cleared on the generated node.
+        '''
+        def timestamp(time_format, utc, set_attrs, clear_attrs):
+            if utc:
+                now = datetime.datetime.utcnow()
+            else:
+                now = datetime.datetime.now()
+            ts = now.strftime(time_format)
+            n = Node('cts', value_type=fvt.String(val_list=[ts], size=len(ts)))
+            n.set_semantics(NodeSemantics(['timestamp']))
+            MH._handle_attrs(n, set_attrs, clear_attrs)
+            return n
+        
+        return functools.partial(timestamp, time_format, utc, set_attrs, clear_attrs)
+
+    @staticmethod
+    def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=True,
+            set_attrs=[], clear_attrs=[]):
+        '''Return a *generator* that returns the CRC (in the chosen type) of
+        all the node parameters. (Default CRC is PKZIP CRC32)
+
+        Args:
+          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+          poly (int): CRC polynom
+          init_crc (int): initial value used to start the CRC calculation.
+          xor_out (int): final value to XOR with the calculated CRC value.
+          rev (bool): bit reversed algorithm when `True`.
+          set_attrs (list): attributes that will be set on the generated node.
+          clear_attrs (list): attributes that will be cleared on the generated node.
+        '''
+        def crc(vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs, nodes):
+            crc_func = crcmod.mkCrcFun(poly, initCrc=init_crc, xorOut=xor_out, rev=rev)
+            if isinstance(nodes, Node):
+                s = nodes.to_bytes()
+            else:
+                if issubclass(nodes.__class__, NodeAbstraction):
+                    nodes = nodes.get_concrete_nodes()
+                elif not isinstance(nodes, tuple) and not isinstance(nodes, list):
+                    raise TypeError("Contents of 'nodes' parameter is incorrect!")
+                s = b''
+                for n in nodes:
+                    s += n.to_bytes()
+
+            result = crc_func(s)
+
+            n = Node('cts', value_type=vt(int_list=[result]))
+            n.set_semantics(NodeSemantics(['crc']))
+            MH._handle_attrs(n, set_attrs, clear_attrs)
+            return n
+
+        if not crcmod_module:
+            raise NotImplementedError('the CRC template has been disabled because python-crcmod module is not installed!')
+
+        vt = MH._validate_int_vt(vt)
+        return functools.partial(crc, vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs)
+
+
+    @staticmethod
+    def WRAP(func, vt=fvt.INT_str,
+             set_attrs=[], clear_attrs=[]):
+        '''Return a *generator* that returns the result (in the chosen type)
+        of the provided function applied on the concatenation of all
+        the node parameters.
+
+        Args:
+          func (function): function applied on the concatenation
+          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+          set_attrs (list): attributes that will be set on the generated node.
+          clear_attrs (list): attributes that will be cleared on the generated node.
+        '''
+        def map_func(vt, func, set_attrs, clear_attrs, nodes):
+            if isinstance(nodes, Node):
+                s = nodes.to_bytes()
+            else:
+                if issubclass(nodes.__class__, NodeAbstraction):
+                    nodes = nodes.get_concrete_nodes()
+                elif not isinstance(nodes, tuple) and not isinstance(nodes, list):
+                    raise TypeError("Contents of 'nodes' parameter is incorrect!")
+                s = b''
+                for n in nodes:
+                    s += n.to_bytes()
+
+            result = func(s)
+
+            n = Node('cts', value_type=vt(int_list=[result]))
+            MH._handle_attrs(n, set_attrs, clear_attrs)
+            return n
+
+        vt = MH._validate_int_vt(vt)
+        return functools.partial(map_func, vt, func, set_attrs, clear_attrs)
+
+    @staticmethod
+    def CYCLE(vals, depth=1, vt=fvt.String,
+              set_attrs=[], clear_attrs=[]):
+        '''Return a *generator* that iterates other the provided value list
+        and returns at each step a `vt` node corresponding to the
+        current value.
+
+        Args:
+          vals (list): the value list to iterate on.
+          depth (int): depth of our nth-ancestor used as a reference to iterate. By default,
+            it is the parent node. Thus, in this case, depending on the drawn quantity
+            of parent nodes, the position within the grand-parent determines the index
+            of the value to use in the provided list, modulo the quantity.
+          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
+          set_attrs (list): attributes that will be set on the generated node.
+          clear_attrs (list): attributes that will be cleared on the generated node.
+        '''
+        class Cycle(object):
+            provide_helpers = True
+            
+            def __init__(self, vals, depth, vt, set_attrs, clear_attrs):
+                self.vals = vals
+                self.vals_sz = len(vals)
+                self.vt = vt
+                self.depth = depth
+                self.set_attrs = set_attrs
+                self.clear_attrs = clear_attrs
+
+            def __call__(self, helper):
+                info = helper.graph_info
+                # print('INFO: ', info)
+                try:
+                    clone_info, name = info[self.depth]
+                    idx, total = clone_info
+                except:
+                    idx = 0
+                idx = idx % self.vals_sz
+                if issubclass(self.vt, fvt.INT):
+                    vtype = self.vt(int_list=[self.vals[idx]])
+                elif issubclass(self.vt, fvt.String):
+                    vtype = self.vt(val_list=[self.vals[idx]])
+                else:
+                    raise NotImplementedError('Value type not supported')
+
+                n = Node('cts', value_type=vtype)
+                MH._handle_attrs(n, set_attrs, clear_attrs)
+                return n
+
+        assert(not issubclass(vt, fvt.BitField))
+        return Cycle(vals, depth, vt, set_attrs, clear_attrs)
+
+
+    @staticmethod
+    def OFFSET(use_current_position=True, depth=1, vt=fvt.INT_str,
+               set_attrs=[], clear_attrs=[]):
+        '''Return a *generator* that computes the offset of a child node
+        within its parent node.
+
+        If `use_current_position` is `True`, the child node is
+        selected automatically, based on our current index within our
+        own parent node (or the nth-ancestor, depending on the
+        parameter `depth`). Otherwise, the child node has to be
+        provided in the node parameters just before its parent node.
+
+        Besides, if there are N node parameters, the first N-1 (or N-2
+        if `use_current_position` is False) nodes are used for adding
+        a fixed amount (the length of their concatenated values) to
+        the offset (determined thanks to the node in the last position
+        of the node parameters).
+
+        The generator returns the result wrapped in a `vt` node.
+
+        Args:
+          use_current_position (bool): automate the computation of the child node position
+          depth (int): depth of our nth-ancestor used as a reference to compute automatically
+            the targeted child node position. Only relevant if `use_current_position` is True.
+          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
+          set_attrs (list): attributes that will be set on the generated node.
+          clear_attrs (list): attributes that will be cleared on the generated node.
+        '''
+        class Offset(object):
+            provide_helpers = True
+            
+            def __init__(self, use_current_position, depth, vt, set_attrs, clear_attrs):
+                self.vt = vt
+                self.use_current_position = use_current_position
+                self.depth = depth
+                self.set_attrs = set_attrs
+                self.clear_attrs = clear_attrs
+
+            def __call__(self, nodes, helper):
+                if self.use_current_position:
+                    info = helper.graph_info
+                    try:
+                        clone_info, name = info[self.depth]
+                        idx, total = clone_info
+                    except:
+                        idx = 0
+
+                if isinstance(nodes, Node):
+                    assert(self.use_current_position)
+                    base = 0
+                    off = nodes.get_subnode_off(idx)
+                else:
+                    if issubclass(nodes.__class__, NodeAbstraction):
+                        nodes = nodes.get_concrete_nodes()
+                    elif not isinstance(nodes, tuple) and not isinstance(nodes, list):
+                        raise TypeError("Contents of 'nodes' parameter is incorrect!")
+
+                    if not self.use_current_position:
+                        child = nodes[-2]
+                        parent = nodes[-1]
+                        parent.get_value()
+                        idx = parent.get_subnode_idx(child)
+
+                    s = b''
+                    end = -1 if self.use_current_position else -2
+                    for n in nodes[:end]:
+                        s += n.to_bytes()
+                    base = len(s)
+                    off = nodes[-1].get_subnode_off(idx)
+
+                n = Node('cts', value_type=self.vt(int_list=[base+off]))
+                MH._handle_attrs(n, set_attrs, clear_attrs)
+                return n
+
+        vt = MH._validate_int_vt(vt)
+        return Offset(use_current_position, depth, vt, set_attrs, clear_attrs)
+
+
+    @staticmethod
+    def COPY_VALUE(path, depth=None, vt=None,
+                   set_attrs=[], clear_attrs=[]):
+        '''Return a *generator* that retrieves the value of another node, and
+        then return a `vt` node with this value. The other node is
+        selected:
+
+        - either directly by following the provided relative `path` from
+          the given generator-parameter node.
+
+        - or indirectly (if `depth` is provided) where a *base* node is
+          first selected automatically, based on our current index
+          within our own parent node (or the nth-ancestor, depending
+          on the parameter `depth`), and then the targeted node is selected
+          by following the provided relative `path` from the *base* node.
+
+        Args:
+          path (str): relative path to the node whose value will be picked.
+          depth (int): depth of our nth-ancestor used as a reference to compute automatically
+            the targeted base node position.
+          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
+          set_attrs (list): attributes that will be set on the generated node.
+          clear_attrs (list): attributes that will be cleared on the generated node.
+
+        '''
+        class CopyValue(object):
+            provide_helpers = True
+            
+            def __init__(self, path, depth, vt, set_attrs, clear_attrs):
+                self.vt = vt
+                self.path = path
+                self.depth = depth
+                self.set_attrs = set_attrs
+                self.clear_attrs = clear_attrs
+
+            def __call__(self, node, helper):
+                if self.depth is not None:
+                    info = helper.graph_info
+                    # print('INFO: ', info)
+                    try:
+                        clone_info, name = info[self.depth]
+                        idx, total = clone_info
+                    except:
+                        # print('\n*** WARNING[Pick Generator]: incorrect depth ({:d})!\n' \
+                        #       '  (Normal behavior if used during absorption.)'.format(self.depth))
+                        idx = 0
+                    base_node = node.get_subnode(idx)
+                else:
+                    base_node = node
+
+                tg_node = base_node[self.path]
+                raw = tg_node.to_bytes()
+
+                if tg_node.is_nonterm():
+                    n = Node('cts', base_node=tg_node, ignore_frozen_state=False)
+                else:
+                    if self.vt is None:
+                        assert(tg_node.is_typed_value() and not tg_node.is_typed_value(subkind=fvt.BitField))
+                        self.vt = tg_node.get_current_subkind()
+
+                    if issubclass(self.vt, fvt.INT):
+                        vtype = self.vt(int_list=[tg_node.get_raw_value()])
+                    elif issubclass(self.vt, fvt.String):
+                        vtype = self.vt(val_list=[raw])
+                    else:
+                        raise NotImplementedError('Value type not supported')
+                    n = Node('cts', value_type=vtype)
+
+                n.set_semantics(NodeSemantics(['clone']))
+                MH._handle_attrs(n, set_attrs, clear_attrs)
+                return n
+
+
+        assert(vt is None or not issubclass(vt, fvt.BitField))
+        return CopyValue(path, depth, vt, set_attrs, clear_attrs)
+
+
+    @staticmethod
+    def _validate_int_vt(vt):
+        if not issubclass(vt, fvt.INT):
+            print("*** WARNING: the value type of typed node requested is not supported!" \
+                  " Use of 'INT_str' instead.")
+            vt = fvt.INT_str             
+        return vt
+
+    @staticmethod
+    def _handle_attrs(n, set_attrs, clear_attrs):
+        for sa in set_attrs:
+            n.set_attr(sa)
+        for ca in clear_attrs:
+            n.clear_attr(ca)
+
 
 class ModelHelper(object):
 
@@ -88,21 +497,23 @@ class ModelHelper(object):
         # generic description keys
         'name', 'contents', 'qty', 'clone', 'type', 'alt', 'conf', 'mode',
         # NonTerminal description keys
-        'weight', 'section_type', 'duplicate_mode', 'weights',
+        'weight', 'shape_type', 'section_type', 'duplicate_mode', 'weights',
+        'separator', 'prefix', 'suffix', 'unique',
         # Generator/Function description keys
-        'node_args', 'other_args', 'provide_helpers',
-        # Export description keys
-        'export_from', 'data_id',
+        'node_args', 'other_args', 'provide_helpers', 'trigger_last',
+        # Import description keys
+        'import_from', 'data_id',        
         # node properties description keys
-        'determinist', 'random', 'clear_attrs', 'set_attrs',
+        'determinist', 'random', 'mutable', 'clear_attrs', 'set_attrs',
         'absorb_csts', 'absorb_helper',
         'semantics', 'fuzz_weight',
         'sync_qty_with', 'exists_if', 'exists_if_not',
         'post_freeze'
     ]
 
-    def __init__(self, dm=None):
+    def __init__(self, dm=None, delayed_jobs=True):
         self.dm = dm
+        self.delayed_jobs = delayed_jobs
 
     def _verify_keys_conformity(self, desc):
         for k in desc.keys():
@@ -137,12 +548,22 @@ class ModelHelper(object):
             name = name_desc
             ident = 1
         else:
-            raise ValueError("Name is not recognized: '%s'!"%name_desc)
+            raise ValueError("Name is not recognized: '%s'!" % name_desc)
 
         return name, ident
 
 
     def _create_graph_from_desc(self, desc, parent_node):
+
+        def _get_type(top_desc, contents):
+            pre_ntype = top_desc.get('type', None)
+            if isinstance(contents, list) and pre_ntype in [None, MH.NonTerminal]:
+                ntype = MH.NonTerminal
+            elif hasattr(contents, '__call__') and pre_ntype in [None, MH.Generator]:
+                ntype = MH.Generator
+            else:
+                ntype = MH.Leaf
+            return ntype
 
         self._verify_keys_conformity(desc)
 
@@ -156,11 +577,7 @@ class ModelHelper(object):
         else:
             # Non-terminal are recognized via its contents (avoiding
             # the user to always provide a 'type' field)
-            if isinstance(contents, list):
-                ntype = MH.NonTerminal
-            else:
-                ntype = desc.get('type', MH.Leaf)
-
+            ntype = _get_type(desc, contents)
             nd = dispatcher.get(ntype)(desc)
             self.__post_handling(desc, nd)
 
@@ -172,11 +589,7 @@ class ModelHelper(object):
                 if cts is None:
                     raise ValueError("Cloning or referencing an existing node"\
                                      " into an alternate configuration is not supported")
-                if isinstance(cts, list):
-                    ntype = MH.NonTerminal
-                else:
-                    ntype = alt.get('type', MH.Leaf)
-
+                ntype = _get_type(alt, cts)
                 # dispatcher.get(ntype)(alt, None, node=nd)
                 dispatcher.get(ntype)(alt, node=nd)
 
@@ -185,11 +598,11 @@ class ModelHelper(object):
     def __handle_clone(self, desc, parent_node):
         name, ident = self._handle_name(desc['name'])
 
-        exp = desc.get('export_from', None)
+        exp = desc.get('import_from', None)
         if exp is not None:
             assert self.dm is not None, "ModelHelper should be initialized with the current data model!"
             data_id = desc.get('data_id', None)
-            assert data_id is not None, "Missing field: 'data_id' (to be used with 'export_from' field)"
+            assert data_id is not None, "Missing field: 'data_id' (to be used with 'import_from' field)"
             nd = self.dm.get_external_node(dm_name=exp, data_id=data_id, name=name)
             assert nd is not None, "The requested data ID '{:s}' does not exist!".format(data_id)
             self.node_dico[(name, ident)] = nd
@@ -244,13 +657,20 @@ class ModelHelper(object):
 
         if hasattr(contents, '__call__'):
             other_args = desc.get('other_args', None)
-            provide_helpers = desc.get('provide_helpers', False)
+            if hasattr(contents, 'provide_helpers') and contents.provide_helpers:
+                provide_helpers = True
+            else:
+                provide_helpers = desc.get('provide_helpers', False)
             node_args = desc.get('node_args', None)
             n.set_generator_func(contents, func_arg=other_args,
                                  provide_helpers=provide_helpers, conf=conf)
-            # node_args interpretation is postponed after all nodes has been created
-            self._register_todo(n, self._complete_generator, args=(node_args, conf), unpack_args=True,
-                                prio=self.HIGH_PRIO)
+            trig_last = desc.get('trigger_last', False)
+            if trig_last:
+                n.set_attr(NodeInternals.TriggerLast, conf=conf)
+            if node_args is not None:
+                # node_args interpretation is postponed after all nodes has been created
+                self._register_todo(n, self._complete_generator, args=(node_args, conf), unpack_args=True,
+                                    prio=self.HIGH_PRIO)
         else:
             raise ValueError("*** ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
@@ -287,22 +707,36 @@ class ModelHelper(object):
                 shapes.append(shape)
         else:
             # in this case there is only one shape
-            shape = self._create_nodes_from_shape(cts, n)
+            shtype = desc.get('shape_type', MH.Ordered)
+            dupmode = desc.get('duplicate_mode', MH.Copy)
+            shape = self._create_nodes_from_shape(cts, n, shape_type=shtype,
+                                                  dup_mode=dupmode)
             shapes.append(1)
             shapes.append(shape)
 
         n.set_subnodes_with_csts(shapes, conf=conf)
 
-        mode = desc.get('mode', MH.MutableClone)
+        mode = desc.get('mode', MH.Mode.MutableClone)
+
         internals = n.cc if conf is None else n.c[conf]
         internals.set_mode(mode)
+
+        sep_desc = desc.get('separator', None)
+        if sep_desc is not None:
+            sep_node_desc = sep_desc.get('contents', None)
+            assert(sep_node_desc is not None)
+            sep_node = self._create_graph_from_desc(sep_node_desc, n)
+            prefix = sep_desc.get('prefix', True)
+            suffix = sep_desc.get('suffix', True)
+            unique = sep_desc.get('unique', False)
+            n.set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique)
 
         self._handle_common_attr(n, desc, conf)
 
         return n
 
 
-    def _create_nodes_from_shape(self, shapes, parent_node):
+    def _create_nodes_from_shape(self, shapes, parent_node, shape_type=MH.Ordered, dup_mode=MH.Copy):
         
         def _handle_section(nodes_desc, sh):
             for n in nodes_desc:
@@ -323,32 +757,41 @@ class ModelHelper(object):
                     l.insert(0, node)
                     sh.append(l)
                 else:
-                    raise ValueError
-
-        if isinstance(shapes[0], list):
-            # This is a node and not a node_desc. Thus, no section!
-            ref = 'NotNone'
-        else:
-            ref = shapes[0].get('name')
+                    raise ValueError('Unrecognized section type!')
 
         sh = []
+        prev_section_exist = False
+        first_pass = True
+        # Note that sections are not always materialised in the description
+        for section_desc in shapes:
 
-        if ref is None:
-            # in this case, sections are materialised in the description
-            for section_desc in shapes:
+            # check if it is directly a node
+            if isinstance(section_desc, list):
+                if prev_section_exist or first_pass:
+                    prev_section_exist = False
+                    first_pass = False
+                    sh.append(dup_mode + shape_type)
+                _handle_section([section_desc], sh)
+
+            # check if it is a section description
+            elif section_desc.get('name') is None:
+                prev_section_exist = True
                 self._verify_keys_conformity(section_desc)
-                sec_type = section_desc.get('section_type', '>')
-                dupmode = section_desc.get('duplicate_mode', 'u')
+                sec_type = section_desc.get('section_type', MH.Ordered)
+                dupmode = section_desc.get('duplicate_mode', MH.Copy)
                 # TODO: revamp weights
                 weights = ''.join(str(section_desc.get('weights', '')).split(' '))
                 sh.append(dupmode+sec_type+weights)
                 _handle_section(section_desc.get('contents', []), sh)
-        else:
-            # if 'name' attr is present, there is no section in the
-            # shape, thus we adopt a default sequencing of nodes (that
-            # is 'u>')
-            sh.append('u>')
-            _handle_section(shapes, sh)
+
+            # if 'name' attr is present, it is not a section in the
+            # shape, thus we adopt the default sequencing of nodes.
+            else:
+                if prev_section_exist or first_pass:
+                    prev_section_exist = False
+                    first_pass = False
+                    sh.append(dup_mode + shape_type)
+                _handle_section([section_desc], sh)
 
         return sh
 
@@ -370,7 +813,7 @@ class ModelHelper(object):
             n.set_func(contents, func_arg=other_args,
                        provide_helpers=provide_helpers, conf=conf)
 
-            mode = desc.get('mode', 1)
+            mode = desc.get('mode', MH.Mode.FrozenArgs)
             internals = n.cc if conf is None else n.c[conf]
             internals.set_mode(mode)
 
@@ -386,6 +829,12 @@ class ModelHelper(object):
         return n
 
     def _handle_common_attr(self, node, desc, conf):
+        param = desc.get('mutable', None)
+        if param is not None:
+            if param:
+                node.set_attr(MH.Attr.Mutable, conf=conf)
+            else:
+                node.clear_attr(MH.Attr.Mutable, conf=conf)
         param = desc.get('determinist', None)
         if param is not None:
             node.make_determinist(conf=conf)
@@ -414,15 +863,15 @@ class ModelHelper(object):
             self._register_todo(node, self._set_sync_node,
                                 args=(ref, SyncScope.Qty, conf),
                                 unpack_args=True)
-        ref = desc.get('exists_if', None)
-        if ref is not None:
+        condition = desc.get('exists_if', None)
+        if condition is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(ref, SyncScope.Existence, conf),
+                                args=(condition, SyncScope.Existence, conf),
                                 unpack_args=True)
-        ref = desc.get('exists_if_not', None)
-        if ref is not None:
+        condition = desc.get('exists_if_not', None)
+        if condition is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(ref, SyncScope.Inexistence, conf),
+                                args=(condition, SyncScope.Inexistence, conf),
                                 unpack_args=True)
         fw = desc.get('fuzz_weight', None)
         if fw is not None:
@@ -457,9 +906,15 @@ class ModelHelper(object):
             raise ValueError("arguments refer to an inexistent node ({:s}, {!s})!".format(ref[0], ref[1]))
         parent_node.replace_subnode(node, self.node_dico[ref])
 
-    def _set_sync_node(self, node, sync_with_ref, scope, conf):
-        sync_with = self.__get_node_from_db(sync_with_ref)
-        node.make_synchronized_with(sync_with, scope=scope, conf=conf)
+    def _set_sync_node(self, node, arg, scope, conf):
+        if isinstance(arg, tuple) and issubclass(arg[0].__class__, NodeCondition):
+            param = arg[0]
+            sync_with = self.__get_node_from_db(arg[1])
+        else:
+            param = None
+            sync_with = self.__get_node_from_db(arg)
+
+        node.make_synchronized_with(sync_with, scope=scope, param=param, conf=conf)
 
     def _complete_func(self, node, args, conf):
         if isinstance(args, str):
@@ -485,7 +940,9 @@ class ModelHelper(object):
         internals.set_generator_func_arg(generator_node_arg=func_args)
 
     def _set_env(self, node, args):
-        node.set_env(Env())
+        env = Env()
+        env.delayed_jobs_enabled = self.delayed_jobs
+        node.set_env(env)
 
     def __get_node_from_db(self, name_desc):
         ref = self._handle_name(name_desc)
@@ -493,7 +950,8 @@ class ModelHelper(object):
             raise ValueError("arguments refer to an inexistent node ({:s}, {!s})!".format(ref[0], ref[1]))
 
         node = self.node_dico[ref]
-        assert(not isinstance(node.cc, NodeInternals_Empty))
+        if isinstance(node.cc, NodeInternals_Empty):
+            raise ValueError("Node ({:s}, {!s}) is Empty!".format(ref[0], ref[1]))
                
         return node
 
@@ -513,6 +971,15 @@ class DataModel(object):
         self.__built = False
         self.__confs = set()
 
+
+    def merge_with(self, data_model):
+        for k, v in data_model.__dm_hashtable.items():
+            if k in self.__dm_hashtable:
+                raise ValueError("the data ID {:s} exists already".format(k))
+            else:
+                self.__dm_hashtable[k] = v
+
+        
     def pre_build(self):
         '''
         This method is called when a data model is loaded.
@@ -537,9 +1004,17 @@ class DataModel(object):
             self.build_data_model()
             self.__built = True
 
-    def unload_data_model(self):
+    def cleanup(self):
         pass
 
+
+    def absorb(self, data, idx):
+        '''
+        If your data model is able to absorb raw data, do it here.  This
+        function is called for each files (with the right extension)
+        present in imported_data/<data_model_name>.
+        '''
+        return data
 
     def get_external_node(self, dm_name, data_id, name=None):
         dm = self.__dm_db[dm_name]
@@ -562,7 +1037,8 @@ class DataModel(object):
     def get_data(self, hash_key, name=None):
         if hash_key in self.__dm_hashtable:
             nm = hash_key if name is None else name
-            node = Node(nm, base_node=self.__dm_hashtable[hash_key], ignore_frozen_state=False)
+            node = Node(nm, base_node=self.__dm_hashtable[hash_key], ignore_frozen_state=False,
+                        new_env=True)
             return node
         else:
             raise ValueError('Requested data does not exist!')
@@ -622,6 +1098,9 @@ class DataModel(object):
                 desc_name = desc['name']
                 node = mh.create_graph_from_desc(desc)
             except:
+                print('-'*60)
+                traceback.print_exc(file=sys.stdout)
+                print('-'*60)
                 msg = "*** ERROR: problem encountered with the '{desc:s}' descriptor!".format(desc=desc_name)
                 raise UserWarning(msg)
 
@@ -633,11 +1112,11 @@ class DataModel(object):
         node.set_env(env)
 
 
-    def import_file_contents(self, extension=None, dissector=lambda x, y: x,
+    def import_file_contents(self, extension=None, absorber=None,
                              subdir=None, path=None, filename=None):
 
-        if hasattr(self, 'dissect'):
-            dissector = self.dissect
+        if absorber is None:
+            absorber = self.absorb
 
         if extension is None:
             extension = self.file_extension
@@ -666,7 +1145,9 @@ class DataModel(object):
         for name in files:
             with open(os.path.join(path, name), 'rb') as f:
                 buff = f.read()
-                msgs[name] = dissector(buff, idx)
+                d_abs = absorber(buff, idx)
+                if d_abs is not None:
+                    msgs[name] = d_abs
             idx +=1
 
         return msgs

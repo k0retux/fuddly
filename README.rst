@@ -78,6 +78,7 @@ Dependencies
 + Mandatory:
 
   - `six`_: Python 2/3 compatibility
+  - `sqlite3`_: SQLite3 data base
 
 + Optional:
 
@@ -92,9 +93,10 @@ Dependencies
   - `readthedocs theme`_ (optional): Privileged html theme for sphinx
 
 .. _six: http://pythonhosted.org/six/
-.. _xtermcolor: https://github.com/broadinstitute/xtermcolor "xtermcolor"
-.. _cups: https://pypi.python.org/pypi/pycups "cups"
-.. _rpyc: https://pypi.python.org/pypi/rpyc "rpyc"
-.. _sphinx: http://sphinx-doc.org/ "sphinx"
+.. _sqlite3: https://www.sqlite.org/
+.. _xtermcolor: https://github.com/broadinstitute/xtermcolor
+.. _cups: https://pypi.python.org/pypi/pycups
+.. _rpyc: https://pypi.python.org/pypi/rpyc
+.. _sphinx: http://sphinx-doc.org/
 .. _texlive: https://www.tug.org/texlive/
 .. _readthedocs theme: https://github.com/snide/sphinx_rtd_theme
