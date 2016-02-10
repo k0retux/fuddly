@@ -308,7 +308,9 @@ class ProbePID_SSH(Probe):
           the process ID.
         delay_between_attempts (float): delay in seconds between
           each attempt.
-        delay (float): delay before retrieving the process PID
+        delay (float): delay before retrieving the process PID.
+        ssh_command_pattern (str): format string for the ssh command. '{0:s}' refer
+          to the process name.
     """
     process_name = None
     sshd_ip = None
@@ -318,6 +320,7 @@ class ProbePID_SSH(Probe):
     max_attempts = 10
     delay_between_attempts = 0.1
     delay = 0.5
+    ssh_command_pattern = 'pgrep {0:s}'
 
     def __init__(self):
         assert(self.process_name != None)
@@ -329,19 +332,42 @@ class ProbePID_SSH(Probe):
             raise eh.UnavailablePythonModule('Python module for SSH is not available!')
 
     def _get_pid(self, logger):
-        ssh_in, ssh_out, ssh_err = self.client.exec_command('pgrep ' + self.process_name)
-        l = ssh_out.read().split()
-        if len(l) > 1:
-            logger.print_console("*** ERROR: more than one PID detected for process name '{:s}'"
-                                 " --> {!s}".format(self.process_name, l),
-                                 rgb=Color.ERROR,
-                                 nl_before=True)
-            return -10
-        elif len(l) == 1:
-            return int(l[0])
+        ssh_in, ssh_out, ssh_err = \
+            self.client.exec_command(self.ssh_command_pattern.format(self.process_name))
+
+        if ssh_err.read():
+            # fallback method as previous command does not exist on the system
+            fallback_cmd = 'ps a -opid,comm'
+            ssh_in, ssh_out, ssh_err = self.client.exec_command(fallback_cmd)
+            res = ssh_out.read()
+            if sys.version_info[0] > 2:
+                res = res.decode('latin_1')
+            pid_list = res.split('\n')
+            for entry in pid_list:
+                if entry.find(self.process_name) >= 0:
+                    pid = int(entry.split()[0])
+                    break
+            else:
+                # process not found
+                pid = -1
         else:
-            # process not found
-            return -1
+            res = ssh_out.read()
+            if sys.version_info[0] > 2:
+                res = res.decode('latin_1')
+            l = res.split()
+            if len(l) > 1:
+                logger.print_console("*** ERROR: more than one PID detected for process name '{:s}'"
+                                     " --> {!s}".format(self.process_name, l),
+                                     rgb=Color.ERROR,
+                                     nl_before=True)
+                pid = -10
+            elif len(l) == 1:
+                pid = int(l[0])
+            else:
+                # process not found
+                pid = -1
+
+        return pid
 
     def start(self, target, logger):
         self.status = ProbeStatus(0)
@@ -379,6 +405,7 @@ class ProbePID_SSH(Probe):
             self.status.set_status(-2)
             self.status.set_private_info("'{:s}' is not running anymore!".format(self.process_name))
         elif self._saved_pid != current_pid:
+            self._saved_pid = current_pid
             self.status.set_status(-1)
             self.status.set_private_info("'{:s}' PID({:d}) has changed!".format(self.process_name,
                                                                               current_pid))
