@@ -26,7 +26,7 @@ import fuzzfmk
 import sys
 import inspect
 
-fuddly_version = '0.22'
+fuddly_version = '0.22.1'
 
 fuzzfmk_folder = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 # fuzzfmk_folder = os.path.dirname(fuzzfmk.__file__)
