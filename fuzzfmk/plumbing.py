@@ -790,12 +790,13 @@ class Fuzzer(object):
         if not self.__is_started():
             signal.signal(signal.SIGINT, signal.SIG_IGN)
 
+            self.lg.start()
+
             ok = self._load_data_model()
             if not ok:
                 self.set_error("Project cannot be launched because of data model loading error")
                 return
 
-            self.lg.start()
             try:
                 ok = self.tg._start()
             except:
