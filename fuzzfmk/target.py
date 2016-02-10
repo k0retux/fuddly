@@ -249,12 +249,12 @@ class NetworkTarget(Target):
             we close the related socket.
         '''
 
-        self.host = {}
-        self.port = {}
-        self.socket_type = {}
-        self.host[self.UNKNOWN_SEMANTIC] = self.host[data_semantics] = host
-        self.port[self.UNKNOWN_SEMANTIC] = self.port[data_semantics] = port
-        self.socket_type[self.UNKNOWN_SEMANTIC] = self.socket_type[data_semantics] = socket_type
+        self._host = {}
+        self._port = {}
+        self._socket_type = {}
+        self.host = self._host[self.UNKNOWN_SEMANTIC] = self._host[data_semantics] = host
+        self.port = self._port[self.UNKNOWN_SEMANTIC] = self._port[data_semantics] = port
+        self._socket_type[self.UNKNOWN_SEMANTIC] = self._socket_type[data_semantics] = socket_type
 
         self.known_semantics = []
         self.sending_sockets = []
@@ -288,9 +288,9 @@ class NetworkTarget(Target):
     def register_new_interface(self, host, port, socket_type, data_semantics, server_mode=False,
                                hold_connection=False):
         self.multiple_destination = True
-        self.host[data_semantics] = host
-        self.port[data_semantics] = port
-        self.socket_type[data_semantics] = socket_type
+        self._host[data_semantics] = host
+        self._port[data_semantics] = port
+        self._socket_type[data_semantics] = socket_type
         self.known_semantics.append(data_semantics)
         self.server_mode[(host,port)] = server_mode
         self._default_fbk_id[(host, port)] = self._default_fbk_socket_id + ' - {:s}:{:d}'.format(host, port)
@@ -618,9 +618,9 @@ class NetworkTarget(Target):
 
     def _get_net_info_from(self, data):
         key = self._get_data_semantic_key(data)
-        host = self.host[key]
-        port = self.port[key]
-        return host, port, self.socket_type[key], self.server_mode[(host,port)]
+        host = self._host[key]
+        port = self._port[key]
+        return host, port, self._socket_type[key], self.server_mode[(host, port)]
 
     def _connect_to_target(self, host, port, socket_type):
         if self.hold_connection[(host, port)] and (host, port) in self._hclient_hp2sock.keys():
@@ -837,7 +837,8 @@ class NetworkTarget(Target):
 
         with self._fbk_handling_lock:
             for fbkid, ev in socket_errors:
-                self._feedback_collect(">>> ERROR[{:d}]: unable to interact with '{:s}' <<<".format(ev,fbkid), fbkid, error=-ev)
+                self._feedback_collect(">>> ERROR[{:d}]: unable to interact with '{:s}' "
+                                       "<<<".format(ev,fbkid), fbkid, error=-ev)
             self._feedback_complete(send_id)
 
         return
@@ -964,8 +965,8 @@ class NetworkTarget(Target):
     def get_description(self):
         desc_added = []
         desc = ''
-        for key, host in self.host.items():
-            port = self.port[key]
+        for key, host in self._host.items():
+            port = self._port[key]
             if (host, port) in desc_added:
                 continue
             desc_added.append((host, port))

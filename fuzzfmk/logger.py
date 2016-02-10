@@ -340,9 +340,12 @@ class Logger(object):
 
         for fbk, idx in zip(fbk_list, range(len(fbk_list))):
             m, status = fbk
+            fbk_cond = status is not None and status < 0
+            hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
+            body_color = Color.FEEDBACK_HLIGHT if status < 0 else None
             self.log_fn("### Collected Target Feedback [{:d}] (status={!s}): ".format(idx, status),
-                        rgb=Color.FEEDBACK)
-            self.log_fn(m)
+                        rgb=hdr_color)
+            self.log_fn(m, rgb=body_color)
             self.fmkDB.insert_feedback(self.last_data_id, "Collector [record #{:d}]".format(idx),
                                        self._encode_target_feedback(m),
                                        status_code=status)
@@ -367,10 +370,13 @@ class Logger(object):
                 source)
             self.log_fn(msg_hdr, rgb=Color.FEEDBACK)
         else:
+            fbk_cond = status_code is not None and status_code < 0
+            hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
+            body_color = Color.FEEDBACK_HLIGHT if status_code < 0 else None
             msg_hdr = "### Target Feedback (status={!s}):".format(status_code) if source is None \
                 else "### Target Feedback from '{!s}' (status={!s}):".format(source, status_code)
-            self.log_fn(msg_hdr, rgb=Color.FEEDBACK)
-            self.log_fn(decoded_feedback)
+            self.log_fn(msg_hdr, rgb=hdr_color)
+            self.log_fn(decoded_feedback, rgb=body_color)
             if self.last_data_id is not None:
                 src = 'Default' if source is None else source
                 self.fmkDB.insert_feedback(self.last_data_id, src,
@@ -390,13 +396,16 @@ class Logger(object):
         if not decoded_feedback and status_code is None:
             self.log_fn("### No Operator Feedback!", rgb=Color.FEEDBACK)
         else:
+            fbk_cond = status_code is not None and status_code < 0
+            hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
+            body_color = Color.FEEDBACK_HLIGHT if status_code < 0 else None
             if decoded_feedback:
                 self.log_fn("### Operator Feedback (status={!s}):".format(status_code),
-                            rgb=Color.FEEDBACK)
-                self.log_fn(decoded_feedback)
+                            rgb=hdr_color)
+                self.log_fn(decoded_feedback, rgb=body_color)
             else: # status_code is not None
                 self.log_fn("### Operator Status: {:d}".format(status_code),
-                            rgb=Color.FEEDBACK)
+                            rgb=hdr_color)
 
             if self.last_data_id is not None:
                 feedback = None if feedback is None else self._encode_target_feedback(feedback)
@@ -417,11 +426,15 @@ class Logger(object):
         return feedback
 
     def log_probe_feedback(self, source, content, status_code):
+        fbk_cond = status_code is not None and status_code < 0
+        hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
+        body_color = Color.FEEDBACK_HLIGHT if status_code < 0 else None
         if content is None:
-            self.log_fn("### {:s} Status: {:d}".format(source, status_code), rgb=Color.FEEDBACK)
+            self.log_fn("### {:s} Status: {:d}".format(source, status_code), rgb=hdr_color)
         else:
-            self.log_fn("### {:s} Feedback (status={:d}):".format(source, status_code), rgb=Color.FEEDBACK)
-            self.log_fn(self._decode_target_feedback(content))
+            self.log_fn("### {:s} Feedback (status={:d}):".format(source, status_code),
+                        rgb=hdr_color)
+            self.log_fn(self._decode_target_feedback(content),rgb=body_color)
         if self.last_data_id is not None:
             content = None if content is None else self._encode_target_feedback(content)
             self.fmkDB.insert_feedback(self.last_data_id, source, content,

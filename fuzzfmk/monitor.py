@@ -25,6 +25,7 @@ import os
 import threading
 import datetime
 import time
+import traceback
 
 from libs.external_modules import *
 import data_models
@@ -292,21 +293,163 @@ class ProbeStatus(object):
         return self.__private
 
 
+class ProbePID_SSH(Probe):
+    """
+    This generic probe enables you to monitor a process PID through an
+    SSH connection.
+
+    Attributes:
+        process_name (str): name of the process to monitor.
+        sshd_ip (str): IP of the SSH server.
+        sshd_port (int): port of the SSH server.
+        username (str): username to connect with.
+        password (str): password related to the username.
+        max_attempts (int): maximum number of attempts for getting
+          the process ID.
+        delay_between_attempts (float): delay in seconds between
+          each attempt.
+        delay (float): delay before retrieving the process PID.
+        ssh_command_pattern (str): format string for the ssh command. '{0:s}' refer
+          to the process name.
+    """
+    process_name = None
+    sshd_ip = None
+    sshd_port = 22
+    username = None
+    password = None
+    max_attempts = 10
+    delay_between_attempts = 0.1
+    delay = 0.5
+    ssh_command_pattern = 'pgrep {0:s}'
+
+    def __init__(self):
+        assert(self.process_name != None)
+        assert(self.sshd_ip != None)
+        assert(self.username != None)
+        assert(self.password != None)
+
+        if not ssh_module:
+            raise eh.UnavailablePythonModule('Python module for SSH is not available!')
+
+    def _get_pid(self, logger):
+        ssh_in, ssh_out, ssh_err = \
+            self.client.exec_command(self.ssh_command_pattern.format(self.process_name))
+
+        if ssh_err.read():
+            # fallback method as previous command does not exist on the system
+            fallback_cmd = 'ps a -opid,comm'
+            ssh_in, ssh_out, ssh_err = self.client.exec_command(fallback_cmd)
+            res = ssh_out.read()
+            if sys.version_info[0] > 2:
+                res = res.decode('latin_1')
+            pid_list = res.split('\n')
+            for entry in pid_list:
+                if entry.find(self.process_name) >= 0:
+                    pid = int(entry.split()[0])
+                    break
+            else:
+                # process not found
+                pid = -1
+        else:
+            res = ssh_out.read()
+            if sys.version_info[0] > 2:
+                res = res.decode('latin_1')
+            l = res.split()
+            if len(l) > 1:
+                logger.print_console("*** ERROR: more than one PID detected for process name '{:s}'"
+                                     " --> {!s}".format(self.process_name, l),
+                                     rgb=Color.ERROR,
+                                     nl_before=True)
+                pid = -10
+            elif len(l) == 1:
+                pid = int(l[0])
+            else:
+                # process not found
+                pid = -1
+
+        return pid
+
+    def start(self, target, logger):
+        self.status = ProbeStatus(0)
+        self.client = ssh.SSHClient()
+        self.client.set_missing_host_key_policy(ssh.AutoAddPolicy())
+        self.client.connect(self.sshd_ip, port=self.sshd_port,
+                            username=self.username,
+                            password=self.password)
+        self._saved_pid = self._get_pid(logger)
+        if self._saved_pid < 0:
+            logger.print_console("*** ERROR: unable to retrieve process PID",
+                                 rgb=Color.ERROR,
+                                 nl_before=True)
+        else:
+            msg = "*** '{:s}' current PID: {:d}\n".format(self.process_name, self._saved_pid)
+            self.status.set_private_info(msg)
+            logger.print_console(msg, rgb=Color.FMKINFO, nl_before=True)
+
+    def stop(self, target, logger):
+        self.client.close()
+
+    def main(self, target, logger):
+        cpt = self.max_attempts
+        current_pid = -1
+        time.sleep(self.delay)
+        while cpt > 0 and current_pid == -1:
+            time.sleep(self.delay_between_attempts)
+            current_pid = self._get_pid(logger)
+            cpt -= 1
+
+        if current_pid == -10:
+            self.status.set_status(10)
+            self.status.set_private_info("ERROR with the ssh command")
+        elif current_pid == -1:
+            self.status.set_status(-2)
+            self.status.set_private_info("'{:s}' is not running anymore!".format(self.process_name))
+        elif self._saved_pid != current_pid:
+            self._saved_pid = current_pid
+            self.status.set_status(-1)
+            self.status.set_private_info("'{:s}' PID({:d}) has changed!".format(self.process_name,
+                                                                              current_pid))
+        else:
+            self.status.set_status(0)
+            self.status.set_private_info(None)
+
+        return self.status
+
+
+def _handle_probe_exception(context, prj, probe):
+    pname = probe.__class__.__name__
+    prj.reset_probe(pname)
+    print("\nException in probe '{:s}' ({:s}):".format(pname, context))
+    print('-'*60)
+    traceback.print_exc(file=sys.stdout)
+    print('-'*60)
+
 def probe(prj):
     def internal_func(probe_cls):
         probe = probe_cls()
 
         def probe_func(stop_event, evts, *args, **kargs):
-            probe._start(*args, **kargs)
+            try:
+                probe._start(*args, **kargs)
+            except:
+                _handle_probe_exception('during start()', prj, probe)
+                return
             while not stop_event.is_set():
                 delay = prj.get_probe_delay(probe.__class__.__name__)
-                status = probe.main(*args, **kargs)
+                try:
+                    status = probe.main(*args, **kargs)
+                except:
+                    _handle_probe_exception('during main()', prj, probe)
+                    return
                 prj.set_probe_status(probe.__class__.__name__, status)
-
                 stop_event.wait(delay)
 
-            probe._stop(*args, **kargs)
-            prj.reset_probe(probe.__class__.__name__)
+            try:
+                probe._stop(*args, **kargs)
+            except:
+                _handle_probe_exception('during stop()', prj, probe)
+            else:
+                prj.reset_probe(probe.__class__.__name__)
 
         prj.register_new_probe(probe.__class__.__name__, probe_func, obj=probe, blocking=False)
 
@@ -315,31 +458,49 @@ def probe(prj):
     return internal_func
 
 
-
 def blocking_probe(prj):
     def internal_func(probe_cls):
         probe = probe_cls()
 
         def probe_func(stop_event, evts, *args, **kargs):
-            probe._start(*args, **kargs)
+            try:
+                probe._start(*args, **kargs)
+            except:
+                _handle_probe_exception('during start()', prj, probe)
+                return
+
             while not stop_event.is_set():
                 delay = prj.get_probe_delay(probe.__class__.__name__)
                 
                 evts.wait_for_data_ready()
 
-                probe.arm_probe(*args, **kargs)
+                try:
+                    probe.arm_probe(*args, **kargs)
+                except:
+                    _handle_probe_exception('during arm_probe()', prj, probe)
+                    evts.wait_until_data_is_emitted()
+                    evts.lets_fuzz_continue()
+                    return
 
                 evts.wait_until_data_is_emitted()
 
-                status = probe.main(*args, **kargs)
+                try:
+                    status = probe.main(*args, **kargs)
+                except:
+                    _handle_probe_exception('during main()', prj, probe)
+                    evts.lets_fuzz_continue()
+                    return
+
                 prj.set_probe_status(probe.__class__.__name__, status)
-
                 evts.lets_fuzz_continue()
-
                 stop_event.wait(delay)
 
-            probe._stop(*args, **kargs)
-            prj.reset_probe(probe.__class__.__name__)
+            try:
+                probe._stop(*args, **kargs)
+            except:
+                _handle_probe_exception('during start()', prj, probe)
+            else:
+                prj.reset_probe(probe.__class__.__name__)
 
         prj.register_new_probe(probe.__class__.__name__, probe_func, obj=probe, blocking=True)
 
