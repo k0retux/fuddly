@@ -51,6 +51,8 @@ class Color(object):
     COMPONENT_STOP = 0x4775A3
     DATA_MODEL_LOADED = 0xB03BB0
     FEEDBACK = 0x800080
+    FEEDBACK_ERR = 0xEF0000
+    FEEDBACK_HLIGHT = 0xFFFFFF
     NEWLOGENTRY = 0x1975FF
     FUZZSTEP = 0x009D9D
     LOGSECTION = 0x638C8C
@@ -91,12 +93,20 @@ try:
     import cups
 except ImportError:
     cups_module = False
-    print('WARNING [FMK]: python-cups module is not installed, Printer targets will not be available!')
+    print('WARNING [FMK]: python(3)-cups module is not installed, Printer targets will not be available!')
 
 crcmod_module = True
 try:
     import crcmod
 except ImportError:
     crcmod_module = False
-    print('WARNING [FMK]: python-crcmod module is not installed, the MH.CRC()' \
+    print('WARNING [FMK]: python(3)-crcmod module is not installed, the MH.CRC()' \
           ' generator template will not be available!')
+
+ssh_module = True
+try:
+    import paramiko as ssh
+except ImportError:
+    ssh_module = False
+    print('WARNING [FMK]: python(3)-paramiko module is not installed! '
+          'Should be installed for ssh-based monitoring.')

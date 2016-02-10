@@ -837,7 +837,8 @@ class NetworkTarget(Target):
 
         with self._fbk_handling_lock:
             for fbkid, ev in socket_errors:
-                self._feedback_collect(">>> ERROR[{:d}]: unable to interact with '{:s}' <<<".format(ev,fbkid), fbkid, error=-ev)
+                self._feedback_collect(">>> ERROR[{:d}]: unable to interact with '{:s}' "
+                                       "<<<".format(ev,fbkid), fbkid, error=-ev)
             self._feedback_complete(send_id)
 
         return

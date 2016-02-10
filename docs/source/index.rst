@@ -24,6 +24,8 @@ Contents:
 
    targets
 
+   probes
+
    examples
 
    api

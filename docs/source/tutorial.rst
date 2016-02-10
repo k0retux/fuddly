@@ -2363,9 +2363,12 @@ handle status as expected. Status rules are described below:
   (log feedback from the probes and try to restart the target).
 
 .. note::
-    that you can implement :meth:`fuzzfmk.monitor.Probe.start` and/or :meth:`fuzzfmk.monitor.Probe.stop` methods if
+    You can implement :meth:`fuzzfmk.monitor.Probe.start` and/or :meth:`fuzzfmk.monitor.Probe.stop` methods if
     you need to do some stuff during their initialization and termination.
 
+
+.. seealso:: Refer to :ref:`probes` for details on the available generic
+             probes that you can use within you project.
 
 In order to associate one or more probe to a target, you have to add them within the ``targets``
 global variable of the related project file (refer to :ref:`tuto:project`). More precisely, for a target ``A``,

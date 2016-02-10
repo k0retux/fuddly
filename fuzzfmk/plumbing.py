@@ -1177,6 +1177,8 @@ class Fuzzer(object):
         if tg is not None:
             assert(isinstance(tg, int))
             self.__set_target(tg)
+        else:
+            self.__set_target(0)
 
         ok = self.launch()
         if not ok:
@@ -1609,7 +1611,7 @@ class Fuzzer(object):
         if tg_fbk is not None:
             err_code = tg_fbk.get_error_code()
             if err_code is not None and err_code < 0:
-                self.lg.log_comment('Error detected with the target (error code: {:d}) !'.format(err_code))
+                self.lg.log_comment('Error detected with the target (error code: {:d})!'.format(err_code))
                 err_detected = True
 
             if tg_fbk.has_fbk_collector():

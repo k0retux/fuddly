@@ -22,3 +22,4 @@
 ################################################################################
 
 class Timeout(Exception): pass
+class UnavailablePythonModule(Exception): pass
