@@ -75,14 +75,14 @@ class Operation(object):
 
 class LastInstruction(object):
 
-    ExportData = 1
+    RecordData = 1
 
     def __init__(self):
         self.comments = None
         self.feedback_info = None
         self._status_code = None
         self.instructions = {
-            LastInstruction.ExportData: False
+            LastInstruction.RecordData: False
             }
 
     def set_instruction(self, name):
@@ -161,7 +161,7 @@ class Operator(object):
         # In order to export data in
         # any case, that is even if the Logger has been set to
         # export data only when requested (i.e. explicit_export == True)
-        linst.set_instruction(LastInstruction.ExportData)
+        linst.set_instruction(LastInstruction.RecordData)
 
         return linst
 

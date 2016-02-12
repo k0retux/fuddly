@@ -142,7 +142,7 @@ class Target(object):
     def recover_target(self):
         '''
         Implementation of target recovering operations, when a target problem has been detected
-        (i.e. a negative feedback from a probe or an operator)
+        (i.e. a negative feedback from a probe, an operator or the Target() itself)
 
         Returns:
             bool: True if the target has been recovered. False otherwise.
@@ -1073,6 +1073,8 @@ class LocalTarget(Target):
         self.__app = None
         self.__pre_args = None
         self.__post_args = None
+        self._data_sent = None
+        self._feedback_computed = None
         self.__feedback = TargetFeedback()
         self.set_target_path(target_path)
         self.set_tmp_file_extension(tmpfile_ext)
@@ -1114,13 +1116,18 @@ class LocalTarget(Target):
         if not self.__target_path:
             print('/!\\ ERROR /!\\: the LocalTarget path has not been set')
             return False
+
+        self._data_sent = False
+
         return self.initialize()
 
     def stop(self):
         return self.terminate()
 
-    def send_data(self, data):
+    def do_before_sending_data(self, data_list):
+        self._feedback_computed = False
 
+    def send_data(self, data):
         data = data.to_bytes()
         wkspace = os.path.join(app_folder, 'workspace')
 
@@ -1144,49 +1151,57 @@ class LocalTarget(Target):
 
         fl = fcntl.fcntl(self.__app.stdout, fcntl.F_GETFL)
         fcntl.fcntl(self.__app.stdout, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+        self._data_sent = True
         
     def cleanup(self):
         try:
             os.kill(self.__app.pid, signal.SIGTERM)
         except:
             print("\n*** WARNING: cannot kill application with PID {:d}".format(self.__app.pid))
+        finally:
+            self._data_sent = False
 
     def get_feedback(self, delay=0.2):
-        if self.__app is None:
-            return
+        if self._feedback_computed:
+            return self.__feedback
+        else:
+            self._feedback_computed = True
 
+        if self.__app is None and self._data_sent:
+            self.__feedback.set_error_code(-3)
+            self.__feedback.add_fbk_from("LocalTarget", "Application has terminated (crash?)")
+            return self.__feedback
+        elif self.__app is None:
+            return self.__feedback
+
+        exit_status = self.__app.poll()
+        if exit_status is not None and exit_status < 0:
+            self.__feedback.set_error_code(exit_status)
+            self.__feedback.add_fbk_from("Application[{:d}]".format(self.__app.pid),
+                                         "Negative return status ({:d})".format(exit_status))
+
+        err_detected = False
         ret = select.select([self.__app.stdout, self.__app.stderr], [], [], delay)
         if ret[0]:
             byte_string = b''
             for fd in ret[0][:-1]:
                 byte_string += fd.read() + b'\n\n'
-            byte_string += ret[0][-1].read()
+
+            if b'error' in byte_string or b'invalid' in byte_string:
+                self.__feedback.set_error_code(-1)
+                self.__feedback.add_fbk_from("LocalTarget[stdout]", "Application outputs errors on stdout")
+
+            stderr_msg = ret[0][-1].read()
+            if stderr_msg:
+                self.__feedback.set_error_code(-2)
+                self.__feedback.add_fbk_from("LocalTarget[stderr]", "Application outputs on stderr")
+                byte_string += stderr_msg
+            else:
+                byte_string = byte_string[:-2]  # remove '\n\n'
+
         else:
             byte_string = b''
 
         self.__feedback.set_bytes(byte_string)
 
         return self.__feedback
-
-    def is_alive(self):
-        if self.__app is None:
-            return True
-
-        target_exit_status = self.__app.poll()
-
-        self.__feedback.set_error_code(target_exit_status)
-
-        if target_exit_status == None:
-            ret = True
-        else:
-            ret = False
-
-        return ret
-
-    def is_damaged(self):
-        bstring = self.__feedback.get_bytes().lower()
-
-        if b'error' in bstring or b'invalid' in bstring:
-            return True
-        else:
-            return False

@@ -116,16 +116,13 @@ class MyOp(Operator):
         if not monitor.is_probe_launched('P2'):
             monitor.start_probe('P2')
 
-        self.new = True
         self.cpt = 0
         fmk_ops.set_fuzz_delay(0.5)
 
         return True
 
     def stop(self, fmk_ops, dm, monitor, target, logger):
-        monitor.stop_probe('P1')
-        monitor.stop_probe('P2')
-        self.new = False
+        pass
 
     def plan_next_operation(self, fmk_ops, dm, monitor, target, logger, fmk_feedback):
 
@@ -168,9 +165,7 @@ class MyOp(Operator):
         linst = LastInstruction()
 
         if not monitor.is_target_ok():
-            linst.set_instruction(LastInstruction.ExportData)
-            linst.set_comments('This input has crashed the target!')
-
-            # Restart the target
+            linst.set_instruction(LastInstruction.RecordData)
+            linst.set_operator_feedback('This input has crashed the target!')
 
         return linst
