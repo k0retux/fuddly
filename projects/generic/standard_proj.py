@@ -40,7 +40,7 @@ printer1_tg.set_target_ip('127.0.0.1')
 printer1_tg.set_printer_name('PDF')
 
 local_tg = LocalTarget(tmpfile_ext='.png')
-local_tg.set_target_path('display')
+local_tg.set_target_path('/usr/bin/display')
 
 local2_tg = LocalTarget(tmpfile_ext='.pdf')
 local2_tg.set_target_path('okular')

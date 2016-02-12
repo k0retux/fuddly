@@ -152,6 +152,7 @@ class Logger(object):
 
         self._reset_current_state()
         self.last_data_id = None
+        self.last_data_recordable = None
 
         with self._tg_fbk_lck:
             self._tg_fbk = []
@@ -212,6 +213,7 @@ class Logger(object):
 
         self._reset_current_state()
         self.last_data_id = None
+        self.last_data_recordable = None
 
         self.print_console('*** Logger is stopped ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
 
@@ -244,6 +246,7 @@ class Logger(object):
                 print("\n*** ERROR: Cannot insert the data record in FMKDB!")
                 self.fmkDB.rollback()
                 self.last_data_id = None
+                self.last_data_recordable = None
                 self._reset_current_state()
                 return self.last_data_id
 
@@ -272,11 +275,12 @@ class Logger(object):
 
             self.fmkDB.commit()
 
-            if not self.__explicit_data_recording or self._current_data.is_recordable():
+            if not self.__explicit_data_recording or self.last_data_recordable:
                 self.fmkDB.insert_project_record(prj_name, self._current_data.get_data_id(), tg_name)
 
-        return self.last_data_id
+            self._reset_current_state()
 
+        return self.last_data_id
 
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO, data_id=None):
         now = datetime.datetime.now()
@@ -337,11 +341,11 @@ class Logger(object):
             # self.log_fn("\n::[ NO TARGET FEEDBACK ]::\n") 
             raise NotImplementedError
 
-        if self._current_data is None:
+        if self.last_data_recordable or not self.__explicit_data_recording:
+            record = True
+        else:
             # feedback will not be recorded because data is not recorded
             record = False
-        else:
-            record = True
 
         if preamble is not None:
             self.log_fn(preamble, do_record=record)
@@ -371,11 +375,11 @@ class Logger(object):
                                  status_code=None):
         decoded_feedback = self._decode_target_feedback(feedback)
 
-        if self._current_data is None:
+        if self.last_data_recordable or not self.__explicit_data_recording:
+            record = True
+        else:
             # feedback will not be recorded because data is not recorded
             record = False
-        else:
-            record = True
 
         if preamble is not None:
             self.log_fn(preamble, do_record=record)
@@ -409,11 +413,11 @@ class Logger(object):
             decoded_feedback = self._decode_target_feedback(feedback)
             # decoded_feedback can be the empty string
 
-        if self._current_data is None:
+        if self.last_data_recordable or not self.__explicit_data_recording:
+            record = True
+        else:
             # feedback will not be recorded because data is not recorded
             record = False
-        else:
-            record = True
 
         if not decoded_feedback and status_code is None:
             self.log_fn("### No Operator Feedback!", rgb=Color.FEEDBACK,
@@ -449,11 +453,11 @@ class Logger(object):
         return feedback
 
     def log_probe_feedback(self, source, content, status_code):
-        if self._current_data is None:
+        if self.last_data_recordable or not self.__explicit_data_recording:
+            record = True
+        else:
             # feedback will not be recorded because data is not recorded
             record = False
-        else:
-            record = True
 
         fbk_cond = status_code is not None and status_code < 0
         hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
@@ -473,10 +477,6 @@ class Logger(object):
                                        status_code=status_code)
 
     def start_new_log_entry(self, preamble=''):
-        if self.last_data_id is not None:
-            # We reset logger state each time we prepare a new data logging entry
-            self._reset_current_state()
-
         self.__idx += 1
         self._current_sent_date = datetime.datetime.now()
         now = self._current_sent_date.strftime("%d/%m/%Y - %H:%M:%S")
@@ -593,10 +593,12 @@ class Logger(object):
         self.log_fn("%d bytes" % self._current_size, nl_before=False)
 
         if self.__explicit_data_recording and not data.is_recordable():
+            self.last_data_recordable = False
             self.log_fn("### Data emitted but not recorded", rgb=Color.LOGSECTION)
             return False
 
         self._current_data = data
+        self.last_data_recordable = self._current_data.is_recordable()
 
         if not self.__export_data:
             self.log_fn("### Data emitted:", rgb=Color.LOGSECTION)
