@@ -226,7 +226,7 @@ class Logger(object):
         self._current_dmaker_info = {}
         self._current_src_data_id = None
 
-    def commit_log_entry(self, group_id):
+    def commit_log_entry(self, group_id, prj_name, tg_name):
         if self._current_data is not None:  # that means data will be recorded
             init_dmaker = self._current_data.get_initial_dmaker()
             init_dmaker = Database.DEFAULT_GTYPE_NAME if init_dmaker is None else init_dmaker[0]
@@ -270,14 +270,12 @@ class Logger(object):
                                         self._current_src_data_id,
                                         str(user_input), info)
 
-        self.fmkDB.commit()
-        # self._reset_current_state()
+            self.fmkDB.commit()
+
+            if not self.__explicit_data_recording or self._current_data.is_recordable():
+                self.fmkDB.insert_project_record(prj_name, self._current_data.get_data_id(), tg_name)
 
         return self.last_data_id
-
-    def commit_project_record(self, data, prj_name, tg_name):
-        if not self.__explicit_data_recording or data.is_exportable():
-            self.fmkDB.insert_project_record(prj_name, data.get_data_id(), tg_name)
 
 
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO, data_id=None):
@@ -549,7 +547,7 @@ class Logger(object):
         if data is None:
             exportable = False
         else:
-            exportable = data.is_exportable()
+            exportable = data.is_recordable()
 
         if self.__explicit_data_recording and not exportable:
             return False
@@ -594,7 +592,7 @@ class Logger(object):
         self._current_size = data.get_length()
         self.log_fn("%d bytes" % self._current_size, nl_before=False)
 
-        if self.__explicit_data_recording and not data.is_exportable():
+        if self.__explicit_data_recording and not data.is_recordable():
             self.log_fn("### Data emitted but not recorded", rgb=Color.LOGSECTION)
             return False
 

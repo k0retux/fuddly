@@ -1366,10 +1366,10 @@ class Fuzzer(object):
         if orig_data_provided:
             for dt_orig in original_data:
                 if dt_orig is not None:
-                    dt_orig.make_exportable()
+                    dt_orig.make_recordable()
 
         for dt in data_list:
-            dt.make_exportable()
+            dt.make_recordable()
 
         if multiple_data:
             self.log_data(data_list, original_data=original_data, get_target_ack=cont0,
@@ -1553,10 +1553,9 @@ class Fuzzer(object):
                 if multiple_data:
                     self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
 
-                data_id = self.lg.commit_log_entry(self.group_id)
-                if data_id is not None:
-                    tg_name = self._get_detailed_target_desc(self.tg)
-                    self.lg.commit_project_record(dt, self.prj.name, tg_name)
+                tg_name = self._get_detailed_target_desc(self.tg)
+                data_id = self.lg.commit_log_entry(self.group_id, self.prj.name, tg_name)
+
 
     @EnforceOrder(accepted_states=['S2'])
     def new_transfer_preamble(self):
@@ -2025,7 +2024,7 @@ class Fuzzer(object):
 
                 if linst.is_instruction_set(LastInstruction.RecordData):
                     for dt in data_list:
-                        dt.make_exportable()
+                        dt.make_recordable()
                         self.__register_in_data_bank(None, dt)
 
                 if multiple_data:

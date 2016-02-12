@@ -51,7 +51,7 @@ class Data(object):
         self._dm = None
         self._data_id = None
 
-        self.__exportable = False
+        self._recordable = False
         self.__unusable = False
 
         self.info_list = []
@@ -82,7 +82,7 @@ class Data(object):
     def flatten_copy(self):
         d = Data(self.to_bytes())
         d._dm = self._dm
-        d.__exportable = self.__exportable
+        d._recordable = self._recordable
         d.__unusable = self.__unusable
         d.info = copy.copy(self.info)
 
@@ -122,12 +122,12 @@ class Data(object):
             return False
 
     # Only taken into account if the Logger has been set to
-    # export data only when requested (explicit_export == True)
-    def make_exportable(self):
-        self.__exportable = True
+    # record data only when requested (explicit_data_recording == True)
+    def make_recordable(self):
+        self._recordable = True
 
-    def is_exportable(self):
-        return self.__exportable
+    def is_recordable(self):
+        return self._recordable
 
     def add_info(self, info_str):
         self.info_list.append(info_str)
