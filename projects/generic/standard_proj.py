@@ -56,34 +56,10 @@ net_tg.add_additional_feedback_interface('localhost', 7777, (socket.AF_INET, soc
 net_tg.set_timeout(fbk_timeout=5, sending_delay=3)
 
 
-@blocking_probe(project)
-class health_check(Probe):
 
-    def start(self, target, logger):
-        self.status = ProbeStatus(0)
-
-    def stop(self, target, logger):
-        pass
-
-    def main(self, target, logger):
-        fb = target.get_feedback()
-        if fb is not None:
-            byte_string = fb.get_bytes()
-            self.status.set_private_info(byte_string)
-        self.status.set_status(0)
-
-        if target.is_damaged():
-            self.status.set_status(-1)
-
-        if not target.is_alive():
-            self.status.set_status(-2)
-
-        return self.status
-
-
-targets = [(local_tg, health_check),
-           (local2_tg, health_check),
-           (local3_tg, health_check),
+targets = [local_tg,
+           local2_tg,
+           local3_tg,
            printer1_tg, net_tg]
 
 
@@ -167,27 +143,20 @@ class Op1(Operator):
         linst = LastInstruction()
 
         if isinstance(target, LocalTarget):
-            health_status = monitor.get_probe_status('health_check')
-            info = health_status.get_private_info()
-
+            fbk = target.get_feedback()
+            info = fbk.get_bytes()
+            status_code = fbk.get_error_code()
+            if status_code is not None and status_code < 0:
+                linst.set_operator_feedback('This input has crashed the target!')
+                linst.set_operator_status(-status_code) # does not prevent operator to continue so
+                                                        # provide a value > 0
             export = True
             if info in self._last_feedback:
                 export = False
-            else:
+            elif info:
                 self._last_feedback.append(info)
-
-            err_code = health_status.get_status()
-            if  err_code == -1:
-                if export:
-                    linst.set_instruction(LastInstruction.ExportData)
-                linst.set_operator_feedback('This input has triggered an error, but not a crash!')
-                linst.set_operator_status(-err_code) # does not prevent operator to continue so
-                                                     # provide a value > 0
-            elif err_code == -2:
                 linst.set_instruction(LastInstruction.ExportData)
-                linst.set_operator_feedback('This input has crashed the target!')
-                linst.set_operator_status(-err_code) # does not prevent operator to continue so
-                                                     # provide a value > 0
+
         else:
             linst.set_instruction(LastInstruction.ExportData)
         

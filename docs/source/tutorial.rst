@@ -2069,7 +2069,6 @@ stimulated at once through this method.
              defined to be overloaded. Look at their descriptions to
              learn more about what can be customized.
 
-
 .. _logger-def:
 
 Defining the Logger
@@ -2110,7 +2109,7 @@ Some parameters allows to customize the behavior of the logger, such as:
   will be stored. If set to ``False``, instead of being stored in
   separate files as explained previously, they will be written
   directly within the log files (if ``enable_file_logging`` is set to ``True``).
-  This parameter does not interfere with data recording within ``fmkDB``.
+  This parameter does not interfere with data recording within ``FmkDB``.
 
 - ``explicit_data_recording``: which is used for logging outcomes further to
   an :class:`fuzzfmk.operator_helpers.Operator` instruction. If set to
@@ -2122,7 +2121,7 @@ Some parameters allows to customize the behavior of the logger, such as:
   feedback and/or probes outputs.
 
 - ``enable_file_logging`` which is used to control the production of log files.
-  If set to ``False``, the Logger will only commit records to the ``fmkDB``.
+  If set to ``False``, the Logger will only commit records to the ``FmkDB``.
 
 .. seealso:: Refer to :ref:`tuto:operator` to learn more about the
              interaction between an Operator and the Logger.
@@ -2181,27 +2180,27 @@ Here under is presented a skeleton of an Operator:
 
        def start(self, fmk_ops, dm, monitor, target, logger, user_input):
            # Do some initialization stuff
-	   return True
+    	   return True
 
        def stop(self, fmk_ops, dm, monitor, target, logger):
            # Do some termination stuff
 
        def plan_next_operation(self, fmk_ops, dm, monitor, target, logger, fmk_feedback):
-	   op = Operation()
+    	   op = Operation()
 	   
-	   # Do some planning stuff and decide what would be the next
-	   # operations you want fuddly to perform
+    	   # Do some planning stuff and decide what would be the next
+    	   # operations you want fuddly to perform
 
-	   return op
+    	   return op
 
        def do_after_all(self, fmk_ops, dm, monitor, target, logger):
-	   linst = LastInstruction()
+    	   linst = LastInstruction()
 
-	   # Do some stuff after the planned Operation() has been
-	   # executed and request fuddly to perform some last-minute
-	   # instructions.
+           # Do some stuff after the planned Operation() has been
+           # executed and request fuddly to perform some last-minute
+           # instructions.
 
-	   return linst
+           return linst
 
 
 
@@ -2355,16 +2354,32 @@ information from the target is given here under:
            return self.pstatus
 
 
+.. note::
+    You can implement :meth:`fuzzfmk.monitor.Probe.start` and/or
+    :meth:`fuzzfmk.monitor.Probe.stop` methods if
+    you need to do some stuff during their initialization and termination.
+
 The return status of a probe has to comply with some rules in order to get ``fuddly``
 handle status as expected. Status rules are described below:
 
-- if the status is positive or null, ``fuddly`` will consider that the target is OK;
-- if the status is negative, ``fuddly`` will consider that something happen to the target and will act accordingly
-  (log feedback from the probes and try to restart the target).
+- If the status is positive or null, ``fuddly`` will consider that the target is OK.
+- If the status is negative, ``fuddly`` will consider that something happen to the target
+  and will act accordingly:
 
-.. note::
-    You can implement :meth:`fuzzfmk.monitor.Probe.start` and/or :meth:`fuzzfmk.monitor.Probe.stop` methods if
-    you need to do some stuff during their initialization and termination.
+    1. log feedback from the probes as well as the status they return to facilitate further
+       investigation
+    2. try to recover the target, by calling :meth:`fuzzfmk.target.Target.recover_target`
+
+To quickly retrieve the data that negatively impacted a target and which
+have been recorded within the FmkDB (refer to :ref:`logger-def`) you can
+run ``tools/fmkdb.py --data-with-impact -v``.
+It will display for each target the data you sent for which a negative
+status has been recorded, coming either from:
+
+- a probe;
+- an operator (more about that in what follows);
+- or the :class:`fuzzfmk.target.Target` itself (refer to the error status
+  that are transmitted by the generic targets---:ref:`targets`).
 
 
 .. seealso:: Refer to :ref:`probes` for details on the available generic
@@ -2375,6 +2390,7 @@ global variable of the related project file (refer to :ref:`tuto:project`). More
 instead of putting it directly within the ``targets`` list, you have to put a tuple containing first the target itself,
 then all the needed probes. Here under an example with the target ``A`` associated to the probe ``health_check``, and
 the target ``B`` with no probe:
+
 
 .. code-block:: python
    :linenos:
@@ -2392,9 +2408,10 @@ containing the probe itself and the delay expressed in seconds. Here under an ex
                (B, (my_first_probe, 0.6)) ]
 
 
-Finally, you can also leverage probes from within an Operator. If you want to get a status from probes each time
-your planned operation has been executed by ``fuddly``, you can to do it within the method
-:meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`. Let's illustrate this in the following example:
+Finally, you can also leverage probes from within an Operator. If you want to get a status
+from probes each time your planned operations have been executed by ``fuddly``, you can do
+it within the method :meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`.
+Let's illustrate this with the following example:
 
 .. code-block:: python
    :linenos:
@@ -2410,25 +2427,46 @@ your planned operation has been executed by ``fuddly``, you can to do it within 
            monitor.stop_probe('health_check')
 
        def plan_next_operation(self, fmk_ops, dm, monitor, target, logger, fmk_feedback):
-           op = Operation()
-           return op
+           self.op = Operation()
 
-           def do_after_all(self, fmk_ops, dm, monitor, target, logger):
-                linst = LastInstruction()
+           # Let's say the actions to be performed
+           # are guided by a state machine
+           self.op_state = ... # save the current state of the operator
 
-                health_status = monitor.get_probe_status('health_check')
-                if health_status.get_status() < 0:
+           return self.op
+
+       def do_after_all(self, fmk_ops, dm, monitor, target, logger):
+            linst = LastInstruction()
+
+            health_status = monitor.get_probe_status('health_check')
+
+            if health_status.get_status() < 0 and self.op_state == 'critical':
                 linst.set_instruction(LastInstruction.ExportData)
-                    linst.set_comments('This input has triggered an error!')
+                linst.set_operator_feedback('Data sent seems worthwhile!')
+                linst.set_operator_status(-3)
 
             return linst
 
 
-In this example, we basically retrieve the status of our
-*health-check* probe. If it is negative, we first order ``fuddly`` to
-export the data. In the case the logger has its parameter
-``explicit_export`` set to ``True`` (refer to :ref:`logger-def`), you
-have to instruct explicitly ``fuddly`` to do it if you want to keep
-the data, otherwise it will never be logged. Finally, we also order
-``fuddly`` to log a specific comment related to this data and more
-generally related to the last performed operation.
+In this example, the operator retrieves the status of our
+*health-check* probe and also check what was just performed.
+It then correlates both information in order to determine if the test case
+is worth to investigate further.
+In our example, it occurs when the *health check* is negative and our operator
+state is ``'critical'``. In such situation, we first order ``fuddly`` to
+export the data (line 26).
+
+.. note::
+    In the case the logger has its parameter
+    ``explicit_data_recording`` set to ``True`` (refer to :ref:`logger-def`), you
+    have to instruct explicitly ``fuddly`` to do it if you want to keep
+    the data, otherwise it will never be logged.
+
+Finally we convey the operator verdict to
+``fuddly`` through the :class:`fuzzfmk.operator_helpers.LastInstruction` object
+it returns, by setting a negative status and some feedback on it.
+
+.. note:: Setting a negative status through
+   :class:`fuzzfmk.operator_helpers.LastInstruction` will make ``fuddly`` act the same
+   as for a negative status from a probe, except that target recovering will not be
+   attempted, assuming this task should be decided by the operator itself.

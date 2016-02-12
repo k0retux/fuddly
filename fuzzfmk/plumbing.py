@@ -1484,15 +1484,16 @@ class Fuzzer(object):
 
                 self.__stats.inc_stat(gen_type, gen_name, gen_ui)
 
-                num = 1
-
                 data_id = dt.get_data_id()
                 # if data_id is not None, the data has been created from fmkDB
                 # because new data have not a data_id yet at this point in the code.
                 if data_id is not None:
+                    num = 1
                     self.lg.log_fuzzing_step(num)
                     self.lg.log_generator_info(gen_type_initial, gen_name, None, data_id=data_id)
                     self.lg.log_data_info(("Data fetched from FMKDB",), gen_type_initial, gen_name)
+                else:
+                    num = 0
 
                 if dt_mk_h is not None:
                     if orig_data_provided:
@@ -1611,16 +1612,16 @@ class Fuzzer(object):
         if tg_fbk is not None:
             err_code = tg_fbk.get_error_code()
             if err_code is not None and err_code < 0:
-                self.lg.log_comment('Error detected with the target (error code: {:d})!'.format(err_code))
+                # self.lg.log_comment('Error detected with the target (error code: {:d})!'.format(err_code))
                 err_detected = True
 
             if tg_fbk.has_fbk_collector():
                 for ref, fbk in tg_fbk:
                     self.lg.log_target_feedback_from(fbk, preamble=preamble, epilogue=epilogue,
                                                      source=ref, status_code=err_code)
-            else:
-                self.lg.log_target_feedback_from(tg_fbk.get_bytes(), preamble=preamble,
-                                                 epilogue=epilogue, status_code=err_code)
+
+            self.lg.log_target_feedback_from(tg_fbk.get_bytes(), preamble=preamble,
+                                             epilogue=epilogue)
 
             tg_fbk.cleanup()
 
@@ -1739,28 +1740,33 @@ class Fuzzer(object):
         data_id  = data.get_data_id()
         data_makers_history = data.get_history()
         if data_makers_history:
+            first_pass = True
             data.init_read_info()
             for dmaker_type, data_maker_name, user_input in data_makers_history:
-                if dmaker_type in gen:
-                    if user_input:
+                if first_pass:
+                    first_pass = False
+                    gen_type_initial, gen_name, gen_ui = data.get_initial_dmaker()
+                    if gen_ui:
                         msg = "|- data id: %d | generator type: %s | generator name: %s | User input: %s" % \
-                            (data_id, dmaker_type, data_maker_name, user_input)
+                            (data_id, gen_type_initial, gen_name, gen_ui)
                     else:
                         msg = "|- data id: %d | generator type: %s | generator name: %s | No user input" % \
-                            (data_id, dmaker_type, data_maker_name)
-                else:
+                            (data_id, gen_type_initial, gen_name)
+                    self.lg.print_console(msg, rgb=Color.SUBINFO)
+
+                if dmaker_type not in gen:
                     if user_input:
                         msg = "|- disruptor type: %s | data_maker name: %s | User input: %s" % \
                             (dmaker_type, data_maker_name, user_input)
                     else:
                         msg = "|- disruptor type: %s | data_maker name: %s | No user input" % \
                             (dmaker_type, data_maker_name)
-                self.lg.print_console(msg, rgb=Color.SUBINFO)
+                    self.lg.print_console(msg, rgb=Color.SUBINFO)
 
-                self.lg.print_console("|- data info:", rgb=Color.SUBINFO)
-                data_info = data.read_info(data_maker_name, dmaker_type)
-                for msg in data_info:
-                    self.lg.print_console('   |_ ' + msg, rgb=Color.SUBINFO)
+                    self.lg.print_console("|- data info:", rgb=Color.SUBINFO)
+                    data_info = data.read_info(data_maker_name, dmaker_type)
+                    for msg in data_info:
+                        self.lg.print_console('   |_ ' + msg, rgb=Color.SUBINFO)
         else:
             init_dmaker = data.get_initial_dmaker()
             if init_dmaker is None:
@@ -1769,7 +1775,7 @@ class Fuzzer(object):
                 dtype, dmk_name, _ = init_dmaker
             dm = data.get_data_model()
             dm_name = None if dm is None else dm.name
-            msg = "|- data id: {:d} | type: {:s} | data model: {:s}".format(
+            msg = "|- data id: {:d} | type: {:s} | data model: {!s}".format(
                 data_id, dtype, dm_name
             )
             self.lg.print_console(msg, rgb=Color.SUBINFO)
@@ -1911,7 +1917,7 @@ class Fuzzer(object):
         exit_operator = False
         while True:
 
-            if exit_operator:                
+            if exit_operator:
                 break
 
             try:
@@ -2019,7 +2025,7 @@ class Fuzzer(object):
                 if linst.is_instruction_set(LastInstruction.ExportData):
                     for dt in data_list:
                         dt.make_exportable()
-                        self.__register_in_data_bank(None, dt.flatten_copy())
+                        self.__register_in_data_bank(None, dt)
 
                 if multiple_data:
                     self.log_data(data_list, get_target_ack=get_target_ack, verbose=verbose)
@@ -2032,23 +2038,20 @@ class Fuzzer(object):
                     exit_operator = True
                     self.lg.log_fmk_info("Operator will shutdown because waiting has been cancelled by the user")
 
-                if linst.is_instruction_set(LastInstruction.ExportData):
-                    # Target fbk is logged only at the end of a burst
-                    if self._burst_countdown == self._burst:
-                        cont1 = self.log_target_feedback()
-                        cont2 = self.monitor_probes()
-                        if not cont1 or not cont2:
-                            exit_operator = True
-                            self.lg.log_fmk_info("Operator will shutdown because something is going wrong with "
-                                                 "the target and the recovering procedure did not succeed...")
+                # Target fbk is logged only at the end of a burst
+                if self._burst_countdown == self._burst:
+                    cont1 = self.log_target_feedback()
+                    cont2 = self.monitor_probes()
+                    if not cont1 or not cont2:
+                        exit_operator = True
+                        self.lg.log_fmk_info("Operator will shutdown because something is going wrong with "
+                                             "the target and the recovering procedure did not succeed...")
 
-                    op_feedback = linst.get_operator_feedback()
-                    op_status = linst.get_operator_status()
-                    if op_feedback or op_status:
-                        self.lg.log_operator_feedback(op_feedback,
-                                                      status_code=op_status)
-                else:
-                    op_status = None
+                op_feedback = linst.get_operator_feedback()
+                op_status = linst.get_operator_status()
+                if op_feedback or op_status:
+                    self.lg.log_operator_feedback(op_feedback,
+                                                  status_code=op_status)
 
                 comments = linst.get_comments()
                 if comments:

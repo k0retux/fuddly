@@ -10,6 +10,9 @@ of them they can also be customized by inheriting from them and
 implementing some intended methods acting as hooks within the generic
 targets.
 
+Some of them will automatically provide feedback if an error occurs,
+to make ``fuddly`` aware of it and act accordingly (refer to :ref:`tuto:probes`
+for more information on that topic).
 
 NetworkTarget
 =============
@@ -38,6 +41,11 @@ Description:
 
   .. seealso:: Refer also to the tutorial section :ref:`targets-def`
                that guides you through an example of network target.
+
+
+Feedback:
+  This target will automatically provide feedback on any network-related error
+  encountered while delivering data to the target.
 
 
 Usage Example:
@@ -112,6 +120,10 @@ Description:
     specific actions at target termination.
 
 
+Feedback:
+  This target will automatically provide feedback if the application writes on
+  ``stderr`` or returns a negative status or terminates/crashes.
+
 Usage example:
    .. code-block:: python
       :linenos:
@@ -151,6 +163,9 @@ Reference:
 
 Description:
   This generic target enables you to interact with a IPP server.
+
+Feedback:
+  No feedback is automatically returned.
 
 Usage Example:
    .. code-block:: python

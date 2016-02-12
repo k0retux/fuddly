@@ -84,13 +84,14 @@ class Logger(object):
 
     fmkDB = None
 
-    def __init__(self, name=None, prefix='', export_data=False, explicit_data_recording=False, export_orig=True,
-                 export_raw_data=True, console_display_limit=800, enable_file_logging=False):
+    def __init__(self, name=None, prefix='', export_data=False, explicit_data_recording=False,
+                 export_orig=True, export_raw_data=True, console_display_limit=800,
+                 enable_file_logging=False):
         '''
         Args:
           name (str): Name to be used in the log filenames. If not specified, the name of the project
             in which the logger is embedded will be used.
-          export_data (bool): If True, each emitted data will be stored separetely in a specific
+          export_data (bool): If True, each emitted data will be stored in a specific
             file within `exported_data/`.
           explicit_data_recording (bool): Used for logging outcomes further to an Operator instruction. If True,
             the operator would have to state explicitly if it wants the just emitted data to be logged.
@@ -107,8 +108,8 @@ class Logger(object):
         '''
         self.name = name
         self.p = prefix
-        self.__seperate_file = export_data
-        self.__explicit_export = explicit_data_recording
+        self.__export_data = export_data
+        self.__explicit_data_recording = explicit_data_recording
         self.__export_orig = export_orig
         self._console_display_limit = console_display_limit
 
@@ -123,7 +124,8 @@ class Logger(object):
         self._tg_fbk = []
         self._tg_fbk_lck = threading.Lock()
 
-        def init_logfn(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False):
+        def init_logfn(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
+                       do_record=True):
             if issubclass(x.__class__, Data):
                 if sys.version_info[0] > 2:
                     data = repr(x) if self.__export_raw_data else x.to_bytes().decode('latin-1')
@@ -164,7 +166,8 @@ class Logger(object):
             log_file = os.path.join(logs_folder, self.now + '_' + self.name + '_log')
             self._fd = open(log_file, 'w')
 
-            def intern_func(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False):
+            def intern_func(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
+                            do_record=True):
                 if issubclass(x.__class__, Data):
                     if sys.version_info[0] > 2:
                         data = repr(x) if self.__export_raw_data else x.to_bytes().decode('latin-1')
@@ -177,6 +180,8 @@ class Logger(object):
                 else:
                     data = x
                 self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)
+                if not do_record:
+                    return data
                 try:
                     self._fd.write(data)
                     self._fd.write('\n')
@@ -222,7 +227,7 @@ class Logger(object):
         self._current_src_data_id = None
 
     def commit_log_entry(self, group_id):
-        if self._current_data is not None:
+        if self._current_data is not None:  # that means data will be recorded
             init_dmaker = self._current_data.get_initial_dmaker()
             init_dmaker = Database.DEFAULT_GTYPE_NAME if init_dmaker is None else init_dmaker[0]
             dm = self._current_data.get_data_model()
@@ -266,13 +271,12 @@ class Logger(object):
                                         str(user_input), info)
 
         self.fmkDB.commit()
-        self._reset_current_state()
+        # self._reset_current_state()
 
         return self.last_data_id
 
-
     def commit_project_record(self, data, prj_name, tg_name):
-        if not self.__explicit_export or data.is_exportable():
+        if not self.__explicit_data_recording or data.is_exportable():
             self.fmkDB.insert_project_record(prj_name, data.get_data_id(), tg_name)
 
 
@@ -335,25 +339,32 @@ class Logger(object):
             # self.log_fn("\n::[ NO TARGET FEEDBACK ]::\n") 
             raise NotImplementedError
 
+        if self._current_data is None:
+            # feedback will not be recorded because data is not recorded
+            record = False
+        else:
+            record = True
+
         if preamble is not None:
-            self.log_fn(preamble)
+            self.log_fn(preamble, do_record=record)
 
         for fbk, idx in zip(fbk_list, range(len(fbk_list))):
             m, status = fbk
             fbk_cond = status is not None and status < 0
             hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
-            body_color = Color.FEEDBACK_HLIGHT if status < 0 else None
+            body_color = Color.FEEDBACK_HLIGHT if fbk_cond else None
             self.log_fn("### Collected Target Feedback [{:d}] (status={!s}): ".format(idx, status),
-                        rgb=hdr_color)
-            self.log_fn(m, rgb=body_color)
-            self.fmkDB.insert_feedback(self.last_data_id, "Collector [record #{:d}]".format(idx),
-                                       self._encode_target_feedback(m),
-                                       status_code=status)
+                        rgb=hdr_color, do_record=record)
+            self.log_fn(m, rgb=body_color, do_record=record)
+            if self.last_data_id is not None and record:
+                self.fmkDB.insert_feedback(self.last_data_id, "Collector [record #{:d}]".format(idx),
+                                           self._encode_target_feedback(m),
+                                           status_code=status)
             if status < 0:
                 error_detected = True
 
         if epilogue is not None:
-            self.log_fn(epilogue)
+            self.log_fn(epilogue, do_record=record)
 
         return error_detected
 
@@ -362,29 +373,36 @@ class Logger(object):
                                  status_code=None):
         decoded_feedback = self._decode_target_feedback(feedback)
 
+        if self._current_data is None:
+            # feedback will not be recorded because data is not recorded
+            record = False
+        else:
+            record = True
+
         if preamble is not None:
-            self.log_fn(preamble)
+            self.log_fn(preamble, do_record=record)
 
         if not decoded_feedback:
             msg_hdr = "### No Target Feedback!" if source is None else '### No Target Feedback from "{!s}"!'.format(
                 source)
-            self.log_fn(msg_hdr, rgb=Color.FEEDBACK)
+            self.log_fn(msg_hdr, rgb=Color.FEEDBACK, do_record=record)
         else:
             fbk_cond = status_code is not None and status_code < 0
             hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
-            body_color = Color.FEEDBACK_HLIGHT if status_code < 0 else None
+            body_color = Color.FEEDBACK_HLIGHT if fbk_cond else None
             msg_hdr = "### Target Feedback (status={!s}):".format(status_code) if source is None \
                 else "### Target Feedback from '{!s}' (status={!s}):".format(source, status_code)
-            self.log_fn(msg_hdr, rgb=hdr_color)
-            self.log_fn(decoded_feedback, rgb=body_color)
-            if self.last_data_id is not None:
+            self.log_fn(msg_hdr, rgb=hdr_color, do_record=record)
+            self.log_fn(decoded_feedback, rgb=body_color, do_record=record)
+
+            if self.last_data_id is not None and record:
                 src = 'Default' if source is None else source
                 self.fmkDB.insert_feedback(self.last_data_id, src,
                                            self._encode_target_feedback(feedback),
                                            status_code=status_code)
 
         if epilogue is not None:
-            self.log_fn(epilogue)
+            self.log_fn(epilogue, do_record=record)
 
     def log_operator_feedback(self, feedback, status_code=None):
         if feedback is None:
@@ -393,21 +411,28 @@ class Logger(object):
             decoded_feedback = self._decode_target_feedback(feedback)
             # decoded_feedback can be the empty string
 
+        if self._current_data is None:
+            # feedback will not be recorded because data is not recorded
+            record = False
+        else:
+            record = True
+
         if not decoded_feedback and status_code is None:
-            self.log_fn("### No Operator Feedback!", rgb=Color.FEEDBACK)
+            self.log_fn("### No Operator Feedback!", rgb=Color.FEEDBACK,
+                        do_record=record)
         else:
             fbk_cond = status_code is not None and status_code < 0
             hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
-            body_color = Color.FEEDBACK_HLIGHT if status_code < 0 else None
+            body_color = Color.FEEDBACK_HLIGHT if fbk_cond else None
             if decoded_feedback:
                 self.log_fn("### Operator Feedback (status={!s}):".format(status_code),
-                            rgb=hdr_color)
-                self.log_fn(decoded_feedback, rgb=body_color)
+                            rgb=hdr_color, do_record=record)
+                self.log_fn(decoded_feedback, rgb=body_color, do_record=record)
             else: # status_code is not None
                 self.log_fn("### Operator Status: {:d}".format(status_code),
-                            rgb=hdr_color)
+                            rgb=hdr_color, do_record=record)
 
-            if self.last_data_id is not None:
+            if self.last_data_id is not None and record:
                 feedback = None if feedback is None else self._encode_target_feedback(feedback)
                 self.fmkDB.insert_feedback(self.last_data_id, 'Operator',
                                            feedback,
@@ -426,21 +451,34 @@ class Logger(object):
         return feedback
 
     def log_probe_feedback(self, source, content, status_code):
+        if self._current_data is None:
+            # feedback will not be recorded because data is not recorded
+            record = False
+        else:
+            record = True
+
         fbk_cond = status_code is not None and status_code < 0
         hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
-        body_color = Color.FEEDBACK_HLIGHT if status_code < 0 else None
+        body_color = Color.FEEDBACK_HLIGHT if fbk_cond else None
         if content is None:
-            self.log_fn("### {:s} Status: {:d}".format(source, status_code), rgb=hdr_color)
+            self.log_fn("### {:s} Status: {:d}".format(source, status_code),
+                        rgb=hdr_color, do_record=record)
         else:
             self.log_fn("### {:s} Feedback (status={:d}):".format(source, status_code),
-                        rgb=hdr_color)
-            self.log_fn(self._decode_target_feedback(content),rgb=body_color)
-        if self.last_data_id is not None:
+                        rgb=hdr_color, do_record=record)
+            self.log_fn(self._decode_target_feedback(content),rgb=body_color,
+                        do_record=record)
+
+        if self.last_data_id is not None and record:
             content = None if content is None else self._encode_target_feedback(content)
             self.fmkDB.insert_feedback(self.last_data_id, source, content,
                                        status_code=status_code)
 
     def start_new_log_entry(self, preamble=''):
+        if self.last_data_id is not None:
+            # We reset logger state each time we prepare a new data logging entry
+            self._reset_current_state()
+
         self.__idx += 1
         self._current_sent_date = datetime.datetime.now()
         now = self._current_sent_date.strftime("%d/%m/%Y - %H:%M:%S")
@@ -513,13 +551,13 @@ class Logger(object):
         else:
             exportable = data.is_exportable()
 
-        if self.__explicit_export and not exportable:
+        if self.__explicit_data_recording and not exportable:
             return False
 
         if data is not None:
             self._current_orig_data_id = data.get_data_id()
 
-        if self.__export_orig and not self.__seperate_file:
+        if self.__export_orig and not self.__export_data:
             if data is None:
                 msgs = ("### No Original Data",)
             else:
@@ -535,7 +573,7 @@ class Logger(object):
             if data is None:
                 ret = False
             else:
-                ffn = self.__export_data(data)
+                ffn = self._export_data_func(data)
                 if ffn:
                     self.log_fn("### Original data is stored in the file:", rgb=Color.DATAINFO)
                     self.log_fn(ffn)
@@ -556,17 +594,17 @@ class Logger(object):
         self._current_size = data.get_length()
         self.log_fn("%d bytes" % self._current_size, nl_before=False)
 
-        if self.__explicit_export and not data.is_exportable():
-            self.log_fn("### Data emitted but not exported", rgb=Color.LOGSECTION)
+        if self.__explicit_data_recording and not data.is_exportable():
+            self.log_fn("### Data emitted but not recorded", rgb=Color.LOGSECTION)
             return False
 
         self._current_data = data
 
-        if not self.__seperate_file:
+        if not self.__export_data:
             self.log_fn("### Data emitted:", rgb=Color.LOGSECTION)
             self.log_fn(data, nl_after=True, verbose=verbose)
         else:
-            ffn = self.__export_data(data)
+            ffn = self._export_data_func(data)
             if ffn:
                 self.log_fn("### Emitted data is stored in the file:", rgb=Color.LOGSECTION)
                 self.log_fn(ffn)
@@ -578,7 +616,7 @@ class Logger(object):
 
         return True
 
-    def __export_data(self, data, suffix=''):
+    def _export_data_func(self, data, suffix=''):
 
         def ensure_dir(f):
             d = os.path.dirname(f)
