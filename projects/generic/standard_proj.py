@@ -155,9 +155,9 @@ class Op1(Operator):
                 export = False
             elif info:
                 self._last_feedback.append(info)
-                linst.set_instruction(LastInstruction.ExportData)
+                linst.set_instruction(LastInstruction.RecordData)
 
         else:
-            linst.set_instruction(LastInstruction.ExportData)
+            linst.set_instruction(LastInstruction.RecordData)
         
         return linst

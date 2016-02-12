@@ -168,7 +168,7 @@ class MyOp(Operator):
         linst = LastInstruction()
 
         if not monitor.is_target_ok():
-            linst.set_instruction(LastInstruction.ExportData)
+            linst.set_instruction(LastInstruction.RecordData)
             linst.set_comments('This input has crashed the target!')
 
             # Restart the target

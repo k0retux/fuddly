@@ -2023,7 +2023,7 @@ class Fuzzer(object):
                     self._handle_user_code_exception('Operator has crashed during its .do_after_all() method')
                     return False
 
-                if linst.is_instruction_set(LastInstruction.ExportData):
+                if linst.is_instruction_set(LastInstruction.RecordData):
                     for dt in data_list:
                         dt.make_exportable()
                         self.__register_in_data_bank(None, dt)
