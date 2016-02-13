@@ -240,6 +240,7 @@ class Logger(object):
                                                        self._current_size,
                                                        self._current_sent_date,
                                                        self._current_ack_date,
+                                                       tg_name, prj_name,
                                                        group_id=group_id)
 
             if self.last_data_id is None:
@@ -274,9 +275,6 @@ class Logger(object):
                                         str(user_input), info)
 
             self.fmkDB.commit()
-
-            if not self.__explicit_data_recording or self.last_data_recordable:
-                self.fmkDB.insert_project_record(prj_name, self._current_data.get_data_id(), tg_name)
 
             self._reset_current_state()
 

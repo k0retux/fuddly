@@ -113,13 +113,15 @@ class Database(object):
         else:
             return self._cur.lastrowid
 
-    def insert_data(self, dtype, dm_name, raw_data, sz, sent_date, ack_date, group_id=None):
+    def insert_data(self, dtype, dm_name, raw_data, sz, sent_date, ack_date,
+                    target_name, prj_name, group_id=None):
         blob = sqlite3.Binary(raw_data)
         try:
             self._cur.execute(
-                    "INSERT INTO DATA(GROUP_ID,TYPE,DM_NAME,CONTENT,SIZE,SENT_DATE,ACK_DATE)"
-                    " VALUES(?,?,?,?,?,?,?)",
-                    (group_id, dtype, dm_name, blob, sz, sent_date, ack_date))
+                    "INSERT INTO DATA(GROUP_ID,TYPE,DM_NAME,CONTENT,SIZE,SENT_DATE,ACK_DATE,"
+                    "TARGET,PRJ_NAME)"
+                    " VALUES(?,?,?,?,?,?,?,?,?)",
+                    (group_id, dtype, dm_name, blob, sz, sent_date, ack_date, target_name, prj_name))
             self._con.commit()
         except sqlite3.Error as e:
             self._con.rollback()
@@ -193,19 +195,19 @@ class Database(object):
         else:
             return self._cur.lastrowid
 
-    def insert_project_record(self, prj_name, data_id, target):
-        try:
-            self._cur.execute(
-                "INSERT INTO PROJECT_RECORDS(PRJ_NAME,DATA_ID,TARGET)"
-                " VALUES(?,?,?)",
-                (prj_name, data_id, target))
-            self._con.commit()
-        except sqlite3.Error as e:
-            self._con.rollback()
-            print("\n*** ERROR[SQL:{:s}] while inserting a value into table PROJECT_RECORDS!".format(e.args[0]))
-            return -1
-        else:
-            return self._cur.lastrowid
+    # def insert_project_record(self, prj_name, data_id, target):
+    #     try:
+    #         self._cur.execute(
+    #             "INSERT INTO PROJECT_RECORDS(PRJ_NAME,DATA_ID,TARGET)"
+    #             " VALUES(?,?,?)",
+    #             (prj_name, data_id, target))
+    #         self._con.commit()
+    #     except sqlite3.Error as e:
+    #         self._con.rollback()
+    #         print("\n*** ERROR[SQL:{:s}] while inserting a value into table PROJECT_RECORDS!".format(e.args[0]))
+    #         return -1
+    #     else:
+    #         return self._cur.lastrowid
 
     def fetch_data(self, start_id=1, end_id=-1):
         ign_end_id = '--' if end_id < 1 else ''

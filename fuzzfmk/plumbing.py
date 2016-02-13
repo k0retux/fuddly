@@ -1006,7 +1006,9 @@ class Fuzzer(object):
         except IndexError:
             self.__current_tg = 0
             self.tg = self.__target_dict[prj][self.__current_tg]
-            
+
+        self.tg_name = self._get_detailed_target_desc(self.tg)
+
         self.tg.set_logger(self.lg)
         self.prj.set_target(self.tg)
 
@@ -1553,8 +1555,7 @@ class Fuzzer(object):
                 if multiple_data:
                     self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
 
-                tg_name = self._get_detailed_target_desc(self.tg)
-                data_id = self.lg.commit_log_entry(self.group_id, self.prj.name, tg_name)
+                data_id = self.lg.commit_log_entry(self.group_id, self.prj.name, self.tg_name)
 
 
     @EnforceOrder(accepted_states=['S2'])

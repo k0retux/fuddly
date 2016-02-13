@@ -170,7 +170,8 @@ if __name__ == "__main__":
             "WHERE STATUS < 0;"
         )
         prj_records = fmkdb.execute_sql_statement(
-            "SELECT PRJ_NAME, DATA_ID, TARGET FROM PROJECT_RECORDS;"
+            "SELECT ID, TARGET, PRJ_NAME FROM DATA "
+            "ORDER BY PRJ_NAME ASC, TARGET ASC;"
         )
 
         if fbk_records and prj_records:
@@ -182,7 +183,7 @@ if __name__ == "__main__":
 
             current_prj = None
             for rec in prj_records:
-                prj, data_id, target = rec
+                data_id, target, prj = rec
                 if data_id in data_ids.keys():
                     if prj != current_prj:
                         current_prj = prj
