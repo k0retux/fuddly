@@ -29,7 +29,6 @@ from libs.external_modules import *
 
 import traceback
 import datetime
-import types
 
 ################################
 # ModelWalker Helper Functions #

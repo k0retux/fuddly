@@ -63,7 +63,7 @@ class VT(object):
         }
 
     def __init__(self, endian=BigEndian):
-        self.endian = enc2struct[endian]
+        self.endian = self.enc2struct[endian]
 
     def make_private(self, forget_current_state):
         pass

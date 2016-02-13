@@ -2468,5 +2468,4 @@ it returns, by setting a negative status and some feedback on it.
 
 .. note:: Setting a negative status through
    :class:`fuzzfmk.operator_helpers.LastInstruction` will make ``fuddly`` act the same
-   as for a negative status from a probe, except that target recovering will not be
-   attempted, assuming this task should be decided by the operator itself.
+   as for a negative status from a probe. In addition, the operator will be shutdown.

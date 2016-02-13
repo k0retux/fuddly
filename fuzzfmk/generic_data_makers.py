@@ -210,7 +210,7 @@ class sd_switch_to_alternate_conf(StatefulDisruptor):
                 else:
                     ok = False
                 if ok:
-                    self.confs_list = conf
+                    self.confs_list = self.conf
                 else:
                     return False
             elif self.conf not in all_alternate_confs:

@@ -724,7 +724,7 @@ class Fuzzer(object):
             self.__logger_dict[project] = logger
             self.__stats_dict[project] = Stats(self._generic_tactics.get_generators())
             self.__monitor_dict[project] = Monitor(project, fmk_ops=self._exportable_fmk_ops)
-            self.__monitor_dict[project].set_logger(self.__logger_dict[project])
+            self.__monitor_dict[project]._set_logger(self.__logger_dict[project])
             self._prj_dict[project].set_logger(self.__logger_dict[project])
             self._prj_dict[project].set_monitor(self.__monitor_dict[project])
             self.__logger_dict[project].set_stats(self.__stats_dict[project])
@@ -734,7 +734,7 @@ class Fuzzer(object):
             self.__logger_dict[project] = logger
             self.__stats_dict[project] = Stats(self._generic_tactics.get_generators())
             self.__monitor_dict[project] = Monitor(project, fmk_ops=self._exportable_fmk_ops)
-            self.__monitor_dict[project].set_logger(self.__logger_dict[project])
+            self.__monitor_dict[project]._set_logger(self.__logger_dict[project])
             self._prj_dict[project].set_logger(self.__logger_dict[project])
             self._prj_dict[project].set_monitor(self.__monitor_dict[project])
             self.__logger_dict[project].set_stats(self.__stats_dict[project])
@@ -1009,7 +1009,7 @@ class Fuzzer(object):
 
         self.tg_name = self._get_detailed_target_desc(self.tg)
 
-        self.tg.set_logger(self.lg)
+        self.tg._set_logger(self.lg)
         self.prj.set_target(self.tg)
 
         if self.__first_loading:
@@ -2061,6 +2061,7 @@ class Fuzzer(object):
                 if op_status is not None and op_status < 0:
                     exit_operator = True
                     self.lg.log_fmk_info("Operator will shutdown because it returns a negative status")
+                    self._recover_target()
 
                 if self._burst_countdown == self._burst:
                     self.tg.cleanup()

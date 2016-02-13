@@ -74,7 +74,7 @@ class Monitor(object):
         self._logger = None
         self._target_status = None
 
-    def set_logger(self, logger):
+    def _set_logger(self, logger):
         self._logger = logger
 
     def set_strategy(self, strategy):
