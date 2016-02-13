@@ -2114,7 +2114,7 @@ Some parameters allows to customize the behavior of the logger, such as:
 - ``explicit_data_recording``: which is used for logging outcomes further to
   an :class:`fuzzfmk.operator_helpers.Operator` instruction. If set to
   ``True``, the operator would have to state explicitly if it wants
-  the just emitted data to be logged. Such instruction is typically
+  the just emitted data to be recorded. Such instruction is typically
   used within its method
   :meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`, where the
   Operator can take its decision after the observation of the target
@@ -2364,11 +2364,11 @@ handle status as expected. Status rules are described below:
 
 - If the status is positive or null, ``fuddly`` will consider that the target is OK.
 - If the status is negative, ``fuddly`` will consider that something happen to the target
-  and will act accordingly:
+  and will act accordingly by:
 
-    1. log feedback from the probes as well as the status they return to facilitate further
-       investigation
-    2. try to recover the target, by calling :meth:`fuzzfmk.target.Target.recover_target`
+    1. logging feedback from the probes as well as the status they return to facilitate further
+       investigation;
+    2. trying to recover the target, by calling :meth:`fuzzfmk.target.Target.recover_target`.
 
 To quickly retrieve the data that negatively impacted a target and which
 have been recorded within the FmkDB (refer to :ref:`logger-def`) you can
@@ -2441,7 +2441,7 @@ Let's illustrate this with the following example:
             health_status = monitor.get_probe_status('health_check')
 
             if health_status.get_status() < 0 and self.op_state == 'critical':
-                linst.set_instruction(LastInstruction.ExportData)
+                linst.set_instruction(LastInstruction.RecordData)
                 linst.set_operator_feedback('Data sent seems worthwhile!')
                 linst.set_operator_status(-3)
 
@@ -2454,7 +2454,7 @@ It then correlates both information in order to determine if the test case
 is worth to investigate further.
 In our example, it occurs when the *health check* is negative and our operator
 state is ``'critical'``. In such situation, we first order ``fuddly`` to
-export the data (line 26).
+record the data (line 26).
 
 .. note::
     In the case the logger has its parameter

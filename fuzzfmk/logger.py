@@ -94,7 +94,7 @@ class Logger(object):
           export_data (bool): If True, each emitted data will be stored in a specific
             file within `exported_data/`.
           explicit_data_recording (bool): Used for logging outcomes further to an Operator instruction. If True,
-            the operator would have to state explicitly if it wants the just emitted data to be logged.
+            the operator would have to state explicitly if it wants the just emitted data to be recorded.
             Such notification is possible when the framework call its method
             :meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`, where the Operator can take its decision
             after the observation of the target feedback and/or probes outputs.
@@ -103,8 +103,8 @@ class Logger(object):
             as human readable text.
           console_display_limit (int): maximum amount of characters to display on the console at once.
             If this threshold is overrun, the message to print on the console will be truncated.
-          prefix (str): prefix to use for printing on the console
-          enable_file_logging (bool): If True, file logging will be enabled
+          prefix (str): prefix to use for printing on the console.
+          enable_file_logging (bool): If True, file logging will be enabled.
         '''
         self.name = name
         self.p = prefix
