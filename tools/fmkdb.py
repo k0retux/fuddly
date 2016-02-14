@@ -57,6 +57,9 @@ group.add_argument('--info-by-date', nargs=2, metavar=('START','END'),
                    help='''display information on data sent between START and END '''
                         '''(date format 'Year/Month/Day' or 'Year/Month/Day-Hour' or
                         'Year/Month/Day-Hour:Minute')''')
+group.add_argument('--project', metavar='PROJECT_NAME',
+                   help='restrict the data to be displayed to a specific project (expect --info-by-date)')
+
 group.add_argument('--with-fbk', action='store_true', help='display full feedback (expect --info)')
 group.add_argument('--with-data', action='store_true', help='display data content (expect --info)')
 group.add_argument('--without-fmkinfo', action='store_true',
@@ -349,6 +352,7 @@ if __name__ == "__main__":
 
     data_info = args[0].info
     data_info_by_date = args[0].info_by_date
+    prj_name = args[0].project
     with_fbk = args[0].with_fbk
     with_data = args[0].with_data
     without_fmkinfo = args[0].without_fmkinfo
@@ -404,11 +408,18 @@ if __name__ == "__main__":
         start = handle_date(data_info_by_date[0])
         end = handle_date(data_info_by_date[1])
 
-        records = fmkdb.execute_sql_statement(
-            "SELECT ID FROM DATA "
-            "WHERE ? <= SENT_DATE and SENT_DATE <= ?;",
-            params=(start, end)
-        )
+        if prj_name:
+            records = fmkdb.execute_sql_statement(
+                "SELECT ID FROM DATA "
+                "WHERE ? <= SENT_DATE and SENT_DATE <= ? and PRJ_NAME == ?;",
+                params=(start, end, prj_name)
+            )
+        else:
+            records = fmkdb.execute_sql_statement(
+                "SELECT ID FROM DATA "
+                "WHERE ? <= SENT_DATE and SENT_DATE <= ?;",
+                params=(start, end)
+            )
 
         if records:
             for rec in records:
