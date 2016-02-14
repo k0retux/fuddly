@@ -27,3 +27,19 @@ def ensure_dir(f):
     d = os.path.dirname(f)
     if not os.path.exists(d):
         os.makedirs(d)
+
+def chunk_lines(string, length):
+    l = string.split(' ')
+    chk_list = []
+    full_line = ''
+    for wd in l:
+        full_line += wd + ' '
+        if len(full_line) > (length - 1):
+            chk_list.append(full_line)
+            full_line = ''
+    if full_line:
+        chk_list.append(full_line)
+    # remove last space char
+    if chk_list:
+        chk_list[-1] = (chk_list[-1])[:-1]
+    return chk_list

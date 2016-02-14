@@ -31,6 +31,7 @@ from libs.external_modules import *
 from fuzzfmk.data_model import Data
 from fuzzfmk.global_resources import *
 from fuzzfmk.database import Database
+from libs.utils import ensure_dir
 
 import data_models
 
@@ -404,7 +405,7 @@ class Logger(object):
         if epilogue is not None:
             self.log_fn(epilogue, do_record=record)
 
-    def log_operator_feedback(self, feedback, status_code=None):
+    def log_operator_feedback(self, feedback, op_name, status_code=None):
         if feedback is None:
             decoded_feedback = None
         else:
@@ -434,7 +435,7 @@ class Logger(object):
 
             if self.last_data_id is not None and record:
                 feedback = None if feedback is None else self._encode_target_feedback(feedback)
-                self.fmkDB.insert_feedback(self.last_data_id, 'Operator',
+                self.fmkDB.insert_feedback(self.last_data_id, "Operator '{:s}'".format(op_name),
                                            feedback,
                                            status_code=status_code)
 
@@ -615,11 +616,6 @@ class Logger(object):
         return True
 
     def _export_data_func(self, data, suffix=''):
-
-        def ensure_dir(f):
-            d = os.path.dirname(f)
-            if not os.path.exists(d):
-                os.makedirs(d)
 
         base_dir = os.path.join(app_folder, 'exported_data')
 

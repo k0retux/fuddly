@@ -1293,9 +1293,9 @@ class Fuzzer(object):
                     try:
                         signal.signal(signal.SIGINT, sig_int_handler)
                         if sys.version_info[0] == 2:
-                            cont = raw_input("\n*** Press [ENTER] to continue ('q' to exit).")
+                            cont = raw_input("\n*** Press [ENTER] to continue ('q' to exit) ***\n")
                         else:
-                            cont = input("\n*** Press [ENTER] to continue ('q' to exit).")
+                            cont = input("\n*** Press [ENTER] to continue ('q' to exit) ***\n")
                         if cont == 'q':
                             ret = False
                     except KeyboardInterrupt:
@@ -2051,7 +2051,7 @@ class Fuzzer(object):
                 op_feedback = linst.get_operator_feedback()
                 op_status = linst.get_operator_status()
                 if op_feedback or op_status:
-                    self.lg.log_operator_feedback(op_feedback,
+                    self.lg.log_operator_feedback(op_feedback, op_name=operator.__class__.__name__,
                                                   status_code=op_status)
 
                 comments = linst.get_comments()
