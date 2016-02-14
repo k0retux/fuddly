@@ -724,7 +724,7 @@ class Fuzzer(object):
             self.__logger_dict[project] = logger
             self.__stats_dict[project] = Stats(self._generic_tactics.get_generators())
             self.__monitor_dict[project] = Monitor(project, fmk_ops=self._exportable_fmk_ops)
-            self.__monitor_dict[project].set_logger(self.__logger_dict[project])
+            self.__monitor_dict[project]._set_logger(self.__logger_dict[project])
             self._prj_dict[project].set_logger(self.__logger_dict[project])
             self._prj_dict[project].set_monitor(self.__monitor_dict[project])
             self.__logger_dict[project].set_stats(self.__stats_dict[project])
@@ -734,7 +734,7 @@ class Fuzzer(object):
             self.__logger_dict[project] = logger
             self.__stats_dict[project] = Stats(self._generic_tactics.get_generators())
             self.__monitor_dict[project] = Monitor(project, fmk_ops=self._exportable_fmk_ops)
-            self.__monitor_dict[project].set_logger(self.__logger_dict[project])
+            self.__monitor_dict[project]._set_logger(self.__logger_dict[project])
             self._prj_dict[project].set_logger(self.__logger_dict[project])
             self._prj_dict[project].set_monitor(self.__monitor_dict[project])
             self.__logger_dict[project].set_stats(self.__stats_dict[project])
@@ -1006,8 +1006,10 @@ class Fuzzer(object):
         except IndexError:
             self.__current_tg = 0
             self.tg = self.__target_dict[prj][self.__current_tg]
-            
-        self.tg.set_logger(self.lg)
+
+        self.tg_name = self._get_detailed_target_desc(self.tg)
+
+        self.tg._set_logger(self.lg)
         self.prj.set_target(self.tg)
 
         if self.__first_loading:
@@ -1291,9 +1293,9 @@ class Fuzzer(object):
                     try:
                         signal.signal(signal.SIGINT, sig_int_handler)
                         if sys.version_info[0] == 2:
-                            cont = raw_input("\n*** Press [ENTER] to continue ('q' to exit).")
+                            cont = raw_input("\n*** Press [ENTER] to continue ('q' to exit) ***\n")
                         else:
-                            cont = input("\n*** Press [ENTER] to continue ('q' to exit).")
+                            cont = input("\n*** Press [ENTER] to continue ('q' to exit) ***\n")
                         if cont == 'q':
                             ret = False
                     except KeyboardInterrupt:
@@ -1553,8 +1555,7 @@ class Fuzzer(object):
                 if multiple_data:
                     self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
 
-                tg_name = self._get_detailed_target_desc(self.tg)
-                data_id = self.lg.commit_log_entry(self.group_id, self.prj.name, tg_name)
+                data_id = self.lg.commit_log_entry(self.group_id, self.prj.name, self.tg_name)
 
 
     @EnforceOrder(accepted_states=['S2'])
@@ -2050,7 +2051,7 @@ class Fuzzer(object):
                 op_feedback = linst.get_operator_feedback()
                 op_status = linst.get_operator_status()
                 if op_feedback or op_status:
-                    self.lg.log_operator_feedback(op_feedback,
+                    self.lg.log_operator_feedback(op_feedback, op_name=operator.__class__.__name__,
                                                   status_code=op_status)
 
                 comments = linst.get_comments()
@@ -2060,6 +2061,7 @@ class Fuzzer(object):
                 if op_status is not None and op_status < 0:
                     exit_operator = True
                     self.lg.log_fmk_info("Operator will shutdown because it returns a negative status")
+                    self._recover_target()
 
                 if self._burst_countdown == self._burst:
                     self.tg.cleanup()

@@ -60,7 +60,7 @@ class Target(object):
         '''
         pass
 
-    def set_logger(self, logger):
+    def _set_logger(self, logger):
         self._logger = logger
 
     def _start(self):
@@ -82,6 +82,19 @@ class Target(object):
         To be overloaded if needed
         '''
         return True
+
+    def record_info(self, info):
+        """
+        Can be used by the target to record some information during initialization or anytime
+        it make sense for your purpose.
+
+        Args:
+            info (str): info to be recorded
+
+        Returns:
+            None
+        """
+        self._logger.log_comment(info)
 
     def send_data(self, data):
         '''

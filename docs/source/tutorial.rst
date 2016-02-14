@@ -313,6 +313,34 @@ We use for this example, the generic disruptor ``tWALK`` whose purpose
 is to simply walk through the data model.  Note that disruptors are
 chainable, each one consuming what comes from the left.
 
+.. note::
+   Each data you send and all the related information (the way the data has been built,
+   the feedback from the target, and so on) are stored within the ``fuddly`` database
+   (an SQLite database located at ``<root of fuddly>/fmkdb.db``). They all get a unique ID,
+   starting from 1 and increasing by 1 each time a data is sent.
+
+   To interact with the database a convenient script is provided (``<root of fuddly>/tools/fmkdb.py``).
+   Let's say you want to look at all the information
+   that have been recorded for one of the data you sent, with the ID 4. The following
+   command will display a synthesis of what you want::
+
+      ./tools/fmkdb.py -i 4
+
+   And if you want to get all information, issue the following::
+
+      ./tools/fmkdb.py -i 4 --with-data --with-fbk
+
+   You can also request information on all data sent between two dates. For instance the
+   following command will display all data information that have been recorded between
+   25th January 2016 (11:30) and 26th January 2016::
+
+      ./tools/fmkdb.py --info-by-date 2016/01/25-11:30 2016/01/26
+
+   For further information refer to the help by issuing::
+
+      ./tools/fmkdb.py -h
+
+
 .. _tuto:dmaker-chain:
 
 How to Perform Automatic Modification on Data
@@ -2114,7 +2142,7 @@ Some parameters allows to customize the behavior of the logger, such as:
 - ``explicit_data_recording``: which is used for logging outcomes further to
   an :class:`fuzzfmk.operator_helpers.Operator` instruction. If set to
   ``True``, the operator would have to state explicitly if it wants
-  the just emitted data to be logged. Such instruction is typically
+  the just emitted data to be recorded. Such instruction is typically
   used within its method
   :meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`, where the
   Operator can take its decision after the observation of the target
@@ -2364,11 +2392,11 @@ handle status as expected. Status rules are described below:
 
 - If the status is positive or null, ``fuddly`` will consider that the target is OK.
 - If the status is negative, ``fuddly`` will consider that something happen to the target
-  and will act accordingly:
+  and will act accordingly by:
 
-    1. log feedback from the probes as well as the status they return to facilitate further
-       investigation
-    2. try to recover the target, by calling :meth:`fuzzfmk.target.Target.recover_target`
+    1. logging feedback from the probes as well as the status they return to facilitate further
+       investigation;
+    2. trying to recover the target, by calling :meth:`fuzzfmk.target.Target.recover_target`.
 
 To quickly retrieve the data that negatively impacted a target and which
 have been recorded within the FmkDB (refer to :ref:`logger-def`) you can
@@ -2441,7 +2469,7 @@ Let's illustrate this with the following example:
             health_status = monitor.get_probe_status('health_check')
 
             if health_status.get_status() < 0 and self.op_state == 'critical':
-                linst.set_instruction(LastInstruction.ExportData)
+                linst.set_instruction(LastInstruction.RecordData)
                 linst.set_operator_feedback('Data sent seems worthwhile!')
                 linst.set_operator_status(-3)
 
@@ -2454,7 +2482,7 @@ It then correlates both information in order to determine if the test case
 is worth to investigate further.
 In our example, it occurs when the *health check* is negative and our operator
 state is ``'critical'``. In such situation, we first order ``fuddly`` to
-export the data (line 26).
+record the data (line 26).
 
 .. note::
     In the case the logger has its parameter
@@ -2468,5 +2496,4 @@ it returns, by setting a negative status and some feedback on it.
 
 .. note:: Setting a negative status through
    :class:`fuzzfmk.operator_helpers.LastInstruction` will make ``fuddly`` act the same
-   as for a negative status from a probe, except that target recovering will not be
-   attempted, assuming this task should be decided by the operator itself.
+   as for a negative status from a probe. In addition, the operator will be shutdown.

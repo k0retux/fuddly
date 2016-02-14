@@ -178,15 +178,17 @@ class PDFObj(object):
             return e
  
 
-    def __calc_alphabet():
-        pdf_reserved_char = "%()<>[]{}/#"
-        alphabet = [chr(x) for x in range(0x21, 0x7F)]
-        for a in pdf_reserved_char:
-            alphabet.remove(a)
+    @property
+    def alphabet(self):
+        if self.__alphabet is None:
+            pdf_reserved_char = "%()<>[]{}/#"
+            self.__alphabet = [chr(x) for x in range(0x21, 0x7F)]
+            for a in pdf_reserved_char:
+                self.__alphabet.remove(a)
 
-        return alphabet
+        return self.__alphabet
 
-    alphabet = __calc_alphabet()
+    # alphabet = __calc_alphabet()
 
     @staticmethod
     def get_name(name, vals=None):

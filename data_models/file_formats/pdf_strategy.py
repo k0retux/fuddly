@@ -21,6 +21,7 @@
 #
 ################################################################################
 
+from fuzzfmk.data_model import Data
 from fuzzfmk.tactics_helpers import *
 
 tactics = Tactics()
@@ -51,7 +52,6 @@ class g_pdf_bomb02(Generator):
 
     def generate_data(self, dm, monitor, target):
         self.pdf.set_current_conf('ALT', root_regexp='PDF.*leaf_0-0$')
-        self.pdf.unfreeze
+        self.pdf.unfreeze()
 
         return Data(self.pdf)
-

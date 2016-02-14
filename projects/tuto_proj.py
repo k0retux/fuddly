@@ -56,7 +56,7 @@ tg.set_timeout(fbk_timeout=5, sending_delay=3)
 class P1(Probe):
 
     def start(self, target, logger):
-        self.cpt = 10
+        self.cpt = 0
 
     def main(self, target, logger):
         self.cpt += 1
@@ -68,7 +68,7 @@ class P1(Probe):
 class P2(Probe):
 
     def start(self, target, logger):
-        self.cpt = 5
+        self.cpt = 10
 
     def main(self, target, logger):
         self.cpt -= 1
@@ -109,14 +109,15 @@ targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
 class MyOp(Operator):
 
     def start(self, fmk_ops, dm, monitor, target, logger, user_input):
-        monitor.set_probe_delay('P1', 0.3)
-        monitor.set_probe_delay('P2', 0.1)
+        monitor.set_probe_delay('P1', 1)
+        monitor.set_probe_delay('P2', 0.2)
         if not monitor.is_probe_launched('P1'):
             monitor.start_probe('P1')
         if not monitor.is_probe_launched('P2'):
             monitor.start_probe('P2')
 
         self.cpt = 0
+        self.detected_error = 0
         fmk_ops.set_fuzz_delay(0.5)
 
         return True
@@ -146,9 +147,9 @@ class MyOp(Operator):
                        ('tSTRUCT', None, UI(deep=True)),
                        ('Cp', None, UI(idx=1)), ('Cp#1', None, UI(idx=3))]
         elif -5 < p1_ret + p2_ret <= 0:
-            actions = ['SHAPE#specific', ('C', None, UI(path='.*prefix.$')), ('Cp#2', None, UI(idx=1))]
+            actions = ['SHAPE#specific', ('C#2', None, UI(path='.*prefix.$')), ('Cp#2', None, UI(idx=1))]
         else:
-            actions = ['SHAPE#2', 'tTYPE']
+            actions = ['SHAPE#3', 'tTYPE#3']
 
         op.add_instruction(actions)
 
@@ -165,7 +166,16 @@ class MyOp(Operator):
         linst = LastInstruction()
 
         if not monitor.is_target_ok():
+            self.detected_error += 1
             linst.set_instruction(LastInstruction.RecordData)
             linst.set_operator_feedback('This input has crashed the target!')
+
+        if self.cpt > 10 and self.detected_error < 9:
+            linst.set_operator_feedback("We have less than 9 data that trigger some problem with the target!"
+                                        " You win!")
+            linst.set_operator_status(-8)
+        elif self.cpt > 10:
+            linst.set_operator_feedback("Too many errors! ... You loose!")
+            linst.set_operator_status(-self.detected_error)
 
         return linst

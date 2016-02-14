@@ -31,6 +31,7 @@ from libs.external_modules import *
 from fuzzfmk.data_model import Data
 from fuzzfmk.global_resources import *
 from fuzzfmk.database import Database
+from libs.utils import ensure_dir
 
 import data_models
 
@@ -94,7 +95,7 @@ class Logger(object):
           export_data (bool): If True, each emitted data will be stored in a specific
             file within `exported_data/`.
           explicit_data_recording (bool): Used for logging outcomes further to an Operator instruction. If True,
-            the operator would have to state explicitly if it wants the just emitted data to be logged.
+            the operator would have to state explicitly if it wants the just emitted data to be recorded.
             Such notification is possible when the framework call its method
             :meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`, where the Operator can take its decision
             after the observation of the target feedback and/or probes outputs.
@@ -103,8 +104,8 @@ class Logger(object):
             as human readable text.
           console_display_limit (int): maximum amount of characters to display on the console at once.
             If this threshold is overrun, the message to print on the console will be truncated.
-          prefix (str): prefix to use for printing on the console
-          enable_file_logging (bool): If True, file logging will be enabled
+          prefix (str): prefix to use for printing on the console.
+          enable_file_logging (bool): If True, file logging will be enabled.
         '''
         self.name = name
         self.p = prefix
@@ -240,6 +241,7 @@ class Logger(object):
                                                        self._current_size,
                                                        self._current_sent_date,
                                                        self._current_ack_date,
+                                                       tg_name, prj_name,
                                                        group_id=group_id)
 
             if self.last_data_id is None:
@@ -274,9 +276,6 @@ class Logger(object):
                                         str(user_input), info)
 
             self.fmkDB.commit()
-
-            if not self.__explicit_data_recording or self.last_data_recordable:
-                self.fmkDB.insert_project_record(prj_name, self._current_data.get_data_id(), tg_name)
 
             self._reset_current_state()
 
@@ -406,7 +405,7 @@ class Logger(object):
         if epilogue is not None:
             self.log_fn(epilogue, do_record=record)
 
-    def log_operator_feedback(self, feedback, status_code=None):
+    def log_operator_feedback(self, feedback, op_name, status_code=None):
         if feedback is None:
             decoded_feedback = None
         else:
@@ -436,7 +435,7 @@ class Logger(object):
 
             if self.last_data_id is not None and record:
                 feedback = None if feedback is None else self._encode_target_feedback(feedback)
-                self.fmkDB.insert_feedback(self.last_data_id, 'Operator',
+                self.fmkDB.insert_feedback(self.last_data_id, "Operator '{:s}'".format(op_name),
                                            feedback,
                                            status_code=status_code)
 
@@ -617,11 +616,6 @@ class Logger(object):
         return True
 
     def _export_data_func(self, data, suffix=''):
-
-        def ensure_dir(f):
-            d = os.path.dirname(f)
-            if not os.path.exists(d):
-                os.makedirs(d)
 
         base_dir = os.path.join(app_folder, 'exported_data')
 
