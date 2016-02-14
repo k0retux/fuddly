@@ -67,10 +67,14 @@ class Database(object):
         else:
             return 0
 
-    def execute_sql_statement(self, sql_stmt):
+    def execute_sql_statement(self, sql_stmt, params=None):
         with self._con:
-            self._cur.execute(sql_stmt)
-            rows = self._cur.fetchall()
+            if params:
+                self._cur.execute(sql_stmt, params)
+                rows = self._cur.fetchall()
+            else:
+                self._cur.execute(sql_stmt)
+                rows = self._cur.fetchall()
 
             return rows
 

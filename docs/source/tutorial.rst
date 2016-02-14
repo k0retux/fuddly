@@ -313,6 +313,34 @@ We use for this example, the generic disruptor ``tWALK`` whose purpose
 is to simply walk through the data model.  Note that disruptors are
 chainable, each one consuming what comes from the left.
 
+.. note::
+   Each data you send and all the related information (the way the data has been built,
+   the feedback from the target, and so on) are stored within the ``fuddly`` database
+   (an SQLite database located at ``<root of fuddly>/fmkdb.db``). They all get a unique ID,
+   starting from 1 and increasing by 1 each time a data is sent.
+
+   To interact with the database a convenient script is provided (``<root of fuddly>/tools/fmkdb.py``).
+   Let's say you want to look at all the information
+   that have been recorded for one of the data you sent, with the ID 4. The following
+   command will display a synthesis of what you want::
+
+      ./tools/fmkdb.py -i 4
+
+   And if you want to get all information, issue the following::
+
+      ./tools/fmkdb.py -i 4 --with-data --with-fbk
+
+   You can also request information on all data sent between two dates. For instance the
+   following command will display all data information that have been recorded between
+   25th January 2016 (11:30) and 26th January 2016::
+
+      ./tools/fmkdb.py --info-by-date 2016/01/25-11:30 2016/01/26
+
+   For further information refer to the help by issuing::
+
+      ./tools/fmkdb.py -h
+
+
 .. _tuto:dmaker-chain:
 
 How to Perform Automatic Modification on Data
