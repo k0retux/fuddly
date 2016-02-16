@@ -56,15 +56,14 @@ class Database(object):
     def _is_valid(self, cursor):
         valid = False
         with self._con:
-            cursor.execute("select name from sqlite_master WHERE type='table'")
-            tables = map(lambda x: x[0], cursor.fetchall())
-            tables = filter(lambda x: not x.startswith('sqlite'), tables)
-
             tmp_con = sqlite3.connect(':memory:', detect_types=sqlite3.PARSE_DECLTYPES)
             fmk_db_sql = open(gr.fmk_folder + self.DDL_fname).read()
             with tmp_con:
                 cur = tmp_con.cursor()
                 cur.executescript(fmk_db_sql)
+                cur.execute("select name from sqlite_master WHERE type='table'")
+                tables = map(lambda x: x[0], cur.fetchall())
+                tables = filter(lambda x: not x.startswith('sqlite'), tables)
                 for t in tables:
                     cur.execute('select * from {!s}'.format(t))
                     ref_names = list(map(lambda x: x[0], cur.description))
