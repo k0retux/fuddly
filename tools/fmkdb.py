@@ -365,7 +365,11 @@ if __name__ == "__main__":
     impact_analysis = args[0].data_with_impact
 
     fmkdb = Database(fmkdb_path=fmkdb)
-    fmkdb.start()
+    ok = fmkdb.start()
+    if not ok:
+        print(colorize("*** ERROR: The database {:s} is invalid! ***".format(fmkdb.fmk_db_path),
+                       rgb=Color.ERROR))
+        sys.exit(-1)
 
     if display_stats:
         records = fmkdb.execute_sql_statement(

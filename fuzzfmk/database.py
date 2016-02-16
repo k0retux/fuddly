@@ -17,9 +17,9 @@ class Database(object):
     def __init__(self, fmkdb_path=None):
         self.name = 'fmkDB.db'
         if fmkdb_path is None:
-            self.fmk_db = os.path.join(gr.app_folder, self.name)
+            self.fmk_db_path = os.path.join(gr.app_folder, self.name)
         else:
-            self.fmk_db = fmkdb_path
+            self.fmk_db_path = fmkdb_path
         self._con = None
         self._cur = None
         self.enabled = False
@@ -29,18 +29,21 @@ class Database(object):
             print("/!\\ WARNING /!\\: Fuddly's FmkDB unavailable because python-sqlite3 is not installed!")
             return False
 
-        if os.path.isfile(self.fmk_db):
-            self._con = sqlite3.connect(self.fmk_db, detect_types=sqlite3.PARSE_DECLTYPES)
+        if os.path.isfile(self.fmk_db_path):
+            self._con = sqlite3.connect(self.fmk_db_path, detect_types=sqlite3.PARSE_DECLTYPES)
             self._cur = self._con.cursor()
-
+            ok = self._is_valid(self._cur)
         else:
-            self._con = sqlite3.connect(self.fmk_db, detect_types=sqlite3.PARSE_DECLTYPES)
+            self._con = sqlite3.connect(self.fmk_db_path, detect_types=sqlite3.PARSE_DECLTYPES)
             fmk_db_sql = open(gr.fmk_folder + self.DDL_fname).read()
+            ok = False
             with self._con:
                 self._cur = self._con.cursor()
                 self._cur.executescript(fmk_db_sql)
+                ok = True
 
-        self.enabled = True
+        self.enabled = ok
+        return ok
 
     def stop(self):
         if self._con:
@@ -49,6 +52,32 @@ class Database(object):
         self._con = None
         self._cur = None
         self.enabled = False
+
+    def _is_valid(self, cursor):
+        valid = False
+        with self._con:
+            cursor.execute("select name from sqlite_master WHERE type='table'")
+            tables = map(lambda x: x[0], cursor.fetchall())
+            tables = filter(lambda x: not x.startswith('sqlite'), tables)
+
+            tmp_con = sqlite3.connect(':memory:', detect_types=sqlite3.PARSE_DECLTYPES)
+            fmk_db_sql = open(gr.fmk_folder + self.DDL_fname).read()
+            with tmp_con:
+                cur = tmp_con.cursor()
+                cur.executescript(fmk_db_sql)
+                for t in tables:
+                    cur.execute('select * from {!s}'.format(t))
+                    ref_names = list(map(lambda x: x[0], cur.description))
+                    cursor.execute('select * from {!s}'.format(t))
+                    names = list(map(lambda x: x[0], cursor.description))
+                    if ref_names != names:
+                        valid = False
+                        break
+                else:
+                    valid = True
+
+        return valid
+
 
     def commit(self):
         try:

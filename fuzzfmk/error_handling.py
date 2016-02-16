@@ -23,3 +23,4 @@
 
 class Timeout(Exception): pass
 class UnavailablePythonModule(Exception): pass
+class InvalidFmkDB(Exception): pass

@@ -47,6 +47,7 @@ from fuzzfmk.logger import *
 from fuzzfmk.monitor import *
 from fuzzfmk.operator_helpers import *
 from fuzzfmk.project import *
+from fuzzfmk.error_handling import *
 
 import fuzzfmk.generic_data_makers
 
@@ -203,7 +204,10 @@ class Fuzzer(object):
         self._name2prj = {}
 
         self.fmkDB = Database()
-        self.fmkDB.start()
+        ok = self.fmkDB.start()
+        if not ok:
+            raise InvalidFmkDB("The database {:s} is invalid!".format(self.fmkDB.fmk_db_path))
+
         self._fmkDB_insert_dm_and_dmakers('generic', self._generic_tactics)
         self.fmkDB.commit()
 
