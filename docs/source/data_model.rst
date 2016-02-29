@@ -134,8 +134,7 @@ that enables to handle transparently any encoding scheme:
 - Fuzzing test cases are generated based on the raw values, and then are encoded properly.
 - Some test cases may be defined on the encoding scheme itself.
 
-.. note:: To define a ``String`` subclass handling a specific encoding, you have to
-   set :attr:`fuzzfmk.value_types.String.encoded_string` to ``True``, and to overload
+.. note:: To define a ``String`` subclass handling a specific encoding, you have to overload
    the methods: :meth:`fuzzfmk.value_types.String.encode` and :meth:`fuzzfmk.value_types.String.decode`
 
    Optionally, you may overload: :meth:`fuzzfmk.value_types.String.encoded_test_cases` if you want

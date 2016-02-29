@@ -353,7 +353,9 @@ class String(VT_Alt):
         self.min_sz = None
         self.max_sz = None
 
-        self.init_encoding_scheme(encoding_arg)
+        if self.__class__.encode != String.encode:
+            self.encoded_string = True
+            self.init_encoding_scheme(encoding_arg)
 
         self.set_description(val_list=val_list, size=size, min_sz=min_sz,
                              max_sz=max_sz, determinist=determinist,
@@ -1106,7 +1108,6 @@ class Filename(String):
     ]
 
 class UTF16_LE(String):
-    encoded_string = True
 
     def encode(self, val):
         enc = val.decode('latin_1').encode('utf_16_le')
@@ -1126,7 +1127,6 @@ class UTF16_LE(String):
         return l
 
 class GZIP(String):
-    encoded_string = True
 
     def init_encoding_scheme(self, arg=None):
         self.lvl = 9 if arg is None else arg
@@ -1143,7 +1143,6 @@ class GZIP(String):
         return dec
 
 class GSM_UserData_7bit(String):
-    encoded_string = True
 
     def encode(self, msg):
         if sys.version_info[0] > 2:

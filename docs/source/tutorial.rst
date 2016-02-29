@@ -2251,10 +2251,10 @@ is given here under:
        op = Operation()
 
        if fmk_feedback.is_flag_set(FmkFeedback.NeedChange):
-	   op.set_flag(Operation.Stop)
+          op.set_flag(Operation.Stop)
        else:
-	   actions = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', None, UI(deep=True))]
-	   op.add_instruction(actions)
+          actions = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', None, UI(deep=True))]
+          op.add_instruction(actions)
 
        return op
 
