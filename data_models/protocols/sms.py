@@ -20,7 +20,7 @@ class SMS_DataModel(DataModel):
               'contents': MH.LEN(vt=UINT8, after_encoding=False),
               'node_args': 'user_data'},
              {'name': 'user_data',
-              'contents': GSM_UserData_7bit(val_list=['Hello World!'])
+              'contents': GSM_UserData_7bit(val_list=['Hello World!'], max_sz=160)
              }
          ]
         }

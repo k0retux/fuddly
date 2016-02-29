@@ -107,6 +107,8 @@ class VT(object):
                 new_arg = bytes(arg, 'latin_1')
             else:
                 new_arg = arg
+        elif sys.version_info[0] == 2 and isinstance(arg, unicode):
+            new_arg = arg.encode('latin_1')
         else:
             raise ValueError
 
@@ -276,7 +278,7 @@ class String(VT_Alt):
 
     def encode(self, val):
         """
-        To overloaded by a subclass that deals with encoding.
+        To be overloaded by a subclass that deals with encoding.
 
         Args:
             val (bytes): the decoded value
@@ -288,7 +290,7 @@ class String(VT_Alt):
 
     def decode(self, val):
         """
-        To overloaded by a subclass that deals with encoding.
+        To be overloaded by a subclass that deals with encoding.
 
         Args:
             val (bytes): the encoded value
@@ -297,6 +299,23 @@ class String(VT_Alt):
             bytes: the decoded value
         """
         return val
+
+    def encoded_test_cases(self, current_val, max_sz, min_sz, max_encoded_sz):
+        """
+        To be optionally overloaded by a subclass that deals with encoding
+        in order to provide specific test cases on encoding scheme.
+
+        Args:
+            current_val: the current value (not encoded)
+            max_sz: maximum size for a not encoded string
+            min_sz: minimum size for a not encoded string
+            max_encoded_sz: maximum encoded size for a string
+
+        Returns:
+            list: the list of encoded test cases
+        """
+        return None
+
 
     def __repr__(self):
         if DEBUG:
@@ -307,7 +326,7 @@ class String(VT_Alt):
     def init_specific(self, val_list=None, size=None, min_sz=None,
                       max_sz=None, determinist=True, ascii_mode=False,
                       extra_fuzzy_list=None, absorb_regexp=None,
-                      alphabet=None):
+                      alphabet=None, max_encoded_sz=None):
 
         self.drawn_val = None
 
@@ -320,12 +339,12 @@ class String(VT_Alt):
 
         self.min_sz = None
         self.max_sz = None
-        self.max_encoded_sz = None
 
         self.set_description(val_list=val_list, size=size, min_sz=min_sz,
                              max_sz=max_sz, determinist=determinist,
                              ascii_mode=ascii_mode, extra_fuzzy_list=extra_fuzzy_list,
-                             absorb_regexp=absorb_regexp, alphabet=alphabet)
+                             absorb_regexp=absorb_regexp, alphabet=alphabet,
+                             max_encoded_sz=max_encoded_sz)
 
     def make_private(self, forget_current_state):
         if forget_current_state:
@@ -577,10 +596,13 @@ class String(VT_Alt):
     def set_description(self, val_list=None, size=None, min_sz=None,
                         max_sz=None, determinist=True,
                         ascii_mode=False, extra_fuzzy_list=None,
-                        absorb_regexp=None, alphabet=None):
+                        absorb_regexp=None, alphabet=None,
+                        max_encoded_sz=None):
         '''
         @size take precedence over @min_sz and @max_sz
         '''
+        self.max_encoded_sz = max_encoded_sz
+
         if alphabet is not None:
             self.alphabet = convert_to_internal_repr(alphabet)
         else:
@@ -646,7 +668,7 @@ class String(VT_Alt):
 
         elif val_list is not None:
             sz = 0
-            if self.encoded_string:
+            if self.encoded_string and max_encoded_sz is None:
                 self.max_encoded_sz = 0
             for v in val_list:
                 length = len(v)
@@ -668,7 +690,8 @@ class String(VT_Alt):
         if val_list is None:
             self._populate_val_list()
             if self.encoded_string:
-                self.max_encoded_sz = 0
+                if max_encoded_sz is None:
+                    self.max_encoded_sz = 0
                 for v in self.val_list:
                     length = len(self.encode(v))
                     if length > self.max_encoded_sz:
@@ -735,7 +758,12 @@ class String(VT_Alt):
         for v in self.extra_fuzzy_list:
             if v not in self.val_list_fuzzy:
                 self.val_list_fuzzy.append(v)
-        
+
+        enc_cases = self.encoded_test_cases(orig_val, self.max_sz, self.min_sz,
+                                            self.max_encoded_sz)
+        if enc_cases:
+            self.val_list_fuzzy += enc_cases
+
         self.val_list_save = self.val_list
         self.val_list = self.val_list_fuzzy
         self.val_list_copy = copy.copy(self.val_list)
@@ -1062,6 +1090,25 @@ class Filename(String):
         b'file%n%n%n%nname.txt',
     ]
 
+class UTF16_LE(String):
+    encoded_string = True
+
+    def encode(self, val):
+        enc = val.decode('latin_1').encode('utf_16_le')
+        return enc
+
+    def decode(self, val):
+        dec = val.decode('utf_16_le')
+        return VT._str2internal(dec)
+
+    def encoded_test_cases(self, current_val, max_sz, min_sz, max_encoded_sz):
+        l = None
+        if max_sz > 0:
+            if max_encoded_sz % 2 == 1:
+                nb = max_sz // 2
+                # euro character at the end that 'fully' use the 2 bytes of utf-16
+                l = [self.encode(b'A'*nb)+b'\xac\x20']
+        return l
 
 class GSM_UserData_7bit(String):
     encoded_string = True

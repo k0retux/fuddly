@@ -2547,6 +2547,13 @@ class TestNode_TypedValue(unittest.TestCase):
         gsm_dec = gsm_t.decode(gsm_enc)
         self.assertEqual(msg, gsm_dec)
 
+        msg = b'o\xf9 \xe7a'
+        vtype = UTF16_LE(max_sz=20)
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
+
+
 
 class TestHLAPI(unittest.TestCase):
 

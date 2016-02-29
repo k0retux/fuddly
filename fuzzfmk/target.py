@@ -1254,20 +1254,24 @@ class SIMTarget(Target):
         self.ser.write(b"AT+CSMS=0\r\n") # check if modem can process SMS
         time.sleep(self.delay_between_write)
 
-        self._retrieve_feedback_from_serial()
+        fbk = self._retrieve_feedback_from_serial()
+        code = 0 if fbk.find(b'ERROR') == -1 else -1
+        self._logger.collect_target_feedback(fbk, status_code=code)
 
-        return True
+        return False if code < 0 else True
 
     def stop(self):
         self.ser.close()
 
     def _retrieve_feedback_from_serial(self):
+        feedback = b''
         while True:
             fbk = self.ser.readline()
             if fbk.strip():
-                self._logger.collect_target_feedback(fbk)
+                feedback += fbk
             else:
                 break
+        return feedback
 
     def send_data(self, data):
         pdu = b''
@@ -1279,11 +1283,13 @@ class SIMTarget(Target):
         pdu = pdu.upper()
         pdu = b"0001000B91" + self.tel_num + b"0000" + pdu + b"\x1a\r\n"
 
-        print('\n\nPDU:')
-        print(pdu)
+        # print('\n\nPDU:')
+        # print(pdu)
 
         self.ser.write(b"AT+CMGS=23\r\n") # PDU mode
         time.sleep(self.delay_between_write)
         self.ser.write(pdu)
 
-        self._retrieve_feedback_from_serial()
+        fbk = self._retrieve_feedback_from_serial()
+        code = 0 if fbk.find(b'ERROR') == -1 else -1
+        self._logger.collect_target_feedback(fbk, status_code=code)

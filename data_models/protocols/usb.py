@@ -456,22 +456,11 @@ class USB_DataModel(DataModel):
         langid_tbl.set_semantics(NodeSemantics(['LANGID_DESC']))
 
         # STRING
-
         valid_str = ['blabla...', "don't know ;)"]
-        valid_str_enc = list(map(lambda x: x.encode('utf_16_le'), valid_str))
 
-        invalid_str = ['A'*126, # max str len is 253, in utf-16 it is 253/2 = 126 char
-                       'A'*127, # thus 254 in utf-16 (check off-by-one)
-                       '%s%n%n%n%n%n',
-                       '',
-                       '\x00',
-                       '\r\n']
-        invalid_str_enc = list(map(lambda x: x.encode('utf_16_le'), invalid_str))
-
-        e_str_contents = Node('contents', values=valid_str_enc)
-        e_str_contents.add_conf('ALT')
-        e_str_contents.set_values(invalid_str_enc, conf='ALT')
-        # e_str_contents.make_determinist(conf='ALT')
+        # max USB str len is 253, so in utf-16 we may have up to 126 chars (253//2)
+        e_str_contents = Node('contents', vt=UTF16_LE(val_list=valid_str, max_sz=126,
+                                                      max_encoded_sz=253))
         e_str_contents.set_fuzz_weight(5)
         
         def str_len(node):
