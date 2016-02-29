@@ -2484,6 +2484,70 @@ class TestNode_TypedValue(unittest.TestCase):
         self.assertEqual(raw_data[size:], b'FEND')
 
 
+    def test_encoded_str(self):
+
+        class EncodedStr(String):
+            encoded_string = True
+
+            def encode(self, val):
+                return val+b'***'
+
+            def decode(self, val):
+                return val[:-3]
+
+        data = 'Hello World!'
+        enc_desc = \
+        {'name': 'enc',
+         'contents': [
+             {'name': 'len',
+              'contents': MH.LEN(vt=UINT8, after_encoding=False),
+              'node_args': 'user_data'},
+             {'name': 'user_data',
+              'contents': EncodedStr(val_list=[data])
+             }
+         ]}
+
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(enc_desc)
+        node.set_env(Env())
+
+        node_abs = Node('enc_abs', base_node=node)
+        node_abs.set_env(Env())
+
+        node.show()
+        self.assertEqual(struct.unpack('B', node['enc/len$'].to_bytes())[0],
+                         len(data))
+
+        raw_data = b'\x0CHello World!***'
+        status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+        print('Absorb Status:', status, off, size, name)
+        print(' \_ length of original data:', len(raw_data))
+        print(' \_ remaining:', raw_data[size:])
+        raw_data_abs = node_abs.to_bytes()
+        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        node_abs.show()
+
+        self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+        self.assertEqual(raw_data, raw_data_abs)
+
+        msg = b'Hello World'
+        gsm_t = GSM_UserData_7bit(max_sz=20)
+        gsm_enc = gsm_t.encode(msg)
+        gsm_dec = gsm_t.decode(gsm_enc)
+        self.assertEqual(msg, gsm_dec)
+
+        msg = b'Hello World!'
+        gsm_enc = gsm_t.encode(msg)
+        gsm_dec = gsm_t.decode(gsm_enc)
+        self.assertEqual(msg, gsm_dec)
+
+        msg = b'H'
+        gsm_enc = gsm_t.encode(msg)
+        gsm_dec = gsm_t.decode(gsm_enc)
+        self.assertEqual(msg, gsm_dec)
+
+
 class TestHLAPI(unittest.TestCase):
 
     @classmethod

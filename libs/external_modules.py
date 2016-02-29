@@ -113,3 +113,11 @@ except ImportError:
     ssh_module = False
     print('WARNING [FMK]: python(3)-paramiko module is not installed! '
           'Should be installed for ssh-based monitoring.')
+
+serial_module = True
+try:
+    import serial
+except ImportError:
+    serial_module = False
+    print('WARNING [FMK]: python(3)-serial module is not installed! '
+          'Should be installed for serial-based Target.')

@@ -121,7 +121,7 @@ class MH(object):
 
     @staticmethod
     def LEN(vt=fvt.INT_str,
-            set_attrs=[], clear_attrs=[]):
+            set_attrs=[], clear_attrs=[], after_encoding=True):
         '''
         Return a *generator* that returns the length of a node parameter.
 
@@ -129,9 +129,12 @@ class MH(object):
           vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
+          after_encoding (bool): if False compute the length before any encoding. Can be
+            set to False only if node arguments support encoding.
         '''
         def length(vt, set_attrs, clear_attrs, node):
-            n = Node('cts', value_type=vt(int_list=[len(node.to_bytes())]))
+            raw_data = node.to_bytes() if after_encoding else node.get_raw_value()
+            n = Node('cts', value_type=vt(int_list=[len(raw_data)]))
             n.set_semantics(NodeSemantics(['len']))
             MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
@@ -188,7 +191,7 @@ class MH(object):
 
     @staticmethod
     def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=True,
-            set_attrs=[], clear_attrs=[]):
+            set_attrs=[], clear_attrs=[], after_encoding=True):
         '''Return a *generator* that returns the CRC (in the chosen type) of
         all the node parameters. (Default CRC is PKZIP CRC32)
 
@@ -200,11 +203,13 @@ class MH(object):
           rev (bool): bit reversed algorithm when `True`.
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
+          after_encoding (bool): if False compute the CRC before any encoding. Can be
+            set to False only if node arguments support encoding.
         '''
         def crc(vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs, nodes):
             crc_func = crcmod.mkCrcFun(poly, initCrc=init_crc, xorOut=xor_out, rev=rev)
             if isinstance(nodes, Node):
-                s = nodes.to_bytes()
+                s = nodes.to_bytes() if after_encoding else nodes.get_raw_value()
             else:
                 if issubclass(nodes.__class__, NodeAbstraction):
                     nodes = nodes.get_concrete_nodes()
@@ -212,7 +217,8 @@ class MH(object):
                     raise TypeError("Contents of 'nodes' parameter is incorrect!")
                 s = b''
                 for n in nodes:
-                    s += n.to_bytes()
+                    raw_data = n.to_bytes() if after_encoding else n.get_raw_value()
+                    s += raw_data
 
             result = crc_func(s)
 
@@ -230,7 +236,7 @@ class MH(object):
 
     @staticmethod
     def WRAP(func, vt=fvt.INT_str,
-             set_attrs=[], clear_attrs=[]):
+             set_attrs=[], clear_attrs=[], after_encoding=True):
         '''Return a *generator* that returns the result (in the chosen type)
         of the provided function applied on the concatenation of all
         the node parameters.
@@ -240,10 +246,12 @@ class MH(object):
           vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
+          after_encoding (bool): if False, execute `func` on node arguments before any encoding.
+            Can be set to False only if node arguments support encoding.
         '''
         def map_func(vt, func, set_attrs, clear_attrs, nodes):
             if isinstance(nodes, Node):
-                s = nodes.to_bytes()
+                s = nodes.to_bytes() if after_encoding else nodes.get_raw_value()
             else:
                 if issubclass(nodes.__class__, NodeAbstraction):
                     nodes = nodes.get_concrete_nodes()
@@ -251,7 +259,8 @@ class MH(object):
                     raise TypeError("Contents of 'nodes' parameter is incorrect!")
                 s = b''
                 for n in nodes:
-                    s += n.to_bytes()
+                    raw_data = n.to_bytes() if after_encoding else n.get_raw_value()
+                    s += raw_data
 
             result = func(s)
 
@@ -316,7 +325,7 @@ class MH(object):
 
     @staticmethod
     def OFFSET(use_current_position=True, depth=1, vt=fvt.INT_str,
-               set_attrs=[], clear_attrs=[]):
+               set_attrs=[], clear_attrs=[], after_encoding=True):
         '''Return a *generator* that computes the offset of a child node
         within its parent node.
 
@@ -341,6 +350,8 @@ class MH(object):
           vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
+          after_encoding (bool): if False compute the fixed amount part of the offset before
+            any encoding. Can be set to False only if node arguments support encoding.
         '''
         class Offset(object):
             provide_helpers = True
@@ -380,7 +391,8 @@ class MH(object):
                     s = b''
                     end = -1 if self.use_current_position else -2
                     for n in nodes[:end]:
-                        s += n.to_bytes()
+                        raw_data = n.to_bytes() if after_encoding else n.get_raw_value()
+                        s += raw_data
                     base = len(s)
                     off = nodes[-1].get_subnode_off(idx)
 
@@ -394,7 +406,7 @@ class MH(object):
 
     @staticmethod
     def COPY_VALUE(path, depth=None, vt=None,
-                   set_attrs=[], clear_attrs=[]):
+                   set_attrs=[], clear_attrs=[], after_encoding=True):
         '''Return a *generator* that retrieves the value of another node, and
         then return a `vt` node with this value. The other node is
         selected:
@@ -415,7 +427,8 @@ class MH(object):
           vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
-
+          after_encoding (bool): if False, copy the raw value, otherwise the encoded one. Can be
+            set to False only if node arguments support encoding.
         '''
         class CopyValue(object):
             provide_helpers = True
@@ -443,11 +456,12 @@ class MH(object):
                     base_node = node
 
                 tg_node = base_node[self.path]
-                raw = tg_node.to_bytes()
 
                 if tg_node.is_nonterm():
                     n = Node('cts', base_node=tg_node, ignore_frozen_state=False)
                 else:
+                    raw = tg_node.to_bytes() if after_encoding else tg_node.get_raw_value()
+
                     if self.vt is None:
                         assert(tg_node.is_typed_value() and not tg_node.is_typed_value(subkind=fvt.BitField))
                         self.vt = tg_node.get_current_subkind()

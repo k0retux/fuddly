@@ -36,6 +36,7 @@ import copy
 import struct
 import time
 import collections
+import binascii
 
 import errno
 from socket import error as socket_error
@@ -1218,3 +1219,71 @@ class LocalTarget(Target):
         self.__feedback.set_bytes(byte_string)
 
         return self.__feedback
+
+
+class SIMTarget(Target):
+    delay_between_write = 0.5
+
+    def __init__(self, serial_port, baudrate, tel_num, zone='33'):
+        self.serial_port = serial_port
+        self.baudrate = baudrate
+        self.tel_num = zone
+        tel = tel_num[1:]
+        tel_sz = len(tel)
+        for idx in range(0, tel_sz, 2):
+            if idx+1<tel_sz:
+                self.tel_num += tel[idx+1]+tel[idx]
+            else:
+                self.tel_num += 'F'+tel[idx]
+        if sys.version_info[0]>2:
+            self.tel_num = bytes(self.tel_num, 'latin_1')
+
+    def start(self):
+
+        if not serial_module:
+            print('/!\\ ERROR /!\\: the PhoneTarget has been disabled because '
+                  'python-serial module is not installed')
+            return False
+
+        self.ser = serial.Serial(self.serial_port, self.baudrate, timeout=1)
+
+        self.ser.write(b"ATE1\r\n")   # echo ON
+        time.sleep(self.delay_between_write)
+        self.ser.write(b"AT+CMGF=0\r\n") # PDU mode
+        time.sleep(self.delay_between_write)
+        self.ser.write(b"AT+CSMS=0\r\n") # check if modem can process SMS
+        time.sleep(self.delay_between_write)
+
+        self._retrieve_feedback_from_serial()
+
+        return True
+
+    def stop(self):
+        self.ser.close()
+
+    def _retrieve_feedback_from_serial(self):
+        while True:
+            fbk = self.ser.readline()
+            if fbk.strip():
+                self._logger.collect_target_feedback(fbk)
+            else:
+                break
+
+    def send_data(self, data):
+        pdu = b''
+        raw_data = data.to_bytes()
+        for c in raw_data:
+            if sys.version_info[0] == 2:
+                c = ord(c)
+            pdu += binascii.b2a_hex(struct.pack('B', c))
+        pdu = pdu.upper()
+        pdu = b"0001000B91" + self.tel_num + b"0000" + pdu + b"\x1a\r\n"
+
+        print('\n\nPDU:')
+        print(pdu)
+
+        self.ser.write(b"AT+CMGS=23\r\n") # PDU mode
+        time.sleep(self.delay_between_write)
+        self.ser.write(pdu)
+
+        self._retrieve_feedback_from_serial()

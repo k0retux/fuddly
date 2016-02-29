@@ -264,7 +264,40 @@ class meta_int_str(type):
 
 
 class String(VT_Alt):
-    
+    """
+    Value type that represents a character string.
+
+    Attributes:
+        encoded_string (bool): Shall be set to True by any subclass that deals
+          with encoding
+    """
+
+    encoded_string = False
+
+    def encode(self, val):
+        """
+        To overloaded by a subclass that deals with encoding.
+
+        Args:
+            val (bytes): the decoded value
+
+        Returns:
+            bytes: the encoded value
+        """
+        return val
+
+    def decode(self, val):
+        """
+        To overloaded by a subclass that deals with encoding.
+
+        Args:
+            val (bytes): the encoded value
+
+        Returns:
+            bytes: the decoded value
+        """
+        return val
+
     def __repr__(self):
         if DEBUG:
             return VT_Alt.__repr__(self)[:-1] + ' contents:' + str(self.val_list) + '>'
@@ -287,6 +320,7 @@ class String(VT_Alt):
 
         self.min_sz = None
         self.max_sz = None
+        self.max_encoded_sz = None
 
         self.set_description(val_list=val_list, size=size, min_sz=min_sz,
                              max_sz=max_sz, determinist=determinist,
@@ -307,7 +341,7 @@ class String(VT_Alt):
 
     def absorb_auto_helper(self, blob, constraints):
         off = 0
-        size = self.max_sz
+        size = self.max_encoded_sz
 
         # If 'Contents' constraint is set, we seek for string within
         # val_list or conforming to the alphabet.
@@ -316,12 +350,15 @@ class String(VT_Alt):
         # If no such constraints are provided, we assume off==0
         # and let do_absorb() decide if it's OK (via size constraints
         # for instance).
+        blob_dec = self.decode(blob)
         if constraints[AbsCsts.Contents] and self.val_list is not None and self.alphabet is None:
             for v in self.val_list:
-                if blob.startswith(v):
+                if blob_dec.startswith(v):
                     break
             else:
                 for v in self.val_list:
+                    if self.encoded_string:
+                        v = self.encode(v)
                     off = blob.find(v)
                     if off > -1:
                         size = len(v)
@@ -330,14 +367,20 @@ class String(VT_Alt):
         elif constraints[AbsCsts.Contents] and self.alphabet is not None:
             size = None
             blob = unconvert_from_internal_repr(blob)
+            if self.encoded_string:
+                blob_dec = unconvert_from_internal_repr(blob_dec)
+            else:
+                blob_dec = blob
             alp = unconvert_from_internal_repr(self.alphabet)
             for l in alp:
-                if blob.startswith(l):
+                if blob_dec.startswith(l):
                     break
             else:
                 sup_sz = len(blob)+1
                 off = sup_sz
                 for l in alp:
+                    if self.encoded_string:
+                        l = self.encode(l)
                     new_off = blob.find(l)
                     if new_off < off and new_off > -1:
                         off = new_off
@@ -345,10 +388,15 @@ class String(VT_Alt):
                     off = -1
 
         elif constraints[AbsCsts.Regexp] and self.regexp is not None:
-            g = re.search(self.regexp, blob, re.S)
+            g = re.search(self.regexp, blob_dec, re.S)
             if g is not None:
-                off = g.start()
-                size = g.end() - off
+                if self.encoded_string:
+                    pattern_enc = self.encode(g.group(0))
+                    off = blob.find(pattern_enc)
+                    size = len(pattern_enc)
+                else:
+                    off = g.start()
+                    size = g.end() - off
             else:
                 off = -1
 
@@ -359,16 +407,34 @@ class String(VT_Alt):
 
 
     def do_absorb(self, blob, constraints, off=0, size=None):
+        """
+        Core function for absorption.
+
+        Args:
+            blob: binary string on which to perform absorption
+            constraints: constraints to comply with
+            off: absorption should start at offset `off` from blob
+            size: if provided, `size` relates to the string to be absorbed (which can be encoded)
+
+        Returns:
+            value, off, size
+        """
 
         self.orig_max_sz = self.max_sz
+        self.orig_max_encoded_sz = self.max_encoded_sz
         self.orig_min_sz = self.min_sz
         self.orig_val_list = copy.copy(self.val_list)
         self.orig_val_list_copy = copy.copy(self.val_list_copy)
         self.orig_drawn_val = self.drawn_val
 
         if constraints[AbsCsts.Size]:
-            sz = size if size is not None and size < self.max_sz else self.max_sz
+            if self.encoded_string:
+                sz = size if size is not None and size < self.max_encoded_sz else self.max_encoded_sz
+            else:
+                sz = size if size is not None and size < self.max_sz else self.max_sz
+
             val = self._read_value_from(blob[off:sz+off], constraints)
+
             val_sz = len(val) # maybe different from sz if blob is smaller
             if val_sz < self.min_sz:
                 raise ValueError('min_sz constraint not respected!')
@@ -390,7 +456,11 @@ class String(VT_Alt):
                     raise ValueError('contents not valid!')
         elif constraints[AbsCsts.Contents] and self.alphabet is not None:
             val, val_sz = self._check_alphabet(val, constraints)
-            
+
+        if self.encoded_string:
+            val_enc = self.encode(val)
+            val_enc_sz = len(val_enc)
+
         # If we reach this point that means that val is accepted. Thus
         # update max and min if necessary.
         if not constraints[AbsCsts.Size]:
@@ -398,6 +468,9 @@ class String(VT_Alt):
                 self.max_sz = val_sz
             elif val_sz < self.min_sz:
                 self.min_sz = val_sz
+            if self.encoded_string:
+                if val_enc_sz > self.max_encoded_sz:
+                    self.max_encoded_sz = val_enc_sz
 
         if self.val_list is None:
             self.val_list = []
@@ -406,7 +479,11 @@ class String(VT_Alt):
 
         self.reset_state()
 
-        return val, off, val_sz
+        if self.encoded_string:
+            # off is still valid here (not modified by this method)
+            return val_enc, off, val_enc_sz
+        else:
+            return val, off, val_sz
 
 
     def _check_alphabet(self, val, constraints):
@@ -446,6 +523,7 @@ class String(VT_Alt):
             self.val_list_copy = self.orig_val_list_copy
             self.min_sz = self.orig_min_sz
             self.max_sz = self.orig_max_sz
+            self.max_encoded_sz = self.orig_max_encoded_sz
             self.drawn_val = self.orig_drawn_val
 
     def do_cleanup_absorb(self):
@@ -457,9 +535,12 @@ class String(VT_Alt):
             del self.orig_val_list_copy
             del self.orig_min_sz
             del self.orig_max_sz
+            del self.orig_max_encoded_sz
             del self.orig_drawn_val
 
     def _read_value_from(self, blob, constraints):
+        if self.encoded_string:
+            blob = self.decode(blob)
         if constraints[AbsCsts.Regexp]:
             g = re.match(self.regexp, blob, re.S)
             if g is None:
@@ -565,10 +646,17 @@ class String(VT_Alt):
 
         elif val_list is not None:
             sz = 0
+            if self.encoded_string:
+                self.max_encoded_sz = 0
             for v in val_list:
                 length = len(v)
                 if length > sz:
                     sz = length
+                if self.encoded_string:
+                    length_enc = len(self.encode(VT._str2internal(v)))
+                    if length_enc > self.max_encoded_sz:
+                        self.max_encoded_sz = length_enc
+
             self.max_sz = sz
             self.min_sz = 0
 
@@ -579,8 +667,15 @@ class String(VT_Alt):
 
         if val_list is None:
             self._populate_val_list()
+            if self.encoded_string:
+                self.max_encoded_sz = 0
+                for v in self.val_list:
+                    length = len(self.encode(v))
+                    if length > self.max_encoded_sz:
+                        self.max_encoded_sz = length
 
         self.determinist = determinist
+
 
     def _populate_val_list(self):
         self.val_list = []
@@ -657,6 +752,8 @@ class String(VT_Alt):
             self.val_list_copy.remove(ret)
 
         self.drawn_val = ret
+        if self.encoded_string:
+            ret = self.encode(ret)
         return ret
 
     def is_exhausted(self):
@@ -965,6 +1062,55 @@ class Filename(String):
         b'file%n%n%n%nname.txt',
     ]
 
+
+class GSM_UserData_7bit(String):
+    encoded_string = True
+
+    def encode(self, msg):
+        if sys.version_info[0] > 2:
+            ORD = lambda x: x
+        else:
+            ORD = ord
+        msg_sz = len(msg)
+        l = []
+        idx = 0
+        off_cpt = 0
+        while idx < msg_sz:
+            off = off_cpt % 7
+            c_idx = idx
+            if off == 0 and off_cpt > 0:
+                c_idx = idx + 1
+            if c_idx+1 < msg_sz:
+                l.append((ORD(msg[c_idx])>>off)+((ORD(msg[c_idx+1])<<(7-off))&0x00FF))
+            elif c_idx < msg_sz:
+                l.append(ORD(msg[c_idx])>>off)
+            idx = c_idx + 1
+            off_cpt += 1
+
+        return b''.join(map(lambda x: struct.pack('B', x), l))
+
+    def decode(self, msg):
+        if sys.version_info[0] > 2:
+            ORD = lambda x: x
+        else:
+            ORD = ord
+        msg_sz = len(msg)
+        l = []
+        c_idx = 0
+        off_cpt = 0
+        lsb = 0
+        while c_idx < msg_sz:
+            off = off_cpt % 7
+            if off == 0 and off_cpt > 0:
+                l.append(lsb)
+                lsb = 0
+            if c_idx < msg_sz:
+                l.append(((ORD(msg[c_idx])<<off)&0x007F)+lsb)
+                lsb = ORD(msg[c_idx])>>(7-off)
+            c_idx += 1
+            off_cpt += 1
+
+        return b''.join(map(lambda x: struct.pack('B', x), l))
 
 
 class Fuzzy_INT(INT):

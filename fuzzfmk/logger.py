@@ -361,7 +361,7 @@ class Logger(object):
                 self.fmkDB.insert_feedback(self.last_data_id, "Collector [record #{:d}]".format(idx),
                                            self._encode_target_feedback(m),
                                            status_code=status)
-            if status < 0:
+            if status is not None and status < 0:
                 error_detected = True
 
         if epilogue is not None:
