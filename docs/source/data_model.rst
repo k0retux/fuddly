@@ -118,14 +118,34 @@ following parameters:
   provided. Also use during absorption to validate the contents. It is
   checked if there is no ``val_list``.
 
+``max_encoded_sz`` [optional, default value: **None**]
+  Only relevant for subclass that leverage the encoding infrastructure.
+  Enable to provide the maximum legitimate size for an encoded string.
+
+Some String subclasses leverage the ``String`` encoding infrastructure,
+that enables to handle transparently any encoding scheme:
+
+- The input values are the same as for the ``String`` type.
+- Fuzzing test cases are generated based on the raw values, and then are encoded properly.
+- Some test cases may be defined on the encoding scheme itself.
+
+.. note:: To define a ``String`` subclass handling a specific encoding, you have to
+   set :attr:`fuzzfmk.value_types.String.encoded_string` to ``True``, and to overload
+   the methods: :meth:`fuzzfmk.value_types.String.encode` and :meth:`fuzzfmk.value_types.String.decode`
+
+   Optionally, you may overload: :meth:`fuzzfmk.value_types.String.encoded_test_cases`.
+
 
 Below the different currently defined string types:
 
-- :class:`fuzzfmk.value_types.String`: General purpose character
-  string.
+- :class:`fuzzfmk.value_types.String`: General purpose character string.
 - :class:`fuzzfmk.value_types.Filename`: Filename. Similar to the type
   ``String``, but some disruptors like ``tTYPE`` will generate more specific
   test cases.
+- :class:`fuzzfmk.value_types.UTF16_LE`: ``String`` encoded in ``UTF16`` little-endian.
+  Note that some test cases are defined on the encoding scheme.
+- :class:`fuzzfmk.value_types.GSM_UserData_7bit`: ``String`` encoded in conformity
+  with ``GSM 7-bits`` packed format.
 
 
 BitField
@@ -252,9 +272,9 @@ the first example. We additionally specify the parameter
              a look especially at:
 
              - :func:`fuzzfmk.value_types.BitField.set_subfield`, :func:`fuzzfmk.value_types.BitField.get_subfield`
-	     - :func:`fuzzfmk.value_types.BitField.extend_right`
-	     - :func:`fuzzfmk.value_types.BitField.reset_state`, :func:`fuzzfmk.value_types.BitField.rewind`
-	     - :func:`fuzzfmk.value_types.VT_Alt.switch_mode` (used currently by the disruptor ``tTYPE``)
+             - :func:`fuzzfmk.value_types.BitField.extend_right`
+             - :func:`fuzzfmk.value_types.BitField.reset_state`, :func:`fuzzfmk.value_types.BitField.rewind`
+             - :func:`fuzzfmk.value_types.VT_Alt.switch_mode` (used currently by the disruptor ``tTYPE``)
 
 
 .. _dm:generators:
