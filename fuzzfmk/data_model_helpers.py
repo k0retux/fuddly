@@ -133,8 +133,8 @@ class MH(object):
             set to False only if node arguments support encoding.
         '''
         def length(vt, set_attrs, clear_attrs, node):
-            raw_data = node.to_bytes() if after_encoding else node.get_raw_value()
-            n = Node('cts', value_type=vt(int_list=[len(raw_data)]))
+            blob = node.to_bytes() if after_encoding else node.get_raw_value()
+            n = Node('cts', value_type=vt(int_list=[len(blob)]))
             n.set_semantics(NodeSemantics(['len']))
             MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
@@ -217,8 +217,8 @@ class MH(object):
                     raise TypeError("Contents of 'nodes' parameter is incorrect!")
                 s = b''
                 for n in nodes:
-                    raw_data = n.to_bytes() if after_encoding else n.get_raw_value()
-                    s += raw_data
+                    blob = n.to_bytes() if after_encoding else n.get_raw_value()
+                    s += blob
 
             result = crc_func(s)
 
@@ -259,8 +259,8 @@ class MH(object):
                     raise TypeError("Contents of 'nodes' parameter is incorrect!")
                 s = b''
                 for n in nodes:
-                    raw_data = n.to_bytes() if after_encoding else n.get_raw_value()
-                    s += raw_data
+                    blob = n.to_bytes() if after_encoding else n.get_raw_value()
+                    s += blob
 
             result = func(s)
 
@@ -391,8 +391,8 @@ class MH(object):
                     s = b''
                     end = -1 if self.use_current_position else -2
                     for n in nodes[:end]:
-                        raw_data = n.to_bytes() if after_encoding else n.get_raw_value()
-                        s += raw_data
+                        blob = n.to_bytes() if after_encoding else n.get_raw_value()
+                        s += blob
                     base = len(s)
                     off = nodes[-1].get_subnode_off(idx)
 
@@ -460,7 +460,7 @@ class MH(object):
                 if tg_node.is_nonterm():
                     n = Node('cts', base_node=tg_node, ignore_frozen_state=False)
                 else:
-                    raw = tg_node.to_bytes() if after_encoding else tg_node.get_raw_value()
+                    blob = tg_node.to_bytes() if after_encoding else tg_node.get_raw_value()
 
                     if self.vt is None:
                         assert(tg_node.is_typed_value() and not tg_node.is_typed_value(subkind=fvt.BitField))
@@ -469,7 +469,7 @@ class MH(object):
                     if issubclass(self.vt, fvt.INT):
                         vtype = self.vt(int_list=[tg_node.get_raw_value()])
                     elif issubclass(self.vt, fvt.String):
-                        vtype = self.vt(val_list=[raw])
+                        vtype = self.vt(val_list=[blob])
                     else:
                         raise NotImplementedError('Value type not supported')
                     n = Node('cts', value_type=vtype)

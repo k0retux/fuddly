@@ -119,8 +119,13 @@ following parameters:
   checked if there is no ``val_list``.
 
 ``max_encoded_sz`` [optional, default value: **None**]
-  Only relevant for subclass that leverage the encoding infrastructure.
+  Only relevant for subclasses that leverage the encoding infrastructure.
   Enable to provide the maximum legitimate size for an encoded string.
+
+``encoding_arg`` [optional, default value: **None**]
+  Only relevant for subclasses that leverage the encoding infrastructure and that
+  allow their encoding scheme to be configured. This parameter is directly provided to
+  :meth:`fuzzfmk.value_types.String.init_encoding_scheme`.
 
 Some String subclasses leverage the ``String`` encoding infrastructure,
 that enables to handle transparently any encoding scheme:
@@ -133,8 +138,10 @@ that enables to handle transparently any encoding scheme:
    set :attr:`fuzzfmk.value_types.String.encoded_string` to ``True``, and to overload
    the methods: :meth:`fuzzfmk.value_types.String.encode` and :meth:`fuzzfmk.value_types.String.decode`
 
-   Optionally, you may overload: :meth:`fuzzfmk.value_types.String.encoded_test_cases`.
-
+   Optionally, you may overload: :meth:`fuzzfmk.value_types.String.encoded_test_cases` if you want
+   to define encoding-related test cases.
+   Finally, if you need to initialize the encoding scheme you should overload the method
+   :meth:`fuzzfmk.value_types.String.init_encoding_scheme`.
 
 Below the different currently defined string types:
 
@@ -144,6 +151,8 @@ Below the different currently defined string types:
   test cases.
 - :class:`fuzzfmk.value_types.UTF16_LE`: ``String`` encoded in ``UTF16`` little-endian.
   Note that some test cases are defined on the encoding scheme.
+- :class:`fuzzfmk.value_types.GZIP`: ``String`` compressed with ``zlib``. The parameter
+  ``encoding_arg`` is used to specify the level of compression (0-9).
 - :class:`fuzzfmk.value_types.GSM_UserData_7bit`: ``String`` encoded in conformity
   with ``GSM 7-bits`` packed format.
 

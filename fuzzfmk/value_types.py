@@ -33,6 +33,7 @@ import binascii
 import collections
 import string
 import re
+import zlib
 
 import six
 from six import with_metaclass
@@ -300,6 +301,18 @@ class String(VT_Alt):
         """
         return val
 
+    def init_encoding_scheme(self, arg):
+        """
+        To be optionally overloaded by a subclass that deals with encoding,
+        if encoding need to be initialized in some way.
+
+        Args:
+            arg: provided through the `encoding_arg` parameter of the `String` constructor
+
+        Returns:
+            None
+        """
+
     def encoded_test_cases(self, current_val, max_sz, min_sz, max_encoded_sz):
         """
         To be optionally overloaded by a subclass that deals with encoding
@@ -326,7 +339,7 @@ class String(VT_Alt):
     def init_specific(self, val_list=None, size=None, min_sz=None,
                       max_sz=None, determinist=True, ascii_mode=False,
                       extra_fuzzy_list=None, absorb_regexp=None,
-                      alphabet=None, max_encoded_sz=None):
+                      alphabet=None, max_encoded_sz=None, encoding_arg=None):
 
         self.drawn_val = None
 
@@ -339,6 +352,8 @@ class String(VT_Alt):
 
         self.min_sz = None
         self.max_sz = None
+
+        self.init_encoding_scheme(encoding_arg)
 
         self.set_description(val_list=val_list, size=size, min_sz=min_sz,
                              max_sz=max_sz, determinist=determinist,
@@ -1109,6 +1124,23 @@ class UTF16_LE(String):
                 # euro character at the end that 'fully' use the 2 bytes of utf-16
                 l = [self.encode(b'A'*nb)+b'\xac\x20']
         return l
+
+class GZIP(String):
+    encoded_string = True
+
+    def init_encoding_scheme(self, arg=None):
+        self.lvl = 9 if arg is None else arg
+
+    def encode(self, val):
+        return zlib.compress(val, self.lvl)
+
+    def decode(self, val):
+        try:
+            dec = zlib.decompress(val)
+        except:
+            dec = b''
+
+        return dec
 
 class GSM_UserData_7bit(String):
     encoded_string = True

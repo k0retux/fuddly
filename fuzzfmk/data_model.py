@@ -1640,6 +1640,8 @@ class NodeInternals_TypedValue(NodeInternals_Term):
         return NodeInternals_Term._convert_to_internal_repr(ret)
 
     def get_raw_value(self):
+        if not self.is_frozen():
+            self._get_value()
         return self.value_type.get_current_raw_val()
         
     def absorb_auto_helper(self, blob, constraints):

@@ -2495,30 +2495,34 @@ class TestNode_TypedValue(unittest.TestCase):
             def decode(self, val):
                 return val[:-3]
 
-        data = 'Hello World!'
+        data = ['Test!', 'Hello World!']
         enc_desc = \
         {'name': 'enc',
          'contents': [
              {'name': 'len',
               'contents': MH.LEN(vt=UINT8, after_encoding=False),
-              'node_args': 'user_data'},
+              'node_args': 'user_data',
+              'absorb_csts': AbsFullCsts(contents=False)},
              {'name': 'user_data',
-              'contents': EncodedStr(val_list=[data])
-             }
+              'contents': EncodedStr(val_list=data) },
+             {'name': 'compressed_data',
+              'contents': GZIP(val_list=data, encoding_arg=6) }
          ]}
 
         mh = ModelHelper()
         node = mh.create_graph_from_desc(enc_desc)
         node.set_env(Env())
 
-        node_abs = Node('enc_abs', base_node=node)
+        node_abs = Node('enc_abs', base_node=node, new_env=True)
         node_abs.set_env(Env())
 
         node.show()
         self.assertEqual(struct.unpack('B', node['enc/len$'].to_bytes())[0],
-                         len(data))
+                         len(node['enc/user_data$'].get_raw_value()))
 
-        raw_data = b'\x0CHello World!***'
+        raw_data = b'\x0CHello World!***' + \
+                   b'x\x9c\xf3H\xcd\xc9\xc9W\x08\xcf/\xcaIQ\x04\x00\x1cI\x04>'
+
         status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
 
         print('Absorb Status:', status, off, size, name)
@@ -2553,6 +2557,11 @@ class TestNode_TypedValue(unittest.TestCase):
         dec = vtype.decode(enc)
         self.assertEqual(msg, dec)
 
+        msg = b'Hello World!'*10
+        vtype = GZIP(max_sz=20)
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
 
 
 class TestHLAPI(unittest.TestCase):
@@ -2937,8 +2946,7 @@ class TestFMK(unittest.TestCase):
                 d.pretty_print()
                 fmk.cleanup_dmaker(dmaker_type=dmaker_type, reset_existing_seed=True)
             else:
-                print("\n***WARNING: the sequence %r returns nothing!" % act)
-                raise ValueError
+                raise ValueError("\n***WARNING: the sequence {!r} returns {!r}!".format(act,d))
 
         fmk.cleanup_all_dmakers(reset_existing_seed=True)
 
