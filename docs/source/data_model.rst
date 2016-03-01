@@ -134,13 +134,18 @@ that enables to handle transparently any encoding scheme:
 - Fuzzing test cases are generated based on the raw values, and then are encoded properly.
 - Some test cases may be defined on the encoding scheme itself.
 
-.. note:: To define a ``String`` subclass handling a specific encoding, you have to overload
-   the methods: :meth:`fuzzfmk.value_types.String.encode` and :meth:`fuzzfmk.value_types.String.decode`
+.. note::
+   To define a ``String`` subclass handling a specific encoding, you have to overload
+   the methods: :meth:`fuzzfmk.value_types.String.encode` and :meth:`fuzzfmk.value_types.String.decode`.
+   You may optionally overload: :meth:`fuzzfmk.value_types.String.encoding_test_cases` if you want
+   to define encoding-related test cases. And if you need to initialize the encoding scheme you
+   should overload the method :meth:`fuzzfmk.value_types.String.init_encoding_scheme`.
 
-   Optionally, you may overload: :meth:`fuzzfmk.value_types.String.encoded_test_cases` if you want
-   to define encoding-related test cases.
-   Finally, if you need to initialize the encoding scheme you should overload the method
-   :meth:`fuzzfmk.value_types.String.init_encoding_scheme`.
+   Alternatively and preferably, you should define a subclass of :class:`fuzzfmk.encoders.Encoder`
+   and then create a subclass of String decorated by :func:`fuzzfmk.value_types.from_encoder`
+   with the your encoder subclass in parameter. By doing so, you enable your encoder to be also
+   usable by a non-terminal node.
+
 
 Below the different currently defined string types:
 
@@ -152,7 +157,7 @@ Below the different currently defined string types:
   Note that some test cases are defined on the encoding scheme.
 - :class:`fuzzfmk.value_types.GZIP`: ``String`` compressed with ``zlib``. The parameter
   ``encoding_arg`` is used to specify the level of compression (0-9).
-- :class:`fuzzfmk.value_types.GSM_UserData_7bit`: ``String`` encoded in conformity
+- :class:`fuzzfmk.value_types.GSM7bitPacking`: ``String`` encoded in conformity
   with ``GSM 7-bits`` packed format.
 
 
@@ -583,6 +588,18 @@ unique
   node copy). Otherwise, the separators will be references to a
   unique node (zero copy).
 
+encoder
+  If specified, an encoder instance should be provided. The *encoding* will be applied
+  transparently when the binary value of the non terminal node will be retrieved
+  (:meth:`fuzzfmk.data_model.Node.to_bytes`). Additionally, during an absorption
+  (refer to :ref:`tuto:dm-absorption`), the *decoding* will also be performed automatically.
+
+  Several generic encoders are defined within ``fuzzfmk/encoders.py``. But if they
+  don't match your need, you can define your own encoder by inheriting from
+  :class:`fuzzfmk.encoders.Encoder` and implementing its interface.
+
+  .. note:: Depending on your needs, you could also choose to implement a disruptor
+     to perform your encoding (refer to :ref:`tuto:disruptors`).
 
 
 Keywords to Describe Generator Node

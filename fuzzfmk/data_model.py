@@ -2004,6 +2004,7 @@ class NodeInternals_NonTerm(NodeInternals):
                          # sense only for absorption operation.
 
     def _init_specific(self, arg):
+        self.encoder = None
         self.reset()
 
     def reset(self, nodes_drawn_qty=None, mode=None, exhaust_info=None):
@@ -2013,6 +2014,9 @@ class NodeInternals_NonTerm(NodeInternals):
         self.subnodes_csts_total_weight = 0
         self.subnodes_minmax = {}
         self.separator = None
+
+        if self.encoder:
+            self.encoder.reset()
 
         if exhaust_info is None:
             self.exhausted = False
@@ -2047,6 +2051,10 @@ class NodeInternals_NonTerm(NodeInternals):
             self.mode = m
         else:
             raise ValueError
+
+    def set_encoder(self, encoder):
+        self.encoder = encoder
+        encoder.reset()
 
     def __iter_csts(self, node_list):
         for delim, sublist in node_list:
@@ -2200,6 +2208,11 @@ class NodeInternals_NonTerm(NodeInternals):
 
                             modified_csts[id(node_list)].append(idx)
 
+    def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement):
+        if self.encoder:
+            self.encoder = copy.copy(self.encoder)
+            if ignore_frozen_state:
+                self.encoder.reset()
 
     def make_private_subnodes(self, node_dico, func_nodes, env, ignore_frozen_state,
                               accept_external_entanglement, entangled_set, delayed_node_internals):
@@ -2817,10 +2830,20 @@ class NodeInternals_NonTerm(NodeInternals):
 
 
     def _get_value(self, conf=None, recursive=True):
+
+        def handle_encoding(list_to_enc):
+            if self.encoder:
+                list_to_enc = list(flatten(list_to_enc))
+                blob = b''.join(list_to_enc)
+                blob = self.encoder.encode(blob)
+                return blob
+            else:
+                return list_to_enc
+
         l = []
         node_list, was_not_frozen = self.get_subnodes_with_csts()
 
-        djob_group_created = False        
+        djob_group_created = False
         for n in node_list:
             if n.is_attr_set(NodeInternals.DISABLED):
                 val = Node.DEFAULT_DISABLED_VALUE
@@ -2839,18 +2862,16 @@ class NodeInternals_NonTerm(NodeInternals):
 
             l.append(val)
 
-        ret = (l, was_not_frozen)
-
         if node_list:
             node_env = node_list[0].env
         else:
-            return ret
+            return (handle_encoding(l), was_not_frozen)
 
         # We avoid reentrancy that could trigger recursive loop with
         # self._existence_from_node()
         if node_env and node_env._reentrancy_cpt > 0:
             node_env._reentrancy_cpt = 0
-            return ret
+            return (handle_encoding(l), was_not_frozen)
 
         if node_env and node_env.delayed_jobs_enabled and \
            node_env.djobs_exists(Node.DJOBS_PRIO_nterm_existence):
@@ -2880,7 +2901,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                         if args[2] > job_idx:
                                             args[2] += node_qty-1
 
-        return ret
+        return (handle_encoding(l), was_not_frozen)
 
 
     @staticmethod
@@ -3107,6 +3128,10 @@ class NodeInternals_NonTerm(NodeInternals):
                within the same non-terminal node. Use delayed job
                infrastructure to cover all cases (TBC).
         '''
+
+        if self.encoder:
+            original_blob = blob
+            blob = self.encoder.decode(blob)
 
         abs_excluded_components = []
         abs_exhausted = False
@@ -3520,6 +3545,9 @@ class NodeInternals_NonTerm(NodeInternals):
 
         self._clone_node_cleanup()
         self._clone_separator_cleanup()
+
+        if self.encoder:
+            consumed_size = len(original_blob)
 
         return status, 0, consumed_size
 
@@ -5481,6 +5509,10 @@ class Node(object):
                                     log_func=log_func)
                     else:
                         print_nonterm_func(' [{:s}]'.format(node_type), nl=False, log_func=log_func)
+                        if node.is_nonterm(conf_tmp) and node.encoder is not None:
+                            self._print(' [Encoded by {:s}]'.format(node.encoder.__class__.__name__),
+                                        rgb=Color.ND_ENCODED, style=FontStyle.BOLD,
+                                        nl=False, log_func=log_func)
                         self._print(graph_deco, rgb=Color.ND_DUPLICATED, style=FontStyle.BOLD,
                                     log_func=log_func)
 

@@ -512,6 +512,7 @@ class ModelHelper(object):
         # NonTerminal description keys
         'weight', 'shape_type', 'section_type', 'duplicate_mode', 'weights',
         'separator', 'prefix', 'suffix', 'unique',
+        'encoder',
         # Generator/Function description keys
         'node_args', 'other_args', 'provide_helpers', 'trigger_last',
         # Import description keys
@@ -892,7 +893,9 @@ class ModelHelper(object):
         pfh = desc.get('post_freeze', None)
         if pfh is not None:
             node.register_post_freeze_handler(pfh)
-
+        encoder = desc.get('encoder', None)
+        if encoder is not None:
+            node.set_encoder(encoder)
 
     def _register_todo(self, node, func, args=None, unpack_args=True, prio=VERYLOW_PRIO):
         if self.sorted_todo.get(prio, None) is None:

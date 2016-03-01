@@ -42,7 +42,7 @@ sys.path.append('.')
 
 import fuzzfmk.basic_primitives as bp
 from fuzzfmk.data_model import AbsorbStatus, AbsCsts, convert_to_internal_repr, unconvert_from_internal_repr
-
+from fuzzfmk.encoders import *
 
 DEBUG = False
 
@@ -282,10 +282,10 @@ class String(VT_Alt):
     def encode(self, val):
         """
         To be overloaded by a subclass that deals with encoding.
-        (Should not be stateless.)
+        (Should be stateless.)
 
         Args:
-            val (bytes): the decoded value
+            val (bytes): the value
 
         Returns:
             bytes: the encoded value
@@ -314,11 +314,10 @@ class String(VT_Alt):
         Args:
             arg: provided through the `encoding_arg` parameter of the `String` constructor
 
-        Returns:
-            None
         """
+        return
 
-    def encoded_test_cases(self, current_val, max_sz, min_sz, max_encoded_sz):
+    def encoding_test_cases(self, current_val, max_sz, min_sz, max_encoded_sz):
         """
         To be optionally overloaded by a subclass that deals with encoding
         in order to provide specific test cases on encoding scheme.
@@ -821,8 +820,8 @@ class String(VT_Alt):
             if v not in self.val_list_fuzzy:
                 self.val_list_fuzzy.append(v)
 
-        enc_cases = self.encoded_test_cases(orig_val, self.max_sz, self.min_sz,
-                                            self.max_encoded_sz)
+        enc_cases = self.encoding_test_cases(orig_val, self.max_sz, self.min_sz,
+                                             self.max_encoded_sz)
         if enc_cases:
             self.val_list_fuzzy += enc_cases
 
@@ -1152,17 +1151,21 @@ class Filename(String):
         b'file%n%n%n%nname.txt',
     ]
 
+
+def from_encoder(encoder_cls):
+    def internal_func(string_subclass):
+        def new_meth(meth):
+            return meth if sys.version_info[0] > 2 else meth.im_func
+        string_subclass.encode = new_meth(encoder_cls.encode)
+        string_subclass.decode = new_meth(encoder_cls.decode)
+        string_subclass.init_encoding_scheme = new_meth(encoder_cls.init_encoding_scheme)
+        string_subclass.to_bytes = encoder_cls.to_bytes  # static method
+        return string_subclass
+    return internal_func
+
+@from_encoder(UTF16LE_Enc)
 class UTF16_LE(String):
-
-    def encode(self, val):
-        enc = val.decode('latin_1').encode('utf_16_le')
-        return enc
-
-    def decode(self, val):
-        dec = val.decode('utf_16_le')
-        return VT._str2internal(dec)
-
-    def encoded_test_cases(self, current_val, max_sz, min_sz, max_encoded_sz):
+    def encoding_test_cases(self, current_val, max_sz, min_sz, max_encoded_sz):
         l = None
         if max_sz > 0:
             if max_encoded_sz % 2 == 1:
@@ -1171,69 +1174,12 @@ class UTF16_LE(String):
                 l = [self.encode(b'A'*nb)+b'\xac\x20']
         return l
 
-class GZIP(String):
+@from_encoder(GZIP_Enc)
+class GZIP(String): pass
 
-    def init_encoding_scheme(self, arg=None):
-        self.lvl = 9 if arg is None else arg
+@from_encoder(GSM7bitPacking_Enc)
+class GSM7bitPacking(String): pass
 
-    def encode(self, val):
-        return zlib.compress(val, self.lvl)
-
-    def decode(self, val):
-        try:
-            dec = zlib.decompress(val)
-        except:
-            dec = b''
-
-        return dec
-
-class GSM_UserData_7bit(String):
-
-    def encode(self, msg):
-        if sys.version_info[0] > 2:
-            ORD = lambda x: x
-        else:
-            ORD = ord
-        msg_sz = len(msg)
-        l = []
-        idx = 0
-        off_cpt = 0
-        while idx < msg_sz:
-            off = off_cpt % 7
-            c_idx = idx
-            if off == 0 and off_cpt > 0:
-                c_idx = idx + 1
-            if c_idx+1 < msg_sz:
-                l.append((ORD(msg[c_idx])>>off)+((ORD(msg[c_idx+1])<<(7-off))&0x00FF))
-            elif c_idx < msg_sz:
-                l.append(ORD(msg[c_idx])>>off)
-            idx = c_idx + 1
-            off_cpt += 1
-
-        return b''.join(map(lambda x: struct.pack('B', x), l))
-
-    def decode(self, msg):
-        if sys.version_info[0] > 2:
-            ORD = lambda x: x
-        else:
-            ORD = ord
-        msg_sz = len(msg)
-        l = []
-        c_idx = 0
-        off_cpt = 0
-        lsb = 0
-        while c_idx < msg_sz:
-            off = off_cpt % 7
-            if off == 0 and off_cpt > 0:
-                l.append(lsb)
-                lsb = 0
-            if c_idx < msg_sz:
-                l.append(((ORD(msg[c_idx])<<off)&0x007F)+lsb)
-                lsb = ORD(msg[c_idx])>>(7-off)
-            c_idx += 1
-            off_cpt += 1
-
-        return b''.join(map(lambda x: struct.pack('B', x), l))
 
 
 class Fuzzy_INT(INT):

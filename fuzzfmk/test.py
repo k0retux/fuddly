@@ -2397,9 +2397,52 @@ class TestNode_NonTerm(unittest.TestCase):
             node.unfreeze()
 
 
+    def test_encoding_attr(self):
 
+        data = ['Test!', 'Hello World!']
+        enc_desc = \
+        {'name': 'top',
+         'contents': [
+             {'name': 'data0',
+              'contents': String(val_list=['Plip', 'Plop']) },
+             {'name': 'enc',
+              'encoder': GZIP_Enc(6),
+              'set_attrs': [NodeInternals.Abs_Postpone],
+              'contents': [
+                 {'name': 'len',
+                  'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                  'node_args': 'data1',
+                  'absorb_csts': AbsFullCsts(contents=False)},
+                 {'name': 'data1',
+                  'contents': String(val_list=data) },
+              ]},
+             {'name': 'data2',
+              'contents': String(val_list=data) }
+         ]}
 
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(enc_desc)
+        node.set_env(Env())
 
+        node_abs = Node('enc_abs', base_node=node, new_env=True)
+        node_abs.set_env(Env())
+
+        node.show()
+        self.assertEqual(struct.unpack('B', node['top/enc/len$'].to_bytes())[0],
+                         len(node['top/enc/data1$'].get_raw_value()))
+
+        raw_data = b'Plopx\x9cc\rI-.Q\x04\x00\x05\xbe\x01\xc7Hello World!'
+        status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+        print('Absorb Status:', status, off, size, name)
+        print(' \_ length of original data:', len(raw_data))
+        print(' \_ remaining:', raw_data[size:])
+        raw_data_abs = node_abs.to_bytes()
+        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        node_abs.show()
+
+        self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+        self.assertEqual(raw_data, raw_data_abs)
 
 
 
@@ -2536,7 +2579,7 @@ class TestNode_TypedValue(unittest.TestCase):
         self.assertEqual(raw_data, raw_data_abs)
 
         msg = b'Hello World'
-        gsm_t = GSM_UserData_7bit(max_sz=20)
+        gsm_t = GSM7bitPacking(max_sz=20)
         gsm_enc = gsm_t.encode(msg)
         gsm_dec = gsm_t.decode(gsm_enc)
         self.assertEqual(msg, gsm_dec)
