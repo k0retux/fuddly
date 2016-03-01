@@ -1556,10 +1556,13 @@ class Fuzzer(object):
                                               Database.DEFAULT_GTYPE_NAME, Database.DEFAULT_GEN_NAME)
 
                 self.lg.log_data(dt, verbose=verbose)
-                if multiple_data:
-                    self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
 
                 data_id = self.lg.commit_log_entry(self.group_id, self.prj.name, self.tg_name)
+                self.lg.print_console('### FmkDB Data ID: {!r}'.format(data_id),
+                                      rgb=Color.DATAINFO, nl_after=True)
+
+                if multiple_data:
+                    self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
 
 
     @EnforceOrder(accepted_states=['S2'])
