@@ -1500,7 +1500,7 @@ match the imaginary TestNode data model we just described in section
 
    fmk = Fuzzer()
 
-   fmk.enable_data_model(name="mydf")
+   fmk.run_project(name="tuto")
 
    data_gen = fmk.dm.get_data('TestNode')    # first instance of TestNode data model
    data_abs = fmk.dm.get_data('TestNode')  # second instance of TestNode data model

@@ -347,16 +347,39 @@ class MyDF_DataModel(DataModel):
               ]}
          ]}
 
-
         for_network_tg1 = Node('4tg1', vt=String(val_list=['FOR_TARGET_1']))
         for_network_tg1.set_semantics(['TG1'])
 
         for_network_tg2 = Node('4tg2', vt=String(val_list=['FOR_TARGET_2']))
         for_network_tg2.set_semantics(['TG2'])
 
+        enc_desc = \
+        {'name': 'enc',
+         'contents': [
+             {'name': 'data0',
+              'contents': String(val_list=['Plip', 'Plop']) },
+             {'name': 'crc',
+              'contents': MH.CRC(vt=UINT32_be, after_encoding=False),
+              'node_args': ['enc_data', 'data2'],
+              'absorb_csts': AbsFullCsts(contents=False) },
+             {'name': 'enc_data',
+              'encoder': GZIP_Enc(6),
+              'set_attrs': [NodeInternals.Abs_Postpone],
+              'contents': [
+                 {'name': 'len',
+                  'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                  'node_args': 'data1',
+                  'absorb_csts': AbsFullCsts(contents=False)},
+                 {'name': 'data1',
+                  'contents': UTF16_LE(val_list=['Test!', 'Hello World!']) },
+              ]},
+             {'name': 'data2',
+              'contents': String(val_list=['Red', 'Green', 'Blue']) },
+         ]}
+
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
-                      shape_desc, for_network_tg1, for_network_tg2)
+                      shape_desc, for_network_tg1, for_network_tg2, enc_desc)
 
 
 data_model = MyDF_DataModel()

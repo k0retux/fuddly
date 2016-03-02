@@ -2399,13 +2399,16 @@ class TestNode_NonTerm(unittest.TestCase):
 
     def test_encoding_attr(self):
 
-        data = ['Test!', 'Hello World!']
         enc_desc = \
-        {'name': 'top',
+        {'name': 'enc',
          'contents': [
              {'name': 'data0',
               'contents': String(val_list=['Plip', 'Plop']) },
-             {'name': 'enc',
+             {'name': 'crc',
+              'contents': MH.CRC(vt=UINT32_be, after_encoding=False),
+              'node_args': ['enc_data', 'data2'],
+              'absorb_csts': AbsFullCsts(contents=False) },
+             {'name': 'enc_data',
               'encoder': GZIP_Enc(6),
               'set_attrs': [NodeInternals.Abs_Postpone],
               'contents': [
@@ -2414,27 +2417,29 @@ class TestNode_NonTerm(unittest.TestCase):
                   'node_args': 'data1',
                   'absorb_csts': AbsFullCsts(contents=False)},
                  {'name': 'data1',
-                  'contents': String(val_list=data) },
+                  'contents': UTF16_LE(val_list=['Test!', 'Hello World!']) },
               ]},
              {'name': 'data2',
-              'contents': String(val_list=data) }
+              'contents': String(val_list=['Red', 'Green', 'Blue']) },
          ]}
 
         mh = ModelHelper()
         node = mh.create_graph_from_desc(enc_desc)
         node.set_env(Env())
 
-        node_abs = Node('enc_abs', base_node=node, new_env=True)
+        node_abs = Node('abs', base_node=node, new_env=True)
         node_abs.set_env(Env())
 
         node.show()
-        self.assertEqual(struct.unpack('B', node['top/enc/len$'].to_bytes())[0],
-                         len(node['top/enc/data1$'].get_raw_value()))
+        print('\nData:')
+        print(node.to_bytes())
+        self.assertEqual(struct.unpack('B', node['enc/enc_data/len$'].to_bytes())[0],
+                         len(node['enc/enc_data/data1$'].get_raw_value()))
 
-        raw_data = b'Plopx\x9cc\rI-.Q\x04\x00\x05\xbe\x01\xc7Hello World!'
+        raw_data = b'Plop\x8c\xd6/\x06x\x9cc\raHe(f(aPd\x00\x00\x0bv\x01\xc7Blue'
         status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
 
-        print('Absorb Status:', status, off, size, name)
+        print('\nAbsorb Status:', status, off, size, name)
         print(' \_ length of original data:', len(raw_data))
         print(' \_ remaining:', raw_data[size:])
         raw_data_abs = node_abs.to_bytes()

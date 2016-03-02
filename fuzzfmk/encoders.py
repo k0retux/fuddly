@@ -84,7 +84,10 @@ class UTF16LE_Enc(Encoder):
         return enc
 
     def decode(self, val):
-        dec = val.decode('utf_16_le')
+        try:
+            dec = val.decode('utf_16_le')
+        except:
+            dec = b''
         return Encoder.to_bytes(dec)
 
 

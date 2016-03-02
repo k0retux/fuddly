@@ -2829,10 +2829,10 @@ class NodeInternals_NonTerm(NodeInternals):
         return (self.frozen_node_list, True)
 
 
-    def _get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True, after_encoding=True):
 
         def handle_encoding(list_to_enc):
-            if self.encoder:
+            if self.encoder and after_encoding:
                 list_to_enc = list(flatten(list_to_enc))
                 blob = b''.join(list_to_enc)
                 blob = self.encoder.encode(blob)
@@ -2903,6 +2903,13 @@ class NodeInternals_NonTerm(NodeInternals):
 
         return (handle_encoding(l), was_not_frozen)
 
+
+    def get_raw_value(self):
+        raw_list = self._get_value(after_encoding=False)[0]
+        raw_list = list(flatten(raw_list))
+        raw = b''.join(raw_list)
+
+        return raw
 
     @staticmethod
     def _expand_delayed_nodes(node, node_list, idx, conf, rec):

@@ -1296,3 +1296,99 @@ Which correspond to the following data::
              `True`. Refer to :ref:`dm:keywords` for more information
              on the available keywords.
 
+
+How to Describe a Data Format With Some Encoded Parts
+-----------------------------------------------------
+
+The example below shows how to describe a data format with some parts encoded in different ways.
+
+The non-terminal node named ``enc`` (lines 9-19) has the attribute ``encoder``
+(refer to :ref:`dm:keywords`) which means that it will be encoded following the scheme of the
+specified encoder. In this case it is the :class:`fuzzfmk.encoders.GZIP_Enc` with a level
+of compression of 6. Within this node is also defined a typed node (lines 17-18) named
+``data1`` which is encoded in *UTF16 little endian* thanks to the type
+:class:`fuzzfmk.value_types.UTF16_LE` (which inherit from :class:`fuzzfmk.value_types.String`)
+that leverages the encoder :class:`fuzzfmk.encoders.UTF16LE_Enc`.
+
+Note also the parameter ``after_encoding=False`` (lines 6 and 14), which is supported by every
+relevant generator node templates (refer to :ref:`dm:generators`) and enable them to act either
+on the encoded form or the decoded form of their node parameters.
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 6, 10, 14, 18
+
+    {'name': 'enc',
+     'contents': [
+         {'name': 'data0',
+          'contents': String(val_list=['Plip', 'Plop']) },
+         {'name': 'crc',
+          'contents': MH.CRC(vt=UINT32_be, after_encoding=False),
+          'node_args': ['enc_data', 'data2'],
+          'absorb_csts': AbsFullCsts(contents=False) },
+         {'name': 'enc_data',
+          'encoder': GZIP_Enc(6),
+          'set_attrs': [NodeInternals.Abs_Postpone],
+          'contents': [
+             {'name': 'len',
+              'contents': MH.LEN(vt=UINT8, after_encoding=False),
+              'node_args': 'data1',
+              'absorb_csts': AbsFullCsts(contents=False)},
+             {'name': 'data1',
+              'contents': UTF16_LE(val_list=['Test!', 'Hello World!']) },
+          ]},
+         {'name': 'data2',
+          'contents': String(val_list=['Red', 'Green', 'Blue']) }
+     ]}
+
+This data description will enable you to produce data compliant to the specified encoding schemes
+in a transparent way. Additionally, any fuzzing operations (:ref:`tuto:disruptors`) you want to
+perform on any data parts will be done *before* any encoding takes place.
+
+If you want to perform some fuzzing on the encoding scheme itself you will have first to
+describe its format. Then it boils down to run some generic disruptors on them or some of your own.
+However, note that some value types that support encoding (refer to :ref:`vt:value-types`) embed
+specific test cases on the encoding scheme (which is the case of
+:class:`fuzzfmk.value_types.UTF16_LE` for instance).
+
+Finally, absorption (refer to :ref:`tuto:dm-absorption`) is also supported when encoding is used
+within your data description. For instance, the following data will be absorbed by the previous
+data model::
+
+   b'Plop\x8c\xd6/\x06x\x9cc\raHe(f(aPd\x00\x00\x0bv\x01\xc7Blue'
+
+To perform that operation you can write the following python code:
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 10, 12
+
+   from fuzzfmk.plumbing import *
+   from fuzzfmk.data_model import AbsorbStatus
+
+   raw_data = b'Plop\x8c\xd6/\x06x\x9cc\raHe(f(aPd\x00\x00\x0bv\x01\xc7Blue'
+
+   fmk = Fuzzer()
+   fmk.run_project(name="tuto")
+   enc_dm = fmk.dm.get_data('enc')
+
+   status, off, size, name = enc_dm.absorb(raw_data, constraints=AbsFullCsts())
+   if status == AbsorbStatus.FullyAbsorbed:
+      enc_dm.show()
+
+The following picture displays the result of the previous code (triggered by line 12):
+
+.. figure::  images/encoding.png
+   :align:   center
+   :scale:   100 %
+
+.. note:: The ``content`` absorption constraint is released for the generator nodes ``crc``
+   (line 8) and ``len`` (line 16) in order to allow any value to be absorbed and not limit them to
+   the value generated the last time the generators triggered (which occurs during node freezing).
+   Indeed, generators based on these templates will dynamically generate a typed node that contains
+   only one value---based on the current value their node parameters have while the generator is
+   triggered.
+
+.. note:: Line 11 is to make the absorption operation work correctly. Indeed because of the
+   encoding, constraints are not rigid enough to make fuddly work out the absorption
+   without some help.
