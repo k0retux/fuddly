@@ -159,6 +159,9 @@ Below the different currently defined string types:
   ``encoding_arg`` is used to specify the level of compression (0-9).
 - :class:`fuzzfmk.value_types.GSM7bitPacking`: ``String`` encoded in conformity
   with ``GSM 7-bits`` packed format.
+- :class:`fuzzfmk.value_types.Wrapper`: to be used as a mean to wrap a ``String`` with
+  a prefix and/or a suffix, without defining specific *nodes* for that (meaning you
+  don't need to model that part and want to simplify your data description).
 
 
 BitField

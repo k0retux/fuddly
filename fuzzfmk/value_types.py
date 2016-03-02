@@ -1180,6 +1180,8 @@ class GZIP(String): pass
 @from_encoder(GSM7bitPacking_Enc)
 class GSM7bitPacking(String): pass
 
+@from_encoder(Wrap_Enc)
+class Wrapper(String): pass
 
 
 class Fuzzy_INT(INT):

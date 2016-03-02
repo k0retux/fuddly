@@ -2535,7 +2535,6 @@ class TestNode_TypedValue(unittest.TestCase):
     def test_encoded_str(self):
 
         class EncodedStr(String):
-            encoded_string = True
 
             def encode(self, val):
                 return val+b'***'
@@ -2607,6 +2606,22 @@ class TestNode_TypedValue(unittest.TestCase):
 
         msg = b'Hello World!'*10
         vtype = GZIP(max_sz=20)
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
+
+        msg = b'Hello World!'
+        vtype = Wrapper(max_sz=20, encoding_arg=['<test>', '</test>'])
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
+
+        vtype = Wrapper(max_sz=20, encoding_arg=['<test>', None])
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
+
+        vtype = Wrapper(max_sz=20, encoding_arg=[None, '</test>'])
         enc = vtype.encode(msg)
         dec = vtype.decode(enc)
         self.assertEqual(msg, dec)

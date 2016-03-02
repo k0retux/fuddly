@@ -71,6 +71,8 @@ class Encoder(object):
                 else:
                     new_v = v
                 new_val.append(new_v)
+        elif val is None:
+            new_val = b''
         else:
             raise ValueError
 
@@ -106,6 +108,46 @@ class GZIP_Enc(Encoder):
             dec = b''
 
         return dec
+
+class Wrap_Enc(Encoder):
+    """
+    Encoder to be used as a mean to wrap a Node with a prefix and/or a suffix,
+    without defining specific Nodes for that (meaning you don't need to model
+    that part and want to simplify your data description).
+    """
+    def init_encoding_scheme(self, arg):
+        """
+        Take a list parameter specifying the prefix and the
+        suffix to add to the value to encode, or to remove from
+        an encoded value.
+
+        Args:
+            arg (list): Prefix and suffix character strings.
+              Can be individually set to None
+        """
+        assert(isinstance(arg, list) or isinstance(arg, tuple))
+        print(arg)
+        self.prefix = Encoder.to_bytes(arg[0])
+        self.suffix = Encoder.to_bytes(arg[1])
+        self.prefix_sz = 0 if self.prefix is None else len(self.prefix)
+        self.suffix_sz = 0 if self.suffix is None else len(self.suffix)
+
+    def encode(self, val):
+        return self.prefix + val + self.suffix
+
+    def decode(self, val):
+        val_sz = len(val)
+        if val_sz < self.prefix_sz + self.suffix_sz:
+            dec = b''
+        else:
+            if val[:self.prefix_sz] == self.prefix and \
+                val[val_sz-self.suffix_sz:] == self.suffix:
+                dec = val[self.prefix_sz:val_sz-self.suffix_sz]
+            else:
+                dec = b''
+
+        return dec
+
 
 class GSM7bitPacking_Enc(Encoder):
 
