@@ -2604,6 +2604,33 @@ class TestNode_TypedValue(unittest.TestCase):
         dec = vtype.decode(enc)
         self.assertEqual(msg, dec)
 
+        msg = b'o\xf9 \xe7a'
+        vtype = UTF16_BE(max_sz=20)
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
+
+        msg = b'o\xf9 \xe7a'
+        vtype = UTF8(max_sz=20)
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
+
+        msg = b'o\xf9 \xe7a'
+        vtype = Codec(max_sz=20, encoding_arg=None)
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
+
+        msg = b'o\xf9 \xe7a'
+        vtype = Codec(max_sz=20, encoding_arg='utf_32')
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
+        utf32_enc = b"\xff\xfe\x00\x00o\x00\x00\x00\xf9\x00\x00\x00 " \
+                    b"\x00\x00\x00\xe7\x00\x00\x00a\x00\x00\x00"
+        self.assertEqual(enc, utf32_enc)
+
         msg = b'Hello World!'*10
         vtype = GZIP(max_sz=20)
         enc = vtype.encode(msg)

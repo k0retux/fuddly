@@ -153,8 +153,15 @@ Below the different currently defined string types:
 - :class:`fuzzfmk.value_types.Filename`: Filename. Similar to the type
   ``String``, but some disruptors like ``tTYPE`` will generate more specific
   test cases.
+- :class:`fuzzfmk.value_types.UTF8`: ``String`` encoded in ``UTF8``.
 - :class:`fuzzfmk.value_types.UTF16_LE`: ``String`` encoded in ``UTF16`` little-endian.
-  Note that some test cases are defined on the encoding scheme.
+  Note that some test cases on the encoding scheme are defined.
+- :class:`fuzzfmk.value_types.UTF16_BE`: ``String`` encoded in ``UTF16`` big-endian.
+  Note that some test cases on the encoding scheme are defined.
+- :class:`fuzzfmk.value_types.Codec`: ``String`` encoded in any standard encoding
+  supported by Python. You have to provide the parameter ``encoding_arg`` with the
+  codec you want to use. If no codec is provided, this class will behave the same as the class
+  :class:`fuzzfmk.value_types.String`, that is, the ``latin_1`` codec will be used.
 - :class:`fuzzfmk.value_types.GZIP`: ``String`` compressed with ``zlib``. The parameter
   ``encoding_arg`` is used to specify the level of compression (0-9).
 - :class:`fuzzfmk.value_types.GSM7bitPacking`: ``String`` encoded in conformity

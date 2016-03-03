@@ -394,8 +394,9 @@ class String(VT_Alt):
 
         if self.__class__.encode != String.encode:
             self.encoded_string = True
-            self.encoding_arg = encoding_arg
-            self.init_encoding_scheme(encoding_arg)
+            if not hasattr(self, 'encoding_arg'):
+                self.encoding_arg = encoding_arg
+            self.init_encoding_scheme(self.encoding_arg)
 
         self.set_description(val_list=val_list, size=size, min_sz=min_sz,
                              max_sz=max_sz, determinist=determinist,
@@ -1152,7 +1153,7 @@ class Filename(String):
     ]
 
 
-def from_encoder(encoder_cls):
+def from_encoder(encoder_cls, encoding_arg=None):
     def internal_func(string_subclass):
         def new_meth(meth):
             return meth if sys.version_info[0] > 2 else meth.im_func
@@ -1160,10 +1161,16 @@ def from_encoder(encoder_cls):
         string_subclass.decode = new_meth(encoder_cls.decode)
         string_subclass.init_encoding_scheme = new_meth(encoder_cls.init_encoding_scheme)
         string_subclass.to_bytes = encoder_cls.to_bytes  # static method
+        if encoding_arg is not None:
+            string_subclass.encoding_arg = encoding_arg
         return string_subclass
     return internal_func
 
-@from_encoder(UTF16LE_Enc)
+
+@from_encoder(PythonCodec_Enc)
+class Codec(String): pass
+
+@from_encoder(PythonCodec_Enc, 'utf_16_le')
 class UTF16_LE(String):
     def encoding_test_cases(self, current_val, max_sz, min_sz, max_encoded_sz):
         l = None
@@ -1173,6 +1180,12 @@ class UTF16_LE(String):
                 # euro character at the end that 'fully' use the 2 bytes of utf-16
                 l = [self.encode(b'A'*nb)+b'\xac\x20']
         return l
+
+@from_encoder(PythonCodec_Enc, 'utf_16_be')
+class UTF16_BE(UTF16_LE): pass
+
+@from_encoder(PythonCodec_Enc, 'utf_8')
+class UTF8(String): pass
 
 @from_encoder(GZIP_Enc)
 class GZIP(String): pass

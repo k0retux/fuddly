@@ -79,15 +79,23 @@ class Encoder(object):
         return new_val
 
 
-class UTF16LE_Enc(Encoder):
+class PythonCodec_Enc(Encoder):
+    """
+    Encoder enabling the usage of every standard encodings supported by Python.
+    """
+    def init_encoding_scheme(self, arg=None):
+        if arg is None:
+            self._codec = 'latin_1'
+        else:
+            self._codec = arg
 
     def encode(self, val):
-        enc = val.decode('latin_1').encode('utf_16_le')
+        enc = val.decode('latin_1').encode(self._codec)
         return enc
 
     def decode(self, val):
         try:
-            dec = val.decode('utf_16_le')
+            dec = val.decode(self._codec)
         except:
             dec = b''
         return Encoder.to_bytes(dec)
@@ -126,7 +134,6 @@ class Wrap_Enc(Encoder):
               Can be individually set to None
         """
         assert(isinstance(arg, list) or isinstance(arg, tuple))
-        print(arg)
         self.prefix = Encoder.to_bytes(arg[0])
         self.suffix = Encoder.to_bytes(arg[1])
         self.prefix_sz = 0 if self.prefix is None else len(self.prefix)
@@ -141,7 +148,7 @@ class Wrap_Enc(Encoder):
             dec = b''
         else:
             if val[:self.prefix_sz] == self.prefix and \
-                val[val_sz-self.suffix_sz:] == self.suffix:
+                            val[val_sz-self.suffix_sz:] == self.suffix:
                 dec = val[self.prefix_sz:val_sz-self.suffix_sz]
             else:
                 dec = b''

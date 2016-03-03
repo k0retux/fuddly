@@ -85,6 +85,8 @@ Dependencies
   - `xtermcolor`_: Terminal color support
   - `cups`_: Python bindings for libcups
   - `rpyc`_: Remote Python Call (RPyC), a transparent and symmetric RPC library
+  - `paramiko`_: Python implementation of the SSHv2 protocol
+  - `serial`_: For serial port access
 
 + For documentation generation:
 
@@ -97,6 +99,8 @@ Dependencies
 .. _xtermcolor: https://github.com/broadinstitute/xtermcolor
 .. _cups: https://pypi.python.org/pypi/pycups
 .. _rpyc: https://pypi.python.org/pypi/rpyc
+.. _paramiko: http://www.paramiko.org/
+.. _serial: https://github.com/pyserial/pyserial
 .. _sphinx: http://sphinx-doc.org/
 .. _texlive: https://www.tug.org/texlive/
 .. _readthedocs theme: https://github.com/snide/sphinx_rtd_theme
