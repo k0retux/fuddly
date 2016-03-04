@@ -1222,13 +1222,15 @@ class LocalTarget(Target):
 
 
 class SIMTarget(Target):
-    delay_between_write = 0.5
+    delay_between_write = 0.4  # without, it seems some commands can be lost
 
-    def __init__(self, serial_port, baudrate, tel_num, zone='33'):
+    def __init__(self, serial_port, baudrate, pin_code, targeted_tel_num,
+                 zone='33'):
         self.serial_port = serial_port
         self.baudrate = baudrate
         self.tel_num = zone
-        tel = tel_num[1:]
+        self.pin_code = pin_code
+        tel = targeted_tel_num[1:]
         tel_sz = len(tel)
         for idx in range(0, tel_sz, 2):
             if idx+1<tel_sz:
@@ -1237,6 +1239,7 @@ class SIMTarget(Target):
                 self.tel_num += 'F'+tel[idx]
         if sys.version_info[0]>2:
             self.tel_num = bytes(self.tel_num, 'latin_1')
+            self.pin_code = bytes(self.pin_code, 'latin_1')
 
     def start(self):
 
@@ -1245,9 +1248,19 @@ class SIMTarget(Target):
                   'python-serial module is not installed')
             return False
 
-        self.ser = serial.Serial(self.serial_port, self.baudrate, timeout=1)
+        self.ser = serial.Serial(self.serial_port, self.baudrate, timeout=2)
 
-        self.ser.write(b"ATE1\r\n")   # echo ON
+        self.ser.write(b"ATE1\r\n") # echo ON
+        time.sleep(self.delay_between_write)
+        self.ser.write(b"AT+CPIN?\r\n") # need to unlock?
+        cpin_fbk = self._retrieve_feedback_from_serial()
+        if cpin_fbk.find(b'SIM PIN') != -1:
+            # Note that if SIM is already unlocked modem will answer CME ERROR: 3
+            # if we try to unlock it again.
+            # So we need to unlock only when it is needed.
+            # If modem is unlocked the answer will be: CPIN: READY
+            # otherwise it will be: CPIN: SIM PIN.
+            self.ser.write(b"AT+CPIN="+self.pin_code+b"\r\n") # enter pin code
         time.sleep(self.delay_between_write)
         self.ser.write(b"AT+CMGF=0\r\n") # PDU mode
         time.sleep(self.delay_between_write)
@@ -1257,6 +1270,8 @@ class SIMTarget(Target):
         fbk = self._retrieve_feedback_from_serial()
         code = 0 if fbk.find(b'ERROR') == -1 else -1
         self._logger.collect_target_feedback(fbk, status_code=code)
+        if code < 0:
+            self._logger.print_console(cpin_fbk+fbk, rgb=Color.ERROR)
 
         return False if code < 0 else True
 
@@ -1282,9 +1297,6 @@ class SIMTarget(Target):
             pdu += binascii.b2a_hex(struct.pack('B', c))
         pdu = pdu.upper()
         pdu = b"0001000B91" + self.tel_num + b"0000" + pdu + b"\x1a\r\n"
-
-        # print('\n\nPDU:')
-        # print(pdu)
 
         self.ser.write(b"AT+CMGS=23\r\n") # PDU mode
         time.sleep(self.delay_between_write)

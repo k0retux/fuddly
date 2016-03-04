@@ -209,7 +209,6 @@ Feedback:
 Usage Example:
    .. code-block:: python
       :linenos:
-      :emphasize-lines: 1
 
-       tg = SIMTarget(serial_port='/dev/ttyUSB3', baudrate=115200,
-                      tel_num='0123456789')
+       tg = SIMTarget(serial_port='/dev/ttyUSB3', baudrate=115200, pin_code='0000'
+                      targeted_tel_num='0123456789', zone='33')
