@@ -2772,6 +2772,7 @@ class FuzzShell(cmd.Cmd):
         self.__error = False
         self.__error_msg = ''
         self.__error_fmk = ''
+        self._quit_shell = False
 
         history_path = os.path.expanduser('~'+os.sep+'.fuddly_history')
 
@@ -2787,6 +2788,19 @@ class FuzzShell(cmd.Cmd):
 
 
     def postcmd(self, stop, line):
+        if self._quit_shell:
+            self._quit_shell = False
+            msg = colorize(FontStyle.BOLD + "\nReally Quit? [Y/n]", rgb=Color.WARNING)
+            if sys.version_info[0] == 2:
+                cont = raw_input(msg)
+            else:
+                cont = input(msg)
+            cont = cont.upper()
+            if cont == 'Y' or cont == '':
+                return True
+            else:
+                return False
+
         printed_err = False
         print('')
         if self.fz.is_not_ok() or self.__error:
@@ -2829,6 +2843,10 @@ class FuzzShell(cmd.Cmd):
             self.cmdloop()
 
     def precmd(self, line):
+        if line == 'EOF':
+            self._quit_shell = True
+            return ''
+
         if self.fz.is_usable():
             return line
 
