@@ -249,14 +249,20 @@ class Probe(object):
 
     def _start(self, target, logger):
         logger.print_console("__ probe '{:s}' is starting __".format(self.__class__.__name__), nl_before=True, nl_after=True)
-        self.start(target, logger)
+        return self.start(target, logger)
 
     def _stop(self, target, logger):
         logger.print_console("__ probe '{:s}' is stopping __".format(self.__class__.__name__), nl_before=True, nl_after=True)
         self.stop(target, logger)
 
     def start(self, target, logger):
-        pass
+        """
+        Probe initialization
+
+        Returns:
+            ProbeStatus: may return a status or None
+        """
+        return None
 
     def stop(self, target, logger):
         pass
@@ -273,9 +279,10 @@ class Probe(object):
 
 class ProbeStatus(object):
 
-    def __init__(self, status=None):
+    def __init__(self, status=None, info=None):
+        self._now = datetime.datetime.now()
         self.__status = status
-        self.__private = None
+        self.__private = info
 
     def set_status(self, status):
         '''
@@ -291,6 +298,9 @@ class ProbeStatus(object):
 
     def get_private_info(self):
         return self.__private
+
+    def get_timestamp(self):
+        return self._now
 
 
 class ProbePID_SSH(Probe):
@@ -370,7 +380,6 @@ class ProbePID_SSH(Probe):
         return pid
 
     def start(self, target, logger):
-        self.status = ProbeStatus(0)
         self.client = ssh.SSHClient()
         self.client.set_missing_host_key_policy(ssh.AutoAddPolicy())
         self.client.connect(self.sshd_ip, port=self.sshd_port,
@@ -378,13 +387,14 @@ class ProbePID_SSH(Probe):
                             password=self.password)
         self._saved_pid = self._get_pid(logger)
         if self._saved_pid < 0:
-            logger.print_console("*** ERROR: unable to retrieve process PID",
-                                 rgb=Color.ERROR,
-                                 nl_before=True)
+            msg = "*** INIT ERROR: unable to retrieve process PID ***\n"
+            # logger.print_console(msg, rgb=Color.ERROR, nl_before=True)
         else:
-            msg = "*** '{:s}' current PID: {:d}\n".format(self.process_name, self._saved_pid)
-            self.status.set_private_info(msg)
-            logger.print_console(msg, rgb=Color.FMKINFO, nl_before=True)
+            msg = "*** INIT: '{:s}' current PID: {:d} ***\n".format(self.process_name,
+                                                                    self._saved_pid)
+            # logger.print_console(msg, rgb=Color.FMKINFO, nl_before=True)
+
+        return ProbeStatus(self._saved_pid, info=msg)
 
     def stop(self, target, logger):
         self.client.close()
@@ -398,22 +408,24 @@ class ProbePID_SSH(Probe):
             current_pid = self._get_pid(logger)
             cpt -= 1
 
+        status = ProbeStatus()
+
         if current_pid == -10:
-            self.status.set_status(10)
-            self.status.set_private_info("ERROR with the ssh command")
+            status.set_status(10)
+            status.set_private_info("ERROR with the ssh command")
         elif current_pid == -1:
-            self.status.set_status(-2)
-            self.status.set_private_info("'{:s}' is not running anymore!".format(self.process_name))
+            status.set_status(-2)
+            status.set_private_info("'{:s}' is not running anymore!".format(self.process_name))
         elif self._saved_pid != current_pid:
             self._saved_pid = current_pid
-            self.status.set_status(-1)
-            self.status.set_private_info("'{:s}' PID({:d}) has changed!".format(self.process_name,
-                                                                              current_pid))
+            status.set_status(-1)
+            status.set_private_info("'{:s}' PID({:d}) has changed!".format(self.process_name,
+                                                                           current_pid))
         else:
-            self.status.set_status(0)
-            self.status.set_private_info(None)
+            status.set_status(0)
+            status.set_private_info(None)
 
-        return self.status
+        return status
 
 
 def _handle_probe_exception(context, prj, probe):
@@ -430,10 +442,14 @@ def probe(prj):
 
         def probe_func(stop_event, evts, *args, **kargs):
             try:
-                probe._start(*args, **kargs)
+                status = probe._start(*args, **kargs)
             except:
                 _handle_probe_exception('during start()', prj, probe)
                 return
+
+            if status is not None:
+                prj.set_probe_status(probe.__class__.__name__, status)
+
             while not stop_event.is_set():
                 delay = prj.get_probe_delay(probe.__class__.__name__)
                 try:
@@ -464,10 +480,13 @@ def blocking_probe(prj):
 
         def probe_func(stop_event, evts, *args, **kargs):
             try:
-                probe._start(*args, **kargs)
+                status = probe._start(*args, **kargs)
             except:
                 _handle_probe_exception('during start()', prj, probe)
                 return
+
+            if status is not None:
+                prj.set_probe_status(probe.__class__.__name__, status)
 
             while not stop_event.is_set():
                 delay = prj.get_probe_delay(probe.__class__.__name__)

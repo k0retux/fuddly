@@ -410,17 +410,21 @@ class Fuzzer(object):
                                      "will be terminated.")
         return target_recovered
 
-    def monitor_probes(self):
+    def monitor_probes(self, force_record=False):
         probes = self.prj.get_probes()
         ok = True
         for pname in probes:
             if self.prj.is_probe_launched(pname):
                 pstatus = self.prj.get_probe_status(pname)
                 err = pstatus.get_status()
-                if err < 0:
-                    ok = False
+                if err < 0 or force_record:
+                    if err < 0:
+                        ok = False
+                    tstamp = pstatus.get_timestamp()
                     priv = pstatus.get_private_info()
-                    self.lg.log_probe_feedback(source="Probe '{:s}'".format(pname), content=priv, status_code=err)
+                    self.lg.log_probe_feedback(source="Probe '{:s}'".format(pname),
+                                               timestamp=tstamp,
+                                               content=priv, status_code=err)
 
         if not ok:
             return self._recover_target()
@@ -819,6 +823,9 @@ class Fuzzer(object):
                             self.__mon.set_probe_delay(pname, delay)
                             self.__mon.start_probe(pname)
                     self.prj.start()
+                    if self.tg.probes:
+                        time.sleep(0.5)
+                        self.monitor_probes(force_record=True)
                 else:
                     self.set_error("The Target has not been initialized correctly")
             
@@ -1251,34 +1258,36 @@ class Fuzzer(object):
         self._wkspace_enabled = False
 
     @EnforceOrder(accepted_states=['S1','S2'])
-    def set_fuzz_delay(self, delay):
+    def set_fuzz_delay(self, delay, do_record=False):
         if delay >= 0 or delay == -1:
             self._delay = delay
-            self.lg.log_fmk_info('Fuzz delay = {:.1f}s'.format(self._delay))
+            self.lg.log_fmk_info('Fuzz delay = {:.1f}s'.format(self._delay), do_record=do_record)
             return True
         else:
-            self.lg.log_fmk_info('Wrong delay value!')
+            self.lg.log_fmk_info('Wrong delay value!', do_record=False)
             return False
 
     @EnforceOrder(accepted_states=['S1','S2'])
-    def set_fuzz_burst(self, val):
+    def set_fuzz_burst(self, val, do_record=False):
         if val >= 1:
             self._burst = int(val)
             self._burst_countdown = self._burst
-            self.lg.log_fmk_info('Number of data sent in burst = %d' % self._burst)
+            self.lg.log_fmk_info('Number of data sent in burst = %d' % self._burst,
+                                 do_record=do_record)
             return True
         else:
-            self.lg.log_fmk_info('Wrong burst value!')
+            self.lg.log_fmk_info('Wrong burst value!', do_record=False)
             return False
 
     @EnforceOrder(accepted_states=['S1','S2'])
-    def set_timeout(self, timeout):
+    def set_timeout(self, timeout, do_record=False):
         if timeout >= 0:
             self._timeout = timeout
-            self.lg.log_fmk_info('Target health-check timeout = {:.1f}s'.format(self._timeout))
+            self.lg.log_fmk_info('Target health-check timeout = {:.1f}s'.format(self._timeout),
+                                 do_record=do_record)
             return True
         else:
-            self.lg.log_fmk_info('Wrong timeout value!')
+            self.lg.log_fmk_info('Wrong timeout value!', do_record=False)
             return False
 
 
@@ -1624,11 +1633,15 @@ class Fuzzer(object):
                 err_detected = True
 
             if tg_fbk.has_fbk_collector():
-                for ref, fbk in tg_fbk:
-                    self.lg.log_target_feedback_from(fbk, preamble=preamble, epilogue=epilogue,
+                for ref, fbk, tstamp in tg_fbk:
+                    self.lg.log_target_feedback_from(fbk, tstamp, preamble=preamble,
+                                                     epilogue=epilogue,
                                                      source=ref, status_code=err_code)
 
-            self.lg.log_target_feedback_from(tg_fbk.get_bytes(), preamble=preamble,
+            self.lg.log_target_feedback_from(tg_fbk.get_bytes(),
+                                             tg_fbk.get_timestamp(),
+                                             status_code=err_code,
+                                             preamble=preamble,
                                              epilogue=epilogue)
 
             tg_fbk.cleanup()
@@ -2057,8 +2070,10 @@ class Fuzzer(object):
 
                 op_feedback = linst.get_operator_feedback()
                 op_status = linst.get_operator_status()
+                op_tstamp = linst.get_timestamp()
                 if op_feedback or op_status:
-                    self.lg.log_operator_feedback(op_feedback, op_name=operator.__class__.__name__,
+                    self.lg.log_operator_feedback(op_feedback, op_tstamp,
+                                                  op_name=operator.__class__.__name__,
                                                   status_code=op_status)
 
                 comments = linst.get_comments()

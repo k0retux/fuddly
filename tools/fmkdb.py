@@ -142,9 +142,10 @@ def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limi
         sys.exit(-1)
 
     feedback = fmkdb.execute_sql_statement(
-        "SELECT SOURCE, STATUS, CONTENT FROM FEEDBACK "
+        "SELECT SOURCE, DATE, STATUS, CONTENT FROM FEEDBACK "
         "WHERE DATA_ID == {data_id:d} "
-        "ORDER BY SOURCE ASC;".format(data_id=data_id)
+        "ORDER BY SOURCE"
+        " ASC;".format(data_id=data_id)
     )
 
     comments = fmkdb.execute_sql_statement(
@@ -173,7 +174,7 @@ def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limi
     msg += colorize("\n    Status: ", rgb=Color.FMKINFO)
     src_max_sz = 0
     for idx, fbk in enumerate(feedback):
-        src, status, _ = fbk
+        src, tstamp, status, _ = fbk
         src_sz = len(src)
         src_max_sz = src_sz if src_sz > src_max_sz else src_max_sz
         if status is None:
@@ -306,9 +307,12 @@ def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limi
         msg += colorize('\n'+line_pattern, rgb=Color.NEWLOGENTRY)
 
     if with_fbk:
-        for src, status, content in feedback:
+        for src, tstamp, status, content in feedback:
             msg += colorize("\n Status(", rgb=Color.FMKINFOGROUP) + \
                    colorize("{:s}".format(src), rgb=Color.FMKSUBINFO) + \
+                   colorize(" | ", rgb=Color.FMKINFOGROUP) + \
+                   colorize("{:s}".format(tstamp.strftime("%d/%m/%Y - %H:%M:%S")),
+                            rgb=Color.FMKSUBINFO) + \
                    colorize(")", rgb=Color.FMKINFOGROUP) + \
                    colorize(" = {!s}".format(status), rgb=Color.FMKSUBINFO)
             if content:

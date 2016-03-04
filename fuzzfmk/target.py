@@ -42,7 +42,6 @@ import errno
 from socket import error as socket_error
 
 from libs.external_modules import *
-import data_models
 from fuzzfmk.global_resources import *
 
 class TargetStuck(Exception): pass
@@ -193,25 +192,31 @@ class TargetFeedback(object):
         self.set_bytes(bstring)
 
     def add_fbk_from(self, ref, fbk):
-        self._feedback_collector[ref] = fbk
+        now = datetime.datetime.now()
+        self._feedback_collector[ref] = (fbk, now)
 
     def has_fbk_collector(self):
         return len(self._feedback_collector) > 0
 
     def cleanup(self):
         self._feedback_collector = collections.OrderedDict()
-        self.set_bytes(b'')
+        self._tstamped_bstring = None
         self.set_error_code(0)
 
     def __iter__(self):
-        for ref, fbk in self._feedback_collector.items():
-            yield ref, fbk
+        for ref, obj in self._feedback_collector.items():
+            fbk, tstamp = obj
+            yield ref, fbk, tstamp
 
     def set_bytes(self, bstring):
-        self._bstring = bstring
+        now = datetime.datetime.now()
+        self._tstamped_bstring = (bstring, now)
 
     def get_bytes(self):
-        return self._bstring
+        return None if self._tstamped_bstring is None else self._tstamped_bstring[0]
+
+    def get_timestamp(self):
+        return None if self._tstamped_bstring is None else self._tstamped_bstring[1]
 
     def set_error_code(self, err_code):
         self._err_code = err_code
@@ -1222,7 +1227,7 @@ class LocalTarget(Target):
 
 
 class SIMTarget(Target):
-    delay_between_write = 0.4  # without, it seems some commands can be lost
+    delay_between_write = 0.1  # without, it seems some commands can be lost
 
     def __init__(self, serial_port, baudrate, pin_code, targeted_tel_num,
                  zone='33'):
@@ -1251,6 +1256,8 @@ class SIMTarget(Target):
         self.ser = serial.Serial(self.serial_port, self.baudrate, timeout=2)
 
         self.ser.write(b"ATE1\r\n") # echo ON
+        time.sleep(self.delay_between_write)
+        self.ser.write(b"AT+CMEE=1\r\n") # enable extended error reports
         time.sleep(self.delay_between_write)
         self.ser.write(b"AT+CPIN?\r\n") # need to unlock?
         cpin_fbk = self._retrieve_feedback_from_serial()
