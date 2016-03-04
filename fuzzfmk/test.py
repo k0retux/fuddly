@@ -51,7 +51,7 @@ from fuzzfmk.logger import *
 from fuzzfmk.operator_helpers import *
 
 from fuzzfmk.data_model_helpers import *
-
+from fuzzfmk.encoders import *
 
 parser = argparse.ArgumentParser(description='Process arguments.')
 parser.add_argument('-a', '--all', action='store_true',

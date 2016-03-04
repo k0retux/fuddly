@@ -32,6 +32,7 @@ import re
 import pickle
 import readline
 import cmd
+import atexit
 import datetime
 import time
 import signal
@@ -2771,6 +2772,16 @@ class FuzzShell(cmd.Cmd):
         self.__error = False
         self.__error_msg = ''
         self.__error_fmk = ''
+
+        history_path = os.path.expanduser('~'+os.sep+'.fuddly_history')
+
+        def save_history(history_path=history_path):
+            readline.write_history_file(history_path)
+
+        if os.path.exists(history_path):
+            readline.read_history_file(history_path)
+
+        atexit.register(save_history)
 
         signal.signal(signal.SIGINT, signal.SIG_IGN)
 

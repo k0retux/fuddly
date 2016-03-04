@@ -6,6 +6,7 @@ from fuzzfmk.plumbing import *
 from fuzzfmk.data_model import *
 from fuzzfmk.value_types import *
 from fuzzfmk.data_model_helpers import *
+from fuzzfmk.encoders import *
 
 class MyDF_DataModel(DataModel):
 
