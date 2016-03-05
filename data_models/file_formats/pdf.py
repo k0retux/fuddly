@@ -40,9 +40,9 @@ from fuzzfmk.data_model_helpers import *
 from fuzzfmk.value_types import *
 from fuzzfmk.fuzzing_primitives import *
 from fuzzfmk.basic_primitives import *
+import fuzzfmk.global_resources as gr
 
-
-def gather_pdf_objects(path='./imported_data/pdf/'):
+def gather_pdf_objects(path=gr.imported_data_folder):
 
     r_pdf_file = re.compile(".*\.pdf$")
     def is_pdf_file(fname):
@@ -1214,14 +1214,11 @@ data_model = PDF_DataModel()
 
 if __name__ == "__main__":
 
-    # dm = data_model
-    # dm.build_data_model()
-
     from fuzzfmk.plumbing import *
-    fuzzer = Fuzzer()
+    fmk = FmkPlumbing()
 
     dm = data_model
-    dm.load_data_model(fuzzer._name2dm)
+    dm.load_data_model(fmk._name2dm)
 
     print("\n[ PDF Number ]\n")
 
@@ -1283,12 +1280,6 @@ if __name__ == "__main__":
 
     print("\n[ PDF get objects ]\n")
 
-    # e = PDFObj.get_string('test')
-    # l = sorted(e.get_nodes_names())
-    # for k in l:
-    #     print(k)
-    # e.unfreeze_all()
-
     for i in range(10):
         e = PDFObj.get_string('test')
         print(e.get_flatten_value())
@@ -1310,10 +1301,6 @@ if __name__ == "__main__":
 
     pdf = dm.get_data('PDF_basic')
 
-    # l = sorted(pdf.get_nodes_names())
-    # for k in l:
-    #     print(k)
-
     val = pdf.get_flatten_value()
     val2 = pdf.get_flatten_value()
 
@@ -1321,17 +1308,8 @@ if __name__ == "__main__":
     if val != val2:
         raise ValueError
 
-    # print('real xref off: ', val.decode('latin_1').find('xref\n0'))
 
-    # print(val.decode('latin_1'))
-    # print(val2.decode('latin_1'))
-
-    # l = sorted(pdf.get_nodes_names())
-    # for k in l:
-    #     print(k)
-
-
-    with open('./workspace/TEST_FUZZING_PDF-orig' + '.pdf', 'wb') as f:
+    with open(gr.workspace_folder + 'TEST_FUZZING_PDF-orig' + '.pdf', 'wb') as f:
         f.write(val)
 
     leaf0 = pdf.get_node_by_path('PDF.*leaf_0-0$').get_flatten_value()
@@ -1344,19 +1322,10 @@ if __name__ == "__main__":
     pdf.unfreeze()
 
     val3 = pdf.get_flatten_value()
-    with open('./workspace/TEST_FUZZING_PDF-big_page' + '.pdf', 'wb') as f:
+    with open(gr.workspace_folder + 'TEST_FUZZING_PDF-big_page' + '.pdf', 'wb') as f:
         f.write(val3)
 
     pdf.set_current_conf('MAIN', root_regexp='PDF.*leaf_0-0$')
-
-    # pdf.get_node_by_path('PDF.*Body$').unfreeze()
-    # pdf.set_current_conf('ALT', root_regexp='PDF.*Body$', recursive=False)
-    # pdf.get_node_by_path('PDF.*Body$').get_flatten_value()
-    # pdf.unfreeze()
-
-    # pdf_pagetree_loop = pdf.get_flatten_value()
-    # with open('./workspace/TEST_FUZZING_PDF-pagetree_loop' + '.pdf', 'wb') as f:
-    #     f.write(pdf_pagetree_loop)
 
     pdf_buff = {}
     for e_id in dm.data_identifiers():
@@ -1368,8 +1337,5 @@ if __name__ == "__main__":
         pdf = dm.get_data(e_id)
         pdf_buff[e_id] = pdf.get_flatten_value()
 
-        with open('./workspace/' + e_id + '.pdf', 'wb') as f:
+        with open(gr.workspace_folder + e_id + '.pdf', 'wb') as f:
             f.write(pdf_buff[e_id])
-    
-    # print("is pdf_pagetree_loop equal to pdf_buff['PDF_loop_01']?", pdf_pagetree_loop == pdf_buff['PDF_loop_01'])
-

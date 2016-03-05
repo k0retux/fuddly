@@ -24,6 +24,7 @@
 from fuzzfmk.data_model import *
 import fuzzfmk.value_types as fvt
 from fuzzfmk.value_types import VT
+import fuzzfmk.global_resources as gr
 
 from libs.external_modules import *
 
@@ -1087,8 +1088,8 @@ class DataModel(object):
         if not node_list:
             msg = "\n*** WARNING: nothing to register for " \
                   "the data model '{nm:s}'!"\
-                  "\n   [probable reason: ./imported_data/{nm:s}/ not " \
-                  "populated with sample files]".format(nm=self.name)
+                  "\n   [probable reason: {fdata:s}/imported_data/{nm:s}/ not " \
+                  "populated with sample files]".format(nm=self.name, fdata=gr.fuddly_data_folder)
             raise UserWarning(msg)
 
         for e in node_list:
@@ -1172,9 +1173,9 @@ class DataModel(object):
         if subdir is None:
             subdir = self.name
         if subdir is None:
-            path = os.path.join(app_folder, 'imported_data')
+            path = gr.imported_data_folder
         else:
-            path = os.path.join(app_folder, 'imported_data', subdir)
+            path = os.path.join(gr.imported_data_folder, subdir)
 
         if not os.path.exists(path):
             os.makedirs(path)

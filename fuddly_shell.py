@@ -32,9 +32,9 @@ sys.path.insert(0, external_libs_folder)
 
 if __name__ == "__main__":
 
-    fuzzer = Fuzzer()
+    fmk = FmkPlumbing()
 
-    shell = FuzzShell("FuzzShell", fuzzer)
+    shell = FmkShell("Fuddly Shell", fmk)
     shell.cmdloop()
 
     sys.exit(0)

@@ -25,6 +25,7 @@ import os
 import fuzzfmk
 import sys
 import inspect
+from libs.utils import ensure_dir
 
 fuddly_version = '0.22.3'
 
@@ -35,11 +36,24 @@ fuzzfmk_folder  = '.' if fuzzfmk_folder == '' else fuzzfmk_folder
 app_folder = os.path.dirname(fuzzfmk_folder)
 app_folder = '.' if app_folder == '' else app_folder
 
-workspace_folder = app_folder + os.sep + 'workspace' + os.sep
-external_libs_folder = app_folder + os.sep + 'external_libs' + os.sep
-external_tools_folder = app_folder + os.sep + 'external_tools' + os.sep
-exported_data_folder = app_folder + os.sep + 'exported_data' + os.sep
-logs_folder = app_folder + os.sep + 'logs' + os.sep
+fuddly_data_folder = os.path.expanduser('~' + os.sep + 'fuddly_data' + os.sep)
+if not os.path.exists(fuddly_data_folder):
+    new_fuddly_data_folder = True
+ensure_dir(fuddly_data_folder)
+
+exported_data_folder = fuddly_data_folder + os.sep + 'exported_data' + os.sep
+ensure_dir(exported_data_folder)
+imported_data_folder = fuddly_data_folder + os.sep + 'imported_data' + os.sep
+ensure_dir(imported_data_folder)
+logs_folder = fuddly_data_folder + os.sep + 'logs' + os.sep
+ensure_dir(logs_folder)
+workspace_folder = fuddly_data_folder + os.sep + 'workspace' + os.sep
+ensure_dir(workspace_folder)
+external_libs_folder = fuddly_data_folder + os.sep + 'external_libs' + os.sep
+ensure_dir(external_libs_folder)
+external_tools_folder = fuddly_data_folder + os.sep + 'external_tools' + os.sep
+ensure_dir(external_tools_folder)
+
 fmk_folder = app_folder + os.sep + 'fuzzfmk' + os.sep
 
 class Error(object):
@@ -54,13 +68,13 @@ class Error(object):
     FmkWarning = -6
     OperationCancelled = -7
 
-    # Fuzzer.get_data() error code
+    # FmkPlumbing.get_data() error code
     CloneError = -10
     InvalidDmaker = -11
     HandOver = -12
     DataUnusable = -13
 
-    # Fuzzer.launch_operator() error code
+    # FmkPlumbing.launch_operator() error code
     InvalidOp = -20
     WrongOpPlan = -21
 

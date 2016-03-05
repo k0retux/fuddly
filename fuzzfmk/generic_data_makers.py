@@ -550,7 +550,7 @@ class d_call_external_program(Disruptor):
             else:
                 file_extension = 'bin'
 
-            filename = os.path.join(app_folder, "workspace", 'EXT_file.' + file_extension)
+            filename = os.path.join(workspace_folder, 'EXT_file.' + file_extension)
             with open(filename, 'wb') as f:
                 f.write(raw_data)
 

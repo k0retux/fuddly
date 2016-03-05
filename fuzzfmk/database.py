@@ -17,7 +17,7 @@ class Database(object):
     def __init__(self, fmkdb_path=None):
         self.name = 'fmkDB.db'
         if fmkdb_path is None:
-            self.fmk_db_path = os.path.join(gr.app_folder, self.name)
+            self.fmk_db_path = os.path.join(gr.fuddly_data_folder, self.name)
         else:
             self.fmk_db_path = fmkdb_path
         self._con = None

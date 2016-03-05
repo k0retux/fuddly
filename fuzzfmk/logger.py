@@ -32,6 +32,7 @@ from fuzzfmk.data_model import Data
 from fuzzfmk.global_resources import *
 from fuzzfmk.database import Database
 from libs.utils import ensure_dir
+import fuzzfmk.global_resources as gr
 
 import data_models
 
@@ -496,13 +497,13 @@ class Logger(object):
         self.__idx += 1
         self._current_sent_date = datetime.datetime.now()
         now = self._current_sent_date.strftime("%d/%m/%Y - %H:%M:%S")
-        msg = preamble + "========[ %d ]==[ %s ]=======================" % \
-                         (self.__idx, now)
+        msg = "====[ {:d} ]==[ {:s} ]====".format(self.__idx, now)
+        msg += '='*(max(80-len(msg),0))
         self.log_fn(msg, rgb=Color.NEWLOGENTRY, style=FontStyle.BOLD)
 
-    def log_fuzzing_step(self, num):
-        msg = "### Fuzzing (step %d):" % num
-        self.log_fn(msg, rgb=Color.FUZZSTEP)
+    def log_dmaker_step(self, num):
+        msg = "### Step %d:" % num
+        self.log_fn(msg, rgb=Color.DMAKERSTEP)
 
     def log_initial_generator(self, dmaker_type, dmaker_name, dmaker_ui):
         msgs = []
@@ -634,7 +635,7 @@ class Logger(object):
 
     def _export_data_func(self, data, suffix=''):
 
-        base_dir = os.path.join(app_folder, 'exported_data')
+        base_dir = gr.exported_data_folder
 
         dm = data.get_data_model()
         if dm:

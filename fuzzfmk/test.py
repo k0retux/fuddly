@@ -87,7 +87,7 @@ class TestBasics(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.dm = example.data_model
-        cls.dm.load_data_model(fuzzer._name2dm)
+        cls.dm.load_data_model(fmk._name2dm)
 
     def setUp(self):
         pass
@@ -872,7 +872,7 @@ class TestMisc(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.dm = example.data_model
-        cls.dm.load_data_model(fuzzer._name2dm)
+        cls.dm.load_data_model(fmk._name2dm)
 
 
     def setUp(self):
@@ -1527,7 +1527,7 @@ class TestModelWalker(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.dm = example.data_model
-        cls.dm.load_data_model(fuzzer._name2dm)
+        cls.dm.load_data_model(fmk._name2dm)
 
     def setUp(self):
         pass
@@ -2767,7 +2767,7 @@ class TestDataModel(unittest.TestCase):
 
         for dm in fmk.dm_list:
             try:
-                dm.load_data_model(fuzzer._name2dm)
+                dm.load_data_model(fmk._name2dm)
             except:
                 print("\n*** WARNING: Data Model '{:s}' not tested because" \
                       " the loading process has failed ***\n".format(dm.name))
@@ -2826,7 +2826,7 @@ class TestDataModel(unittest.TestCase):
             png_buff = png.get_flatten_value()
             png.show(raw_limit=400)
 
-            with open('./workspace/TEST_FUZZING_' + n, 'wb') as f:
+            with open(gr.workspace_folder + 'TEST_FUZZING_' + n, 'wb') as f:
                 f.write(png_buff)
 
             filename = os.path.join(dm.get_import_directory_path(), n)
@@ -2850,7 +2850,7 @@ class TestDataModel(unittest.TestCase):
 
             jpg_buff = jpg.get_flatten_value()
 
-            with open('./workspace/TEST_FUZZING_' + n, 'wb') as f:
+            with open(gr.workspace_folder + 'TEST_FUZZING_' + n, 'wb') as f:
                 f.write(jpg_buff)
 
             filename = os.path.join(dm.get_import_directory_path(), n)
@@ -2988,7 +2988,7 @@ class TestDataModel(unittest.TestCase):
             zip_buff = pkzip.get_flatten_value()
             # pkzip.show(raw_limit=400)
 
-            with open('./workspace/TEST_FUZZING_' + n, 'wb') as f:
+            with open(gr.workspace_folder + 'TEST_FUZZING_' + n, 'wb') as f:
                 f.write(zip_buff)
 
             filename = os.path.join(dm.get_import_directory_path(), n)
@@ -3010,7 +3010,7 @@ class TestFMK(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        fuzzer.run_project(name='tuto', dm_name='mydf')
+        fmk.run_project(name='tuto', dm_name='mydf')
     
     def setUp(self):
         pass
@@ -3127,13 +3127,12 @@ if __name__ == "__main__":
 
     results = collections.OrderedDict()
 
-    fuzzer = Fuzzer()
+    fmk = FmkPlumbing()
 
-    fuzzer.run_project(name='tuto', dm_name='example')
-    fmk = fuzzer
+    fmk.run_project(name='tuto', dm_name='example')
 
     dm = example.data_model
-    # dm.load_data_model(fuzzer._name2dm)
+    # dm.load_data_model(fmk._name2dm)
 
     # print(test_args, sys.argv)
     args = [sys.argv[0]] + test_args[1]

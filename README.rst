@@ -69,7 +69,7 @@ of ``fuddly`` itself. Usage is as follows:
 
 Miscellaneous
 -------------
-+ Don't forget to populate ``imported_data/`` with sample files for data
++ Don't forget to populate ``~/fuddly_data/imported_data/`` with sample files for data
   models that need it
 
 Dependencies

@@ -1070,7 +1070,7 @@ class PrinterTarget(Target):
     def send_data(self, data):
 
         data = data.to_bytes()
-        wkspace = os.path.join(app_folder, 'workspace')
+        wkspace = workspace_folder
         file_name = os.path.join(wkspace, 'fuzz_test_' + self.__suffix + self._tmpfile_ext)
 
         with open(file_name, 'wb') as f:
@@ -1148,7 +1148,7 @@ class LocalTarget(Target):
 
     def send_data(self, data):
         data = data.to_bytes()
-        wkspace = os.path.join(app_folder, 'workspace')
+        wkspace = workspace_folder
 
         name = os.path.join(wkspace, 'fuzz_test_' + self.__suffix + self._tmpfile_ext)
         with open(name, 'wb') as f:

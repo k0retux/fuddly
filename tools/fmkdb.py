@@ -186,8 +186,8 @@ def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limi
             msg += colorize(", ".format(src), rgb=Color.FMKINFO)
 
     msg += '\n'
-    sentd = sent_date.strftime("%d/%m/%Y - %H:%M:%S")
-    ackd = 'None' if ack_date is None else ack_date.strftime("%d/%m/%Y - %H:%M:%S")
+    sentd = sent_date.strftime("%d/%m/%Y - %H:%M:%S") if sent_date else 'None'
+    ackd = ack_date.strftime("%d/%m/%Y - %H:%M:%S") if ack_date else 'None'
     msg += colorize("      Sent: ", rgb=Color.FMKINFO) + colorize(sentd, rgb=Color.DATE)
     msg += colorize("\n  Received: ", rgb=Color.FMKINFO) + colorize(ackd, rgb=Color.DATE)
     msg += colorize("\n      Size: ", rgb=Color.FMKINFO) + colorize(str(size)+' Bytes', rgb=Color.FMKSUBINFO)
@@ -258,7 +258,7 @@ def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limi
     msg = ''
     for idx, com in enumerate(comments, start=1):
         content, date = com
-        date_str = sent_date.strftime("%d/%m/%Y - %H:%M:%S")
+        date_str = sent_date.strftime("%d/%m/%Y - %H:%M:%S") if sent_date else 'None'
         msg += colorize("\n Comment #{:d}: ".format(idx), rgb=Color.FMKINFOGROUP) + \
                colorize(date_str, rgb=Color.DATE)
         chks = chunk_lines(content, page_width-10)
@@ -274,7 +274,7 @@ def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limi
         content, date, error = info
         if without_fmkinfo and not error:
             continue
-        date_str = sent_date.strftime("%d/%m/%Y - %H:%M:%S")
+        date_str = sent_date.strftime("%d/%m/%Y - %H:%M:%S") if sent_date else 'None'
         if error:
             msg += colorize("\n FMK Error: ", rgb=Color.ERROR)
         else:
@@ -463,7 +463,10 @@ if __name__ == "__main__":
 
                 file_extension = dm_name
 
-                current_export_date = sent_date.strftime("%Y-%m-%d-%H%M%S")
+                if sent_date is None:
+                    current_export_date = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+                else:
+                    current_export_date = sent_date.strftime("%Y-%m-%d-%H%M%S")
 
                 if current_export_date != prev_export_date:
                     prev_export_date = current_export_date
