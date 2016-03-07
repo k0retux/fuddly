@@ -742,12 +742,16 @@ class NodeInternals(object):
     def _match_node_constraints(self, criteria):
         # precond: criteria is not empty
 
-        if self._sync_with is None:
-            return False
-
         for scope, required in criteria.items():
             if required is None:
                 continue
+
+            if self._sync_with is None:
+                if required:
+                    return False
+                else:
+                    continue
+
             if scope in self._sync_with and not required:
                 return False
             elif scope not in self._sync_with and required:

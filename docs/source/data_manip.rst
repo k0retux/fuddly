@@ -127,6 +127,12 @@ By default, ``unfreeze`` will act recursively and will affect every nodes reacha
 one. You can unfreeze only the node on which the method is called by switching its ``recursive``
 parameter.
 
+You may want to unfreeze the graph without changing its state, just because you performed some
+modifications locally and want it to be taken into account when getting a new data from the graph.
+(refer to :ref:`dmanip:conf` for a usage example). For that purpose, you may use the
+``dont_change_state`` parameter of :meth:`fuzzfmk.data_model.Node.unfreeze` which allows
+to unfreeze without cycling.
+
 Another option you may want is to unfreeze only the constraints of your graph which based on
 existence conditions (refer to :ref:`dm:pattern:existence-cond`), *generator*  and *func* nodes.
 To do so, set the ``reevaluate_constraints`` parameter to ``True``.
@@ -291,18 +297,31 @@ criteria based on which you want to perform the search, you should use:
   .. code-block:: python
      :linenos:
 
+     from fuzzfmk.plumbing import *
+     from fuzzfmk.data_model import *
+     from fuzzfmk.value_types import *
+
+     fmk = FmkPlumbing()
+     fmk.run_project(name='tuto')
+
+     data = fmk.get_data(['EX'])    # Return a Data container on the data model example
+     data.node.freeze()
+
      ic = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
                                 node_kinds=[NodeInternals_TypedValue],
                                 negative_node_subkinds=[String],
-                                owned_conf='alt2',
                                 negative_csts=[SyncScope.Qty])
 
      sc = NodeSemanticsCriteria(mandatory_criteria=['sem1', 'sem2'])
 
-     rnode.get_reachable_nodes(internals_criteria=ic, semantics_criteria=sc)
+     data.node.get_reachable_nodes(internals_criteria=ic, semantics_criteria=sc,
+                                   owned_conf='alt2')
 
   Obviously, you don't need all these criteria for retrieving such node. It's only for
   exercise.
+
+  .. note:: For abstracting away the data model from the rest of the framework, ``fuddly`` uses the
+     specific class :meth:`fuzzfmk.data_model.Data` which acts as a data container.
 
 
 The Node Dictionary Interface
@@ -320,7 +339,7 @@ following operation are possible on a node:
 
 As a ``key``, you can provide:
 
-- A path regexp (where the node on which the method is called is considered as the root) to the
+- A *path regexp* (where the node on which the method is called is considered as the root) to the
   node you want to reach. If multiple nodes match the path regexp, the first one will be returned
   (or ``None`` if the path match nothing). It is equivalent to calling
   :meth:`fuzzfmk.data_model.Node.get_node_by_path` on the node and providing the parameter
@@ -332,21 +351,21 @@ As a ``key``, you can provide:
    .. code-block:: python
       :linenos:
 
-      rnode['ex/data_group/len$'].to_bytes()
+      rnode['ex/data_group/len'].to_bytes()
 
       # same as:
-      rnode.get_node_by_path('ex/data_group/len$').to_bytes()
+      rnode.get_node_by_path('ex/data_group/len').to_bytes()
 
 
 - A :class:`fuzzfmk.data_model.NodeInternalsCriteria` that match the internal
   attributes of interest of the nodes you want to retrieve and which are reachable from the
-  current one. It is equivalent to calling :meth:`fuzzfmk.data_model.Node.get_reachable_nodes`
+  current node. It is equivalent to calling :meth:`fuzzfmk.data_model.Node.get_reachable_nodes`
   on the node and providing the parameter ``internals_criteria`` with your criteria object. A
   list will always be returned, either empty or containing the nodes of interest.
 
 - A :class:`fuzzfmk.data_model.NodeSemanticsCriteria` that match the internal
   attributes of interest of the nodes you want to retrieve and which are reachable from the
-  current one. It is equivalent to calling :meth:`fuzzfmk.data_model.Node.get_reachable_nodes`
+  current node. It is equivalent to calling :meth:`fuzzfmk.data_model.Node.get_reachable_nodes`
   on the node and providing the parameter ``semantics_criteria`` with the criteria object. A list
   will always be returned, either empty or containing the nodes of interest.
 
@@ -366,12 +385,14 @@ As a ``value``, you can provide:
 
 - A python integer: In this case the method :meth:`fuzzfmk.value_types.INT.set_raw_values` of the
   *INT* object embedded in the targeted node will be called with the *integer* as parameter.
+  (Have to be only used with typed-value nodes embedding an ``INT``.)
 
 - A byte string: In this case the method :meth:`fuzzfmk.data_model.Node.absorb` will be called
   on the node with the *byte string* as parameter.
 
 
 .. warning:: These methods should generally be called on a frozen graph.
+
 
 Change a Node
 =============
@@ -416,9 +437,6 @@ it if you like ;).
 
     data.show()                      # Data.show() will call .show() on the embedded node
 
-
-.. note:: For abstracting away the data model from the rest of the framework, ``fuddly`` uses the
-   specific class :meth:`fuzzfmk.data_model.Data` which acts as a data container.
 
 The result is shown below:
 
@@ -504,6 +522,8 @@ configuration* and everything that characterize a node---its type: non-terminal,
 generator; its attributes; its links with other nodes; and so on---are included within. A node is
 then a receptacle for an arbitrary number of *configurations*.
 
+.. note:: When a node is created it gets a default configuration named ``MAIN``.
+
 Configuration management is based on the following methods:
 
 - :meth:`fuzzfmk.data_model.Node.add_conf`: To add a new configuration.
@@ -521,30 +541,38 @@ In what follows, we illustrate some node configuration change based on our data 
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 4
 
     rnode.freeze()   # We consider there is at least 2 'data2' nodes
 
     # We change the configuration of the second 'data2' node
-    rnode['ex/data_group/data2:2'].set_current_conf('alt2', ignore_entanglement=True)
+    rnode['ex/data_group/data2:2'].set_current_conf('alt1', ignore_entanglement=True)
     rnode['ex/data_group/data2:2'].unfreeze()
 
     rnode.show()
 
+    # We change back 'data2:2' to the default configuration
+    rnode['ex/data_group/data2:2'].set_current_conf('MAIN', ignore_entanglement=True)
+    # We change the configuration of the first 'data2' node
+    rnode['ex/data_group/data2'].set_current_conf('alt1', ignore_entanglement=True)
+    # This time we unfreeze directly the parent node
+    rnode['ex/data_group$'].unfreeze(dont_change_state=True)
+
+    rnode.show()
 
 .. seealso:: Refer to :ref:`dmanip:entangle` about the parameter ``ignore_entanglement``.
 
 
 If you want to act on a specific configuration of a node without changing first its configuration,
 you can leverage the ``conf`` parameter of the methods that support it. For instance, all the
-methods used for setting the content of a node (refer to :ref:`dmanip:node`) are configuration aware.
+methods used for setting the content of a node (refer to :ref:`dmanip:node`) are *configuration
+aware*.
 
 .. note::
    If you need to access to the node internals (:attr:`fuzzfmk.data_model.NodeInternals`) the
    following attributes are provided:
 
    - :attr:`fuzzfmk.data_model.Node.cc`: to access to the node internals of the current
-     configuration
+     configuration.
    - :attr:`fuzzfmk.data_model.Node.c`: dictionary to access to the node internals of
      any configuration based on their name.
 
@@ -574,7 +602,8 @@ generation from the graph.
     rnode.env.add_node_to_corrupt(targeted_node, corrupt_type=Node.CORRUPT_NODE_QTY,
                                   corrupt_op=lambda x, y: (mini, maxi))
 
-    corrupt_rnode = Node(rnode.name, base_node=rnode, ignore_frozen_state=False, new_env=True)
+    corrupt_rnode = Node(rnode.name, base_node=rnode, ignore_frozen_state=False,
+                         new_env=True)
     rnode.env.remove_node_to_corrupt(targeted_node)
 
 From now on, you have still a clean graph referenced by ``rnode``, and a corrupted one referenced
