@@ -19,31 +19,32 @@
 #  You should have received a copy of the GNU General Public License
 #  along with fuddly. If not, see <http://www.gnu.org/licenses/>
 #
-################################################################################
+################################################################################import sys
 
-import os
+from fuzzfmk.data_model import *
+from fuzzfmk.value_types import *
+from fuzzfmk.data_model_helpers import *
 
-def ensure_dir(f):
-    d = os.path.dirname(f)
-    if not os.path.exists(d):
-        os.makedirs(d)
+class SMS_DataModel(DataModel):
 
-def ensure_file(f):
-    if not os.path.isfile(f):
-        open(f, 'a').close()
+    file_extension = 'sms'
 
-def chunk_lines(string, length):
-    l = string.split(' ')
-    chk_list = []
-    full_line = ''
-    for wd in l:
-        full_line += wd + ' '
-        if len(full_line) > (length - 1):
-            chk_list.append(full_line)
-            full_line = ''
-    if full_line:
-        chk_list.append(full_line)
-    # remove last space char
-    if chk_list:
-        chk_list[-1] = (chk_list[-1])[:-1]
-    return chk_list
+    def absorb(self, data, idx):
+        pass
+
+    def build_data_model(self):
+
+        smstxt_desc = \
+        {'name': 'smstxt',
+         'contents': [
+             {'name': 'len',
+              'contents': MH.LEN(vt=UINT8, after_encoding=False),
+              'node_args': 'user_data'},
+             {'name': 'user_data',
+              'contents': GSM7bitPacking(val_list=['Hello World!'], max_sz=160)
+             }
+         ]
+        }
+        self.register(smstxt_desc)
+
+data_model = SMS_DataModel()

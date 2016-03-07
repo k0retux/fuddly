@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -24,6 +24,7 @@
 from fuzzfmk.data_model import *
 import fuzzfmk.value_types as fvt
 from fuzzfmk.value_types import VT
+import fuzzfmk.global_resources as gr
 
 from libs.external_modules import *
 
@@ -121,7 +122,7 @@ class MH(object):
 
     @staticmethod
     def LEN(vt=fvt.INT_str,
-            set_attrs=[], clear_attrs=[]):
+            set_attrs=[], clear_attrs=[], after_encoding=True):
         '''
         Return a *generator* that returns the length of a node parameter.
 
@@ -129,9 +130,12 @@ class MH(object):
           vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
+          after_encoding (bool): if False compute the length before any encoding. Can be
+            set to False only if node arguments support encoding.
         '''
         def length(vt, set_attrs, clear_attrs, node):
-            n = Node('cts', value_type=vt(int_list=[len(node.to_bytes())]))
+            blob = node.to_bytes() if after_encoding else node.get_raw_value()
+            n = Node('cts', value_type=vt(int_list=[len(blob)]))
             n.set_semantics(NodeSemantics(['len']))
             MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
@@ -188,7 +192,7 @@ class MH(object):
 
     @staticmethod
     def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=True,
-            set_attrs=[], clear_attrs=[]):
+            set_attrs=[], clear_attrs=[], after_encoding=True):
         '''Return a *generator* that returns the CRC (in the chosen type) of
         all the node parameters. (Default CRC is PKZIP CRC32)
 
@@ -200,11 +204,13 @@ class MH(object):
           rev (bool): bit reversed algorithm when `True`.
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
+          after_encoding (bool): if False compute the CRC before any encoding. Can be
+            set to False only if node arguments support encoding.
         '''
         def crc(vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs, nodes):
             crc_func = crcmod.mkCrcFun(poly, initCrc=init_crc, xorOut=xor_out, rev=rev)
             if isinstance(nodes, Node):
-                s = nodes.to_bytes()
+                s = nodes.to_bytes() if after_encoding else nodes.get_raw_value()
             else:
                 if issubclass(nodes.__class__, NodeAbstraction):
                     nodes = nodes.get_concrete_nodes()
@@ -212,7 +218,8 @@ class MH(object):
                     raise TypeError("Contents of 'nodes' parameter is incorrect!")
                 s = b''
                 for n in nodes:
-                    s += n.to_bytes()
+                    blob = n.to_bytes() if after_encoding else n.get_raw_value()
+                    s += blob
 
             result = crc_func(s)
 
@@ -230,7 +237,7 @@ class MH(object):
 
     @staticmethod
     def WRAP(func, vt=fvt.INT_str,
-             set_attrs=[], clear_attrs=[]):
+             set_attrs=[], clear_attrs=[], after_encoding=True):
         '''Return a *generator* that returns the result (in the chosen type)
         of the provided function applied on the concatenation of all
         the node parameters.
@@ -240,10 +247,12 @@ class MH(object):
           vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
+          after_encoding (bool): if False, execute `func` on node arguments before any encoding.
+            Can be set to False only if node arguments support encoding.
         '''
         def map_func(vt, func, set_attrs, clear_attrs, nodes):
             if isinstance(nodes, Node):
-                s = nodes.to_bytes()
+                s = nodes.to_bytes() if after_encoding else nodes.get_raw_value()
             else:
                 if issubclass(nodes.__class__, NodeAbstraction):
                     nodes = nodes.get_concrete_nodes()
@@ -251,7 +260,8 @@ class MH(object):
                     raise TypeError("Contents of 'nodes' parameter is incorrect!")
                 s = b''
                 for n in nodes:
-                    s += n.to_bytes()
+                    blob = n.to_bytes() if after_encoding else n.get_raw_value()
+                    s += blob
 
             result = func(s)
 
@@ -316,7 +326,7 @@ class MH(object):
 
     @staticmethod
     def OFFSET(use_current_position=True, depth=1, vt=fvt.INT_str,
-               set_attrs=[], clear_attrs=[]):
+               set_attrs=[], clear_attrs=[], after_encoding=True):
         '''Return a *generator* that computes the offset of a child node
         within its parent node.
 
@@ -341,6 +351,8 @@ class MH(object):
           vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
+          after_encoding (bool): if False compute the fixed amount part of the offset before
+            any encoding. Can be set to False only if node arguments support encoding.
         '''
         class Offset(object):
             provide_helpers = True
@@ -380,7 +392,8 @@ class MH(object):
                     s = b''
                     end = -1 if self.use_current_position else -2
                     for n in nodes[:end]:
-                        s += n.to_bytes()
+                        blob = n.to_bytes() if after_encoding else n.get_raw_value()
+                        s += blob
                     base = len(s)
                     off = nodes[-1].get_subnode_off(idx)
 
@@ -394,7 +407,7 @@ class MH(object):
 
     @staticmethod
     def COPY_VALUE(path, depth=None, vt=None,
-                   set_attrs=[], clear_attrs=[]):
+                   set_attrs=[], clear_attrs=[], after_encoding=True):
         '''Return a *generator* that retrieves the value of another node, and
         then return a `vt` node with this value. The other node is
         selected:
@@ -415,7 +428,8 @@ class MH(object):
           vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
-
+          after_encoding (bool): if False, copy the raw value, otherwise the encoded one. Can be
+            set to False only if node arguments support encoding.
         '''
         class CopyValue(object):
             provide_helpers = True
@@ -443,11 +457,12 @@ class MH(object):
                     base_node = node
 
                 tg_node = base_node[self.path]
-                raw = tg_node.to_bytes()
 
                 if tg_node.is_nonterm():
                     n = Node('cts', base_node=tg_node, ignore_frozen_state=False)
                 else:
+                    blob = tg_node.to_bytes() if after_encoding else tg_node.get_raw_value()
+
                     if self.vt is None:
                         assert(tg_node.is_typed_value() and not tg_node.is_typed_value(subkind=fvt.BitField))
                         self.vt = tg_node.get_current_subkind()
@@ -455,7 +470,7 @@ class MH(object):
                     if issubclass(self.vt, fvt.INT):
                         vtype = self.vt(int_list=[tg_node.get_raw_value()])
                     elif issubclass(self.vt, fvt.String):
-                        vtype = self.vt(val_list=[raw])
+                        vtype = self.vt(val_list=[blob])
                     else:
                         raise NotImplementedError('Value type not supported')
                     n = Node('cts', value_type=vtype)
@@ -498,12 +513,14 @@ class ModelHelper(object):
         # NonTerminal description keys
         'weight', 'shape_type', 'section_type', 'duplicate_mode', 'weights',
         'separator', 'prefix', 'suffix', 'unique',
+        'encoder',
         # Generator/Function description keys
         'node_args', 'other_args', 'provide_helpers', 'trigger_last',
         # Import description keys
         'import_from', 'data_id',        
         # node properties description keys
-        'determinist', 'random', 'mutable', 'clear_attrs', 'set_attrs',
+        'determinist', 'random', 'finite', 'infinite', 'mutable',
+        'clear_attrs', 'set_attrs',
         'absorb_csts', 'absorb_helper',
         'semantics', 'fuzz_weight',
         'sync_qty_with', 'exists_if', 'exists_if_not',
@@ -840,6 +857,12 @@ class ModelHelper(object):
         param = desc.get('random', None)
         if param is not None:
             node.make_random(conf=conf)     
+        param = desc.get('finite', None)
+        if param is not None:
+            node.make_finite(conf=conf)
+        param = desc.get('infinite', None)
+        if param is not None:
+            node.make_infinite(conf=conf)
         param = desc.get('clear_attrs', None)
         if param is not None:
             for a in param:
@@ -878,7 +901,9 @@ class ModelHelper(object):
         pfh = desc.get('post_freeze', None)
         if pfh is not None:
             node.register_post_freeze_handler(pfh)
-
+        encoder = desc.get('encoder', None)
+        if encoder is not None:
+            node.set_encoder(encoder)
 
     def _register_todo(self, node, func, args=None, unpack_args=True, prio=VERYLOW_PRIO):
         if self.sorted_todo.get(prio, None) is None:
@@ -1070,8 +1095,8 @@ class DataModel(object):
         if not node_list:
             msg = "\n*** WARNING: nothing to register for " \
                   "the data model '{nm:s}'!"\
-                  "\n   [probable reason: ./imported_data/{nm:s}/ not " \
-                  "populated with sample files]".format(nm=self.name)
+                  "\n   [probable reason: {fdata:s}/imported_data/{nm:s}/ not " \
+                  "populated with sample files]".format(nm=self.name, fdata=gr.fuddly_data_folder)
             raise UserWarning(msg)
 
         for e in node_list:
@@ -1155,9 +1180,9 @@ class DataModel(object):
         if subdir is None:
             subdir = self.name
         if subdir is None:
-            path = os.path.join(app_folder, 'imported_data')
+            path = gr.imported_data_folder
         else:
-            path = os.path.join(app_folder, 'imported_data', subdir)
+            path = os.path.join(gr.imported_data_folder, subdir)
 
         if not os.path.exists(path):
             os.makedirs(path)

@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -39,6 +39,7 @@ class Color(object):
     FMKINFOSUBGROUP = 0x66CCFF
     FMKINFO = 0x66FFFF
     FMKSUBINFO = 0xD0D0C0
+    FMKINFO_HLIGHT = 0x00FF00
     INFO = 0xFF9900
     SUBINFO = 0xE6E68A
     INFO_ALT = 0x0055FF
@@ -56,7 +57,7 @@ class Color(object):
     FEEDBACK_ERR = 0xEF0000
     FEEDBACK_HLIGHT = 0xFFFFFF
     NEWLOGENTRY = 0x1975FF
-    FUZZSTEP = 0x009D9D
+    DMAKERSTEP = 0x009D9D
     LOGSECTION = 0x638C8C
     DISABLED = 0x7D7D7D
     DATAINFO = 0x8CAFCF
@@ -71,6 +72,7 @@ class Color(object):
     ND_TYPE = 0x66FFFF
     ND_DUPLICATED = 0x800080
     ND_SEPARATOR = 0x008000
+    ND_ENCODED = 0xFFA500
 
     @staticmethod
     def display():
@@ -113,3 +115,11 @@ except ImportError:
     ssh_module = False
     print('WARNING [FMK]: python(3)-paramiko module is not installed! '
           'Should be installed for ssh-based monitoring.')
+
+serial_module = True
+try:
+    import serial
+except ImportError:
+    serial_module = False
+    print('WARNING [FMK]: python(3)-serial module is not installed! '
+          'Should be installed for serial-based Target.')

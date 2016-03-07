@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -23,9 +23,7 @@
 
 from __future__ import print_function
 
-import sys
-import random
-import threading
+import datetime
 
 from fuzzfmk.global_resources import *
 from fuzzfmk.tactics_helpers import _handle_user_inputs, _user_input_conformity, _restore_dmaker_internals
@@ -78,6 +76,7 @@ class LastInstruction(object):
     RecordData = 1
 
     def __init__(self):
+        self._now = datetime.datetime.now()
         self.comments = None
         self.feedback_info = None
         self._status_code = None
@@ -114,6 +113,8 @@ class LastInstruction(object):
     def get_operator_feedback(self):
         return self.feedback_info
 
+    def get_timestamp(self):
+        return self._now
 
 
 class Operator(object):

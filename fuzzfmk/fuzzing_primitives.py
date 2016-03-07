@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -289,7 +289,7 @@ class ModelWalker(object):
             else:
                 return node, orig_node_val, False, True
 
-        orig_node_val = node.get_flatten_value()
+        orig_node_val = node.to_bytes()
 
         not_recovered = False
         consume_called_again = False
@@ -737,7 +737,7 @@ class TermNodeDisruption(NodeConsumerStub):
 
     def consume_node(self, node):
         self.orig_internal = node.cc
-        orig_val = node.get_flatten_value()
+        orig_val = node.to_bytes()
         new_val_list = copy.copy(self.val_list)
 
         try:
@@ -797,7 +797,7 @@ class TypedNodeDisruption(NodeConsumerStub):
 
         if not self.current_fuzz_vt_list:
             self.orig_internal = node.cc
-            self.orig_value = node.get_flatten_value()
+            self.orig_value = node.to_bytes()
 
             self.current_fuzz_vt_list = self._create_fuzzy_vt_list(node)
             self._extend_fuzzy_vt_list(self.current_fuzz_vt_list, node)

@@ -1,5 +1,5 @@
-Data Model
-**********
+Data Modeling
+*************
 
 .. _vt:value-types:
 
@@ -118,14 +118,57 @@ following parameters:
   provided. Also use during absorption to validate the contents. It is
   checked if there is no ``val_list``.
 
+``max_encoded_sz`` [optional, default value: **None**]
+  Only relevant for subclasses that leverage the encoding infrastructure.
+  Enable to provide the maximum legitimate size for an encoded string.
+
+``encoding_arg`` [optional, default value: **None**]
+  Only relevant for subclasses that leverage the encoding infrastructure and that
+  allow their encoding scheme to be configured. This parameter is directly provided to
+  :meth:`fuzzfmk.value_types.String.init_encoding_scheme`.
+
+Some String subclasses leverage the ``String`` encoding infrastructure,
+that enables to handle transparently any encoding scheme:
+
+- The input values are the same as for the ``String`` type.
+- Fuzzing test cases are generated based on the raw values, and then are encoded properly.
+- Some test cases may be defined on the encoding scheme itself.
+
+.. note::
+   To define a ``String`` subclass handling a specific encoding, you have to overload
+   the methods: :meth:`fuzzfmk.value_types.String.encode` and :meth:`fuzzfmk.value_types.String.decode`.
+   You may optionally overload: :meth:`fuzzfmk.value_types.String.encoding_test_cases` if you want
+   to define encoding-related test cases. And if you need to initialize the encoding scheme you
+   should overload the method :meth:`fuzzfmk.value_types.String.init_encoding_scheme`.
+
+   Alternatively and preferably, you should define a subclass of :class:`fuzzfmk.encoders.Encoder`
+   and then create a subclass of String decorated by :func:`fuzzfmk.value_types.from_encoder`
+   with the your encoder subclass in parameter. By doing so, you enable your encoder to be also
+   usable by a non-terminal node.
+
 
 Below the different currently defined string types:
 
-- :class:`fuzzfmk.value_types.String`: General purpose character
-  string.
+- :class:`fuzzfmk.value_types.String`: General purpose character string.
 - :class:`fuzzfmk.value_types.Filename`: Filename. Similar to the type
   ``String``, but some disruptors like ``tTYPE`` will generate more specific
   test cases.
+- :class:`fuzzfmk.value_types.UTF8`: ``String`` encoded in ``UTF8``.
+- :class:`fuzzfmk.value_types.UTF16_LE`: ``String`` encoded in ``UTF16`` little-endian.
+  Note that some test cases on the encoding scheme are defined.
+- :class:`fuzzfmk.value_types.UTF16_BE`: ``String`` encoded in ``UTF16`` big-endian.
+  Note that some test cases on the encoding scheme are defined.
+- :class:`fuzzfmk.value_types.Codec`: ``String`` encoded in any standard encoding
+  supported by Python. You have to provide the parameter ``encoding_arg`` with the
+  codec you want to use. If no codec is provided, this class will behave the same as the class
+  :class:`fuzzfmk.value_types.String`, that is, the ``latin_1`` codec will be used.
+- :class:`fuzzfmk.value_types.GZIP`: ``String`` compressed with ``zlib``. The parameter
+  ``encoding_arg`` is used to specify the level of compression (0-9).
+- :class:`fuzzfmk.value_types.GSM7bitPacking`: ``String`` encoded in conformity
+  with ``GSM 7-bits`` packed format.
+- :class:`fuzzfmk.value_types.Wrapper`: to be used as a mean to wrap a ``String`` with
+  a prefix and/or a suffix, without defining specific *nodes* for that (meaning you
+  don't need to model that part and want to simplify your data description).
 
 
 BitField
@@ -252,9 +295,9 @@ the first example. We additionally specify the parameter
              a look especially at:
 
              - :func:`fuzzfmk.value_types.BitField.set_subfield`, :func:`fuzzfmk.value_types.BitField.get_subfield`
-	     - :func:`fuzzfmk.value_types.BitField.extend_right`
-	     - :func:`fuzzfmk.value_types.BitField.reset_state`, :func:`fuzzfmk.value_types.BitField.rewind`
-	     - :func:`fuzzfmk.value_types.VT_Alt.switch_mode` (used currently by the disruptor ``tTYPE``)
+             - :func:`fuzzfmk.value_types.BitField.extend_right`
+             - :func:`fuzzfmk.value_types.BitField.reset_state`, :func:`fuzzfmk.value_types.BitField.rewind`
+             - :func:`fuzzfmk.value_types.VT_Alt.switch_mode` (used currently by the disruptor ``tTYPE``)
 
 
 .. _dm:generators:
@@ -555,6 +598,18 @@ unique
   node copy). Otherwise, the separators will be references to a
   unique node (zero copy).
 
+encoder
+  If specified, an encoder instance should be provided. The *encoding* will be applied
+  transparently when the binary value of the non terminal node will be retrieved
+  (:meth:`fuzzfmk.data_model.Node.to_bytes`). Additionally, during an absorption
+  (refer to :ref:`tuto:dm-absorption`), the *decoding* will also be performed automatically.
+
+  Several generic encoders are defined within ``fuzzfmk/encoders.py``. But if they
+  don't match your need, you can define your own encoder by inheriting from
+  :class:`fuzzfmk.encoders.Encoder` and implementing its interface.
+
+  .. note:: Depending on your needs, you could also choose to implement a disruptor
+     to perform your encoding (refer to :ref:`tuto:disruptors`).
 
 
 Keywords to Describe Generator Node
@@ -606,6 +661,15 @@ determinist
 
 random
   Make the node behave in a random way.
+
+finite
+  Make the node *finite*, meaning that it will exhaust at some point
+  (meaning that it has cycled over all its possible values or shapes)
+  When the situation occurs, a notification is posted in the node
+  environment (refer to :ref:`data-manip`)
+
+infinite
+  Make the node *infinite*, meaning that it will always provide values.
 
 mutable
   Make the node mutable. It is a shortcut for the node attribute
@@ -1251,3 +1315,99 @@ Which correspond to the following data::
              `True`. Refer to :ref:`dm:keywords` for more information
              on the available keywords.
 
+
+How to Describe a Data Format With Some Encoded Parts
+-----------------------------------------------------
+
+The example below shows how to describe a data format with some parts encoded in different ways.
+
+The non-terminal node named ``enc`` (lines 9-19) has the attribute ``encoder``
+(refer to :ref:`dm:keywords`) which means that it will be encoded following the scheme of the
+specified encoder. In this case it is the :class:`fuzzfmk.encoders.GZIP_Enc` with a level
+of compression of 6. Within this node is also defined a typed node (lines 17-18) named
+``data1`` which is encoded in *UTF16 little endian* thanks to the type
+:class:`fuzzfmk.value_types.UTF16_LE` (which inherit from :class:`fuzzfmk.value_types.String`)
+that leverages the encoder :class:`fuzzfmk.encoders.UTF16LE_Enc`.
+
+Note also the parameter ``after_encoding=False`` (lines 6 and 14), which is supported by every
+relevant generator node templates (refer to :ref:`dm:generators`) and enable them to act either
+on the encoded form or the decoded form of their node parameters.
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 6, 10, 14, 18
+
+    {'name': 'enc',
+     'contents': [
+         {'name': 'data0',
+          'contents': String(val_list=['Plip', 'Plop']) },
+         {'name': 'crc',
+          'contents': MH.CRC(vt=UINT32_be, after_encoding=False),
+          'node_args': ['enc_data', 'data2'],
+          'absorb_csts': AbsFullCsts(contents=False) },
+         {'name': 'enc_data',
+          'encoder': GZIP_Enc(6),
+          'set_attrs': [NodeInternals.Abs_Postpone],
+          'contents': [
+             {'name': 'len',
+              'contents': MH.LEN(vt=UINT8, after_encoding=False),
+              'node_args': 'data1',
+              'absorb_csts': AbsFullCsts(contents=False)},
+             {'name': 'data1',
+              'contents': UTF16_LE(val_list=['Test!', 'Hello World!']) },
+          ]},
+         {'name': 'data2',
+          'contents': String(val_list=['Red', 'Green', 'Blue']) }
+     ]}
+
+This data description will enable you to produce data compliant to the specified encoding schemes
+in a transparent way. Additionally, any fuzzing operations (:ref:`tuto:disruptors`) you want to
+perform on any data parts will be done *before* any encoding takes place.
+
+If you want to perform some fuzzing on the encoding scheme itself you will have first to
+describe its format. Then it boils down to run some generic disruptors on them or some of your own.
+However, note that some value types that support encoding (refer to :ref:`vt:value-types`) embed
+specific test cases on the encoding scheme (which is the case of
+:class:`fuzzfmk.value_types.UTF16_LE` for instance).
+
+Finally, absorption (refer to :ref:`tuto:dm-absorption`) is also supported when encoding is used
+within your data description. For instance, the following data will be absorbed by the previous
+data model::
+
+   b'Plop\x8c\xd6/\x06x\x9cc\raHe(f(aPd\x00\x00\x0bv\x01\xc7Blue'
+
+To perform that operation you can write the following python code:
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 10, 12
+
+   from fuzzfmk.plumbing import *
+   from fuzzfmk.data_model import AbsorbStatus
+
+   raw_data = b'Plop\x8c\xd6/\x06x\x9cc\raHe(f(aPd\x00\x00\x0bv\x01\xc7Blue'
+
+   fmk = FmkPlumbing()
+   fmk.run_project(name="tuto")
+   enc_dm = fmk.dm.get_data('enc')
+
+   status, off, size, name = enc_dm.absorb(raw_data, constraints=AbsFullCsts())
+   if status == AbsorbStatus.FullyAbsorbed:
+      enc_dm.show()
+
+The following picture displays the result of the previous code (triggered by line 12):
+
+.. figure::  images/encoding.png
+   :align:   center
+   :scale:   100 %
+
+.. note:: The ``content`` absorption constraint is released for the generator nodes ``crc``
+   (line 8) and ``len`` (line 16) in order to allow any value to be absorbed and not limit them to
+   the value generated the last time the generators triggered (which occurs during node freezing).
+   Indeed, generators based on these templates will dynamically generate a typed node that contains
+   only one value---based on the current value their node parameters have while the generator is
+   triggered.
+
+.. note:: Line 11 is to make the absorption operation work correctly. Indeed because of the
+   encoding, constraints are not rigid enough to make fuddly work out the absorption
+   without some help.

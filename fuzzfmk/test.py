@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -51,7 +51,7 @@ from fuzzfmk.logger import *
 from fuzzfmk.operator_helpers import *
 
 from fuzzfmk.data_model_helpers import *
-
+from fuzzfmk.encoders import *
 
 parser = argparse.ArgumentParser(description='Process arguments.')
 parser.add_argument('-a', '--all', action='store_true',
@@ -87,7 +87,7 @@ class TestBasics(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.dm = example.data_model
-        cls.dm.load_data_model(fuzzer._name2dm)
+        cls.dm.load_data_model(fmk._name2dm)
 
     def setUp(self):
         pass
@@ -98,8 +98,8 @@ class TestBasics(unittest.TestCase):
 
         node_ex1 = dm.get_data('EX1')
 
-        print('Flatten 1: ', repr(node_ex1.get_flatten_value()))
-        print('Flatten 1: ', repr(node_ex1.get_flatten_value()))
+        print('Flatten 1: ', repr(node_ex1.to_bytes()))
+        print('Flatten 1: ', repr(node_ex1.to_bytes()))
         l = node_ex1.get_value()
         hk = set(node_ex1.get_all_paths().keys())
         print(l)
@@ -150,11 +150,11 @@ class TestBasics(unittest.TestCase):
 
         node_ex1.unfreeze()
         print(node_ex1.get_value())
-        val1 = node_ex1.get_flatten_value()
+        val1 = node_ex1.to_bytes()
 
         node_ex1.unfreeze()
         print(node_ex1.get_value())
-        val2 = node_ex1.get_flatten_value()
+        val2 = node_ex1.to_bytes()
 
         results['test2'] = val1 != val2
 
@@ -170,7 +170,7 @@ class TestBasics(unittest.TestCase):
         val3 = tux.get_value()
         print(val3)
 
-        print(repr(tux.get_flatten_value()))
+        print(repr(tux.to_bytes()))
 
         res = val1 == val2 and val1 == val3
         results['test3'] = res
@@ -179,10 +179,10 @@ class TestBasics(unittest.TestCase):
         print('\n### TEST 4: generate 2 different flatten TUX ###')
 
         tux.unfreeze()
-        val1 = repr(tux.get_flatten_value())
+        val1 = repr(tux.to_bytes())
         print(val1)
         tux.unfreeze()
-        val2 = repr(tux.get_flatten_value())
+        val2 = repr(tux.to_bytes())
         print(val2)
 
         res = val1 != val2
@@ -296,7 +296,7 @@ class TestBasics(unittest.TestCase):
         print('*** junk test:')
 
         tux2.get_node_by_path('TUX$').cc.change_subnodes_csts([('u=+', 'u>'), ('u=.', 'u>')])
-        print(tux2.get_flatten_value())
+        print(tux2.to_bytes())
 
         print('\n*** test 7.1:')
 
@@ -444,22 +444,22 @@ class TestBasics(unittest.TestCase):
 
         res1 = True
 
-        msg = node_ex1.get_flatten_value(conf='ALT')
+        msg = node_ex1.to_bytes(conf='ALT')
         if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg:
             res1 = False
         print(msg)
         node_ex1.unfreeze_all()
-        msg = node_ex1.get_flatten_value(conf='ALT')
+        msg = node_ex1.to_bytes(conf='ALT')
         if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg:
             res1 = False
         print(msg)
         node_ex1.unfreeze_all()
-        msg = node_ex1.get_flatten_value()
+        msg = node_ex1.to_bytes()
         if b' ~(..)~ ' in msg or b' ~(X)~ ' in msg:
             res1 = False
         print(msg)
         node_ex1.unfreeze_all()
-        msg = node_ex1.get_flatten_value(conf='ALT')
+        msg = node_ex1.to_bytes(conf='ALT')
         if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg:
             res1 = False
         print(msg)
@@ -474,17 +474,17 @@ class TestBasics(unittest.TestCase):
 
         res2 = True
 
-        print(node_ex1.get_flatten_value())
+        print(node_ex1.to_bytes())
 
         node_ex1.set_current_conf('ALT', root_regexp=None)
 
         node_ex1.unfreeze_all()
-        msg = node_ex1.get_flatten_value()
+        msg = node_ex1.to_bytes()
         if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or b'[\xc2]' not in msg:
             res2 = False
         print(msg)
         node_ex1.unfreeze_all()
-        msg = node_ex1.get_flatten_value()
+        msg = node_ex1.to_bytes()
         if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or b'[\xc2]' not in msg:
             res2 = False
         print(msg)
@@ -492,7 +492,7 @@ class TestBasics(unittest.TestCase):
         node_ex1.set_current_conf('MAIN', reverse=True, root_regexp=None)
 
         node_ex1.unfreeze_all()
-        msg = node_ex1.get_flatten_value()
+        msg = node_ex1.to_bytes()
         if b' ~(..)~ ' in msg or b' ~(X)~ ' in msg or b'[<]' in msg or b'[\xc2]' in msg:
             res2 = False
         print(msg)
@@ -503,15 +503,15 @@ class TestBasics(unittest.TestCase):
         node_ex1.set_current_conf('ALT', root_regexp='TUX$')
 
         node_ex1.unfreeze_all()
-        msg = node_ex1.get_flatten_value()
+        msg = node_ex1.to_bytes()
         if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or b'[\xc2]' not in msg:
             res2 = False
         print(msg)
 
         print('\n***** test 8.2.1: subparts equality:')
 
-        val1 = node_ex1.get_node_by_path('TUX$').get_flatten_value()
-        val2 = node_ex1.get_node_by_path('CONCAT$').get_flatten_value()
+        val1 = node_ex1.get_node_by_path('TUX$').to_bytes()
+        val2 = node_ex1.get_node_by_path('CONCAT$').to_bytes()
         print(b' @ ' + val1 + b' @ ')
         print(val2)
 
@@ -533,7 +533,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 8.4:')
 
-        print(node_ex1.get_flatten_value())
+        print(node_ex1.to_bytes())
         res4 = True
         l = sorted(node_ex1.get_nodes_names())
         for k in l:
@@ -548,13 +548,13 @@ class TestBasics(unittest.TestCase):
 
         res5 = True
         node_ex1.unfreeze_all()
-        msg = node_ex1.get_node_by_path('TUX$').get_flatten_value(conf='ALT', recursive=False)
+        msg = node_ex1.get_node_by_path('TUX$').to_bytes(conf='ALT', recursive=False)
         if b' ~(..)~ ' not in msg or b' ~(X)~ ' in msg:
             res5 = False
         print(msg)
 
         node_ex1.unfreeze_all()
-        msg = node_ex1.get_node_by_path('TUX$').get_flatten_value(conf='ALT', recursive=True)
+        msg = node_ex1.get_node_by_path('TUX$').to_bytes(conf='ALT', recursive=True)
         if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg:
             res5 = False
         print(msg)
@@ -600,7 +600,7 @@ class TestBasics(unittest.TestCase):
         res = True
         for i in range(20):
             node_ex1.unfreeze_all()
-            msg = node_ex1.get_node_by_path('TUX$').get_flatten_value(conf='ALT', recursive=True)
+            msg = node_ex1.get_node_by_path('TUX$').to_bytes(conf='ALT', recursive=True)
             if b' ~(..)~ TUX ~(..)~ ' not in msg:
                 res = False
                 break
@@ -626,19 +626,19 @@ class TestBasics(unittest.TestCase):
         node_ex1 = dm.get_data('EX1')
 
         res1 = True
-        msg = node_ex1.get_flatten_value(conf='ALT')
+        msg = node_ex1.to_bytes(conf='ALT')
         if b'[<]' not in msg or b'[\xc2]' not in msg:
             res1 = False
         print(msg)
 
         node_ex1.unfreeze_all()
-        msg = node_ex1.get_flatten_value(conf='ALT')
+        msg = node_ex1.to_bytes(conf='ALT')
         if b'[<]' not in msg or b'[\xc2]' not in msg:
             res1 = False
         print(msg)
 
         node_ex1.unfreeze_all()
-        msg = node_ex1.get_node_by_path('TUX$').get_flatten_value(conf='ALT', recursive=False)
+        msg = node_ex1.get_node_by_path('TUX$').to_bytes(conf='ALT', recursive=False)
         if b'[<]' in msg or b'[\xc2]' in msg or b' ~(..)~ TUX ~(..)~ ' not in msg:
             res1 = False
         print(msg)
@@ -667,19 +667,19 @@ class TestBasics(unittest.TestCase):
         node_ex1 = dm.get_data('EX1')
 
         res3 = True
-        msg = node_ex1.get_flatten_value(conf='ALT')
+        msg = node_ex1.to_bytes(conf='ALT')
         if b'___' not in msg:
             res3 = False
         print(msg)
 
         node_ex1.unfreeze_all()
-        msg = node_ex1.get_flatten_value(conf='ALT')
+        msg = node_ex1.to_bytes(conf='ALT')
         if b'___' not in msg:
             res3 = False
         print(msg)
 
         node_ex1.unfreeze_all()
-        msg = node_ex1.get_node_by_path('TUX$').get_flatten_value(conf='ALT', recursive=False)
+        msg = node_ex1.get_node_by_path('TUX$').to_bytes(conf='ALT', recursive=False)
         if b'___' in msg:
             res3 = False
         print(msg)
@@ -782,7 +782,7 @@ class TestBasics(unittest.TestCase):
 
         print('--[ EVT1 ]-----[ EVT2 ]--')
         for i in range(7):
-            print(evt.get_flatten_value())
+            print(evt.to_bytes())
             evt.unfreeze_all()
 
         vt = {}
@@ -808,7 +808,7 @@ class TestBasics(unittest.TestCase):
 
         print('--[ EVT1 ]-----[ EVT2 ]--')
         for i in range(20):
-            s = evt.get_flatten_value()
+            s = evt.to_bytes()
             print(s)
             if evt.env.exhausted_node_exists():
                 print("Exhausted Elts Exists!")
@@ -841,7 +841,7 @@ class TestBasics(unittest.TestCase):
         res1 = False
 
         blend = dm.get_data('BLEND')
-        msg = blend.get_flatten_value()
+        msg = blend.to_bytes()
         print('Blend Node starts with:')
         print(msg[:300] + b' ...')
         print('\nAnd ends with:')
@@ -850,7 +850,7 @@ class TestBasics(unittest.TestCase):
         print("\n--> Call unfreeze()")
         blend.unfreeze()
 
-        msg2 = blend.get_flatten_value()
+        msg2 = blend.to_bytes()
 
         print('\nBlend Node starts with:')
         print(msg2[:300] + b' ...')
@@ -872,7 +872,7 @@ class TestMisc(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.dm = example.data_model
-        cls.dm.load_data_model(fuzzer._name2dm)
+        cls.dm.load_data_model(fmk._name2dm)
 
 
     def setUp(self):
@@ -907,10 +907,10 @@ class TestMisc(unittest.TestCase):
         simple.make_determinist(recursive=True)
         for i in range(15):
             simple.unfreeze()
-            val1 = simple.get_flatten_value()
+            val1 = simple.to_bytes()
             # print(val1)
             simple.unfreeze(dont_change_state=True)
-            val2 = simple.get_flatten_value()
+            val2 = simple.to_bytes()
             # print(val2)
             if val1 != val2:
                 res1 = False
@@ -962,10 +962,10 @@ class TestMisc(unittest.TestCase):
         tn_consumer = TypedNodeDisruption()
         for rnode, node, orig_node_val, i in ModelWalker(evt, tn_consumer, make_determinist=True, max_steps=200):
             print('=======[ %d ]========' % i)
-            print('  orig:    ', rnode.get_flatten_value())
+            print('  orig:    ', rnode.to_bytes())
             print('  ----')
             if node != None:
-                print('  fuzzed:  ', rnode.get_flatten_value())
+                print('  fuzzed:  ', rnode.to_bytes())
                 print('  ----')
                 current_path = node.get_path_from(rnode)
                 if current_path != prev_path:
@@ -983,8 +983,8 @@ class TestMisc(unittest.TestCase):
                     print('  node vt endian:         ', node.cc.get_value_type().endian)
                 print('  node orig value:        (hexlified) {0!s:s}, {0!s:s}'.format(binascii.hexlify(orig_node_val),
                                                                                      orig_node_val))
-                print('  node corrupted value:   (hexlified) {0!s:s}, {0!s:s}'.format(binascii.hexlify(node.get_flatten_value()),
-                                                                                     node.get_flatten_value()))
+                print('  node corrupted value:   (hexlified) {0!s:s}, {0!s:s}'.format(binascii.hexlify(node.to_bytes()),
+                                                                                      node.to_bytes()))
             else:
                 turn_nb_list.append(i)
                 print('\n--> Fuzzing terminated!\n')
@@ -1010,7 +1010,7 @@ class TestMisc(unittest.TestCase):
 
         for i in range(10):
             evt.unfreeze()
-            print(evt.get_flatten_value())
+            print(evt.to_bytes())
 
         evt.get_node_by_path('Pre').make_random()
 
@@ -1018,7 +1018,7 @@ class TestMisc(unittest.TestCase):
 
         for i in range(10):
             evt.unfreeze()
-            print(evt.get_flatten_value())
+            print(evt.to_bytes())
 
         # self.assertEqual(idx, )
 
@@ -1527,7 +1527,7 @@ class TestModelWalker(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.dm = example.data_model
-        cls.dm.load_data_model(fuzzer._name2dm)
+        cls.dm.load_data_model(fmk._name2dm)
 
     def setUp(self):
         pass
@@ -1536,21 +1536,21 @@ class TestModelWalker(unittest.TestCase):
         nt  = self.dm.get_data('Simple')
         default_consumer = NodeConsumerStub()
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True, max_steps=70):
-            print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 37)
         
     def test_NodeConsumerStub_2(self):
         nt  = self.dm.get_data('Simple')
         default_consumer = NodeConsumerStub(max_runs_per_node=-1, min_runs_per_node=2)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True, max_steps=70):
-            print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 28)
 
     def test_BasicVisitor(self):
         nt  = self.dm.get_data('Simple')
         default_consumer = BasicVisitor()
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True, max_steps=70):
-            print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 37)
 
     def test_NonTermVisitor(self):
@@ -1691,7 +1691,7 @@ class TestModelWalker(unittest.TestCase):
         ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         tn_consumer.set_node_interest(internals_criteria=ic)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True, max_steps=300):
-            print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 23)
 
 
@@ -1701,7 +1701,7 @@ class TestModelWalker(unittest.TestCase):
         ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         tn_consumer.set_node_interest(internals_criteria=ic)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True, max_steps=100):
-            print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 9)
 
     def test_TypedNodeDisruption_3(self):
@@ -1714,30 +1714,30 @@ class TestModelWalker(unittest.TestCase):
         # ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         # tn_consumer.set_node_interest(internals_criteria=ic)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True, max_steps=-1):
-            print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 282)
 
     def test_TermNodeDisruption_1(self):
         simple  = self.dm.get_data('Simple')
         consumer = TermNodeDisruption()
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=-1):
-            print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
             # print('original val: %s' % repr(orig_node_val))
-            # print('corrupted val: %s' % repr(consumed_node.get_flatten_value()))
+            # print('corrupted val: %s' % repr(consumed_node.to_bytes()))
         self.assertEqual(idx, 266)
 
     def test_TermNodeDisruption_2(self):
         simple  = self.dm.get_data('Simple')
         consumer = TermNodeDisruption(max_runs_per_node=-1, min_runs_per_node=2)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=-1):
-            print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 91)
 
     def test_TermNodeDisruption_3(self):
         simple  = self.dm.get_data('Simple')
         consumer = TermNodeDisruption(specific_args=['1_BANG_1', '2_PLOUF_2'])
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=-1):
-            print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 152)
 
 
@@ -1747,7 +1747,7 @@ class TestModelWalker(unittest.TestCase):
         consumer.set_node_interest(owned_confs=['ALT'])
 
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=100):
-            print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 15)
 
     def test_AltConfConsumer_2(self):
@@ -1756,7 +1756,7 @@ class TestModelWalker(unittest.TestCase):
         consumer.set_node_interest(owned_confs=['ALT'])
 
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=100):
-            print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 8)
 
     def test_AltConfConsumer_3(self):
@@ -1765,7 +1765,7 @@ class TestModelWalker(unittest.TestCase):
         consumer.set_node_interest(owned_confs=['ALT', 'ALT_2'])
 
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=100):
-            print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 21)
 
     def test_AltConfConsumer_4(self):
@@ -1774,7 +1774,7 @@ class TestModelWalker(unittest.TestCase):
         consumer.set_node_interest(owned_confs=['ALT_2', 'ALT'])
 
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=50):
-            print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 22)
 
 
@@ -1808,7 +1808,7 @@ class TestModelWalker(unittest.TestCase):
         consumer.need_reset_when_structure_change = True
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, consumer, make_determinist=True, max_steps=600):
             pass
-            # print(colorize('[%d] '%idx + repr(rnode.get_flatten_value()), rgb=Color.INFO))
+            # print(colorize('[%d] '%idx + repr(rnode.to_bytes()), rgb=Color.INFO))
 
         print(colorize('number of confs: %d'%idx, rgb=Color.INFO))
 
@@ -2076,11 +2076,11 @@ class TestNodeFeatures(unittest.TestCase):
         self.assertEqual(len(msg), size)
         self.assertTrue(self.helper1_called)
         self.assertTrue(self.helper2_called)
-        self.assertEqual(top.get_node_by_path("top/middle2/str10").get_flatten_value(), b'THE_END')
+        self.assertEqual(top.get_node_by_path("top/middle2/str10").to_bytes(), b'THE_END')
 
         # Because constraints are untighten on this node, its nominal
         # size of 4 is set to 5 when absorbing b'COOL!'
-        self.assertEqual(top.get_node_by_path("top/middle1/cool").get_flatten_value(), b'COOL!')
+        self.assertEqual(top.get_node_by_path("top/middle1/cool").to_bytes(), b'COOL!')
         
         self.assertEqual(status2, AbsorbStatus.FullyAbsorbed)
 
@@ -2397,9 +2397,57 @@ class TestNode_NonTerm(unittest.TestCase):
             node.unfreeze()
 
 
+    def test_encoding_attr(self):
 
+        enc_desc = \
+        {'name': 'enc',
+         'contents': [
+             {'name': 'data0',
+              'contents': String(val_list=['Plip', 'Plop']) },
+             {'name': 'crc',
+              'contents': MH.CRC(vt=UINT32_be, after_encoding=False),
+              'node_args': ['enc_data', 'data2'],
+              'absorb_csts': AbsFullCsts(contents=False) },
+             {'name': 'enc_data',
+              'encoder': GZIP_Enc(6),
+              'set_attrs': [NodeInternals.Abs_Postpone],
+              'contents': [
+                 {'name': 'len',
+                  'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                  'node_args': 'data1',
+                  'absorb_csts': AbsFullCsts(contents=False)},
+                 {'name': 'data1',
+                  'contents': UTF16_LE(val_list=['Test!', 'Hello World!']) },
+              ]},
+             {'name': 'data2',
+              'contents': String(val_list=['Red', 'Green', 'Blue']) },
+         ]}
 
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(enc_desc)
+        node.set_env(Env())
 
+        node_abs = Node('abs', base_node=node, new_env=True)
+        node_abs.set_env(Env())
+
+        node.show()
+        print('\nData:')
+        print(node.to_bytes())
+        self.assertEqual(struct.unpack('B', node['enc/enc_data/len$'].to_bytes())[0],
+                         len(node['enc/enc_data/data1$'].get_raw_value()))
+
+        raw_data = b'Plop\x8c\xd6/\x06x\x9cc\raHe(f(aPd\x00\x00\x0bv\x01\xc7Blue'
+        status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+        print('\nAbsorb Status:', status, off, size, name)
+        print(' \_ length of original data:', len(raw_data))
+        print(' \_ remaining:', raw_data[size:])
+        raw_data_abs = node_abs.to_bytes()
+        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        node_abs.show()
+
+        self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+        self.assertEqual(raw_data, raw_data_abs)
 
 
 
@@ -2482,6 +2530,128 @@ class TestNode_TypedValue(unittest.TestCase):
 
         self.assertEqual(status, AbsorbStatus.Reject)
         self.assertEqual(raw_data[size:], b'FEND')
+
+
+    def test_encoded_str(self):
+
+        class EncodedStr(String):
+
+            def encode(self, val):
+                return val+b'***'
+
+            def decode(self, val):
+                return val[:-3]
+
+        data = ['Test!', 'Hello World!']
+        enc_desc = \
+        {'name': 'enc',
+         'contents': [
+             {'name': 'len',
+              'contents': MH.LEN(vt=UINT8, after_encoding=False),
+              'node_args': 'user_data',
+              'absorb_csts': AbsFullCsts(contents=False)},
+             {'name': 'user_data',
+              'contents': EncodedStr(val_list=data) },
+             {'name': 'compressed_data',
+              'contents': GZIP(val_list=data, encoding_arg=6) }
+         ]}
+
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(enc_desc)
+        node.set_env(Env())
+
+        node_abs = Node('enc_abs', base_node=node, new_env=True)
+        node_abs.set_env(Env())
+
+        node.show()
+        self.assertEqual(struct.unpack('B', node['enc/len$'].to_bytes())[0],
+                         len(node['enc/user_data$'].get_raw_value()))
+
+        raw_data = b'\x0CHello World!***' + \
+                   b'x\x9c\xf3H\xcd\xc9\xc9W\x08\xcf/\xcaIQ\x04\x00\x1cI\x04>'
+
+        status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
+
+        print('Absorb Status:', status, off, size, name)
+        print(' \_ length of original data:', len(raw_data))
+        print(' \_ remaining:', raw_data[size:])
+        raw_data_abs = node_abs.to_bytes()
+        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        node_abs.show()
+
+        self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
+        self.assertEqual(raw_data, raw_data_abs)
+
+        msg = b'Hello World'
+        gsm_t = GSM7bitPacking(max_sz=20)
+        gsm_enc = gsm_t.encode(msg)
+        gsm_dec = gsm_t.decode(gsm_enc)
+        self.assertEqual(msg, gsm_dec)
+
+        msg = b'Hello World!'
+        gsm_enc = gsm_t.encode(msg)
+        gsm_dec = gsm_t.decode(gsm_enc)
+        self.assertEqual(msg, gsm_dec)
+
+        msg = b'H'
+        gsm_enc = gsm_t.encode(msg)
+        gsm_dec = gsm_t.decode(gsm_enc)
+        self.assertEqual(msg, gsm_dec)
+
+        msg = b'o\xf9 \xe7a'
+        vtype = UTF16_LE(max_sz=20)
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
+
+        msg = b'o\xf9 \xe7a'
+        vtype = UTF16_BE(max_sz=20)
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
+
+        msg = b'o\xf9 \xe7a'
+        vtype = UTF8(max_sz=20)
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
+
+        msg = b'o\xf9 \xe7a'
+        vtype = Codec(max_sz=20, encoding_arg=None)
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
+
+        msg = b'o\xf9 \xe7a'
+        vtype = Codec(max_sz=20, encoding_arg='utf_32')
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
+        utf32_enc = b"\xff\xfe\x00\x00o\x00\x00\x00\xf9\x00\x00\x00 " \
+                    b"\x00\x00\x00\xe7\x00\x00\x00a\x00\x00\x00"
+        self.assertEqual(enc, utf32_enc)
+
+        msg = b'Hello World!'*10
+        vtype = GZIP(max_sz=20)
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
+
+        msg = b'Hello World!'
+        vtype = Wrapper(max_sz=20, encoding_arg=['<test>', '</test>'])
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
+
+        vtype = Wrapper(max_sz=20, encoding_arg=['<test>', None])
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
+
+        vtype = Wrapper(max_sz=20, encoding_arg=[None, '</test>'])
+        enc = vtype.encode(msg)
+        dec = vtype.decode(enc)
+        self.assertEqual(msg, dec)
 
 
 class TestHLAPI(unittest.TestCase):
@@ -2597,7 +2767,7 @@ class TestDataModel(unittest.TestCase):
 
         for dm in fmk.dm_list:
             try:
-                dm.load_data_model(fuzzer._name2dm)
+                dm.load_data_model(fmk._name2dm)
             except:
                 print("\n*** WARNING: Data Model '{:s}' not tested because" \
                       " the loading process has failed ***\n".format(dm.name))
@@ -2653,10 +2823,10 @@ class TestDataModel(unittest.TestCase):
 
         for n, png in dm.png_dict.items():
 
-            png_buff = png.get_flatten_value()
+            png_buff = png.to_bytes()
             png.show(raw_limit=400)
 
-            with open('./workspace/TEST_FUZZING_' + n, 'wb') as f:
+            with open(gr.workspace_folder + 'TEST_FUZZING_' + n, 'wb') as f:
                 f.write(png_buff)
 
             filename = os.path.join(dm.get_import_directory_path(), n)
@@ -2678,9 +2848,9 @@ class TestDataModel(unittest.TestCase):
 
         for n, jpg in dm.jpg_dict.items():
 
-            jpg_buff = jpg.get_flatten_value()
+            jpg_buff = jpg.to_bytes()
 
-            with open('./workspace/TEST_FUZZING_' + n, 'wb') as f:
+            with open(gr.workspace_folder + 'TEST_FUZZING_' + n, 'wb') as f:
                 f.write(jpg_buff)
 
             filename = os.path.join(dm.get_import_directory_path(), n)
@@ -2751,7 +2921,7 @@ class TestDataModel(unittest.TestCase):
         abszip.set_current_conf('ABS', recursive=True)
 
         # We generate a ZIP file from the model only (no real ZIP file)
-        zip_buff = dm.get_data('ZIP').get_flatten_value()
+        zip_buff = dm.get_data('ZIP').to_bytes()
         lg = len(zip_buff)
 
         # dm.pkzip.show(raw_limit=400)
@@ -2764,7 +2934,7 @@ class TestDataModel(unittest.TestCase):
 
         self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
 
-        abs_buff = abszip.get_flatten_value()
+        abs_buff = abszip.to_bytes()
         if zip_buff == abs_buff:
             print("\n*** Absorption of the generated node has worked!")
         else:
@@ -2781,7 +2951,7 @@ class TestDataModel(unittest.TestCase):
         if off_before is not None:
             # Make modification of the ZIP and verify that some other ZIP
             # fields are automatically updated
-            off_before = off_before.get_flatten_value()
+            off_before = off_before.to_bytes()
             print('offset before:', off_before)
             csz_before = abszip['ZIP/file_list/file/header/common_attrs/compressed_size'].to_bytes()
             print('compressed_size before:', csz_before)
@@ -2800,7 +2970,7 @@ class TestDataModel(unittest.TestCase):
             # print('\n******\n')
             # abszip.show()
 
-            off_after = abszip['ZIP/cdir/cdir_hdr:2/file_hdr_off'].get_flatten_value()
+            off_after = abszip['ZIP/cdir/cdir_hdr:2/file_hdr_off'].to_bytes()
             print('offset after: ', off_after)
             csz_after = abszip['ZIP/file_list/file/header/common_attrs/compressed_size'].to_bytes()
             print('compressed_size after:', csz_after)
@@ -2815,10 +2985,10 @@ class TestDataModel(unittest.TestCase):
 
         for n, pkzip in dm.zip_dict.items():
 
-            zip_buff = pkzip.get_flatten_value()
+            zip_buff = pkzip.to_bytes()
             # pkzip.show(raw_limit=400)
 
-            with open('./workspace/TEST_FUZZING_' + n, 'wb') as f:
+            with open(gr.workspace_folder + 'TEST_FUZZING_' + n, 'wb') as f:
                 f.write(zip_buff)
 
             filename = os.path.join(dm.get_import_directory_path(), n)
@@ -2840,7 +3010,7 @@ class TestFMK(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        fuzzer.run_project(name='tuto', dm_name='mydf')
+        fmk.run_project(name='tuto', dm_name='mydf')
     
     def setUp(self):
         pass
@@ -2866,8 +3036,7 @@ class TestFMK(unittest.TestCase):
                 d.pretty_print()
                 fmk.cleanup_dmaker(dmaker_type=dmaker_type, reset_existing_seed=True)
             else:
-                print("\n***WARNING: the sequence %r returns nothing!" % act)
-                raise ValueError
+                raise ValueError("\n***WARNING: the sequence {!r} returns {!r}!".format(act,d))
 
         fmk.cleanup_all_dmakers(reset_existing_seed=True)
 
@@ -2958,13 +3127,12 @@ if __name__ == "__main__":
 
     results = collections.OrderedDict()
 
-    fuzzer = Fuzzer()
+    fmk = FmkPlumbing()
 
-    fuzzer.run_project(name='tuto', dm_name='example')
-    fmk = fuzzer
+    fmk.run_project(name='tuto', dm_name='example')
 
     dm = example.data_model
-    # dm.load_data_model(fuzzer._name2dm)
+    # dm.load_data_model(fmk._name2dm)
 
     # print(test_args, sys.argv)
     args = [sys.argv[0]] + test_args[1]

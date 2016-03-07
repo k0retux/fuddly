@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -36,12 +36,12 @@ import copy
 import struct
 import time
 import collections
+import binascii
 
 import errno
 from socket import error as socket_error
 
 from libs.external_modules import *
-import data_models
 from fuzzfmk.global_resources import *
 
 class TargetStuck(Exception): pass
@@ -192,25 +192,31 @@ class TargetFeedback(object):
         self.set_bytes(bstring)
 
     def add_fbk_from(self, ref, fbk):
-        self._feedback_collector[ref] = fbk
+        now = datetime.datetime.now()
+        self._feedback_collector[ref] = (fbk, now)
 
     def has_fbk_collector(self):
         return len(self._feedback_collector) > 0
 
     def cleanup(self):
         self._feedback_collector = collections.OrderedDict()
-        self.set_bytes(b'')
+        self._tstamped_bstring = None
         self.set_error_code(0)
 
     def __iter__(self):
-        for ref, fbk in self._feedback_collector.items():
-            yield ref, fbk
+        for ref, obj in self._feedback_collector.items():
+            fbk, tstamp = obj
+            yield ref, fbk, tstamp
 
     def set_bytes(self, bstring):
-        self._bstring = bstring
+        now = datetime.datetime.now()
+        self._tstamped_bstring = (bstring, now)
 
     def get_bytes(self):
-        return self._bstring
+        return None if self._tstamped_bstring is None else self._tstamped_bstring[0]
+
+    def get_timestamp(self):
+        return None if self._tstamped_bstring is None else self._tstamped_bstring[1]
 
     def set_error_code(self, err_code):
         self._err_code = err_code
@@ -1064,7 +1070,7 @@ class PrinterTarget(Target):
     def send_data(self, data):
 
         data = data.to_bytes()
-        wkspace = os.path.join(app_folder, 'workspace')
+        wkspace = workspace_folder
         file_name = os.path.join(wkspace, 'fuzz_test_' + self.__suffix + self._tmpfile_ext)
 
         with open(file_name, 'wb') as f:
@@ -1142,7 +1148,7 @@ class LocalTarget(Target):
 
     def send_data(self, data):
         data = data.to_bytes()
-        wkspace = os.path.join(app_folder, 'workspace')
+        wkspace = workspace_folder
 
         name = os.path.join(wkspace, 'fuzz_test_' + self.__suffix + self._tmpfile_ext)
         with open(name, 'wb') as f:
@@ -1218,3 +1224,91 @@ class LocalTarget(Target):
         self.__feedback.set_bytes(byte_string)
 
         return self.__feedback
+
+
+class SIMTarget(Target):
+    delay_between_write = 0.1  # without, it seems some commands can be lost
+
+    def __init__(self, serial_port, baudrate, pin_code, targeted_tel_num,
+                 zone='33'):
+        self.serial_port = serial_port
+        self.baudrate = baudrate
+        self.tel_num = zone
+        self.pin_code = pin_code
+        tel = targeted_tel_num[1:]
+        tel_sz = len(tel)
+        for idx in range(0, tel_sz, 2):
+            if idx+1<tel_sz:
+                self.tel_num += tel[idx+1]+tel[idx]
+            else:
+                self.tel_num += 'F'+tel[idx]
+        if sys.version_info[0]>2:
+            self.tel_num = bytes(self.tel_num, 'latin_1')
+            self.pin_code = bytes(self.pin_code, 'latin_1')
+
+    def start(self):
+
+        if not serial_module:
+            print('/!\\ ERROR /!\\: the PhoneTarget has been disabled because '
+                  'python-serial module is not installed')
+            return False
+
+        self.ser = serial.Serial(self.serial_port, self.baudrate, timeout=2)
+
+        self.ser.write(b"ATE1\r\n") # echo ON
+        time.sleep(self.delay_between_write)
+        self.ser.write(b"AT+CMEE=1\r\n") # enable extended error reports
+        time.sleep(self.delay_between_write)
+        self.ser.write(b"AT+CPIN?\r\n") # need to unlock?
+        cpin_fbk = self._retrieve_feedback_from_serial()
+        if cpin_fbk.find(b'SIM PIN') != -1:
+            # Note that if SIM is already unlocked modem will answer CME ERROR: 3
+            # if we try to unlock it again.
+            # So we need to unlock only when it is needed.
+            # If modem is unlocked the answer will be: CPIN: READY
+            # otherwise it will be: CPIN: SIM PIN.
+            self.ser.write(b"AT+CPIN="+self.pin_code+b"\r\n") # enter pin code
+        time.sleep(self.delay_between_write)
+        self.ser.write(b"AT+CMGF=0\r\n") # PDU mode
+        time.sleep(self.delay_between_write)
+        self.ser.write(b"AT+CSMS=0\r\n") # check if modem can process SMS
+        time.sleep(self.delay_between_write)
+
+        fbk = self._retrieve_feedback_from_serial()
+        code = 0 if fbk.find(b'ERROR') == -1 else -1
+        self._logger.collect_target_feedback(fbk, status_code=code)
+        if code < 0:
+            self._logger.print_console(cpin_fbk+fbk, rgb=Color.ERROR)
+
+        return False if code < 0 else True
+
+    def stop(self):
+        self.ser.close()
+
+    def _retrieve_feedback_from_serial(self):
+        feedback = b''
+        while True:
+            fbk = self.ser.readline()
+            if fbk.strip():
+                feedback += fbk
+            else:
+                break
+        return feedback
+
+    def send_data(self, data):
+        pdu = b''
+        raw_data = data.to_bytes()
+        for c in raw_data:
+            if sys.version_info[0] == 2:
+                c = ord(c)
+            pdu += binascii.b2a_hex(struct.pack('B', c))
+        pdu = pdu.upper()
+        pdu = b"0001000B91" + self.tel_num + b"0000" + pdu + b"\x1a\r\n"
+
+        self.ser.write(b"AT+CMGS=23\r\n") # PDU mode
+        time.sleep(self.delay_between_write)
+        self.ser.write(pdu)
+
+        fbk = self._retrieve_feedback_from_serial()
+        code = 0 if fbk.find(b'ERROR') == -1 else -1
+        self._logger.collect_target_feedback(fbk, status_code=code)

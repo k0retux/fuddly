@@ -116,6 +116,14 @@ fuzzfmk.fuzzing_primitives module
     :show-inheritance:
 
 
+fuzzfmk.encoders module
+-----------------------
+
+.. automodule:: fuzzfmk.encoders
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ..
    fuzzfmk.plumbing module
    -----------------------

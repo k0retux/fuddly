@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -166,8 +166,8 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
         data.add_info(' |_ original node value: %s (ascii: %s)' % \
                       (binascii.b2a_hex(orig_node_val), orig_node_val))
         data.add_info(' |_ corrupt node value:  %s (ascii: %s)' % \
-                      (binascii.b2a_hex(consumed_node.get_flatten_value()),
-                      consumed_node.get_flatten_value()))
+                      (binascii.b2a_hex(consumed_node.to_bytes()),
+                      consumed_node.to_bytes()))
 
         if self.clone_node:
             exported_node = Node(rnode.name, base_node=rnode, new_env=True)
@@ -257,7 +257,7 @@ class sd_switch_to_alternate_conf(StatefulDisruptor):
         data.add_info('model walking index: {:d}'.format(idx))        
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
         data.add_info('current node with alternate conf: %s' % self.modelwalker.consumed_node_path)
-        data.add_info(' |_ associated value: %s' % repr(consumed_node.get_flatten_value()))
+        data.add_info(' |_ associated value: %s' % repr(consumed_node.to_bytes()))
         data.add_info(' |_ original node value: %s' % orig_node_val)
 
         if self.clone_node:
@@ -338,8 +338,8 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
         data.add_info(' |_ original separator: %s (ascii: %s)' % \
                       (binascii.b2a_hex(orig_node_val), orig_node_val))
         data.add_info(' |_ replaced by:        %s (ascii: %s)' % \
-                      (binascii.b2a_hex(consumed_node.get_flatten_value()),
-                      consumed_node.get_flatten_value()))
+                      (binascii.b2a_hex(consumed_node.to_bytes()),
+                      consumed_node.to_bytes()))
 
         if self.clone_node:
             exported_node = Node(rnode.name, base_node=rnode, new_env=True)
@@ -530,7 +530,7 @@ class d_call_external_program(Disruptor):
             if node is None:
                 prev_data.add_info('INVALID INPUT')
                 return prev_data
-            raw_data = node.get_flatten_value()
+            raw_data = node.to_bytes()
         else:
             node = None
             raw_data = prev_data.to_bytes()
@@ -550,7 +550,7 @@ class d_call_external_program(Disruptor):
             else:
                 file_extension = 'bin'
 
-            filename = os.path.join(app_folder, "workspace", 'EXT_file.' + file_extension)
+            filename = os.path.join(workspace_folder, 'EXT_file.' + file_extension)
             with open(filename, 'wb') as f:
                 f.write(raw_data)
 
@@ -695,7 +695,7 @@ class d_max_size(Disruptor):
             else:
                 node = prev_data.node
 
-            val = node.get_flatten_value()
+            val = node.to_bytes()
             orig_len = len(val)
             prev_data.add_info('orig node length: %d' % orig_len)
             
@@ -767,7 +767,7 @@ class d_corrupt_node_bits(Disruptor):
                     l = random.sample(l, 1)
 
             for i in l:
-                val = i.get_flatten_value()
+                val = i.to_bytes()
                 prev_data.add_info('current fuzzed node: %s' % i.get_path_from(prev_data.node))
                 prev_data.add_info('orig data: %s' % repr(val))
 
@@ -809,7 +809,7 @@ class d_corrupt_bits_by_position(Disruptor):
 
     def disrupt_data(self, dm, target, prev_data):
         if prev_data.node:
-            val = prev_data.node.get_flatten_value()
+            val = prev_data.node.to_bytes()
         else:
             val = prev_data.to_bytes()
 
@@ -1066,7 +1066,7 @@ class sd_fuzz_terminal_nodes(StatefulDisruptor):
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
         data.add_info('current fuzzed node: %s' % consumed_node.get_path_from(rnode))
         data.add_info('original val: %s' % repr(orig_node_val))
-        data.add_info('corrupted val: %s' % repr(consumed_node.get_flatten_value()))
+        data.add_info('corrupted val: %s' % repr(consumed_node.to_bytes()))
 
         if self.clone_node:
             exported_node = Node(rnode.name, base_node=rnode, new_env=True)

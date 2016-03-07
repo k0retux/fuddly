@@ -8,13 +8,13 @@ steps to create a new data model and the way to define specific
 disruptors,
 
 
-Using ``fuddly`` simple UI: ``FuzzShell``
-=========================================
+Using ``fuddly`` simple UI: ``Fuddly Shell``
+============================================
 
-A simple UI---called FuzzShell---allows to interact with ``fuddly`` in
+A simple UI---called Fuddly Shell---allows to interact with ``fuddly`` in
 an easy way. In this tutorial we present the usual commands that can
 be used during a fuzzing session. But first we have to launch it by
-running the ``./client.py`` script.
+running the ``<root of fuddly>/fuddly_shell.py`` script.
 
 .. note::
    This script basically does the following:
@@ -22,8 +22,8 @@ running the ``./client.py`` script.
    .. code-block:: python
       :linenos:
 
-       fuzzer = Fuzzer()
-       shell = FuzzShell("FuzzShell", fuzzer)
+       fmk = FmkPlumbing()
+       shell = FmkShell("Fuddly Shell", fmk)
        shell.cmdloop()
 
 
@@ -57,12 +57,12 @@ this:
    *** Found Project: 'standard' ***
    ================================================================================
 
-   -=[ FuzzShell ]=- (with Fuddly FmK 0.20)
+   -=[ Fuddly Shell ]=- (with Fuddly FmK 0.23)
 
    >> 
 
 .. note:: The ``help`` command shows you every defined command within
-   ``FuzzShell``. You can also look at a brief command description and
+   ``Fuddly Shell``. You can also look at a brief command description and
    syntax by typing ``help <command_name>``
 
 Note that ``fuddly`` looks for *Data Model* files (within
@@ -101,7 +101,7 @@ You can look at the defined targets by issuing the following command:
    [0] EmptyTarget
    [1] LocalTarget [Program: display]
    [2] LocalTarget [Program: okular]
-   [3] LocalTarget [Program: unzip, Args: -d /home/tuxico/Projets/fuddly/workspace/]
+   [3] LocalTarget [Program: unzip, Args: -d ~/fuddly_data/workspace/]
    [4] PrinterTarget [IP: 127.0.0.1, Name: PDF]
    [5] NetworkTarget [localhost:54321, localhost:12345]
 
@@ -122,7 +122,7 @@ experiment without a real target. But let's say you want to fuzz the
 
 .. seealso::   
    ``Target`` (\ :class:`fuzzfmk.target.Target`) configuration cannot
-   be changed dynamically within ``FuzzShell``. But you can do it
+   be changed dynamically within ``Fuddly Shell``. But you can do it
    through any python interpreter, by directly manipulating the
    related ``Target`` object. Look at :ref:`fuddly-advanced`.
 
@@ -219,7 +219,7 @@ How to Send a ZIP File
 
 In order to send a ZIP file to the target, type the following::
 
->> send ZIP
+   >> send ZIP
 
 which will invoke the ``unzip`` program with a ZIP file:
 
@@ -229,7 +229,7 @@ which will invoke the ``unzip`` program with a ZIP file:
 
    ========[ 1 ]==[ 18/08/2015 - 19:24:34 ]=======================
    ### Target ack received at: None
-   ### Fuzzing (step 1):
+   ### Step 1:
     |- generator type: ZIP | generator name: g_zip | User input: G=[ ], S=[ ]
    ### Data size: 47360 bytes
    ### Emitted data is stored in the file:
@@ -288,7 +288,7 @@ this case---the ZIP data model---the first one will generate modeled
 ZIP archive based uniquely on the data model, whereas the other ones
 (``ZIP_00``, ``ZIP_01``, ...)  generate modeled ZIP archives based on
 the sample files available within the directory
-``imported_data/zip/``.
+``~/fuddly_data/imported_data/zip/``.
 
 For each one of these generators, some parameters are associated:
 
@@ -316,7 +316,7 @@ chainable, each one consuming what comes from the left.
 .. note::
    Each data you send and all the related information (the way the data has been built,
    the feedback from the target, and so on) are stored within the ``fuddly`` database
-   (an SQLite database located at ``<root of fuddly>/fmkdb.db``). They all get a unique ID,
+   (an SQLite database located at ``~/fuddly_data/fmkdb.db``). They all get a unique ID,
    starting from 1 and increasing by 1 each time a data is sent.
 
    To interact with the database a convenient script is provided (``<root of fuddly>/tools/fmkdb.py``).
@@ -357,19 +357,27 @@ of each disruptor along with their parameters.
 
    The following command allows to briefly look at all the defined
    generators and disruptors (called data makers), usable within the
-   frame of the current data model. Note that specific data makers are
-   separated from the generic ones by ``...``.
+   frame of the current data model.
 
    .. code-block:: none
       :emphasize-lines: 1
 
       >> show_dmaker_types
 
-      ==[ Generator types ]=====
-      ZIP | ZIP_00 | ... | 
+      ===[ Generator Types ]==========================================================
 
-      ==[ Disruptor types ]========
-      ... | ALT | C | Cp | EXT | SIZE | STRUCT | tALT | tTERM | tTYPE | tWALK |
+       [ Specific ]
+         | 4TG1, 4TG2, ABSTEST, ABSTEST2, ENC
+         | EXIST_COND, LEN_GEN, MISC_GEN, OFF_GEN, SEPARATOR
+         | SHAPE, TESTNODE, ZIP, ZIP_00
+
+      ===[ Disruptor Types ]==========================================================
+
+       [ Generic ]
+         | ALT, C, COPY, Cp, EXT
+         | FIX, MOD, NEXT, SIZE, STRUCT
+         | tALT, tSEP, tSTRUCT, tTERM, tTYPE
+         | tWALK
 
 
 You can also chain disruptors in order to perform advanced
@@ -394,9 +402,9 @@ Let's illustrate this with the following example:
 
    ========[ 1 ]==[ 20/08/2015 - 15:20:06 ]=======================
    ### Target ack received at: None
-   ### Fuzzing (step 1):
+   ### Step 1:
     |- generator type: ZIP_00 | generator name: g_zip_00 | User input: G=[ ], S=[ ]
-   ### Fuzzing (step 2):
+   ### Step 2:
     |- disruptor type: C | disruptor name: d_corrupt_node_bits | User input: G=[ ], S=[nb=2,path='ZIP_00/file_list/.*/file_name']
     |- data info:
        |_ current fuzzed node: ZIP_00/file_list/file:3/header/file_name/cts
@@ -405,7 +413,7 @@ Let's illustrate this with the following example:
        |_ current fuzzed node: ZIP_00/file_list/file:2/header/file_name/cts
        |_ orig data: b'hello.pdf'
        |_ corrupted data: b'hello.pd\xf6'
-   ### Fuzzing (step 3):
+   ### Step 3:
     |- disruptor type: tTYPE | disruptor name: d_fuzz_typed_nodes | User input: G=[max_steps=50], S=[order=True]
     |- data info:
        |_ model walking index: 1
@@ -414,7 +422,7 @@ Let's illustrate this with the following example:
        |_  |_ value type:         <fuzzfmk.value_types.Fuzzy_INT16 object at 0x7fbf961e5250>
        |_  |_ original node value: b'1400' (ascii: b'\x14\x00')
        |_  |_ corrupt node value:  b'1300' (ascii: b'\x13\x00')
-   ### Fuzzing (step 4):
+   ### Step 4:
     |- disruptor type: SIZE | disruptor name: d_max_size | User input: G=[ ], S=[sz=256]
     |- data info:
        |_ orig node length: 1054002
@@ -452,7 +460,7 @@ to corrupt can be chosen.
    ``fuddly``'s low-level primitives. One of this criteria is *paths*,
    and the syntax defined to represent paths is similar to the one of
    filesystem paths. Each path are represented by a python string,
-   where node identifier are separated by ``/``'s. For instance:
+   where node identifiers are separated by ``/``'s. For instance:
    :code:`'ZIP/file_list/file:2/header'`, is a path from the root of a
    modeled ZIP archive to the *header* of its second file.
 
@@ -556,7 +564,7 @@ exceeds 256---as the parameter ``sz`` is equal to 256.
    ### Initial Generator (currently disabled):
     |- generator type: ZIP_00 | generator name: g_zip_00 | User input: G=[ ], S=[ ]
      ...
-   ### Fuzzing (step 1):
+   ### Step 1:
     |- disruptor type: tTYPE | disruptor name: d_fuzz_typed_nodes | User input: G=[max_steps=50], S=[order=True]
     |- data info:
        |_ model walking index: 2
@@ -567,7 +575,7 @@ exceeds 256---as the parameter ``sz`` is equal to 256.
        |_  |_ corrupt node value:  b'1500' (ascii: b'\x15\x00')
        |_ Data maker [#1] of type 'ZIP_00' (name: g_zip_00) has been disabled by this disruptor taking over it.
        |_ Data maker [#2] of type 'C' (name: d_corrupt_node_bits) has been disabled by this disruptor taking over it.
-   ### Fuzzing (step 2):
+   ### Step 2:
     |- disruptor type: SIZE | disruptor name: d_max_size | User input: G=[ ], S=[sz=256]
     |- data info:
        |_ orig node length: 1054002
@@ -594,7 +602,7 @@ been disabled as explained before.
    ### Initial Generator (currently disabled):
     |- generator type: ZIP_00 | generator name: g_zip_00 | User input: G=[ ], S=[ ]
      ...
-   ### Fuzzing (step 1):
+   ### Step 1:
     |- disruptor type: tTYPE | disruptor name: d_fuzz_typed_nodes | User input: G=[max_steps=50], S=[order=True]
     |- data info:
        |_ model walking index: 50
@@ -605,7 +613,7 @@ been disabled as explained before.
        |_  |_ corrupt node value:  b'00000080' (ascii: b'\x00\x00\x00\x80')
        |_ Data maker [#1] of type 'ZIP_00' (name: g_zip_00) has been disabled by this disruptor taking over it.
        |_ Data maker [#2] of type 'C' (name: d_corrupt_node_bits) has been disabled by this disruptor taking over it.
-   ### Fuzzing (step 2):
+   ### Step 2:
     |- disruptor type: SIZE | disruptor name: d_max_size | User input: G=[ ], S=[sz=256]
     |- data info:
        |_ orig node length: 1054002
@@ -636,9 +644,9 @@ disruptor ``C``, as seen `below <#dis-chain-run51>`_ on line 3 & 5.
 
    ========[ 51 ]==[ 20/08/2015 - 15:26:19 ]=======================
    ### Target ack received at: None
-   ### Fuzzing (step 1):
+   ### Step 1:
     |- generator type: ZIP_00 | generator name: g_zip_00 | User input: G=[ ], S=[ ]
-   ### Fuzzing (step 2):
+   ### Step 2:
     |- disruptor type: C | disruptor name: d_corrupt_node_bits | User input: G=[ ], S=[nb=2,path='ZIP_00/file_list/.*/file_name']
     |- data info:
        |_ current fuzzed node: ZIP_00/file_list/file:2/header/file_name/cts
@@ -647,7 +655,7 @@ disruptor ``C``, as seen `below <#dis-chain-run51>`_ on line 3 & 5.
        |_ current fuzzed node: ZIP_00/file_list/file/header/file_name/cts
        |_ orig data: b'Fond-ecran-paysage-gratuit.jpg'
        |_ corrupted data: b'Fond-ecran-paysage\xafgratuit.jpg'
-   ### Fuzzing (step 3):
+   ### Step 3:
     |- disruptor type: tTYPE | disruptor name: d_fuzz_typed_nodes | User input: G=[max_steps=50], S=[order=True]
     |- data info:
        |_ model walking index: 1
@@ -656,7 +664,7 @@ disruptor ``C``, as seen `below <#dis-chain-run51>`_ on line 3 & 5.
        |_  |_ value type:         <fuzzfmk.value_types.Fuzzy_INT16 object at 0x7fbfec9895f8>
        |_  |_ original node value: b'1400' (ascii: b'\x14\x00')
        |_  |_ corrupt node value:  b'1300' (ascii: b'\x13\x00')
-   ### Fuzzing (step 4):
+   ### Step 4:
     |- disruptor type: SIZE | disruptor name: d_max_size | User input: G=[ ], S=[sz=256]
     |- data info:
        |_ orig node length: 1054002
@@ -694,6 +702,19 @@ it by issuing the following command::
 where ``<dmaker_type>`` is the data maker to reset, for instance:
 ``ZIP_00``, ``tTYPE``, ...
 
+
+.. note:: You can also choose to cleanup a *Generator* without resetting the
+   specifics of the previously produced data, that is, preserving the *seed* that
+   guided the data generation. Actually this seed is a copy of the
+   data that has been generated at the beginning, before any disruptor got a chance to
+   modify it. This original data is kept within the generator and will be provided again
+   if you use the command ``cleanup_dmaker`` instead of ``reset_dmaker``. The latter will
+   remove this seed.
+
+   Keeping such *seeds* may consume a lot of memory at some point. Moreover, they may only
+   be useful for non-determinist data model.
+
+
 Another way that can reveal itself to be useful (especially within
 :class:`fuzzfmk.tactics_helper.Operator`--- refer to
 :ref:`tuto:operator`) is to clone a data maker. By doing so, you have
@@ -708,19 +729,13 @@ the cloned data makers::
   >> send ZIP_00#new tTYPE#new
 
 
-.. todo:: Tackle *data seeds* topic, useful for replays (as an
-          alternative to replay commands that may consume lots of
-          memory).
-
-
-
 Reloading Data Models / Targets / ...
 +++++++++++++++++++++++++++++++++++++
 
 If during a test session you want to perform a modification within the
 data model without restarting ``fuddly``, you can simply edit the data
 model with your favorite editor, and after saving it, issue the
-command ``reload_data_model`` at the ``FuzzShell`` prompt.
+command ``reload_data_model`` at the ``Fuddly Shell`` prompt.
 
 If you also want to modify the target abstraction or operators or
 probes, ..., you have to reload every fuddly subsystems. To do so, you
@@ -852,20 +867,16 @@ will need to issue the following commands:
    :linenos:
    :emphasize-lines: 1,2,5
 
-   import sys
-   from fuzzfmk.global_resources import *
    from fuzzfmk.plumbing import *
 
-   sys.path.insert(0, external_libs_folder)
-
-   fmk = Fuzzer()
+   fmk = FmkPlumbing()
 
 
 The lines 1, 2 and 5 are not necessary if you don't intend to use
 external libraries. From now on you can use ``fuddly`` through the
-object ``fmk``. Every commands defined by ``FuzzShell`` (refer to
+object ``fmk``. Every commands defined by ``Fuddly Shell`` (refer to
 :ref:`tuto:start-fuzzshell`) are backed by a method of the class
-:class:`fuzzfmk.plumbing.Fuzzer`.
+:class:`fuzzfmk.plumbing.FmkPlumbing`.
 
 Here under some basic commands to start with:
 
@@ -919,7 +930,7 @@ Here under some basic commands to start with:
    list(fmk.dm.data_identifiers())
    
    # Get an instance of the modeled data ZIP_00 which is made from the
-   # absorption of an existing ZIP archive within <fuddly_dir>/imported_data/zip/
+   # absorption of an existing ZIP archive within ~/fuddly_data/imported_data/zip/
    dt = fmk.dm.get_data('ZIP_00')
 
    # Display the raw contents of the first generated element of the data type `dt`
@@ -960,7 +971,7 @@ you have the ``xtermcolor`` python library):
    ### Initial Generator (currently disabled):
     |- generator type: None | generator name: None | User input: None
      ...
-   ### Fuzzing (step 1):
+   ### Step 1:
     |- disruptor type: tTYPE | disruptor name: d_fuzz_typed_nodes | User input: G=[init=5], S=[order=True]
     |- data info:
        |_ model walking index: 5
@@ -969,7 +980,7 @@ you have the ``xtermcolor`` python library):
        |_  |_ value type:         <fuzzfmk.value_types.Fuzzy_INT16 object at 0x7efe52da4c90>
        |_  |_ original node value: 1400 (ascii: )
        |_  |_ corrupt node value:  0080 (ascii: �)
-   ### Fuzzing (step 2):
+   ### Step 2:
     |- disruptor type: SIZE | disruptor name: d_max_size | User input: G=None, S=[sz=200]
     |- data info:
        |_ orig node length: 1054002
@@ -984,7 +995,7 @@ you have the ``xtermcolor`` python library):
    :linenos:
 
    # And to terminate fuddly properly 
-   fmk.exit_fuzzer()
+   fmk.exit_fmk()
 
 
 For more information on how to manually make modification on data,
@@ -1181,8 +1192,8 @@ Defining the Imaginary MyDF Data Model
 ++++++++++++++++++++++++++++++++++++++
 
 Assuming we want to model an imaginary data format called `MyDF`.  Two
-files need to be created within ``<root of
-fuddly>/data_models/[file_formats|protocol]/``:
+files need to be created either within ``<root of fuddly>/data_models/`` or within
+``~/fuddly_data/user_data_models/`` (or within any subdirectory):
 
 ``mydf.py``
   Contain the implementation of the data model related to
@@ -1226,7 +1237,7 @@ is a simple skeleton for ``mydf.py``:
 .. note:: All elements discussed during this tutorial, related to the
           data model ``mydf``, are implemented within ``tuto.py`` and
           ``tuto_strategy.py``. Don't hesitate to play with what are
-          defined within, Either with ``ipython`` or ``FuzzShell``
+          defined within, Either with ``ipython`` or ``Fuddly Shell``
           (:ref:`tuto:start-fuzzshell`).
 
 In this skeleton, you can notice that you have to define a class that
@@ -1246,7 +1257,7 @@ model, by calling
             :meth:`fuzzfmk.data_model_helpers.DataModel.absorb` in
             order to perform the operations for absorbing the samples
             (refer to :ref:`tuto:dm-absorption`). This method is
-            called for each file found in ``imported_data/mydf/``, and
+            called for each file found in ``~/fuddly_data/imported_data/mydf/``, and
             should return a modeled data.
 
 	  - Then, you have to perform the import manually within the
@@ -1498,9 +1509,9 @@ match the imaginary TestNode data model we just described in section
 
    from fuzzfmk.plumbing import *
 
-   fmk = Fuzzer()
+   fmk = FmkPlumbing()
 
-   fmk.enable_data_model(name="mydf")
+   fmk.run_project(name="tuto")
 
    data_gen = fmk.dm.get_data('TestNode')    # first instance of TestNode data model
    data_abs = fmk.dm.get_data('TestNode')  # second instance of TestNode data model
@@ -1976,9 +1987,9 @@ Defining a Project Environment
 
 The environment---composed of at least one target, a logger, and
 optionnaly some monitoring means and virtual operators---is setup
-within a project file located within ``<root of
-fuddly>/projects/``. To illustrate that let's show the beginning of
-``generic/standard_proj.py``:
+within a project file located within ``<root of fuddly>/projects/`` or within
+`~/fuddly_data/user_projects/``. To illustrate that let's
+show the beginning of ``generic/standard_proj.py``:
 
 .. code-block:: python
    :linenos:
@@ -2035,7 +2046,7 @@ A default data model or a list of data models can be added to the
 project through its attribute ``default_dm``. ``fuddly`` will use this
 if the project is directly launched, that is either by issuing the
 command ``run_project`` in the ``fuddly`` shell or by using the
-method :meth:`fuzzfmk.plumbing.Fuzzer.run_project()` through any
+method :meth:`fuzzfmk.plumbing.FmkPlumbing.run_project()` through any
 ``python`` interpreter.
 
 .. note:: An :class:`fuzzfmk.target.EmptyTarget` is automatically
@@ -2111,24 +2122,24 @@ and kept in sync with the log files.
 
 The outputs of the logger are of four types:
 
-- ``<root of fuddly>/logs/*<project_name>_logs``: the history of your
+- ``~/fuddly_data/logs/*<project_name>_logs``: the history of your
   test session for the project named ``project_name``. The files are
   prefixed with the test session starting time. A new one is created
   each time you run a new project or you reload the current one.
   Note these files are created only if the parameter ``enable_file_logging``
   is set to True.
 
-- ``<root of fuddly>/logs/*<project_name>_stats``: some statistics of
+- ``~/fuddly_data/logs/*<project_name>_stats``: some statistics of
   the kind of data that has been emitted during the session.
   Note these files are created only if the parameter ``enable_file_logging``
   is set to True.
 
-- ``<root of fuddly>/exported_data/<data model name>/*.<data
+- ``~/fuddly_data/exported_data/<data model name>/*.<data
   extension>``: the data emitted during a session are stored within
   the their data model directory. Each one is prefixed by the date of
   emission, and each one is uniquely identified within the log files.
 
-- records within the database ``<root of fuddly>/fmkDB.db``. Every piece of
+- records within the database ``~/fuddly_data/fmkDB.db``. Every piece of
   information from the previous files are recorder with this database.
 
 Some parameters allows to customize the behavior of the logger, such as:
@@ -2251,10 +2262,10 @@ is given here under:
        op = Operation()
 
        if fmk_feedback.is_flag_set(FmkFeedback.NeedChange):
-	   op.set_flag(Operation.Stop)
+          op.set_flag(Operation.Stop)
        else:
-	   actions = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', None, UI(deep=True))]
-	   op.add_instruction(actions)
+          actions = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', None, UI(deep=True))]
+          op.add_instruction(actions)
 
        return op
 

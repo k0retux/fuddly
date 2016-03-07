@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -93,7 +93,7 @@ class USB_DataModel(DataModel):
         e_blength = Node('bLength', value_type=UINT8(int_list=[9]))
         e_bdesctype = Node('bDescType', value_type=UINT8(int_list=[USB_DEFS.DT_CONFIGURATION]))
         def conf_len(node):
-            intg = min(9+len(node.get_flatten_value()), 2**16-1)
+            intg = min(9 + len(node.to_bytes()), 2 ** 16 - 1)
             e = Node('dyn', value_type=UINT16_le(int_list=[intg]))
             return e
         e_wtotlen_gen = Node('wTotalLength')
@@ -431,7 +431,7 @@ class USB_DataModel(DataModel):
 
         e_langid_tbl_contents = Node('contents')
         def langid_len(node):
-            intg = 2+len(node.get_flatten_value())
+            intg = 2+len(node.to_bytes())
             if intg > 255:
                 intg = 255
             e = Node('dyn', value_type=UINT8(int_list=[intg]))
@@ -456,26 +456,15 @@ class USB_DataModel(DataModel):
         langid_tbl.set_semantics(NodeSemantics(['LANGID_DESC']))
 
         # STRING
-
         valid_str = ['blabla...', "don't know ;)"]
-        valid_str_enc = list(map(lambda x: x.encode('utf_16_le'), valid_str))
 
-        invalid_str = ['A'*126, # max str len is 253, in utf-16 it is 253/2 = 126 char
-                       'A'*127, # thus 254 in utf-16 (check off-by-one)
-                       '%s%n%n%n%n%n',
-                       '',
-                       '\x00',
-                       '\r\n']
-        invalid_str_enc = list(map(lambda x: x.encode('utf_16_le'), invalid_str))
-
-        e_str_contents = Node('contents', values=valid_str_enc)
-        e_str_contents.add_conf('ALT')
-        e_str_contents.set_values(invalid_str_enc, conf='ALT')
-        # e_str_contents.make_determinist(conf='ALT')
+        # max USB str len is 253, so in utf-16 we may have up to 126 chars (253//2)
+        e_str_contents = Node('contents', vt=UTF16_LE(val_list=valid_str, max_sz=126,
+                                                      max_encoded_sz=253))
         e_str_contents.set_fuzz_weight(5)
         
         def str_len(node):
-            intg = 2+len(node.get_flatten_value())
+            intg = 2+len(node.to_bytes())
             if intg > 255:
                 intg = 255
             e = Node('dyn', value_type=UINT8(int_list=[intg]))

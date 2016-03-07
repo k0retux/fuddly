@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -32,6 +32,7 @@ import re
 import pickle
 import readline
 import cmd
+import atexit
 import datetime
 import time
 import signal
@@ -47,6 +48,7 @@ from fuzzfmk.logger import *
 from fuzzfmk.monitor import *
 from fuzzfmk.operator_helpers import *
 from fuzzfmk.project import *
+from fuzzfmk.error_handling import *
 
 import fuzzfmk.generic_data_makers
 
@@ -54,7 +56,15 @@ import data_models
 import projects
 
 from fuzzfmk.global_resources import *
+from libs.utils import *
 
+sys.path.insert(0, gr.fuddly_data_folder)
+sys.path.insert(0, gr.external_libs_folder)
+
+user_dm_mod = os.path.basename(os.path.normpath(gr.user_data_models_folder))
+user_prj_mod = os.path.basename(os.path.normpath(gr.user_projects_folder))
+exec('import ' + user_dm_mod)
+exec('import ' + user_prj_mod)
 
 sig_int_handler = signal.getsignal(signal.SIGINT)
 
@@ -159,7 +169,7 @@ class EnforceOrder(object):
 
 
 
-class Fuzzer(object):
+class FmkPlumbing(object):
 
     ''' 
     Defines the methods to operate every sub-systems of fuddly
@@ -203,7 +213,10 @@ class Fuzzer(object):
         self._name2prj = {}
 
         self.fmkDB = Database()
-        self.fmkDB.start()
+        ok = self.fmkDB.start()
+        if not ok:
+            raise InvalidFmkDB("The database {:s} is invalid!".format(self.fmkDB.fmk_db_path))
+
         self._fmkDB_insert_dm_and_dmakers('generic', self._generic_tactics)
         self.fmkDB.commit()
 
@@ -211,8 +224,23 @@ class Fuzzer(object):
         self._saved_group_id = None  # used by self._recover_target()
 
         self.enable_wkspace()
+
         self.get_data_models()
         self.get_projects()
+
+        print(colorize(FontStyle.BOLD + '='*44 + '[ Fuddly Data Folder Information ]==\n',
+                       rgb=Color.FMKINFOGROUP))
+
+        if hasattr(gr, 'new_fuddly_data_folder'):
+            print(colorize(FontStyle.BOLD + \
+                           ' *** New Fuddly Data Folder Has Been Created ***\n',
+                           rgb=Color.FMKINFO_HLIGHT))
+
+        print(colorize(' --> path: {:s}'.format(gr.fuddly_data_folder),
+                       rgb=Color.FMKINFO))
+        print(colorize(' --> contains: - fmkDB.db, logs, imported/exported data, ...\n'
+                       '               - user projects and user data models',
+                       rgb=Color.FMKSUBINFO))
 
     def set_error(self, msg='', context=None, code=Error.Reserved):
         self.error = True
@@ -328,7 +356,7 @@ class Fuzzer(object):
         dm_prefix = self.__dm_rld_args_dict[self.dm][0]
         dm_name = self.__dm_rld_args_dict[self.dm][1]
 
-        self.__stop_fuzzing()
+        self.__stop_fmk_plumbing()
 
         if tg_num is not None:
             self.set_target(tg_num)
@@ -352,9 +380,9 @@ class Fuzzer(object):
                     self.__dyngenerators_created[dm_params['dm']] = False
                     self.__init_fmk_internals_step1(prj_params['project'], dm_params['dm'])
 
-        self.__start_fuzzing()
+        self.__start_fmk_plumbing()
         if self.is_not_ok():
-            self.__stop_fuzzing()
+            self.__stop_fmk_plumbing()
             return False
 
         if prj_params is not None:
@@ -406,17 +434,21 @@ class Fuzzer(object):
                                      "will be terminated.")
         return target_recovered
 
-    def monitor_probes(self):
+    def monitor_probes(self, force_record=False):
         probes = self.prj.get_probes()
         ok = True
         for pname in probes:
             if self.prj.is_probe_launched(pname):
                 pstatus = self.prj.get_probe_status(pname)
                 err = pstatus.get_status()
-                if err < 0:
-                    ok = False
+                if err < 0 or force_record:
+                    if err < 0:
+                        ok = False
+                    tstamp = pstatus.get_timestamp()
                     priv = pstatus.get_private_info()
-                    self.lg.log_probe_feedback(source="Probe '{:s}'".format(pname), content=priv, status_code=err)
+                    self.lg.log_probe_feedback(source="Probe '{:s}'".format(pname),
+                                               timestamp=tstamp,
+                                               content=priv, status_code=err)
 
         if not ok:
             return self._recover_target()
@@ -426,21 +458,25 @@ class Fuzzer(object):
 
     @EnforceOrder(initial_func=True, final_state='get_projs')
     def get_data_models(self):
-        dm_dir = 'data_models'
-        path = os.path.join(app_folder, dm_dir)
+
         data_models = collections.OrderedDict()
-        for (dirpath, dirnames, filenames) in os.walk(path):
-            if filenames:
-                data_models[dm_dir] = []
-                data_models[dm_dir].extend(filenames)
-            for d in dirnames:
-                full_path = os.path.join(path, d)
-                rel_path = os.path.join(dm_dir, d)
-                data_models[rel_path] = []
-                for (dth, dnames, fnm) in os.walk(full_path):
-                    data_models[rel_path].extend(fnm)
-                    break
-            break
+        def populate_data_models(path):
+            dm_dir = os.path.basename(os.path.normpath(path))
+            for (dirpath, dirnames, filenames) in os.walk(path):
+                if filenames:
+                    data_models[dm_dir] = []
+                    data_models[dm_dir].extend(filenames)
+                for d in dirnames:
+                    full_path = os.path.join(path, d)
+                    rel_path = os.path.join(dm_dir, d)
+                    data_models[rel_path] = []
+                    for (dth, dnames, fnm) in os.walk(full_path):
+                        data_models[rel_path].extend(fnm)
+                        break
+                break
+
+        populate_data_models(gr.data_models_folder)
+        populate_data_models(gr.user_data_models_folder)
 
         dms = copy.copy(data_models)
         for k in dms:
@@ -564,21 +600,25 @@ class Fuzzer(object):
 
     @EnforceOrder(accepted_states=['get_projs'], final_state='20_load_prj')
     def get_projects(self):
-        prj_dir = 'projects'
-        path = os.path.join(app_folder, prj_dir)
+
         projects = collections.OrderedDict()
-        for (dirpath, dirnames, filenames) in os.walk(path):
-            if filenames:
-                projects[prj_dir] = []
-                projects[prj_dir].extend(filenames)
-            for d in dirnames:
-                full_path = os.path.join(path, d)
-                rel_path = os.path.join(prj_dir, d)
-                projects[rel_path] = []
-                for (dth, dnames, fnm) in os.walk(full_path):
-                    projects[rel_path].extend(fnm)
-                    break
-            break
+        def populate_projects(path):
+            prj_dir = os.path.basename(os.path.normpath(path))
+            for (dirpath, dirnames, filenames) in os.walk(path):
+                if filenames:
+                    projects[prj_dir] = []
+                    projects[prj_dir].extend(filenames)
+                for d in dirnames:
+                    full_path = os.path.join(path, d)
+                    rel_path = os.path.join(prj_dir, d)
+                    projects[rel_path] = []
+                    for (dth, dnames, fnm) in os.walk(full_path):
+                        projects[rel_path].extend(fnm)
+                        break
+                break
+
+        populate_projects(gr.projects_folder)
+        populate_projects(gr.user_projects_folder)
 
         prjs = copy.copy(projects)
         for k in prjs:
@@ -611,8 +651,6 @@ class Fuzzer(object):
 
         self.fmkDB.commit()
 
-        print(colorize(FontStyle.BOLD + "="*80, rgb=Color.FMKINFOGROUP))
-
 
     def _import_project(self, prefix, name, reload_prj=False):
 
@@ -630,6 +668,7 @@ class Fuzzer(object):
                 print(colorize("*** Problem during reload of '%s_proj.py' ***" % (name), rgb=Color.ERROR))
             else:
                 print(colorize("*** Problem during import of '%s_proj.py' ***" % (name), rgb=Color.ERROR))
+            print(prefix)
             print('-'*60)
             traceback.print_exc(file=sys.stdout)
             print('-'*60)
@@ -786,7 +825,7 @@ class Fuzzer(object):
 
         return True
 
-    def __start_fuzzing(self):
+    def __start_fmk_plumbing(self):
         if not self.__is_started():
             signal.signal(signal.SIGINT, signal.SIG_IGN)
 
@@ -815,6 +854,9 @@ class Fuzzer(object):
                             self.__mon.set_probe_delay(pname, delay)
                             self.__mon.start_probe(pname)
                     self.prj.start()
+                    if self.tg.probes:
+                        time.sleep(0.5)
+                        self.monitor_probes(force_record=True)
                 else:
                     self.set_error("The Target has not been initialized correctly")
             
@@ -825,7 +867,7 @@ class Fuzzer(object):
             self.__start()
 
 
-    def __stop_fuzzing(self):
+    def __stop_fmk_plumbing(self):
         if self.__is_started():
             signal.signal(signal.SIGINT, sig_int_handler)
 
@@ -847,12 +889,10 @@ class Fuzzer(object):
 
             self.__stop()
 
-        # TODO: propose to save the data bank
-
 
     @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
-    def exit_fuzzer(self):
-        self.__stop_fuzzing()
+    def exit_fmk(self):
+        self.__stop_fmk_plumbing()
         self.fmkDB.stop()
 
     @EnforceOrder(accepted_states=['25_load_dm','S1','S2'])
@@ -1203,7 +1243,7 @@ class Fuzzer(object):
 
         self.prj = prj
 
-        self.__stop_fuzzing()
+        self.__stop_fmk_plumbing()
 
         return True
 
@@ -1212,9 +1252,9 @@ class Fuzzer(object):
     def launch(self):
         if not self.__prj_to_be_reloaded:
             self.__init_fmk_internals_step1(self.prj, self.dm)
-            self.__start_fuzzing()
+            self.__start_fmk_plumbing()
             if self.is_not_ok():
-                self.__stop_fuzzing()
+                self.__stop_fmk_plumbing()
                 return False
 
             self.__init_fmk_internals_step2(self.prj, self.dm)
@@ -1247,34 +1287,36 @@ class Fuzzer(object):
         self._wkspace_enabled = False
 
     @EnforceOrder(accepted_states=['S1','S2'])
-    def set_fuzz_delay(self, delay):
+    def set_fuzz_delay(self, delay, do_record=False):
         if delay >= 0 or delay == -1:
             self._delay = delay
-            self.lg.log_fmk_info('Fuzz delay = {:.1f}s'.format(self._delay))
+            self.lg.log_fmk_info('Fuzz delay = {:.1f}s'.format(self._delay), do_record=do_record)
             return True
         else:
-            self.lg.log_fmk_info('Wrong delay value!')
+            self.lg.log_fmk_info('Wrong delay value!', do_record=False)
             return False
 
     @EnforceOrder(accepted_states=['S1','S2'])
-    def set_fuzz_burst(self, val):
+    def set_fuzz_burst(self, val, do_record=False):
         if val >= 1:
             self._burst = int(val)
             self._burst_countdown = self._burst
-            self.lg.log_fmk_info('Number of data sent in burst = %d' % self._burst)
+            self.lg.log_fmk_info('Number of data sent in burst = %d' % self._burst,
+                                 do_record=do_record)
             return True
         else:
-            self.lg.log_fmk_info('Wrong burst value!')
+            self.lg.log_fmk_info('Wrong burst value!', do_record=False)
             return False
 
     @EnforceOrder(accepted_states=['S1','S2'])
-    def set_timeout(self, timeout):
+    def set_timeout(self, timeout, do_record=False):
         if timeout >= 0:
             self._timeout = timeout
-            self.lg.log_fmk_info('Target health-check timeout = {:.1f}s'.format(self._timeout))
+            self.lg.log_fmk_info('Target health-check timeout = {:.1f}s'.format(self._timeout),
+                                 do_record=do_record)
             return True
         else:
-            self.lg.log_fmk_info('Wrong timeout value!')
+            self.lg.log_fmk_info('Wrong timeout value!', do_record=False)
             return False
 
 
@@ -1492,7 +1534,7 @@ class Fuzzer(object):
                 # because new data have not a data_id yet at this point in the code.
                 if data_id is not None:
                     num = 1
-                    self.lg.log_fuzzing_step(num)
+                    self.lg.log_dmaker_step(num)
                     self.lg.log_generator_info(gen_type_initial, gen_name, None, data_id=data_id)
                     self.lg.log_data_info(("Data fetched from FMKDB",), gen_type_initial, gen_name)
                 else:
@@ -1515,7 +1557,7 @@ class Fuzzer(object):
                             if dmaker_type != gen_type_initial:
                                 self.lg.log_initial_generator(gen_type_initial, gen_name, gen_ui)
 
-                        self.lg.log_fuzzing_step(num)
+                        self.lg.log_dmaker_step(num)
 
                         if dmaker_type in gen:
                             dmaker_obj = self._generic_tactics.get_generator_obj(dmaker_type, data_maker_name)
@@ -1544,7 +1586,7 @@ class Fuzzer(object):
 
                 else:
                     if gen_type_initial is None:
-                        self.lg.log_fuzzing_step(1)
+                        self.lg.log_dmaker_step(1)
                         self.lg.log_generator_info(Database.DEFAULT_GTYPE_NAME,
                                                    Database.DEFAULT_GEN_NAME,
                                                    None)
@@ -1552,10 +1594,13 @@ class Fuzzer(object):
                                               Database.DEFAULT_GTYPE_NAME, Database.DEFAULT_GEN_NAME)
 
                 self.lg.log_data(dt, verbose=verbose)
-                if multiple_data:
-                    self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
 
                 data_id = self.lg.commit_log_entry(self.group_id, self.prj.name, self.tg_name)
+                self.lg.print_console('### FmkDB Data ID: {!r}'.format(data_id),
+                                      rgb=Color.DATAINFO, nl_after=True)
+
+                if multiple_data:
+                    self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
 
 
     @EnforceOrder(accepted_states=['S2'])
@@ -1617,11 +1662,15 @@ class Fuzzer(object):
                 err_detected = True
 
             if tg_fbk.has_fbk_collector():
-                for ref, fbk in tg_fbk:
-                    self.lg.log_target_feedback_from(fbk, preamble=preamble, epilogue=epilogue,
+                for ref, fbk, tstamp in tg_fbk:
+                    self.lg.log_target_feedback_from(fbk, tstamp, preamble=preamble,
+                                                     epilogue=epilogue,
                                                      source=ref, status_code=err_code)
 
-            self.lg.log_target_feedback_from(tg_fbk.get_bytes(), preamble=preamble,
+            self.lg.log_target_feedback_from(tg_fbk.get_bytes(),
+                                             tg_fbk.get_timestamp(),
+                                             status_code=err_code,
+                                             preamble=preamble,
                                              epilogue=epilogue)
 
             tg_fbk.cleanup()
@@ -1783,7 +1832,7 @@ class Fuzzer(object):
 
         self.lg.print_console('|_ OUT > ', rgb=Color.SUBINFO)
         self.lg.print_console(data, nl_before=False)
-        self.lg.print_console('==============================\n', rgb=Color.INFO)
+        self.lg.print_console('='*80+'\n', rgb=Color.INFO)
 
 
     @EnforceOrder(accepted_states=['S2'])
@@ -1791,7 +1840,9 @@ class Fuzzer(object):
         self.lg.print_console("-=[ Data Bank ]=-\n", rgb=Color.INFO, style=FontStyle.BOLD)
 
         for idx, entry in self.__data_bank.items():
-            self.lg.print_console('==[ %d ]=======================' % idx, rgb=Color.INFO)
+            msg = '===[ {:d} ]==='.format(idx)
+            msg += '='*(max(80-len(msg),0))
+            self.lg.print_console(msg, rgb=Color.INFO)
             self.__show_entry(*entry)
 
         self.lg.print_console('\n', nl_before=False)
@@ -2050,8 +2101,10 @@ class Fuzzer(object):
 
                 op_feedback = linst.get_operator_feedback()
                 op_status = linst.get_operator_status()
+                op_tstamp = linst.get_timestamp()
                 if op_feedback or op_status:
-                    self.lg.log_operator_feedback(op_feedback, op_name=operator.__class__.__name__,
+                    self.lg.log_operator_feedback(op_feedback, op_tstamp,
+                                                  op_name=operator.__class__.__name__,
                                                   status_code=op_status)
 
                 comments = linst.get_comments()
@@ -2522,10 +2575,31 @@ class Fuzzer(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def show_data_maker_types(self):
-        disruptors = self._tactics.get_disruptors()
-        generators = self._tactics.get_generators()
 
-        self.lg.print_console('==[ Generator types ]=====')
+        def print_dmaker(dmaker_list, title):
+            if not dmaker_list:
+                return
+
+            ln = ''
+            sep = colorize(', ', rgb=Color.FMKINFO)
+            lines =[]
+            for idx, entry in enumerate(dmaker_list, start=1):
+                if idx % 5 != 0:
+                    ln += colorize(entry, rgb=Color.FMKSUBINFO) + sep
+                else:
+                    ln += colorize(entry, rgb=Color.FMKSUBINFO)
+                    lines.append(colorize('   | ', rgb=Color.FMKINFO) + ln)
+                    ln = ''
+
+            if len(dmaker_list) % 5 != 0:
+                lines.append(colorize('   | ', rgb=Color.FMKINFO) + ln[:-len(sep)])
+
+            self.lg.print_console(' [ ' + title + ' ]', rgb=Color.FMKINFO, nl_before=True, nl_after=False)
+            for ln in lines:
+                self.lg.print_console(ln)
+            self.lg.print_console('')
+
+        self.lg.print_console('===[ Generator Types ]' + '='*58, rgb=Color.FMKINFOGROUP, nl_after=True)
         l1 = []
         for dt in self._tactics.get_generators():
             l1.append(dt)
@@ -2536,15 +2610,10 @@ class Fuzzer(object):
             l2.append(dt)
         l2 = sorted(l2)
 
-        l = l1 + ['...'] + l2
+        print_dmaker(l1, 'Specific')
+        print_dmaker(l2, 'Generic')
 
-        self.lg.print_console('')
-        for i in l:
-            self.lg.print_console(i + ' | ', nl_before=False)
-
-        self.lg.print_console('\n', nl_before=False)
-
-        self.lg.print_console('==[ Disruptor types ]========')
+        self.lg.print_console('===[ Disruptor Types ]' + '='*58, rgb=Color.FMKINFOGROUP, nl_after=True)
         l1 = []
         for dmaker_type in self._tactics.get_disruptors():
             l1.append(dmaker_type)
@@ -2555,13 +2624,8 @@ class Fuzzer(object):
             l2.append(dmaker_type)
         l2 = sorted(l2)
 
-        l = l1 + ['...'] + l2
-
-        self.lg.print_console('')
-        for i in l:
-            self.lg.print_console(i + ' | ', nl_before=False)
-
-        self.lg.print_console('\n\n', nl_before=False)
+        print_dmaker(l1, 'Specific')
+        print_dmaker(l2, 'Generic')
 
 
     def __chunk_lines(self, string, length):
@@ -2727,11 +2791,11 @@ class Fuzzer(object):
     
 
 
-class FuzzShell(cmd.Cmd):
+class FmkShell(cmd.Cmd):
 
-    def __init__(self, title, fuzzer, completekey='tab', stdin=None, stdout=None):
+    def __init__(self, title, fmk_plumbing, completekey='tab', stdin=None, stdout=None):
         cmd.Cmd.__init__(self, completekey, stdin, stdout)
-        self.fz = fuzzer
+        self.fz = fmk_plumbing
         self.prompt = '>> '
         self.intro = colorize(FontStyle.BOLD + "\n-=[ %s ]=- (with Fuddly FmK %s)\n" % (title, fuddly_version), rgb=Color.TITLE)
 
@@ -2749,11 +2813,35 @@ class FuzzShell(cmd.Cmd):
         self.__error = False
         self.__error_msg = ''
         self.__error_fmk = ''
+        self._quit_shell = False
+
+        history_path = os.path.expanduser(gr.fuddly_data_folder + 'fuddly_shell_history')
+
+        def save_history(history_path=history_path):
+            readline.write_history_file(history_path)
+
+        if os.path.exists(history_path):
+            readline.read_history_file(history_path)
+
+        atexit.register(save_history)
 
         signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
     def postcmd(self, stop, line):
+        if self._quit_shell:
+            self._quit_shell = False
+            msg = colorize(FontStyle.BOLD + "\nReally Quit? [Y/n]", rgb=Color.WARNING)
+            if sys.version_info[0] == 2:
+                cont = raw_input(msg)
+            else:
+                cont = input(msg)
+            cont = cont.upper()
+            if cont == 'Y' or cont == '':
+                return True
+            else:
+                return False
+
         printed_err = False
         print('')
         if self.fz.is_not_ok() or self.__error:
@@ -2796,6 +2884,10 @@ class FuzzShell(cmd.Cmd):
             self.cmdloop()
 
     def precmd(self, line):
+        if line == 'EOF':
+            self._quit_shell = True
+            return ''
+
         if self.fz.is_usable():
             return line
 
@@ -4078,7 +4170,7 @@ class FuzzShell(cmd.Cmd):
         return False
 
     def do_quit(self, line):
-        self.fz.exit_fuzzer()
+        self.fz.exit_fmk()
         return True
 
 

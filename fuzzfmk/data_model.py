@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -742,12 +742,16 @@ class NodeInternals(object):
     def _match_node_constraints(self, criteria):
         # precond: criteria is not empty
 
-        if self._sync_with is None:
-            return False
-
         for scope, required in criteria.items():
             if required is None:
                 continue
+
+            if self._sync_with is None:
+                if required:
+                    return False
+                else:
+                    continue
+
             if scope in self._sync_with and not required:
                 return False
             elif scope not in self._sync_with and required:
@@ -1640,6 +1644,8 @@ class NodeInternals_TypedValue(NodeInternals_Term):
         return NodeInternals_Term._convert_to_internal_repr(ret)
 
     def get_raw_value(self):
+        if not self.is_frozen():
+            self._get_value()
         return self.value_type.get_current_raw_val()
         
     def absorb_auto_helper(self, blob, constraints):
@@ -2002,6 +2008,7 @@ class NodeInternals_NonTerm(NodeInternals):
                          # sense only for absorption operation.
 
     def _init_specific(self, arg):
+        self.encoder = None
         self.reset()
 
     def reset(self, nodes_drawn_qty=None, mode=None, exhaust_info=None):
@@ -2011,6 +2018,9 @@ class NodeInternals_NonTerm(NodeInternals):
         self.subnodes_csts_total_weight = 0
         self.subnodes_minmax = {}
         self.separator = None
+
+        if self.encoder:
+            self.encoder.reset()
 
         if exhaust_info is None:
             self.exhausted = False
@@ -2045,6 +2055,10 @@ class NodeInternals_NonTerm(NodeInternals):
             self.mode = m
         else:
             raise ValueError
+
+    def set_encoder(self, encoder):
+        self.encoder = encoder
+        encoder.reset()
 
     def __iter_csts(self, node_list):
         for delim, sublist in node_list:
@@ -2198,6 +2212,11 @@ class NodeInternals_NonTerm(NodeInternals):
 
                             modified_csts[id(node_list)].append(idx)
 
+    def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement):
+        if self.encoder:
+            self.encoder = copy.copy(self.encoder)
+            if ignore_frozen_state:
+                self.encoder.reset()
 
     def make_private_subnodes(self, node_dico, func_nodes, env, ignore_frozen_state,
                               accept_external_entanglement, entangled_set, delayed_node_internals):
@@ -2814,11 +2833,21 @@ class NodeInternals_NonTerm(NodeInternals):
         return (self.frozen_node_list, True)
 
 
-    def _get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True, after_encoding=True):
+
+        def handle_encoding(list_to_enc):
+            if self.encoder and after_encoding:
+                list_to_enc = list(flatten(list_to_enc))
+                blob = b''.join(list_to_enc)
+                blob = self.encoder.encode(blob)
+                return blob
+            else:
+                return list_to_enc
+
         l = []
         node_list, was_not_frozen = self.get_subnodes_with_csts()
 
-        djob_group_created = False        
+        djob_group_created = False
         for n in node_list:
             if n.is_attr_set(NodeInternals.DISABLED):
                 val = Node.DEFAULT_DISABLED_VALUE
@@ -2837,18 +2866,16 @@ class NodeInternals_NonTerm(NodeInternals):
 
             l.append(val)
 
-        ret = (l, was_not_frozen)
-
         if node_list:
             node_env = node_list[0].env
         else:
-            return ret
+            return (handle_encoding(l), was_not_frozen)
 
         # We avoid reentrancy that could trigger recursive loop with
         # self._existence_from_node()
         if node_env and node_env._reentrancy_cpt > 0:
             node_env._reentrancy_cpt = 0
-            return ret
+            return (handle_encoding(l), was_not_frozen)
 
         if node_env and node_env.delayed_jobs_enabled and \
            node_env.djobs_exists(Node.DJOBS_PRIO_nterm_existence):
@@ -2878,8 +2905,15 @@ class NodeInternals_NonTerm(NodeInternals):
                                         if args[2] > job_idx:
                                             args[2] += node_qty-1
 
-        return ret
+        return (handle_encoding(l), was_not_frozen)
 
+
+    def get_raw_value(self):
+        raw_list = self._get_value(after_encoding=False)[0]
+        raw_list = list(flatten(raw_list))
+        raw = b''.join(raw_list)
+
+        return raw
 
     @staticmethod
     def _expand_delayed_nodes(node, node_list, idx, conf, rec):
@@ -3105,6 +3139,10 @@ class NodeInternals_NonTerm(NodeInternals):
                within the same non-terminal node. Use delayed job
                infrastructure to cover all cases (TBC).
         '''
+
+        if self.encoder:
+            original_blob = blob
+            blob = self.encoder.decode(blob)
 
         abs_excluded_components = []
         abs_exhausted = False
@@ -3518,6 +3556,9 @@ class NodeInternals_NonTerm(NodeInternals):
 
         self._clone_node_cleanup()
         self._clone_separator_cleanup()
+
+        if self.encoder:
+            consumed_size = len(original_blob)
 
         return status, 0, consumed_size
 
@@ -4114,7 +4155,7 @@ class Node(object):
         to fuzz. If set, this attribute is used by some generic
         *disruptors* (the ones that rely on a ModelWalker object---refer to
         fuzzing_primitives.py)
-      depth (int): Depth of the node wwithin the graph from a specific given
+      depth (int): Depth of the node within the graph from a specific given
         root. Will be computed lazily (only when requested).
       tmp_ref_count (int): (internal use) Temporarily used during the creation of multiple
         instance of a same node, especially in order to generate unique names.
@@ -5047,8 +5088,6 @@ class Node(object):
                 return n
         else:
             return None
-        # "*** ERROR: get_path_from() --> Node '{:s}' " \
-        #         "not reachable from '{:s}'***".format(self.name, node.name)
 
 
     def get_all_paths_from(self, node, conf=None):
@@ -5163,8 +5202,6 @@ class Node(object):
             val = b''.join(val)
 
         return val
-
-    get_flatten_value = to_bytes
 
     def to_str(self, conf=None, recursive=True):
         val = self.to_bytes(conf=conf, recursive=recursive)
@@ -5479,6 +5516,10 @@ class Node(object):
                                     log_func=log_func)
                     else:
                         print_nonterm_func(' [{:s}]'.format(node_type), nl=False, log_func=log_func)
+                        if node.is_nonterm(conf_tmp) and node.encoder is not None:
+                            self._print(' [Encoded by {:s}]'.format(node.encoder.__class__.__name__),
+                                        rgb=Color.ND_ENCODED, style=FontStyle.BOLD,
+                                        nl=False, log_func=log_func)
                         self._print(graph_deco, rgb=Color.ND_DUPLICATED, style=FontStyle.BOLD,
                                     log_func=log_func)
 
@@ -5512,19 +5553,41 @@ class Node(object):
             raise ValueError
 
     def __setitem__(self, key, val):
-        if isinstance(val, Node):
-            self[key].set_contents(val)
-        elif isinstance(val, NodeSemantics):
-            self[key].set_semantics(val)
-        elif isinstance(val, int):
-            # Method defined by INT object (within TypedValue nodes)
-            self[key].set_raw_values(val)
-        else:
-            status, off, size, name = self[key].absorb(convert_to_internal_repr(val),
-                                                       constraints=AbsNoCsts())
-            if status != AbsorbStatus.FullyAbsorbed:
-                raise ValueError
+        nodes = self[key]
+        if not nodes:
+            raise ValueError
 
+        if isinstance(val, Node):
+            if isinstance(nodes, Node):
+                nodes.set_contents(val)
+            else:
+                for n in nodes:
+                    n.set_contents(val)
+        elif isinstance(val, NodeSemantics):
+            if isinstance(nodes, Node):
+                nodes.set_semantics(val)
+            else:
+                for n in nodes:
+                    n.set_semantics(val)
+        elif isinstance(val, int):
+            if isinstance(nodes, Node):
+                # Method defined by INT object (within TypedValue nodes)
+                nodes.set_raw_values(val)
+            else:
+                for n in nodes:
+                    n.set_raw_values(val)
+        else:
+            if isinstance(nodes, Node):
+                status, off, size, name = nodes.absorb(convert_to_internal_repr(val),
+                                                       constraints=AbsNoCsts())
+                if status != AbsorbStatus.FullyAbsorbed:
+                    raise ValueError
+            else:
+                for n in nodes:
+                    status, off, size, name = nodes.absorb(convert_to_internal_repr(val),
+                                                           constraints=AbsNoCsts())
+                    if status != AbsorbStatus.FullyAbsorbed:
+                        raise ValueError
 
     def __getattr__(self, name):
         internals = self.__getattribute__('internals')[self.current_conf]

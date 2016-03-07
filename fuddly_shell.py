@@ -2,7 +2,7 @@
 
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -24,17 +24,11 @@
 ################################################################################
 
 import sys
-
-from fuzzfmk.global_resources import *
 from fuzzfmk.plumbing import *
 
-sys.path.insert(0, external_libs_folder)
+fmk = FmkPlumbing()
 
-if __name__ == "__main__":
+shell = FmkShell("Fuddly Shell", fmk)
+shell.cmdloop()
 
-    fuzzer = Fuzzer()
-
-    shell = FuzzShell("FuzzShell", fuzzer)
-    shell.cmdloop()
-
-    sys.exit(0)
+sys.exit(0)

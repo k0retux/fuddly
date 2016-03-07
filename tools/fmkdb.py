@@ -2,7 +2,7 @@
 
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -57,6 +57,9 @@ group.add_argument('--info-by-date', nargs=2, metavar=('START','END'),
                    help='''display information on data sent between START and END '''
                         '''(date format 'Year/Month/Day' or 'Year/Month/Day-Hour' or
                         'Year/Month/Day-Hour:Minute')''')
+group.add_argument('--project', metavar='PROJECT_NAME',
+                   help='restrict the data to be displayed to a specific project (expect --info-by-date)')
+
 group.add_argument('--with-fbk', action='store_true', help='display full feedback (expect --info)')
 group.add_argument('--with-data', action='store_true', help='display data content (expect --info)')
 group.add_argument('--without-fmkinfo', action='store_true',
@@ -139,9 +142,10 @@ def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limi
         sys.exit(-1)
 
     feedback = fmkdb.execute_sql_statement(
-        "SELECT SOURCE, STATUS, CONTENT FROM FEEDBACK "
+        "SELECT SOURCE, DATE, STATUS, CONTENT FROM FEEDBACK "
         "WHERE DATA_ID == {data_id:d} "
-        "ORDER BY SOURCE ASC;".format(data_id=data_id)
+        "ORDER BY SOURCE"
+        " ASC;".format(data_id=data_id)
     )
 
     comments = fmkdb.execute_sql_statement(
@@ -170,7 +174,7 @@ def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limi
     msg += colorize("\n    Status: ", rgb=Color.FMKINFO)
     src_max_sz = 0
     for idx, fbk in enumerate(feedback):
-        src, status, _ = fbk
+        src, tstamp, status, _ = fbk
         src_sz = len(src)
         src_max_sz = src_sz if src_sz > src_max_sz else src_max_sz
         if status is None:
@@ -182,8 +186,8 @@ def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limi
             msg += colorize(", ".format(src), rgb=Color.FMKINFO)
 
     msg += '\n'
-    sentd = sent_date.strftime("%d/%m/%Y - %H:%M:%S")
-    ackd = 'None' if ack_date is None else ack_date.strftime("%d/%m/%Y - %H:%M:%S")
+    sentd = sent_date.strftime("%d/%m/%Y - %H:%M:%S") if sent_date else 'None'
+    ackd = ack_date.strftime("%d/%m/%Y - %H:%M:%S") if ack_date else 'None'
     msg += colorize("      Sent: ", rgb=Color.FMKINFO) + colorize(sentd, rgb=Color.DATE)
     msg += colorize("\n  Received: ", rgb=Color.FMKINFO) + colorize(ackd, rgb=Color.DATE)
     msg += colorize("\n      Size: ", rgb=Color.FMKINFO) + colorize(str(size)+' Bytes', rgb=Color.FMKSUBINFO)
@@ -254,7 +258,7 @@ def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limi
     msg = ''
     for idx, com in enumerate(comments, start=1):
         content, date = com
-        date_str = sent_date.strftime("%d/%m/%Y - %H:%M:%S")
+        date_str = sent_date.strftime("%d/%m/%Y - %H:%M:%S") if sent_date else 'None'
         msg += colorize("\n Comment #{:d}: ".format(idx), rgb=Color.FMKINFOGROUP) + \
                colorize(date_str, rgb=Color.DATE)
         chks = chunk_lines(content, page_width-10)
@@ -270,7 +274,7 @@ def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limi
         content, date, error = info
         if without_fmkinfo and not error:
             continue
-        date_str = sent_date.strftime("%d/%m/%Y - %H:%M:%S")
+        date_str = sent_date.strftime("%d/%m/%Y - %H:%M:%S") if sent_date else 'None'
         if error:
             msg += colorize("\n FMK Error: ", rgb=Color.ERROR)
         else:
@@ -303,9 +307,12 @@ def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limi
         msg += colorize('\n'+line_pattern, rgb=Color.NEWLOGENTRY)
 
     if with_fbk:
-        for src, status, content in feedback:
+        for src, tstamp, status, content in feedback:
             msg += colorize("\n Status(", rgb=Color.FMKINFOGROUP) + \
                    colorize("{:s}".format(src), rgb=Color.FMKSUBINFO) + \
+                   colorize(" | ", rgb=Color.FMKINFOGROUP) + \
+                   colorize("{:s}".format(tstamp.strftime("%d/%m/%Y - %H:%M:%S")),
+                            rgb=Color.FMKSUBINFO) + \
                    colorize(")", rgb=Color.FMKINFOGROUP) + \
                    colorize(" = {!s}".format(status), rgb=Color.FMKSUBINFO)
             if content:
@@ -349,6 +356,7 @@ if __name__ == "__main__":
 
     data_info = args[0].info
     data_info_by_date = args[0].info_by_date
+    prj_name = args[0].project
     with_fbk = args[0].with_fbk
     with_data = args[0].with_data
     without_fmkinfo = args[0].without_fmkinfo
@@ -361,7 +369,11 @@ if __name__ == "__main__":
     impact_analysis = args[0].data_with_impact
 
     fmkdb = Database(fmkdb_path=fmkdb)
-    fmkdb.start()
+    ok = fmkdb.start()
+    if not ok:
+        print(colorize("*** ERROR: The database {:s} is invalid! ***".format(fmkdb.fmk_db_path),
+                       rgb=Color.ERROR))
+        sys.exit(-1)
 
     if display_stats:
         records = fmkdb.execute_sql_statement(
@@ -404,11 +416,18 @@ if __name__ == "__main__":
         start = handle_date(data_info_by_date[0])
         end = handle_date(data_info_by_date[1])
 
-        records = fmkdb.execute_sql_statement(
-            "SELECT ID FROM DATA "
-            "WHERE ? <= SENT_DATE and SENT_DATE <= ?;",
-            params=(start, end)
-        )
+        if prj_name:
+            records = fmkdb.execute_sql_statement(
+                "SELECT ID FROM DATA "
+                "WHERE ? <= SENT_DATE and SENT_DATE <= ? and PRJ_NAME == ?;",
+                params=(start, end, prj_name)
+            )
+        else:
+            records = fmkdb.execute_sql_statement(
+                "SELECT ID FROM DATA "
+                "WHERE ? <= SENT_DATE and SENT_DATE <= ?;",
+                params=(start, end)
+            )
 
         if records:
             for rec in records:
@@ -444,7 +463,10 @@ if __name__ == "__main__":
 
                 file_extension = dm_name
 
-                current_export_date = sent_date.strftime("%Y-%m-%d-%H%M%S")
+                if sent_date is None:
+                    current_export_date = datetime.now().strftime("%Y-%m-%d-%H%M%S")
+                else:
+                    current_export_date = sent_date.strftime("%Y-%m-%d-%H%M%S")
 
                 if current_export_date != prev_export_date:
                     prev_export_date = current_export_date

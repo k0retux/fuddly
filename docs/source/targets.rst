@@ -190,3 +190,25 @@ Usage Example:
 
    line 4
      We set the name of the printer of interest.
+
+
+SIMTarget
+=========
+
+Reference:
+  :class:`fuzzfmk.target.SIMTarget`
+
+Description:
+  This generic target enables you to interact with a SIM card through a serial line
+  (e.g., a SIM card embedded within an USB GSM modem)
+
+Feedback:
+  This target will automatically provide feedback if an error is received
+  through the serial line used to interact with the SIM card.
+
+Usage Example:
+   .. code-block:: python
+      :linenos:
+
+       tg = SIMTarget(serial_port='/dev/ttyUSB3', baudrate=115200, pin_code='0000'
+                      targeted_tel_num='0123456789', zone='33')

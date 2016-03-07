@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -23,3 +23,4 @@
 
 class Timeout(Exception): pass
 class UnavailablePythonModule(Exception): pass
+class InvalidFmkDB(Exception): pass

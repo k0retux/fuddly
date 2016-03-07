@@ -6,6 +6,7 @@ from fuzzfmk.plumbing import *
 from fuzzfmk.data_model import *
 from fuzzfmk.value_types import *
 from fuzzfmk.data_model_helpers import *
+from fuzzfmk.encoders import *
 
 class MyDF_DataModel(DataModel):
 
@@ -347,16 +348,84 @@ class MyDF_DataModel(DataModel):
               ]}
          ]}
 
-
         for_network_tg1 = Node('4tg1', vt=String(val_list=['FOR_TARGET_1']))
         for_network_tg1.set_semantics(['TG1'])
 
         for_network_tg2 = Node('4tg2', vt=String(val_list=['FOR_TARGET_2']))
         for_network_tg2.set_semantics(['TG2'])
 
+        enc_desc = \
+        {'name': 'enc',
+         'contents': [
+             {'name': 'data0',
+              'contents': String(val_list=['Plip', 'Plop']) },
+             {'name': 'crc',
+              'contents': MH.CRC(vt=UINT32_be, after_encoding=False),
+              'node_args': ['enc_data', 'data2'],
+              'absorb_csts': AbsFullCsts(contents=False) },
+             {'name': 'enc_data',
+              'encoder': GZIP_Enc(6),
+              'set_attrs': [NodeInternals.Abs_Postpone],
+              'contents': [
+                 {'name': 'len',
+                  'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                  'node_args': 'data1',
+                  'absorb_csts': AbsFullCsts(contents=False)},
+                 {'name': 'data1',
+                  'contents': UTF16_LE(val_list=['Test!', 'Hello World!']) },
+              ]},
+             {'name': 'data2',
+              'contents': String(val_list=['Red', 'Green', 'Blue']) },
+         ]}
+
+
+
+        example_desc = \
+        {'name': 'ex',
+         'contents': [
+             {'name': 'data0',
+              'contents': String(val_list=['Plip', 'Plop']) },
+
+             {'name': 'data_group',
+              'contents': [
+
+                 {'name': 'len',
+                  'mutable': False,
+                  'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                  'node_args': 'data1',
+                  'absorb_csts': AbsFullCsts(contents=False)},
+
+                 {'name': 'data1',
+                  'contents': String(val_list=['Test!', 'Hello World!']) },
+
+                 {'name': 'data2',
+                  'qty': (1,3),
+                  'semantics': ['sem1', 'sem2'],
+                  'contents': UINT16_be(mini=10, maxi=0xa0ff),
+                  'alt': [
+                       {'conf': 'alt1',
+                        'contents': SINT8(int_list=[1,4,8])},
+                       {'conf': 'alt2',
+                        'contents': UINT16_be(mini=0xeeee, maxi=0xff56)} ]},
+
+                 {'name': 'data3',
+                  'semantics': ['sem2'],
+                  'sync_qty_with': 'data2',
+                  'contents': UINT8(int_list=[30,40,50]),
+                  'alt': [
+                       {'conf': 'alt1',
+                        'contents': SINT8(int_list=[1,4,8])}]},
+                ]},
+
+             {'name': 'data4',
+              'contents': String(val_list=['Red', 'Green', 'Blue']) }
+         ]}
+
+
+
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
-                      shape_desc, for_network_tg1, for_network_tg2)
+                      shape_desc, for_network_tg1, for_network_tg2, enc_desc, example_desc)
 
 
 data_model = MyDF_DataModel()
