@@ -76,7 +76,7 @@ The code below show how to perform that:
     rnode.set_env(Env())
 
 
-``fuddly`` models data as directed acyclic graph whose terminal
+``fuddly`` models data as directed acyclic graphs whose terminal
 nodes describe the different parts of a data format (refer to :ref:`data-model`). In order to
 enable elaborated manipulations it also create a specific object to share between all the nodes
 some common information related to the graph: the :class:`fuzzfmk.data_model.Env` object. You should
@@ -93,9 +93,10 @@ the environment from any node, and ``fuddly`` is now able to deal with this grap
    :meth:`fuzzfmk.data_model_helpers.DataModel.register` (refer to :ref:`dm:mydf`), no need to worry
    about the environment.
 
-.. note:: The :class:`fuzzfmk.data_model_helpers.ModelHelper` used to create a graph from a data
-   descriptor is bound to the graph and should not be used for creating another graph. It contains
-   some information on the created graph such as a dictionary of all its nodes ``mh.node_dico``.
+.. note:: The :class:`fuzzfmk.data_model_helpers.ModelHelper` object which is used to create a
+   graph from a data descriptor is bound to the graph and should not be used for creating another
+   graph. It contains some information on the created graph such as a dictionary of all its
+   nodes ``mh.node_dico``.
 
 
 .. _dmanip:freeze:
@@ -150,7 +151,7 @@ once, you should call the method :meth:`fuzzfmk.data_model.Node.unfreeze_all`.
 Create Nodes with Low-Level Primitives
 --------------------------------------
 
-Instead of using the high-level API for describing a graph you can create it by using fuddly
+Instead of using the high-level API for describing a graph you can create it by using ``fuddly``
 low-level primitives. Generally, you don't need to go through that, but for specific
 complex situations it could provide you with what you need. To create a graph or a single node,
 you always have to instantiate the class :class:`fuzzfmk.data_model.Node` which enables you to set
@@ -159,19 +160,19 @@ the type of content for the main node configuration (refer to :ref:`dmanip:conf`
 Depending on the content type the constructor will call the following methods to do the
 job:
 
-- :meth:`fuzzfmk.data_model.Node.set_values`: for *typed-value* node.
-- :meth:`fuzzfmk.data_model.Node.set_subnodes_basic`: for *non-terminal* node without specifying a
+- :meth:`fuzzfmk.data_model.Node.set_values`: for *typed-value* nodes.
+- :meth:`fuzzfmk.data_model.Node.set_subnodes_basic`: for *non-terminal* nodes without specifying a
   grammar.
-- :meth:`fuzzfmk.data_model.Node.set_subnodes_with_csts`: for a *non-terminal* node constrained by
+- :meth:`fuzzfmk.data_model.Node.set_subnodes_with_csts`: for *non-terminal* nodes constrained by
   a grammar.
-- :meth:`fuzzfmk.data_model.Node.set_generator_func`: for a *generator* node.
-- :meth:`fuzzfmk.data_model.Node.set_func`: for a *function* node.
+- :meth:`fuzzfmk.data_model.Node.set_generator_func`: for *generator* nodes.
+- :meth:`fuzzfmk.data_model.Node.set_func`: for *function* nodes.
 
 
 .. note::
    Methods specific to the node content (:class:`fuzzfmk.data_model.NodeInternals`) can be
    called directly on the node itself and it will be *forwarded* to the content (if the method name
-   does not match one the Node class).
+   does not match one the :class:`fuzzfmk.data_model.Node` class).
 
 .. seealso::
    If you want to learn more about the specific operations that can be performed on each kind of
@@ -207,10 +208,10 @@ parameter the node to copy:
     rnode_copy = Node('mycopy', base_node=rnode, new_env=True)
 
 
-When you clone a node you may want to keep its current state or keep it exactly as it is. For
-doing so, you have to use the parameter ``ignore_frozen_state`` of the method
-:meth:`fuzzfmk.data_model.Node.get_clone`. By default it is set to ``False`` which means that the
-state is preserved during the cloning process.
+When you clone a node you may want to keep its current state or ignore it (that is, cloning
+an unfrozen graph as if it was reset). For doing so, you have to use the parameter
+``ignore_frozen_state`` of the method :meth:`fuzzfmk.data_model.Node.get_clone`. By default it is
+set to ``False`` which means that the state is preserved during the cloning process.
 
 
 Display a Frozen Graph
