@@ -2,7 +2,7 @@
 
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -373,8 +373,8 @@ class Example_DataModel(DataModel):
                              'data_id': 'STR'},
 
                             {'type': MH.Generator,
-                             'contents': lambda x: Node('cts', values=[x[0].get_flatten_value() \
-                                                                       + x[1].get_flatten_value()]),
+                             'contents': lambda x: Node('cts', values=[x[0].to_bytes() \
+                                                                       + x[1].to_bytes()]),
                              'name': 'val22',
                              'node_args': [('val21', 2), 'val3']}
                         ]}]},

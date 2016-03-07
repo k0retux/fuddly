@@ -460,7 +460,7 @@ to corrupt can be chosen.
    ``fuddly``'s low-level primitives. One of this criteria is *paths*,
    and the syntax defined to represent paths is similar to the one of
    filesystem paths. Each path are represented by a python string,
-   where node identifier are separated by ``/``'s. For instance:
+   where node identifiers are separated by ``/``'s. For instance:
    :code:`'ZIP/file_list/file:2/header'`, is a path from the root of a
    modeled ZIP archive to the *header* of its second file.
 
@@ -702,6 +702,19 @@ it by issuing the following command::
 where ``<dmaker_type>`` is the data maker to reset, for instance:
 ``ZIP_00``, ``tTYPE``, ...
 
+
+.. note:: You can also choose to cleanup a *Generator* without resetting the
+   specifics of the previously produced data, that is, preserving the *seed* that
+   guided the data generation. Actually this seed is a copy of the
+   data that has been generated at the beginning, before any disruptor got a chance to
+   modify it. This original data is kept within the generator and will be provided again
+   if you use the command ``cleanup_dmaker`` instead of ``reset_dmaker``. The latter will
+   remove this seed.
+
+   Keeping such *seeds* may consume a lot of memory at some point. Moreover, they may only
+   be useful for non-determinist data model.
+
+
 Another way that can reveal itself to be useful (especially within
 :class:`fuzzfmk.tactics_helper.Operator`--- refer to
 :ref:`tuto:operator`) is to clone a data maker. By doing so, you have
@@ -714,12 +727,6 @@ after having issuing the commands from the section
 the cloned data makers::
 
   >> send ZIP_00#new tTYPE#new
-
-
-.. todo:: Tackle *data seeds* topic, useful for replays (as an
-          alternative to replay commands that may consume lots of
-          memory).
-
 
 
 Reloading Data Models / Targets / ...
@@ -860,11 +867,7 @@ will need to issue the following commands:
    :linenos:
    :emphasize-lines: 1,2,5
 
-   import sys
-   from fuzzfmk.global_resources import *
    from fuzzfmk.plumbing import *
-
-   sys.path.insert(0, external_libs_folder)
 
    fmk = FmkPlumbing()
 
@@ -1189,8 +1192,8 @@ Defining the Imaginary MyDF Data Model
 ++++++++++++++++++++++++++++++++++++++
 
 Assuming we want to model an imaginary data format called `MyDF`.  Two
-files need to be created within ``<root of
-fuddly>/data_models/[file_formats|protocol]/``:
+files need to be created either within ``<root of fuddly>/data_models/`` or within
+``~/fuddly_data/user_data_models/`` (or within any subdirectory):
 
 ``mydf.py``
   Contain the implementation of the data model related to
@@ -1984,9 +1987,9 @@ Defining a Project Environment
 
 The environment---composed of at least one target, a logger, and
 optionnaly some monitoring means and virtual operators---is setup
-within a project file located within ``<root of
-fuddly>/projects/``. To illustrate that let's show the beginning of
-``generic/standard_proj.py``:
+within a project file located within ``<root of fuddly>/projects/`` or within
+`~/fuddly_data/user_projects/``. To illustrate that let's
+show the beginning of ``generic/standard_proj.py``:
 
 .. code-block:: python
    :linenos:

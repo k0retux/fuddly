@@ -3,26 +3,624 @@
 Data Manipulation
 *****************
 
-.. seealso:: Also look at :ref:`useful-examples`
+The following section will provide you with an understanding on how to manipulate modeled data
+with ``fuddly`` primitives. Data manipulation is what *disruptors* perform (refer to :ref:`tuto:disruptors`).
+This chapter will enable you to write your own *disruptors* or to simply perform custom
+manipulation of a data coming from a file, retrieved from the network (thanks to data
+absorption---refer to :ref:`tuto:dm-absorption`), or even generated from scratch.
 
 
-Searching Primitives
-====================
+Overview
+========
 
-.. todo:: discuss on data paths, syntactic & semantic criteria
+To guide you over what is possible to perform, let's consider the following data model:
+
+.. code-block:: python
+   :linenos:
+
+    from fuzzfmk.data_model import *
+    from fuzzfmk.value_types import *
+    from fuzzfmk.data_model_helpers import *
+
+     example_desc = \
+     {'name': 'ex',
+      'contents': [
+          {'name': 'data0',
+           'contents': String(val_list=['Plip', 'Plop']) },
+
+          {'name': 'data_group',
+           'contents': [
+
+              {'name': 'len',
+               'mutable': False,
+               'contents': MH.LEN(vt=UINT8, after_encoding=False),
+               'node_args': 'data1',
+               'absorb_csts': AbsFullCsts(contents=False)},
+
+              {'name': 'data1',
+               'contents': String(val_list=['Test!', 'Hello World!']) },
+
+              {'name': 'data2',
+               'qty': (1,3),
+               'semantics': ['sem1', 'sem2'],
+               'contents': UINT16_be(mini=10, maxi=0xa0ff),
+               'alt': [
+                    {'conf': 'alt1',
+                     'contents': SINT8(int_list=[1,4,8])},
+                    {'conf': 'alt2',
+                     'contents': UINT16_be(mini=0xeeee, maxi=0xff56)} ]},
+
+              {'name': 'data3',
+               'semantics': ['sem2'],
+               'sync_qty_with': 'data2',
+               'contents': UINT8(int_list=[30,40,50]),
+               'alt': [
+                    {'conf': 'alt1',
+                     'contents': SINT8(int_list=[1,4,8])}]},
+             ]},
+
+          {'name': 'data4',
+           'contents': String(val_list=['Red', 'Green', 'Blue']) }
+      ]}
+
+
+This is what we call a data descriptor. It cannot be used directly, it should first be
+transformed to ``fuddly`` internal representation based on :class:`fuzzfmk.data_model.Node`.
+The code below show how to perform that:
+
+.. code-block:: python
+   :linenos:
+
+    mh = ModelHelper()
+    rnode = mh.create_graph_from_desc(enc_desc)
+    rnode.set_env(Env())
+
+
+``fuddly`` models data as directed acyclic graph whose terminal
+nodes describe the different parts of a data format (refer to :ref:`data-model`). In order to
+enable elaborated manipulations it also create a specific object to share between all the nodes
+some common information related to the graph: the :class:`fuzzfmk.data_model.Env` object. You should
+note that we create this *environment* object and setup the root node with it. Actually it
+provides all the nodes of the graph with this environment. From now on it is possible to access
+the environment from any node, and ``fuddly`` is now able to deal with this graph.
+
+.. note:: The method :meth:`fuzzfmk.data_model_helpers.ModelHelper.create_graph_from_desc` return a
+   :class:`fuzzfmk.data_model.Node` which is the root of the graph.
+
+.. note:: When you instantiate a data from a model through
+   :meth:`fuzzfmk.data_model_helpers.DataModel.get_data` as illustrated in :ref:`fuddly-advanced`,
+   the environment object is created for you. Likewise, when you register a data descriptor through
+   :meth:`fuzzfmk.data_model_helpers.DataModel.register` (refer to :ref:`dm:mydf`), no need to worry
+   about the environment.
+
+.. note:: The :class:`fuzzfmk.data_model_helpers.ModelHelper` used to create a graph from a data
+   descriptor is bound to the graph and should not be used for creating another graph. It contains
+   some information on the created graph such as a dictionary of all its nodes ``mh.node_dico``.
+
+
+.. _dmanip:freeze:
+
+Generate Data a.k.a. Freeze a Graph
+-----------------------------------
+
+If you want to get a data from the graph you have to freeze it first as it represents many
+different potential data at once (actually it acts like a template). To do so, just call the method
+:meth:`fuzzfmk.data_model.Node.freeze` on the root node. It will provide you with a nested set of
+list containing the frozen value for each node selected within the graph to provide you with a data.
+
+What is way more interesting in the general case is obtaining a byte string of the data. For
+this you just have to call :meth:`fuzzfmk.data_model.Node.to_bytes` on the root node which will
+first freeze the graph and then flatten the nested list automatically to provide you with
+the byte string.
+
+If you want to get another data from the graph you should first unfreeze it because otherwise any
+further call to the previous methods will give you the same value. To do that you can call the
+method :meth:`fuzzfmk.data_model.Node.unfreeze`. You will then be able to get a new data by
+freezing it again. Actually doing so will produce the next data by cycling over the possible
+node values (described in the graph) in a random or a determinist way (refer to :ref:`dmanip:prop`).
+If you look at getting data from the graph by walking over each of its nodes independently then
+you should look for instance at the generic disruptor ``tWALK`` (refer to :ref:`dis:generic-disruptors`)
+and also to the model walker infrastructure :ref:`tuto:modelwalker`).
+
+By default, ``unfreeze`` will act recursively and will affect every nodes reachable from the calling
+one. You can unfreeze only the node on which the method is called by switching its ``recursive``
+parameter.
+
+Another option you may want is to unfreeze only the constraints of your graph which based on
+existence conditions (refer to :ref:`dm:pattern:existence-cond`), *generator*  and *func* nodes.
+To do so, set the ``reevaluate_constraints`` parameter to ``True``.
+
+To cycle over the possible node values or shapes (for non terminal nodes) a state is kept.
+This state is normally reset automatically when the node is exhausted in order to cycle again.
+can be reset thanks to the method :meth:`fuzzfmk.data_model.Node.reset_state`. In
+addition to resetting the node state it also unfreezes it.
+
+.. note:: When a cycle over the possible node values or shapes is terminated, a notification is
+   raised (through the linked environment object). Depending on the ``Finite`` node attribute
+   generic disruptors will recycle the node or change to another one. Setting the ``Finite``
+   property on all the graph will enable you to have an end on data generation, and to avoid
+   the generation of duplicated data.
+
+Finally if you want to unfreeze all the node configurations (refer to :ref:`dmanip:conf`) at
+once, you should call the method :meth:`fuzzfmk.data_model.Node.unfreeze_all`.
+
+
+.. _dmanip:node:
+
+Create Nodes with Low-Level Primitives
+--------------------------------------
+
+Instead of using the high-level API for describing a graph you can create it by using fuddly
+low-level primitives. Generally, you don't need to go through that, but for specific
+complex situations it could provide you with what you need. To create a graph or a single node,
+you always have to instantiate the class :class:`fuzzfmk.data_model.Node` which enables you to set
+the type of content for the main node configuration (refer to :ref:`dmanip:conf`).
+
+Depending on the content type the constructor will call the following methods to do the
+job:
+
+- :meth:`fuzzfmk.data_model.Node.set_values`: for *typed-value* node.
+- :meth:`fuzzfmk.data_model.Node.set_subnodes_basic`: for *non-terminal* node without specifying a
+  grammar.
+- :meth:`fuzzfmk.data_model.Node.set_subnodes_with_csts`: for a *non-terminal* node constrained by
+  a grammar.
+- :meth:`fuzzfmk.data_model.Node.set_generator_func`: for a *generator* node.
+- :meth:`fuzzfmk.data_model.Node.set_func`: for a *function* node.
+
+
+.. note::
+   Methods specific to the node content (:class:`fuzzfmk.data_model.NodeInternals`) can be
+   called directly on the node itself and it will be *forwarded* to the content (if the method name
+   does not match one the Node class).
+
+.. seealso::
+   If you want to learn more about the specific operations that can be performed on each kind of
+   content (whose base class is :class:`fuzzfmk.data_model.NodeInternals`), refer to the related
+   class, namely:
+
+   - :class:`fuzzfmk.data_model.NodeInternals_TypedValue`
+   - :class:`fuzzfmk.data_model.NodeInternals_NonTerm`
+   - :class:`fuzzfmk.data_model.NodeInternals_GenFunc`
+   - :class:`fuzzfmk.data_model.NodeInternals_Func`
 
 
 
+Cloning a Node
+--------------
 
-Modification Primitives
-=======================
+A graph or any node within can be cloned in order to be used anywhere else independently from the
+original node. To perform such an operation you should use
+:meth:`fuzzfmk.data_model.Node.get_clone` like in the following example:
 
-.. todo:: discuss on modification primitives, such as: set_values,
-          set_current_conf, ...
+.. code-block:: python
+   :linenos:
+
+    rnode_copy = rnode.get_clone('mycopy')
+
+``rnode_copy`` is a clone of the root node of the previous graph example, and as such it is a
+clone of the graph. The same operation can be achieved by creating a new node and passing as a
+parameter the node to copy:
+
+.. code-block:: python
+   :linenos:
+
+    rnode_copy = Node('mycopy', base_node=rnode, new_env=True)
+
+
+When you clone a node you may want to keep its current state or keep it exactly as it is. For
+doing so, you have to use the parameter ``ignore_frozen_state`` of the method
+:meth:`fuzzfmk.data_model.Node.get_clone`. By default it is set to ``False`` which means that the
+state is preserved during the cloning process.
+
+
+Display a Frozen Graph
+----------------------
+
+If you want to display a frozen graph (representing one data) in ASCII-art you have to call the
+method :meth:`fuzzfmk.data_model.Node.show` on it. For instance the following::
+
+    rnode.show()
+
+will display a frozen graph that looks the same as the one below:
+
+.. figure::  images/ex_show.png
+   :align:   center
+   :scale:   100 %
+
+
+The Node Environment
+--------------------
+
+The environment which should normally be the same for all the nodes of a same graph are handled
+by the following methods:
+
+- :meth:`fuzzfmk.data_model.Node.set_env`
+- :meth:`fuzzfmk.data_model.Node.get_env`
+
+
+.. _dmanip:search:
+
+Search for Nodes in a Graph
+===========================
+
+Searching a graph for specific nodes can be performed in basically two ways. Depending on the
+criteria based on which you want to perform the search, you should use:
+
+- :meth:`fuzzfmk.data_model.Node.get_node_by_path`: will retrieve the first node that match the
+  *graph path*---you provide as a parameter---from the node on which the method is called (or
+  ``None`` if nothing is found). The syntax defined to represent paths is similar to the one of
+  filesystem paths. Each path are represented by a python string, where node names are
+  separated by ``/``'s. For instance the path from the root node of the previous data model to
+  the node named ``len`` is::
+
+      'ex/data_group/len'
+
+  You can also use a regexp to describe a path. Also, if you need to retrieve all the nodes
+  matching a path regexp you should use the following method.
+
+
+- :meth:`fuzzfmk.data_model.Node.get_reachable_nodes`: It is the more flexible primitive that
+  enables to perform a search based on syntactic and/or semantic criteria. It can take several
+  optional parameters to define your search like a *graph path* regexp. Unlike the previous method
+  it always returns a list, either filled with the nodes that has been found or with nothing.
+  You can use other kinds of criteria to be passed through the following parameters:
+
+  + ``internals_criteria``: To be provided with a :class:`fuzzfmk.data_model.NodeInternalsCriteria`
+    object. This object enable you to describe the syntactic properties you look for, such as:
+
+     - The node kind (refer to :ref:`dmanip:prop`) and/or subkind (for a typed terminal node, a
+       subkind is the class of its embedded typed value);
+
+     - The node attributes (refer to :ref:`dmanip:prop`)
+
+     - The node constraints such as: *existence* or *quantity synchronization*. Usable
+       constraints are defined by :class:`fuzzfmk.data_model.SyncScope`.
+
+
+  + ``semantics_criteria``: To be provided with a :class:`fuzzfmk.data_model.NodeSemanticCriteria`
+    object. This object enable you to describe the semantic properties you look for. They are
+    currently limited to a list of python strings.
+
+  + ``owned_conf``: The name of a node configuration (refer to :ref:`dmanip:conf`) that
+    the targeted nodes own.
+
+  The following code snippet illustrates the use of such criteria for retrieving all the nodes
+  coming from the ``data2`` description (refer to :ref:`dmanip:entangle`):
+
+  .. code-block:: python
+     :linenos:
+
+     ic = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
+                                node_kinds=[NodeInternals_TypedValue],
+                                negative_node_subkinds=[String],
+                                owned_conf='alt2',
+                                negative_csts=[SyncScope.Qty])
+
+     sc = NodeSemanticsCriteria(mandatory_criteria=['sem1', 'sem2'])
+
+     rnode.get_reachable_nodes(internals_criteria=ic, semantics_criteria=sc)
+
+  Obviously, you don't need all these criteria for retrieving such node. It's only for
+  exercise.
+
+
+The Node Dictionary Interface
+=============================
+
+The :class:`fuzzfmk.data_model.Node` implements the dictionary interface, which means the
+following operation are possible on a node:
+
+.. code-block:: python
+   :linenos:
+
+   node[key]           # reading operation
+
+   node[key] = value   # writing operation
+
+As a ``key``, you can provide:
+
+- A path regexp (where the node on which the method is called is considered as the root) to the
+  node you want to reach. If multiple nodes match the path regexp, the first one will be returned
+  (or ``None`` if the path match nothing). It is equivalent to calling
+  :meth:`fuzzfmk.data_model.Node.get_node_by_path` on the node and providing the parameter
+  ``path_regexp`` with your path.
+
+  The following python code snippet illustrate the access to the node named ``len`` to
+  retrieve its byte string representation:
+
+   .. code-block:: python
+      :linenos:
+
+      rnode['ex/data_group/len$'].to_bytes()
+
+      # same as:
+      rnode.get_node_by_path('ex/data_group/len$').to_bytes()
+
+
+- A :class:`fuzzfmk.data_model.NodeInternalsCriteria` that match the internal
+  attributes of interest of the nodes you want to retrieve and which are reachable from the
+  current one. It is equivalent to calling :meth:`fuzzfmk.data_model.Node.get_reachable_nodes`
+  on the node and providing the parameter ``internals_criteria`` with your criteria object. A
+  list will always be returned, either empty or containing the nodes of interest.
+
+- A :class:`fuzzfmk.data_model.NodeSemanticsCriteria` that match the internal
+  attributes of interest of the nodes you want to retrieve and which are reachable from the
+  current one. It is equivalent to calling :meth:`fuzzfmk.data_model.Node.get_reachable_nodes`
+  on the node and providing the parameter ``semantics_criteria`` with the criteria object. A list
+  will always be returned, either empty or containing the nodes of interest.
+
+
+.. seealso:: To learn how to create criteria objects refer to :ref:`dmanip:search`.
+
+
+As a ``value``, you can provide:
+
+- A :class:`fuzzfmk.data_model.Node`: In this case the method
+  :meth:`fuzzfmk.data_model.Node.set_contents` will be called on the node with the *node* as
+  parameter.
+
+- A :class:`fuzzfmk.data_model.NodeSemantics`: In this case the method
+  :meth:`fuzzfmk.data_model.Node.set_semantics` will be called on the node with the *semantics* as
+  parameter.
+
+- A python integer: In this case the method :meth:`fuzzfmk.value_types.INT.set_raw_values` of the
+  *INT* object embedded in the targeted node will be called with the *integer* as parameter.
+
+- A byte string: In this case the method :meth:`fuzzfmk.data_model.Node.absorb` will be called
+  on the node with the *byte string* as parameter.
+
+
+.. warning:: These methods should generally be called on a frozen graph.
+
+Change a Node
+=============
+
+You can change the content of a specific node by absorbing a new content (refer to
+:ref:`dmanip:abs`).
+
+You can also temporarily change the node value of a terminal node (until the next time
+:meth:`fuzzfmk.data_model.Node.unfreeze` is called on it) with the method
+:meth:`fuzzfmk.data_model.Node.set_frozen_value` (refer to :ref:`dmanip:freeze`).
+
+But if you want to make some more disruptive change and change a terminal
+node to a non-terminal node for instance, you have two options.
+Either you do it from scratch and you leverage the function described in the section
+:ref:`dmanip:node`. For instance:
+
+.. code-block:: python
+   :linenos:
+
+   node_to_change.set_values(value_type=String(max_sz=10))
+
+Or you can do it by replacing the content of one node with another one. That allows you for
+instance to add a data from a model to another model. To illustrate this possibility
+let's consider the following code that change the node ``data0`` of our data
+model example with an USB ``STRING`` descriptor (yes, that does not make sense, but you can do
+it if you like ;).
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 10
+
+    from fuzzfmk.plumbing import *
+
+    fmk = FmkPlumbing()
+    fmk.run_project(name='tuto')
+
+    usb_str = fmk.dm.get_external_node(dm_name='usb', data_id='STR')
+
+    data = fmk.get_data(['EX'])      # Return a Data container on the data model example
+
+    data.node['ex/data0'] = usb_str  # Perform the substitution
+
+    data.show()                      # Data.show() will call .show() on the embedded node
+
+
+.. note:: For abstracting away the data model from the rest of the framework, ``fuddly`` uses the
+   specific class :meth:`fuzzfmk.data_model.Data` which acts as a data container.
+
+The result is shown below:
+
+.. figure::  images/ex_subst_show.png
+   :align:   center
+   :scale:   100 %
+
+
+.. warning:: Releasing constraints (like a CRC, an offset, a length, ...) of an altered
+   data can be useful if you want ``fuddly`` to automatically recomputes the constraint for you and
+   still comply to the model. Refer to :ref:`dmanip:freeze`.
+
+
+.. _dmanip:prop:
+
+Operations on Node Properties and Attributes
+--------------------------------------------
+
+The following methods enable you to retrieve the kind of content of the node. The provided answer is
+for the current configuration (refer to :ref:`dmanip:conf`) if the ``conf`` parameter is not
+provided:
+
++ :meth:`fuzzfmk.data_model.Node.is_nonterm`
++ :meth:`fuzzfmk.data_model.Node.is_typed_value`
++ :meth:`fuzzfmk.data_model.Node.is_genfunc`
++ :meth:`fuzzfmk.data_model.Node.is_func`
+
+
+Checking if a node is frozen (refer to :ref:`dmanip:freeze`) can be done thanks to the method:
+
++ :meth:`fuzzfmk.data_model.Node.is_frozen`
+
+The following methods enable you to change specific node properties or attributes:
+
++ Methods related to the keyword ``fuzz_weight`` described in the section :ref:`dm:keywords`:
+
+   - :meth:`fuzzfmk.data_model.Node.set_fuzz_weight`
+   - :meth:`fuzzfmk.data_model.Node.get_fuzz_weight`
+
++ Methods related to the keywords ``determinist``, ``random``, ``finite`` and ``infinite``
+  described in the section :ref:`dm:keywords`:
+
+   - :meth:`fuzzfmk.data_model.Node.make_determinist`
+   - :meth:`fuzzfmk.data_model.Node.make_random`
+   - :meth:`fuzzfmk.data_model.Node.make_finite`
+   - :meth:`fuzzfmk.data_model.Node.make_infinite`
+
++ Methods to deal with node attributes and related to the keywords ``set_attrs`` and
+  ``clear_attrs`` described in the section :ref:`dm:keywords`:
+
+   - :meth:`fuzzfmk.data_model.Node.set_attr`
+   - :meth:`fuzzfmk.data_model.Node.clear_attr`
+   - :meth:`fuzzfmk.data_model.Node.is_attr_set`
+
+You can test the compliance of a node with syntactic and/or semantic criteria with the method
+:meth:`fuzzfmk.data_model.Node.compliant_with`. Refer to the section :ref:`dmanip:search` to
+learn how to specify criteria.
+
+Any object can be added to a node as a private attribute. The private object should support the
+``__copy__`` interface. To set and retrieve a private object the following methods are provided:
+
+- :meth:`fuzzfmk.data_model.Node.set_private`
+- :meth:`fuzzfmk.data_model.Node.get_private`
+
+
+Node semantics can be defined to view the data model in a specific way, which boils down to
+be able to search for nodes based on semantic criteria (refer to :ref:`dmanip:search`).
+To set semantics on nodes or to retrieve them the following methods have to be used:
+
+- :meth:`fuzzfmk.data_model.Node.set_semantics`: Take a list of strings (that capture the
+  semantic) or a :class:`fuzzfmk.data_model.NodeSemantics`
+- :meth:`fuzzfmk.data_model.Node.get_semantics`: Returns a :class:`fuzzfmk.data_model.NodeSemantics`
 
 
 
-Other Primitives
-================
+.. _dmanip:conf:
 
-.. todo:: discuss on primitives like: get_path_from, show, ...
+Node Configurations
+-------------------
+
+Alternative node content can be added dynamically to any node of a graph. This is called a *node
+configuration* and everything that characterize a node---its type: non-terminal, terminal,
+generator; its attributes; its links with other nodes; and so on---are included within. A node is
+then a receptacle for an arbitrary number of *configurations*.
+
+Configuration management is based on the following methods:
+
+- :meth:`fuzzfmk.data_model.Node.add_conf`: To add a new configuration.
+- :meth:`fuzzfmk.data_model.Node.remove_conf`: To remove a configuration based on its name.
+- :meth:`fuzzfmk.data_model.Node.is_conf_existing`: To check a configuration existence based on
+  its name.
+- :meth:`fuzzfmk.data_model.Node.set_current_conf`: To change the current configuration of a node
+  with the one whose the name is provided as a parameter.
+- :meth:`fuzzfmk.data_model.Node.get_current_conf`: To retrieve the name of the current node
+  configuration.
+- :meth:`fuzzfmk.data_model.Node.gather_alt_confs`: to gather all configuration names defined in
+  the subgraph where the root is the node on which the method is called.
+
+In what follows, we illustrate some node configuration change based on our data model example
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 4
+
+    rnode.freeze()   # We consider there is at least 2 'data2' nodes
+
+    # We change the configuration of the second 'data2' node
+    rnode['ex/data_group/data2:2'].set_current_conf('alt2', ignore_entanglement=True)
+    rnode['ex/data_group/data2:2'].unfreeze()
+
+    rnode.show()
+
+
+.. seealso:: Refer to :ref:`dmanip:entangle` about the parameter ``ignore_entanglement``.
+
+
+If you want to act on a specific configuration of a node without changing first its configuration,
+you can leverage the ``conf`` parameter of the methods that support it. For instance, all the
+methods used for setting the content of a node (refer to :ref:`dmanip:node`) are configuration aware.
+
+.. note::
+   If you need to access to the node internals (:attr:`fuzzfmk.data_model.NodeInternals`) the
+   following attributes are provided:
+
+   - :attr:`fuzzfmk.data_model.Node.cc`: to access to the node internals of the current
+     configuration
+   - :attr:`fuzzfmk.data_model.Node.c`: dictionary to access to the node internals of
+     any configuration based on their name.
+
+
+Node Corruption Infrastructure
+------------------------------
+
+You can also leverage the *Node-corruption Infrastructure* (based on hooks within the code) for
+handling various corruption types easily. This infrastructure is especially used by the
+generic disruptor ``tSTRUCT`` (refer to :ref:`dis:generic-disruptors`).
+This infrastructure is based on the following primitives:
+
+- :meth:`fuzzfmk.data_model.Env.add_node_to_corrupt`
+
+- :meth:`fuzzfmk.data_model.Env.remove_node_to_corrupt`
+
+The typical way to perform a corruption with this infrastructure is illustrated in what follows.
+The example perform a corruption that change from the model the allowed amount for a specific
+node (``targeted_node``) of a graph (referenced by ``rnode``) that can be created during the data
+generation from the graph.
+
+.. code-block:: python
+   :linenos:
+
+    mini = 8
+    maxi = 10
+    rnode.env.add_node_to_corrupt(targeted_node, corrupt_type=Node.CORRUPT_NODE_QTY,
+                                  corrupt_op=lambda x, y: (mini, maxi))
+
+    corrupt_rnode = Node(rnode.name, base_node=rnode, ignore_frozen_state=False, new_env=True)
+    rnode.env.remove_node_to_corrupt(targeted_node)
+
+From now on, you have still a clean graph referenced by ``rnode``, and a corrupted one referenced
+by ``corrupt_rnode``. You can now instanciate some data from ``corrupt_rnode`` that complies to an
+altered data model (because we change the grammar that constrain the data generation).
+
+The corruption operations currently defined are:
+
+- :attr:`fuzzfmk.data_model.Node.CORRUPT_NODE_QTY`
+- :attr:`fuzzfmk.data_model.Node.CORRUPT_QTY_SYNC`
+- :attr:`fuzzfmk.data_model.Node.CORRUPT_EXIST_COND`
+
+
+.. _dmanip:abs:
+
+Byte String Absorption
+----------------------
+
+This feature is described in the tutorial. Refer to :ref:`tuto:dm-absorption` to learn about it.
+The methods which are involved in this process are:
+
+- :meth:`fuzzfmk.data_model.Node.absorb`
+- :meth:`fuzzfmk.data_model.Node.set_absorb_helper`
+- :meth:`fuzzfmk.data_model.Node.enforce_absorb_constraints`
+
+
+
+Miscellaneous Primitives
+========================
+
+- :meth:`fuzzfmk.data_model.Node.get_path_from`: if it exists, return the first path to this
+  node from the node provided as parameter; otherwise return None.
+
+- :meth:`fuzzfmk.data_model.Node.get_all_paths_from`: similar as the previous method, except it
+  returns a list of all the possible paths.
+
+
+.. _dmanip:entangle:
+
+Entangled Nodes
+===============
+
+Node descriptors that contain the ``qty`` attribute may trigger the creation of multiple nodes
+based on the same description. These nodes are created in a specific way to make them react as a
+group. We call the nodes of such a group: ``entangled nodes``. If you perform a modification on
+any one node of the group (by calling a *setter* on the node for instance), all the other
+nodes will be affected the same way.
+
+Some node methods are immune to the entanglement, especially all the *getters*, others enable you to
+temporarily break the entanglement through the parameter ``ignore_entanglement``.

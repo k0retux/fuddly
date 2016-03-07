@@ -30,7 +30,6 @@ List of features
 
 What's still missing
 --------------------
-+ Full documentation
 + Refer to TODO file
 
 About documentation

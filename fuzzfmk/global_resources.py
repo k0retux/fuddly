@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -25,7 +25,7 @@ import os
 import fuzzfmk
 import sys
 import inspect
-from libs.utils import ensure_dir
+from libs.utils import ensure_dir, ensure_file
 
 fuddly_version = '0.22.3'
 
@@ -35,6 +35,8 @@ fuzzfmk_folder  = '.' if fuzzfmk_folder == '' else fuzzfmk_folder
 
 app_folder = os.path.dirname(fuzzfmk_folder)
 app_folder = '.' if app_folder == '' else app_folder
+projects_folder = app_folder + os.sep + 'projects' + os.sep
+data_models_folder = app_folder + os.sep + 'data_models' + os.sep
 
 fuddly_data_folder = os.path.expanduser('~' + os.sep + 'fuddly_data' + os.sep)
 if not os.path.exists(fuddly_data_folder):
@@ -53,6 +55,13 @@ external_libs_folder = fuddly_data_folder + os.sep + 'external_libs' + os.sep
 ensure_dir(external_libs_folder)
 external_tools_folder = fuddly_data_folder + os.sep + 'external_tools' + os.sep
 ensure_dir(external_tools_folder)
+
+user_projects_folder = fuddly_data_folder + 'user_projects' + os.sep
+ensure_dir(user_projects_folder)
+ensure_file(user_projects_folder + os.sep + '__init__.py')
+user_data_models_folder = fuddly_data_folder + 'user_data_models' + os.sep
+ensure_dir(user_data_models_folder)
+ensure_file(user_data_models_folder + os.sep + '__init__.py')
 
 fmk_folder = app_folder + os.sep + 'fuzzfmk' + os.sep
 

@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -93,7 +93,7 @@ class USB_DataModel(DataModel):
         e_blength = Node('bLength', value_type=UINT8(int_list=[9]))
         e_bdesctype = Node('bDescType', value_type=UINT8(int_list=[USB_DEFS.DT_CONFIGURATION]))
         def conf_len(node):
-            intg = min(9+len(node.get_flatten_value()), 2**16-1)
+            intg = min(9 + len(node.to_bytes()), 2 ** 16 - 1)
             e = Node('dyn', value_type=UINT16_le(int_list=[intg]))
             return e
         e_wtotlen_gen = Node('wTotalLength')
@@ -431,7 +431,7 @@ class USB_DataModel(DataModel):
 
         e_langid_tbl_contents = Node('contents')
         def langid_len(node):
-            intg = 2+len(node.get_flatten_value())
+            intg = 2+len(node.to_bytes())
             if intg > 255:
                 intg = 255
             e = Node('dyn', value_type=UINT8(int_list=[intg]))
@@ -464,7 +464,7 @@ class USB_DataModel(DataModel):
         e_str_contents.set_fuzz_weight(5)
         
         def str_len(node):
-            intg = 2+len(node.get_flatten_value())
+            intg = 2+len(node.to_bytes())
             if intg > 255:
                 intg = 255
             e = Node('dyn', value_type=UINT8(int_list=[intg]))

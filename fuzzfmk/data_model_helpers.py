@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -519,7 +519,8 @@ class ModelHelper(object):
         # Import description keys
         'import_from', 'data_id',        
         # node properties description keys
-        'determinist', 'random', 'mutable', 'clear_attrs', 'set_attrs',
+        'determinist', 'random', 'finite', 'infinite', 'mutable',
+        'clear_attrs', 'set_attrs',
         'absorb_csts', 'absorb_helper',
         'semantics', 'fuzz_weight',
         'sync_qty_with', 'exists_if', 'exists_if_not',
@@ -856,6 +857,12 @@ class ModelHelper(object):
         param = desc.get('random', None)
         if param is not None:
             node.make_random(conf=conf)     
+        param = desc.get('finite', None)
+        if param is not None:
+            node.make_finite(conf=conf)
+        param = desc.get('infinite', None)
+        if param is not None:
+            node.make_infinite(conf=conf)
         param = desc.get('clear_attrs', None)
         if param is not None:
             for a in param:

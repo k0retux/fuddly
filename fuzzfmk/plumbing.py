@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -57,6 +57,14 @@ import projects
 
 from fuzzfmk.global_resources import *
 from libs.utils import *
+
+sys.path.insert(0, gr.fuddly_data_folder)
+sys.path.insert(0, gr.external_libs_folder)
+
+user_dm_mod = os.path.basename(os.path.normpath(gr.user_data_models_folder))
+user_prj_mod = os.path.basename(os.path.normpath(gr.user_projects_folder))
+exec('import ' + user_dm_mod)
+exec('import ' + user_prj_mod)
 
 sig_int_handler = signal.getsignal(signal.SIGINT)
 
@@ -216,17 +224,23 @@ class FmkPlumbing(object):
         self._saved_group_id = None  # used by self._recover_target()
 
         self.enable_wkspace()
+
         self.get_data_models()
         self.get_projects()
 
+        print(colorize(FontStyle.BOLD + '='*44 + '[ Fuddly Data Folder Information ]==\n',
+                       rgb=Color.FMKINFOGROUP))
+
         if hasattr(gr, 'new_fuddly_data_folder'):
-            print(colorize('\n'+FontStyle.BOLD + '*** New Fuddly Data Folder Has Been Created ***',
+            print(colorize(FontStyle.BOLD + \
+                           ' *** New Fuddly Data Folder Has Been Created ***\n',
                            rgb=Color.FMKINFO_HLIGHT))
-        else:
-            print(colorize('\n'+FontStyle.BOLD + '*** Fuddly Data Folder Information ***',
-                           rgb=Color.FMKINFOGROUP))
-        print(colorize(' [contains: fmkDB.db, logs, imported/exported data, ...]', rgb=Color.FMKSUBINFO))
-        print(colorize(' --> path: {:s}'.format(gr.fuddly_data_folder), rgb=Color.FMKINFO))
+
+        print(colorize(' --> path: {:s}'.format(gr.fuddly_data_folder),
+                       rgb=Color.FMKINFO))
+        print(colorize(' --> contains: - fmkDB.db, logs, imported/exported data, ...\n'
+                       '               - user projects and user data models',
+                       rgb=Color.FMKSUBINFO))
 
     def set_error(self, msg='', context=None, code=Error.Reserved):
         self.error = True
@@ -444,21 +458,25 @@ class FmkPlumbing(object):
 
     @EnforceOrder(initial_func=True, final_state='get_projs')
     def get_data_models(self):
-        dm_dir = 'data_models'
-        path = os.path.join(app_folder, dm_dir)
+
         data_models = collections.OrderedDict()
-        for (dirpath, dirnames, filenames) in os.walk(path):
-            if filenames:
-                data_models[dm_dir] = []
-                data_models[dm_dir].extend(filenames)
-            for d in dirnames:
-                full_path = os.path.join(path, d)
-                rel_path = os.path.join(dm_dir, d)
-                data_models[rel_path] = []
-                for (dth, dnames, fnm) in os.walk(full_path):
-                    data_models[rel_path].extend(fnm)
-                    break
-            break
+        def populate_data_models(path):
+            dm_dir = os.path.basename(os.path.normpath(path))
+            for (dirpath, dirnames, filenames) in os.walk(path):
+                if filenames:
+                    data_models[dm_dir] = []
+                    data_models[dm_dir].extend(filenames)
+                for d in dirnames:
+                    full_path = os.path.join(path, d)
+                    rel_path = os.path.join(dm_dir, d)
+                    data_models[rel_path] = []
+                    for (dth, dnames, fnm) in os.walk(full_path):
+                        data_models[rel_path].extend(fnm)
+                        break
+                break
+
+        populate_data_models(gr.data_models_folder)
+        populate_data_models(gr.user_data_models_folder)
 
         dms = copy.copy(data_models)
         for k in dms:
@@ -582,21 +600,25 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['get_projs'], final_state='20_load_prj')
     def get_projects(self):
-        prj_dir = 'projects'
-        path = os.path.join(app_folder, prj_dir)
+
         projects = collections.OrderedDict()
-        for (dirpath, dirnames, filenames) in os.walk(path):
-            if filenames:
-                projects[prj_dir] = []
-                projects[prj_dir].extend(filenames)
-            for d in dirnames:
-                full_path = os.path.join(path, d)
-                rel_path = os.path.join(prj_dir, d)
-                projects[rel_path] = []
-                for (dth, dnames, fnm) in os.walk(full_path):
-                    projects[rel_path].extend(fnm)
-                    break
-            break
+        def populate_projects(path):
+            prj_dir = os.path.basename(os.path.normpath(path))
+            for (dirpath, dirnames, filenames) in os.walk(path):
+                if filenames:
+                    projects[prj_dir] = []
+                    projects[prj_dir].extend(filenames)
+                for d in dirnames:
+                    full_path = os.path.join(path, d)
+                    rel_path = os.path.join(prj_dir, d)
+                    projects[rel_path] = []
+                    for (dth, dnames, fnm) in os.walk(full_path):
+                        projects[rel_path].extend(fnm)
+                        break
+                break
+
+        populate_projects(gr.projects_folder)
+        populate_projects(gr.user_projects_folder)
 
         prjs = copy.copy(projects)
         for k in prjs:
@@ -629,8 +651,6 @@ class FmkPlumbing(object):
 
         self.fmkDB.commit()
 
-        print(colorize(FontStyle.BOLD + "="*80, rgb=Color.FMKINFOGROUP))
-
 
     def _import_project(self, prefix, name, reload_prj=False):
 
@@ -648,6 +668,7 @@ class FmkPlumbing(object):
                 print(colorize("*** Problem during reload of '%s_proj.py' ***" % (name), rgb=Color.ERROR))
             else:
                 print(colorize("*** Problem during import of '%s_proj.py' ***" % (name), rgb=Color.ERROR))
+            print(prefix)
             print('-'*60)
             traceback.print_exc(file=sys.stdout)
             print('-'*60)

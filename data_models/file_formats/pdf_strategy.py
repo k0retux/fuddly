@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -46,7 +46,7 @@ class g_pdf_bomb02(Generator):
 
     def setup(self, dm, user_input):
         self.pdf = dm.get_data('PDF_basic')
-        self.pdf.get_flatten_value()
+        self.pdf.to_bytes()
 
         return True
 

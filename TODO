@@ -1,11 +1,11 @@
 [NEW FEATURES]
 
-- implement new disruptors (syntactic & semantic)
-- implement new node types that leverage python-constraint, or more
-  powerfull constraint programming library
+- Implement a QEMU Target
+- Implement a GDB Target
 - PIN DBI integration for x86 targets
+- Implement new node types that leverage python-constraint, or more
+  powerfull constraint programming library
 
 [ENHANCEMENT]
 
-- clean up test.py
-- complete documentation
+- Clean up test.py

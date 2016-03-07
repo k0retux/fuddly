@@ -1,5 +1,5 @@
-Data Model
-**********
+Data Modeling
+*************
 
 .. _vt:value-types:
 
@@ -661,6 +661,15 @@ determinist
 
 random
   Make the node behave in a random way.
+
+finite
+  Make the node *finite*, meaning that it will exhaust at some point
+  (meaning that it has cycled over all its possible values or shapes)
+  When the situation occurs, a notification is posted in the node
+  environment (refer to :ref:`data-manip`)
+
+infinite
+  Make the node *infinite*, meaning that it will always provide values.
 
 mutable
   Make the node mutable. It is a shortcut for the node attribute

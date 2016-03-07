@@ -1,6 +1,6 @@
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -4151,7 +4151,7 @@ class Node(object):
         to fuzz. If set, this attribute is used by some generic
         *disruptors* (the ones that rely on a ModelWalker object---refer to
         fuzzing_primitives.py)
-      depth (int): Depth of the node wwithin the graph from a specific given
+      depth (int): Depth of the node within the graph from a specific given
         root. Will be computed lazily (only when requested).
       tmp_ref_count (int): (internal use) Temporarily used during the creation of multiple
         instance of a same node, especially in order to generate unique names.
@@ -5084,8 +5084,6 @@ class Node(object):
                 return n
         else:
             return None
-        # "*** ERROR: get_path_from() --> Node '{:s}' " \
-        #         "not reachable from '{:s}'***".format(self.name, node.name)
 
 
     def get_all_paths_from(self, node, conf=None):
@@ -5200,8 +5198,6 @@ class Node(object):
             val = b''.join(val)
 
         return val
-
-    get_flatten_value = to_bytes
 
     def to_str(self, conf=None, recursive=True):
         val = self.to_bytes(conf=conf, recursive=recursive)
@@ -5553,19 +5549,41 @@ class Node(object):
             raise ValueError
 
     def __setitem__(self, key, val):
-        if isinstance(val, Node):
-            self[key].set_contents(val)
-        elif isinstance(val, NodeSemantics):
-            self[key].set_semantics(val)
-        elif isinstance(val, int):
-            # Method defined by INT object (within TypedValue nodes)
-            self[key].set_raw_values(val)
-        else:
-            status, off, size, name = self[key].absorb(convert_to_internal_repr(val),
-                                                       constraints=AbsNoCsts())
-            if status != AbsorbStatus.FullyAbsorbed:
-                raise ValueError
+        nodes = self[key]
+        if not nodes:
+            raise ValueError
 
+        if isinstance(val, Node):
+            if isinstance(nodes, Node):
+                nodes.set_contents(val)
+            else:
+                for n in nodes:
+                    n.set_contents(val)
+        elif isinstance(val, NodeSemantics):
+            if isinstance(nodes, Node):
+                nodes.set_semantics(val)
+            else:
+                for n in nodes:
+                    n.set_semantics(val)
+        elif isinstance(val, int):
+            if isinstance(nodes, Node):
+                # Method defined by INT object (within TypedValue nodes)
+                nodes.set_raw_values(val)
+            else:
+                for n in nodes:
+                    n.set_raw_values(val)
+        else:
+            if isinstance(nodes, Node):
+                status, off, size, name = nodes.absorb(convert_to_internal_repr(val),
+                                                       constraints=AbsNoCsts())
+                if status != AbsorbStatus.FullyAbsorbed:
+                    raise ValueError
+            else:
+                for n in nodes:
+                    status, off, size, name = nodes.absorb(convert_to_internal_repr(val),
+                                                           constraints=AbsNoCsts())
+                    if status != AbsorbStatus.FullyAbsorbed:
+                        raise ValueError
 
     def __getattr__(self, name):
         internals = self.__getattribute__('internals')[self.current_conf]

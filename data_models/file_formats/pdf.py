@@ -2,7 +2,7 @@
 
 ################################################################################
 #
-#  Copyright 2014-2015 Eric Lacombe <eric.lacombe@security-labs.org>
+#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
 #
 ################################################################################
 #
@@ -426,14 +426,14 @@ class PDFObj(object):
                                           prefix = ["/Filter "])
         
         def gen_length_func(e_stream):
-            return Node('length', value_type=INT_str(int_list=[len(e_stream.get_flatten_value())]))
+            return Node('length', value_type=INT_str(int_list=[len(e_stream.to_bytes())]))
 
         if use_generator_func:
             e_length = Node('length_wrapper')
             e_length.set_generator_func(gen_length_func, func_node_arg=e_stream)
             e_length.set_attr(NodeInternals.CloneExtNodeArgs)
         else:
-            e_length = Node('length', value_type=INT_str(int_list=[len(e_stream.get_flatten_value())]))           
+            e_length = Node('length', value_type=INT_str(int_list=[len(e_stream.to_bytes())]))
 
         e_length_entry = make_wrapped_node('E_Length',
                                           node = e_length,
@@ -464,7 +464,7 @@ class PDFObj(object):
 
         name = 'IMG_XObj' + name
 
-        length = len(PDFObj.jpg_node.get_flatten_value())
+        length = len(PDFObj.jpg_node.to_bytes())
         priv = PDFObj.jpg_node.get_private()
         w, h = priv['width'], priv['height']
 
@@ -780,7 +780,7 @@ class PDFObj(object):
 
             e_hdr, e_pdfobjs_gen = objs
 
-            hdr = e_hdr.get_flatten_value()
+            hdr = e_hdr.to_bytes()
             header_len = len(hdr)
 
             node_list = []
@@ -795,7 +795,7 @@ class PDFObj(object):
             # node_list last Node is the catalog
             catalog_id = catalog.get_private()
 
-            val_list = list(map(lambda x: x.get_flatten_value(), node_list))
+            val_list = list(map(lambda x: x.to_bytes(), node_list))
             sorted_node_list = sorted(node_list, key=lambda x: x.get_private())
 
             nb_objs = len(node_list) + 1  # we have to count the object 0
@@ -831,7 +831,7 @@ class PDFObj(object):
 
             e_hdr, e_pdfobjs_gen = objs
 
-            hdr = e_hdr.get_flatten_value()
+            hdr = e_hdr.to_bytes()
             header_len = len(hdr)
 
             node_list = []
@@ -846,7 +846,7 @@ class PDFObj(object):
             # node_list last Node is the catalog
             catalog_id = catalog.get_private()
 
-            val_list = list(map(lambda x: x.get_flatten_value(), node_list))
+            val_list = list(map(lambda x: x.to_bytes(), node_list))
             sorted_node_list = sorted(node_list, key=lambda x: x.get_private())
 
             nb_objs = len(node_list) + 1  # we have to count the object 0
@@ -869,7 +869,7 @@ class PDFObj(object):
 
             e_random_obj = PDFObj.get_stream('random_obj', stream=b'RANDOM OBJECT!')
 
-            rand_obj_len = len(e_random_obj.get_flatten_value())
+            rand_obj_len = len(e_random_obj.to_bytes())
             
             incomplete_trailer = ("trailer\n"
                                   "<< /Size {size:d}\n"
@@ -1224,25 +1224,25 @@ if __name__ == "__main__":
 
     e = PDFObj.get_number('test')
     for i in range(60):
-        print(e.get_flatten_value())
+        print(e.to_bytes())
         e.unfreeze()
 
     print("\n[ PDF Names ]\n")
 
     e = PDFObj.get_name('test')
     for i in range(10):
-        print(e.get_flatten_value())
+        print(e.to_bytes())
         e.unfreeze()
     print("\n --- invalid names:\n")
     for i in range(10):
         s = NodeSemanticsCriteria(mandatory_criteria=['PDF_name', 'RAW'])
         l = e.get_reachable_nodes(semantics_criteria=s)
         for node in l: node.set_current_conf('ALT', recursive=False)
-        print(e.get_flatten_value())
+        print(e.to_bytes())
         for node in l: node.set_current_conf('MAIN', reverse=True, recursive=False)
         e.unfreeze_all()
 
-        print(e.get_flatten_value(conf='ALT'))
+        print(e.to_bytes(conf='ALT'))
         e.unfreeze_all()
 
     print("\n --- invalid delim:\n")
@@ -1250,7 +1250,7 @@ if __name__ == "__main__":
         s = NodeSemanticsCriteria(mandatory_criteria=['delim'])
         l = e.get_reachable_nodes(semantics_criteria=s)
         for node in l: node.set_current_conf('ALT', recursive=False)
-        print(e.get_flatten_value())
+        print(e.to_bytes())
         for node in l: node.set_current_conf('MAIN', reverse=True, recursive=False)
         e.unfreeze_all()
 
@@ -1258,14 +1258,14 @@ if __name__ == "__main__":
 
     e = PDFObj.get_string('test')
     for i in range(10):
-        print(e.get_flatten_value())
+        print(e.to_bytes())
         e.unfreeze()
     print("\n --- invalid names:\n")
     for i in range(10):
         s = NodeSemanticsCriteria(mandatory_criteria=['PDF_string', 'RAW'])
         l = e.get_reachable_nodes(semantics_criteria=s)
         for node in l: node.set_current_conf('ALT', recursive=False)
-        msg = e.get_flatten_value()
+        msg = e.to_bytes()
         for node in l: node.set_current_conf('MAIN', reverse=True, recursive=False)
         print(msg[:1000])
         e.unfreeze_all()
@@ -1274,7 +1274,7 @@ if __name__ == "__main__":
     for i in range(10):
         l = e.get_reachable_nodes(semantics_criteria=NodeSemanticsCriteria(mandatory_criteria=['delim']))
         for node in l: node.set_current_conf('ALT', recursive=False)
-        print(e.get_flatten_value())
+        print(e.to_bytes())
         for node in l: node.set_current_conf('MAIN', reverse=True, recursive=False)
         e.unfreeze_all()
 
@@ -1282,13 +1282,13 @@ if __name__ == "__main__":
 
     for i in range(10):
         e = PDFObj.get_string('test')
-        print(e.get_flatten_value())
+        print(e.to_bytes())
         print('id: ', e.get_private())
 
     print("\n[ Tests copy and private attribute ]\n")
 
     e2 = Node('test', base_node=e)
-    print(e2.get_flatten_value())
+    print(e2.to_bytes())
     print('id(e2): ', e2.get_private())
     
     e2.set_private('OK!')
@@ -1301,8 +1301,8 @@ if __name__ == "__main__":
 
     pdf = dm.get_data('PDF_basic')
 
-    val = pdf.get_flatten_value()
-    val2 = pdf.get_flatten_value()
+    val = pdf.to_bytes()
+    val2 = pdf.to_bytes()
 
     print('freezen? ', val == val2)
     if val != val2:
@@ -1312,16 +1312,16 @@ if __name__ == "__main__":
     with open(gr.workspace_folder + 'TEST_FUZZING_PDF-orig' + '.pdf', 'wb') as f:
         f.write(val)
 
-    leaf0 = pdf.get_node_by_path('PDF.*leaf_0-0$').get_flatten_value()
+    leaf0 = pdf.get_node_by_path('PDF.*leaf_0-0$').to_bytes()
     pdf.set_current_conf('ALT', root_regexp='PDF.*leaf_0-0$')
-    leaf1 = pdf.get_node_by_path('PDF.*leaf_0-0$').get_flatten_value()
+    leaf1 = pdf.get_node_by_path('PDF.*leaf_0-0$').to_bytes()
 
     print(leaf0)
     print(leaf1)
 
     pdf.unfreeze()
 
-    val3 = pdf.get_flatten_value()
+    val3 = pdf.to_bytes()
     with open(gr.workspace_folder + 'TEST_FUZZING_PDF-big_page' + '.pdf', 'wb') as f:
         f.write(val3)
 
@@ -1335,7 +1335,7 @@ if __name__ == "__main__":
         print('DEBUG: ', e_id)
 
         pdf = dm.get_data(e_id)
-        pdf_buff[e_id] = pdf.get_flatten_value()
+        pdf_buff[e_id] = pdf.to_bytes()
 
         with open(gr.workspace_folder + e_id + '.pdf', 'wb') as f:
             f.write(pdf_buff[e_id])
