@@ -2353,10 +2353,10 @@ example (not really useful ;) of a basic probe is presented below:
    @probe(project)
    class my_first_probe(Probe):
 
-       def start(self, target, logger):
+       def start(self, dm, target, logger):
            self.cpt = 10
 
-       def main(self, target, logger):
+       def main(self, dm, target, logger):
            self.cpt -= 1
            return ProbeStatus(self.cpt)
 
@@ -2370,13 +2370,13 @@ information from the target is given here under:
    @blocking_probe(project)
    class health_check(Probe):
 
-       def start(self, target, logger):
+       def start(self, dm, target, logger):
            self.pstatus = ProbeStatus(0)
 
        def stop(self, target, logger):
            pass
 
-       def main(self, target, logger):
+       def main(self, dm, target, logger):
 
            def check(target):
                status = 0

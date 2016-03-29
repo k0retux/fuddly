@@ -330,6 +330,10 @@ class FmkPlumbing(object):
             if not ok:
                 return False
 
+            self.prj.set_data_model(self.dm)
+            if hasattr(self, 'tg'):
+                self.tg.set_data_model(self.dm)
+
             self._fmkDB_insert_dm_and_dmakers(self.dm.name, dm_params['tactics'])
             self.fmkDB.commit()
 
@@ -1050,7 +1054,9 @@ class FmkPlumbing(object):
         self.tg_name = self._get_detailed_target_desc(self.tg)
 
         self.tg._set_logger(self.lg)
+        self.tg.set_data_model(self.dm)
         self.prj.set_target(self.tg)
+        self.prj.set_data_model(self.dm)
 
         if self.__first_loading:
             self.__first_loading = False
@@ -1106,6 +1112,9 @@ class FmkPlumbing(object):
         if self.__is_started():
             self.cleanup_all_dmakers()
         self.dm = dm
+        self.prj.set_data_model(self.dm)
+        if hasattr(self, 'tg'):
+            self.tg.set_data_model(self.dm)
         if self.__is_started():
             self._cleanup_dm_attrs_from_fmk()
             ok = self._load_data_model()
@@ -1175,6 +1184,9 @@ class FmkPlumbing(object):
             self.__dyngenerators_created[new_dm] = True
             self.__dynamic_generator_ids[new_dm] = dyn_gen_ids
             self.dm = new_dm
+            self.prj.set_data_model(self.dm)
+            if hasattr(self, 'tg'):
+                self.tg.set_data_model(self.dm)
 
         if self.__is_started():
             self._cleanup_dm_attrs_from_fmk()
@@ -2838,6 +2850,7 @@ class FmkShell(cmd.Cmd):
                 cont = input(msg)
             cont = cont.upper()
             if cont == 'Y' or cont == '':
+                self.fz.exit_fmk()
                 return True
             else:
                 return False

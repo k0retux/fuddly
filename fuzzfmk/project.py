@@ -33,6 +33,7 @@ class Project(object):
     default_dm = None
 
     def __init__(self):
+        self.probe_exports = {}
         self.probes = {}
         self.operators = {}
 
@@ -49,6 +50,8 @@ class Project(object):
     def set_monitor(self, monitor):
         self.monitor = monitor
 
+    def set_data_model(self, dm):
+        self.probe_exports['dm'] = dm
 
     def register_new_operator(self, name, obj):
 
@@ -131,7 +134,7 @@ class Project(object):
             evts = None
 
         th = threading.Thread(None, func, 'probe.' + name,
-                              args=(stop_event, evts, self.target, self.logger))
+                              args=(stop_event, evts, self.probe_exports, self.target, self.logger))
         th.start()
 
         lck.acquire()

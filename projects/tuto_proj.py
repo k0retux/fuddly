@@ -55,10 +55,10 @@ tg.set_timeout(fbk_timeout=5, sending_delay=3)
 @probe(project)
 class P1(Probe):
 
-    def start(self, target, logger):
+    def start(self, dm, target, logger):
         self.cpt = 0
 
-    def main(self, target, logger):
+    def main(self, dm, target, logger):
         self.cpt += 1
 
         return ProbeStatus(self.cpt)
@@ -67,10 +67,10 @@ class P1(Probe):
 @probe(project)
 class P2(Probe):
 
-    def start(self, target, logger):
+    def start(self, dm, target, logger):
         self.cpt = 10
 
-    def main(self, target, logger):
+    def main(self, dm, target, logger):
         self.cpt -= 1
 
         return ProbeStatus(self.cpt)
@@ -79,13 +79,13 @@ class P2(Probe):
 @blocking_probe(project)
 class health_check(Probe):
 
-    def start(self, target, logger):
+    def start(self, dm, target, logger):
         self.cpt = 0
 
-    def stop(self, target, logger):
+    def stop(self, dm, target, logger):
         pass
 
-    def main(self, target, logger):           
+    def main(self, dm, target, logger):
         # time.sleep(0.1)
 
         self.cpt += 1

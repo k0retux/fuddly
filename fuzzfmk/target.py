@@ -63,6 +63,9 @@ class Target(object):
     def _set_logger(self, logger):
         self._logger = logger
 
+    def set_data_model(self, dm):
+        self.current_dm = dm
+
     def _start(self):
         self._logger.print_console('*** Target initialization ***\n', nl_before=False, rgb=Color.COMPONENT_START)
         return self.start()
@@ -363,7 +366,7 @@ class NetworkTarget(Target):
 
         Args:
           fbk (bytes): feedback received by the target through a socket referenced by `ref`.
-          ref (string): user-defined reference of the socket used to retreive the feedback
+          ref (string): user-defined reference of the socket used to retrieve the feedback
         '''
         return fbk, ref
 

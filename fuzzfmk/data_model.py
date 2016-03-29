@@ -2611,7 +2611,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
                     new_node = Node(nid, base_node=base_node, ignore_frozen_state=ignore_fstate,
                                     accept_external_entanglement=True,
-                                    acceptance_set=(external_entangled_nodes + subnode_list))
+                                    acceptance_set=set(external_entangled_nodes + subnode_list))
                     new_node._reset_depth(parent_depth=base_node.depth-1)
 
                     # For dynamically created Node(), don't propagate the fuzz weight
@@ -3869,7 +3869,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
 
     def get_child_all_path(self, name, htable, conf, recursive):
-        if self.frozen_node_list:
+        if self.frozen_node_list is not None:
             iterable = self.frozen_node_list
         else:
             iterable = copy.copy(self.subnodes_set)
@@ -5351,9 +5351,9 @@ class Node(object):
             for n in node.c[conf].get_node_args():
                 if first:
                     first = False
-                    args += n.get_path_from(self, conf=conf)
+                    args += str(n.get_path_from(self, conf=conf))
                 else:
-                    args += ', ' + n.get_path_from(self, conf=conf)
+                    args += ', ' + str(n.get_path_from(self, conf=conf))
             if args is '':
                 args = 'None'
             return args
@@ -5393,7 +5393,7 @@ class Node(object):
             return smaller_depth
 
         # in case the node is not frozen
-        self.get_value()
+        self.freeze()
 
         htable = self.get_all_paths(conf=conf)
         l = []
