@@ -798,13 +798,13 @@ class NetworkTarget(Target):
         while dont_stop:
             ready_to_read = []
             for fd, ev in epobj.poll(timeout=0.2):
-                socket = fileno2fd[fd]
+                skt = fileno2fd[fd]
                 if ev != select.EPOLLIN:
-                    _check_and_handle_obsolete_socket(socket, error=ev, error_list=socket_errors)
-                    if socket in fbk_sockets:
-                        fbk_sockets.remove(socket)
+                    _check_and_handle_obsolete_socket(skt, error=ev, error_list=socket_errors)
+                    if skt in fbk_sockets:
+                        fbk_sockets.remove(skt)
                     continue
-                ready_to_read.append(socket)
+                ready_to_read.append(skt)
 
             now = datetime.datetime.now()
             duration = (now - t0).total_seconds()
@@ -817,7 +817,23 @@ class NetworkTarget(Target):
                         sz = NetworkTarget.CHUNK_SZ
                     else:
                         sz = min(fbk_lengths[s] - bytes_recd[s], NetworkTarget.CHUNK_SZ)
-                    chunk = s.recv(sz)
+
+                    retry = 0
+                    while retry < 3:
+                        try:
+                            chunk = s.recv(sz)
+                        except socket.error as serr:
+                            print('\n*** ERROR: ' + str(serr))
+                            chunk = b''
+                            if serr.errno == socket.errno.EAGAIN:
+                                retry += 1
+                                time.sleep(0.2)
+                                continue
+                            else:
+                                break
+                        else:
+                            break
+
                     if chunk == b'':
                         # print('\n*** NOTE: Nothing more to receive from : {!r}'.format(fbk_ids[s]))
                         fbk_sockets.remove(s)

@@ -801,7 +801,7 @@ class String(VT_Alt):
             val = bp.corrupt_bits(orig_val, n=1, ascii=self.ascii_mode)
             self.val_list_fuzzy.append(val)
         except:
-            print("Problematic (empty) val!")
+            print("\n*** Value is empty! --> skipping bitflip test case ***")
 
         sz = len(orig_val)
         sz_delta = self.max_sz - sz
