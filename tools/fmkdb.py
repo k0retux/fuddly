@@ -52,11 +52,15 @@ group.add_argument('-s', '--all-stats', action='store_true', help='show all stat
 
 group = parser.add_argument_group('Fuddly Database Information')
 group.add_argument('-i', '--info', type=int, metavar='DATA_ID',
-                   help='display information on data ID')
+                   help='display information on the specified data ID')
 group.add_argument('--info-by-date', nargs=2, metavar=('START','END'),
                    help='''display information on data sent between START and END '''
                         '''(date format 'Year/Month/Day' or 'Year/Month/Day-Hour' or
                         'Year/Month/Day-Hour:Minute')''')
+group.add_argument('--info-by-ids', nargs=2, metavar=('FIRST_DATA_ID','LAST_DATA_ID'), type=int,
+                   help='''display information on all the data included within the specified
+                   data ID range''')
+
 group.add_argument('--project', metavar='PROJECT_NAME',
                    help='restrict the data to be displayed to a specific project (expect --info-by-date)')
 
@@ -69,7 +73,7 @@ group.add_argument('--limit', type=int, default=600,
 
 group = parser.add_argument_group('Fuddly Database Operations')
 group.add_argument('--export-data', nargs=2, metavar=('FIRST_DATA_ID','LAST_DATA_ID'), type=int,
-                   help='extract data from provided data IDs')
+                   help='extract data from provided data ID range')
 group.add_argument('-e', '--export-one-data', type=int, metavar='DATA_ID',
                    help='extract data from the provided data ID')
 group.add_argument('--remove-data', type=int, metavar='DATA_ID',
@@ -339,36 +343,37 @@ def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limi
 
 if __name__ == "__main__":
 
-    args = parser.parse_known_args()
+    args = parser.parse_args()
 
-    fmkdb = args[0].fmkdb
+    fmkdb = args.fmkdb
     if fmkdb is not None and not os.path.isfile(fmkdb):
         print(colorize("*** ERROR: '{:s}' does not exist ***".format(fmkdb), rgb=Color.ERROR))
         sys.exit(-1)
 
-    verbose = args[0].verbose
-    no_color = args[0].no_color
+    verbose = args.verbose
+    no_color = args.no_color
     if no_color:
         def colorize(string, rgb=None, ansi=None, bg=None, ansi_bg=None, fd=1):
             return string
 
-    page_width = args[0].page_width
+    page_width = args.page_width
 
-    display_stats = args[0].all_stats
+    display_stats = args.all_stats
 
-    data_info = args[0].info
-    data_info_by_date = args[0].info_by_date
-    prj_name = args[0].project
-    with_fbk = args[0].with_fbk
-    with_data = args[0].with_data
-    without_fmkinfo = args[0].without_fmkinfo
-    limit_data_sz = args[0].limit
+    data_info = args.info
+    data_info_by_date = args.info_by_date
+    data_info_by_range = args.info_by_ids
+    prj_name = args.project
+    with_fbk = args.with_fbk
+    with_data = args.with_data
+    without_fmkinfo = args.without_fmkinfo
+    limit_data_sz = args.limit
 
-    export_data = args[0].export_data
-    export_one_data = args[0].export_one_data
-    remove_data = args[0].remove_data
+    export_data = args.export_data
+    export_one_data = args.export_one_data
+    remove_data = args.remove_data
 
-    impact_analysis = args[0].data_with_impact
+    impact_analysis = args.data_with_impact
 
     fmkdb = Database(fmkdb_path=fmkdb)
     ok = fmkdb.start()
@@ -438,6 +443,28 @@ if __name__ == "__main__":
                                   limit_data_sz=limit_data_sz)
         else:
             print(colorize("*** ERROR: No data found between {!s} and {!s} ***".format(start, end),
+                           rgb=Color.ERROR))
+
+
+    elif data_info_by_range is not None:
+
+        first_id=data_info_by_range[0]
+        last_id=data_info_by_range[1]
+
+        records = fmkdb.execute_sql_statement(
+            "SELECT ID FROM DATA "
+            "WHERE {start:d} <= ID and ID <= {end:d};".format(start=first_id,
+                                                              end=last_id)
+        )
+
+        if records:
+            for rec in records:
+                data_id = rec[0]
+                display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo,
+                                  limit_data_sz=limit_data_sz)
+        else:
+            print(colorize("*** ERROR: No data found between {!s} and {!s} ***".format(first_id,
+                                                                                       last_id),
                            rgb=Color.ERROR))
 
     elif export_data is not None or export_one_data is not None:
