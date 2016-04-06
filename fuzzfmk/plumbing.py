@@ -1015,8 +1015,7 @@ class FmkPlumbing(object):
         print(colorize('   Number of data sent in burst: ', rgb=Color.SUBINFO) + str(self._burst))
         print(colorize('    Target health-check timeout: ', rgb=Color.SUBINFO) + str(self._timeout))
         print(colorize('              Workspace enabled: ', rgb=Color.SUBINFO) + repr(self._wkspace_enabled))
-
-
+        print(colorize('                  FmkDB enabled: ', rgb=Color.SUBINFO) + repr(self.fmkDB.enabled))
 
     @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
     def projects(self):
@@ -1190,8 +1189,9 @@ class FmkPlumbing(object):
                 dyn_gen_ids.append(dmk_id)
 
         new_dm.name = name[:-1]
+        is_dm_name_exists = new_dm.name in map(lambda x: x.name, self.dm_list)
 
-        if reload_dm or new_dm.name not in map(lambda x: x.name, self.dm_list):
+        if reload_dm or not is_dm_name_exists:
             self.fmkDB.insert_data_model(new_dm.name)
             self.__add_data_model(new_dm, new_tactics,
                                   (None, dm_list),
@@ -1202,10 +1202,17 @@ class FmkPlumbing(object):
             # the reloading of the included DMs
             self.__dyngenerators_created[new_dm] = True
             self.__dynamic_generator_ids[new_dm] = dyn_gen_ids
-            self.dm = new_dm
-            self.prj.set_data_model(self.dm)
-            if hasattr(self, 'tg'):
-                self.tg.set_data_model(self.dm)
+
+        elif is_dm_name_exists:
+            new_dm = self.get_data_model_by_name(new_dm.name)
+
+        else:  # unreachable
+            raise ValueError
+
+        self.dm = new_dm
+        self.prj.set_data_model(self.dm)
+        if hasattr(self, 'tg'):
+            self.tg.set_data_model(self.dm)
 
         if self.__is_started():
             self._cleanup_dm_attrs_from_fmk()
@@ -1636,9 +1643,15 @@ class FmkPlumbing(object):
 
                 self.lg.log_data(dt, verbose=verbose)
 
-                data_id = self.lg.commit_log_entry(self.group_id, self.prj.name, self.tg_name)
-                self.lg.print_console('### FmkDB Data ID: {!r}'.format(data_id),
-                                      rgb=Color.DATAINFO, nl_after=True)
+
+                if self.fmkDB.enabled:
+                    data_id = self.lg.commit_log_entry(self.group_id, self.prj.name, self.tg_name)
+                    if data_id is None:
+                        self.lg.print_console('### Data not recorded in FmkDB',
+                                              rgb=Color.DATAINFO, nl_after=True)
+                    else:
+                        self.lg.print_console('### FmkDB Data ID: {!r}'.format(data_id),
+                                              rgb=Color.DATAINFO, nl_after=True)
 
                 if multiple_data:
                     self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
@@ -1787,6 +1800,16 @@ class FmkPlumbing(object):
                 dm = self.get_data_model_by_name(dm_name)
                 data.set_data_model(dm)
             self.__register_in_data_bank(None, data)
+
+    @EnforceOrder(accepted_states=['S2'])
+    def enable_fmkdb(self):
+        self.fmkDB.enable()
+        self.lg.log_fmk_info('Enable FmkDB', do_record=False)
+
+    @EnforceOrder(accepted_states=['S2'])
+    def disable_fmkdb(self):
+        self.fmkDB.disable()
+        self.lg.log_fmk_info('Disable FmkDB', do_record=False)
 
     @EnforceOrder(accepted_states=['S2'])
     def get_last_data(self):
@@ -4174,7 +4197,15 @@ class FmkShell(cmd.Cmd):
         self.__error = False
         return False
 
+    def do_fmkdb_enable(self, line):
+        '''Enable FmkDB recording'''
+        self.fz.enable_fmkdb()
+        return False
 
+    def do_fmkdb_disable(self, line):
+        '''Enable FmkDB recording'''
+        self.fz.disable_fmkdb()
+        return False
 
     def do_dump_db_to_file(self, line):
         '''
