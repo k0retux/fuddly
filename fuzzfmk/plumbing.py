@@ -290,6 +290,25 @@ class FmkPlumbing(object):
         traceback.print_exc(file=sys.stdout)
         print('-'*60)
 
+    def _is_data_valid(self, data):
+        def is_valid(d):
+            if d.raw is None and d.node is None:
+                return False
+            return True
+
+        if isinstance(data, Data):
+            return is_valid(data)
+        elif isinstance(data, list):
+            if len(data) == 0:
+                return False
+
+            for d in data:
+                if not is_valid(d):
+                    return False
+            else:
+                return True
+        else:
+            raise ValueError
 
 
     @EnforceOrder(accepted_states=['S2'])
@@ -1460,17 +1479,19 @@ class FmkPlumbing(object):
         '''
         if self.__send_enabled:
 
+            if not self._is_data_valid(data_list):
+                self.set_error('Data is empty --> will not be sent',
+                               code=Error.DataInvalid)
+                return
+
             # Monitor hook function before sending
             self.__mon.do_before_sending_data()
 
             try:
-                # Allow the Target object to act before the FMK send data
-                self.tg.do_before_sending_data(data_list)
-
                 if len(data_list) == 1:
-                    self.tg.send_data(data_list[0])
+                    self.tg.send_data_sync(data_list[0], from_fmk=True)
                 elif len(data_list) > 1:
-                    self.tg.send_multiple_data(data_list)
+                    self.tg.send_multiple_data_sync(data_list, from_fmk=True)
                 else:
                     raise ValueError
             except TargetStuck as e:
@@ -1491,10 +1512,18 @@ class FmkPlumbing(object):
             # Monitor hook before resuming sending data
             self.__mon.do_before_resuming_sending_data()
 
+
     @EnforceOrder(accepted_states=['S2'])
     def log_data(self, data_list, original_data=None, get_target_ack=True, verbose=False):
 
         if self.__send_enabled:
+
+            if not self._is_data_valid(data_list):
+                self.set_error('Data is empty and miss some needed meta-info --> will not be '
+                               'logged',
+                               code=Error.DataInvalid)
+                return
+
             self.group_id += 1
             gen = self.__current_gen
 
@@ -2143,9 +2172,11 @@ class FmkPlumbing(object):
     @EnforceOrder(accepted_states=['S2'])
     def get_data(self, action_list, data_orig=None, valid_gen=False, save_seed=False):
         '''
-        @action_list shall have the following format:
+        @action_list shall have the following formats:
         [(action_1, generic_UI_1, specific_UI_1), ...,
          (action_n, generic_UI_1, specific_UI_1)]
+
+        [action_1, (action_2, generic_UI_2, specific_UI_2), ... action_n]
 
         where action_N can be either: dmaker_type_N or (dmaker_type_N, dmaker_name_N)
         '''
@@ -2310,7 +2341,6 @@ class FmkPlumbing(object):
             if isinstance(dmaker_obj, Generator) and dmaker_obj.is_attr_set(DataMakerAttr.Active):
                 activate_all = True
 
-
             current_dmobj_list.append(dmaker_obj)
 
             if not dmaker_obj.is_attr_set(DataMakerAttr.Active):
@@ -2362,6 +2392,7 @@ class FmkPlumbing(object):
 
             if not setup_crashed and not setup_err:
                 try:
+                    invalid_data = False
                     if isinstance(dmaker_obj, Generator):
                         if dmaker_obj.produced_seed is not None:
                             data = Data(dmaker_obj.produced_seed.get_contents(copy=True))
@@ -2373,18 +2404,36 @@ class FmkPlumbing(object):
                                 data.materialize()
                                 dmaker_obj.produced_seed = Data(data.get_contents(copy=True))
                     elif isinstance(dmaker_obj, Disruptor):
-                        data = dmaker_obj.disrupt_data(self.dm, self.tg, data)
-                    elif isinstance(dmaker_obj, StatefulDisruptor):
-                        ret = dmaker_obj._set_seed(data)
-                        if isinstance(ret, Data):
-                            data = ret
-                            dmaker_obj.set_attr(DataMakerAttr.NeedSeed)
+                        if not self._is_data_valid(data):
+                            invalid_data = True
                         else:
                             data = dmaker_obj.disrupt_data(self.dm, self.tg, data)
+                    elif isinstance(dmaker_obj, StatefulDisruptor):
+                        # we only check validity in the case the stateful disruptor is
+                        # has not been seeded
+                        if dmaker_obj.is_attr_set(DataMakerAttr.NeedSeed) and not \
+                                self._is_data_valid(data):
+                            invalid_data = True
+                        else:
+                            ret = dmaker_obj._set_seed(data)
+                            if isinstance(ret, Data):
+                                data = ret
+                                dmaker_obj.set_attr(DataMakerAttr.NeedSeed)
+                            else:
+                                data = dmaker_obj.disrupt_data(self.dm, self.tg, data)
                     else:
                         raise ValueError
 
-                    if data is None:
+
+                    if invalid_data:
+                        unrecoverable_error = True
+                        self.set_error("The data maker ({:s}) returned an empty data (probable "
+                                       "reason: the left-side data maker is disabled and need"
+                                       "to be reset)".format(dmaker_ref),
+                                       code=Error.DataInvalid,
+                                       context={'dmaker_name': dmaker_name, 'dmaker_type': dmaker_type})
+
+                    elif data is None:
                         unrecoverable_error = True
                         self.set_error("A Data maker shall never return None! (guilty: '%s')" % dmaker_ref,
                                        code=Error.UserCodeError)
@@ -2460,7 +2509,14 @@ class FmkPlumbing(object):
 
         data.set_history(l)
         data.set_initial_dmaker(initial_generator_info)
-        return data
+
+        if not self._is_data_valid(data):
+            self.set_error('Data is empty (probable reason: used data maker is disabled and need '
+                           'to be reset)',
+                           code=Error.DataInvalid)
+            return None
+        else:
+            return data
 
     @EnforceOrder(accepted_states=['S1','S2'])
     def cleanup_all_dmakers(self, reset_existing_seed=True):

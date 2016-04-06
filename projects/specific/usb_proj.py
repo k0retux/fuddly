@@ -58,7 +58,7 @@ class Pandaboard(Target):
         return False
 
 
-    def send_multiple_data(self, data_list):
+    def send_multiple_data(self, data_list, from_fmk=False):
 
         stringdict = {}
         idx = 1
@@ -92,7 +92,7 @@ class Pandaboard(Target):
         self.cnx.root.connect(stringdict=stringdict, dev_desc_str=dev_desc, conf_desc_str_list=conf_desc, raw=True)
 
 
-    def send_data(self, data):
+    def send_data(self, data, from_fmk=False):
         e = data.node
 
         if e.semantics.match(NodeSemanticsCriteria(mandatory_criteria=['DEV_DESC'])):

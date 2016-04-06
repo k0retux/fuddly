@@ -82,6 +82,7 @@ class Error(object):
     InvalidDmaker = -11
     HandOver = -12
     DataUnusable = -13
+    DataInvalid = -14
 
     # FmkPlumbing.launch_operator() error code
     InvalidOp = -20
@@ -101,6 +102,7 @@ class Error(object):
         InvalidDmaker: {'name': 'InvalidDmaker', 'color': 0xB00000},
         HandOver: {'name': 'HandOver', 'color': 0x00B500},
         DataUnusable: {'name': 'DataUnusable', 'color': 0x009500},
+        DataInvalid: {'name': 'DataInvalid', 'color': 0xA00000},
 
         InvalidOp: {'name': 'InvalidOp', 'color': 0xB00000},
         WrongOpPlan: {'name': 'WrongOpPlan', 'color': 0xE00000},

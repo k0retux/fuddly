@@ -1003,6 +1003,8 @@ class DataModel(object):
             else:
                 self.__dm_hashtable[k] = v
 
+        self.__confs = self.__confs.union(data_model.__confs)
+
         
     def pre_build(self):
         '''

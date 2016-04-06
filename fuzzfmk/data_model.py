@@ -44,7 +44,7 @@ DEBUG = False
 
 class Data(object):
 
-    def __init__(self, data=''):
+    def __init__(self, data=None):
         self.node = None
         self.raw = None
         self.__type = None
@@ -59,6 +59,9 @@ class Data(object):
         self.__info_idx = {}
 
         self._history = None
+
+        if data is None:
+            return
 
         if isinstance(data, bytes):
             self.update_from_str_or_bytes(data)
@@ -178,12 +181,12 @@ class Data(object):
 
     def materialize(self):
         if self.node is not None:
-            self.node.get_value()
+            self.node.freeze()
 
     def get_contents(self, copy=False):
         if self.node is not None:
             # we freeze the contents before exporting it
-            self.node.get_value()
+            self.node.freeze()
             if copy:
                 contents = Node(self.node.name, base_node=self.node, ignore_frozen_state=False)
             else:

@@ -138,8 +138,10 @@ def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limi
     )
 
     if not steps:
-        print(colorize("*** BUG (data should always have at least 1 step) ***", rgb=Color.ERROR))
-        sys.exit(-1)
+        print(colorize("*** BUG with data ID '{:d}' (data should always have at least 1 step) "
+                       "***".format(data_id),
+                       rgb=Color.ERROR))
+        return
 
     feedback = fmkdb.execute_sql_statement(
         "SELECT SOURCE, DATE, STATUS, CONTENT FROM FEEDBACK "
