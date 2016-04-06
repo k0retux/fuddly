@@ -1861,10 +1861,10 @@ class FmkPlumbing(object):
                     first_pass = False
                     gen_type_initial, gen_name, gen_ui = data.get_initial_dmaker()
                     if gen_ui:
-                        msg = "|- data id: %d | generator type: %s | generator name: %s | User input: %s" % \
+                        msg = "|- data id: %r | generator type: %s | generator name: %s | User input: %s" % \
                             (data_id, gen_type_initial, gen_name, gen_ui)
                     else:
-                        msg = "|- data id: %d | generator type: %s | generator name: %s | No user input" % \
+                        msg = "|- data id: %r | generator type: %s | generator name: %s | No user input" % \
                             (data_id, gen_type_initial, gen_name)
                     self.lg.print_console(msg, rgb=Color.SUBINFO)
 
@@ -1889,7 +1889,7 @@ class FmkPlumbing(object):
                 dtype, dmk_name, _ = init_dmaker
             dm = data.get_data_model()
             dm_name = None if dm is None else dm.name
-            msg = "|- data id: {:d} | type: {:s} | data model: {!s}".format(
+            msg = "|- data id: {!r} | type: {:s} | data model: {!s}".format(
                 data_id, dtype, dm_name
             )
             self.lg.print_console(msg, rgb=Color.SUBINFO)
