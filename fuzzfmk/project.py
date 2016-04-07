@@ -49,6 +49,9 @@ class Project(object):
     def set_monitor(self, monitor):
         self.monitor = monitor
 
+    def set_data_model(self, dm):
+        self.dm = dm
+
     def register_new_operator(self, name, obj):
 
         if name in self.operators:
