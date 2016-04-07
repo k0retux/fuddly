@@ -74,12 +74,16 @@ class Monitor(object):
         self._logger = None
         self._target = None
         self._target_status = None
+        self.probe_exports = {}
 
     def set_logger(self, logger):
         self._logger = logger
 
     def set_target(self, target):
         self._target = target
+
+    def set_data_model(self, dm):
+        self.probe_exports['dm'] = dm
 
     def set_strategy(self, strategy):
         self._logger.print_console('*** Monitor refresh in progress... ***\n', nl_before=False, rgb=Color.COMPONENT_INFO)
@@ -126,7 +130,7 @@ class Monitor(object):
             evts = None
 
         th = threading.Thread(None, func, 'probe.' + name,
-                              args=(stop_event, evts, self._prj.probe_exports,
+                              args=(stop_event, evts, self.probe_exports,
                                     self._target, self._logger))
         th.start()
 

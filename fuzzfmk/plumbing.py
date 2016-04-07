@@ -352,7 +352,8 @@ class FmkPlumbing(object):
             self.prj.set_data_model(self.dm)
             if hasattr(self, 'tg'):
                 self.tg.set_data_model(self.dm)
-
+            if hasattr(self, 'mon'):
+                self.mon.set_data_model(self.dm)
             self._fmkDB_insert_dm_and_dmakers(self.dm.name, dm_params['tactics'])
             self.fmkDB.commit()
 
@@ -1092,6 +1093,7 @@ class FmkPlumbing(object):
         self.mon = self.__monitor_dict[prj]
         self.mon.set_target(self.tg)
         self.mon.set_logger(self.lg)
+        self.mon.set_data_model(self.dm)
         self.__stats = self.__stats_dict[prj]
         self.__initialized_dmakers = self.__initialized_dmaker_dict[prj]
         self.__stats_countdown = 9
@@ -1136,6 +1138,8 @@ class FmkPlumbing(object):
         self.prj.set_data_model(self.dm)
         if hasattr(self, 'tg'):
             self.tg.set_data_model(self.dm)
+        if hasattr(self, 'mon'):
+            self.mon.set_data_model(self.dm)
         if self.__is_started():
             self._cleanup_dm_attrs_from_fmk()
             ok = self._load_data_model()
@@ -1216,7 +1220,8 @@ class FmkPlumbing(object):
         self.prj.set_data_model(self.dm)
         if hasattr(self, 'tg'):
             self.tg.set_data_model(self.dm)
-
+        if hasattr(self, 'mon'):
+            self.mon.set_data_model(self.dm)
         if self.__is_started():
             self._cleanup_dm_attrs_from_fmk()
             ok = self._load_data_model()
