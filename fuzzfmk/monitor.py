@@ -72,10 +72,14 @@ class Monitor(object):
         self.probes = self._prj.get_probes()
         self.fmk_ops = fmk_ops
         self._logger = None
+        self._target = None
         self._target_status = None
 
-    def _set_logger(self, logger):
+    def set_logger(self, logger):
         self._logger = logger
+
+    def set_target(self, target):
+        self._target = target
 
     def set_strategy(self, strategy):
         self._logger.print_console('*** Monitor refresh in progress... ***\n', nl_before=False, rgb=Color.COMPONENT_INFO)
@@ -104,7 +108,32 @@ class Monitor(object):
         return self._prj.quick_reset_probe(name, *args)
 
     def start_probe(self, name):
-        return self._prj.launch_probe(name)
+        lck = self._prj.probes[name]['lock']
+
+        with lck:
+            if self._prj.probes[name]['started']:
+                return False
+
+        func = self._prj.get_probe_func(name)
+        if not func:
+            return False
+
+        stop_event = self._prj.probes[name]['stop']
+
+        if self._prj.probes[name]['blocking']:
+            evts = self.get_evts(name)
+        else:
+            evts = None
+
+        th = threading.Thread(None, func, 'probe.' + name,
+                              args=(stop_event, evts, self._prj.probe_exports,
+                                    self._target, self._logger))
+        th.start()
+
+        with lck:
+            self.probes[name]['started'] = True
+
+        return True
 
     def is_probe_launched(self, pname):
         return self._prj.is_probe_launched(pname)
@@ -215,14 +244,6 @@ class Monitor(object):
             return True
 
         return self.is_target_ok()
-
-        # for n, p in self.probes.items():
-        #     if self._prj.is_probe_launched(n):
-        #         pstatus = self._prj.get_probe_status(n)
-        #         if pstatus.get_status() < 0:
-        #             return False
-        #
-        # return True
 
     @property
     def target_status(self):

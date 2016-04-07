@@ -786,7 +786,8 @@ class FmkPlumbing(object):
             self.__logger_dict[project] = logger
             self.__stats_dict[project] = Stats(self._generic_tactics.get_generators())
             self.__monitor_dict[project] = Monitor(project, fmk_ops=self._exportable_fmk_ops)
-            self.__monitor_dict[project]._set_logger(self.__logger_dict[project])
+            self.__monitor_dict[project].set_logger(self.__logger_dict[project])
+            self.__monitor_dict[project].set_target(self.__target_dict[project])
             self._prj_dict[project].set_logger(self.__logger_dict[project])
             self._prj_dict[project].set_monitor(self.__monitor_dict[project])
             self.__logger_dict[project].set_stats(self.__stats_dict[project])
@@ -796,7 +797,8 @@ class FmkPlumbing(object):
             self.__logger_dict[project] = logger
             self.__stats_dict[project] = Stats(self._generic_tactics.get_generators())
             self.__monitor_dict[project] = Monitor(project, fmk_ops=self._exportable_fmk_ops)
-            self.__monitor_dict[project]._set_logger(self.__logger_dict[project])
+            self.__monitor_dict[project].set_logger(self.__logger_dict[project])
+            self.__monitor_dict[project].set_target(self.__target_dict[project])
             self._prj_dict[project].set_logger(self.__logger_dict[project])
             self._prj_dict[project].set_monitor(self.__monitor_dict[project])
             self.__logger_dict[project].set_stats(self.__stats_dict[project])
@@ -868,14 +870,14 @@ class FmkPlumbing(object):
             else:
                 if ok:
                     self.__enable_target()
-                    self.__mon.start()
+                    self.mon.start()
                     for p in self.tg.probes:
                         pname, delay = self._extract_info_from_probe(p)
                         if delay is None:
-                            self.__mon.start_probe(pname)
+                            self.mon.start_probe(pname)
                         else:
-                            self.__mon.set_probe_delay(pname, delay)
-                            self.__mon.start_probe(pname)
+                            self.mon.set_probe_delay(pname, delay)
+                            self.mon.start_probe(pname)
                     self.prj.start()
                     if self.tg.probes:
                         time.sleep(0.5)
@@ -898,7 +900,7 @@ class FmkPlumbing(object):
                 self.log_target_residual_feedback()
 
             if self.is_target_enabled():
-                self.__mon.stop()
+                self.mon.stop()
                 try:
                     self.tg._stop()
                 except:
@@ -1071,7 +1073,7 @@ class FmkPlumbing(object):
 
         self.tg_name = self._get_detailed_target_desc(self.tg)
 
-        self.tg._set_logger(self.lg)
+        self.tg.set_logger(self.lg)
         self.tg.set_data_model(self.dm)
         self.prj.set_target(self.tg)
         self.prj.set_data_model(self.dm)
@@ -1086,9 +1088,10 @@ class FmkPlumbing(object):
             self._tactics.clear_disruptor_clones()
 
         self._tactics = self.__st_dict[dm]
-        # self._tactics.set_target(self.tg)
 
-        self.__mon = self.__monitor_dict[prj]
+        self.mon = self.__monitor_dict[prj]
+        self.mon.set_target(self.tg)
+        self.mon.set_logger(self.lg)
         self.__stats = self.__stats_dict[prj]
         self.__initialized_dmakers = self.__initialized_dmaker_dict[prj]
         self.__stats_countdown = 9
@@ -1309,12 +1312,12 @@ class FmkPlumbing(object):
     def __enable_target(self):
         self.__tg_enabled = True
         self.__send_enabled = True
-        self.__mon.enable_hooks()
+        self.mon.enable_hooks()
 
     def __disable_target(self):
         self.__tg_enabled = False
         self.__send_enabled = False
-        self.__mon.disable_hooks()
+        self.mon.disable_hooks()
 
     @EnforceOrder(always_callable=True)
     def enable_wkspace(self):
@@ -1475,7 +1478,7 @@ class FmkPlumbing(object):
             cont4 = self.monitor_probes()
             self.tg.cleanup()
 
-        cont2 = self.__mon.do_after_sending_and_logging_data()
+        cont2 = self.mon.do_after_sending_and_logging_data()
 
         return cont0 and cont1 and cont2 and cont3 and cont4
 
@@ -1492,7 +1495,7 @@ class FmkPlumbing(object):
                 return
 
             # Monitor hook function before sending
-            self.__mon.do_before_sending_data()
+            self.mon.do_before_sending_data()
 
             try:
                 if len(data_list) == 1:
@@ -1514,10 +1517,10 @@ class FmkPlumbing(object):
                 self.__stats_countdown -= 1
 
             # Monitor hook function after sending
-            self.__mon.do_after_sending_data()
+            self.mon.do_after_sending_data()
 
             # Monitor hook before resuming sending data
-            self.__mon.do_before_resuming_sending_data()
+            self.mon.do_before_resuming_sending_data()
 
 
     @EnforceOrder(accepted_states=['S2'])
@@ -2017,7 +2020,7 @@ class FmkPlumbing(object):
         self.__reset_fmk_internals(reset_existing_seed=(not use_existing_seed))
 
         try:
-            ok = operator._start(self._exportable_fmk_ops, self.dm, self.__mon, self.tg, self.lg, user_input)
+            ok = operator._start(self._exportable_fmk_ops, self.dm, self.mon, self.tg, self.lg, user_input)
         except:
             ok = False
             self._handle_user_code_exception('Operator has crashed during its start() method')
@@ -2038,7 +2041,7 @@ class FmkPlumbing(object):
 
             try:
                 operation = operator.plan_next_operation(self._exportable_fmk_ops, self.dm,
-                                                         self.__mon, self.tg, self.lg, fmk_feedback)
+                                                         self.mon, self.tg, self.lg, fmk_feedback)
 
                 if operation is None:
                     self.set_error("An operator shall always return an Operation() object in its plan_next_operation()",
@@ -2133,7 +2136,7 @@ class FmkPlumbing(object):
                         self.lg.log_fmk_info("Operator will shutdown because of exception in user code")
                 
                 try:
-                    linst = operator.do_after_all(self._exportable_fmk_ops, self.dm, self.__mon, self.tg, self.lg)
+                    linst = operator.do_after_all(self._exportable_fmk_ops, self.dm, self.mon, self.tg, self.lg)
                 except:
                     self._handle_user_code_exception('Operator has crashed during its .do_after_all() method')
                     return False
@@ -2183,7 +2186,7 @@ class FmkPlumbing(object):
                 if self._burst_countdown == self._burst:
                     self.tg.cleanup()
         try:
-            operator.stop(self._exportable_fmk_ops, self.dm, self.__mon, self.tg, self.lg)
+            operator.stop(self._exportable_fmk_ops, self.dm, self.mon, self.tg, self.lg)
         except:
             self._handle_user_code_exception('Operator has crashed during its stop() method')
             return False
@@ -2420,7 +2423,7 @@ class FmkPlumbing(object):
                         if dmaker_obj.produced_seed is not None:
                             data = Data(dmaker_obj.produced_seed.get_contents(copy=True))
                         else:
-                            data = dmaker_obj.generate_data(self.dm, self.__mon,
+                            data = dmaker_obj.generate_data(self.dm, self.mon,
                                                             self.tg)
                             if save_seed and dmaker_obj.produced_seed is None:
                                 # Usefull to replay from the beginning a modelwalking sequence
@@ -2638,7 +2641,7 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def launch_probe(self, name):
-        ok = self.__mon.start_probe(name)
+        ok = self.mon.start_probe(name)
         if not ok:
             self.set_error('Probe does not exist (or already launched)',
                            code=Error.CommandError)
@@ -2646,19 +2649,19 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def stop_all_probes(self):
-        self.__mon.stop_all_probes()
+        self.mon.stop_all_probes()
 
     @EnforceOrder(accepted_states=['S2'])
     def stop_probe(self, name):
-        self.__mon.stop_probe(name)
+        self.mon.stop_probe(name)
 
     @EnforceOrder(accepted_states=['S2'])
     def get_probe_delay(self, name):
-        self.__mon.get_probe_delay(name)
+        self.mon.get_probe_delay(name)
 
     @EnforceOrder(accepted_states=['S2'])
     def set_probe_delay(self, name, delay):
-        ok = self.__mon.set_probe_delay(name, delay)
+        ok = self.mon.set_probe_delay(name, delay)
         if not ok:
             self.set_error("Probe '%s' does not exist" % name,
                            code=Error.CommandError)

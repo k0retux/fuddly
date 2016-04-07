@@ -112,38 +112,6 @@ class Project(object):
 
         return ret
 
-    def launch_probe(self, name):
-
-        lck = self.probes[name]['lock']
-
-        lck.acquire()
-        if self.probes[name]['started']:
-            lck.release()
-            return False
-        lck.release()
-
-        func = self.get_probe_func(name)
-        if not func:
-            return False
-
-        stop_event = self.probes[name]['stop']
-
-        if self.probes[name]['blocking']:
-            evts = self.monitor.get_evts(name)
-        else:
-            evts = None
-
-        th = threading.Thread(None, func, 'probe.' + name,
-                              args=(stop_event, evts, self.probe_exports, self.target, self.logger))
-        th.start()
-
-        lck.acquire()
-        self.probes[name]['started'] = True
-        lck.release()
-
-        return True
-
-
     def quick_reset_probe(self, name, *args):
         try:
             with self.probes[name]['lock']:

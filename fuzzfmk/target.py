@@ -62,7 +62,7 @@ class Target(object):
         '''
         pass
 
-    def _set_logger(self, logger):
+    def set_logger(self, logger):
         self._logger = logger
 
     def set_data_model(self, dm):
@@ -898,8 +898,8 @@ class NetworkTarget(Target):
                 fbk, err = self._feedback_handling(fbk, fbkid)
                 self._feedback_collect(fbk, fbkid, error=err)
                 if (self._additional_fbk_sockets is None or s not in self._additional_fbk_sockets) and \
-                   s not in self._hclient_sock2hp.keys() and \
-                   s not in self._last_client_sock2hp.keys():
+                        (self._hclient_sock2hp is None or s not in self._hclient_sock2hp.keys()) and \
+                        (self._last_client_sock2hp is None or s not in self._last_client_sock2hp.keys()):
                     s.close()
 
         with self._fbk_handling_lock:
