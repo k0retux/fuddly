@@ -42,6 +42,7 @@ import errno
 from socket import error as socket_error
 
 from libs.external_modules import *
+from fuzzfmk.data_model import Data
 from fuzzfmk.global_resources import *
 
 class TargetStuck(Exception): pass
@@ -53,6 +54,7 @@ class Target(object):
     _logger=None
     _time_beetwen_data_emission = None
     _probes = None
+    _send_data_lock = threading.Lock()
 
     def __init__(self):
         '''
@@ -60,8 +62,11 @@ class Target(object):
         '''
         pass
 
-    def _set_logger(self, logger):
+    def set_logger(self, logger):
         self._logger = logger
+
+    def set_data_model(self, dm):
+        self.current_dm = dm
 
     def _start(self):
         self._logger.print_console('*** Target initialization ***\n', nl_before=False, rgb=Color.COMPONENT_START)
@@ -96,39 +101,36 @@ class Target(object):
         """
         self._logger.log_comment(info)
 
-    def send_data(self, data):
+    def send_data(self, data, from_fmk=False):
         '''
         To be overloaded.
 
         Note: use data.to_bytes() to get binary data.
 
         Args:
+          from_fmk (bool): set to True if the call was performed by the framework itself,
+            otherwise the call comes from user-code (e.g., from a `probe` or an `operator`)
           data (Data): data container that embeds generally a
             modeled data accessible through `data.node`. However if the
             latter is None, it only embeds the raw data.
         '''
         raise NotImplementedError
 
-    def send_multiple_data(self, data_list):
+    def send_multiple_data(self, data_list, from_fmk=False):
         '''
         Used to send multiple data to the target, or to stimulate several
         target's inputs in one shot.
 
+        Note: Use data.to_bytes() to get binary data
+
         Args:
+            from_fmk (bool): set to True if the call was performed by the framework itself,
+              otherwise the call comes from user-code (e.g., from a `Probe` or an `Operator`)
             data_list (list): list of data to be sent
 
-        Note: Use data.to_bytes() to get binary data
         '''
         raise NotImplementedError
 
-    def do_before_sending_data(self, data_list):
-        '''
-        Called by the framework before sending data
-
-        Args:
-          data_list (list): list of Data objects that will be sent to the target.
-        '''
-        pass
 
     def is_target_ready_for_new_data(self):
         '''
@@ -168,9 +170,29 @@ class Target(object):
         '''
         return None
 
+
     def get_description(self):
         return None
 
+    def send_data_sync(self, data, from_fmk=False):
+        '''
+        Can be used in user-code to send data to the target without interfering
+        with the framework.
+
+        Use case example: The user needs to send some message to the target on a regular basis
+        in background. For that purpose, it can quickly define a :class:`fuzzfmk.monitor.Probe` that just
+        emits the message by itself.
+        '''
+        with self._send_data_lock:
+            self.send_data(data, from_fmk=from_fmk)
+
+    def send_multiple_data_sync(self, data_list, from_fmk=False):
+        '''
+        Can be used in user-code to send data to the target without interfering
+        with the framework.
+        '''
+        with self._send_data_lock:
+            self.send_multiple_data(data_list, from_fmk=from_fmk)
 
     def add_probe(self, probe):
         if self._probes is None:
@@ -227,10 +249,10 @@ class TargetFeedback(object):
 
 class EmptyTarget(Target):
 
-    def send_data(self, data):
+    def send_data(self, data, from_fmk=False):
         pass
 
-    def send_multiple_data(self, data_list):
+    def send_multiple_data(self, data_list, from_fmk):
         pass
 
 
@@ -363,9 +385,14 @@ class NetworkTarget(Target):
 
         Args:
           fbk (bytes): feedback received by the target through a socket referenced by `ref`.
-          ref (string): user-defined reference of the socket used to retreive the feedback
+          ref (string): user-defined reference of the socket used to retrieve the feedback.
+
+        Returns:
+          tuple: a tuple `(new_fbk, status)` where `new_fbk` is the feedback
+            you want to log and `status` is a status that enables you to notify a problem to the
+            framework (should be positive if everything is fine, otherwise should be negative).
         '''
-        return fbk, ref
+        return fbk, 0
 
 
     def listen_to(self, host, port, ref_id,
@@ -548,13 +575,15 @@ class NetworkTarget(Target):
 
         return self.terminate()
 
-    def send_data(self, data):
+    def send_data(self, data, from_fmk=False):
+        self._before_sending_data(data, from_fmk)
         connected_client_event = None
         host, port, socket_type, server_mode = self._get_net_info_from(data)
         if server_mode:
             connected_client_event = threading.Event()
             self._listen_to_target(host, port, socket_type,
-                                   self._handle_target_connection, args=(data, host, port, connected_client_event))
+                                   self._handle_target_connection,
+                                   args=(data, host, port, connected_client_event, from_fmk))
             connected_client_event.wait(self._sending_delay)
             if not connected_client_event.is_set():
                 self._feedback.set_error_code(-2)
@@ -567,10 +596,11 @@ class NetworkTarget(Target):
                 err_msg = '>>> WARNING: unable to send data to {:s}:{:d} <<<'.format(host, port)
                 self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
             else:
-                self._send_data([s], {s:(data, host, port)}, self._sending_id)
+                self._send_data([s], {s:(data, host, port)}, self._sending_id, from_fmk)
 
 
-    def send_multiple_data(self, data_list):
+    def send_multiple_data(self, data_list, from_fmk):
+        self._before_sending_data(data_list, from_fmk)
         sockets = []
         data_refs = {}
         connected_client_event = {}
@@ -580,8 +610,9 @@ class NetworkTarget(Target):
             if server_mode:
                 connected_client_event[(host, port)] = threading.Event()
                 self._listen_to_target(host, port, socket_type,
-                                       self._handle_target_connection, args=(data, host, port,
-                                                                             connected_client_event[(host, port)]))
+                                       self._handle_target_connection,
+                                       args=(data, host, port,
+                                             connected_client_event[(host, port)], from_fmk))
             else:
                 s = self._connect_to_target(host, port, socket_type)
                 if s is None:
@@ -592,7 +623,7 @@ class NetworkTarget(Target):
                     sockets.append(s)
                     data_refs[s] = (data, host, port)
 
-        self._send_data(sockets, data_refs, self._sending_id)
+        self._send_data(sockets, data_refs, self._sending_id, from_fmk)
         t0 = datetime.datetime.now()
 
         if connected_client_event:
@@ -738,17 +769,18 @@ class NetworkTarget(Target):
             self._additional_fbk_lengths[clientsocket] = fbk_length
 
     def _handle_target_connection(self, clientsocket, address, args):
-        data, host, port, connected_client_event = args
+        data, host, port, connected_client_event, from_fmk = args
         if self.hold_connection[(host, port)]:
             with self._server_thread_lock:
                 self._last_client_hp2sock[(host, port)] = (clientsocket, address)
                 self._last_client_sock2hp[clientsocket] = (host, port)
         connected_client_event.set()
-        self._send_data([clientsocket], {clientsocket:(data, host, port)}, self._sending_id)
+        self._send_data([clientsocket], {clientsocket:(data, host, port)}, self._sending_id,
+                        from_fmk=from_fmk)
 
 
     def _collect_feedback_from(self, fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd,
-                               send_id, fbk_timeout):
+                               send_id, fbk_timeout, from_fmk):
 
         def _check_and_handle_obsolete_socket(socket, error=None, error_list=None):
             # print('\n*** NOTE: Remove obsolete socket {!r}'.format(socket))
@@ -777,7 +809,6 @@ class NetworkTarget(Target):
                         del self._additional_fbk_ids[socket]
                         del self._additional_fbk_lengths[socket]
 
-
         chunks = collections.OrderedDict()
         t0 = datetime.datetime.now()
         duration = 0
@@ -795,13 +826,13 @@ class NetworkTarget(Target):
         while dont_stop:
             ready_to_read = []
             for fd, ev in epobj.poll(timeout=0.2):
-                socket = fileno2fd[fd]
+                skt = fileno2fd[fd]
                 if ev != select.EPOLLIN:
-                    _check_and_handle_obsolete_socket(socket, error=ev, error_list=socket_errors)
-                    if socket in fbk_sockets:
-                        fbk_sockets.remove(socket)
+                    _check_and_handle_obsolete_socket(skt, error=ev, error_list=socket_errors)
+                    if skt in fbk_sockets:
+                        fbk_sockets.remove(skt)
                     continue
-                ready_to_read.append(socket)
+                ready_to_read.append(skt)
 
             now = datetime.datetime.now()
             duration = (now - t0).total_seconds()
@@ -814,9 +845,25 @@ class NetworkTarget(Target):
                         sz = NetworkTarget.CHUNK_SZ
                     else:
                         sz = min(fbk_lengths[s] - bytes_recd[s], NetworkTarget.CHUNK_SZ)
-                    chunk = s.recv(sz)
+
+                    retry = 0
+                    while retry < 3:
+                        try:
+                            chunk = s.recv(sz)
+                        except socket.error as serr:
+                            chunk = b''
+                            print('\n*** ERROR: ' + str(serr))
+                            if serr.errno == socket.errno.EAGAIN:
+                                retry += 1
+                                time.sleep(0.2)
+                                continue
+                            else:
+                                break
+                        else:
+                            break
+
                     if chunk == b'':
-                        # print('\n*** NOTE: Nothing more to receive from : {!r}'.format(fbk_ids[s]))
+                        print('\n*** NOTE: Nothing more to receive from : {!r}'.format(fbk_ids[s]))
                         fbk_sockets.remove(s)
                         _check_and_handle_obsolete_socket(s)
                         s.close()
@@ -847,23 +894,25 @@ class NetworkTarget(Target):
         for s, chks in chunks.items():
             fbk = b'\n'.join(chks)
             with self._fbk_handling_lock:
-                fbk, fbkid = self._feedback_handling(fbk, fbk_ids[s])
-                self._feedback_collect(fbk, fbkid)
-                if s not in self._additional_fbk_sockets and \
-                   s not in self._hclient_sock2hp.keys() and \
-                   s not in self._last_client_sock2hp.keys():
+                fbkid = fbk_ids[s]
+                fbk, err = self._feedback_handling(fbk, fbkid)
+                self._feedback_collect(fbk, fbkid, error=err)
+                if (self._additional_fbk_sockets is None or s not in self._additional_fbk_sockets) and \
+                        (self._hclient_sock2hp is None or s not in self._hclient_sock2hp.keys()) and \
+                        (self._last_client_sock2hp is None or s not in self._last_client_sock2hp.keys()):
                     s.close()
 
         with self._fbk_handling_lock:
             for fbkid, ev in socket_errors:
                 self._feedback_collect(">>> ERROR[{:d}]: unable to interact with '{:s}' "
                                        "<<<".format(ev,fbkid), fbkid, error=-ev)
-            self._feedback_complete(send_id)
+            if from_fmk:
+                self._feedback_complete(send_id)
 
         return
 
 
-    def _send_data(self, sockets, data_refs, sid):
+    def _send_data(self, sockets, data_refs, sid, from_fmk):
         if sid != self._initial_sending_id:
             self._initial_sending_id = sid
             # self._first_send_data_call = True
@@ -928,21 +977,21 @@ class NetworkTarget(Target):
                     fbk_ids[s] = self._default_fbk_id[(host, port)]
                     fbk_lengths[s] = self.feedback_length
 
-            self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd)
+            self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk)
 
         else:
             raise TargetStuck("system not ready for sending data!")
 
 
-    def _start_fbk_collector(self, fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd):
+    def _start_fbk_collector(self, fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk):
         self._thread_cpt += 1
-        self.feedback_thread_qty += 1
+        if from_fmk:
+            self.feedback_thread_qty += 1
         feedback_thread = threading.Thread(None, self._collect_feedback_from,
                                            name='FBK-' + repr(self._sending_id) + '#' + repr(self._thread_cpt),
                                            args=(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd,
-                                                 self._sending_id, self._feedback_timeout))
+                                                 self._sending_id, self._feedback_timeout, from_fmk))
         feedback_thread.start()
-
 
 
     def _feedback_collect(self, fbk, ref, error=0):
@@ -956,15 +1005,20 @@ class NetworkTarget(Target):
         if self.feedback_complete_cpt == self.feedback_thread_qty:
             self._feedback_handled = True
 
+    def _before_sending_data(self, data_list, from_fmk):
+        if from_fmk:
+            self._first_send_data_call = True  # related to additional feedback
+            self._feedback_handled = False
+            self._sending_id += 1
+        else:
+            self._first_send_data_call = False  # we ignore all additional feedback
+        if isinstance(data_list, Data):
+            self._custom_data_handling_before_emission([data_list])
+        else:
+            self._custom_data_handling_before_emission(data_list)
+
     def get_feedback(self):
         return self._feedback
-
-    def do_before_sending_data(self, data_list):
-        self._feedback_handled = False
-        self._first_send_data_call = True
-        self._sending_id += 1
-        self._thread_cpt = 0
-        self._custom_data_handling_before_emission(data_list)
 
     def is_target_ready_for_new_data(self):
         # We answer we are ready if at least one receiver has
@@ -1067,7 +1121,7 @@ class PrinterTarget(Target):
 
         return True
 
-    def send_data(self, data):
+    def send_data(self, data, from_fmk=False):
 
         data = data.to_bytes()
         wkspace = workspace_folder
@@ -1143,10 +1197,11 @@ class LocalTarget(Target):
     def stop(self):
         return self.terminate()
 
-    def do_before_sending_data(self, data_list):
+    def _before_sending_data(self):
         self._feedback_computed = False
 
-    def send_data(self, data):
+    def send_data(self, data, from_fmk=False):
+        self._before_sending_data()
         data = data.to_bytes()
         wkspace = workspace_folder
 
@@ -1295,7 +1350,7 @@ class SIMTarget(Target):
                 break
         return feedback
 
-    def send_data(self, data):
+    def send_data(self, data, from_fmk=False):
         pdu = b''
         raw_data = data.to_bytes()
         for c in raw_data:

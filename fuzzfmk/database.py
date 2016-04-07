@@ -53,6 +53,12 @@ class Database(object):
         self._cur = None
         self.enabled = False
 
+    def enable(self):
+        self.enabled = True
+
+    def disable(self):
+        self.enabled = False
+
     def _is_valid(self, cursor):
         valid = False
         with self._con:
@@ -147,6 +153,9 @@ class Database(object):
 
     def insert_data(self, dtype, dm_name, raw_data, sz, sent_date, ack_date,
                     target_name, prj_name, group_id=None):
+        if not self.enabled:
+            return None
+
         blob = sqlite3.Binary(raw_data)
         try:
             self._cur.execute(
@@ -164,6 +173,9 @@ class Database(object):
 
     def insert_steps(self, data_id, step_id, dmaker_type, dmaker_name, data_id_src,
                      user_input, info):
+        if not self.enabled:
+            return None
+
         if info:
             info = sqlite3.Binary(info)
         try:
@@ -179,6 +191,9 @@ class Database(object):
             return self._cur.lastrowid
 
     def insert_feedback(self, data_id, source, timestamp, content, status_code=None):
+        if not self.enabled:
+            return None
+
         if content:
             content = sqlite3.Binary(content)
         try:
@@ -195,6 +210,9 @@ class Database(object):
             return self._cur.lastrowid
 
     def insert_comment(self, data_id, content, date):
+        if not self.enabled:
+            return None
+
         try:
             self._cur.execute(
                     "INSERT INTO COMMENTS(DATA_ID,CONTENT,DATE)"
@@ -209,6 +227,9 @@ class Database(object):
             return self._cur.lastrowid
 
     def insert_fmk_info(self, data_id, content, date, error=False):
+        if not self.enabled:
+            return None
+
         try:
             self._cur.execute(
                     "INSERT INTO FMKINFO(DATA_ID,CONTENT,DATE,ERROR)"
@@ -227,19 +248,6 @@ class Database(object):
         else:
             return self._cur.lastrowid
 
-    # def insert_project_record(self, prj_name, data_id, target):
-    #     try:
-    #         self._cur.execute(
-    #             "INSERT INTO PROJECT_RECORDS(PRJ_NAME,DATA_ID,TARGET)"
-    #             " VALUES(?,?,?)",
-    #             (prj_name, data_id, target))
-    #         self._con.commit()
-    #     except sqlite3.Error as e:
-    #         self._con.rollback()
-    #         print("\n*** ERROR[SQL:{:s}] while inserting a value into table PROJECT_RECORDS!".format(e.args[0]))
-    #         return -1
-    #     else:
-    #         return self._cur.lastrowid
 
     def fetch_data(self, start_id=1, end_id=-1):
         ign_end_id = '--' if end_id < 1 else ''

@@ -280,7 +280,11 @@ class Logger(object):
 
             self._reset_current_state()
 
-        return self.last_data_id
+            return self.last_data_id
+
+        else:
+            return None
+
 
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO,
                      data_id=None, do_record=True):

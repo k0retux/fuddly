@@ -810,6 +810,8 @@ class TypedNodeDisruption(NodeConsumerStub):
             node.set_values(value_type=vt_obj)
             node.make_finite()
             node.make_determinist()
+            # we need to be sure that the current node is freezable
+            node.set_attr(dm.NodeInternals.Freezable)
 
             return True
         else:

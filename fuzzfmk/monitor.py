@@ -72,10 +72,18 @@ class Monitor(object):
         self.probes = self._prj.get_probes()
         self.fmk_ops = fmk_ops
         self._logger = None
+        self._target = None
         self._target_status = None
+        self.probe_exports = {}
 
-    def _set_logger(self, logger):
+    def set_logger(self, logger):
         self._logger = logger
+
+    def set_target(self, target):
+        self._target = target
+
+    def set_data_model(self, dm):
+        self.probe_exports['dm'] = dm
 
     def set_strategy(self, strategy):
         self._logger.print_console('*** Monitor refresh in progress... ***\n', nl_before=False, rgb=Color.COMPONENT_INFO)
@@ -104,7 +112,32 @@ class Monitor(object):
         return self._prj.quick_reset_probe(name, *args)
 
     def start_probe(self, name):
-        return self._prj.launch_probe(name)
+        lck = self._prj.probes[name]['lock']
+
+        with lck:
+            if self._prj.probes[name]['started']:
+                return False
+
+        func = self._prj.get_probe_func(name)
+        if not func:
+            return False
+
+        stop_event = self._prj.probes[name]['stop']
+
+        if self._prj.probes[name]['blocking']:
+            evts = self.get_evts(name)
+        else:
+            evts = None
+
+        th = threading.Thread(None, func, 'probe.' + name,
+                              args=(stop_event, evts, self.probe_exports,
+                                    self._target, self._logger))
+        th.start()
+
+        with lck:
+            self.probes[name]['started'] = True
+
+        return True
 
     def is_probe_launched(self, pname):
         return self._prj.is_probe_launched(pname)
@@ -216,14 +249,6 @@ class Monitor(object):
 
         return self.is_target_ok()
 
-        # for n, p in self.probes.items():
-        #     if self._prj.is_probe_launched(n):
-        #         pstatus = self._prj.get_probe_status(n)
-        #         if pstatus.get_status() < 0:
-        #             return False
-        #
-        # return True
-
     @property
     def target_status(self):
         if self._target_status is None:
@@ -247,15 +272,15 @@ class Probe(object):
     def __init__(self):
         pass
 
-    def _start(self, target, logger):
+    def _start(self, dm, target, logger):
         logger.print_console("__ probe '{:s}' is starting __".format(self.__class__.__name__), nl_before=True, nl_after=True)
-        return self.start(target, logger)
+        return self.start(dm, target, logger)
 
-    def _stop(self, target, logger):
+    def _stop(self, dm, target, logger):
         logger.print_console("__ probe '{:s}' is stopping __".format(self.__class__.__name__), nl_before=True, nl_after=True)
-        self.stop(target, logger)
+        self.stop(dm, target, logger)
 
-    def start(self, target, logger):
+    def start(self, dm, target, logger):
         """
         Probe initialization
 
@@ -264,7 +289,7 @@ class Probe(object):
         """
         return None
 
-    def stop(self, target, logger):
+    def stop(self, dm, target, logger):
         pass
 
     def quick_reset(self, target, logger):
@@ -273,7 +298,7 @@ class Probe(object):
     def arm_probe(self, target, logger):
         pass
 
-    def main(self, target, logger):
+    def main(self, dm, target, logger):
         pass
 
 
@@ -379,7 +404,7 @@ class ProbePID_SSH(Probe):
 
         return pid
 
-    def start(self, target, logger):
+    def start(self, dm, target, logger):
         self.client = ssh.SSHClient()
         self.client.set_missing_host_key_policy(ssh.AutoAddPolicy())
         self.client.connect(self.sshd_ip, port=self.sshd_port,
@@ -396,10 +421,10 @@ class ProbePID_SSH(Probe):
 
         return ProbeStatus(self._saved_pid, info=msg)
 
-    def stop(self, target, logger):
+    def stop(self, dm, target, logger):
         self.client.close()
 
-    def main(self, target, logger):
+    def main(self, dm, target, logger):
         cpt = self.max_attempts
         current_pid = -1
         time.sleep(self.delay)
@@ -440,9 +465,9 @@ def probe(prj):
     def internal_func(probe_cls):
         probe = probe_cls()
 
-        def probe_func(stop_event, evts, *args, **kargs):
+        def probe_func(stop_event, evts, probe_exports, *args, **kargs):
             try:
-                status = probe._start(*args, **kargs)
+                status = probe._start(probe_exports['dm'], *args, **kargs)
             except:
                 _handle_probe_exception('during start()', prj, probe)
                 return
@@ -453,7 +478,7 @@ def probe(prj):
             while not stop_event.is_set():
                 delay = prj.get_probe_delay(probe.__class__.__name__)
                 try:
-                    status = probe.main(*args, **kargs)
+                    status = probe.main(probe_exports['dm'], *args, **kargs)
                 except:
                     _handle_probe_exception('during main()', prj, probe)
                     return
@@ -461,7 +486,7 @@ def probe(prj):
                 stop_event.wait(delay)
 
             try:
-                probe._stop(*args, **kargs)
+                probe._stop(probe_exports['dm'], *args, **kargs)
             except:
                 _handle_probe_exception('during stop()', prj, probe)
             else:
@@ -478,9 +503,9 @@ def blocking_probe(prj):
     def internal_func(probe_cls):
         probe = probe_cls()
 
-        def probe_func(stop_event, evts, *args, **kargs):
+        def probe_func(stop_event, evts, probe_exports, *args, **kargs):
             try:
-                status = probe._start(*args, **kargs)
+                status = probe._start(probe_exports['dm'], *args, **kargs)
             except:
                 _handle_probe_exception('during start()', prj, probe)
                 return
@@ -504,7 +529,7 @@ def blocking_probe(prj):
                 evts.wait_until_data_is_emitted()
 
                 try:
-                    status = probe.main(*args, **kargs)
+                    status = probe.main(probe_exports['dm'], *args, **kargs)
                 except:
                     _handle_probe_exception('during main()', prj, probe)
                     evts.lets_fuzz_continue()
@@ -515,7 +540,7 @@ def blocking_probe(prj):
                 stop_event.wait(delay)
 
             try:
-                probe._stop(*args, **kargs)
+                probe._stop(probe_exports['dm'], *args, **kargs)
             except:
                 _handle_probe_exception('during start()', prj, probe)
             else:
