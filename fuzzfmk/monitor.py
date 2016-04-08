@@ -108,8 +108,14 @@ class Monitor(object):
     def disable_hooks(self):
         self.__enable = False
 
-    def quick_reset_probe(self, name, *args):
-        return self._prj.quick_reset_probe(name, *args)
+    def configure_probe(self, name, *args):
+        try:
+            with self._prj.probes[name]['lock']:
+                self._prj.probes[name]['obj'].configure(*args)
+        except KeyError:
+            return False
+        else:
+            return True
 
     def start_probe(self, name):
         lck = self._prj.probes[name]['lock']
@@ -292,15 +298,47 @@ class Probe(object):
     def stop(self, dm, target, logger):
         pass
 
-    def quick_reset(self, target, logger):
-        pass
+    def arm(self, target, logger):
+        """
+        Only used by blocking probes.
+        Called by the framework just before sending a data.
 
-    def arm_probe(self, target, logger):
+        Args:
+            target: the current target
+            logger: the current logger
+        """
         pass
 
     def main(self, dm, target, logger):
-        pass
+        """
+        To be overloaded by user-code
 
+        In the case of a basic probe, this method will be called in loop following a
+        period specified within the associated project file.
+
+        In the case of a blocking probe, this method will be called by the framework
+        just after having sent a data (or a batch of data).
+
+        Args:
+            dm: the current data model
+            target: the current target
+            logger: the current logger
+
+        Returns:
+            ProbeStatus: negative status if something is wrong
+        """
+        raise NotImplementedError
+
+    def configure(self, *args):
+        """
+        (Optional method) To be overloaded with any signature that fits your needs
+        Could be called by user code through :meth:`fuzzfmk.monitor.Monitor.configure_probe`
+        Use case example is to call it from an :class:`fuzzfmk.operator_helpers.Operator`
+
+        Args:
+            *args: anything that fits your needs
+        """
+        pass
 
 class ProbeStatus(object):
 
@@ -310,9 +348,10 @@ class ProbeStatus(object):
         self.__private = info
 
     def set_status(self, status):
-        '''
-        @status shall be an integer
-        '''
+        """
+        Args:
+            status (int): negative status if something is wrong
+        """
         self.__status = status
 
     def get_status(self):
@@ -519,9 +558,9 @@ def blocking_probe(prj):
                 evts.wait_for_data_ready()
 
                 try:
-                    probe.arm_probe(*args, **kargs)
+                    probe.arm(*args, **kargs)
                 except:
-                    _handle_probe_exception('during arm_probe()', prj, probe)
+                    _handle_probe_exception('during arm()', prj, probe)
                     evts.wait_until_data_is_emitted()
                     evts.lets_fuzz_continue()
                     return

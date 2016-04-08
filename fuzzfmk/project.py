@@ -111,14 +111,6 @@ class Project(object):
 
         return ret
 
-    def quick_reset_probe(self, name, *args):
-        try:
-            with self.probes[name]['lock']:
-                self.probes[name]['obj'].quick_reset(*args)
-            return True
-        except KeyError:
-            return False
-
     def get_probe_func(self, name):
         try:
             ret = self.probes[name]['func']
