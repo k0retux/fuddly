@@ -74,7 +74,6 @@ class Project(object):
             'lock': threading.Lock(),
             'status': ProbeStatus(0),
             'delay': 1.0,
-            'stop': threading.Event(),
             'started': False,
             'blocking': blocking
             }
@@ -143,14 +142,6 @@ class Project(object):
 
         return ret
 
-    def get_probe_stop_evt(self, name):
-        try:
-            ret = self.probes[name]['stop']
-        except KeyError:
-            return None
-
-        return ret
-
     def notify_probe_starts(self, name):
         try:
             self.probes[name]['lock'].acquire()
@@ -161,23 +152,11 @@ class Project(object):
 
         return True
 
-    def stop_probe(self, name):
-        try:
-            self.probes[name]['lock'].acquire()
-            if self.probes[name]['started']:
-                self.probes[name]['stop'].set()
-            self.probes[name]['lock'].release()
-        except KeyError:
-            return False
-
-        return True
-
-    def reset_probe(self, name):
+    def notify_probe_stops(self, name):
         try:
             self.probes[name]['lock'].acquire()
             self.probes[name]['status'] = ProbeStatus(0)
             self.probes[name]['started'] = False
-            self.probes[name]['stop'].clear()
             self.probes[name]['lock'].release()
         except KeyError:
             return False
