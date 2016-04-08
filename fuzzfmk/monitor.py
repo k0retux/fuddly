@@ -110,27 +110,24 @@ class Monitor(object):
 
     def configure_probe(self, name, *args):
         try:
-            with self._prj.probes[name]['lock']:
-                self._prj.probes[name]['obj'].configure(*args)
+            with self._prj.get_probe_lock(name):
+                self._prj.get_probe_obj(name).configure(*args)
         except KeyError:
             return False
         else:
             return True
 
     def start_probe(self, name):
-        lck = self._prj.probes[name]['lock']
-
-        with lck:
-            if self._prj.probes[name]['started']:
-                return False
+        if self.is_probe_launched(name):
+            return False
 
         func = self._prj.get_probe_func(name)
         if not func:
             return False
 
-        stop_event = self._prj.probes[name]['stop']
+        stop_event = self._prj.get_probe_stop_evt(name)
 
-        if self._prj.probes[name]['blocking']:
+        if self._prj.is_probe_blocking(name):
             evts = self.get_evts(name)
         else:
             evts = None
@@ -140,8 +137,7 @@ class Monitor(object):
                                     self._target, self._logger))
         th.start()
 
-        with lck:
-            self.probes[name]['started'] = True
+        self._prj.notify_probe_starts(name)
 
         return True
 

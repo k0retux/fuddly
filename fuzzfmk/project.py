@@ -107,7 +107,23 @@ class Project(object):
             ret = self.probes[name]['started']
             self.probes[name]['lock'].release()
         except KeyError:
-            return False
+            return None
+
+        return ret
+
+    def is_probe_blocking(self, name):
+        try:
+            ret = self.probes[name]['blocking']
+        except KeyError:
+            return None
+
+        return ret
+
+    def get_probe_obj(self, name):
+        try:
+            ret = self.probes[name]['obj']
+        except KeyError:
+            return None
 
         return ret
 
@@ -126,6 +142,24 @@ class Project(object):
             return None
 
         return ret
+
+    def get_probe_stop_evt(self, name):
+        try:
+            ret = self.probes[name]['stop']
+        except KeyError:
+            return None
+
+        return ret
+
+    def notify_probe_starts(self, name):
+        try:
+            self.probes[name]['lock'].acquire()
+            self.probes[name]['started'] = True
+            self.probes[name]['lock'].release()
+        except KeyError:
+            return False
+
+        return True
 
     def stop_probe(self, name):
         try:
