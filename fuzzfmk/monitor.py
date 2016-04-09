@@ -523,8 +523,9 @@ class ProbePID_SSH(Probe):
         return status
 
 
-def _handle_probe_exception(context, probe):
+def _handle_probe_exception(context, probe, helper):
     pname = probe.__class__.__name__
+    helper.notify_probe_stops()
     print("\nException in probe '{:s}' ({:s}):".format(pname, context))
     print('-'*60)
     traceback.print_exc(file=sys.stdout)
@@ -538,7 +539,7 @@ def probe(prj):
             try:
                 status = probe._start(probe_exports['dm'], *args, **kargs)
             except:
-                _handle_probe_exception('during start()', probe)
+                _handle_probe_exception('during start()', probe, helper)
                 return
 
             if status is not None:
@@ -549,7 +550,7 @@ def probe(prj):
                 try:
                     status = probe.main(probe_exports['dm'], *args, **kargs)
                 except:
-                    _handle_probe_exception('during main()', probe)
+                    _handle_probe_exception('during main()', probe, helper)
                     return
                 helper.set_probe_status(status)
                 helper.wait(delay)
@@ -557,8 +558,8 @@ def probe(prj):
             try:
                 probe._stop(probe_exports['dm'], *args, **kargs)
             except:
-                _handle_probe_exception('during stop()', probe)
-            finally:
+                _handle_probe_exception('during stop()', probe, helper)
+            else:
                 helper.notify_probe_stops()
 
         prj.register_new_probe(probe.__class__.__name__, probe_func, obj=probe, blocking=False)
@@ -576,7 +577,7 @@ def blocking_probe(prj):
             try:
                 status = probe._start(probe_exports['dm'], *args, **kargs)
             except:
-                _handle_probe_exception('during start()', probe)
+                _handle_probe_exception('during start()', probe, helper)
                 return
 
             if status is not None:
@@ -590,7 +591,7 @@ def blocking_probe(prj):
                 try:
                     probe.arm(*args, **kargs)
                 except:
-                    _handle_probe_exception('during arm()', probe)
+                    _handle_probe_exception('during arm()', probe, helper)
                     helper.wait_until_data_is_emitted()
                     helper.lets_fuzz_continue()
                     return
@@ -600,7 +601,7 @@ def blocking_probe(prj):
                 try:
                     status = probe.main(probe_exports['dm'], *args, **kargs)
                 except:
-                    _handle_probe_exception('during main()', probe)
+                    _handle_probe_exception('during main()', probe, helper)
                     helper.lets_fuzz_continue()
                     return
 
@@ -611,8 +612,8 @@ def blocking_probe(prj):
             try:
                 probe._stop(probe_exports['dm'], *args, **kargs)
             except:
-                _handle_probe_exception('during start()', probe)
-            finally:
+                _handle_probe_exception('during start()', probe, helper)
+            else:
                 helper.notify_probe_stops()
 
         prj.register_new_probe(probe.__class__.__name__, probe_func, obj=probe, blocking=True)
