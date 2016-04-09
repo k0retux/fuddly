@@ -252,7 +252,7 @@ class EmptyTarget(Target):
     def send_data(self, data, from_fmk=False):
         pass
 
-    def send_multiple_data(self, data_list, from_fmk):
+    def send_multiple_data(self, data_list, from_fmk=False):
         pass
 
 

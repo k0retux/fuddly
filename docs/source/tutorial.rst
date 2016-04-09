@@ -2458,12 +2458,12 @@ Let's illustrate this with the following example:
    class MyOperator(Operator):
 
        def start(self, fmk_ops, dm, monitor, target, logger, user_input):
-           if not monitor.is_probe_launched('health_check'):
+           if not monitor.is_probe_launched(health_check):
                # This case occurs if the probe is not associated to the target
-               monitor.start_probe('health_check')
+               monitor.start_probe(health_check)
 
        def stop(self, fmk_ops, dm, monitor, target, logger):
-           monitor.stop_probe('health_check')
+           monitor.stop_probe(health_check)
 
        def plan_next_operation(self, fmk_ops, dm, monitor, target, logger, fmk_feedback):
            self.op = Operation()
@@ -2477,7 +2477,7 @@ Let's illustrate this with the following example:
        def do_after_all(self, fmk_ops, dm, monitor, target, logger):
             linst = LastInstruction()
 
-            health_status = monitor.get_probe_status('health_check')
+            health_status = monitor.get_probe_status(health_check)
 
             if health_status.get_status() < 0 and self.op_state == 'critical':
                 linst.set_instruction(LastInstruction.RecordData)

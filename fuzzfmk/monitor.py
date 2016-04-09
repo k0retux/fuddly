@@ -139,7 +139,16 @@ class Monitor(object):
     def disable_hooks(self):
         self.__enable = False
 
-    def configure_probe(self, name, *args):
+    def _get_probe_ref(self, probe):
+        if isinstance(probe, str):
+            return probe
+        elif isinstance(probe, type) and issubclass(probe, Probe):
+            return probe.__name__
+        else:
+            return None
+
+    def configure_probe(self, probe, *args):
+        name = self._get_probe_ref(probe)
         try:
             with self._prj.get_probe_lock(name):
                 self._prj.get_probe_obj(name).configure(*args)
@@ -148,7 +157,8 @@ class Monitor(object):
         else:
             return True
 
-    def start_probe(self, name):
+    def start_probe(self, probe):
+        name = self._get_probe_ref(probe)
         if self.is_probe_launched(name):
             return False
 
@@ -167,10 +177,12 @@ class Monitor(object):
 
         return True
 
-    def is_probe_launched(self, pname):
-        return self._prj.is_probe_launched(pname)
+    def is_probe_launched(self, probe):
+        name = self._get_probe_ref(probe)
+        return self._prj.is_probe_launched(name)
 
-    def stop_probe(self, name):
+    def stop_probe(self, probe):
+        name = self._get_probe_ref(probe)
         if name in self.probe_helper:
             self.probe_helper[name].stop_probe()
         else:
@@ -192,10 +204,11 @@ class Monitor(object):
             return
 
 
-    def get_probe_helper(self, name):
+    def get_probe_helper(self, probe):
         """
         This method is called each time a probe is launched.
         """
+        name = self._get_probe_ref(probe)
         if name in self.probe_helper:
             # this branch is a priori useless
             ret = self.probe_helper[name]
@@ -245,13 +258,16 @@ class Monitor(object):
             time.sleep(0.1)
 
 
-    def get_probe_status(self, name):
+    def get_probe_status(self, probe):
+        name = self._get_probe_ref(probe)
         return self._prj.get_probe_status(name)
 
-    def get_probe_delay(self, name):
+    def get_probe_delay(self, probe):
+        name = self._get_probe_ref(probe)
         return self._prj.get_probe_delay(name)
 
-    def set_probe_delay(self, name, delay):
+    def set_probe_delay(self, probe, delay):
+        name = self._get_probe_ref(probe)
         return self._prj.set_probe_delay(name, delay)
 
     def do_before_sending_data(self):
