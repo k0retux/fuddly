@@ -626,8 +626,6 @@ class DynGenerator(Generator):
         return True
 
     def generate_data(self, dm, monitor, target):
-        data = fdm.Data()
-
         node = dm.get_data(self.data_id)
 
         if self.make_finite:

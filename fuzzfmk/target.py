@@ -599,7 +599,7 @@ class NetworkTarget(Target):
                 self._send_data([s], {s:(data, host, port)}, self._sending_id, from_fmk)
 
 
-    def send_multiple_data(self, data_list, from_fmk):
+    def send_multiple_data(self, data_list, from_fmk=False):
         self._before_sending_data(data_list, from_fmk)
         sockets = []
         data_refs = {}
@@ -620,8 +620,9 @@ class NetworkTarget(Target):
                     err_msg = '>>> WARNING: unable to send data to {:s}:{:d} <<<'.format(host, port)
                     self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
                 else:
-                    sockets.append(s)
-                    data_refs[s] = (data, host, port)
+                    if s not in sockets:
+                        sockets.append(s)
+                        data_refs[s] = (data, host, port)
 
         self._send_data(sockets, data_refs, self._sending_id, from_fmk)
         t0 = datetime.datetime.now()
@@ -650,7 +651,8 @@ class NetworkTarget(Target):
 
     def _get_data_semantic_key(self, data):
         if data.node is None:
-            print('\n*** ERROR: None data has been received!')
+            if data.raw is None:
+                print('\n*** ERROR: Empty data has been received!')
             return self.UNKNOWN_SEMANTIC
 
         semantics = data.node.get_semantics()
@@ -969,8 +971,8 @@ class NetworkTarget(Target):
                     fbk_sockets = []
                     fbk_ids = {}
                     fbk_lengths = {}
-                else:
-                    assert(self._default_fbk_id[(host, port)] not in fbk_ids.values())
+                # else:
+                #     assert(self._default_fbk_id[(host, port)] not in fbk_ids.values())
 
                 if add_main_socket:
                     fbk_sockets.append(s)

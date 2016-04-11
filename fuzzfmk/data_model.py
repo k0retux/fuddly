@@ -2567,7 +2567,7 @@ class NodeInternals_NonTerm(NodeInternals):
         return expanded_node_list
 
     def _construct_subnodes(self, node_desc, subnode_list, mode, ignore_sep_fstate, ignore_separator=False, lazy_mode=True):
-        
+
         node_attrs = node_desc[1:]
         # node = node_desc[0]
         node, mini, maxi = self._handle_node_desc(node_desc)
@@ -2607,7 +2607,8 @@ class NodeInternals_NonTerm(NodeInternals):
                 else:
                     base_node.tmp_ref_count += 1
                     nid = base_node.name + ':' + str(base_node.tmp_ref_count)
-                    if base_node.is_frozen():
+                    # if base_node.is_frozen():
+                    if self.is_attr_set(NodeInternals.Determinist):
                         ignore_fstate = False
                     else:
                         ignore_fstate = True
