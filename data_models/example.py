@@ -354,7 +354,8 @@ class Example_DataModel(DataModel):
                    {'name': 'val2'},
 
                    {'name': 'middle',
-                    'mode': MH.Mode.ImmutableClone,
+                    'custo_set': MH.Custo.NTerm.FrozenCopy,
+                    'custo_clear': MH.Custo.NTerm.MutableClone,
                     'separator': {'contents': {'name': 'sep',
                                                'contents': String(val_list=['\n'], absorb_regexp=b'\n+'),
                                                'absorb_csts': AbsNoCsts(regexp=True)}},

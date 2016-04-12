@@ -438,24 +438,35 @@ conf
   configuration. It set the name of the alternative configuration.
 
 
-mode
-  This attribute is used to change the behavior of the described node.
-  For non-terminal node this attribute can be set to:
+custo_set, custo_clear
+  These attributes are used to customize the behavior of the described node.
+  ``custo_set`` is to enable some behavior modes, whereas ``custo_clear`` allows to
+  disable them. What is expected is either a single mode or a list of modes.
+  The available modes depend on the kind of node.
 
-  - ``MH.Mode.ImmutableClone``: When a child node is instantiated more
+  For non-terminal node, the customizable behavior modes are:
+
+  - ``MH.Custo.NTerm.MutableClone``: By default, this mode is *enabled*.
+    When enabled, it means that for child nodes which can be instantiated many times
+    (refer to ``qty`` attribute), all instances will be set as *mutable*.
+    If it is disabled, when a child node is instantiated more
     than once, only the first instance is set *mutable*, the others
     have this attribute cleared to prevent generic disruptors from
     altering them. This mode aims at limiting the number of test
     cases, by pruning what is assumed to be redundant.
-  - ``MH.Mode.MutableClone``: Opposite of the previous mode.
+  - ``MH.Custo.NTerm.FrozenCopy``: By default, this mode is *enabled*.
+    When enabled, it means that for child nodes which can be instantiated many times
+    (refer to ``qty`` attribute), the instantiation process will make a frozen copy
+    of the node, meaning that it will be the exact copy of the original one at
+    the time of the copy. If disabled, the instantiation process will ignore the frozen
+    state, and thus will release all the constraints.
 
-  For *function* node this attribute can be set to:
+  For *function* node, the customizable behavior mode is:
 
-  - ``MH.Mode.FrozenArgs``: The node parameters are frozen before
-    being provided to the *function* node.
-  - ``MH.Mode.RawArgs``: The node parameters are directly provided to
+  - ``MH.Mode.FrozenArgs``: By default, this mode is *enabled*.
+    When enabled, the node parameters are frozen before being provided to
+    the *function* node. If disabled, the node parameters are directly provided to
     the *function* node (without being frozen first).
-
 
 
 Keywords to Describe Non Terminal Node

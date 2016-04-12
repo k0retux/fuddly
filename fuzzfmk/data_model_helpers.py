@@ -86,18 +86,19 @@ class MH(object):
     Copy = 'u'
     ZeroCopy = 's'
 
-    ###################
-    ### Node Modes  ###
-    ###################
+    ##########################
+    ### Node Customization ###
+    ##########################
 
-    class Mode:
-        # Function node (leaf) mode
-        FrozenArgs = 1
-        RawArgs = 2
+    class Custo:
+        # Function node (leaf) custo
+        class Func:
+            FrozenArgs = FuncCusto.FrozenArgs
 
-        # NonTerminal node mode
-        ImmutableClone = 1
-        MutableClone = 2
+        # NonTerminal node custo
+        class NTerm:
+            MutableClone = NonTermCusto.MutableClone
+            FrozenCopy = NonTermCusto.FrozenCopy
 
     #######################
     ### Node Attributes ###
@@ -509,7 +510,8 @@ class ModelHelper(object):
 
     valid_keys = [
         # generic description keys
-        'name', 'contents', 'qty', 'clone', 'type', 'alt', 'conf', 'mode',
+        'name', 'contents', 'qty', 'clone', 'type', 'alt', 'conf',
+        'custo_set', 'custo_clear',
         # NonTerminal description keys
         'weight', 'shape_type', 'section_type', 'duplicate_mode', 'weights',
         'separator', 'prefix', 'suffix', 'unique',
@@ -732,10 +734,12 @@ class ModelHelper(object):
 
         n.set_subnodes_with_csts(shapes, conf=conf)
 
-        mode = desc.get('mode', MH.Mode.MutableClone)
+        custo_set = desc.get('custo_set', None)
+        custo_clear = desc.get('custo_clear', None)
+        custo = NonTermCusto(items_to_set=custo_set, items_to_clear=custo_clear)
 
         internals = n.cc if conf is None else n.c[conf]
-        internals.set_mode(mode)
+        internals.customize(custo)
 
         sep_desc = desc.get('separator', None)
         if sep_desc is not None:
@@ -829,9 +833,12 @@ class ModelHelper(object):
             n.set_func(contents, func_arg=other_args,
                        provide_helpers=provide_helpers, conf=conf)
 
-            mode = desc.get('mode', MH.Mode.FrozenArgs)
+            custo_set = desc.get('custo_set', None)
+            custo_clear = desc.get('custo_clear', None)
+            custo = FuncCusto(items_to_set=custo_set, items_to_clear=custo_clear)
+
             internals = n.cc if conf is None else n.c[conf]
-            internals.set_mode(mode)
+            internals.customize(custo)
 
             # node_args interpretation is postponed after all nodes has been created
             self._register_todo(n, self._complete_func, args=(node_args, conf), unpack_args=True,

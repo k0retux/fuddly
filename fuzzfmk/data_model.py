@@ -507,10 +507,78 @@ class BitFieldCondition(NodeCondition):
 
 
 
-class NodeInternals(object):
-    '''Base class for implementing the contents of a node.
-    '''
+class NodeCustomization(object):
+    """
+    Base class for node cutomization
+    """
+    _custo_items = {}
 
+    def __init__(self, items_to_set=None, items_to_clear=None):
+        if items_to_set is not None:
+            if isinstance(items_to_set, int):
+                assert(items_to_set in self._custo_items)
+                self._custo_items[items_to_set] = True
+            elif isinstance(items_to_set, list):
+                for item in items_to_set:
+                    assert(item in self._custo_items)
+                    self._custo_items[item] = True
+        if items_to_clear is not None:
+            if isinstance(items_to_clear, int):
+                assert(items_to_clear in self._custo_items)
+                self._custo_items[items_to_clear] = False
+            elif isinstance(items_to_clear, list):
+                for item in items_to_clear:
+                    assert(item in self._custo_items)
+                    self._custo_items[item] = False
+
+    def __copy__(self):
+        new_custo = type(self)()
+        new_custo.__dict__.update(self.__dict__)
+        new_custo._custo_items = copy.copy(self._custo_items)
+        return new_custo
+
+class NonTermCusto(NodeCustomization):
+    """
+    Non-terminal node behavior customization
+    To be provided to :meth:`NodeInternals.customize`
+    """
+    MutableClone = 1
+    FrozenCopy = 2
+
+    _custo_items = {
+        MutableClone: True,
+        FrozenCopy: True
+    }
+
+    @property
+    def mutable_clone_mode(self):
+        return self._custo_items[self.MutableClone]
+
+    @property
+    def frozen_copy_mode(self):
+        return self._custo_items[self.FrozenCopy]
+
+
+class FuncCusto(NodeCustomization):
+    """
+    Function node behavior customization
+    To be provided to :meth:`NodeInternals.customize`
+    """
+    FrozenArgs = 1
+
+    _custo_items = {
+        FrozenArgs: True
+    }
+
+    @property
+    def frozen_args_mode(self):
+        return self._custo_items[self.FrozenArgs]
+
+
+class NodeInternals(object):
+    """
+    Base class for implementing the contents of a node.
+    """
     Freezable = 1
     Mutable = 2
     Determinist = 3
@@ -526,10 +594,14 @@ class NodeInternals(object):
     Separator = 15
     DISABLED = 100
 
-    def __init__(self, defaults=True, arg=None):
+
+    default_custo = None
+
+    def __init__(self, arg=None):
         self.private = None
         self.absorb_helper = None
         self.absorb_constraints = None
+        self.custo = None
 
         self.__attrs = {
             ### GENERIC ###
@@ -555,10 +627,14 @@ class NodeInternals(object):
             }
 
         self._sync_with = None
+        self.customize(self.default_custo)
         self._init_specific(arg)
 
     def _init_specific(self, arg):
         pass
+
+    def customize(self, custo):
+        self.custo = copy.copy(custo)
 
     def has_subkinds(self):
         return False
@@ -580,6 +656,8 @@ class NodeInternals(object):
     def make_private(self, ignore_frozen_state, accept_external_entanglement, delayed_node_internals):
         if self.private is not None:
             self.private = copy.copy(self.private)
+        if self.custo is not None:
+            self.custo = copy.copy(self.custo)
         self.absorb_constraints = copy.copy(self.absorb_constraints)
         self.__attrs = copy.copy(self.__attrs)
 
@@ -1690,17 +1768,17 @@ class NodeInternals_TypedValue(NodeInternals_Term):
             return object.__getattribute__(self, name)
 
 class NodeInternals_Func(NodeInternals_Term):
+    default_custo = FuncCusto()
+
     def _init_specific(self, arg):
         NodeInternals_Term._init_specific(self, arg)
         self.fct = None
         self.node_arg = None
         self.fct_arg = None
         self.env = None
-        self.__mode = None
         self._node_helpers = DynNode_Helpers()
         self.provide_helpers = False
-        self.set_mode(1)
-        
+
     def import_func(self, fct, fct_node_arg=None, fct_arg=None,
                     provide_helpers=False):
 
@@ -1741,15 +1819,16 @@ class NodeInternals_Func(NodeInternals_Term):
     def set_env(self, env):
         self.env = env
 
-    def set_mode(self, mode):
-        self.__mode = mode
-
-        if mode == 1:
-            self._get_value_specific = self.__get_value_specific_mode1
-        elif mode == 2:
-            self._get_value_specific = self.__get_value_specific_mode2
+    def customize(self, custo):
+        if custo is None:
+            self.custo = copy.copy(self.default_custo)
         else:
-            raise ValueError
+            self.custo = copy.copy(custo)
+
+        if self.custo.frozen_args_mode:
+            self._get_value_specific = self.__get_value_specific_mode1
+        else:
+            self._get_value_specific = self.__get_value_specific_mode2
 
     def set_clone_info(self, info, node):
         self._node_helpers.set_graph_info(node, info)
@@ -1848,7 +1927,7 @@ class NodeInternals_Func(NodeInternals_Term):
         # new _get_value_specific() still points to the bounded method
         # of the copied object, and thus the bounded 'node_arg'
         # attribute used by this function is not what we want for the new object
-        self.set_mode(self.__mode)
+        self.customize(self.custo)
 
         self._node_helpers = copy.copy(self._node_helpers)
         # The call to 'self._node_helpers.make_private()' is performed
@@ -2010,11 +2089,13 @@ class NodeInternals_NonTerm(NodeInternals):
                          # infinite (-1). "Infinite quantity" makes
                          # sense only for absorption operation.
 
+    default_custo = NonTermCusto()
+
     def _init_specific(self, arg):
         self.encoder = None
         self.reset()
 
-    def reset(self, nodes_drawn_qty=None, mode=None, exhaust_info=None):
+    def reset(self, nodes_drawn_qty=None, custo=None, exhaust_info=None):
         self.frozen_node_list = None
         self.subnodes_set = set()
         self.subnodes_csts = []
@@ -2044,20 +2125,14 @@ class NodeInternals_NonTerm(NodeInternals):
             self.component_seed = exhaust_info[5]
             self._perform_first_step = exhaust_info[6]
 
-        if mode is None:
-            self.set_mode(2)
+        if custo is None:
+            self.customize(self.default_custo)
         else:
-            self.set_mode(mode)
+            self.customize(custo)
         if nodes_drawn_qty is None:
             self._nodes_drawn_qty = {}
         else:
             self._nodes_drawn_qty = nodes_drawn_qty
-
-    def set_mode(self, m):
-        if 2 >= m >= 1:
-            self.mode = m
-        else:
-            raise ValueError
 
     def set_encoder(self, encoder):
         self.encoder = encoder
@@ -2148,8 +2223,9 @@ class NodeInternals_NonTerm(NodeInternals):
 
 
     def import_subnodes_full_format(self, subnodes_csts=None, frozen_node_list=None, internals=None,
-                                   nodes_drawn_qty=None, mode=None, exhaust_info=None, separator=None):
-        self.reset(nodes_drawn_qty=nodes_drawn_qty, mode=mode, exhaust_info=exhaust_info)
+                                    nodes_drawn_qty=None, custo=None, exhaust_info=None,
+                                    separator=None):
+        self.reset(nodes_drawn_qty=nodes_drawn_qty, custo=custo, exhaust_info=exhaust_info)
 
         if internals is not None:
             # This case is only for Node.set_contents() usage
@@ -2158,7 +2234,7 @@ class NodeInternals_NonTerm(NodeInternals):
             self.frozen_node_list = internals.frozen_node_list
             self.separator =  internals.separator
             self.subnodes_set = internals.subnodes_set
-            self.set_mode(internals.mode)
+            self.customize(internals.custo)
 
         elif subnodes_csts is not None:
             # This case is used by self.make_private_subnodes()
@@ -2253,9 +2329,8 @@ class NodeInternals_NonTerm(NodeInternals):
                     node_dico[e] = new_e
                 new_fl.append(node_dico[e])
 
-
         self.import_subnodes_full_format(subnodes_csts=subnodes_csts, frozen_node_list=new_fl,
-                                         nodes_drawn_qty=new_nodes_drawn_qty, mode=self.mode,
+                                         nodes_drawn_qty=new_nodes_drawn_qty, custo=self.custo,
                                          exhaust_info=new_exhaust_info, separator=new_separator)
 
         if self.frozen_node_list is None or ignore_frozen_state:
@@ -2607,8 +2682,8 @@ class NodeInternals_NonTerm(NodeInternals):
                 else:
                     base_node.tmp_ref_count += 1
                     nid = base_node.name + ':' + str(base_node.tmp_ref_count)
-                    # if base_node.is_frozen():
-                    if self.is_attr_set(NodeInternals.Determinist):
+                    # if self.is_attr_set(NodeInternals.Determinist):
+                    if self.custo.frozen_copy_mode:
                         ignore_fstate = False
                     else:
                         ignore_fstate = True
@@ -2619,16 +2694,14 @@ class NodeInternals_NonTerm(NodeInternals):
                     new_node._reset_depth(parent_depth=base_node.depth-1)
 
                     # For dynamically created Node(), don't propagate the fuzz weight
-                    if self.mode == 1:
+                    if not self.custo.mutable_clone_mode:
                         new_node.reset_fuzz_weight(recursive=True)
                         new_node.clear_attr(NodeInternals.Mutable, all_conf=True, recursive=True)
-                    elif self.mode == 2:
-                        pass
                     else:
-                        raise ValueError
+                        pass
 
                 if new_node.is_nonterm():
-                    new_node.cc.set_mode(self.mode)
+                    new_node.cc.customize(self.custo)
 
                 new_node._set_clone_info((base_node.tmp_ref_count-1, nb), base_node)
 
@@ -2650,7 +2723,7 @@ class NodeInternals_NonTerm(NodeInternals):
         # only once as there is no node copy.
         if new_node is not None and mode == 's':
             if new_node.is_nonterm():
-                new_node.cc.set_mode(self.mode)
+                new_node.cc.customize(self.custo)
             new_node._set_clone_info((0,nb), base_node)
 
         if len(to_entangle) > 1:
@@ -3024,7 +3097,7 @@ class NodeInternals_NonTerm(NodeInternals):
             node = Node(nid, base_node=base_node, ignore_frozen_state=ignore_frozen_state,
                         accept_external_entanglement=False)
             node._reset_depth(parent_depth=base_node.depth-1)
-            if base_node.is_nonterm() and base_node.cc.mode == 1:
+            if base_node.is_nonterm() and not base_node.cc.custo.mutable_clone_mode:
                 node.reset_fuzz_weight(recursive=True)
                 node.clear_attr(NodeInternals.Mutable, all_conf=True, recursive=True)
         else:

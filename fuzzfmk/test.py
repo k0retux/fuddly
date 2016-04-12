@@ -1592,7 +1592,8 @@ class TestModelWalker(unittest.TestCase):
         # data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')
         shape_desc = \
         {'name': 'shape',
-         'mode': MH.Mode.ImmutableClone,
+         'custo_set': MH.Custo.NTerm.FrozenCopy,
+         'custo_clear': MH.Custo.NTerm.MutableClone,
          'separator': {'contents': {'name': 'sep',
                                     'contents': String(val_list=[' [!] '])}},
          'contents': [
@@ -1606,7 +1607,8 @@ class TestModelWalker(unittest.TestCase):
                    'contents': [
 
                        {'name': 'body',
-                        'mode' : MH.Mode.ImmutableClone,
+                        'custo_set': MH.Custo.NTerm.FrozenCopy,
+                        'custo_clear': MH.Custo.NTerm.MutableClone,
                         'separator': {'contents': {'name': 'sep2',
                                                    'contents': String(val_list=['::'])}},
                         'shape_type': MH.Random, # ignored in determnist mode
@@ -2682,7 +2684,8 @@ class TestHLAPI(unittest.TestCase):
                            {'name': 'val2'},
 
                            {'name': 'middle',
-                            'mode': MH.Mode.ImmutableClone,
+                            'custo_clear': MH.Custo.NTerm.MutableClone,
+                            'custo_set': MH.Custo.NTerm.FrozenCopy,
                             'contents': [{
                                 'section_type': MH.Ordered,
                                 'contents': [
@@ -2701,7 +2704,7 @@ class TestHLAPI(unittest.TestCase):
                                      'contents': lambda x: x[0] + x[1],
                                      'name': 'val22',
                                      'node_args': ['val1', 'val3'],
-                                     'mode': MH.Mode.FrozenArgs}
+                                     'custo_set': MH.Custo.Func.FrozenArgs}
                                 ]}]},
 
                            {'contents': String(max_sz = 10),
