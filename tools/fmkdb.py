@@ -28,6 +28,7 @@ import sys
 import inspect
 from datetime import datetime
 import math
+import re
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
@@ -46,6 +47,8 @@ parser.add_argument('--no-color', action='store_true', help='do not use colors')
 parser.add_argument('-v', '--verbose', action='store_true', help='verbose mode')
 parser.add_argument('--page-width', type=int, metavar='WIDTH', default=100,
                     help='width hint for displaying information')
+parser.add_argument('--fbk-src', metavar='FEEDBACK_SOURCES',
+                   help='restrict the feedback sources to consider (through a regexp)')
 
 group = parser.add_argument_group('Fuddly Database Visualization')
 group.add_argument('-s', '--all-stats', action='store_true', help='show all statistics')
@@ -82,6 +85,8 @@ group.add_argument('--remove-data', type=int, metavar='DATA_ID',
 group = parser.add_argument_group('Fuddly Database Analysis')
 group.add_argument('--data-with-impact', action='store_true',
                    help="retrieve data that negatively impacted a target")
+group.add_argument('--data-without-fbk', action='store_true',
+                   help="retrieve data without feedback")
 
 
 def handle_confirmation():
@@ -374,6 +379,8 @@ if __name__ == "__main__":
     remove_data = args.remove_data
 
     impact_analysis = args.data_with_impact
+    data_without_fbk = args.data_without_fbk
+    fbk_src = args.fbk_src
 
     fmkdb = Database(fmkdb_path=fmkdb)
     ok = fmkdb.start()
@@ -566,16 +573,21 @@ if __name__ == "__main__":
         )
 
         if fbk_records and prj_records:
-            data_ids = {}
+            id2fbk = {}
             for rec in fbk_records:
-                data_ids[rec[0]] = (rec[1], rec[2])
+                data_id, status, src = rec
+                if data_id not in id2fbk:
+                    id2fbk[data_id] = {}
+                if src not in id2fbk[data_id]:
+                    id2fbk[data_id][src] = []
+                id2fbk[data_id][src].append(status)
 
             data_id_pattern = "{:>"+str(int(math.log10(len(prj_records)))+2)+"s}"
 
             current_prj = None
             for rec in prj_records:
                 data_id, target, prj = rec
-                if data_id in data_ids.keys():
+                if data_id in id2fbk:
                     if prj != current_prj:
                         current_prj = prj
                         print(colorize("*** Project '{:s}' ***".format(prj), rgb=Color.FMKINFOGROUP))
@@ -583,10 +595,68 @@ if __name__ == "__main__":
                     print(colorize(format_string.format('#'+str(data_id), target),
                                    rgb=Color.DATAINFO))
                     if verbose:
-                        print(colorize("       |_ status={:d} from {:s}".format(data_ids[data_id][0], data_ids[data_id][1]),
-                                       rgb=Color.FMKSUBINFO))
+                        for src, status in id2fbk[data_id].items():
+                            status_str = ''.join([str(s)+',' for s in status])[:-1]
+                            print(colorize("       |_ status={:s} from {:s}".format(status_str,
+                                                                                    src),
+                                           rgb=Color.FMKSUBINFO))
 
         else:
             print(colorize("*** No data has negatively impacted a target ***", rgb=Color.FMKINFO))
+
+    elif data_without_fbk:
+        fbk_records = fmkdb.execute_sql_statement(
+            "SELECT DATA_ID, STATUS, SOURCE, CONTENT FROM FEEDBACK;"
+        )
+        prj_records = fmkdb.execute_sql_statement(
+            "SELECT ID, TARGET, PRJ_NAME FROM DATA "
+            "ORDER BY PRJ_NAME ASC, TARGET ASC;"
+        )
+
+        if fbk_records and prj_records:
+            id2fbk = {}
+            for rec in fbk_records:
+                data_id, status, src, content = rec
+                if data_id not in id2fbk:
+                    id2fbk[data_id] = {}
+                if src not in id2fbk[data_id]:
+                    id2fbk[data_id][src] = []
+                id2fbk[data_id][src].append((status, content))
+
+            data_id_pattern = "{:>"+str(int(math.log10(len(prj_records)))+2)+"s}"
+            format_string = "     [DataID " + data_id_pattern + "] --> {:s}"
+
+            current_prj = None
+            for rec in prj_records:
+                data_id, target, prj = rec
+                to_display = True
+                if data_id in id2fbk:
+                    current_fbk = id2fbk[data_id]  # the dictionnay is never empty
+                    src_regexp = None if fbk_src is None else re.compile(fbk_src)
+                    for src, fbk_list in current_fbk.items():
+                        for fbk in fbk_list:
+                            if src_regexp and src_regexp.match(src) is None:
+                                continue
+                            elif src_regexp is None or (src_regexp and src_regexp.match(src)):
+                                if fbk[1] is None or \
+                                        (isinstance(fbk[1], bytes) and fbk[1].strip() == b''):
+                                    continue
+                                else:
+                                    to_display = False
+                                    break
+                        if not to_display:
+                            break
+
+                if to_display:
+                    if prj != current_prj:
+                        current_prj = prj
+                        print(colorize("*** Project '{:s}' ***".format(prj), rgb=Color.FMKINFOGROUP))
+                    print(colorize(format_string.format('#'+str(data_id), target),
+                                   rgb=Color.DATAINFO))
+
+        else:
+            print(colorize("*** No data has been found for analysis ***", rgb=Color.FMKINFO))
+
+
 
     fmkdb.stop()

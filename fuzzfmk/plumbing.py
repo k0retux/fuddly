@@ -88,6 +88,7 @@ class ExportableFMKOps(object):
         self.set_error = fmk.set_error
         self.load_data_model = fmk.load_data_model
         self.load_multiple_data_model = fmk.load_multiple_data_model
+        self.reload_all = fmk.reload_all
 
 class FmkFeedback(object):
     
