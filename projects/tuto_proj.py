@@ -72,8 +72,9 @@ class P2(Probe):
 
     def main(self, dm, target, logger):
         self.cpt -= 1
-
-        return ProbeStatus(self.cpt)
+        ps = ProbeStatus(self.cpt)
+        ps.set_private_info('always KO!')
+        return ps
 
 
 @blocking_probe(project)

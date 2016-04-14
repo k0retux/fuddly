@@ -1,10 +1,25 @@
 import os
-import sys
-import datetime
+import re
 
 from libs.external_modules import *
-from fuzzfmk.data_model import Data
 import fuzzfmk.global_resources as gr
+
+
+def regexp(expr, item):
+    reg = re.compile(expr)
+    if item is None:
+        return False
+    robj = reg.search(item)
+    return robj is not None
+
+def regexp_bin(expr, item):
+    expr = bytes(expr)
+    reg = re.compile(expr)
+    if item is None:
+        return False
+    robj = reg.search(item)
+    return robj is not None
+
 
 class Database(object):
 
@@ -41,6 +56,10 @@ class Database(object):
                 self._cur = self._con.cursor()
                 self._cur.executescript(fmk_db_sql)
                 ok = True
+
+        if ok:
+            self._con.create_function("REGEXP", 2, regexp)
+            self._con.create_function("BINREGEXP", 2, regexp_bin)
 
         self.enabled = ok
         return ok

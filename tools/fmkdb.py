@@ -41,52 +41,62 @@ from libs.utils import ensure_dir, chunk_lines
 
 import argparse
 
-parser = argparse.ArgumentParser(description='Process arguments.')
-parser.add_argument('--fmkdb', metavar='PATH', help='path to an alternative fmkDB.db')
-parser.add_argument('--no-color', action='store_true', help='do not use colors')
-parser.add_argument('-v', '--verbose', action='store_true', help='verbose mode')
-parser.add_argument('--page-width', type=int, metavar='WIDTH', default=100,
-                    help='width hint for displaying information')
-parser.add_argument('--fbk-src', metavar='FEEDBACK_SOURCES',
-                   help='restrict the feedback sources to consider (through a regexp)')
+parser = argparse.ArgumentParser(description='Argument for FmkDB toolkit script')
+
+group = parser.add_argument_group('Miscellaneous Options')
+group.add_argument('--fmkdb', metavar='PATH', help='Path to an alternative fmkDB.db')
+group.add_argument('--no-color', action='store_true', help='Do not use colors')
+group.add_argument('-v', '--verbose', action='store_true', help='Verbose mode')
+group.add_argument('--page-width', type=int, metavar='WIDTH', default=100,
+                    help='Width hint for displaying information')
+
+group = parser.add_argument_group('Configuration Handles')
+group.add_argument('--fbk-src', metavar='FEEDBACK_SOURCES',
+                   help='Restrict the feedback sources to consider (through a regexp). '
+                        'Supported by: --data-with-impact, --data-without-fbk, '
+                        '--data-with-specific-fbk')
+group.add_argument('--project', metavar='PROJECT_NAME',
+                   help='Restrict the data to be displayed to a specific project. '
+                        'Supported by: --info-by-date, --info-by-ids, '
+                        '--data-with-impact, --data-without-fbk, --data-with-specific-fbk')
 
 group = parser.add_argument_group('Fuddly Database Visualization')
-group.add_argument('-s', '--all-stats', action='store_true', help='show all statistics')
+group.add_argument('-s', '--all-stats', action='store_true', help='Show all statistics')
 
 group = parser.add_argument_group('Fuddly Database Information')
 group.add_argument('-i', '--info', type=int, metavar='DATA_ID',
-                   help='display information on the specified data ID')
+                   help='Display information on the specified data ID')
 group.add_argument('--info-by-date', nargs=2, metavar=('START','END'),
-                   help='''display information on data sent between START and END '''
+                   help='''Display information on data sent between START and END '''
                         '''(date format 'Year/Month/Day' or 'Year/Month/Day-Hour' or
                         'Year/Month/Day-Hour:Minute')''')
 group.add_argument('--info-by-ids', nargs=2, metavar=('FIRST_DATA_ID','LAST_DATA_ID'), type=int,
-                   help='''display information on all the data included within the specified
+                   help='''Display information on all the data included within the specified
                    data ID range''')
 
-group.add_argument('--project', metavar='PROJECT_NAME',
-                   help='restrict the data to be displayed to a specific project (expect --info-by-date)')
-
-group.add_argument('--with-fbk', action='store_true', help='display full feedback (expect --info)')
-group.add_argument('--with-data', action='store_true', help='display data content (expect --info)')
+group.add_argument('--with-fbk', action='store_true', help='Display full feedback (expect --info)')
+group.add_argument('--with-data', action='store_true', help='Display data content (expect --info)')
 group.add_argument('--without-fmkinfo', action='store_true',
-                   help='do not display fmkinfo (expect --info)')
+                   help='Do not display fmkinfo (expect --info)')
 group.add_argument('--limit', type=int, default=600,
-                   help='limit the size of what is displayed from data (expect --with-data)')
+                   help='Limit the size of what is displayed from data (expect --with-data)')
 
 group = parser.add_argument_group('Fuddly Database Operations')
 group.add_argument('--export-data', nargs=2, metavar=('FIRST_DATA_ID','LAST_DATA_ID'), type=int,
-                   help='extract data from provided data ID range')
+                   help='Extract data from provided data ID range')
 group.add_argument('-e', '--export-one-data', type=int, metavar='DATA_ID',
-                   help='extract data from the provided data ID')
+                   help='Extract data from the provided data ID')
 group.add_argument('--remove-data', type=int, metavar='DATA_ID',
-                   help='remove data ID and all related information from fmkDB')
+                   help='Remove data ID and all related information from fmkDB')
 
 group = parser.add_argument_group('Fuddly Database Analysis')
 group.add_argument('--data-with-impact', action='store_true',
-                   help="retrieve data that negatively impacted a target")
+                   help="Retrieve data that negatively impacted a target")
 group.add_argument('--data-without-fbk', action='store_true',
-                   help="retrieve data without feedback")
+                   help="Retrieve data without feedback")
+group.add_argument('--data-with-specific-fbk', metavar='FEEDBACK_REGEXP',
+                   help="Retrieve data with specific feedback provided as a regexp")
+
 
 
 def handle_confirmation():
@@ -132,6 +142,22 @@ def handle_date(date_str):
 
     return date
 
+
+def get_project_record(prj_name=None):
+    if prj_name:
+        prj_records = fmkdb.execute_sql_statement(
+            "SELECT ID, TARGET, PRJ_NAME FROM DATA "
+            "WHERE PRJ_NAME == ? "
+            "ORDER BY PRJ_NAME ASC, TARGET ASC;",
+            params=(prj_name,)
+        )
+    else:
+        prj_records = fmkdb.execute_sql_statement(
+            "SELECT ID, TARGET, PRJ_NAME FROM DATA "
+            "ORDER BY PRJ_NAME ASC, TARGET ASC;",
+        )
+
+    return prj_records
 
 
 def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limit_data_sz=600):
@@ -381,6 +407,7 @@ if __name__ == "__main__":
     impact_analysis = args.data_with_impact
     data_without_fbk = args.data_without_fbk
     fbk_src = args.fbk_src
+    data_with_specific_fbk = args.data_with_specific_fbk
 
     fmkdb = Database(fmkdb_path=fmkdb)
     ok = fmkdb.start()
@@ -458,11 +485,18 @@ if __name__ == "__main__":
         first_id=data_info_by_range[0]
         last_id=data_info_by_range[1]
 
-        records = fmkdb.execute_sql_statement(
-            "SELECT ID FROM DATA "
-            "WHERE {start:d} <= ID and ID <= {end:d};".format(start=first_id,
-                                                              end=last_id)
-        )
+        if prj_name:
+            records = fmkdb.execute_sql_statement(
+                "SELECT ID FROM DATA "
+                "WHERE ? <= ID and ID <= ? and PRJ_NAME == ?;",
+                params=(first_id, last_id, prj_name)
+            )
+        else:
+            records = fmkdb.execute_sql_statement(
+                "SELECT ID FROM DATA "
+                "WHERE ? <= ID and ID <= ?;",
+                params=(first_id, last_id)
+            )
 
         if records:
             for rec in records:
@@ -563,14 +597,19 @@ if __name__ == "__main__":
 
 
     elif impact_analysis:
-        fbk_records = fmkdb.execute_sql_statement(
-            "SELECT DATA_ID, STATUS, SOURCE FROM FEEDBACK "
-            "WHERE STATUS < 0;"
-        )
-        prj_records = fmkdb.execute_sql_statement(
-            "SELECT ID, TARGET, PRJ_NAME FROM DATA "
-            "ORDER BY PRJ_NAME ASC, TARGET ASC;"
-        )
+        if fbk_src:
+            fbk_records = fmkdb.execute_sql_statement(
+                "SELECT DATA_ID, STATUS, SOURCE FROM FEEDBACK "
+                "WHERE STATUS < 0 and SOURCE REGEXP ?;",
+                params=(fbk_src,)
+            )
+        else:
+            fbk_records = fmkdb.execute_sql_statement(
+                "SELECT DATA_ID, STATUS, SOURCE FROM FEEDBACK "
+                "WHERE STATUS < 0;"
+            )
+
+        prj_records = get_project_record(prj_name)
 
         if fbk_records and prj_records:
             id2fbk = {}
@@ -583,6 +622,7 @@ if __name__ == "__main__":
                 id2fbk[data_id][src].append(status)
 
             data_id_pattern = "{:>"+str(int(math.log10(len(prj_records)))+2)+"s}"
+            format_string = "     [DataID " + data_id_pattern + "] --> {:s}"
 
             current_prj = None
             for rec in prj_records:
@@ -591,7 +631,6 @@ if __name__ == "__main__":
                     if prj != current_prj:
                         current_prj = prj
                         print(colorize("*** Project '{:s}' ***".format(prj), rgb=Color.FMKINFOGROUP))
-                    format_string = "     [DataID " + data_id_pattern + "] --> {:s}"
                     print(colorize(format_string.format('#'+str(data_id), target),
                                    rgb=Color.DATAINFO))
                     if verbose:
@@ -605,13 +644,18 @@ if __name__ == "__main__":
             print(colorize("*** No data has negatively impacted a target ***", rgb=Color.FMKINFO))
 
     elif data_without_fbk:
-        fbk_records = fmkdb.execute_sql_statement(
-            "SELECT DATA_ID, STATUS, SOURCE, CONTENT FROM FEEDBACK;"
-        )
-        prj_records = fmkdb.execute_sql_statement(
-            "SELECT ID, TARGET, PRJ_NAME FROM DATA "
-            "ORDER BY PRJ_NAME ASC, TARGET ASC;"
-        )
+        if fbk_src:
+            fbk_records = fmkdb.execute_sql_statement(
+                "SELECT DATA_ID, STATUS, SOURCE, CONTENT FROM FEEDBACK "
+                "WHERE SOURCE REGEXP ?;",
+                params=(fbk_src,)
+            )
+        else:
+            fbk_records = fmkdb.execute_sql_statement(
+                "SELECT DATA_ID, STATUS, SOURCE, CONTENT FROM FEEDBACK;"
+            )
+
+        prj_records = get_project_record(prj_name)
 
         if fbk_records and prj_records:
             id2fbk = {}
@@ -632,18 +676,18 @@ if __name__ == "__main__":
                 to_display = True
                 if data_id in id2fbk:
                     current_fbk = id2fbk[data_id]  # the dictionnay is never empty
-                    src_regexp = None if fbk_src is None else re.compile(fbk_src)
+                    # src_regexp = None if fbk_src is None else re.compile(fbk_src)
                     for src, fbk_list in current_fbk.items():
                         for fbk in fbk_list:
-                            if src_regexp and src_regexp.match(src) is None:
+                            # if src_regexp and src_regexp.match(src) is None:
+                            #     continue
+                            # elif src_regexp is None or (src_regexp and src_regexp.match(src)):
+                            if fbk[1] is None or \
+                                    (isinstance(fbk[1], bytes) and fbk[1].strip() == b''):
                                 continue
-                            elif src_regexp is None or (src_regexp and src_regexp.match(src)):
-                                if fbk[1] is None or \
-                                        (isinstance(fbk[1], bytes) and fbk[1].strip() == b''):
-                                    continue
-                                else:
-                                    to_display = False
-                                    break
+                            else:
+                                to_display = False
+                                break
                         if not to_display:
                             break
 
@@ -657,6 +701,56 @@ if __name__ == "__main__":
         else:
             print(colorize("*** No data has been found for analysis ***", rgb=Color.FMKINFO))
 
+    elif data_with_specific_fbk:
+        if sys.version_info[0] > 2:
+            data_with_specific_fbk = bytes(data_with_specific_fbk, 'latin_1')
+
+        if fbk_src:
+            fbk_records = fmkdb.execute_sql_statement(
+                "SELECT DATA_ID, CONTENT, SOURCE FROM FEEDBACK "
+                "WHERE SOURCE REGEXP ? AND BINREGEXP(?,CONTENT);",
+                params=(fbk_src, data_with_specific_fbk)
+            )
+        else:
+            fbk_records = fmkdb.execute_sql_statement(
+                "SELECT DATA_ID, CONTENT, SOURCE FROM FEEDBACK "
+                "WHERE BINREGEXP(?,CONTENT);",
+                params=(data_with_specific_fbk,)
+            )
+
+        prj_records = get_project_record(prj_name)
+
+        data_id_pattern = "{:>"+str(int(math.log10(len(prj_records)))+2)+"s}"
+        format_string = "     [DataID " + data_id_pattern + "] --> {:s}"
+
+        if fbk_records and prj_records:
+
+            ids_to_display = {}
+            for rec in fbk_records:
+                data_id, content, src = rec
+                if data_id not in ids_to_display:
+                    ids_to_display[data_id] = {}
+                if src not in ids_to_display[data_id]:
+                    ids_to_display[data_id][src] = []
+                ids_to_display[data_id][src].append(content)
+
+            current_prj = None
+            for rec in prj_records:
+                data_id, target, prj = rec
+                if data_id in ids_to_display:
+                    fbk = ids_to_display[data_id]
+                    if prj != current_prj:
+                        current_prj = prj
+                        print(colorize("*** Project '{:s}' ***".format(prj), rgb=Color.FMKINFOGROUP))
+                    print(colorize(format_string.format('#'+str(data_id), target),
+                                   rgb=Color.DATAINFO))
+                    for src, contents in fbk.items():
+                        print(colorize("       |_ From [{:s}]:".format(src), rgb=Color.FMKSUBINFO))
+                        for ct in contents:
+                            print(colorize("          {:s}".format(str(ct)), rgb=Color.DATAINFO_ALT))
+
+        else:
+            print(colorize("*** No data has been found for analysis ***", rgb=Color.FMKINFO))
 
 
     fmkdb.stop()
