@@ -514,6 +514,7 @@ class NodeCustomization(object):
     _custo_items = {}
 
     def __init__(self, items_to_set=None, items_to_clear=None):
+        self._custo_items = copy.copy(self._custo_items)
         if items_to_set is not None:
             if isinstance(items_to_set, int):
                 assert(items_to_set in self._custo_items)
@@ -539,7 +540,7 @@ class NodeCustomization(object):
 
 class NonTermCusto(NodeCustomization):
     """
-    Non-terminal node behavior customization
+    Non-terminal node behavior-customization
     To be provided to :meth:`NodeInternals.customize`
     """
     MutableClone = 1
@@ -559,20 +560,60 @@ class NonTermCusto(NodeCustomization):
         return self._custo_items[self.FrozenCopy]
 
 
+class GenFuncCusto(NodeCustomization):
+    """
+    Generator node behavior-customization
+    To be provided to :meth:`NodeInternals.customize`
+    """
+    ForwardConfChange = 1
+    CloneExtNodeArgs = 2
+    ResetOnUnfreeze = 3
+    TriggerLast = 4
+
+    _custo_items = {
+        ForwardConfChange: True,
+        CloneExtNodeArgs: False,
+        ResetOnUnfreeze: True,
+        TriggerLast: False
+    }
+
+    @property
+    def forward_conf_change_mode(self):
+        return self._custo_items[self.ForwardConfChange]
+
+    @property
+    def clone_ext_node_args_mode(self):
+        return self._custo_items[self.CloneExtNodeArgs]
+
+    @property
+    def reset_on_unfreeze_mode(self):
+        return self._custo_items[self.ResetOnUnfreeze]
+
+    @property
+    def trigger_last_mode(self):
+        return self._custo_items[self.TriggerLast]
+
+
 class FuncCusto(NodeCustomization):
     """
-    Function node behavior customization
+    Function node behavior-customization
     To be provided to :meth:`NodeInternals.customize`
     """
     FrozenArgs = 1
+    CloneExtNodeArgs = 2
 
     _custo_items = {
-        FrozenArgs: True
+        FrozenArgs: True,
+        CloneExtNodeArgs: False,
     }
 
     @property
     def frozen_args_mode(self):
         return self._custo_items[self.FrozenArgs]
+
+    @property
+    def clone_ext_node_args_mode(self):
+        return self._custo_items[self.CloneExtNodeArgs]
 
 
 class NodeInternals(object):
@@ -583,12 +624,9 @@ class NodeInternals(object):
     Mutable = 2
     Determinist = 3
     Finite = 4
-    AcceptConfChange = 5
-    
+
     Abs_Postpone = 6
 
-    CloneExtNodeArgs = 7
-    ResetOnUnfreeze = 8
     TriggerLast = 9
 
     Separator = 15
@@ -615,11 +653,7 @@ class NodeInternals(object):
             NodeInternals.Separator: False,
 
             ### SPECIFIC ###
-            NodeInternals.AcceptConfChange: True,
-            # Used for Gen and Func
-            NodeInternals.CloneExtNodeArgs: False,
             # Used for Gen
-            NodeInternals.ResetOnUnfreeze: True,
             NodeInternals.TriggerLast: False,
 
             ### INTERNAL USAGE ###
@@ -656,8 +690,6 @@ class NodeInternals(object):
     def make_private(self, ignore_frozen_state, accept_external_entanglement, delayed_node_internals):
         if self.private is not None:
             self.private = copy.copy(self.private)
-        if self.custo is not None:
-            self.custo = copy.copy(self.custo)
         self.absorb_constraints = copy.copy(self.absorb_constraints)
         self.__attrs = copy.copy(self.__attrs)
 
@@ -666,6 +698,7 @@ class NodeInternals(object):
         self._sync_with = copy.copy(self._sync_with)
 
         self._make_private_specific(ignore_frozen_state, accept_external_entanglement)
+        self.custo = copy.copy(self.custo)
 
     # Called near the end of Node copy (Node.set_contents) to update
     # node references inside the NodeInternals
@@ -1152,6 +1185,9 @@ class NodeInternals_Empty(NodeInternals):
 
 
 class NodeInternals_GenFunc(NodeInternals):
+
+    default_custo = GenFuncCusto()
+
     def _init_specific(self, arg):
         self._generated_node = None
         self.generator_func = None
@@ -1162,7 +1198,6 @@ class NodeInternals_GenFunc(NodeInternals):
         self._node_helpers = DynNode_Helpers()
         self.provide_helpers = False
         self._trigger_registered = False
-        # self._clear_attr_direct(NodeInternals.AcceptConfChange)
         # self.enforce_absorb_constraints(AbsNoCsts())
 
     def get_node_args(self):
@@ -1237,7 +1272,7 @@ class NodeInternals_GenFunc(NodeInternals):
                     print("NOTE: Often a normal behavior if the generator is duplicated" \
                           " within a nonterm node that does not contain the node args.")
 
-                if self.is_attr_set(NodeInternals.CloneExtNodeArgs):
+                if self.custo.clone_ext_node_args_mode:
                     node = Node(func_node_arg.name, base_node=func_node_arg,
                                 copy_dico=node_dico, accept_external_entanglement=False)
                 else:
@@ -1271,7 +1306,7 @@ class NodeInternals_GenFunc(NodeInternals):
                             print("--> guilty: ", e.name)
                             print("NOTE: Often a normal behavior if the generator is duplicated" \
                                   " within a nonterm node that does not contain the node args.")
-                        if self.is_attr_set(NodeInternals.CloneExtNodeArgs):
+                        if self.custo.clone_ext_node_args_mode:
                             node = Node(e.name, base_node=e, copy_dico=node_dico,
                                       accept_external_entanglement=False)
                         else:
@@ -1443,7 +1478,9 @@ class NodeInternals_GenFunc(NodeInternals):
     def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False,
                  only_generators=False, reevaluate_constraints=False):
         # if self.is_attr_set(NodeInternals.Mutable):
-        if self.is_attr_set(NodeInternals.ResetOnUnfreeze):
+        # print(self.custo.reset_on_unfreeze_mode, self.generated_node.name,
+        #       self.default_custo.reset_on_unfreeze_mode)
+        if self.custo.reset_on_unfreeze_mode:
             # 'dont_change_state' is not supported in this case. But
             # if generator is stateless, it should not be a problem.
             # And if there is a state, ResetOnUnfreeze should be cleared anyway.
@@ -1456,7 +1493,7 @@ class NodeInternals_GenFunc(NodeInternals):
 
     def unfreeze_all(self, recursive=True, ignore_entanglement=False):
         # if self.is_attr_set(NodeInternals.Mutable):
-        if self.is_attr_set(NodeInternals.ResetOnUnfreeze):
+        if self.custo.reset_on_unfreeze_mode:
             self._trigger_registered = False
             self.reset_generator()
         else:
@@ -1502,7 +1539,7 @@ class NodeInternals_GenFunc(NodeInternals):
                                                        top_node=top_node, ignore_fstate=ignore_fstate)
 
     def set_child_current_conf(self, node, conf, reverse, ignore_entanglement):
-        if self.is_attr_set(NodeInternals.AcceptConfChange):
+        if self.custo.forward_conf_change_mode:
             if self._generated_node is not None:
                 node._set_subtrees_current_conf(self.generated_node,
                                                conf, reverse,
@@ -1510,7 +1547,6 @@ class NodeInternals_GenFunc(NodeInternals):
 
     def get_child_all_path(self, name, htable, conf, recursive):
         self.generated_node._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False)
-
 
     def set_clone_info(self, info, node):
         self._node_helpers.set_graph_info(node, info)
@@ -1858,7 +1894,7 @@ class NodeInternals_Func(NodeInternals_Term):
                     print("--> guilty: ", func_node_arg.name)
                     print("NOTE: Often a normal behavior if the function is duplicated" \
                           " within a nonterm node that does not contain the node args.")
-                if self.is_attr_set(NodeInternals.CloneExtNodeArgs):
+                if self.custo.clone_ext_node_args_mode:
                     node = Node(func_node_arg.name, base_node=func_node_arg,
                               copy_dico=node_dico, accept_external_entanglement=False)
                 else:
@@ -1892,7 +1928,7 @@ class NodeInternals_Func(NodeInternals_Term):
                             print("--> guilty: ", e.name)
                             print("NOTE: Often a normal behavior if the function is duplicated" \
                                   " within a nonterm node that does not contain the node args.")
-                        if self.is_attr_set(NodeInternals.CloneExtNodeArgs):
+                        if self.custo.clone_ext_node_args_mode:
                             node = Node(e.name, base_node=e, copy_dico=node_dico,
                                       accept_external_entanglement=False)
                         else:

@@ -461,12 +461,39 @@ custo_set, custo_clear
     the time of the copy. If disabled, the instantiation process will ignore the frozen
     state, and thus will release all the constraints.
 
-  For *function* node, the customizable behavior mode is:
+  For *generator* node, the customizable behavior modes are:
 
-  - ``MH.Mode.FrozenArgs``: By default, this mode is *enabled*.
+  - ``MH.Custo.Gen.ForwardConfChange``: By default, this mode is *enabled*.
+    If enabled, a
+    call to :meth:`fuzzfmk.data_model.Node.set_current_conf()` will be
+    called on the generated node (default behavior).
+  - ``MH.Custo.Gen.CloneExtNodeArgs``: By default, this mode is *disabled*.
+    If enabled, during a cloning operation (e.g., full copy
+    of the modeled data containing this node) if the node parameters do
+    not belong to the graph representing the data, they will be cloned (full
+    copy). Otherwise, they will just be referenced (default
+    behavior). Rationale for default behavior: When a *generator* or
+    *function* node is duplicated within a non terminal node, the node
+    parameters may be unknown to it, thus considered as external, while
+    still belonging to the full data.
+  - ``MH.Custo.Gen.ResetOnUnfreeze``: By default, this mode is *enabled*.
+    If enabled, a
+    call to :meth:`fuzzfmk.data_model.Node.unfreeze()` on the node will
+    provoke the reset of the *generator* itself, meaning that the next
+    time its value will be asked for, it will be recomputed (default
+    behaviour). If unset, a call to the method
+    :meth:`fuzzfmk.data_model.Node.unfreeze()` will provoke the call of
+    this method on the already existing generated node (and if it
+    didn't exist by this time it would have been computed first).
+
+  For *function* node, the customizable behaviors mode are:
+
+  - ``MH.Custo.Func.FrozenArgs``: By default, this mode is *enabled*.
     When enabled, the node parameters are frozen before being provided to
     the *function* node. If disabled, the node parameters are directly provided to
     the *function* node (without being frozen first).
+  - ``MH.Custo.Func.CloneExtNodeArgs``: By default, this mode is *disabled*.
+    Refer to the description of the corresponding *generator node* mode.
 
 
 Keywords to Describe Non Terminal Node
@@ -717,26 +744,6 @@ set_attrs
 
   The current specific attributes are:
 
-  - ``MH.Attr.AcceptConfChange``: Used for *generator* node. If set, a
-    call to :meth:`fuzzfmk.data_model.Node.set_current_conf()` will be
-    called on the generated node (default behavior).
-  - ``MH.Attr.CloneExtNodeArgs``: Used for *generator* node and
-    *function* node. If set, during a cloning operation (e.g., full copy
-    of the modeled data containing this node) if the node parameters do
-    not belong to the graph representing the data, they will be cloned (full
-    copy). Otherwise, they will just be referenced (default
-    behavior). Rationale for default behavior: When a *generator* or
-    *function* node is duplicated within a non terminal node, the node
-    parameters may be unknown to it, thus considered as external, while
-    still belonging to the full data.
-  - ``MH.Attr.ResetOnUnfreeze``: Used for *generator* node. If set, a
-    call to :meth:`fuzzfmk.data_model.Node.unfreeze()` on the node will
-    provoke the reset of the *generator* itself, meaning that the next
-    time its value will be asked for, it will be recomputed (default
-    behaviour). If unset, a call to the method
-    :meth:`fuzzfmk.data_model.Node.unfreeze()` will provoke the call of
-    this method on the already existing generated node (and if it
-    didn't exist by this time it would have been computed first).
   - ``MH.Attr.TriggerLast``: This attribute can be set directly
     through the keyword ``trigger_last``. Refer to it for details.
 

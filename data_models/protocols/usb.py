@@ -333,7 +333,7 @@ class USB_DataModel(DataModel):
         e_conf_contents.set_subnodes_with_csts([
                 1, ['u>', [e_intf, 1, 5]]
                 ])
-        e_conf_contents.customize(NonTermCusto(items_to_clear=MH.Custo.NTerm.MutableClone))
+        e_conf_contents.customize(NonTermCusto(items_to_clear=NonTermCusto.MutableClone))
         e_conf_contents.add_conf('MSD')
         e_conf_contents.set_subnodes_basic([msd_intf], conf='MSD')
 
