@@ -160,7 +160,8 @@ def get_project_record(prj_name=None):
     return prj_records
 
 
-def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limit_data_sz=600):
+def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, fbk_src,
+                      limit_data_sz=600):
     data = handle_data_existence(data_id=data_id)
     prt = sys.stdout.write
 
@@ -178,12 +179,20 @@ def display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, limi
                        rgb=Color.ERROR))
         return
 
-    feedback = fmkdb.execute_sql_statement(
-        "SELECT SOURCE, DATE, STATUS, CONTENT FROM FEEDBACK "
-        "WHERE DATA_ID == {data_id:d} "
-        "ORDER BY SOURCE"
-        " ASC;".format(data_id=data_id)
-    )
+    if fbk_src:
+        feedback = fmkdb.execute_sql_statement(
+            "SELECT SOURCE, DATE, STATUS, CONTENT FROM FEEDBACK "
+            "WHERE DATA_ID == ? AND SOURCE REGEXP ? "
+            "ORDER BY SOURCE ASC;",
+            params=(data_id, fbk_src)
+        )
+    else:
+        feedback = fmkdb.execute_sql_statement(
+            "SELECT SOURCE, DATE, STATUS, CONTENT FROM FEEDBACK "
+            "WHERE DATA_ID == {data_id:d} "
+            "ORDER BY SOURCE"
+            " ASC;".format(data_id=data_id)
+        )
 
     comments = fmkdb.execute_sql_statement(
         "SELECT CONTENT, DATE FROM COMMENTS "
@@ -449,7 +458,7 @@ if __name__ == "__main__":
 
     elif data_info is not None:
 
-        display_data_info(fmkdb, data_info, with_data, with_fbk, without_fmkinfo,
+        display_data_info(fmkdb, data_info, with_data, with_fbk, without_fmkinfo, fbk_src,
                           limit_data_sz=limit_data_sz)
 
     elif data_info_by_date is not None:
@@ -473,7 +482,7 @@ if __name__ == "__main__":
         if records:
             for rec in records:
                 data_id = rec[0]
-                display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo,
+                display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, fbk_src,
                                   limit_data_sz=limit_data_sz)
         else:
             print(colorize("*** ERROR: No data found between {!s} and {!s} ***".format(start, end),
@@ -501,7 +510,7 @@ if __name__ == "__main__":
         if records:
             for rec in records:
                 data_id = rec[0]
-                display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo,
+                display_data_info(fmkdb, data_id, with_data, with_fbk, without_fmkinfo, fbk_src,
                                   limit_data_sz=limit_data_sz)
         else:
             print(colorize("*** ERROR: No data found between {!s} and {!s} ***".format(first_id,
