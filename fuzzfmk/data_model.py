@@ -532,6 +532,12 @@ class NodeCustomization(object):
                     assert(item in self._custo_items)
                     self._custo_items[item] = False
 
+    def __getitem__(self, key):
+        if key in self._custo_items:
+            return self._custo_items[key]
+        else:
+            return None
+
     def __copy__(self):
         new_custo = type(self)()
         new_custo.__dict__.update(self.__dict__)
@@ -626,10 +632,8 @@ class NodeInternals(object):
     Finite = 4
 
     Abs_Postpone = 6
-
-    TriggerLast = 9
-
     Separator = 15
+
     DISABLED = 100
 
 
@@ -651,10 +655,6 @@ class NodeInternals(object):
             NodeInternals.Abs_Postpone: False,
             # Used to distinguish separator
             NodeInternals.Separator: False,
-
-            ### SPECIFIC ###
-            # Used for Gen
-            NodeInternals.TriggerLast: False,
 
             ### INTERNAL USAGE ###
             NodeInternals.DISABLED: False
@@ -791,6 +791,34 @@ class NodeInternals(object):
                 return False
         return True
 
+    def _match_negative_custo(self, criteria):
+        if criteria is None:
+            return True
+
+        # if None the node does not support customization
+        # thus we return False as we cannot be compliant
+        if self.custo is None:
+            return False
+
+        for c in criteria:
+            if self.custo[c]:
+                return False
+        return True
+
+    def _match_mandatory_custo(self, criteria):
+        if criteria is None:
+            return True
+
+        # if None the node does not support customization
+        # thus we return False as we cannot be compliant
+        if self.custo is None:
+            return False
+
+        for c in criteria:
+            if not self.custo[c]:
+                return False
+        return True
+
     def _match_negative_attrs(self, criteria):
         if criteria is None:
             return True
@@ -875,33 +903,41 @@ class NodeInternals(object):
 
 
     def match(self, internals_criteria):
-        c1 = self._match_mandatory_attrs(internals_criteria.get_mandatory_attrs())
+        c1 = self._match_mandatory_attrs(internals_criteria.mandatory_attrs)
         if not c1:
             return False
 
-        c2 = self._match_negative_attrs(internals_criteria.get_negative_attrs())
+        c2 = self._match_negative_attrs(internals_criteria.negative_attrs)
         if not c2:
             return False
 
-        c3 = self._match_node_kinds(internals_criteria.get_node_kinds())
+        c3 = self._match_mandatory_custo(internals_criteria.mandatory_custo)
         if not c3:
             return False
 
-        c4 = self._match_negative_node_kinds(internals_criteria.get_negative_node_kinds())
+        c4 = self._match_negative_custo(internals_criteria.negative_custo)
         if not c4:
             return False
 
-        c5 = self._match_node_subkinds(internals_criteria.get_node_subkinds())
+        c5 = self._match_node_kinds(internals_criteria.node_kinds)
         if not c5:
             return False
 
-        c6 = self._match_negative_node_subkinds(internals_criteria.get_negative_node_subkinds())
+        c6 = self._match_negative_node_kinds(internals_criteria.negative_node_kinds)
         if not c6:
             return False
 
+        c7 = self._match_node_subkinds(internals_criteria.node_subkinds)
+        if not c7:
+            return False
+
+        c8 = self._match_negative_node_subkinds(internals_criteria.negative_node_subkinds)
+        if not c8:
+            return False
+
         if internals_criteria.has_node_constraints():
-            c7 = self._match_node_constraints(internals_criteria.get_all_node_constraints())
-            if not c7:
+            c9 = self._match_node_constraints(internals_criteria.get_all_node_constraints())
+            if not c9:
                 return False
 
         return True
@@ -947,62 +983,76 @@ class NodeInternalsCriteria(object):
 
     def __init__(self, mandatory_attrs=None, negative_attrs=None, node_kinds=None,
                  negative_node_kinds=None, node_subkinds=None, negative_node_subkinds=None,
-                 required_csts=[], negative_csts=[]):
-        self.set_mandatory_attrs(mandatory_attrs)
-        self.set_negative_attrs(negative_attrs)
-        self.set_node_kinds(node_kinds)
-        self.set_negative_node_kinds(negative_node_kinds)
-        self.set_node_subkinds(node_subkinds)
-        self.set_negative_node_subkinds(negative_node_subkinds)
+                 mandatory_custo=None, negative_custo=None,
+                 required_csts=None, negative_csts=None):
+
+        self.mandatory_attrs = mandatory_attrs
+        self.negative_attrs = negative_attrs
+        self.mandatory_custo = mandatory_custo
+        self.negative_custo = negative_custo
+        self.node_kinds = node_kinds
+        self.negative_node_kinds = negative_node_kinds
+        self.node_subkinds = node_subkinds
+        self.negative_node_subkinds = negative_node_subkinds
         self._node_constraints = None
-        if required_csts or negative_csts:
+        if required_csts is not None:
+            assert(isinstance(required_csts, list))
             for cst in required_csts:
                 self.set_node_constraint(cst, True)
+        if negative_csts is not None:
+            assert(isinstance(negative_csts, list))
             for cst in negative_csts:
                 self.set_node_constraint(cst, False)
 
-            # # If Existence constraint is required, Inexistence constraint is also required
-            # exist_cst = self.get_node_constraint(SyncScope.Existence)
-            # if exist_cst is not None:
-            #     self.set_node_constraint(SyncScope.Inexistence, exist_cst)
-
 
     def extend(self, ic):
-        crit = ic.get_mandatory_attrs()
+        crit = ic.mandatory_attrs
         if crit:
-            if self.__mandatory_attrs is None:
-                self.__mandatory_attrs = []
-            self.__mandatory_attrs.extend(crit)
+            if self.mandatory_attrs is None:
+                self.mandatory_attrs = []
+            self.mandatory_attrs.extend(crit)
 
-        crit = ic.get_negative_attrs()
+        crit = ic.negative_attrs
         if crit:
-            if self.__negative_attrs is None:
-                self.__negative_attrs = []
-            self.__negative_attrs.extend(crit)
+            if self.negative_attrs is None:
+                self.negative_attrs = []
+            self.negative_attrs.extend(crit)
 
-        crit = ic.get_node_kinds()
+        crit = ic.mandatory_custo
         if crit:
-            if self.__node_kinds is None:
-                self.__node_kinds = []
-            self.__node_kinds.extend(crit)
+            if self.mandatory_custo is None:
+                self.mandatory_custo = []
+            self.mandatory_custo.extend(crit)
 
-        crit = ic.get_negative_node_kinds()
+        crit = ic.negative_custo
         if crit:
-            if self.__negative_node_kinds is None:
-                self.__negative_node_kinds = []
-            self.__negative_node_kinds.extend(crit)
+            if self.negative_custo is None:
+                self.negative_custo = []
+            self.negative_custo.extend(crit)
 
-        crit = ic.get_node_subkinds()
+        crit = ic.node_kinds
         if crit:
-            if self.__node_subkinds is None:
-                self.__node_subkinds = []
-            self.__node_subkinds.extend(crit)
+            if self.node_kinds is None:
+                self.node_kinds = []
+            self.node_kinds.extend(crit)
 
-        crit = ic.get_negative_node_subkinds()
+        crit = ic.negative_node_kinds
         if crit:
-            if self.__negative_node_subkinds is None:
-                self.__negative_node_subkinds = []
-            self.__negative_node_subkinds.extend(crit)
+            if self.negative_node_kinds is None:
+                self.negative_node_kinds = []
+            self.negative_node_kinds.extend(crit)
+
+        crit = ic.node_subkinds
+        if crit:
+            if self.node_subkinds is None:
+                self.node_subkinds = []
+            self.node_subkinds.extend(crit)
+
+        crit = ic.negative_node_subkinds
+        if crit:
+            if self.negative_node_subkinds is None:
+                self.negative_node_subkinds = []
+            self.negative_node_subkinds.extend(crit)
 
         crit = ic.get_all_node_constraints()
         if crit:
@@ -1037,42 +1087,6 @@ class NodeInternalsCriteria(object):
                 return True
 
         return False
-
-    def set_mandatory_attrs(self, attrs):
-        self.__mandatory_attrs = attrs
-
-    def get_mandatory_attrs(self):
-        return self.__mandatory_attrs
-
-    def set_negative_attrs(self, attrs):
-        self.__negative_attrs = attrs
-
-    def get_negative_attrs(self):
-        return self.__negative_attrs
-
-    def set_node_kinds(self, node_kinds):
-        self.__node_kinds = node_kinds
-
-    def get_node_kinds(self):
-        return self.__node_kinds
-
-    def set_negative_node_kinds(self, negative_node_kinds):
-        self.__negative_node_kinds = negative_node_kinds
-
-    def get_negative_node_kinds(self):
-        return self.__negative_node_kinds
-
-    def set_node_subkinds(self, node_subkinds):
-        self.__node_subkinds = node_subkinds
-
-    def get_node_subkinds(self):
-        return self.__node_subkinds
-
-    def set_negative_node_subkinds(self, negative_node_subkinds):
-        self.__negative_node_subkinds = negative_node_subkinds
-
-    def get_negative_node_subkinds(self):
-        return self.__negative_node_subkinds
 
 
 class DynNode_Helpers(object):
@@ -1400,7 +1414,7 @@ class NodeInternals_GenFunc(NodeInternals):
 
 
     def _get_value(self, conf=None, recursive=True):
-        if self.is_attr_set(NodeInternals.TriggerLast) and not self._trigger_registered:
+        if self.custo.trigger_last_mode and not self._trigger_registered:
             assert(self.env is not None)
             self._trigger_registered = True
             self.env.register_basic_djob(self._get_delayed_value,

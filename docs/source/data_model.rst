@@ -485,6 +485,13 @@ custo_set, custo_clear
     :meth:`fuzzfmk.data_model.Node.unfreeze()` will provoke the call of
     this method on the already existing generated node (and if it
     didn't exist by this time it would have been computed first).
+  - ``MH.Custo.Gen.TriggerLast``: By default, this mode is *disabled*.
+    If enabled, the triggering of a generator is postpone until everything else has
+    been resolved. It is especially
+    useful when you describe a generator that use a node with an
+    existence condition and that this condition cannot be resolved at
+    the time the generator would normally trigger (which is
+    when it is reached while walking through the graph).
 
   For *function* node, the customizable behaviors mode are:
 
@@ -673,13 +680,8 @@ provide_helpers
   of the modeled data.
 
 trigger_last
-  The triggering of a generator is postpone until everything else has
-  been resolved, when this keyword is set to `True`. It is especially
-  useful when you describe a generator that use a node with an
-  existence condition and when this condition cannot be resolved at
-  the time the generator will normally be triggered (that is when it
-  is reached during the nominal graph traversal).
-
+  This keyword is a shortcut for the related node customization mode.
+  Refer to ``custo_set`` and ``custo_clear``.
 
 Keywords to Import External Data Description
 --------------------------------------------
@@ -741,12 +743,6 @@ set_attrs
   - ``MH.Attr.Separator``: Used to distinguish a separator. Some
     disruptors can leverage this attribute to perform their
     alteration.
-
-  The current specific attributes are:
-
-  - ``MH.Attr.TriggerLast``: This attribute can be set directly
-    through the keyword ``trigger_last``. Refer to it for details.
-
 
   .. note:: Most of the generic stateful disruptors will recursively
 	    set the attributes ``MH.Attr.Determinist`` and ``MH.Attr.Finite``

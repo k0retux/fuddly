@@ -73,7 +73,7 @@ class ModelWalker(object):
         assert(self._max_steps > 0 or self._max_steps == -1)
 
         self.ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable, dm.NodeInternals.Finite])
-        self.triglast_ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.TriggerLast])
+        self.triglast_ic = dm.NodeInternalsCriteria(mandatory_custo=[dm.GenFuncCusto.TriggerLast])
 
         self.consumed_node_path = None
 
