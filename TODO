@@ -1,8 +1,8 @@
 [NEW FEATURES]
 
-- Implement a QEMU Target
-- Implement a GDB Target
-- PIN DBI integration for x86 targets
+- Add GDB/PIN/QEMU probes/managers
+- Add support for evolutionary fuzzing
+- Add FmkDB visualization tools
 - Implement new node types that leverage python-constraint, or more
   powerfull constraint programming library
 
