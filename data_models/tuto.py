@@ -35,7 +35,8 @@ class MyDF_DataModel(DataModel):
                   {'name': 'val2'},
                   
                   {'name': 'middle',
-                   'mode': MH.Mode.ImmutableClone,
+                   'custo_set': MH.Custo.NTerm.FrozenCopy,
+                   'custo_clear': MH.Custo.NTerm.MutableClone,
                    'separator': {'contents': {'name': 'sep',
                                               'contents': String(val_list=['\n'], absorb_regexp=b'\n+'),
                                               'absorb_csts': AbsNoCsts(regexp=True)}},
@@ -247,14 +248,14 @@ class MyDF_DataModel(DataModel):
 
         offset_gen_desc = \
         {'name': 'off_gen',
-         'mode': MH.Mode.MutableClone,
+         'custo_set': MH.Custo.NTerm.MutableClone,
          'contents': [
              {'name': 'prefix',
               'contents': String(size=10, alphabet='*+')},
               # 'contents': String(max_sz=10, min_sz=1, alphabet='*+')},
 
              {'name': 'body',
-              # 'mode': MH.Mode.MutableClone,
+              # 'custo_set': MH.Custo.NTerm.MutableClone,
               'shape_type': MH.FullyRandom,
               'contents': [
                   {'contents': String(val_list=['AAA']),

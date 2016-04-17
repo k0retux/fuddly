@@ -72,8 +72,9 @@ class P2(Probe):
 
     def main(self, dm, target, logger):
         self.cpt -= 1
-
-        return ProbeStatus(self.cpt)
+        ps = ProbeStatus(self.cpt)
+        ps.set_private_info('always KO!')
+        return ps
 
 
 @blocking_probe(project)
@@ -109,12 +110,12 @@ targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
 class MyOp(Operator):
 
     def start(self, fmk_ops, dm, monitor, target, logger, user_input):
-        monitor.set_probe_delay('P1', 1)
-        monitor.set_probe_delay('P2', 0.2)
-        if not monitor.is_probe_launched('P1'):
-            monitor.start_probe('P1')
-        if not monitor.is_probe_launched('P2'):
-            monitor.start_probe('P2')
+        monitor.set_probe_delay(P1, 1)
+        monitor.set_probe_delay(P2, 0.2)
+        if not monitor.is_probe_launched(P1):
+            monitor.start_probe(P1)
+        if not monitor.is_probe_launched(P2):
+            monitor.start_probe(P2)
 
         self.cpt = 0
         self.detected_error = 0
@@ -129,8 +130,8 @@ class MyOp(Operator):
 
         op = Operation()
 
-        p1_ret = monitor.get_probe_status('P1').get_status()
-        p2_ret = monitor.get_probe_status('P2').get_status()
+        p1_ret = monitor.get_probe_status(P1).get_status()
+        p2_ret = monitor.get_probe_status(P2).get_status()
 
         logger.print_console('*** status: p1: %d / p2: %d ***' % (p1_ret, p2_ret))
 

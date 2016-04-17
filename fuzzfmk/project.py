@@ -74,7 +74,6 @@ class Project(object):
             'lock': threading.Lock(),
             'status': ProbeStatus(0),
             'delay': 1.0,
-            'stop': threading.Event(),
             'started': False,
             'blocking': blocking
             }
@@ -107,17 +106,25 @@ class Project(object):
             ret = self.probes[name]['started']
             self.probes[name]['lock'].release()
         except KeyError:
-            return False
+            return None
 
         return ret
 
-    def quick_reset_probe(self, name, *args):
+    def is_probe_blocking(self, name):
         try:
-            with self.probes[name]['lock']:
-                self.probes[name]['obj'].quick_reset(*args)
-            return True
+            ret = self.probes[name]['blocking']
         except KeyError:
-            return False
+            return None
+
+        return ret
+
+    def get_probe_obj(self, name):
+        try:
+            ret = self.probes[name]['obj']
+        except KeyError:
+            return None
+
+        return ret
 
     def get_probe_func(self, name):
         try:
@@ -135,23 +142,21 @@ class Project(object):
 
         return ret
 
-    def stop_probe(self, name):
+    def notify_probe_starts(self, name):
         try:
             self.probes[name]['lock'].acquire()
-            if self.probes[name]['started']:
-                self.probes[name]['stop'].set()
+            self.probes[name]['started'] = True
             self.probes[name]['lock'].release()
         except KeyError:
             return False
 
         return True
 
-    def reset_probe(self, name):
+    def notify_probe_stops(self, name):
         try:
             self.probes[name]['lock'].acquire()
             self.probes[name]['status'] = ProbeStatus(0)
             self.probes[name]['started'] = False
-            self.probes[name]['stop'].clear()
             self.probes[name]['lock'].release()
         except KeyError:
             return False

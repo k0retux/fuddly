@@ -379,7 +379,7 @@ class sd_struct_constraints(StatefulDisruptor):
         self.seed = prev_data.node
         self.seed.make_finite(all_conf=True, recursive=True)
         self.seed.freeze()
-        
+
         self.idx = 0
 
         ic_exist_cst = NodeInternalsCriteria(required_csts=[SyncScope.Existence])
@@ -418,10 +418,9 @@ class sd_struct_constraints(StatefulDisruptor):
             for n in minmax_cst_nodelist:
                 for sn in n.subnodes_set:
                     minmax = n.get_subnode_minmax(sn)
-                    if minmax:
+                    if minmax is not None:
                         mini, maxi = minmax
-                        if sn.is_nonterm():
-                            self.minmax_cst_nodelist_1.add((sn, mini, maxi))
+                        self.minmax_cst_nodelist_1.add((sn, mini, maxi))
 
             nodedesclist = copy.copy(self.minmax_cst_nodelist_1)
             for n_desc in nodedesclist:

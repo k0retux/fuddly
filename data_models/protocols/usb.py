@@ -253,7 +253,7 @@ class USB_DataModel(DataModel):
 
         ep_desc = \
         {'name': 'EP_DESC',
-         # 'mode': MH.Mode.ImmutableClone,
+         # 'custo_clear': MH.Custo.NTerm.MutableClone,
          'contents': [
              {'name': 'bLength',
               'contents': UINT8(int_list=[7])},
@@ -310,8 +310,7 @@ class USB_DataModel(DataModel):
         e_intf_contents.set_subnodes_with_csts([
                 1, ['u>', [e_ep_desc, 1, 8]]
                 ])
-        # e_intf_contents.set_mode(MH.Mode.ImmutableClone)
-        # e_intf_contents.cc.set_mode(2)
+        # e_intf_contents.customize(NonTermCusto(items_to_clear=MH.Custo.NTerm.MutableClone))
 
         e_intf = Node('INTF')
         e_intf.set_subnodes_basic([e_intf_desc, e_intf_contents])
@@ -334,7 +333,7 @@ class USB_DataModel(DataModel):
         e_conf_contents.set_subnodes_with_csts([
                 1, ['u>', [e_intf, 1, 5]]
                 ])
-        e_conf_contents.set_mode(MH.Mode.ImmutableClone)
+        e_conf_contents.customize(NonTermCusto(items_to_clear=NonTermCusto.MutableClone))
         e_conf_contents.add_conf('MSD')
         e_conf_contents.set_subnodes_basic([msd_intf], conf='MSD')
 
@@ -344,11 +343,9 @@ class USB_DataModel(DataModel):
                 1, ['u>', [e_intf_alt, 1700]]
                 ], conf='BIGCONF')
 
-        # e_conf_contents.cc.set_mode(2)
-
         conf = Node('CONF')
         conf.set_subnodes_basic([e_conf_desc, e_conf_contents])
-        # conf.set_mode(MH.Mode.ImmutableClone)
+        # conf.customize(NonTermCusto(items_to_clear=MH.Custo.NTerm.MutableClone))
         conf.add_conf('MSD')
         msd_conf_desc = e_conf_desc.get_clone('MSD_CONF_DESC')
         msd_conf_desc.set_current_conf('MSD', recursive=True)

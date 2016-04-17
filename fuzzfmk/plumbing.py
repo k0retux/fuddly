@@ -88,6 +88,7 @@ class ExportableFMKOps(object):
         self.set_error = fmk.set_error
         self.load_data_model = fmk.load_data_model
         self.load_multiple_data_model = fmk.load_multiple_data_model
+        self.reload_all = fmk.reload_all
 
 class FmkFeedback(object):
     
@@ -342,8 +343,10 @@ class FmkPlumbing(object):
                 self.__add_data_model(dm_params['dm'], dm_params['tactics'],
                                       dm_params['dm_rld_args'], reload_dm=True)
                 self.__dyngenerators_created[dm_params['dm']] = False
+                self.dm = dm_params['dm']
+            else:
+                return False
 
-            self.dm = dm_params['dm']
             self._cleanup_dm_attrs_from_fmk()
             ok = self._load_data_model()
             if not ok:

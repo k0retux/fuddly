@@ -73,7 +73,7 @@ class ModelWalker(object):
         assert(self._max_steps > 0 or self._max_steps == -1)
 
         self.ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable, dm.NodeInternals.Finite])
-        self.triglast_ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.TriggerLast])
+        self.triglast_ic = dm.NodeInternalsCriteria(mandatory_custo=[dm.GenFuncCusto.TriggerLast])
 
         self.consumed_node_path = None
 
@@ -91,7 +91,7 @@ class ModelWalker(object):
         gen = self.walk_graph_rec([self._root_node], self._consumer.yield_original_val,
                                   structure_has_changed=False, consumed_nodes=set())
         for consumed_node, orig_node_val in gen:
-            self._root_node.get_value()
+            self._root_node.freeze()
 
             if self._cpt >= self._initial_step:
                 self.consumed_node_path = consumed_node.get_path_from(self._root_node)
@@ -308,7 +308,7 @@ class ModelWalker(object):
             raise ValueError  # We should never return here, otherwise its a bug we want to alert on
 
         consumed_nodes.add(node)
-        node.get_value()
+        node.freeze()
         not_recovered = True
 
         max_steps = self._consumer.wait_for_exhaustion(node)
@@ -356,8 +356,8 @@ class ModelWalker(object):
             if max_steps != 0 and not consume_called_again:
                 max_steps -= 1
                 # In this case we iterate only on the current node
-                node.unfreeze(recursive=False)
-                node.get_value()
+                node.unfreeze(recursive=False, ignore_entanglement=True)
+                node.freeze()
             elif not consume_called_again:
                 if not_recovered and (self._consumer.interested_by(node) or node in consumed_nodes):
                     self._consumer.recover_node(node)
@@ -807,11 +807,12 @@ class TypedNodeDisruption(NodeConsumerStub):
         if self.current_fuzz_vt_list:
             vt_obj = self.current_fuzz_vt_list.pop(0)
 
-            node.set_values(value_type=vt_obj)
+            node.set_values(value_type=vt_obj, ignore_entanglement=True)
             node.make_finite()
             node.make_determinist()
-            # we need to be sure that the current node is freezable
-            node.set_attr(dm.NodeInternals.Freezable)
+            node.unfreeze(ignore_entanglement=True)
+            # we need to be sure that the current node is freezable (always the case by default)
+            # node.set_attr(dm.NodeInternals.Freezable)
 
             return True
         else:
@@ -822,18 +823,18 @@ class TypedNodeDisruption(NodeConsumerStub):
 
     def recover_node(self, node):
         node.cc = self.orig_internal
-        if node.entangled_nodes is None:
-            return
-
-        for n in node.entangled_nodes:
-            if n is node:
-                continue
-            if isinstance(n.cc, dm.NodeInternals_TypedValue):
-                n.cc.import_value_type(self.orig_internal.value_type)
-            else:
-                raise ValueError
-
-        node.unfreeze(recursive=False)
+        # if node.entangled_nodes is None:
+        #     return
+        #
+        # for n in node.entangled_nodes:
+        #     if n is node:
+        #         continue
+        #     if isinstance(n.cc, dm.NodeInternals_TypedValue):
+        #         n.cc.import_value_type(self.orig_internal.value_type)
+        #     else:
+        #         raise ValueError
+        #
+        # node.unfreeze(recursive=False, ignore_entanglement=False)
 
 
     def need_reset(self, node):

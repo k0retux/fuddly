@@ -391,8 +391,7 @@ class PDFObj(object):
                         return Node('stream', values=[enc])
 
                     e_stream.set_generator_func(gen_func, func_arg=stream)
-                    e_stream.set_attr(NodeInternals.CloneExtNodeArgs)
-
+                    e_stream.customize(GenFuncCusto(items_to_set=GenFuncCusto.CloneExtNodeArgs))
                 else:
                     e_stream = Node('stream')
                     func = lambda x: zlib.compress(x)
@@ -431,7 +430,7 @@ class PDFObj(object):
         if use_generator_func:
             e_length = Node('length_wrapper')
             e_length.set_generator_func(gen_length_func, func_node_arg=e_stream)
-            e_length.set_attr(NodeInternals.CloneExtNodeArgs)
+            e_length.customize(GenFuncCusto(items_to_set=GenFuncCusto.CloneExtNodeArgs))
         else:
             e_length = Node('length', value_type=INT_str(int_list=[len(e_stream.to_bytes())]))
 
@@ -926,20 +925,20 @@ class PDFObj(object):
         if catalog_type == PDFObj.t_ctg_flat:
             e_pdf_body_gen.set_generator_func(_generate_pdf_body, func_node_arg=pdf_contents,
                                               func_arg=(context, PDFObj.__generate_pagetree_flat))
-            e_pdf_body_gen.set_attr(NodeInternals.CloneExtNodeArgs)
+            e_pdf_body_gen.customize(GenFuncCusto(items_to_set=GenFuncCusto.CloneExtNodeArgs))
             e_pdf_body_gen.add_conf('pagetree_branchloop')
             e_pdf_body_gen.set_generator_func(_generate_pdf_body, func_node_arg=pdf_contents,
                                               func_arg=(context, PDFObj.__generate_pagetree_branchloop), conf='pagetree_branchloop')
-            e_pdf_body_gen.set_attr(NodeInternals.CloneExtNodeArgs, conf='pagetree_branchloop')
+            e_pdf_body_gen.c['pagetree_branchloop'].customize(GenFuncCusto(items_to_set=GenFuncCusto.CloneExtNodeArgs))
 
         elif catalog_type == PDFObj.t_ctg_pagetree_loop:
             e_pdf_body_gen.set_generator_func(_generate_pdf_body, func_node_arg=pdf_contents,
                                               func_arg=(context, PDFObj.__generate_pagetree_branchloop))
-            e_pdf_body_gen.set_attr(NodeInternals.CloneExtNodeArgs)
+            e_pdf_body_gen.customize(GenFuncCusto(items_to_set=GenFuncCusto.CloneExtNodeArgs))
         elif catalog_type == PDFObj.t_ctg_page_loop:
             e_pdf_body_gen.set_generator_func(_generate_pdf_body, func_node_arg=pdf_contents,
                                               func_arg=(context, PDFObj.__generate_pagetree_pageloop))
-            e_pdf_body_gen.set_attr(NodeInternals.CloneExtNodeArgs)
+            e_pdf_body_gen.customize(GenFuncCusto(items_to_set=GenFuncCusto.CloneExtNodeArgs))
         else:
             raise ValueError
 
@@ -947,10 +946,10 @@ class PDFObj(object):
 
         if xref_type == PDFObj.t_xref_valid:
             e_pdf_gen.set_generator_func(_generate_xref, [pdf_contents.e_hdr, e_pdf_body_gen])
-            e_pdf_gen.set_attr(NodeInternals.CloneExtNodeArgs)
+            e_pdf_gen.customize(GenFuncCusto(items_to_set=GenFuncCusto.CloneExtNodeArgs))
         elif xref_type == PDFObj.t_xref_loop:
             e_pdf_gen.set_generator_func(_generate_xref_loop, [pdf_contents.e_hdr, e_pdf_body_gen])
-            e_pdf_gen.set_attr(NodeInternals.CloneExtNodeArgs)
+            e_pdf_gen.customize(GenFuncCusto(items_to_set=GenFuncCusto.CloneExtNodeArgs))
         else:
             raise ValueError
 

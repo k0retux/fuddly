@@ -32,8 +32,39 @@ import data_models
 from fuzzfmk.global_resources import *
 import fuzzfmk.error_handling as eh
 
-class MonitorCondition(object):
-    def __init__(self):
+class ProbeHelper(object):
+    def __init__(self, prj, pname):
+        self._prj = prj
+        self._pname = pname
+        self._stop_event = threading.Event()
+        self._init_specific(prj, pname)
+
+    def _init_specific(self, prj, pname):
+        pass
+
+    def go_on(self):
+        return not self._stop_event.is_set()
+
+    def wait(self, delay):
+        self._stop_event.wait(delay)
+
+    def stop_probe(self):
+        self._stop_event.set()
+
+    def notify_probe_stops(self):
+        self._stop_event.clear()
+        self._prj.notify_probe_stops(self._pname)
+
+    def get_probe_delay(self):
+        return self._prj.get_probe_delay(self._pname)
+
+    def set_probe_status(self, status):
+        self._prj.set_probe_status(self._pname, status)
+
+
+class BlockingProbeHelper(ProbeHelper):
+
+    def _init_specific(self, prj, pname):
         self.lck = threading.Lock()
         self.resume_fuzzing_event = threading.Event()
         self.data_emitted_event = threading.Event()
@@ -94,7 +125,7 @@ class Monitor(object):
     def start(self):
         self.__enable = True
         self._target_status = None
-        self.monitor_conditions = {}
+        self.probe_helper = {}
         self._logger.print_console('*** Monitor is started ***\n', nl_before=False, rgb=Color.COMPONENT_START)
         
     def stop(self):
@@ -108,51 +139,62 @@ class Monitor(object):
     def disable_hooks(self):
         self.__enable = False
 
-    def quick_reset_probe(self, name, *args):
-        return self._prj.quick_reset_probe(name, *args)
+    def _get_probe_ref(self, probe):
+        if isinstance(probe, str):
+            return probe
+        elif isinstance(probe, type) and issubclass(probe, Probe):
+            return probe.__name__
+        else:
+            return None
 
-    def start_probe(self, name):
-        lck = self._prj.probes[name]['lock']
+    def configure_probe(self, probe, *args):
+        name = self._get_probe_ref(probe)
+        try:
+            with self._prj.get_probe_lock(name):
+                self._prj.get_probe_obj(name).configure(*args)
+        except KeyError:
+            return False
+        else:
+            return True
 
-        with lck:
-            if self._prj.probes[name]['started']:
-                return False
+    def start_probe(self, probe):
+        name = self._get_probe_ref(probe)
+        if self.is_probe_launched(name):
+            return False
 
         func = self._prj.get_probe_func(name)
         if not func:
             return False
 
-        stop_event = self._prj.probes[name]['stop']
-
-        if self._prj.probes[name]['blocking']:
-            evts = self.get_evts(name)
-        else:
-            evts = None
+        phelpers = self.get_probe_helper(name)
 
         th = threading.Thread(None, func, 'probe.' + name,
-                              args=(stop_event, evts, self.probe_exports,
+                              args=(phelpers, self.probe_exports,
                                     self._target, self._logger))
         th.start()
 
-        with lck:
-            self.probes[name]['started'] = True
+        self._prj.notify_probe_starts(name)
 
         return True
 
-    def is_probe_launched(self, pname):
-        return self._prj.is_probe_launched(pname)
+    def is_probe_launched(self, probe):
+        name = self._get_probe_ref(probe)
+        return self._prj.is_probe_launched(name)
 
-    def stop_probe(self, name):
-        ok = self._prj.stop_probe(name)
-        if not ok:
+    def stop_probe(self, probe):
+        name = self._get_probe_ref(probe)
+        if name in self.probe_helper:
+            self.probe_helper[name].stop_probe()
+        else:
             self.fmk_ops.set_error("Probe '%s' does not exist" % name,
                                    code=Error.CommandError)
             return
 
-        if name in self.monitor_conditions:
-            self.monitor_conditions[name].notify_data_ready()
-            self.monitor_conditions[name].notify_data_emission()
-            self.monitor_conditions.pop(name)
+        if name in self.probe_helper:
+            if self._prj.is_probe_blocking(name):
+                self.probe_helper[name].notify_data_ready()
+                self.probe_helper[name].notify_data_emission()
+            self.probe_helper.pop(name)
 
         try:
             self._wait_for_probe_termination(name)
@@ -162,26 +204,31 @@ class Monitor(object):
             return
 
 
-    def get_evts(self, name):
-        '''
-        This method is called by the project each time a probe is launched.
-        '''
-        if name in self.monitor_conditions:
+    def get_probe_helper(self, probe):
+        """
+        This method is called each time a probe is launched.
+        """
+        name = self._get_probe_ref(probe)
+        if name in self.probe_helper:
             # this branch is a priori useless
-            ret = self.monitor_conditions[name]
+            ret = self.probe_helper[name]
         else:
-            self.monitor_conditions[name] = MonitorCondition()
-            ret = self.monitor_conditions[name]
+            if self._prj.is_probe_blocking(name):
+                self.probe_helper[name] = BlockingProbeHelper(self._prj, name)
+            else:
+                self.probe_helper[name] = ProbeHelper(self._prj, name)
+            ret = self.probe_helper[name]
 
         return ret
 
     def stop_all_probes(self):
         for p in self._prj.get_probes():
-            self._prj.stop_probe(p)
-            if p in self.monitor_conditions:
-                self.monitor_conditions[p].notify_data_ready()
-                self.monitor_conditions[p].notify_data_emission()
-        self.monitor_conditions = {}
+            if p in self.probe_helper:
+                self.probe_helper[p].stop_probe()
+                if self._prj.is_probe_blocking(p):
+                    self.probe_helper[p].notify_data_ready()
+                    self.probe_helper[p].notify_data_emission()
+        self.probe_helper = {}
 
         try:
             self._wait_for_probe_termination()
@@ -211,34 +258,40 @@ class Monitor(object):
             time.sleep(0.1)
 
 
-    def get_probe_status(self, name):
+    def get_probe_status(self, probe):
+        name = self._get_probe_ref(probe)
         return self._prj.get_probe_status(name)
 
-    def get_probe_delay(self, name):
+    def get_probe_delay(self, probe):
+        name = self._get_probe_ref(probe)
         return self._prj.get_probe_delay(name)
 
-    def set_probe_delay(self, name, delay):
+    def set_probe_delay(self, probe, delay):
+        name = self._get_probe_ref(probe)
         return self._prj.set_probe_delay(name, delay)
 
     def do_before_sending_data(self):
         self._target_status = None
-        if self.monitor_conditions:
-            for name, mobj in self.monitor_conditions.items():
-                mobj.notify_data_ready()
+        if self.probe_helper:
+            for name, mobj in self.probe_helper.items():
+                if self._prj.is_probe_blocking(name):
+                    mobj.notify_data_ready()
 
     def do_after_sending_data(self):
         '''
         Return False to stop current operations
         '''
-        if self.monitor_conditions:
-            for name, mobj in self.monitor_conditions.items():
-                mobj.notify_data_emission()
+        if self.probe_helper:
+            for name, mobj in self.probe_helper.items():
+                if self._prj.is_probe_blocking(name):
+                    mobj.notify_data_emission()
 
 
     def do_before_resuming_sending_data(self):
-        if self.monitor_conditions:
-            for name, mobj in self.monitor_conditions.items():
-                mobj.wait_until_data_can_be_emitted()
+        if self.probe_helper:
+            for name, mobj in self.probe_helper.items():
+                if self._prj.is_probe_blocking(name):
+                    mobj.wait_until_data_can_be_emitted()
 
 
     # Used only in interactive session
@@ -292,15 +345,47 @@ class Probe(object):
     def stop(self, dm, target, logger):
         pass
 
-    def quick_reset(self, target, logger):
-        pass
+    def arm(self, target, logger):
+        """
+        Only used by blocking probes.
+        Called by the framework just before sending a data.
 
-    def arm_probe(self, target, logger):
+        Args:
+            target: the current target
+            logger: the current logger
+        """
         pass
 
     def main(self, dm, target, logger):
-        pass
+        """
+        To be overloaded by user-code
 
+        In the case of a basic probe, this method will be called in loop following a
+        period specified within the associated project file.
+
+        In the case of a blocking probe, this method will be called by the framework
+        just after having sent a data (or a batch of data).
+
+        Args:
+            dm: the current data model
+            target: the current target
+            logger: the current logger
+
+        Returns:
+            ProbeStatus: negative status if something is wrong
+        """
+        raise NotImplementedError
+
+    def configure(self, *args):
+        """
+        (Optional method) To be overloaded with any signature that fits your needs
+        Could be called by user code through :meth:`fuzzfmk.monitor.Monitor.configure_probe`
+        Use case example is to call it from an :class:`fuzzfmk.operator_helpers.Operator`
+
+        Args:
+            *args: anything that fits your needs
+        """
+        pass
 
 class ProbeStatus(object):
 
@@ -310,9 +395,10 @@ class ProbeStatus(object):
         self.__private = info
 
     def set_status(self, status):
-        '''
-        @status shall be an integer
-        '''
+        """
+        Args:
+            status (int): negative status if something is wrong
+        """
         self.__status = status
 
     def get_status(self):
@@ -453,9 +539,9 @@ class ProbePID_SSH(Probe):
         return status
 
 
-def _handle_probe_exception(context, prj, probe):
+def _handle_probe_exception(context, probe, helper):
     pname = probe.__class__.__name__
-    prj.reset_probe(pname)
+    helper.notify_probe_stops()
     print("\nException in probe '{:s}' ({:s}):".format(pname, context))
     print('-'*60)
     traceback.print_exc(file=sys.stdout)
@@ -465,32 +551,32 @@ def probe(prj):
     def internal_func(probe_cls):
         probe = probe_cls()
 
-        def probe_func(stop_event, evts, probe_exports, *args, **kargs):
+        def probe_func(helper, probe_exports, *args, **kargs):
             try:
                 status = probe._start(probe_exports['dm'], *args, **kargs)
             except:
-                _handle_probe_exception('during start()', prj, probe)
+                _handle_probe_exception('during start()', probe, helper)
                 return
 
             if status is not None:
-                prj.set_probe_status(probe.__class__.__name__, status)
+                helper.set_probe_status(status)
 
-            while not stop_event.is_set():
-                delay = prj.get_probe_delay(probe.__class__.__name__)
+            while helper.go_on():
+                delay = helper.get_probe_delay()
                 try:
                     status = probe.main(probe_exports['dm'], *args, **kargs)
                 except:
-                    _handle_probe_exception('during main()', prj, probe)
+                    _handle_probe_exception('during main()', probe, helper)
                     return
-                prj.set_probe_status(probe.__class__.__name__, status)
-                stop_event.wait(delay)
+                helper.set_probe_status(status)
+                helper.wait(delay)
 
             try:
                 probe._stop(probe_exports['dm'], *args, **kargs)
             except:
-                _handle_probe_exception('during stop()', prj, probe)
+                _handle_probe_exception('during stop()', probe, helper)
             else:
-                prj.reset_probe(probe.__class__.__name__)
+                helper.notify_probe_stops()
 
         prj.register_new_probe(probe.__class__.__name__, probe_func, obj=probe, blocking=False)
 
@@ -503,48 +589,48 @@ def blocking_probe(prj):
     def internal_func(probe_cls):
         probe = probe_cls()
 
-        def probe_func(stop_event, evts, probe_exports, *args, **kargs):
+        def probe_func(helper, probe_exports, *args, **kargs):
             try:
                 status = probe._start(probe_exports['dm'], *args, **kargs)
             except:
-                _handle_probe_exception('during start()', prj, probe)
+                _handle_probe_exception('during start()', probe, helper)
                 return
 
             if status is not None:
-                prj.set_probe_status(probe.__class__.__name__, status)
+                helper.set_probe_status(status)
 
-            while not stop_event.is_set():
-                delay = prj.get_probe_delay(probe.__class__.__name__)
+            while helper.go_on():
+                delay = helper.get_probe_delay()
                 
-                evts.wait_for_data_ready()
+                helper.wait_for_data_ready()
 
                 try:
-                    probe.arm_probe(*args, **kargs)
+                    probe.arm(*args, **kargs)
                 except:
-                    _handle_probe_exception('during arm_probe()', prj, probe)
-                    evts.wait_until_data_is_emitted()
-                    evts.lets_fuzz_continue()
+                    _handle_probe_exception('during arm()', probe, helper)
+                    helper.wait_until_data_is_emitted()
+                    helper.lets_fuzz_continue()
                     return
 
-                evts.wait_until_data_is_emitted()
+                helper.wait_until_data_is_emitted()
 
                 try:
                     status = probe.main(probe_exports['dm'], *args, **kargs)
                 except:
-                    _handle_probe_exception('during main()', prj, probe)
-                    evts.lets_fuzz_continue()
+                    _handle_probe_exception('during main()', probe, helper)
+                    helper.lets_fuzz_continue()
                     return
 
-                prj.set_probe_status(probe.__class__.__name__, status)
-                evts.lets_fuzz_continue()
-                stop_event.wait(delay)
+                helper.set_probe_status(status)
+                helper.lets_fuzz_continue()
+                helper.wait(delay)
 
             try:
                 probe._stop(probe_exports['dm'], *args, **kargs)
             except:
-                _handle_probe_exception('during start()', prj, probe)
+                _handle_probe_exception('during start()', probe, helper)
             else:
-                prj.reset_probe(probe.__class__.__name__)
+                helper.notify_probe_stops()
 
         prj.register_new_probe(probe.__class__.__name__, probe_func, obj=probe, blocking=True)
 

@@ -140,7 +140,7 @@ class ZIP_DataModel(DataModel):
                         'alt': [
                             {'conf': 'ABS',
                              'type': MH.Generator,
-                             'clear_attrs': [MH.Attr.ResetOnUnfreeze],
+                             'custo_clear': MH.Custo.Gen.ResetOnUnfreeze,
                              'contents': lambda x: Node('cts', value_type=\
                                                         String(size=x.get_raw_value())),
                              'node_args': 'compressed_size'}
@@ -219,6 +219,7 @@ class ZIP_DataModel(DataModel):
                         'contents': UINT32_le()},
                        {'name': 'file_hdr_off',
                         'fuzz_weight': 10,
+                        # 'custo_set': MH.Custo.Gen.ResetOnUnfreeze,
                         'contents': MH.OFFSET(vt=UINT32_le),
                         'node_args': ['start_padding', 'file_list']},
                        {'name': ('file_name', 2),

@@ -86,18 +86,28 @@ class MH(object):
     Copy = 'u'
     ZeroCopy = 's'
 
-    ###################
-    ### Node Modes  ###
-    ###################
+    ##########################
+    ### Node Customization ###
+    ##########################
 
-    class Mode:
-        # Function node (leaf) mode
-        FrozenArgs = 1
-        RawArgs = 2
+    class Custo:
+        # NonTerminal node custo
+        class NTerm:
+            MutableClone = NonTermCusto.MutableClone
+            FrozenCopy = NonTermCusto.FrozenCopy
 
-        # NonTerminal node mode
-        ImmutableClone = 1
-        MutableClone = 2
+        # Generator node (leaf) custo
+        class Gen:
+            ForwardConfChange = GenFuncCusto.ForwardConfChange
+            CloneExtNodeArgs = GenFuncCusto.CloneExtNodeArgs
+            ResetOnUnfreeze = GenFuncCusto.ResetOnUnfreeze
+            TriggerLast = GenFuncCusto.TriggerLast
+
+        # Function node (leaf) custo
+        class Func:
+            FrozenArgs = FuncCusto.FrozenArgs
+            CloneExtNodeArgs = FuncCusto.CloneExtNodeArgs
+
 
     #######################
     ### Node Attributes ###
@@ -108,11 +118,7 @@ class MH(object):
         Mutable = NodeInternals.Mutable
         Determinist = NodeInternals.Determinist
         Finite = NodeInternals.Finite
-        AcceptConfChange = NodeInternals.AcceptConfChange
         Abs_Postpone = NodeInternals.Abs_Postpone
-        CloneExtNodeArgs = NodeInternals.CloneExtNodeArgs
-        ResetOnUnfreeze = NodeInternals.ResetOnUnfreeze
-        TriggerLast = NodeInternals.TriggerLast
 
         Separator = NodeInternals.Separator
 
@@ -397,7 +403,7 @@ class MH(object):
                     base = len(s)
                     off = nodes[-1].get_subnode_off(idx)
 
-                n = Node('cts', value_type=self.vt(int_list=[base+off]))
+                n = Node('cts_off', value_type=self.vt(int_list=[base+off]))
                 MH._handle_attrs(n, set_attrs, clear_attrs)
                 return n
 
@@ -509,7 +515,8 @@ class ModelHelper(object):
 
     valid_keys = [
         # generic description keys
-        'name', 'contents', 'qty', 'clone', 'type', 'alt', 'conf', 'mode',
+        'name', 'contents', 'qty', 'clone', 'type', 'alt', 'conf',
+        'custo_set', 'custo_clear',
         # NonTerminal description keys
         'weight', 'shape_type', 'section_type', 'duplicate_mode', 'weights',
         'separator', 'prefix', 'suffix', 'unique',
@@ -680,15 +687,27 @@ class ModelHelper(object):
             node_args = desc.get('node_args', None)
             n.set_generator_func(contents, func_arg=other_args,
                                  provide_helpers=provide_helpers, conf=conf)
-            trig_last = desc.get('trigger_last', False)
-            if trig_last:
-                n.set_attr(NodeInternals.TriggerLast, conf=conf)
             if node_args is not None:
                 # node_args interpretation is postponed after all nodes has been created
                 self._register_todo(n, self._complete_generator, args=(node_args, conf), unpack_args=True,
                                     prio=self.HIGH_PRIO)
         else:
             raise ValueError("*** ERROR: {:s} is an invalid contents!".format(repr(contents)))
+
+        custo_set = desc.get('custo_set', [])
+        custo_clear = desc.get('custo_clear', [])
+
+        trig_last = desc.get('trigger_last', None)
+        if trig_last is not None:
+            if trig_last:
+                custo_set.append(MH.Custo.Gen.TriggerLast)
+            else:
+                custo_clear.append(MH.Custo.Gen.TriggerLast)
+
+        if custo_set or custo_clear:
+            custo = GenFuncCusto(items_to_set=custo_set, items_to_clear=custo_clear)
+            internals = n.cc if conf is None else n.c[conf]
+            internals.customize(custo)
 
         self._handle_common_attr(n, desc, conf)
 
@@ -732,10 +751,13 @@ class ModelHelper(object):
 
         n.set_subnodes_with_csts(shapes, conf=conf)
 
-        mode = desc.get('mode', MH.Mode.MutableClone)
+        custo_set = desc.get('custo_set', None)
+        custo_clear = desc.get('custo_clear', None)
 
-        internals = n.cc if conf is None else n.c[conf]
-        internals.set_mode(mode)
+        if custo_set or custo_clear:
+            custo = NonTermCusto(items_to_set=custo_set, items_to_clear=custo_clear)
+            internals = n.cc if conf is None else n.c[conf]
+            internals.customize(custo)
 
         sep_desc = desc.get('separator', None)
         if sep_desc is not None:
@@ -829,16 +851,20 @@ class ModelHelper(object):
             n.set_func(contents, func_arg=other_args,
                        provide_helpers=provide_helpers, conf=conf)
 
-            mode = desc.get('mode', MH.Mode.FrozenArgs)
-            internals = n.cc if conf is None else n.c[conf]
-            internals.set_mode(mode)
-
             # node_args interpretation is postponed after all nodes has been created
             self._register_todo(n, self._complete_func, args=(node_args, conf), unpack_args=True,
                                 prio=self.HIGH_PRIO)
 
         else:
             raise ValueError("ERROR: {:s} is an invalid contents!".format(repr(contents)))
+
+        custo_set = desc.get('custo_set', None)
+        custo_clear = desc.get('custo_clear', None)
+
+        if custo_set or custo_clear:
+            custo = FuncCusto(items_to_set=custo_set, items_to_clear=custo_clear)
+            internals = n.cc if conf is None else n.c[conf]
+            internals.customize(custo)
 
         self._handle_common_attr(n, desc, conf)
 

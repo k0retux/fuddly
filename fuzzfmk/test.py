@@ -991,7 +991,7 @@ class TestMisc(unittest.TestCase):
                 break
 
         print('\nTurn number when Node has changed: %r, number of test cases: %d' % (turn_nb_list, i))
-        good_list = [1, 9, 17, 25, 33, 44, 55, 63, 71, 79, 87, 95, 103, 111, 119, 128, 136, 144, 152, 158, 167, 173, 186]
+        good_list = [1, 9, 17, 25, 33, 42, 51, 59, 67, 75, 83, 91, 99, 107, 115, 124, 132, 140, 148, 154, 163, 169, 182]
 
         msg = "If Fuzzy_<TypedValue>.int_list have been modified in size, the good_list should be updated.\n" \
               "If BitField are in random mode [currently put in determinist mode], the fuzzy_mode can produce more" \
@@ -1537,14 +1537,14 @@ class TestModelWalker(unittest.TestCase):
         default_consumer = NodeConsumerStub()
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True, max_steps=70):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 37)
+        self.assertEqual(idx, 49)
         
     def test_NodeConsumerStub_2(self):
         nt  = self.dm.get_data('Simple')
         default_consumer = NodeConsumerStub(max_runs_per_node=-1, min_runs_per_node=2)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True, max_steps=70):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 28)
+        self.assertEqual(idx, 35)
 
     def test_BasicVisitor(self):
         nt  = self.dm.get_data('Simple')
@@ -1592,7 +1592,8 @@ class TestModelWalker(unittest.TestCase):
         # data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')
         shape_desc = \
         {'name': 'shape',
-         'mode': MH.Mode.ImmutableClone,
+         'custo_set': MH.Custo.NTerm.FrozenCopy,
+         'custo_clear': MH.Custo.NTerm.MutableClone,
          'separator': {'contents': {'name': 'sep',
                                     'contents': String(val_list=[' [!] '])}},
          'contents': [
@@ -1606,7 +1607,8 @@ class TestModelWalker(unittest.TestCase):
                    'contents': [
 
                        {'name': 'body',
-                        'mode' : MH.Mode.ImmutableClone,
+                        'custo_set': MH.Custo.NTerm.FrozenCopy,
+                        'custo_clear': MH.Custo.NTerm.MutableClone,
                         'separator': {'contents': {'name': 'sep2',
                                                    'contents': String(val_list=['::'])}},
                         'shape_type': MH.Random, # ignored in determnist mode
@@ -1641,12 +1643,12 @@ class TestModelWalker(unittest.TestCase):
             ' [!] ++++++++++ [!] ::\x80:: [!] ',
             ' [!] ++++++++++ [!] ::\x7f:: [!] ',
             ' [!] ++++++++++ [!] ::AA\xc3::AA\xc3::>:: [!] ',  # [8] could change has it is a random corrupt_bit
-            ' [!] ++++++++++ [!] ::AAAA::AAAA::>:: [!] ',
-            ' [!] ++++++++++ [!] ::::::>:: [!] ',
-            ' [!] ++++++++++ [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAAXXXXXXXXXXXXXXXXXXXXXXXX::>:: [!] ',
-            ' [!] ++++++++++ [!] ::../../../../../../etc/password::../../../../../../etc/password::>:: [!] ',
-            ' [!] ++++++++++ [!] ::../../../../../../Windows/system.ini::../../../../../../Windows/system.ini::>:: [!] ',
-            ' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::file%n%n%n%nname.txt::>:: [!] ',
+            ' [!] ++++++++++ [!] ::AAAA::AAA::>:: [!] ',
+            ' [!] ++++++++++ [!] ::::AAA::>:: [!] ',
+            ' [!] ++++++++++ [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
+            ' [!] ++++++++++ [!] ::../../../../../../etc/password::AAA::>:: [!] ',
+            ' [!] ++++++++++ [!] ::../../../../../../Windows/system.ini::AAA::>:: [!] ',
+            ' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
             ' [!] ++++++++++ [!] ::AAA::AAA::=:: [!] ',
             ' [!] ++++++++++ [!] ::AAA::AAA::?:: [!] ',
             ' [!] ++++++++++ [!] ::AAA::AAA::\xff:: [!] ',
@@ -1655,12 +1657,12 @@ class TestModelWalker(unittest.TestCase):
             ' [!] ++++++++++ [!] ::AAA::AAA::\x80:: [!] ',
             ' [!] ++++++++++ [!] ::AAA::AAA::\x7f:: [!] ',
             ' [!] >>>>>>>>>> [!] ::\xc9AA::\xc9AA::>:: [!] ',  # [22] could change has it is a random corrupt_bit
-            ' [!] >>>>>>>>>> [!] ::AAAA::AAAA::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::::::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAAXXXXXXXXXXXXXXXXXXXXXXXX::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::../../../../../../etc/password::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::../../../../../../Windows/system.ini::../../../../../../Windows/system.ini::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::file%n%n%n%nname.txt::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::AAAA::AAA::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::::AAA::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::AAA::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::../../../../../../Windows/system.ini::AAA::>:: [!] ',
+            ' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
             ' [!] >>>>>>>>>> [!] ::AAA::AAA::=:: [!] ',
             ' [!] >>>>>>>>>> [!] ::AAA::AAA::?:: [!] ',
             ' [!] >>>>>>>>>> [!] ::AAA::AAA::\xff:: [!] ',
@@ -1679,7 +1681,7 @@ class TestModelWalker(unittest.TestCase):
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, tn_consumer, make_determinist=True, max_steps=100):
             val = rnode.to_str()
             print(colorize('[%d] '%idx + repr(val), rgb=Color.INFO))
-            if idx not in [8, 22]: 
+            if idx not in [8, 22]:
                 self.assertEqual(val, raw_vals[idx-1])
 
         self.assertEqual(idx, 35)
@@ -1715,7 +1717,7 @@ class TestModelWalker(unittest.TestCase):
         # tn_consumer.set_node_interest(internals_criteria=ic)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True, max_steps=-1):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 282)
+        self.assertEqual(idx, 306)
 
     def test_TermNodeDisruption_1(self):
         simple  = self.dm.get_data('Simple')
@@ -1766,7 +1768,7 @@ class TestModelWalker(unittest.TestCase):
 
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=100):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 21)
+        self.assertEqual(idx, 24)
 
     def test_AltConfConsumer_4(self):
         simple  = self.dm.get_data('Simple')
@@ -1775,7 +1777,7 @@ class TestModelWalker(unittest.TestCase):
 
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=50):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 22)
+        self.assertEqual(idx, 24)
 
 
     def test_JPG(self):
@@ -2682,7 +2684,8 @@ class TestHLAPI(unittest.TestCase):
                            {'name': 'val2'},
 
                            {'name': 'middle',
-                            'mode': MH.Mode.ImmutableClone,
+                            'custo_clear': MH.Custo.NTerm.MutableClone,
+                            'custo_set': MH.Custo.NTerm.FrozenCopy,
                             'contents': [{
                                 'section_type': MH.Ordered,
                                 'contents': [
@@ -2701,7 +2704,7 @@ class TestHLAPI(unittest.TestCase):
                                      'contents': lambda x: x[0] + x[1],
                                      'name': 'val22',
                                      'node_args': ['val1', 'val3'],
-                                     'mode': MH.Mode.FrozenArgs}
+                                     'custo_set': MH.Custo.Func.FrozenArgs}
                                 ]}]},
 
                            {'contents': String(max_sz = 10),
@@ -3084,7 +3087,7 @@ class TestFMK(unittest.TestCase):
 
         print('\n****\n')
 
-        expected_idx = 6
+        expected_idx = 10
         idx = 0
         act = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', None, UI(deep=True))]
         for j in range(10):

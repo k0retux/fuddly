@@ -507,29 +507,143 @@ class BitFieldCondition(NodeCondition):
 
 
 
-class NodeInternals(object):
-    '''Base class for implementing the contents of a node.
-    '''
+class NodeCustomization(object):
+    """
+    Base class for node cutomization
+    """
+    _custo_items = {}
 
+    def __init__(self, items_to_set=None, items_to_clear=None):
+        self._custo_items = copy.copy(self._custo_items)
+        if items_to_set is not None:
+            if isinstance(items_to_set, int):
+                assert(items_to_set in self._custo_items)
+                self._custo_items[items_to_set] = True
+            elif isinstance(items_to_set, list):
+                for item in items_to_set:
+                    assert(item in self._custo_items)
+                    self._custo_items[item] = True
+        if items_to_clear is not None:
+            if isinstance(items_to_clear, int):
+                assert(items_to_clear in self._custo_items)
+                self._custo_items[items_to_clear] = False
+            elif isinstance(items_to_clear, list):
+                for item in items_to_clear:
+                    assert(item in self._custo_items)
+                    self._custo_items[item] = False
+
+    def __getitem__(self, key):
+        if key in self._custo_items:
+            return self._custo_items[key]
+        else:
+            return None
+
+    def __copy__(self):
+        new_custo = type(self)()
+        new_custo.__dict__.update(self.__dict__)
+        new_custo._custo_items = copy.copy(self._custo_items)
+        return new_custo
+
+class NonTermCusto(NodeCustomization):
+    """
+    Non-terminal node behavior-customization
+    To be provided to :meth:`NodeInternals.customize`
+    """
+    MutableClone = 1
+    FrozenCopy = 2
+
+    _custo_items = {
+        MutableClone: True,
+        FrozenCopy: True
+    }
+
+    @property
+    def mutable_clone_mode(self):
+        return self._custo_items[self.MutableClone]
+
+    @property
+    def frozen_copy_mode(self):
+        return self._custo_items[self.FrozenCopy]
+
+
+class GenFuncCusto(NodeCustomization):
+    """
+    Generator node behavior-customization
+    To be provided to :meth:`NodeInternals.customize`
+    """
+    ForwardConfChange = 1
+    CloneExtNodeArgs = 2
+    ResetOnUnfreeze = 3
+    TriggerLast = 4
+
+    _custo_items = {
+        ForwardConfChange: True,
+        CloneExtNodeArgs: False,
+        ResetOnUnfreeze: True,
+        TriggerLast: False
+    }
+
+    @property
+    def forward_conf_change_mode(self):
+        return self._custo_items[self.ForwardConfChange]
+
+    @property
+    def clone_ext_node_args_mode(self):
+        return self._custo_items[self.CloneExtNodeArgs]
+
+    @property
+    def reset_on_unfreeze_mode(self):
+        return self._custo_items[self.ResetOnUnfreeze]
+
+    @property
+    def trigger_last_mode(self):
+        return self._custo_items[self.TriggerLast]
+
+
+class FuncCusto(NodeCustomization):
+    """
+    Function node behavior-customization
+    To be provided to :meth:`NodeInternals.customize`
+    """
+    FrozenArgs = 1
+    CloneExtNodeArgs = 2
+
+    _custo_items = {
+        FrozenArgs: True,
+        CloneExtNodeArgs: False,
+    }
+
+    @property
+    def frozen_args_mode(self):
+        return self._custo_items[self.FrozenArgs]
+
+    @property
+    def clone_ext_node_args_mode(self):
+        return self._custo_items[self.CloneExtNodeArgs]
+
+
+class NodeInternals(object):
+    """
+    Base class for implementing the contents of a node.
+    """
     Freezable = 1
     Mutable = 2
     Determinist = 3
     Finite = 4
-    AcceptConfChange = 5
-    
+
     Abs_Postpone = 6
-
-    CloneExtNodeArgs = 7
-    ResetOnUnfreeze = 8
-    TriggerLast = 9
-
     Separator = 15
+
     DISABLED = 100
 
-    def __init__(self, defaults=True, arg=None):
+
+    default_custo = None
+
+    def __init__(self, arg=None):
         self.private = None
         self.absorb_helper = None
         self.absorb_constraints = None
+        self.custo = None
 
         self.__attrs = {
             ### GENERIC ###
@@ -542,23 +656,19 @@ class NodeInternals(object):
             # Used to distinguish separator
             NodeInternals.Separator: False,
 
-            ### SPECIFIC ###
-            NodeInternals.AcceptConfChange: True,
-            # Used for Gen and Func
-            NodeInternals.CloneExtNodeArgs: False,
-            # Used for Gen
-            NodeInternals.ResetOnUnfreeze: True,
-            NodeInternals.TriggerLast: False,
-
             ### INTERNAL USAGE ###
             NodeInternals.DISABLED: False
             }
 
         self._sync_with = None
+        self.customize(self.default_custo)
         self._init_specific(arg)
 
     def _init_specific(self, arg):
         pass
+
+    def customize(self, custo):
+        self.custo = copy.copy(custo)
 
     def has_subkinds(self):
         return False
@@ -588,6 +698,7 @@ class NodeInternals(object):
         self._sync_with = copy.copy(self._sync_with)
 
         self._make_private_specific(ignore_frozen_state, accept_external_entanglement)
+        self.custo = copy.copy(self.custo)
 
     # Called near the end of Node copy (Node.set_contents) to update
     # node references inside the NodeInternals
@@ -680,6 +791,34 @@ class NodeInternals(object):
                 return False
         return True
 
+    def _match_negative_custo(self, criteria):
+        if criteria is None:
+            return True
+
+        # if None the node does not support customization
+        # thus we return False as we cannot be compliant
+        if self.custo is None:
+            return False
+
+        for c in criteria:
+            if self.custo[c]:
+                return False
+        return True
+
+    def _match_mandatory_custo(self, criteria):
+        if criteria is None:
+            return True
+
+        # if None the node does not support customization
+        # thus we return False as we cannot be compliant
+        if self.custo is None:
+            return False
+
+        for c in criteria:
+            if not self.custo[c]:
+                return False
+        return True
+
     def _match_negative_attrs(self, criteria):
         if criteria is None:
             return True
@@ -764,33 +903,41 @@ class NodeInternals(object):
 
 
     def match(self, internals_criteria):
-        c1 = self._match_mandatory_attrs(internals_criteria.get_mandatory_attrs())
+        c1 = self._match_mandatory_attrs(internals_criteria.mandatory_attrs)
         if not c1:
             return False
 
-        c2 = self._match_negative_attrs(internals_criteria.get_negative_attrs())
+        c2 = self._match_negative_attrs(internals_criteria.negative_attrs)
         if not c2:
             return False
 
-        c3 = self._match_node_kinds(internals_criteria.get_node_kinds())
+        c3 = self._match_mandatory_custo(internals_criteria.mandatory_custo)
         if not c3:
             return False
 
-        c4 = self._match_negative_node_kinds(internals_criteria.get_negative_node_kinds())
+        c4 = self._match_negative_custo(internals_criteria.negative_custo)
         if not c4:
             return False
 
-        c5 = self._match_node_subkinds(internals_criteria.get_node_subkinds())
+        c5 = self._match_node_kinds(internals_criteria.node_kinds)
         if not c5:
             return False
 
-        c6 = self._match_negative_node_subkinds(internals_criteria.get_negative_node_subkinds())
+        c6 = self._match_negative_node_kinds(internals_criteria.negative_node_kinds)
         if not c6:
             return False
 
+        c7 = self._match_node_subkinds(internals_criteria.node_subkinds)
+        if not c7:
+            return False
+
+        c8 = self._match_negative_node_subkinds(internals_criteria.negative_node_subkinds)
+        if not c8:
+            return False
+
         if internals_criteria.has_node_constraints():
-            c7 = self._match_node_constraints(internals_criteria.get_all_node_constraints())
-            if not c7:
+            c9 = self._match_node_constraints(internals_criteria.get_all_node_constraints())
+            if not c9:
                 return False
 
         return True
@@ -836,62 +983,76 @@ class NodeInternalsCriteria(object):
 
     def __init__(self, mandatory_attrs=None, negative_attrs=None, node_kinds=None,
                  negative_node_kinds=None, node_subkinds=None, negative_node_subkinds=None,
-                 required_csts=[], negative_csts=[]):
-        self.set_mandatory_attrs(mandatory_attrs)
-        self.set_negative_attrs(negative_attrs)
-        self.set_node_kinds(node_kinds)
-        self.set_negative_node_kinds(negative_node_kinds)
-        self.set_node_subkinds(node_subkinds)
-        self.set_negative_node_subkinds(negative_node_subkinds)
+                 mandatory_custo=None, negative_custo=None,
+                 required_csts=None, negative_csts=None):
+
+        self.mandatory_attrs = mandatory_attrs
+        self.negative_attrs = negative_attrs
+        self.mandatory_custo = mandatory_custo
+        self.negative_custo = negative_custo
+        self.node_kinds = node_kinds
+        self.negative_node_kinds = negative_node_kinds
+        self.node_subkinds = node_subkinds
+        self.negative_node_subkinds = negative_node_subkinds
         self._node_constraints = None
-        if required_csts or negative_csts:
+        if required_csts is not None:
+            assert(isinstance(required_csts, list))
             for cst in required_csts:
                 self.set_node_constraint(cst, True)
+        if negative_csts is not None:
+            assert(isinstance(negative_csts, list))
             for cst in negative_csts:
                 self.set_node_constraint(cst, False)
 
-            # # If Existence constraint is required, Inexistence constraint is also required
-            # exist_cst = self.get_node_constraint(SyncScope.Existence)
-            # if exist_cst is not None:
-            #     self.set_node_constraint(SyncScope.Inexistence, exist_cst)
-
 
     def extend(self, ic):
-        crit = ic.get_mandatory_attrs()
+        crit = ic.mandatory_attrs
         if crit:
-            if self.__mandatory_attrs is None:
-                self.__mandatory_attrs = []
-            self.__mandatory_attrs.extend(crit)
+            if self.mandatory_attrs is None:
+                self.mandatory_attrs = []
+            self.mandatory_attrs.extend(crit)
 
-        crit = ic.get_negative_attrs()
+        crit = ic.negative_attrs
         if crit:
-            if self.__negative_attrs is None:
-                self.__negative_attrs = []
-            self.__negative_attrs.extend(crit)
+            if self.negative_attrs is None:
+                self.negative_attrs = []
+            self.negative_attrs.extend(crit)
 
-        crit = ic.get_node_kinds()
+        crit = ic.mandatory_custo
         if crit:
-            if self.__node_kinds is None:
-                self.__node_kinds = []
-            self.__node_kinds.extend(crit)
+            if self.mandatory_custo is None:
+                self.mandatory_custo = []
+            self.mandatory_custo.extend(crit)
 
-        crit = ic.get_negative_node_kinds()
+        crit = ic.negative_custo
         if crit:
-            if self.__negative_node_kinds is None:
-                self.__negative_node_kinds = []
-            self.__negative_node_kinds.extend(crit)
+            if self.negative_custo is None:
+                self.negative_custo = []
+            self.negative_custo.extend(crit)
 
-        crit = ic.get_node_subkinds()
+        crit = ic.node_kinds
         if crit:
-            if self.__node_subkinds is None:
-                self.__node_subkinds = []
-            self.__node_subkinds.extend(crit)
+            if self.node_kinds is None:
+                self.node_kinds = []
+            self.node_kinds.extend(crit)
 
-        crit = ic.get_negative_node_subkinds()
+        crit = ic.negative_node_kinds
         if crit:
-            if self.__negative_node_subkinds is None:
-                self.__negative_node_subkinds = []
-            self.__negative_node_subkinds.extend(crit)
+            if self.negative_node_kinds is None:
+                self.negative_node_kinds = []
+            self.negative_node_kinds.extend(crit)
+
+        crit = ic.node_subkinds
+        if crit:
+            if self.node_subkinds is None:
+                self.node_subkinds = []
+            self.node_subkinds.extend(crit)
+
+        crit = ic.negative_node_subkinds
+        if crit:
+            if self.negative_node_subkinds is None:
+                self.negative_node_subkinds = []
+            self.negative_node_subkinds.extend(crit)
 
         crit = ic.get_all_node_constraints()
         if crit:
@@ -926,42 +1087,6 @@ class NodeInternalsCriteria(object):
                 return True
 
         return False
-
-    def set_mandatory_attrs(self, attrs):
-        self.__mandatory_attrs = attrs
-
-    def get_mandatory_attrs(self):
-        return self.__mandatory_attrs
-
-    def set_negative_attrs(self, attrs):
-        self.__negative_attrs = attrs
-
-    def get_negative_attrs(self):
-        return self.__negative_attrs
-
-    def set_node_kinds(self, node_kinds):
-        self.__node_kinds = node_kinds
-
-    def get_node_kinds(self):
-        return self.__node_kinds
-
-    def set_negative_node_kinds(self, negative_node_kinds):
-        self.__negative_node_kinds = negative_node_kinds
-
-    def get_negative_node_kinds(self):
-        return self.__negative_node_kinds
-
-    def set_node_subkinds(self, node_subkinds):
-        self.__node_subkinds = node_subkinds
-
-    def get_node_subkinds(self):
-        return self.__node_subkinds
-
-    def set_negative_node_subkinds(self, negative_node_subkinds):
-        self.__negative_node_subkinds = negative_node_subkinds
-
-    def get_negative_node_subkinds(self):
-        return self.__negative_node_subkinds
 
 
 class DynNode_Helpers(object):
@@ -1074,6 +1199,9 @@ class NodeInternals_Empty(NodeInternals):
 
 
 class NodeInternals_GenFunc(NodeInternals):
+
+    default_custo = GenFuncCusto()
+
     def _init_specific(self, arg):
         self._generated_node = None
         self.generator_func = None
@@ -1084,7 +1212,6 @@ class NodeInternals_GenFunc(NodeInternals):
         self._node_helpers = DynNode_Helpers()
         self.provide_helpers = False
         self._trigger_registered = False
-        # self._clear_attr_direct(NodeInternals.AcceptConfChange)
         # self.enforce_absorb_constraints(AbsNoCsts())
 
     def get_node_args(self):
@@ -1159,7 +1286,7 @@ class NodeInternals_GenFunc(NodeInternals):
                     print("NOTE: Often a normal behavior if the generator is duplicated" \
                           " within a nonterm node that does not contain the node args.")
 
-                if self.is_attr_set(NodeInternals.CloneExtNodeArgs):
+                if self.custo.clone_ext_node_args_mode:
                     node = Node(func_node_arg.name, base_node=func_node_arg,
                                 copy_dico=node_dico, accept_external_entanglement=False)
                 else:
@@ -1193,7 +1320,7 @@ class NodeInternals_GenFunc(NodeInternals):
                             print("--> guilty: ", e.name)
                             print("NOTE: Often a normal behavior if the generator is duplicated" \
                                   " within a nonterm node that does not contain the node args.")
-                        if self.is_attr_set(NodeInternals.CloneExtNodeArgs):
+                        if self.custo.clone_ext_node_args_mode:
                             node = Node(e.name, base_node=e, copy_dico=node_dico,
                                       accept_external_entanglement=False)
                         else:
@@ -1287,7 +1414,7 @@ class NodeInternals_GenFunc(NodeInternals):
 
 
     def _get_value(self, conf=None, recursive=True):
-        if self.is_attr_set(NodeInternals.TriggerLast) and not self._trigger_registered:
+        if self.custo.trigger_last_mode and not self._trigger_registered:
             assert(self.env is not None)
             self._trigger_registered = True
             self.env.register_basic_djob(self._get_delayed_value,
@@ -1365,7 +1492,9 @@ class NodeInternals_GenFunc(NodeInternals):
     def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False,
                  only_generators=False, reevaluate_constraints=False):
         # if self.is_attr_set(NodeInternals.Mutable):
-        if self.is_attr_set(NodeInternals.ResetOnUnfreeze):
+        # print(self.custo.reset_on_unfreeze_mode, self.generated_node.name,
+        #       self.default_custo.reset_on_unfreeze_mode)
+        if self.custo.reset_on_unfreeze_mode:
             # 'dont_change_state' is not supported in this case. But
             # if generator is stateless, it should not be a problem.
             # And if there is a state, ResetOnUnfreeze should be cleared anyway.
@@ -1378,7 +1507,7 @@ class NodeInternals_GenFunc(NodeInternals):
 
     def unfreeze_all(self, recursive=True, ignore_entanglement=False):
         # if self.is_attr_set(NodeInternals.Mutable):
-        if self.is_attr_set(NodeInternals.ResetOnUnfreeze):
+        if self.custo.reset_on_unfreeze_mode:
             self._trigger_registered = False
             self.reset_generator()
         else:
@@ -1424,7 +1553,7 @@ class NodeInternals_GenFunc(NodeInternals):
                                                        top_node=top_node, ignore_fstate=ignore_fstate)
 
     def set_child_current_conf(self, node, conf, reverse, ignore_entanglement):
-        if self.is_attr_set(NodeInternals.AcceptConfChange):
+        if self.custo.forward_conf_change_mode:
             if self._generated_node is not None:
                 node._set_subtrees_current_conf(self.generated_node,
                                                conf, reverse,
@@ -1432,7 +1561,6 @@ class NodeInternals_GenFunc(NodeInternals):
 
     def get_child_all_path(self, name, htable, conf, recursive):
         self.generated_node._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False)
-
 
     def set_clone_info(self, info, node):
         self._node_helpers.set_graph_info(node, info)
@@ -1690,17 +1818,17 @@ class NodeInternals_TypedValue(NodeInternals_Term):
             return object.__getattribute__(self, name)
 
 class NodeInternals_Func(NodeInternals_Term):
+    default_custo = FuncCusto()
+
     def _init_specific(self, arg):
         NodeInternals_Term._init_specific(self, arg)
         self.fct = None
         self.node_arg = None
         self.fct_arg = None
         self.env = None
-        self.__mode = None
         self._node_helpers = DynNode_Helpers()
         self.provide_helpers = False
-        self.set_mode(1)
-        
+
     def import_func(self, fct, fct_node_arg=None, fct_arg=None,
                     provide_helpers=False):
 
@@ -1741,15 +1869,16 @@ class NodeInternals_Func(NodeInternals_Term):
     def set_env(self, env):
         self.env = env
 
-    def set_mode(self, mode):
-        self.__mode = mode
-
-        if mode == 1:
-            self._get_value_specific = self.__get_value_specific_mode1
-        elif mode == 2:
-            self._get_value_specific = self.__get_value_specific_mode2
+    def customize(self, custo):
+        if custo is None:
+            self.custo = copy.copy(self.default_custo)
         else:
-            raise ValueError
+            self.custo = copy.copy(custo)
+
+        if self.custo.frozen_args_mode:
+            self._get_value_specific = self.__get_value_specific_mode1
+        else:
+            self._get_value_specific = self.__get_value_specific_mode2
 
     def set_clone_info(self, info, node):
         self._node_helpers.set_graph_info(node, info)
@@ -1779,7 +1908,7 @@ class NodeInternals_Func(NodeInternals_Term):
                     print("--> guilty: ", func_node_arg.name)
                     print("NOTE: Often a normal behavior if the function is duplicated" \
                           " within a nonterm node that does not contain the node args.")
-                if self.is_attr_set(NodeInternals.CloneExtNodeArgs):
+                if self.custo.clone_ext_node_args_mode:
                     node = Node(func_node_arg.name, base_node=func_node_arg,
                               copy_dico=node_dico, accept_external_entanglement=False)
                 else:
@@ -1813,7 +1942,7 @@ class NodeInternals_Func(NodeInternals_Term):
                             print("--> guilty: ", e.name)
                             print("NOTE: Often a normal behavior if the function is duplicated" \
                                   " within a nonterm node that does not contain the node args.")
-                        if self.is_attr_set(NodeInternals.CloneExtNodeArgs):
+                        if self.custo.clone_ext_node_args_mode:
                             node = Node(e.name, base_node=e, copy_dico=node_dico,
                                       accept_external_entanglement=False)
                         else:
@@ -1848,7 +1977,7 @@ class NodeInternals_Func(NodeInternals_Term):
         # new _get_value_specific() still points to the bounded method
         # of the copied object, and thus the bounded 'node_arg'
         # attribute used by this function is not what we want for the new object
-        self.set_mode(self.__mode)
+        self.customize(self.custo)
 
         self._node_helpers = copy.copy(self._node_helpers)
         # The call to 'self._node_helpers.make_private()' is performed
@@ -2010,11 +2139,13 @@ class NodeInternals_NonTerm(NodeInternals):
                          # infinite (-1). "Infinite quantity" makes
                          # sense only for absorption operation.
 
+    default_custo = NonTermCusto()
+
     def _init_specific(self, arg):
         self.encoder = None
         self.reset()
 
-    def reset(self, nodes_drawn_qty=None, mode=None, exhaust_info=None):
+    def reset(self, nodes_drawn_qty=None, custo=None, exhaust_info=None):
         self.frozen_node_list = None
         self.subnodes_set = set()
         self.subnodes_csts = []
@@ -2044,20 +2175,14 @@ class NodeInternals_NonTerm(NodeInternals):
             self.component_seed = exhaust_info[5]
             self._perform_first_step = exhaust_info[6]
 
-        if mode is None:
-            self.set_mode(2)
+        if custo is None:
+            self.customize(self.default_custo)
         else:
-            self.set_mode(mode)
+            self.customize(custo)
         if nodes_drawn_qty is None:
             self._nodes_drawn_qty = {}
         else:
             self._nodes_drawn_qty = nodes_drawn_qty
-
-    def set_mode(self, m):
-        if 2 >= m >= 1:
-            self.mode = m
-        else:
-            raise ValueError
 
     def set_encoder(self, encoder):
         self.encoder = encoder
@@ -2148,8 +2273,9 @@ class NodeInternals_NonTerm(NodeInternals):
 
 
     def import_subnodes_full_format(self, subnodes_csts=None, frozen_node_list=None, internals=None,
-                                   nodes_drawn_qty=None, mode=None, exhaust_info=None, separator=None):
-        self.reset(nodes_drawn_qty=nodes_drawn_qty, mode=mode, exhaust_info=exhaust_info)
+                                    nodes_drawn_qty=None, custo=None, exhaust_info=None,
+                                    separator=None):
+        self.reset(nodes_drawn_qty=nodes_drawn_qty, custo=custo, exhaust_info=exhaust_info)
 
         if internals is not None:
             # This case is only for Node.set_contents() usage
@@ -2158,7 +2284,7 @@ class NodeInternals_NonTerm(NodeInternals):
             self.frozen_node_list = internals.frozen_node_list
             self.separator =  internals.separator
             self.subnodes_set = internals.subnodes_set
-            self.set_mode(internals.mode)
+            self.customize(internals.custo)
 
         elif subnodes_csts is not None:
             # This case is used by self.make_private_subnodes()
@@ -2253,9 +2379,8 @@ class NodeInternals_NonTerm(NodeInternals):
                     node_dico[e] = new_e
                 new_fl.append(node_dico[e])
 
-
         self.import_subnodes_full_format(subnodes_csts=subnodes_csts, frozen_node_list=new_fl,
-                                         nodes_drawn_qty=new_nodes_drawn_qty, mode=self.mode,
+                                         nodes_drawn_qty=new_nodes_drawn_qty, custo=self.custo,
                                          exhaust_info=new_exhaust_info, separator=new_separator)
 
         if self.frozen_node_list is None or ignore_frozen_state:
@@ -2567,7 +2692,7 @@ class NodeInternals_NonTerm(NodeInternals):
         return expanded_node_list
 
     def _construct_subnodes(self, node_desc, subnode_list, mode, ignore_sep_fstate, ignore_separator=False, lazy_mode=True):
-        
+
         node_attrs = node_desc[1:]
         # node = node_desc[0]
         node, mini, maxi = self._handle_node_desc(node_desc)
@@ -2607,7 +2732,8 @@ class NodeInternals_NonTerm(NodeInternals):
                 else:
                     base_node.tmp_ref_count += 1
                     nid = base_node.name + ':' + str(base_node.tmp_ref_count)
-                    if base_node.is_frozen():
+                    # if self.is_attr_set(NodeInternals.Determinist):
+                    if self.custo.frozen_copy_mode:
                         ignore_fstate = False
                     else:
                         ignore_fstate = True
@@ -2618,16 +2744,14 @@ class NodeInternals_NonTerm(NodeInternals):
                     new_node._reset_depth(parent_depth=base_node.depth-1)
 
                     # For dynamically created Node(), don't propagate the fuzz weight
-                    if self.mode == 1:
+                    if not self.custo.mutable_clone_mode:
                         new_node.reset_fuzz_weight(recursive=True)
                         new_node.clear_attr(NodeInternals.Mutable, all_conf=True, recursive=True)
-                    elif self.mode == 2:
-                        pass
                     else:
-                        raise ValueError
+                        pass
 
                 if new_node.is_nonterm():
-                    new_node.cc.set_mode(self.mode)
+                    new_node.cc.customize(self.custo)
 
                 new_node._set_clone_info((base_node.tmp_ref_count-1, nb), base_node)
 
@@ -2649,7 +2773,7 @@ class NodeInternals_NonTerm(NodeInternals):
         # only once as there is no node copy.
         if new_node is not None and mode == 's':
             if new_node.is_nonterm():
-                new_node.cc.set_mode(self.mode)
+                new_node.cc.customize(self.custo)
             new_node._set_clone_info((0,nb), base_node)
 
         if len(to_entangle) > 1:
@@ -3023,7 +3147,7 @@ class NodeInternals_NonTerm(NodeInternals):
             node = Node(nid, base_node=base_node, ignore_frozen_state=ignore_frozen_state,
                         accept_external_entanglement=False)
             node._reset_depth(parent_depth=base_node.depth-1)
-            if base_node.is_nonterm() and base_node.cc.mode == 1:
+            if base_node.is_nonterm() and not base_node.cc.custo.mutable_clone_mode:
                 node.reset_fuzz_weight(recursive=True)
                 node.clear_attr(NodeInternals.Mutable, all_conf=True, recursive=True)
         else:

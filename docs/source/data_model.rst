@@ -438,24 +438,69 @@ conf
   configuration. It set the name of the alternative configuration.
 
 
-mode
-  This attribute is used to change the behavior of the described node.
-  For non-terminal node this attribute can be set to:
+custo_set, custo_clear
+  These attributes are used to customize the behavior of the described node.
+  ``custo_set`` is to enable some behavior modes, whereas ``custo_clear`` allows to
+  disable them. What is expected is either a single mode or a list of modes.
+  The available modes depend on the kind of node.
 
-  - ``MH.Mode.ImmutableClone``: When a child node is instantiated more
+  For non-terminal node, the customizable behavior modes are:
+
+  - ``MH.Custo.NTerm.MutableClone``: By default, this mode is *enabled*.
+    When enabled, it means that for child nodes which can be instantiated many times
+    (refer to ``qty`` attribute), all instances will be set as *mutable*.
+    If it is disabled, when a child node is instantiated more
     than once, only the first instance is set *mutable*, the others
     have this attribute cleared to prevent generic disruptors from
     altering them. This mode aims at limiting the number of test
     cases, by pruning what is assumed to be redundant.
-  - ``MH.Mode.MutableClone``: Opposite of the previous mode.
+  - ``MH.Custo.NTerm.FrozenCopy``: By default, this mode is *enabled*.
+    When enabled, it means that for child nodes which can be instantiated many times
+    (refer to ``qty`` attribute), the instantiation process will make a frozen copy
+    of the node, meaning that it will be the exact copy of the original one at
+    the time of the copy. If disabled, the instantiation process will ignore the frozen
+    state, and thus will release all the constraints.
 
-  For *function* node this attribute can be set to:
+  For *generator* node, the customizable behavior modes are:
 
-  - ``MH.Mode.FrozenArgs``: The node parameters are frozen before
-    being provided to the *function* node.
-  - ``MH.Mode.RawArgs``: The node parameters are directly provided to
+  - ``MH.Custo.Gen.ForwardConfChange``: By default, this mode is *enabled*.
+    If enabled, a
+    call to :meth:`fuzzfmk.data_model.Node.set_current_conf()` will be
+    called on the generated node (default behavior).
+  - ``MH.Custo.Gen.CloneExtNodeArgs``: By default, this mode is *disabled*.
+    If enabled, during a cloning operation (e.g., full copy
+    of the modeled data containing this node) if the node parameters do
+    not belong to the graph representing the data, they will be cloned (full
+    copy). Otherwise, they will just be referenced (default
+    behavior). Rationale for default behavior: When a *generator* or
+    *function* node is duplicated within a non terminal node, the node
+    parameters may be unknown to it, thus considered as external, while
+    still belonging to the full data.
+  - ``MH.Custo.Gen.ResetOnUnfreeze``: By default, this mode is *enabled*.
+    If enabled, a
+    call to :meth:`fuzzfmk.data_model.Node.unfreeze()` on the node will
+    provoke the reset of the *generator* itself, meaning that the next
+    time its value will be asked for, it will be recomputed (default
+    behaviour). If unset, a call to the method
+    :meth:`fuzzfmk.data_model.Node.unfreeze()` will provoke the call of
+    this method on the already existing generated node (and if it
+    didn't exist by this time it would have been computed first).
+  - ``MH.Custo.Gen.TriggerLast``: By default, this mode is *disabled*.
+    If enabled, the triggering of a generator is postpone until everything else has
+    been resolved. It is especially
+    useful when you describe a generator that use a node with an
+    existence condition and that this condition cannot be resolved at
+    the time the generator would normally trigger (which is
+    when it is reached while walking through the graph).
+
+  For *function* node, the customizable behaviors mode are:
+
+  - ``MH.Custo.Func.FrozenArgs``: By default, this mode is *enabled*.
+    When enabled, the node parameters are frozen before being provided to
+    the *function* node. If disabled, the node parameters are directly provided to
     the *function* node (without being frozen first).
-
+  - ``MH.Custo.Func.CloneExtNodeArgs``: By default, this mode is *disabled*.
+    Refer to the description of the corresponding *generator node* mode.
 
 
 Keywords to Describe Non Terminal Node
@@ -635,13 +680,8 @@ provide_helpers
   of the modeled data.
 
 trigger_last
-  The triggering of a generator is postpone until everything else has
-  been resolved, when this keyword is set to `True`. It is especially
-  useful when you describe a generator that use a node with an
-  existence condition and when this condition cannot be resolved at
-  the time the generator will normally be triggered (that is when it
-  is reached during the nominal graph traversal).
-
+  This keyword is a shortcut for the related node customization mode.
+  Refer to ``custo_set`` and ``custo_clear``.
 
 Keywords to Import External Data Description
 --------------------------------------------
@@ -703,32 +743,6 @@ set_attrs
   - ``MH.Attr.Separator``: Used to distinguish a separator. Some
     disruptors can leverage this attribute to perform their
     alteration.
-
-  The current specific attributes are:
-
-  - ``MH.Attr.AcceptConfChange``: Used for *generator* node. If set, a
-    call to :meth:`fuzzfmk.data_model.Node.set_current_conf()` will be
-    called on the generated node (default behavior).
-  - ``MH.Attr.CloneExtNodeArgs``: Used for *generator* node and
-    *function* node. If set, during a cloning operation (e.g., full copy
-    of the modeled data containing this node) if the node parameters do
-    not belong to the graph representing the data, they will be cloned (full
-    copy). Otherwise, they will just be referenced (default
-    behavior). Rationale for default behavior: When a *generator* or
-    *function* node is duplicated within a non terminal node, the node
-    parameters may be unknown to it, thus considered as external, while
-    still belonging to the full data.
-  - ``MH.Attr.ResetOnUnfreeze``: Used for *generator* node. If set, a
-    call to :meth:`fuzzfmk.data_model.Node.unfreeze()` on the node will
-    provoke the reset of the *generator* itself, meaning that the next
-    time its value will be asked for, it will be recomputed (default
-    behaviour). If unset, a call to the method
-    :meth:`fuzzfmk.data_model.Node.unfreeze()` will provoke the call of
-    this method on the already existing generated node (and if it
-    didn't exist by this time it would have been computed first).
-  - ``MH.Attr.TriggerLast``: This attribute can be set directly
-    through the keyword ``trigger_last``. Refer to it for details.
-
 
   .. note:: Most of the generic stateful disruptors will recursively
 	    set the attributes ``MH.Attr.Determinist`` and ``MH.Attr.Finite``

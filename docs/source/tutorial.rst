@@ -1304,7 +1304,7 @@ various constructions, and value types.
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 5, 53, 64
+   :emphasize-lines: 5, 54, 65
 
    d1 = \
    {'name': 'TestNode',
@@ -1324,7 +1324,8 @@ various constructions, and value types.
 	      {'name': 'val2'},
 
 	      {'name': 'middle',
-	       'mode': MH.Mode.ImmutableClone,
+	       'custo_set': MH.Custo.NTerm.FrozenCopy,
+	       'custo_clear': MH.Custo.NTerm.MutableClone,
 	       'contents': [{
 		   'section_type': MH.Random,
 		   'contents': [
@@ -1386,20 +1387,20 @@ At first glance, the data model is composed of three parts: *block 1*
 64-72). Within these blocks, various constructions are used. Below,
 some insights:
 
-line 6, line 21, line 54, line 65
+line 6, line 22, line 55, line 66
   The keyword ``section_type`` allows to choose the order to be
   enforce by a non-terminal node to its children. ``MH.Ordered``
   specifies that the children should be kept strictly in the order of
   the description. ``MH.Random`` specifies there is no order to
   enforce between any node *blocks* (we intend by block the set of all
   the nodes that could be generated from a unique description block
-  like in line 24-26), except if the parent node has the
+  like in line 25-27), except if the parent node has the
   ``determinist`` attribute. ``MH.FullyRandom`` specifies there is no
   order to enforce between every single nodes. ``MH.Pick`` specifies
   that only one node among the children should be kept at a time---the
   choice is randomly performed except if the parent has the
   ``determinist`` attribute---as per the weight associated to each
-  child node (``weights``, line 55).
+  child node (``weights``, line 56).
 
 lines 10-14
   A terminal node with typed-value contents is defined. It is a
@@ -1412,17 +1413,17 @@ line 16
   This pattern allows to use an already defined node. In our case, it
   is the node ``val2`` specified in lines 24-26.
 
-lines 28-29
+lines 29-30
   This pattern with the keyword ``clone`` allows to make a full copy
   of an existing node.
 
 
-lines 31-33
+lines 32-34
   The keywords ``import_from`` and ``data_id`` are used for importing
   a data type from another data model. In this case it is a ``STRING
   Descriptor`` data type from the ``USB`` data model.
 
-lines 35-39
+lines 36-40
   Here is defined a *generator* nodes. It takes two nodes of
   the current graph as parameters, namely: ``(val21, 2)`` and
   ``val3``. It simply create a new node with a value equal to the
@@ -1434,11 +1435,11 @@ lines 35-39
 	    them uniquely---thanks to ``nb``---as illustrated by this generator
 	    node.
 
-lines 45-50
+lines 46-51
   Two alternate configurations of node ``val3`` are specified through
   this pattern.
 
-lines 44
+lines 45
   The keyword ``sync_qty_with`` allows to synchronize the number of
   nodes to generate or to absorb with the one specified by its
   name. In this case it is the node ``val1`` which is defined in lines 10-14.
@@ -2458,12 +2459,12 @@ Let's illustrate this with the following example:
    class MyOperator(Operator):
 
        def start(self, fmk_ops, dm, monitor, target, logger, user_input):
-           if not monitor.is_probe_launched('health_check'):
+           if not monitor.is_probe_launched(health_check):
                # This case occurs if the probe is not associated to the target
-               monitor.start_probe('health_check')
+               monitor.start_probe(health_check)
 
        def stop(self, fmk_ops, dm, monitor, target, logger):
-           monitor.stop_probe('health_check')
+           monitor.stop_probe(health_check)
 
        def plan_next_operation(self, fmk_ops, dm, monitor, target, logger, fmk_feedback):
            self.op = Operation()
@@ -2477,7 +2478,7 @@ Let's illustrate this with the following example:
        def do_after_all(self, fmk_ops, dm, monitor, target, logger):
             linst = LastInstruction()
 
-            health_status = monitor.get_probe_status('health_check')
+            health_status = monitor.get_probe_status(health_check)
 
             if health_status.get_status() < 0 and self.op_state == 'critical':
                 linst.set_instruction(LastInstruction.RecordData)
