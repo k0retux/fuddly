@@ -700,8 +700,12 @@ class ModelHelper(object):
         trig_last = desc.get('trigger_last', None)
         if trig_last is not None:
             if trig_last:
+                if not isinstance(custo_set, list):
+                    custo_set = [custo_set]
                 custo_set.append(MH.Custo.Gen.TriggerLast)
             else:
+                if not isinstance(custo_clear, list):
+                    custo_clear = [custo_clear]
                 custo_clear.append(MH.Custo.Gen.TriggerLast)
 
         if custo_set or custo_clear:
