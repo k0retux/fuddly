@@ -411,13 +411,23 @@ class Logger(object):
                     else "### Target Feedback from '{!s}' (status={!s}):".format(source, status_code)
             self.log_fn(msg_hdr, rgb=hdr_color, do_record=record)
             if decoded_feedback:
-                self.log_fn(decoded_feedback, rgb=body_color, do_record=record)
+                if isinstance(decoded_feedback, list):
+                    for dfbk in decoded_feedback:
+                        self.log_fn(dfbk, rgb=body_color, do_record=record)
+                else:
+                    self.log_fn(decoded_feedback, rgb=body_color, do_record=record)
 
             if record:
                 src = 'Default' if source is None else source
-                self.fmkDB.insert_feedback(self.last_data_id, src, timestamp,
-                                           self._encode_target_feedback(feedback),
-                                           status_code=status_code)
+                if isinstance(feedback, list):
+                    for fbk, ts in zip(feedback, timestamp):
+                        self.fmkDB.insert_feedback(self.last_data_id, src, ts,
+                                                   self._encode_target_feedback(fbk),
+                                                   status_code=status_code)
+                else:
+                    self.fmkDB.insert_feedback(self.last_data_id, src, timestamp,
+                                               self._encode_target_feedback(feedback),
+                                               status_code=status_code)
 
         if epilogue is not None:
             self.log_fn(epilogue, do_record=record)
@@ -462,11 +472,22 @@ class Logger(object):
         if feedback is None:
             return feedback
 
-        feedback = feedback.strip()
-        if sys.version_info[0] > 2 and feedback and isinstance(feedback, bytes):
-            feedback = feedback.decode('latin_1')
-            feedback = '{!a}'.format(feedback)
-        return feedback
+        if isinstance(feedback, list):
+            new_fbk = []
+            for f in feedback:
+                new_f = f.strip()
+                if sys.version_info[0] > 2 and new_f and isinstance(new_f, bytes):
+                    new_f = new_f.decode('latin_1')
+                    new_f = '{!a}'.format(new_f)
+                new_fbk.append(new_f)
+                new_fbk = list(filter(lambda x: x != '', new_fbk))
+        else:
+            new_fbk = feedback.strip()
+            if sys.version_info[0] > 2 and new_fbk and isinstance(new_fbk, bytes):
+                new_fbk = new_fbk.decode('latin_1')
+                new_fbk = '{!a}'.format(new_fbk)
+
+        return new_fbk
 
     def _encode_target_feedback(self, feedback):
         if sys.version_info[0] > 2 and not isinstance(feedback, bytes):

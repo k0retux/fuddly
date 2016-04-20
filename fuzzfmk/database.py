@@ -530,8 +530,9 @@ class Database(object):
                 if content:
                     if sys.version_info[0] > 2:
                         content = content.decode("latin_1")
+                        content = "{!a}".format(content)
                     else:
-                        content = str(content)
+                        content = repr(str(content))
                     chks = chunk_lines(content, page_width - 4)
                     for c in chks:
                         c_sz = len(c)

@@ -208,27 +208,48 @@ class Target(object):
 
 
 class TargetFeedback(object):
+    fbk_lock = threading.Lock()
 
     def __init__(self, bstring=b''):
         self.cleanup()
+        self._feedback_collector = collections.OrderedDict()
+        self._feedback_collector_tstamped = collections.OrderedDict()
         self.set_bytes(bstring)
 
     def add_fbk_from(self, ref, fbk):
         now = datetime.datetime.now()
-        self._feedback_collector[ref] = (fbk, now)
+        with self.fbk_lock:
+            if ref not in self._feedback_collector:
+                self._feedback_collector[ref] = []
+                self._feedback_collector_tstamped[ref] = []
+            if fbk.strip() not in self._feedback_collector[ref]:
+                self._feedback_collector[ref].append(fbk)
+                self._feedback_collector_tstamped[ref].append(now)
 
     def has_fbk_collector(self):
         return len(self._feedback_collector) > 0
 
-    def cleanup(self):
-        self._feedback_collector = collections.OrderedDict()
-        self._tstamped_bstring = None
-        self.set_error_code(0)
-
     def __iter__(self):
-        for ref, obj in self._feedback_collector.items():
-            fbk, tstamp = obj
-            yield ref, fbk, tstamp
+        with self.fbk_lock:
+            fbk_collector = copy.copy(self._feedback_collector)
+            fbk_collector_ts = copy.copy(self._feedback_collector_tstamped)
+        for ref, fbk_list in fbk_collector.items():
+            yield ref, fbk_list, fbk_collector_ts[ref]
+
+    def iter_and_cleanup_collector(self):
+        with self.fbk_lock:
+            fbk_collector = self._feedback_collector
+            fbk_collector_ts = self._feedback_collector_tstamped
+            self._feedback_collector = collections.OrderedDict()
+            self._feedback_collector_tstamped = collections.OrderedDict()
+        for ref, fbk_list in fbk_collector.items():
+            yield ref, fbk_list, fbk_collector_ts[ref]
+
+    def set_error_code(self, err_code):
+        self._err_code = err_code
+
+    def get_error_code(self):
+        return self._err_code
 
     def set_bytes(self, bstring):
         now = datetime.datetime.now()
@@ -240,11 +261,11 @@ class TargetFeedback(object):
     def get_timestamp(self):
         return None if self._tstamped_bstring is None else self._tstamped_bstring[1]
 
-    def set_error_code(self, err_code):
-        self._err_code = err_code
-
-    def get_error_code(self):
-        return self._err_code
+    def cleanup(self):
+        # collector cleanup is done during consumption to avoid loss of feedback in
+        # multi-threading context
+        self._tstamped_bstring = None
+        self.set_error_code(0)
 
 
 class EmptyTarget(Target):
@@ -680,6 +701,7 @@ class NetworkTarget(Target):
 
         family, sock_type = socket_type
         s = socket.socket(family, sock_type)
+        # s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
 
         try:
             s.connect((host, port))
@@ -857,7 +879,7 @@ class NetworkTarget(Target):
                             print('\n*** ERROR: ' + str(serr))
                             if serr.errno == socket.errno.EAGAIN:
                                 retry += 1
-                                time.sleep(0.2)
+                                time.sleep(2)
                                 continue
                             else:
                                 break
@@ -865,7 +887,7 @@ class NetworkTarget(Target):
                             break
 
                     if chunk == b'':
-                        print('\n*** NOTE: Nothing more to receive from : {!r}'.format(fbk_ids[s]))
+                        print('\n*** NOTE: Nothing more to receive from: {!r}'.format(fbk_ids[s]))
                         fbk_sockets.remove(s)
                         _check_and_handle_obsolete_socket(s)
                         s.close()

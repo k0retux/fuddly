@@ -1727,7 +1727,7 @@ class FmkPlumbing(object):
                 err_detected = True
 
             if tg_fbk.has_fbk_collector():
-                for ref, fbk, tstamp in tg_fbk:
+                for ref, fbk, tstamp in tg_fbk.iter_and_cleanup_collector():
                     self.lg.log_target_feedback_from(fbk, tstamp, preamble=preamble,
                                                      epilogue=epilogue,
                                                      source=ref, status_code=err_code)
