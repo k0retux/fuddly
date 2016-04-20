@@ -480,7 +480,8 @@ class Logger(object):
                     new_f = new_f.decode('latin_1')
                     new_f = '{!a}'.format(new_f)
                 new_fbk.append(new_f)
-                new_fbk = list(filter(lambda x: x != '', new_fbk))
+                if not list(filter(lambda x: x != '', new_fbk)):
+                    new_fbk = None
         else:
             new_fbk = feedback.strip()
             if sys.version_info[0] > 2 and new_fbk and isinstance(new_fbk, bytes):
