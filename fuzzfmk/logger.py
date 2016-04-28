@@ -491,6 +491,8 @@ class Logger(object):
         return new_fbk
 
     def _encode_target_feedback(self, feedback):
+        if feedback is None:
+            return None
         if sys.version_info[0] > 2 and not isinstance(feedback, bytes):
             feedback = bytes(feedback, 'latin_1')
         return feedback
