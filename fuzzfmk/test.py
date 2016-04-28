@@ -1798,7 +1798,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of imgs: %d'%idx, rgb=Color.INFO))
 
-        # self.assertEqual(idx, )
+        self.assertEqual(idx, 202)
 
 
     def test_USB(self):
@@ -1814,7 +1814,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of confs: %d'%idx, rgb=Color.INFO))
 
-        self.assertIn(idx, [148, 149, 150]) # previously 189
+        self.assertIn(idx, [268, 270]) # previously [148, 149, 150]
 
 
 

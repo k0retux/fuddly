@@ -2750,9 +2750,6 @@ class NodeInternals_NonTerm(NodeInternals):
                     else:
                         pass
 
-                if new_node.is_nonterm():
-                    new_node.cc.customize(self.custo)
-
                 new_node._set_clone_info((base_node.tmp_ref_count-1, nb), base_node)
 
             # 'same' mode
@@ -2772,8 +2769,6 @@ class NodeInternals_NonTerm(NodeInternals):
         # set_clone_info() and other methods are applied for 's' mode
         # only once as there is no node copy.
         if new_node is not None and mode == 's':
-            if new_node.is_nonterm():
-                new_node.cc.customize(self.custo)
             new_node._set_clone_info((0,nb), base_node)
 
         if len(to_entangle) > 1:
