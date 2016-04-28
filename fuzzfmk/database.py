@@ -469,8 +469,8 @@ class Database(object):
 
         msg = ''
         for idx, com in enumerate(comments, start=1):
-            content, date = com
-            date_str = sent_date.strftime("%d/%m/%Y - %H:%M:%S") if sent_date else 'None'
+            content, tstamp = com
+            date_str = tstamp.strftime("%d/%m/%Y - %H:%M:%S") if tstamp else 'None'
             msg += colorize("\n Comment #{:d}: ".format(idx), rgb=Color.FMKINFOGROUP) + \
                    colorize(date_str, rgb=Color.DATE)
             chks = chunk_lines(content, page_width - 10)
@@ -483,10 +483,10 @@ class Database(object):
 
         msg = ''
         for idx, info in enumerate(fmkinfo, start=1):
-            content, date, error = info
+            content, tstamp, error = info
             if not with_fmkinfo and not error:
                 continue
-            date_str = sent_date.strftime("%d/%m/%Y - %H:%M:%S") if sent_date else 'None'
+            date_str = tstamp.strftime("%d/%m/%Y - %H:%M:%S") if tstamp else 'None'
             if error:
                 msg += colorize("\n FMK Error: ", rgb=Color.ERROR)
             else:
