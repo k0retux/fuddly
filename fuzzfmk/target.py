@@ -42,7 +42,7 @@ import errno
 from socket import error as socket_error
 
 from libs.external_modules import *
-from fuzzfmk.data_model import Data
+from fuzzfmk.data_model import Data, NodeSemanticsCriteria
 from fuzzfmk.global_resources import *
 
 class TargetStuck(Exception): pass
@@ -1382,7 +1382,7 @@ class SIMTarget(Target):
                 c = ord(c)
             pdu += binascii.b2a_hex(struct.pack('B', c))
         pdu = pdu.upper()
-        pdu = b"0001000B91" + self.tel_num + b"0000" + pdu + b"\x1a\r\n"
+        pdu = b"0001000B91" + self.tel_num + pdu + b"\x1a\r\n"
 
         self.ser.write(b"AT+CMGS=23\r\n") # PDU mode
         time.sleep(self.delay_between_write)
