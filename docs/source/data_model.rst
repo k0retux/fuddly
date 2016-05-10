@@ -41,6 +41,11 @@ following parameters:
   If set to ``True`` generated values will be in a deterministic
   order, otherwise in a random order.
 
+  This parameter is for internal usage and will always follow the *hosting*
+  node instructions. If you want to change the deterministic order you have
+  to do it at the node level by using the data model keyword ``determinist``
+  (refer to :ref:`dm:node_prop_keywords`).
+
 
 All these parameters are optional. If you don't specify all of them
 the constructor will let more freedom within the data model. But if
@@ -98,6 +103,12 @@ following parameters:
 ``deteterminist`` [default value: **True**]
   If set to ``True`` generated values will be in a deterministic
   order, otherwise in a random order.
+
+  This parameter is for internal usage and will always follow the *hosting*
+  node instructions. If you want to change the deterministic order you have
+  to do it at the node level by using the data model keyword ``determinist``
+  (refer to :ref:`dm:node_prop_keywords`).
+
 
 ``ascii_mode`` [default value: **False**]
   If set to ``True``, it will enforce the string to comply with ASCII
@@ -228,6 +239,12 @@ parameters:
   one used by the generic disruptor ``tTYPE`` which rely on
   ``BitField`` *fuzzy mode* (reachable through
   :func:`fuzzfmk.value_types.VT_Alt.switch_mode`).
+
+  This parameter is for internal usage and will always follow the *hosting*
+  node instructions. If you want to change the deterministic order you have
+  to do it at the node level by using the data model keyword ``determinist``
+  (refer to :ref:`dm:node_prop_keywords`).
+
 
 ``subfield_descs`` [optional, default value: **None**]
   List of descriptions (character strings) for each sub-field. To
@@ -692,6 +709,8 @@ import_from
 data_id
   Name of the data description to import.
 
+
+.. _dm:node_prop_keywords:
 
 Keywords to Describe Node Properties
 ------------------------------------

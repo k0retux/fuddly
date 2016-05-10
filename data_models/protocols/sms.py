@@ -38,16 +38,21 @@ class SMS_DataModel(DataModel):
         smstxt_desc = \
         {'name': 'smstxt',
          'contents': [
-             {'name': 'TP-PID',  # refer to TS 100 901
+             {'name': 'TP-DA',  # Destination Address
+              'semantics': ['tel num'],
+              'contents': GSMPhoneNum(val_list=['33612345678'])},
+             {'name': 'TP-PID',  # Protocol Identifier (refer to TS 100 901)
+              'determinist': True,
               'contents': BitField(subfield_sizes=[5,1,2], endian=VT.BigEndian,
                                    subfield_val_lists=[[0b00000], # implicit
-                                                       [0],       # no interworking
-                                                       [0b00]]
+                                                       [0, 1],       # no interworking (default)
+                                                       [0b00, 0b01, 0b11]]  # 0b10 is reserved
                                    ) },
-             {'name': 'TP-DCS',  # refer to GSM 03.38
+             {'name': 'TP-DCS',  # Data Coding Scheme (refer to GSM 03.38)
+              'determinist': True,
               'contents': BitField(subfield_sizes=[4,4], endian=VT.BigEndian,
                                    subfield_val_lists=[[0b0000],   # default alphabet
-                                                       [0b0000]],  # first coding group
+                                                       [0b0000]]   # first coding group
                                    ) },
              {'name': 'UDL',
               'contents': MH.LEN(vt=UINT8, after_encoding=False),
@@ -62,17 +67,22 @@ class SMS_DataModel(DataModel):
         smscmd_desc = \
         {'name': 'smscmd',   # refer to GSM 03.48
          'contents': [
-             {'name': 'TP-PID',  # refer to TS 100 901
+             {'name': 'TP-DA',  # Destination Address
+              'semantics': ['tel num'],
+              'contents': GSMPhoneNum(val_list=['33612345678'])},
+             {'name': 'TP-PID',  # Protocol Identifier (refer to TS 100 901)
+              'determinist': True,
               'contents': BitField(subfield_sizes=[5,1,2], endian=VT.BigEndian,
                                    subfield_val_lists=[[0b11111], # GSM mobile station
-                                                       [1],    # telematic interworking
-                                                       [0b01]],
+                                                       [1, 0],    # telematic interworking (default)
+                                                       [0b01, 0b00, 0b11]],
                                    ) },
-             {'name': 'TP-DCS',  # refer to GSM 03.38
+             {'name': 'TP-DCS',  # Data Coding Scheme (refer to GSM 03.38)
+              'determinist': True,
               'contents': BitField(subfield_sizes=[2,1,1,4], endian=VT.BigEndian,
-                                   subfield_val_lists=[[0b10], # class 2
-                                                       [1],    # 8-bit data
-                                                       [0],    # reserved
+                                   subfield_val_lists=[[0b10,0b11,0b00,0b01], # class 2 (default)
+                                                       [1,0],    # 8-bit data (default)
+                                                       [0],      # reserved
                                                        [0b1111]],  # last coding group
                                    ) },
              {'name': 'UDL',

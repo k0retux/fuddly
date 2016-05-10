@@ -43,6 +43,7 @@ from socket import error as socket_error
 
 from libs.external_modules import *
 from fuzzfmk.data_model import Data, NodeSemanticsCriteria
+from fuzzfmk.value_types import GSMPhoneNum
 from fuzzfmk.global_resources import *
 
 class TargetStuck(Exception): pass
@@ -1308,22 +1309,14 @@ class LocalTarget(Target):
 class SIMTarget(Target):
     delay_between_write = 0.1  # without, it seems some commands can be lost
 
-    def __init__(self, serial_port, baudrate, pin_code, targeted_tel_num,
-                 zone='33'):
+    def __init__(self, serial_port, baudrate, pin_code, targeted_tel_num):
         self.serial_port = serial_port
         self.baudrate = baudrate
-        self.tel_num = zone
+        self.tel_num = targeted_tel_num
         self.pin_code = pin_code
-        tel = targeted_tel_num[1:]
-        tel_sz = len(tel)
-        for idx in range(0, tel_sz, 2):
-            if idx+1<tel_sz:
-                self.tel_num += tel[idx+1]+tel[idx]
-            else:
-                self.tel_num += 'F'+tel[idx]
         if sys.version_info[0]>2:
-            self.tel_num = bytes(self.tel_num, 'latin_1')
             self.pin_code = bytes(self.pin_code, 'latin_1')
+        self.set_feedback_timeout(2)
 
     def start(self):
 
@@ -1332,14 +1325,15 @@ class SIMTarget(Target):
                   'python-serial module is not installed')
             return False
 
-        self.ser = serial.Serial(self.serial_port, self.baudrate, timeout=2)
+        self.ser = serial.Serial(self.serial_port, self.baudrate, timeout=2,
+                                 dsrdtr=True, rtscts=True)
 
         self.ser.write(b"ATE1\r\n") # echo ON
         time.sleep(self.delay_between_write)
         self.ser.write(b"AT+CMEE=1\r\n") # enable extended error reports
         time.sleep(self.delay_between_write)
         self.ser.write(b"AT+CPIN?\r\n") # need to unlock?
-        cpin_fbk = self._retrieve_feedback_from_serial()
+        cpin_fbk = self._retrieve_feedback_from_serial(timeout=0)
         if cpin_fbk.find(b'SIM PIN') != -1:
             # Note that if SIM is already unlocked modem will answer CME ERROR: 3
             # if we try to unlock it again.
@@ -1353,7 +1347,7 @@ class SIMTarget(Target):
         self.ser.write(b"AT+CSMS=0\r\n") # check if modem can process SMS
         time.sleep(self.delay_between_write)
 
-        fbk = self._retrieve_feedback_from_serial()
+        fbk = self._retrieve_feedback_from_serial(timeout=1)
         code = 0 if fbk.find(b'ERROR') == -1 else -1
         self._logger.collect_target_feedback(fbk, status_code=code)
         if code < 0:
@@ -1364,17 +1358,31 @@ class SIMTarget(Target):
     def stop(self):
         self.ser.close()
 
-    def _retrieve_feedback_from_serial(self):
+    def set_feedback_timeout(self, fbk_timeout):
+        self._feedback_timeout = max(fbk_timeout, 0)
+        self._time_beetwen_data_emission = self._feedback_timeout + 1
+
+    def _retrieve_feedback_from_serial(self, timeout=None):
         feedback = b''
-        while True:
+        t0 = datetime.datetime.now()
+        duration = -1
+        timeout = self._feedback_timeout if timeout is None else timeout
+        while duration < timeout:
+            now = datetime.datetime.now()
+            duration = (now - t0).total_seconds()
+            time.sleep(0.1)
             fbk = self.ser.readline()
             if fbk.strip():
                 feedback += fbk
-            else:
-                break
+
         return feedback
 
     def send_data(self, data, from_fmk=False):
+        node_list = data.node[NodeSemanticsCriteria(mandatory_criteria=['tel num'])]
+        if node_list and len(node_list)==1:
+            node_list[0].set_values(value_type=GSMPhoneNum(val_list=[self.tel_num]))
+        else:
+            print('\nWARNING: Data does not contain a mobile number.')
         pdu = b''
         raw_data = data.to_bytes()
         for c in raw_data:
@@ -1382,7 +1390,8 @@ class SIMTarget(Target):
                 c = ord(c)
             pdu += binascii.b2a_hex(struct.pack('B', c))
         pdu = pdu.upper()
-        pdu = b"0001000B91" + self.tel_num + pdu + b"\x1a\r\n"
+
+        pdu = b"0001000B91" + pdu + b"\x1a\r\n"
 
         self.ser.write(b"AT+CMGS=23\r\n") # PDU mode
         time.sleep(self.delay_between_write)

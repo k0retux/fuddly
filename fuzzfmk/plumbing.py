@@ -1832,6 +1832,8 @@ class FmkPlumbing(object):
         if self.__current:
             entry = self.__current[-1]
             return entry
+        else:
+            return None, None
 
     @EnforceOrder(accepted_states=['S2'])
     def get_from_data_bank(self, i):

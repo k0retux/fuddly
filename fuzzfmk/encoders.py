@@ -25,6 +25,7 @@ import sys
 import struct
 import zlib
 import copy
+import binascii
 
 class Encoder(object):
     def __init__(self, encoding_arg):
@@ -226,3 +227,30 @@ class GSM7bitPacking_Enc(Encoder):
             off_cpt += 1
 
         return b''.join(map(lambda x: struct.pack('B', x), l))
+
+class GSMPhoneNum_Enc(Encoder):
+
+    def encode(self, msg):
+        tel = msg
+        tel_sz = len(tel)
+        tel_num = b''
+        for idx in range(0, tel_sz, 2):
+            if idx+1<tel_sz:
+                tel_num += tel[idx+1:idx+2]+tel[idx:idx+1]
+            else:
+                tel_num += b'F'+tel[idx:idx+1]
+        return binascii.a2b_hex(tel_num)
+
+    def decode(self, msg):
+        tel_num = binascii.b2a_hex(msg)
+        zone = tel_num[0:2]
+        tel_num = tel_num[2:]
+        dec = b''
+        tel_sz = len(tel_num)
+        for idx in range(0, tel_sz, 2):
+            if idx+1<tel_sz:
+                dec += tel_num[idx+1:idx+2]+tel_num[idx:idx+1]
+        if dec[-1:] == b'f':
+            dec = dec[:-1]
+        return zone+dec
+

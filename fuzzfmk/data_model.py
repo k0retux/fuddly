@@ -649,7 +649,7 @@ class NodeInternals(object):
             ### GENERIC ###
             NodeInternals.Freezable: True,
             NodeInternals.Mutable: True,
-            NodeInternals.Determinist: False,
+            NodeInternals.Determinist: True,
             NodeInternals.Finite: False,
             # Used for absorption
             NodeInternals.Abs_Postpone: False,

@@ -852,6 +852,16 @@ class String(VT_Alt):
         else:
             return True
 
+    def pretty_print(self):
+        if self.drawn_val is None:
+            self.get_value()
+
+        if self.encoded_string:
+            dec = self.drawn_val
+            return repr(dec) + ' [decoded, sz=' + str(len(dec)) + ']'
+        else:
+            return None
+
 
 class INT(VT):
     '''
@@ -1192,6 +1202,9 @@ class GZIP(String): pass
 
 @from_encoder(GSM7bitPacking_Enc)
 class GSM7bitPacking(String): pass
+
+@from_encoder(GSMPhoneNum_Enc)
+class GSMPhoneNum(String): pass
 
 @from_encoder(Wrap_Enc)
 class Wrapper(String): pass
@@ -1884,7 +1897,7 @@ class BitField(VT_Alt):
                 val += drawn_val << prev_lim
                 
             prev_lim = lim
-            
+
         if not self.determinist:
             # We make an artificial count to trigger exhaustion in
             # case the BitField is in Finite & Random mode. An exact
