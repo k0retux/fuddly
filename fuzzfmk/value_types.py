@@ -882,7 +882,7 @@ class INT(VT):
         if int_list:
             self.int_list = int_list
             self.int_list_copy = list(self.int_list)
-        elif mini is not None and maxi - mini < 200:
+        elif mini is not None and maxi is not None and maxi - mini < 200:
             self.int_list = list(range(mini, maxi+1))
             self.int_list_copy = copy.copy(self.int_list)
             # we keep that information as it is valuable for fuzzing

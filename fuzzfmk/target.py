@@ -1391,7 +1391,7 @@ class SIMTarget(Target):
             pdu += binascii.b2a_hex(struct.pack('B', c))
         pdu = pdu.upper()
 
-        pdu = b"0001000B91" + pdu + b"\x1a\r\n"
+        pdu = b'00' + pdu + b"\x1a\r\n"
 
         self.ser.write(b"AT+CMGS=23\r\n") # PDU mode
         time.sleep(self.delay_between_write)

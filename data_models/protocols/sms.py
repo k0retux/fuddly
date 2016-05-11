@@ -34,19 +34,50 @@ class SMS_DataModel(DataModel):
 
     def build_data_model(self):
 
+
         # Text SMS in PDU mode
         smstxt_desc = \
         {'name': 'smstxt',
          'contents': [
-             {'name': 'TP-DA',  # Destination Address
-              'semantics': ['tel num'],
-              'contents': GSMPhoneNum(val_list=['33612345678'])},
+             {'name': 'SMS-SUBMIT',  # refer to TS 100 901 (chapter 9.2.3)
+              'contents': BitField(subfield_sizes=[2,1,2,1,1,1], endian=VT.BigEndian,
+                                   subfield_val_lists=[
+                                       [0b01], # message type indicator,
+                                       [0,1],  # reject duplicates
+                                       [0b00,0b10,0b01,0b11],   # validity period format
+                                       [0,1],  # status report request
+                                       [0,1],  # user data header indicator
+                                       [0,1],  # reply path
+                                       ],
+                                   subfield_descs=['mti','rd','vpf','srr','udhi','rp']
+                                   ) },
+             {'name': 'TP-MR',  # Message Reference (refer to TS 100 901)
+              'contents': UINT8(int_list=[0])},
+             {'name': 'TP-DA',  # Destination Address (refer to TS 100 901 - chapter 9.1.2.5)
+              'contents': [
+                  {'name': 'addr_len',
+                   'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                   'node_args': 'tel_num'},
+                  {'name': 'addr_type',
+                   'contents': BitField(subfield_sizes=[4,3,1], endian=VT.BigEndian,
+                                        subfield_val_lists=[[0b0001], # numbering-plan-identification
+                                                            [0b001],  # type of number
+                                                            [1]],     # always set to 1
+                                        subfield_val_extremums=[None,
+                                                                [0,7],
+                                                                None],
+                                        subfield_descs=['numbering','type',None]
+                                        ) },
+                  {'name': 'tel_num',
+                   'semantics': ['tel num'],
+                   'contents': GSMPhoneNum(val_list=['33612345678'])}
+                ]},
              {'name': 'TP-PID',  # Protocol Identifier (refer to TS 100 901)
               'determinist': True,
               'contents': BitField(subfield_sizes=[5,1,2], endian=VT.BigEndian,
                                    subfield_val_lists=[[0b00000], # implicit
-                                                       [0, 1],       # no interworking (default)
-                                                       [0b00, 0b01, 0b11]]  # 0b10 is reserved
+                                                       [0, 1],    # no interworking (default)
+                                                       [0b00]]    # kind of opcode
                                    ) },
              {'name': 'TP-DCS',  # Data Coding Scheme (refer to GSM 03.38)
               'determinist': True,
@@ -67,15 +98,44 @@ class SMS_DataModel(DataModel):
         smscmd_desc = \
         {'name': 'smscmd',   # refer to GSM 03.48
          'contents': [
-             {'name': 'TP-DA',  # Destination Address
-              'semantics': ['tel num'],
-              'contents': GSMPhoneNum(val_list=['33612345678'])},
+             {'name': 'SMS-SUBMIT',  # refer to TS 100 901 (chapter 9.2.3)
+              'contents': BitField(subfield_sizes=[2,1,2,1,1,1], endian=VT.BigEndian,
+                                   subfield_val_lists=[
+                                       [0b01], # message type indicator,
+                                       [0,1],  # reject duplicates
+                                       [0b00,0b10,0b01,0b11],   # validity period format
+                                       [0,1],  # status report request
+                                       [1,0],  # user data header indicator
+                                       [0,1],  # reply path
+                                       ],
+                                   subfield_descs=['mti','rd','vpf','srr','udhi','rp']
+                                   ) },
+             {'name': 'TP-MR',  # Message Reference (refer to TS 100 901)
+              'contents': UINT8(int_list=[0])},
+             {'name': 'TP-DA',  # Destination Address (refer to TS 100 901 - chapter 9.1.2.5)
+              'contents': [
+                  {'name': 'addr_len',
+                   'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                   'node_args': 'tel_num'},
+                  {'name': 'addr_type',
+                   'contents': BitField(subfield_sizes=[4,3,1], endian=VT.BigEndian,
+                                        subfield_val_lists=[[0b0001], # numbering-plan-identification
+                                                            [0b001],  # type of number
+                                                            [1]],     # always set to 1
+                                        subfield_val_extremums=[None,
+                                                                [0,7],
+                                                                None],
+                                        subfield_descs=['numbering','type',None]
+                                        ) },
+                  {'name': 'tel_num',
+                   'semantics': ['tel num'],
+                   'contents': GSMPhoneNum(val_list=['33612345678'])}
+                ]},
              {'name': 'TP-PID',  # Protocol Identifier (refer to TS 100 901)
               'determinist': True,
-              'contents': BitField(subfield_sizes=[5,1,2], endian=VT.BigEndian,
-                                   subfield_val_lists=[[0b11111], # GSM mobile station
-                                                       [1, 0],    # telematic interworking (default)
-                                                       [0b01, 0b00, 0b11]],
+              'contents': BitField(subfield_sizes=[6,2], endian=VT.BigEndian,
+                                   subfield_val_lists=[[0b111111], # SIM Data Download
+                                                       [0b01]],    # kind of opcode
                                    ) },
              {'name': 'TP-DCS',  # Data Coding Scheme (refer to GSM 03.38)
               'determinist': True,
