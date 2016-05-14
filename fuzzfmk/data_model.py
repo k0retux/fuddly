@@ -2531,23 +2531,29 @@ class NodeInternals_NonTerm(NodeInternals):
         else:
             return None
 
-    @staticmethod
-    def _get_random_component(comp_list, total_weight):
+    def _get_random_component(self, comp_list, total_weight, check_existence=False):
         r = random.uniform(0, total_weight)
         s = 0
 
-        for weight, csts in split_with(lambda x: isinstance(x, int), comp_list):
+        for weight, comp in split_with(lambda x: isinstance(x, int), comp_list):
             s += weight
-            if s >= r:
-                return csts[0]
-        else: # Might occur because of floating point inaccuracies (TBC)
-            return csts[0]
+            if check_existence:
+                shall_exist = self._existence_from_node(comp[0][0])
+                if shall_exist is not None and not shall_exist:
+                    continue
+            if s >= r:  # if check_existence is False, we always return here
+                return comp[0]
+        else:
+            return None
 
-    @staticmethod
-    def _get_heavier_component(comp_list):
+    def _get_heavier_component(self, comp_list, check_existence=False):
         current_weight = -1
         current_comp = None
         for weight, comp in split_with(lambda x: isinstance(x, int), comp_list):
+            if check_existence:
+                shall_exist = self._existence_from_node(comp[0][0])
+                if shall_exist is not None and not shall_exist:
+                    continue
             if weight > current_weight:
                 current_weight = weight
                 current_comp = comp[0]
@@ -2671,6 +2677,9 @@ class NodeInternals_NonTerm(NodeInternals):
                 new_delim = delim[0] + '>'
                 if sublist[0] > -1:
                     for weight, comp in split_with(lambda x: isinstance(x, int), sublist[1]):
+                        shall_exist = self._existence_from_node(comp[0][0])
+                        if shall_exist is not None and not shall_exist:
+                            continue
                         node, mini, maxi = self._handle_node_desc(comp[0])
                         new_nlist = self._copy_nodelist(node_list)
                         new_nlist[idx] = [new_delim, [[node, mini, maxi]]]
@@ -2678,6 +2687,9 @@ class NodeInternals_NonTerm(NodeInternals):
                         expanded_node_list.insert(0, new_nlist)
                 else:
                     for node_desc in sublist[1]:
+                        shall_exist = self._existence_from_node(node_desc[0])
+                        if shall_exist is not None and not shall_exist:
+                            continue
                         node, mini, maxi = self._handle_node_desc(node_desc)
                         new_nlist = self._copy_nodelist(node_list)
                         new_nlist[idx] = [new_delim, [[node, mini, maxi]]]
@@ -2842,6 +2854,7 @@ class NodeInternals_NonTerm(NodeInternals):
         if not self._perform_first_step:
             self._perform_first_step = True
 
+
         if self.is_attr_set(NodeInternals.Finite) or determinist:
             if self.expanded_nodelist is None:
                 # This case occurs when we are a copy of a node and
@@ -2857,6 +2870,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                                                                           excluded_idx=self.excluded_components,
                                                                                           seed=self.component_seed)
 
+                # If the shape is Pick (=+), the shape is reduced to a singleton
                 self.expanded_nodelist = self._generate_expanded_nodelist(node_list)
             
                 self.expanded_nodelist_origsz = len(self.expanded_nodelist)
@@ -2881,11 +2895,24 @@ class NodeInternals_NonTerm(NodeInternals):
                         self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
                 elif delim[1] == '=':
                     if delim[2] == '+':
+                        # This code seems never reached because, in determinist mode, we already choose
+                        # the node during self.expanded_nodelist creation, and change the sublist
+                        # delimiter to '>' (ordered) to avoid useless further handling.
+                        # TODO: Check if this code can be safely removed.
                         if sublist[0] > -1:
-                            node = NodeInternals_NonTerm._get_heavier_component(sublist[1])
+                            node = self._get_heavier_component(sublist[1], check_existence=True)
                         else:
-                            node = sublist[1][0]
-                        self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
+                            for n in sublist[1]:
+                                shall_exist = self._existence_from_node(n[0])
+                                if shall_exist is None or shall_exist:
+                                    node = n
+                                    break
+                            else:
+                                node = None
+                        if node is None:
+                            continue
+                        else:
+                            self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
                     else:
                         for i, node in enumerate(sublist):
                             self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
@@ -2931,11 +2958,19 @@ class NodeInternals_NonTerm(NodeInternals):
                 # choice of only one component within a list
                 elif delim[2] == '+':
                     if sublist[0] > -1:
-                        node = NodeInternals_NonTerm._get_random_component(comp_list=sublist[1], total_weight=sublist[0])
+                        node = self._get_random_component(comp_list=sublist[1], total_weight=sublist[0],
+                                                          check_existence=True)
                     else:
-                        node = random.choice(sublist[1])
-
-                    self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
+                        ndesc_list = []
+                        for n in sublist[1]:
+                            shall_exist = self._existence_from_node(n[0])
+                            if shall_exist is None or shall_exist:
+                                ndesc_list.append(n)
+                        node = random.choice(ndesc_list) if ndesc_list else None
+                    if node is None:
+                        continue
+                    else:
+                        self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
 
                 else:
                     raise ValueError("delim: '%s'"%delim)
