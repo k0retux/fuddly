@@ -95,7 +95,7 @@ class VT(object):
 
     @staticmethod
     def _str2internal(arg):
-        if isinstance(arg, list) or isinstance(arg, tuple):
+        if isinstance(arg, (tuple, list)):
             new_arg = []
             for v in arg:
                 if sys.version_info[0] > 2 and not isinstance(v, bytes):
@@ -103,7 +103,7 @@ class VT(object):
                 else:
                     new_v = v
                 new_arg.append(new_v)
-        elif isinstance(arg, str) or isinstance(arg, bytes):
+        elif isinstance(arg, (str, bytes)):
             if sys.version_info[0] > 2 and not isinstance(arg, bytes):
                 new_arg = bytes(arg, 'latin_1')
             else:

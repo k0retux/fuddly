@@ -736,7 +736,7 @@ class TestBasics(unittest.TestCase):
             print('Node.env: ', e.env)
             print('Node.value_type: ', e.cc.get_value_type())
             vt[e] = e.cc.get_value_type()
-            if issubclass(vt[e].__class__, VT_Alt): #isinstance(vt[e], BitField) or isinstance(vt[e], String):
+            if issubclass(vt[e].__class__, VT_Alt): #isinstance(vt[e], (BitField, String)):
                 continue
             compat = list(vt[e].compat_cls.values())
             compat.remove(vt[e].__class__)

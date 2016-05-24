@@ -80,14 +80,14 @@ class Encoder(object):
 
     @staticmethod
     def to_bytes(val):
-        if isinstance(val, str) or isinstance(val, bytes):
+        if isinstance(val, (str, bytes)):
             if sys.version_info[0] > 2 and not isinstance(val, bytes):
                 new_val = bytes(val, 'latin_1')
             else:
                 new_val = val
         elif sys.version_info[0] == 2 and isinstance(val, unicode):
             new_val = val.encode('latin_1')
-        elif isinstance(val, list) or isinstance(val, tuple):
+        elif isinstance(val, (tuple, list)):
             new_val = []
             for v in val:
                 if sys.version_info[0] > 2 and not isinstance(v, bytes):
@@ -157,7 +157,7 @@ class Wrap_Enc(Encoder):
             arg (list): Prefix and suffix character strings.
               Can be individually set to None
         """
-        assert(isinstance(arg, list) or isinstance(arg, tuple))
+        assert(isinstance(arg, (tuple, list)))
         self.prefix = Encoder.to_bytes(arg[0])
         self.suffix = Encoder.to_bytes(arg[1])
         self.prefix_sz = 0 if self.prefix is None else len(self.prefix)
