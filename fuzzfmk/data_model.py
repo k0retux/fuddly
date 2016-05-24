@@ -484,24 +484,38 @@ class IntCondition(NodeCondition):
 
 class BitFieldCondition(NodeCondition):
 
-    def __init__(self, sf, val):
+    def __init__(self, sf, val=None, neg_val=None):
         '''
         Args:
           sf (int): subfield of the BitField() on which the condition apply
-          val (int): integer (or integer list) that satisfy the condition
+          val (int): integer (or integer list) that satisfies the condition
+          neg_val (int): integer (or integer list) that does NOT satisfy the condition
         '''
         self.sf = sf
-        self.val = val
+
+        assert((val is not None and neg_val is None) or (val is None and neg_val is not None))
+        if val is not None:
+            self.positive_mode = True
+            self.val = val
+        elif neg_val is not None:
+            self.positive_mode = False
+            self.val = neg_val
 
     def check(self, node):
         from fuzzfmk.value_types import BitField
         assert(node.is_typed_value(subkind=BitField))
 
         if isinstance(self.val, tuple) or isinstance(self.val, list):
-            result = node.get_subfield(idx=self.sf) in self.val
+            if self.positive_mode:
+                result = node.get_subfield(idx=self.sf) in self.val
+            else:
+                result = node.get_subfield(idx=self.sf) not in self.val
         else:
             assert(isinstance(self.val, int))
-            result = node.get_subfield(idx=self.sf) == self.val
+            if self.positive_mode:
+                result = node.get_subfield(idx=self.sf) == self.val
+            else:
+                result = node.get_subfield(idx=self.sf) != self.val
 
         return result
 

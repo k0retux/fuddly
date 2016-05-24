@@ -2030,24 +2030,18 @@ class FmkPlumbing(object):
         self.__reset_fmk_internals(reset_existing_seed=(not use_existing_seed))
 
         try:
-            ok = operator._start(self._exportable_fmk_ops, self.dm, self.mon, self.tg, self.lg, user_input)
-        except:
-            ok = False
-            self._handle_user_code_exception('Operator has crashed during its start() method')
-            return False
-
-        if not ok:
-            self.set_error("The _start() method of Operator '%s' has returned an error!" % name,
+            if not operator._start(self._exportable_fmk_ops, self.dm, self.mon, self.tg, self.lg, user_input):
+                self.set_error("The _start() method of Operator '%s' has returned an error!" % name,
                            code=Error.UnrecoverableError)
+                return False
+        except:
+            self._handle_user_code_exception('Operator has crashed during its start() method')
             return False
 
         fmk_feedback = FmkFeedback()
 
         exit_operator = False
-        while True:
-
-            if exit_operator:
-                break
+        while not exit_operator:
 
             try:
                 operation = operator.plan_next_operation(self._exportable_fmk_ops, self.dm,
