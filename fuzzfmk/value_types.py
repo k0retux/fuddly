@@ -1409,29 +1409,25 @@ class BitField(VT_Alt):
                      sf_descs=None):
 
         if sf_limits is not None:
-            if sf_val_lists is not None:
-                if len(sf_val_lists) != len(sf_limits):
-                    raise ValueError
-            else:
-                if len(sf_val_extremums) != len(sf_limits):
-                    raise ValueError               
-
             self.subfield_limits = copy.copy(sf_limits)
-
         elif sf_sizes is not None:
-            if sf_val_lists is not None:
-                if len(sf_val_lists) != len(sf_sizes):
-                    raise ValueError
-            else:
-                if len(sf_val_extremums) != len(sf_sizes):
-                    raise ValueError
-
             lim = 0
             for s in sf_sizes:
                 lim += s
                 self.subfield_limits.append(lim)
         else:
             raise ValueError
+
+
+        if sf_val_lists is None: sf_val_lists = [None for i in range(len(self.subfield_limits))]
+        elif len(sf_val_lists) != len(self.subfield_limits):
+            raise ValueError
+
+
+        if sf_val_extremums is None: sf_val_extremums = [None for i in range(len(self.subfield_limits))]
+        elif len(sf_val_extremums) != len(self.subfield_limits):
+                raise ValueError
+
 
         if sf_descs is not None:
             assert(len(self.subfield_limits) == len(sf_descs))
@@ -1447,15 +1443,6 @@ class BitField(VT_Alt):
 
         self._reset_idx()
 
-        if sf_val_lists is None and sf_val_extremums is None:
-            raise ValueError
-
-        if sf_val_lists is None and sf_val_extremums is not None:
-            sf_val_lists = [None for i in range(len(sf_val_extremums))]
-        elif sf_val_extremums is None and sf_val_lists is not None:
-            sf_val_extremums = [None for i in range(len(sf_val_lists))]
-        else:
-            assert(len(sf_val_lists) == len(sf_val_extremums))
 
         self.subfield_vals = []
         self.subfield_extrems = []
@@ -1483,7 +1470,8 @@ class BitField(VT_Alt):
                     raise ValueError(s)
                 self.subfield_vals.append(None)
             else:
-                raise ValueError
+                self.subfield_extrems.append([0, (1 << size) - 1])
+                self.subfield_vals.append(None)
 
             self.subfield_fuzzy_vals.append(None)
             prev_lim = lim
@@ -1568,10 +1556,7 @@ class BitField(VT_Alt):
 
 
     def is_compatible(self, integer, size):
-        if 0 <= integer <= (1 << size) - 1:
-            return True
-        else:
-            return False
+        return 0 <= integer <= (1 << size) - 1
 
     def after_enabling_mode(self):
         self.drawn_val = None
