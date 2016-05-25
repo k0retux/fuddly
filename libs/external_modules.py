@@ -73,6 +73,7 @@ class Color(object):
     ND_DUPLICATED = 0x800080
     ND_SEPARATOR = 0x008000
     ND_ENCODED = 0xFFA500
+    ND_CUSTO = 0x800080
 
     @staticmethod
     def display():

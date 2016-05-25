@@ -613,10 +613,12 @@ class NonTermCusto(NodeCustomization):
     """
     MutableClone = 1
     FrozenCopy = 2
+    CollapsePadding = 3
 
     _custo_items = {
         MutableClone: True,
-        FrozenCopy: True
+        FrozenCopy: True,
+        CollapsePadding: False
     }
 
     @property
@@ -626,6 +628,10 @@ class NonTermCusto(NodeCustomization):
     @property
     def frozen_copy_mode(self):
         return self._custo_items[self.FrozenCopy]
+
+    @property
+    def collapse_padding_mode(self):
+        return self._custo_items[self.CollapsePadding]
 
 
 class GenFuncCusto(NodeCustomization):
@@ -1044,7 +1050,7 @@ class NodeInternals(object):
     def pretty_print(self):
         return None
 
-    def _get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
         raise NotImplementedError
 
     def reset_depth_specific(self, depth):
@@ -1262,8 +1268,11 @@ class DynNode_Helpers(object):
 
 
 class NodeInternals_Empty(NodeInternals):
-    def _get_value(self, conf=None, recursive=True):
-        return b'<EMPTY>', True
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
+        if return_node_internals:
+            return (Node.DEFAULT_DISABLED_NODEINT, True)
+        else:
+            return (b'<EMPTY>', True)
 
     def set_child_env(self, env):
         print('Empty:', hex(id(self)))
@@ -1485,7 +1494,7 @@ class NodeInternals_GenFunc(NodeInternals):
             self.generator_arg = generator_arg
 
 
-    def _get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
         if self.custo.trigger_last_mode and not self._trigger_registered:
             assert(self.env is not None)
             self._trigger_registered = True
@@ -1493,12 +1502,16 @@ class NodeInternals_GenFunc(NodeInternals):
                                          args=[conf, recursive],
                                          prio=Node.DJOBS_PRIO_genfunc)
 
-            return (Node.DEFAULT_DISABLED_VALUE, False)
+            if return_node_internals:
+                return (Node.DEFAULT_DISABLED_NODEINT, False)
+            else:
+                return (Node.DEFAULT_DISABLED_VALUE, False)
 
         if not self.is_attr_set(NodeInternals.Freezable):
             self.reset_generator()
 
-        ret = self.generated_node._get_value(conf=conf, recursive=recursive)
+        ret = self.generated_node._get_value(conf=conf, recursive=recursive,
+                                             return_node_internals=return_node_internals)
         return (ret, False)
 
     def _get_delayed_value(self, conf=None, recursive=True):
@@ -1669,17 +1682,17 @@ class NodeInternals_Term(NodeInternals):
     def _set_frozen_value(self, val):
         self.frozen_node = val
 
-    def _get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
 
         if self.frozen_node is not None:
-            return (self.frozen_node, False)
+            return (self, False) if return_node_internals else (self.frozen_node, False)
 
         val = self._get_value_specific(conf, recursive)
 
         if self.is_attr_set(NodeInternals.Freezable):
             self.frozen_node = val
 
-        return (val, True)
+        return (self, True) if return_node_internals else (val, True)
 
     def _get_value_specific(self, conf, recursive):
         raise NotImplementedError
@@ -3062,12 +3075,73 @@ class NodeInternals_NonTerm(NodeInternals):
         return (self.frozen_node_list, True)
 
 
-    def _get_value(self, conf=None, recursive=True, after_encoding=True):
+    def _get_value(self, conf=None, recursive=True, after_encoding=True,
+                   return_node_internals=False):
+
+        '''
+        The parameter return_node_internals is not used for non terminal nodes,
+        only for terminal nodes. However, keeping it also for non terminal nodes
+        avoid additional checks in the code.
+        '''
+
+        def tobytes_helper(node_internals):
+            if isinstance(node_internals, bytes):
+                return node_internals
+            else:
+                return node_internals._get_value(conf=conf, recursive=recursive,
+                                                 return_node_internals=False)[0]
 
         def handle_encoding(list_to_enc):
-            if self.encoder and after_encoding:
+
+            if self.custo.collapse_padding_mode:
+                from fuzzfmk.value_types import BitField
                 list_to_enc = list(flatten(list_to_enc))
-                blob = b''.join(list_to_enc)
+                if list_to_enc and isinstance(list_to_enc[0], bytes):
+                    return list_to_enc
+
+                while True:
+                    list_sz = len(list_to_enc)
+                    for i in range(list_sz):
+                        if i < list_sz-1:
+                            item1 = list_to_enc[i]
+                            item2 = list_to_enc[i+1]
+                            c1 = isinstance(item1, NodeInternals_TypedValue) and \
+                                 item1.get_current_subkind() == BitField and \
+                                 item1.get_value_type().padding_size != 0
+                            c2 = isinstance(item2, NodeInternals_TypedValue) and \
+                                 item2.get_current_subkind() == BitField
+                            if c1 and c2:
+                                new_item = NodeInternals_TypedValue()
+                                new_vt = copy.copy(item1.get_value_type())
+                                new_vt.make_private(forget_current_state=False)
+                                new_vt.extend_right(item2.get_value_type())
+                                new_item.import_value_type(new_vt)
+                                if i > 0:
+                                    new_list = list_to_enc[:i-1]
+                                    new_list.append(new_item)
+                                    if i < list_sz-2:
+                                        new_list += list_to_enc[i+2:]
+                                else:
+                                    new_list = list_to_enc[2:]
+                                    new_list.insert(0, new_item)
+                                list_to_enc = new_list
+                                break
+                    else:
+                        break
+
+                list_to_enc = list(map(tobytes_helper, list_to_enc))
+
+            if self.encoder and after_encoding:
+                if not self.custo.collapse_padding_mode:
+                    list_to_enc = list(flatten(list_to_enc))
+
+                if list_to_enc:
+                    if issubclass(list_to_enc[0].__class__, NodeInternals):
+                        list_to_enc = list(map(tobytes_helper, list_to_enc))
+                    blob = b''.join(list_to_enc)
+                else:
+                    blob = b''
+
                 blob = self.encoder.encode(blob)
                 return blob
             else:
@@ -3079,7 +3153,7 @@ class NodeInternals_NonTerm(NodeInternals):
         djob_group_created = False
         for n in node_list:
             if n.is_attr_set(NodeInternals.DISABLED):
-                val = Node.DEFAULT_DISABLED_VALUE
+                val = Node.DEFAULT_DISABLED_NODEINT
                 if not n.env.is_djob_registered(key=id(n), prio=Node.DJOBS_PRIO_nterm_existence):
                     if not djob_group_created:
                         djob_group_created = True
@@ -3091,8 +3165,10 @@ class NodeInternals_NonTerm(NodeInternals):
                                         args=[n, node_list, len(l), conf, recursive],
                                         prio=Node.DJOBS_PRIO_nterm_existence)
             else:
-                val = n._get_value(conf=conf, recursive=recursive)
+                val = n._get_value(conf=conf, recursive=recursive,
+                                   return_node_internals=True)
 
+            # 'val' is always a NodeInternals except if non-term encoding has been carried out
             l.append(val)
 
         if node_list:
@@ -3140,7 +3216,16 @@ class NodeInternals_NonTerm(NodeInternals):
     def get_raw_value(self):
         raw_list = self._get_value(after_encoding=False)[0]
         raw_list = list(flatten(raw_list))
-        raw = b''.join(raw_list)
+
+        def tobytes_helper(node_internals):
+            return node_internals._get_value(return_node_internals=False)[0]
+
+        if raw_list:
+            if issubclass(raw_list[0].__class__, NodeInternals):
+                raw_list = list(map(tobytes_helper, raw_list))
+            raw = b''.join(raw_list)
+        else:
+            raw = b''
 
         return raw
 
@@ -4406,6 +4491,7 @@ class Node(object):
     DJOBS_PRIO_genfunc = 300
 
     DEFAULT_DISABLED_VALUE = b'' #b'**TO_REMOVE**'
+    DEFAULT_DISABLED_NODEINT = NodeInternals_Empty()
 
     CORRUPT_EXIST_COND = 5
     CORRUPT_QTY_SYNC = 6
@@ -5350,9 +5436,10 @@ class Node(object):
     def get_env(self):
         return self.env
 
-    def freeze(self, conf=None, recursive=True):
+    def freeze(self, conf=None, recursive=True, return_node_internals=False):
         
-        ret = self._get_value(conf=conf, recursive=recursive)
+        ret = self._get_value(conf=conf, recursive=recursive,
+                              return_node_internals=return_node_internals)
 
         if self.env is not None and self.env.delayed_jobs_enabled and not self._delayed_jobs_called:
             self._delayed_jobs_called = True
@@ -5363,13 +5450,14 @@ class Node(object):
             if self.env.djobs_exists(Node.DJOBS_PRIO_genfunc):
                 self.env.execute_basic_djobs(Node.DJOBS_PRIO_genfunc)
 
-            ret = self._get_value(conf=conf, recursive=recursive)
+            ret = self._get_value(conf=conf, recursive=recursive,
+                                  return_node_internals=return_node_internals)
 
         return ret
 
     get_value = freeze
 
-    def _get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
 
         if recursive:
             next_conf = conf
@@ -5391,7 +5479,8 @@ class Node(object):
                       "been associted to the Node.)".format(self.name))
             raise ValueError
 
-        ret, was_not_frozen = internal._get_value(conf=next_conf, recursive=recursive)
+        ret, was_not_frozen = internal._get_value(conf=next_conf, recursive=recursive,
+                                                  return_node_internals=return_node_internals)
 
         if was_not_frozen:
             self._post_freeze(internal)
@@ -5432,11 +5521,27 @@ class Node(object):
                 e.reset_state(recursive=recursive, exclude_self=exclude_self, conf=next_conf,
                               ignore_entanglement=True)
 
+
     def to_bytes(self, conf=None, recursive=True):
-        val = self.freeze(conf=conf, recursive=recursive)
-        if not isinstance(val, bytes):
-            val = list(flatten(val))
-            val = b''.join(val)
+
+        def tobytes_helper(node_internals):
+            if isinstance(node_internals, bytes):
+                return node_internals
+            else:
+                return node_internals._get_value(conf=conf, recursive=recursive,
+                                                 return_node_internals=False)[0]
+
+        node_int_list = self.freeze(conf=conf, recursive=recursive)
+        if isinstance(node_int_list, list):
+            node_int_list = list(flatten(node_int_list))
+            if node_int_list:
+                if issubclass(node_int_list[0].__class__, NodeInternals):
+                    node_int_list = list(map(tobytes_helper, node_int_list))
+                val = b''.join(node_int_list)
+            else:
+                val = b''
+        else:
+            val = node_int_list
 
         return val
 
@@ -5446,10 +5551,25 @@ class Node(object):
 
 
     def _tobytes(self, conf=None, recursive=True):
-        val = self._get_value(conf=conf, recursive=recursive)
-        if not isinstance(val, bytes):
-            val = list(flatten(val))
-            val = b''.join(val)
+
+        def tobytes_helper(node_internals):
+            if isinstance(node_internals, bytes):
+                return node_internals
+            else:
+                return node_internals._get_value(conf=conf, recursive=recursive,
+                                                 return_node_internals=False)[0]
+
+        node_int_list = self._get_value(conf=conf, recursive=recursive)
+        if isinstance(node_int_list, list):
+            node_int_list = list(flatten(node_int_list))
+            if node_int_list:
+                if issubclass(node_int_list[0].__class__, NodeInternals):
+                    node_int_list = list(map(tobytes_helper, node_int_list))
+                val = b''.join(node_int_list)
+            else:
+                val = b''
+        else:
+            val = node_int_list
 
         return val
 
@@ -5756,6 +5876,10 @@ class Node(object):
                         if node.is_nonterm(conf_tmp) and node.encoder is not None:
                             self._print(' [Encoded by {:s}]'.format(node.encoder.__class__.__name__),
                                         rgb=Color.ND_ENCODED, style=FontStyle.BOLD,
+                                        nl=False, log_func=log_func)
+                        if node.is_nonterm(conf_tmp) and node.custo.collapse_padding_mode:
+                            self._print(' >Collapse Bitfields<',
+                                        rgb=Color.ND_CUSTO, style=FontStyle.BOLD,
                                         nl=False, log_func=log_func)
                         self._print(graph_deco, rgb=Color.ND_DUPLICATED, style=FontStyle.BOLD,
                                     log_func=log_func)

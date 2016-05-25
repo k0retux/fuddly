@@ -94,32 +94,32 @@ class TestBasics(unittest.TestCase):
 
     def test_01(self):
 
-        print('\n### TEST 0: generate one EX1 ###')
-
+        # print('\n### TEST 0: generate one EX1 ###')
+        #
         node_ex1 = dm.get_data('EX1')
 
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
         l = node_ex1.get_value()
         hk = set(node_ex1.get_all_paths().keys())
-        print(l)
-
-        print('\n\n ####### \n\n')
-
-        print(l[0])
-        print(b' @ ' + b''.join(flatten(l[1])) + b' @ ')
-        print(l[1])
-
-        print('\n\n ####### \n\n')
-
-
-        res1 = b' @ ' + b''.join(flatten(l[1])) + b' @ ' == l[0]
-        print('*** Is the concatenation (first list element) correct? %r' % res1)
-
-        res2 = len(b''.join(flatten(l[1]))) == int(l[2])
-        print('*** Is length of the concatenation correct? %r' % res2)
-
-        results['test0'] = res1 and res2
+        # print(l)
+        #
+        # print('\n\n ####### \n\n')
+        #
+        # print(l[0])
+        # print(b' @ ' + b''.join(flatten(l[1])) + b' @ ')
+        # print(l[1])
+        #
+        # print('\n\n ####### \n\n')
+        #
+        #
+        # res1 = b' @ ' + b''.join(flatten(l[1])) + b' @ ' == l[0]
+        # print('*** Is the concatenation (first list element) correct? %r' % res1)
+        #
+        # res2 = len(b''.join(flatten(l[1]))) == int(l[2])
+        # print('*** Is length of the concatenation correct? %r' % res2)
+        #
+        # results['test0'] = res1 and res2
 
         print('\n### TEST 1: cross check self.node.get_all_paths().keys() and get_nodes_names() ###')
 
@@ -2327,6 +2327,54 @@ class TestNodeFeatures(unittest.TestCase):
         print(raw, len(raw))
 
         result = b'A1 1_OK_A1 2_OK_A1'
+
+        self.assertEqual(result, raw)
+
+
+    def test_collapse_padding(self):
+
+        padding_desc = \
+        {'name': 'padding',
+         'shape_type': MH.Ordered,
+         'custo_set': MH.Custo.NTerm.CollapsePadding,
+         'contents': [
+             {'name': 'part1',
+              'determinist': True,
+              'contents': BitField(subfield_sizes=[3,1], padding=0, endian=VT.BigEndian,
+                                   subfield_val_lists=[None, [1]],
+                                   subfield_val_extremums=[[1,3], None])
+              },
+             {'name': 'sublevel',
+              'contents': [
+                  {'name': 'part2_o1',
+                   'exists_if': (BitFieldCondition(sf=0, val=[1]), 'part1'),
+                   'contents': BitField(subfield_sizes=[2,2,1], endian=VT.BigEndian,
+                                        subfield_val_lists=[[1,2], [3], [0]])
+                  },
+                  {'name': 'part2_o2',
+                   'exists_if': (BitFieldCondition(sf=0, val=[1]), 'part1'),
+                   'contents': BitField(subfield_sizes=[2,2], endian=VT.BigEndian,
+                                        subfield_val_lists=[[3], [3]])
+                  },
+                  {'name': 'part2_KO',
+                   'exists_if': (BitFieldCondition(sf=0, val=[2]), 'part1'),
+                   'contents': BitField(subfield_sizes=[2,2], endian=VT.BigEndian,
+                                        subfield_val_lists=[[1], [1]])
+                  }
+              ]}
+         ]}
+
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(padding_desc)
+
+        print('***')
+        raw = node.to_bytes()
+        node.show()   # part2_KO should not be displayed
+        print(raw, binascii.b2a_hex(raw),
+              list(map(lambda x: bin(x), struct.unpack('>'+'B'*len(raw), raw))),
+              len(raw))
+
+        result = b'\xf6\xc8'
 
         self.assertEqual(result, raw)
 

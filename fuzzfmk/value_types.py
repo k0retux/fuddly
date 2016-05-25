@@ -1488,7 +1488,7 @@ class BitField(VT_Alt):
         if self.subfield_descs is not None or bitfield.subfield_descs is not None:
             if self.subfield_descs is None and bitfield.subfield_descs is not None:
                 self.subfield_descs = [None for i in self.subfield_limits]
-                desc_extension = bitfield.subfield_sizes
+                desc_extension = bitfield.subfield_descs
             elif self.subfield_descs is not None and bitfield.subfield_descs is None:
                 desc_extension = [None for i in bitfield.subfield_limits]
             self.subfield_descs += desc_extension
