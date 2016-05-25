@@ -394,6 +394,54 @@ class SyncScope:
     Existence = 2
     Inexistence = 3
 
+
+class SyncObj(object):
+
+    def __init__(self, sync_list, and_junction=True):
+        self.sync_list = sync_list
+        self.and_clause = and_junction
+
+    def make_private(self, node_dico):
+        new_sl = []
+        for node, cond in self.sync_list:
+            new_node = node_dico.get(node, None)
+            new_param = copy.copy(cond)
+            if new_node is not None:
+                new_sl.append((new_node, new_param))
+            else:
+                # refer to comments of NodeInternals._update_node_refs()
+                pass
+        self.sync_list = new_sl
+
+    def check(self):
+        if self.and_clause:
+            for node, cond in self.sync_list:
+                if not self._condition_satisfied(node, cond):
+                    return False
+            else:
+                return True
+        else:
+            for node, cond in self.sync_list:
+                if self._condition_satisfied(node, cond):
+                    return True
+            else:
+                return False
+
+    def _condition_satisfied(self, node, condition):
+        exist = node.env.node_exists(id(node))
+        crit_1 = True if exist else False
+        crit_2 = True
+        if exist and condition is not None:
+            try:
+                crit_2 = condition.check(node)
+            except Exception as e:
+                print("\n*** ERROR: existence condition is not verifiable " \
+                      "for node '{:s}' (id: {:d})!\n" \
+                      "*** The condition checker raise an exception!".format(node.name, id(node)))
+                raise
+        return crit_1 and crit_2
+
+
 class NodeCondition(object):
     '''
     Base class for every node-related conditions. (Note that NodeCondition
@@ -690,10 +738,15 @@ class NodeInternals(object):
     def get_current_subkind(self):
         raise NotImplementedError
 
-    def set_node_sync(self, node, scope, param=None):
+    def set_node_sync(self, scope, node=None, param=None, sync_obj=None):
         if self._sync_with is None:
             self._sync_with = {}
-        self._sync_with[scope] = (node, param)
+        if sync_obj is not None:
+            assert node is None and param is None
+            self._sync_with[scope] = sync_obj
+        else:
+            assert node is not None
+            self._sync_with[scope] = (node, param)
 
     def get_node_sync(self, scope):
         if self._sync_with is None:
@@ -720,25 +773,30 @@ class NodeInternals(object):
         sync_nodes = copy.copy(self._sync_with)
 
         for scope, obj in sync_nodes.items():
-            node, param = obj
-            new_node = node_dico.get(node, None)
-            new_param = copy.copy(param)
-            if new_node is not None:
-                self._sync_with[scope] = (new_node, new_param)
+            if isinstance(obj, SyncObj):
+                new_obj = copy.copy(obj)
+                new_obj.make_private(node_dico)
+                self._sync_with[scope] = new_obj
             else:
-                # this case only triggers during a call to
-                # NonTerm.get_subnodes_with_csts(), that is when new
-                # subnodes are created during a
-                # Node._get_value(). Indeed, when making copies of a
-                # node within the NonTerm.subnodes_set, the node_dico
-                # of the copies may miss upper nodes. In such a case,
-                # no update needs to be done, as the node ref exist
-                # and is correct for the base_node, and has no meaning
-                # for the copy.
-                pass
-                # print("\n*** WARNING: node refs not updatable for node '%r'!\n" \
-                #       " \_ name: '%s' \n" \
-                #       " \_ updated_node: '%s', scope: '%r'\n" % (node, node.name, debug, scope))
+                node, param = obj
+                new_node = node_dico.get(node, None)
+                new_param = copy.copy(param)
+                if new_node is not None:
+                    self._sync_with[scope] = (new_node, new_param)
+                else:
+                    # this case only triggers during a call to
+                    # NonTerm.get_subnodes_with_csts(), that is when new
+                    # subnodes are created during a
+                    # Node._get_value(). Indeed, when making copies of a
+                    # node within the NonTerm.subnodes_set, the node_dico
+                    # of the copies may miss upper nodes. In such a case,
+                    # no update needs to be done, as the node ref exist
+                    # and is correct for the base_node, and has no meaning
+                    # for the copy.
+                    pass
+                    # print("\n*** WARNING: node refs not updatable for node '%r'!\n" \
+                    #       " \_ name: '%s' \n" \
+                    #       " \_ updated_node: '%s', scope: '%r'\n" % (node, node.name, debug, scope))
 
 
     def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement):
@@ -3225,8 +3283,9 @@ class NodeInternals_NonTerm(NodeInternals):
 
     @staticmethod
     def _qty_from_node(node):
-        sync_node, param = node.synchronized_with(SyncScope.Qty)
-        if sync_node is not None:
+        obj = node.synchronized_with(SyncScope.Qty)
+        if obj is not None:
+            sync_node, param = obj
             nb = node.env.get_drawn_node_qty(id(sync_node))
             if nb is not None:
                 return NodeInternals_NonTerm.qtysync_corrupt_hook(node, nb)
@@ -3239,24 +3298,31 @@ class NodeInternals_NonTerm(NodeInternals):
 
     @staticmethod
     def _existence_from_node(node):
-        sync_node, condition = node.synchronized_with(SyncScope.Existence)
-        if sync_node is not None:
-            exist = node.env.node_exists(id(sync_node))
-            crit_1 = True if exist else False
-            crit_2 = True
-            if exist and condition is not None:
-                try:
-                    crit_2 = condition.check(sync_node)
-                except Exception as e:
-                    print("\n*** ERROR: existence condition is not verifiable " \
-                          "for node '{:s}' (id: {:d})!\n" \
-                          "*** The condition checker raise an exception!".format(node.name, id(node)))
-                    raise
-            correct_reply = crit_1 and crit_2
+        obj = node.synchronized_with(SyncScope.Existence)
+
+        if obj is not None:
+            if isinstance(obj, SyncObj):
+                correct_reply = obj.check()
+            else:
+                sync_node, condition = obj
+                exist = node.env.node_exists(id(sync_node))
+                crit_1 = True if exist else False
+                crit_2 = True
+                if exist and condition is not None:
+                    try:
+                        crit_2 = condition.check(sync_node)
+                    except Exception as e:
+                        print("\n*** ERROR: existence condition is not verifiable " \
+                              "for node '{:s}' (id: {:d})!\n" \
+                              "*** The condition checker raise an exception!".format(node.name, id(node)))
+                        raise
+                correct_reply = crit_1 and crit_2
+
             return NodeInternals_NonTerm.existence_corrupt_hook(node, correct_reply)
 
-        sync_node, condition = node.synchronized_with(SyncScope.Inexistence)
-        if sync_node is not None:
+        obj = node.synchronized_with(SyncScope.Inexistence)
+        if obj is not None:
+            sync_node, _ = obj  # condition is not checked for this scope
             inexist = not node.env.node_exists(id(sync_node))
             correct_reply = True if inexist else False
             return NodeInternals_NonTerm.existence_corrupt_hook(node, correct_reply)
@@ -5009,14 +5075,14 @@ class Node(object):
         for c in self.internals:
             self.internals[c].set_clone_info(info, node)
 
-    def make_synchronized_with(self, node, scope, param=None, conf=None):
+    def make_synchronized_with(self, scope, node=None, param=None, sync_obj=None, conf=None):
         conf = self.__check_conf(conf)
-        self.internals[conf].set_node_sync(node, scope=scope, param=param)
+        self.internals[conf].set_node_sync(scope=scope, node=node, param=param, sync_obj=sync_obj)
 
     def synchronized_with(self, scope, conf=None):
         conf = self.__check_conf(conf)
         val = self.internals[conf].get_node_sync(scope)
-        return val if val is not None else (None, None)
+        return val
 
     def set_attr(self, name, conf=None, all_conf=False, recursive=False):
         if all_conf:

@@ -2110,7 +2110,7 @@ class TestNodeFeatures(unittest.TestCase):
         b.show(raw_limit=400)
 
 
-    def test_exist_condition(self):
+    def test_exist_condition_01(self):
         ''' Test existence condition for generation and absorption
         '''
 
@@ -2147,7 +2147,65 @@ class TestNodeFeatures(unittest.TestCase):
 
             d.unfreeze()
 
+    def test_exist_condition_02(self):
 
+        cond_desc = \
+        {'name': 'exist_cond',
+         'shape_type': MH.Ordered,
+         'contents': [
+             {'name': 'opcode',
+              'determinist': True,
+              'contents': String(val_list=['A3', 'A2'])},
+
+             {'name': 'command_A3',
+              'exists_if': (RawCondition('A3'), 'opcode'),
+              'contents': [
+                  {'name': 'A3_subopcode',
+                   'contents': BitField(subfield_sizes=[15,2,4], endian=VT.BigEndian,
+                                        subfield_val_lists=[None, [1,2], [5,6,12]],
+                                        subfield_val_extremums=[[500, 600], None, None],
+                                        determinist=False)},
+
+                  {'name': 'A3_int',
+                   'determinist': True,
+                   'contents': UINT16_be(int_list=[10, 20, 30])},
+
+                  {'name': 'A3_deco1',
+                   'exists_if/and': [(IntCondition(val=[10]), 'A3_int'),
+                                     (BitFieldCondition(sf=2, val=[5]), 'A3_subopcode')],
+                   'contents': String(val_list=['$ and_OK $'])},
+
+                  {'name': 'A3_deco2',
+                   'exists_if/and': [(IntCondition(val=[10]), 'A3_int'),
+                                     (BitFieldCondition(sf=2, val=[6]), 'A3_subopcode')],
+                   'contents': String(val_list=['! and_KO !'])}
+              ]},
+
+             {'name': 'A31_payload1',
+              'contents': String(val_list=['$ or_OK $']),
+              'exists_if/or': [(IntCondition(val=[20]), 'A3_int'),
+                               (BitFieldCondition(sf=2, val=[5]), 'A3_subopcode')],
+              },
+
+             {'name': 'A31_payload2',
+              'contents': String(val_list=['! or_KO !']),
+              'exists_if/or': [(IntCondition(val=[20]), 'A3_int'),
+                               (BitFieldCondition(sf=2, val=[6]), 'A3_subopcode')],
+              },
+
+         ]}
+
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(cond_desc)
+
+        print('***')
+        raw = node.to_bytes()
+        node.show()
+        print(raw, len(raw))
+
+        result = b"A3T\x0f\xa0\x00\n$ and_OK $$ or_OK $"
+
+        self.assertEqual(result, raw)
 
     def test_generalized_exist_cond(self):
 

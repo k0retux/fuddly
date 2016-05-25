@@ -531,6 +531,7 @@ class ModelHelper(object):
         'absorb_csts', 'absorb_helper',
         'semantics', 'fuzz_weight',
         'sync_qty_with', 'exists_if', 'exists_if_not',
+        'exists_if/and', 'exists_if/or',
         'post_freeze'
     ]
 
@@ -913,17 +914,27 @@ class ModelHelper(object):
         ref = desc.get('sync_qty_with', None)
         if ref is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(ref, SyncScope.Qty, conf),
+                                args=(ref, SyncScope.Qty, conf, None),
                                 unpack_args=True)
         condition = desc.get('exists_if', None)
         if condition is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(condition, SyncScope.Existence, conf),
+                                args=(condition, SyncScope.Existence, conf, None),
+                                unpack_args=True)
+        condition = desc.get('exists_if/and', None)
+        if condition is not None:
+            self._register_todo(node, self._set_sync_node,
+                                args=(condition, SyncScope.Existence, conf, 'and'),
+                                unpack_args=True)
+        condition = desc.get('exists_if/or', None)
+        if condition is not None:
+            self._register_todo(node, self._set_sync_node,
+                                args=(condition, SyncScope.Existence, conf, 'or'),
                                 unpack_args=True)
         condition = desc.get('exists_if_not', None)
         if condition is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(condition, SyncScope.Inexistence, conf),
+                                args=(condition, SyncScope.Inexistence, conf, None),
                                 unpack_args=True)
         fw = desc.get('fuzz_weight', None)
         if fw is not None:
@@ -960,15 +971,30 @@ class ModelHelper(object):
             raise ValueError("arguments refer to an inexistent node ({:s}, {!s})!".format(ref[0], ref[1]))
         parent_node.replace_subnode(node, self.node_dico[ref])
 
-    def _set_sync_node(self, node, arg, scope, conf):
-        if isinstance(arg, tuple) and issubclass(arg[0].__class__, NodeCondition):
-            param = arg[0]
-            sync_with = self.__get_node_from_db(arg[1])
+    def _set_sync_node(self, node, comp, scope, conf, private):
+        sync_obj = None
+        if isinstance(comp, (tuple,list)):
+            if issubclass(comp[0].__class__, NodeCondition):
+                param = comp[0]
+                sync_with = self.__get_node_from_db(comp[1])
+            else:
+                assert private in ['and', 'or']
+                sync_list = []
+                for subcomp in comp:
+                    assert isinstance(subcomp, (tuple,list)) and len(subcomp) == 2
+                    param = subcomp[0]
+                    sync_with = self.__get_node_from_db(subcomp[1])
+                    sync_list.append((sync_with, param))
+                and_junction = True if private == 'and' else False
+                sync_obj = SyncObj(sync_list, and_junction=and_junction)
         else:
             param = None
-            sync_with = self.__get_node_from_db(arg)
+            sync_with = self.__get_node_from_db(comp)
 
-        node.make_synchronized_with(sync_with, scope=scope, param=param, conf=conf)
+        if sync_obj is not None:
+            node.make_synchronized_with(scope=scope, sync_obj=sync_obj, conf=conf)
+        else:
+            node.make_synchronized_with(scope=scope, node=sync_with, param=param, conf=conf)
 
     def _complete_func(self, node, args, conf):
         if isinstance(args, str):

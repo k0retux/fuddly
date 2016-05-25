@@ -1419,14 +1419,16 @@ class BitField(VT_Alt):
             raise ValueError
 
 
-        if sf_val_lists is None: sf_val_lists = [None for i in range(len(self.subfield_limits))]
+        if sf_val_lists is None:
+            sf_val_lists = [None for i in range(len(self.subfield_limits))]
         elif len(sf_val_lists) != len(self.subfield_limits):
             raise ValueError
 
 
-        if sf_val_extremums is None: sf_val_extremums = [None for i in range(len(self.subfield_limits))]
+        if sf_val_extremums is None:
+            sf_val_extremums = [None for i in range(len(self.subfield_limits))]
         elif len(sf_val_extremums) != len(self.subfield_limits):
-                raise ValueError
+            raise ValueError
 
 
         if sf_descs is not None:
