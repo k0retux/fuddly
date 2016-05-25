@@ -202,7 +202,7 @@ class sd_switch_to_alternate_conf(StatefulDisruptor):
         if self.conf is None:
             self.confs_list = all_alternate_confs
         else:
-            if isinstance(self.conf, list) or isinstance(self.conf, tuple):
+            if isinstance(self.conf, (tuple, list)):
                 for c in self.conf:
                     if c in all_alternate_confs:
                         ok = True

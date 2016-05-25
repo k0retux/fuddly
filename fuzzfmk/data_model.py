@@ -280,7 +280,7 @@ def split_verbose_with(predicate, iterable):
 
 def flatten(nested):
     for x in nested:
-        if hasattr(x, '__iter__') and not isinstance(x, str) and not isinstance(x, bytes):
+        if hasattr(x, '__iter__') and not isinstance(x, (str, bytes)):
             for y in flatten(x):
                 yield y
         else:
@@ -291,7 +291,7 @@ def convert_to_internal_repr(val):
     if isinstance(val, int):
         val = bytes(val)
     else:
-        if not isinstance(val, str) and not isinstance(val, bytes):
+        if not isinstance(val, (str, bytes)):
             val = repr(val)
         if sys.version_info[0] > 2 and not isinstance(val, bytes):
             val = bytes(val, 'latin_1')
@@ -471,7 +471,7 @@ class RawCondition(NodeCondition):
             self._handle_cond(neg_val)
 
     def _handle_cond(self, val):
-        if isinstance(val, tuple) or isinstance(val, list):
+        if isinstance(val, (tuple, list)):
             self.val = []
             for v in val:
                 self.val.append(convert_to_internal_repr(v))
@@ -482,12 +482,12 @@ class RawCondition(NodeCondition):
         node_val = node._tobytes()
         # node_val = node_val.replace(Node.DEFAULT_DISABLED_VALUE, b'')
         if self.positive_mode:
-            if isinstance(self.val, tuple) or isinstance(self.val, list):
+            if isinstance(self.val, (tuple, list)):
                 result = node_val in self.val
             else:
                 result = node_val == self.val
         else:
-            if isinstance(self.val, tuple) or isinstance(self.val, list):
+            if isinstance(self.val, (tuple, list)):
                 result = node_val not in self.val
             else:
                 result = node_val != self.val
@@ -515,7 +515,7 @@ class IntCondition(NodeCondition):
         from fuzzfmk.value_types import INT
         assert(node.is_typed_value(subkind=INT))
 
-        if isinstance(self.val, tuple) or isinstance(self.val, list):
+        if isinstance(self.val, (tuple, list)):
             if self.positive_mode:
                 result = node.get_current_raw_val() in self.val
             else:
@@ -553,7 +553,7 @@ class BitFieldCondition(NodeCondition):
         from fuzzfmk.value_types import BitField
         assert(node.is_typed_value(subkind=BitField))
 
-        if isinstance(self.val, tuple) or isinstance(self.val, list):
+        if isinstance(self.val, (tuple, list)):
             if self.positive_mode:
                 result = node.get_subfield(idx=self.sf) in self.val
             else:
@@ -1648,7 +1648,7 @@ class NodeInternals_Term(NodeInternals):
 
     @staticmethod
     def _convert_to_internal_repr(val):
-        if not isinstance(val, str) and not isinstance(val, bytes):
+        if not isinstance(val, (str, bytes)):
             val = repr(val)
         if sys.version_info[0] > 2 and not isinstance(val, bytes):
             val = bytes(val, 'latin_1')

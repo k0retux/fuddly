@@ -729,7 +729,7 @@ class FmkPlumbing(object):
             else:
                 new_targets = []
                 for obj in targets:
-                    if isinstance(obj, list) or isinstance(obj, tuple):
+                    if isinstance(obj, (tuple, list)):
                         tg = obj[0]
                         obj = obj[1:]
                         tg.remove_probes()
@@ -944,7 +944,7 @@ class FmkPlumbing(object):
 
 
     def _extract_info_from_probe(self, p):
-        if isinstance(p, list) or isinstance(p, tuple):
+        if isinstance(p, (tuple, list)):
             assert(len(p) == 2)
             pname = p[0].__name__
             delay = p[1]
@@ -2247,7 +2247,7 @@ class FmkPlumbing(object):
 
         for full_action, idx in zip(action_list, range(len(action_list))):
 
-            if isinstance(full_action, list) or isinstance(full_action, tuple):
+            if isinstance(full_action, (tuple, list)):
                 if len(full_action) == 2:
                     action, gen_args = full_action
                     user_input = UserInputContainer(generic=gen_args, specific=None)
@@ -2282,7 +2282,7 @@ class FmkPlumbing(object):
                 clone_dmaker = self._tactics.clone_disruptor
                 clone_gen_dmaker = self._generic_tactics.clone_disruptor
 
-            if isinstance(action, list) or isinstance(action, tuple):
+            if isinstance(action, (tuple, list)):
                 dmaker_type = action[0]
                 provided_dmaker_name = action[1]
                 dmaker_ref = 'type: ' + dmaker_type + ', name: ' + provided_dmaker_name

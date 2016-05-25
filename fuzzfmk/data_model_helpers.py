@@ -220,7 +220,7 @@ class MH(object):
             else:
                 if issubclass(nodes.__class__, NodeAbstraction):
                     nodes = nodes.get_concrete_nodes()
-                elif not isinstance(nodes, tuple) and not isinstance(nodes, list):
+                elif not isinstance(nodes, (tuple, list)):
                     raise TypeError("Contents of 'nodes' parameter is incorrect!")
                 s = b''
                 for n in nodes:
@@ -262,7 +262,7 @@ class MH(object):
             else:
                 if issubclass(nodes.__class__, NodeAbstraction):
                     nodes = nodes.get_concrete_nodes()
-                elif not isinstance(nodes, tuple) and not isinstance(nodes, list):
+                elif not isinstance(nodes, (tuple, list)):
                     raise TypeError("Contents of 'nodes' parameter is incorrect!")
                 s = b''
                 for n in nodes:
@@ -386,7 +386,7 @@ class MH(object):
                 else:
                     if issubclass(nodes.__class__, NodeAbstraction):
                         nodes = nodes.get_concrete_nodes()
-                    elif not isinstance(nodes, tuple) and not isinstance(nodes, list):
+                    elif not isinstance(nodes, (tuple, list)):
                         raise TypeError("Contents of 'nodes' parameter is incorrect!")
 
                     if not self.use_current_position:
@@ -564,7 +564,7 @@ class ModelHelper(object):
         return n
 
     def _handle_name(self, name_desc):
-        if isinstance(name_desc, tuple) or isinstance(name_desc, list):
+        if isinstance(name_desc, (tuple, list)):
             assert(len(name_desc) == 2)
             name = name_desc[0]
             ident = name_desc[1]
@@ -1000,7 +1000,7 @@ class ModelHelper(object):
         if isinstance(args, str):
             func_args = self.__get_node_from_db(args)
         else:
-            assert(isinstance(args, list) or isinstance(args, tuple))
+            assert(isinstance(args, (tuple, list)))
             func_args = []
             for name_desc in args:
                 func_args.append(self.__get_node_from_db(name_desc))
@@ -1012,7 +1012,7 @@ class ModelHelper(object):
            (isinstance(args, tuple) and isinstance(args[1], int)):
             func_args = self.__get_node_from_db(args)
         else:
-            assert(isinstance(args, list) or isinstance(args, tuple))
+            assert(isinstance(args, (tuple, list)))
             func_args = []
             for name_desc in args:
                 func_args.append(self.__get_node_from_db(name_desc))
