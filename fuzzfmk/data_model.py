@@ -3112,10 +3112,12 @@ class NodeInternals_NonTerm(NodeInternals):
                                  item2.get_current_subkind() == BitField
                             if c1 and c2:
                                 new_item = NodeInternals_TypedValue()
-                                new_vt = copy.copy(item1.get_value_type())
-                                new_vt.make_private(forget_current_state=False)
-                                new_vt.extend_right(item2.get_value_type())
-                                new_item.import_value_type(new_vt)
+                                new_item1vt = copy.copy(item1.get_value_type())
+                                new_item1vt.make_private(forget_current_state=False)
+                                new_item2vt = copy.copy(item2.get_value_type())
+                                new_item2vt.make_private(forget_current_state=False)
+                                new_item1vt.extend_right(new_item2vt)
+                                new_item.import_value_type(new_item1vt)
                                 if i > 0:
                                     new_list = list_to_enc[:i-1]
                                     new_list.append(new_item)

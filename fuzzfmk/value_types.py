@@ -1480,10 +1480,19 @@ class BitField(VT_Alt):
 
     def extend_right(self, bitfield):
 
-        if self._fuzzy_mode:
-            self.switch_mode()
-        if bitfield._fuzzy_mode:
-            bitfield.switch_mode()
+        if self.drawn_val is not None:
+            self.rewind()
+            # TODO: change rewind() by computing the extended value
+        self.drawn_val = None
+        self.__count_of_possible_values = None
+        if self.exhausted and bitfield.exhausted:
+            self.exhausted = True
+        else:
+            self.exhausted = False
+        self.exhaustion_cpt += bitfield.exhaustion_cpt
+        self.current_val_update_pending = False
+        self.idx += bitfield.idx
+        self.idx_inuse = self.idx
 
         if self.subfield_descs is not None or bitfield.subfield_descs is not None:
             if self.subfield_descs is None and bitfield.subfield_descs is not None:
@@ -1510,9 +1519,6 @@ class BitField(VT_Alt):
         else:
             self.padding_size = 8 - (self.size % 8)
 
-        # this call will extend automatically self.idx
-        self.reset_state()
-        
 
     def pretty_print(self):
 

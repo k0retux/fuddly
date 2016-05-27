@@ -978,7 +978,7 @@ class ModelHelper(object):
             if issubclass(comp[0].__class__, NodeCondition):
                 param = comp[0]
                 sync_with = self.__get_node_from_db(comp[1])
-            else:
+            elif issubclass(comp[0].__class__, (tuple,list)):
                 assert private in ['and', 'or']
                 sync_list = []
                 for subcomp in comp:
@@ -988,6 +988,9 @@ class ModelHelper(object):
                     sync_list.append((sync_with, param))
                 and_junction = True if private == 'and' else False
                 sync_obj = SyncObj(sync_list, and_junction=and_junction)
+            else:  # in this case this is a node reference in the form ('node name', ID)
+                param = None
+                sync_with = self.__get_node_from_db(comp)
         else:
             param = None
             sync_with = self.__get_node_from_db(comp)

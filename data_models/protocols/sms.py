@@ -138,13 +138,39 @@ class SMS_DataModel(DataModel):
                                                        [0b01]],    # kind of opcode
                                    ) },
              {'name': 'TP-DCS',  # Data Coding Scheme (refer to GSM 03.38)
-              'determinist': True,
-              'contents': BitField(subfield_sizes=[2,1,1,4], endian=VT.BigEndian,
-                                   subfield_val_lists=[[0b10,0b11,0b00,0b01], # class 2 (default)
-                                                       [1,0],    # 8-bit data (default)
-                                                       [0],      # reserved
-                                                       [0b1111]],  # last coding group
-                                   ) },
+              'custo_set': MH.Custo.NTerm.CollapsePadding,
+              'contents': [
+                  {'name': 'lsb1',
+                   'determinist': True,
+                   'exists_if': (BitFieldCondition(sf=0, val=[0b1111]), 'msb'),
+                   'contents': BitField(subfield_sizes=[2,1,1], endian=VT.BigEndian,
+                                        subfield_val_lists=[[0b10,0b11,0b00,0b01], # class 2 (default)
+                                                            [1,0],    # 8-bit data (default)
+                                                            [0]]      # reserved
+                                        ) },
+                  {'name': 'lsb2',
+                   'determinist': True,
+                   'exists_if': (BitFieldCondition(sf=0, val=[0b1101,0b1100]), 'msb'),
+                   'contents': BitField(subfield_sizes=[2,1,1], endian=VT.BigEndian,
+                                        subfield_val_lists=[[0b10,0b11,0b00,0b01], # indication type
+                                                            [0],    # reserved
+                                                            [0,1]]  # set indication Active/Inactive
+                                        ) },
+                  {'name': 'lsb3',
+                   'determinist': True,
+                   'exists_if': (BitFieldCondition(sf=0, val=[0]), 'msb'),
+                   'contents': BitField(subfield_sizes=[4], endian=VT.BigEndian,
+                                        subfield_val_lists=[
+                                            [0b0000]  # Default alphabet
+                                        ]
+                                        ) },
+                  {'name': 'msb',
+                   'determinist': True,
+                   'contents': BitField(subfield_sizes=[4], endian=VT.BigEndian,
+                                        subfield_val_lists=[
+                                            [0b1111,0b1101,0b1100,0b0000]],  # last coding group
+                                        ) },
+             ]},
              {'name': 'UDL',
               'contents': MH.LEN(vt=UINT8),
               'node_args': 'user_data'},
