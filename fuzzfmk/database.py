@@ -44,6 +44,9 @@ class Database(object):
         self._cur = None
         self.enabled = False
 
+        self.last_feedback = {}
+        self.last_data_id = None
+
     def start(self):
         if not sqlite3_module:
             print("/!\\ WARNING /!\\: Fuddly's FmkDB unavailable because python-sqlite3 is not installed!")
@@ -215,6 +218,22 @@ class Database(object):
             return self._cur.lastrowid
 
     def insert_feedback(self, data_id, source, timestamp, content, status_code=None):
+
+        if data_id != self.last_data_id:
+            self.last_data_id = data_id
+            self.last_feedback = {}
+
+        if source not in self.last_feedback:
+            self.last_feedback[source] = []
+
+        self.last_feedback[source].append(
+            {
+                'timestamp': timestamp,
+                'content': content,
+                'status': status_code
+            }
+        )
+
         if not self.enabled:
             return None
 

@@ -257,6 +257,7 @@ class MyDF_DataModel(DataModel):
              {'name': 'body',
               # 'custo_set': MH.Custo.NTerm.MutableClone,
               'shape_type': MH.FullyRandom,
+              'random': True,
               'contents': [
                   {'contents': String(val_list=['AAA']),
                    'qty': 10,

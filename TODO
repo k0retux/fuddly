@@ -1,5 +1,10 @@
 [NEW FEATURES]
 
+- Add a Data sequencing infrastructure based on callbacks (as an alternative to virtual Operator):
+  - Add support for specifying Data sequencing/scenarii and create new dynamic Generators that
+    either follow a scenario or play around a scenario
+  - Data callbacks should be able to return specific instructions to fuddly, enabling to launch
+    periodic task (e.g., sending continuously a specific data, ...)
 - Add GDB/PIN/QEMU probes/managers
 - Add support for evolutionary fuzzing
 - Add FmkDB visualization tools

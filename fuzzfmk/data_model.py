@@ -58,6 +58,8 @@ class Data(object):
         self.info = {}
         self.__info_idx = {}
 
+        self._callbacks = []
+
         self._history = None
 
         if data is None:
@@ -207,6 +209,17 @@ class Data(object):
 
     pretty_print = show
 
+    def register_callback(self, callback):
+        self._callbacks.append(callback)
+
+    def cleanup_callbacks(self):
+        self._callbacks = []
+
+    def run_callbacks(self, feedback):
+        for cbk in self._callbacks:
+            if not cbk(feedback):
+                break
+
     def __copy__(self):
         new_data = type(self)()
         new_data.__dict__.update(self.__dict__)
@@ -215,6 +228,9 @@ class Data(object):
         new_data.__info_idx = copy.copy(self.__info_idx)
         new_data._history = copy.copy(self._history)
         new_data.__type = copy.copy(self.__type)
+        new_data._callbacks = []
+        for cbk in self._callbacks:
+            new_data._callbacks.append(copy.copy(cbk))
 
         if self.node is not None:
             e = Node(self.node.name, base_node=self.node, ignore_frozen_state=False)
@@ -227,10 +243,10 @@ class Data(object):
             self.raw = self.node.to_bytes()
         return str(self.raw)
 
-    def __repr__(self):
-        if self.node:
-            self.raw = self.node.to_bytes()
-        return repr(self.raw)
+    # def __repr__(self):
+    #     if self.node:
+    #         self.raw = self.node.to_bytes()
+    #     return repr(self.raw)
 
 
 

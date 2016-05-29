@@ -493,7 +493,7 @@ class UserInputContainer(object):
         return str(self)
 
 
-### Generator & Disruptor decorator
+### Generator & Disruptor
 
 class DataMakerAttr:
     Active = 1

@@ -42,7 +42,7 @@ About documentation
   #. execute ``make latexpdf`` to generate PDF documentation
   #. generated documentation is located in ``docs/build/``
 
-.. _here: http://fuddly.readthedocs.org
+.. _here: http://fuddly.readthedocs.io
 
 
 Launch fuddly test cases

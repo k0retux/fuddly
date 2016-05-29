@@ -1415,6 +1415,17 @@ class FmkPlumbing(object):
 
         return ret
 
+
+    def _after_feedback_retrieval(self, data_list):
+        for data in data_list:
+            try:
+                data.run_callbacks(copy.copy(self.fmkDB.last_feedback))
+            except:
+                self._handle_user_code_exception("A callback has crashed! (associated to "
+                                                 "Data object '{!r}')".format(data))
+                continue
+
+
     @EnforceOrder(accepted_states=['S2'])
     def send_data_and_log(self, data_list, original_data=None, verbose=False):
 
@@ -1485,6 +1496,8 @@ class FmkPlumbing(object):
             # We handle probe feedback if any
             cont4 = self.monitor_probes()
             self.tg.cleanup()
+
+        self._after_feedback_retrieval(data_list)
 
         cont2 = self.mon.do_after_sending_and_logging_data()
 
@@ -2169,6 +2182,8 @@ class FmkPlumbing(object):
                         exit_operator = True
                         self.lg.log_fmk_info("Operator will shutdown because something is going wrong with "
                                              "the target and the recovering procedure did not succeed...")
+
+                self._after_feedback_retrieval(data_list)
 
                 op_feedback = linst.get_operator_feedback()
                 op_status = linst.get_operator_status()
