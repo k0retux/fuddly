@@ -169,6 +169,36 @@ class EnforceOrder(object):
         return wrapped_func
 
 
+class FmkTask(threading.Thread):
+
+    def __init__(self, name, func, arg, period=None,
+                 error_func=lambda x: x, cleanup_func=lambda x: None):
+        threading.Thread.__init__(self)
+        self._name = name
+        self._func = func
+        self._arg = arg
+        self._period = period
+        self._stop = threading.Event()
+        self._error_func = error_func
+        self._cleanup_func=cleanup_func
+
+    def run(self):
+        while not self._stop.isSet():
+            try:
+                # print("\n*** Function '{!s}' executed by Task '{!s}' ***".format(self._func, self._name))
+                self._func(self._arg)
+            except:
+                self._error_func("Task '{!s}' has crashed!".format(self._name))
+                break
+            if self._period is not None:
+                self._stop.wait(max(self._period,0.01))
+            else:
+                self._cleanup_func()
+                break
+
+    def stop(self):
+        self._stop.set()
+
 
 class FmkPlumbing(object):
 
@@ -212,6 +242,9 @@ class FmkPlumbing(object):
 
         self._name2dm = {}
         self._name2prj = {}
+
+        self._task_list = {}
+        self._task_list_lock = threading.Lock()
 
         self.fmkDB = Database()
         ok = self.fmkDB.start()
@@ -903,6 +936,8 @@ class FmkPlumbing(object):
             if self.is_target_enabled():
                 self.log_target_residual_feedback()
 
+            self._cleanup_tasks()
+
             if self.is_target_enabled():
                 self.mon.stop()
                 try:
@@ -1425,6 +1460,41 @@ class FmkPlumbing(object):
                                                  "Data object '{!r}')".format(data))
                 continue
 
+            pending_ops = data.pending_callback_ops()
+            if pending_ops:
+                for op in pending_ops:
+                    for id in op[CallBackOps.UnReg_PeriodicData]:
+                        self._unregister_task(id)
+
+                    for id, obj in op[CallBackOps.Reg_PeriodicData].items():
+                        data, period = obj
+                        task = FmkTask(id, self.tg.send_data_sync, data, period=period,
+                                       error_func=self._handle_user_code_exception,
+                                       cleanup_func=functools.partial(self._unregister_task, id))
+                        self._register_task(id, task)
+
+    def _unregister_task(self, id):
+        with self._task_list_lock:
+            if id in self._task_list:
+                self._task_list[id].stop()
+                del self._task_list[id]
+            else:
+                self.set_error('ERROR: Task with ID #{!s} does not exist. '
+                               'Cannot unregister.'.format(id, code=Error.UserCodeError))
+
+    def _register_task(self, id, task):
+        with self._task_list_lock:
+            if id not in self._task_list:
+                self._task_list[id] = task
+                task.start()
+            else:
+                self.set_error('WARNING: Task ID #{!s} already exists. '
+                               'Task ignored.'.format(id, code=Error.UserCodeError))
+
+    def _cleanup_tasks(self):
+        for id in self._task_list:
+            self._task_list[id].stop()
+        self._task_list = {}
 
     @EnforceOrder(accepted_states=['S2'])
     def send_data_and_log(self, data_list, original_data=None, verbose=False):

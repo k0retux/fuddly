@@ -58,7 +58,8 @@ class Data(object):
         self.info = {}
         self.__info_idx = {}
 
-        self._callbacks = []
+        self._callbacks = collections.OrderedDict()
+        self._pending_ops = None
 
         self._history = None
 
@@ -210,15 +211,29 @@ class Data(object):
     pretty_print = show
 
     def register_callback(self, callback):
-        self._callbacks.append(callback)
+        self._callbacks[id(callback)] = callback
 
     def cleanup_callbacks(self):
-        self._callbacks = []
+        self._callbacks = collections.OrderedDict()
 
     def run_callbacks(self, feedback):
-        for cbk in self._callbacks:
-            if not cbk(feedback):
+        new_cbks = copy.copy(self._callbacks)
+        for cbk_id, cbk in self._callbacks.items():
+            cbk_ops = cbk(feedback)
+            if self._pending_ops is None:
+                self._pending_ops = []
+            self._pending_ops.append(cbk_ops.get_operations())
+            if cbk_ops.is_flag_set(CallBackOps.RemoveCB):
+                del new_cbks[cbk_id]
+            if cbk_ops.is_flag_set(CallBackOps.StopProcessingCB):
                 break
+
+        self._callbacks = new_cbks
+
+    def pending_callback_ops(self):
+        pops = self._pending_ops
+        self._pending_ops = None
+        return pops
 
     def __copy__(self):
         new_data = type(self)()
@@ -248,6 +263,49 @@ class Data(object):
     #         self.raw = self.node.to_bytes()
     #     return repr(self.raw)
 
+
+class CallBackOps(object):
+
+    # Flags
+    RemoveCB = 1 # If True, remove this callback after execution
+    StopProcessingCB = 2 # If True, any callback following this one won't be processed
+
+    # Instructions
+    Reg_PeriodicData = 10  # ask for sending periodically a data
+    UnReg_PeriodicData = 11  # ask for stopping a periodic sending
+
+    def __init__(self, remove_cb=False, stop_process_cb=False):
+        self.instr = {
+            CallBackOps.Reg_PeriodicData: {},
+            CallBackOps.UnReg_PeriodicData: [],
+        }
+        self.flags = {
+            CallBackOps.RemoveCB: remove_cb,
+            CallBackOps.StopProcessingCB: stop_process_cb
+            }
+
+    def set_flag(self, name):
+        if name in self.flags:
+            self.flags[name] = True
+        else:
+            raise ValueError
+
+    def is_flag_set(self, name):
+        if name not in self.flags:
+            raise ValueError
+        return self.flags[name]
+
+    def add_operation(self, instr_type, id, data=None, period=None):
+        if instr_type == CallBackOps.Reg_PeriodicData:
+            assert data is not None
+            self.instr[instr_type][id] = (data, period)
+        elif instr_type == CallBackOps.UnReg_PeriodicData:
+            self.instr[instr_type].append(id)
+        else:
+            raise ValueError('Unrecognized Instruction Type')
+
+    def get_operations(self):
+        return self.instr
 
 
 def split_with(predicate, iterable):
