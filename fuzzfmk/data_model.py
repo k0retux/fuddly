@@ -243,9 +243,10 @@ class Data(object):
         new_data.__info_idx = copy.copy(self.__info_idx)
         new_data._history = copy.copy(self._history)
         new_data.__type = copy.copy(self.__type)
-        new_data._callbacks = []
-        for cbk in self._callbacks:
-            new_data._callbacks.append(copy.copy(cbk))
+        new_data._callbacks = collections.OrderedDict()
+        for key, cbk in self._callbacks.items():
+            ncbk = copy.copy(cbk)
+            new_data._callbacks[id(ncbk)] = ncbk
 
         if self.node is not None:
             e = Node(self.node.name, base_node=self.node, ignore_frozen_state=False)

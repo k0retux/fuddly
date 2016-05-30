@@ -2923,6 +2923,11 @@ class TestDataModel(unittest.TestCase):
     def setUp(self):
         pass
 
+    def test_data_container(self):
+        node = fmk.dm.get_external_node(dm_name='mydf', data_id='exist_cond')
+        data = copy.copy(Data(node))
+        data = copy.copy(Data('TEST'))
+
     @unittest.skipIf(not run_long_tests, "Long test case")
     def test_data_makers(self):
 
