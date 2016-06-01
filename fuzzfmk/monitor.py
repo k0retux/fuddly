@@ -32,40 +32,51 @@ from fuzzfmk.global_resources import *
 import fuzzfmk.error_handling as eh
 
 
-class ProbeRunner(object):
+class ProbeUser(object):
 
     timeout = 10.0
 
     def __init__(self, probe):
         self._probe = probe
         self._thread = None
-        self._init_specific()
+        self._stop_event = threading.Event()
 
-    def _init_specific(self):
-        self._helper = ProbeHelper()
+    def go_on(self):
+        return not self._stop_event.is_set()
 
-    @property
-    def helper(self):
-        return self._helper
+    def _wait(self, delay):
+        self._stop_event.wait(delay)
+
+    def stop(self):
+        self._stop_event.set()
+
+    def _notify_stop(self):
+        self._stop_event.clear()
+
+    def _clear(self):
+        """
+        Clear all events
+        """
+        self._stop_event.clear()
 
     def start(self, *args, **kwargs):
-        if self._thread is not None and self.is_alive():
+        if self.is_alive():
             raise RuntimeError
-        self._helper = self._helper.__class__()
-        self._thread = threading.Thread(target=self.run, name=self._probe.__class__.__name__,
+        self._clear()
+        self._thread = threading.Thread(target=self._run, name=self._probe.__class__.__name__,
                                         args=args, kwargs=kwargs)
         self._thread.start()
 
     def join(self, timeout):
-        if self._thread is not None:
-            self._thread.join(ProbeRunner.timeout if timeout is None else timeout)
+        if self.is_alive():
+            self._thread.join(ProbeUser.timeout if timeout is None else timeout)
             if self.is_alive():
                 raise eh.Timeout
 
     def is_alive(self):
         return self._thread is not None and self._thread.is_alive()
 
-    def run(self, *args, **kwargs):
+    def _run(self, *args, **kwargs):
         try:
             status = self._probe._start(*args, **kwargs)
         except:
@@ -75,20 +86,20 @@ class ProbeRunner(object):
         if status is not None:
             self._probe.status = status
 
-        while self._helper.go_on():
+        while self.go_on():
             try:
                 self._probe.status = self._probe.main(*args, **kwargs)
             except:
                 self._handle_exception('during main()')
                 return
-            self._helper.wait(self._probe.delay)
+            self._wait(self._probe.delay)
 
         try:
             self._probe._stop(*args, **kwargs)
         except:
             self._handle_exception('during stop()')
         else:
-            self._helper.notify_probe_stops()
+            self._notify_stop()
 
 
     def get_probe_delay(self):
@@ -102,7 +113,7 @@ class ProbeRunner(object):
 
     def _handle_exception(self, context):
         probe_name = self._probe.__class__.__name__
-        self._helper.notify_probe_stops()
+        self._notify_stop()
         print("\nException in probe '{:s}' ({:s}):".format(probe_name, context))
         print('-'*60)
         traceback.print_exc(file=sys.stdout)
@@ -110,12 +121,70 @@ class ProbeRunner(object):
 
 
 
-class BlockingProbeRunner(ProbeRunner):
+class BlockingProbeUser(ProbeUser):
 
-    def _init_specific(self):
-        self._helper = BlockingProbeHelper()
+    def __init__(self, probe):
+        ProbeUser.__init__(self, probe)
 
-    def run(self, *args, **kwargs):
+        self._continue_event = threading.Event()
+
+        self._arm_event = threading.Event()
+        self._armed_event = threading.Event()
+        self._blocking_event = threading.Event()
+
+
+    def _clear(self):
+        ProbeUser._clear(self)
+        self._arm_event.clear()
+        self._armed_event.clear()
+        self._blocking_event.clear()
+        self._continue_event.clear()
+
+
+    def _wait_for_data_ready(self):
+        while not self._arm_event.is_set():
+            if not self.go_on():
+                return False
+            self._arm_event.wait(1)
+
+        self._arm_event.clear()
+        return True
+
+    def _notify_armed(self):
+        self._armed_event.set()
+
+    def _wait_for_blocking(self):
+        timeout_appended = True
+        while not self._blocking_event.is_set():
+            if self._continue_event.is_set() or not self.go_on():
+                self._continue_event.clear()
+                timeout_appended = False
+                break
+            self._blocking_event.wait(1)
+        self._blocking_event.clear()
+        return timeout_appended
+
+    def notify_data_ready(self):
+        self._arm_event.set()
+
+    def wait_until_armed(self):
+        while not self._armed_event.is_set():
+            self._armed_event.wait(1)
+
+        self._armed_event.clear()
+
+    def notify_blocking(self):
+        self._blocking_event.set()
+
+    def reinitialize(self):
+        self._continue_event.set()
+
+    def stop(self):
+        ProbeUser.stop(self)
+        self.reinitialize()
+
+
+    def _run(self, *args, **kwargs):
         try:
             status = self._probe._start(*args, **kwargs)
         except:
@@ -125,21 +194,21 @@ class BlockingProbeRunner(ProbeRunner):
         if status is not None:
             self._probe.status = status
 
-        while self._helper.go_on():
+        while self.go_on():
 
-            if not self._helper.wait_for_data_ready():
+            if not self._wait_for_data_ready():
                 continue
 
             try:
                 self._probe.arm(*args, **kwargs)
             except:
                 self._handle_exception('during arm()')
-                self._helper.notify_probe_armed()
+                self._notify_armed()
                 return
 
-            self._helper.notify_probe_armed()
+            self._notify_armed()
 
-            if not self._helper.wait_for_blocking():
+            if not self._wait_for_blocking():
                 continue
 
             try:
@@ -153,85 +222,7 @@ class BlockingProbeRunner(ProbeRunner):
         except:
             self._handle_exception('during stop()')
         else:
-            self._helper.notify_probe_stops()
-
-
-class ProbeHelper(object):
-    def __init__(self):
-        self._stop_event = threading.Event()
-        self._init_specific()
-
-    def _init_specific(self):
-        pass
-
-    def go_on(self):
-        return not self._stop_event.is_set()
-
-    def wait(self, delay):
-        self._stop_event.wait(delay)
-
-    def stop_probe(self):
-        self._stop_event.set()
-
-    def notify_probe_stops(self):
-        self._stop_event.clear()
-
-
-class BlockingProbeHelper(ProbeHelper):
-
-    def _init_specific(self):
-        self.continue_event = threading.Event()
-
-        self.arm_event = threading.Event()
-        self.armed_event = threading.Event()
-        self.blocking_event = threading.Event()
-
-    #--------------------------------------
-
-    def wait_for_data_ready(self):
-        while not self.arm_event.is_set():
-            if not self.go_on():
-                return False
-            self.arm_event.wait(1)
-
-        self.arm_event.clear()
-        return True
-
-    def notify_probe_armed(self):
-        self.armed_event.set()
-
-    def wait_for_blocking(self):
-        timeout_appended = True
-        while not self.blocking_event.is_set():
-            if self.continue_event.is_set() or not self.go_on():
-                self.continue_event.clear()
-                timeout_appended = False
-                break
-            self.blocking_event.wait(1)
-        self.blocking_event.clear()
-        return timeout_appended
-
-    #--------------------------------------
-
-    def notify_data_ready(self):
-        self.arm_event.set()
-
-    def wait_until_probe_armed(self):
-        while not self.armed_event.is_set():
-            self.armed_event.wait(1)
-
-        self.armed_event.clear()
-
-    def notify_blocking(self):
-        self.blocking_event.set()
-
-    def reinitialize_probe(self):
-        self.continue_event.set()
-
-    def stop_probe(self):
-        ProbeHelper.stop_probe(self)
-        self.reinitialize_probe()
-
+            self._notify_stop()
 
 
 
@@ -263,7 +254,7 @@ class Monitor(object):
         if probe.__class__.__name__ in self.probe_runners:
             raise AlreadyExistingProbeError(probe.__class_.__name__)
 
-        self.probe_runners[probe.__class__.__name__] = BlockingProbeRunner(probe) if blocking else ProbeRunner(probe)
+        self.probe_runners[probe.__class__.__name__] = BlockingProbeUser(probe) if blocking else ProbeUser(probe)
 
     def start(self):
         self._logger.print_console('*** Monitor is started ***\n', nl_before=False, rgb=Color.COMPONENT_START)
@@ -291,7 +282,7 @@ class Monitor(object):
 
     def stop_probe(self, probe_name):
         if probe_name in self.probe_runners:
-            self.probe_runners[probe_name].helper.stop_probe()
+            self.probe_runners[probe_name].stop()
         else:
             self.fmk_ops.set_error("Probe '%s' does not exist" % probe_name,
                                    code=Error.CommandError)
@@ -308,10 +299,10 @@ class Monitor(object):
 
     def stop_all_probes(self):
         for _, probe_runner in self.probe_runners.items():
-                probe_runner.helper.stop_probe()
+                probe_runner.stop()
 
         try:
-            timeout = datetime.timedelta(seconds=ProbeRunner.timeout)
+            timeout = datetime.timedelta(seconds=ProbeUser.timeout)
             start_date = datetime.datetime.now()
             for _, probe_runner in self.probe_runners.items():
                 timeout -= start_date - datetime.datetime.now()
@@ -343,13 +334,13 @@ class Monitor(object):
         self._target_status = None
 
         for _, probe_runner in self.probe_runners.items():
-            if isinstance(probe_runner, BlockingProbeRunner):
-                probe_runner.helper.notify_data_ready()
+            if isinstance(probe_runner, BlockingProbeUser):
+                probe_runner.notify_data_ready()
 
         for _, probe_runner in self.probe_runners.items():
-            if isinstance(probe_runner, BlockingProbeRunner) and probe_runner.helper.go_on() \
+            if isinstance(probe_runner, BlockingProbeUser) and probe_runner.go_on() \
                     and probe_runner.is_alive():
-                probe_runner.helper.wait_until_probe_armed()
+                probe_runner.wait_until_armed()
 
     def do_after_sending_data(self):
         '''
@@ -373,14 +364,14 @@ class Monitor(object):
 
     def do_after_timeout(self):
         for _, probe_runner in self.probe_runners.items():
-            if isinstance(probe_runner, BlockingProbeRunner):
-                probe_runner.helper.notify_blocking()
+            if isinstance(probe_runner, BlockingProbeUser):
+                probe_runner.notify_blocking()
 
 
     def do_on_error(self):
         for _, probe_runner in self.probe_runners.items():
-            if isinstance(probe_runner, BlockingProbeRunner):
-                probe_runner.helper.reinitialize_probe()
+            if isinstance(probe_runner, BlockingProbeUser):
+                probe_runner.reinitialize()
 
 
     @property
