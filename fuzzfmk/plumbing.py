@@ -819,7 +819,8 @@ class FmkPlumbing(object):
             self.__target_dict[project] = target
             self.__logger_dict[project] = logger
             self.__stats_dict[project] = Stats(self._generic_tactics.get_generators())
-            self.__monitor_dict[project] = Monitor(project, fmk_ops=self._exportable_fmk_ops)
+            self.__monitor_dict[project] = project.monitor
+            self.__monitor_dict[project].set_fmk_ops(fmk_ops=self._exportable_fmk_ops)
             self.__monitor_dict[project].set_logger(self.__logger_dict[project])
             self.__monitor_dict[project].set_target(self.__target_dict[project])
             self._prj_dict[project].set_logger(self.__logger_dict[project])
@@ -830,7 +831,8 @@ class FmkPlumbing(object):
             self.__target_dict[project] = target
             self.__logger_dict[project] = logger
             self.__stats_dict[project] = Stats(self._generic_tactics.get_generators())
-            self.__monitor_dict[project] = Monitor(project, fmk_ops=self._exportable_fmk_ops)
+            self.__monitor_dict[project] = project.monitor
+            self.__monitor_dict[project].set_fmk_ops(fmk_ops=self._exportable_fmk_ops)
             self.__monitor_dict[project].set_logger(self.__logger_dict[project])
             self.__monitor_dict[project].set_target(self.__target_dict[project])
             self._prj_dict[project].set_logger(self.__logger_dict[project])
@@ -907,11 +909,9 @@ class FmkPlumbing(object):
                     self.mon.start()
                     for p in self.tg.probes:
                         pname, delay = self._extract_info_from_probe(p)
-                        if delay is None:
-                            self.mon.start_probe(pname)
-                        else:
+                        if delay is not None:
                             self.mon.set_probe_delay(pname, delay)
-                            self.mon.start_probe(pname)
+                        self.mon.start_probe(pname)
                     self.prj.start()
                     if self.tg.probes:
                         time.sleep(0.5)
@@ -1304,11 +1304,7 @@ class FmkPlumbing(object):
         else:
             self.__set_target(0)
 
-        ok = self.launch()
-        if not ok:
-            return False
-
-        return True
+        return self.launch()
 
 
     @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'], final_state='25_load_dm')
@@ -1456,6 +1452,7 @@ class FmkPlumbing(object):
         else:
             self._burst_countdown -= 1
 
+        self.mon.do_after_timeout()
         return ret
 
 
@@ -1468,8 +1465,6 @@ class FmkPlumbing(object):
         self._handle_data_callbacks(data_list, hook=HOOK.after_sending)
         # Monitor hook function after sending
         self.mon.do_after_sending_data()
-        # Monitor hook before resuming sending data
-        self.mon.do_before_resuming_sending_data()
 
         if self.__stats_countdown < 1:
             self.__stats_countdown = 9
@@ -1642,6 +1637,7 @@ class FmkPlumbing(object):
             cont1 = self.__delay_fuzzing()
         else:
             cont1 = False
+            self.mon.do_on_error()
 
         cont3 = True
         cont4 = True
@@ -1688,6 +1684,7 @@ class FmkPlumbing(object):
             self._do_after_sending_data(data_list)
 
         return data_list
+
 
 
     @EnforceOrder(accepted_states=['S2'])
@@ -2169,7 +2166,7 @@ class FmkPlumbing(object):
         self.lg.print_console('')
         for o in operators:
             self.lg.print_console(o, rgb=Color.SUBINFO)
-            desc = self.__dmaker_desc_str(self.prj.get_operator_obj(o))
+            desc = self.__dmaker_desc_str(self.prj.get_operator(o))
             self.lg.print_console(desc, limit_output=False)
 
         self.lg.print_console('\n\n', nl_before=False)
@@ -2178,7 +2175,7 @@ class FmkPlumbing(object):
     @EnforceOrder(accepted_states=['S2'])
     def launch_operator(self, name, user_input, use_existing_seed=True, verbose=False):
         
-        operator = self.prj.get_operator_obj(name)
+        operator = self.prj.get_operator(name)
         if operator is None:
             self.set_error('Invalid operator', code=Error.InvalidOp)
             return False

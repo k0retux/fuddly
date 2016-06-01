@@ -22,10 +22,7 @@
 ################################################################################
 
 from __future__ import print_function
-
-import sys
-import threading
-from fuzzfmk.monitor import ProbeStatus
+from fuzzfmk.monitor import *
 
 class Project(object):
 
@@ -33,7 +30,9 @@ class Project(object):
     default_dm = None
 
     def __init__(self):
-        self.probes = {}
+        self.monitor = Monitor()
+        self.target = None
+        self.dm = None
         self.operators = {}
 
     #####################
@@ -58,25 +57,14 @@ class Project(object):
             print("\n*** /!\\ ERROR: The operator name '%s' is already used\n" % name)
             raise ValueError
 
-        self.operators[name] = {
-            'obj': obj
-            }
+        self.operators[name] = obj
 
-    def register_new_probe(self, name, func, obj=None, blocking=False):
-
-        if name in self.probes:
-            print("\n*** /!\\ ERROR: The probe name '%s' is already used\n" % name)
+    def register_new_probe(self, probe, blocking=False):
+        try:
+            self.monitor.add_probe(probe, blocking)
+        except AlreadyExistingProbeError:
+            print("\n*** /!\\ ERROR: The probe name '%s' is already used\n" % probe.__class__.__name__)
             raise ValueError
-
-        self.probes[name] = {
-            'func': func,
-            'obj': obj,
-            'lock': threading.Lock(),
-            'status': ProbeStatus(0),
-            'delay': 1.0,
-            'started': False,
-            'blocking': blocking
-            }
 
 
     ##########################
@@ -89,9 +77,9 @@ class Project(object):
     def stop(self):
         pass
 
-    def get_operator_obj(self, name):
+    def get_operator(self, name):
         try:
-            ret = self.operators[name]['obj']
+            ret = self.operators[name]
         except KeyError:
             return None
 
@@ -101,109 +89,16 @@ class Project(object):
         return self.operators
 
     def is_probe_launched(self, name):
-        try:
-            self.probes[name]['lock'].acquire()
-            ret = self.probes[name]['started']
-            self.probes[name]['lock'].release()
-        except KeyError:
-            return None
-
-        return ret
-
-    def is_probe_blocking(self, name):
-        try:
-            ret = self.probes[name]['blocking']
-        except KeyError:
-            return None
-
-        return ret
-
-    def get_probe_obj(self, name):
-        try:
-            ret = self.probes[name]['obj']
-        except KeyError:
-            return None
-
-        return ret
-
-    def get_probe_func(self, name):
-        try:
-            ret = self.probes[name]['func']
-        except KeyError:
-            return None
-
-        return ret
-
-    def get_probe_lock(self, name):
-        try:
-            ret = self.probes[name]['lock']
-        except KeyError:
-            return None
-
-        return ret
-
-    def notify_probe_starts(self, name):
-        try:
-            self.probes[name]['lock'].acquire()
-            self.probes[name]['started'] = True
-            self.probes[name]['lock'].release()
-        except KeyError:
-            return False
-
-        return True
-
-    def notify_probe_stops(self, name):
-        try:
-            self.probes[name]['lock'].acquire()
-            self.probes[name]['status'] = ProbeStatus(0)
-            self.probes[name]['started'] = False
-            self.probes[name]['lock'].release()
-        except KeyError:
-            return False
-
-        return True
-
+        return self.monitor.is_probe_launched(name)
 
     def set_probe_delay(self, name, delay):
-        try:
-            self.probes[name]['lock'].acquire()
-            self.probes[name]['delay'] = delay
-            self.probes[name]['lock'].release()
-        except KeyError:
-            return False
-
-        return True
+        self.monitor.set_probe_delay(name, delay)
 
     def get_probe_delay(self, name):
-        try:
-            self.probes[name]['lock'].acquire()
-            ret = self.probes[name]['delay']
-            self.probes[name]['lock'].release()
-        except KeyError:
-            return None
-
-        return ret
-
-    def set_probe_status(self, name, status):
-        try:
-            self.probes[name]['lock'].acquire()
-            self.probes[name]['status'] = status
-            self.probes[name]['lock'].release()
-        except KeyError:
-            return False
-
-        return True
+        return self.monitor.get_probe_delay(name)
 
     def get_probe_status(self, name):
-        try:
-            self.probes[name]['lock'].acquire()
-            ret = self.probes[name]['status']
-            self.probes[name]['lock'].release()
-        except KeyError:
-            return None
-
-        return ret
+        return self.monitor.get_probe_status(name)
 
     def get_probes(self):
-        return self.probes
-
+        return self.monitor.get_probes_names()
