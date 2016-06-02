@@ -2779,10 +2779,16 @@ class FmkPlumbing(object):
         self.lg.print_console('-=[ Probes ]=-', rgb=Color.INFO, style=FontStyle.BOLD)
         self.lg.print_console('')
         for p in probes:
-            msg = "name: %s (status: %s, delay: %f) --> launched: %r" % \
+            msg = "name: %s (status: %s, delay: %f) --> " % \
                 (p, repr(self.prj.get_probe_status(p).get_status()),
-                 self.prj.get_probe_delay(p),
-                 self.prj.is_probe_launched(p))
+                 self.prj.get_probe_delay(p))
+
+            if self.prj.is_probe_stuck(p):
+                msg += "stuck"
+            elif self.prj.is_probe_launched(p):
+                msg += "launched"
+            else:
+                msg += "stopped"
             self.lg.print_console(msg, rgb=Color.SUBINFO)
 
         self.lg.print_console('\n', nl_before=False)

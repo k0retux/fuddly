@@ -91,6 +91,9 @@ class Project(object):
     def is_probe_launched(self, name):
         return self.monitor.is_probe_launched(name)
 
+    def is_probe_stuck(self, name):
+        return self.monitor.is_probe_stuck(name)
+
     def set_probe_delay(self, name, delay):
         self.monitor.set_probe_delay(name, delay)
 
