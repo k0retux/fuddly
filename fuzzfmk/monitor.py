@@ -168,10 +168,16 @@ class BlockingProbeUser(ProbeUser):
         self._arm_event.set()
 
     def wait_until_armed(self):
+        timeout = datetime.timedelta(seconds=ProbeUser.timeout)
+        start_date = datetime.datetime.now()
+
         while not self._armed_event.is_set():
+            if timeout.total_seconds() <= 0.0:
+                self.stop()
             if not self.is_alive() or not self.go_on():
                 break
             self._armed_event.wait(1)
+            timeout -= start_date - datetime.datetime.now()
 
         self._armed_event.clear()
 
