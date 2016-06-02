@@ -259,10 +259,10 @@ class Data(object):
             self.raw = self.node.to_bytes()
         return str(self.raw)
 
-    # def __repr__(self):
-    #     if self.node:
-    #         self.raw = self.node.to_bytes()
-    #     return repr(self.raw)
+    def __repr__(self):
+        if self.node:
+            self.raw = self.node.to_bytes()
+        return repr(self.raw)
 
 
 class CallBackOps(object):
