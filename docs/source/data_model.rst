@@ -477,6 +477,10 @@ custo_set, custo_clear
     of the node, meaning that it will be the exact copy of the original one at
     the time of the copy. If disabled, the instantiation process will ignore the frozen
     state, and thus will release all the constraints.
+  - ``MH.Custo.NTerm.CollapsePadding``: By default, this mode is *disabled*.
+    When enabled, every time two adjacent BitFields (within its scope) are found, they
+    will be merged in order to remove any padding in between. This is done
+    "recursively" until any inner padding is removed.
 
   For *generator* node, the customizable behavior modes are:
 
@@ -806,11 +810,32 @@ sync_qty_with
   absorb with the one specified by reference.
 
 exists_if
-  Enable to determine the existence of this node based on given
-  conditions.
+  Enable to determine the existence of this node based on a given
+  condition.
 
   .. seealso:: Refer to :ref:`dm:pattern:existence-cond` for how to use existence
 	       conditions.
+
+exists_if/and, exists_if/or
+    Extend the ``exists_if`` keyword by allowing to specify a list or a tuple
+    of conditions. The operator ``and`` (respectively ``or``) will be used to generate
+    the desired behaviour.
+
+
+    .. code-block:: python
+
+        {'name': 'test',
+         'contents': [
+            {'name': 'opcode',
+             'contents': String(val_list=['A3', 'A2'])},
+            {'name': 'subopcode',
+             'contents': BitField(subfield_sizes=[15,2,4],
+                                  subfield_val_lists=[[500], [1,2], [5,6,12]])},
+            {'name': 'and_condition',
+             'exists_if/and': [(RawCondition('A2'), 'opcode'),
+                               (BitFieldCondition(sf=2, val=[5]), 'subopcode')],
+             'contents': String(val_list=['and_condition_true'])}
+         ]}
 
 exists_if_not
   Enable to determine the existence of this node based on the
