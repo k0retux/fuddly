@@ -1911,6 +1911,93 @@ if mock_module and ddt_module:
         def test_invalid_with_both_arguments(self, sf, val, neg_val):
             self.assertRaises(Exception, BitFieldCondition, sf=sf, val=val, neg_val=neg_val)
 
+    class ProbeUserTest(unittest.TestCase):
+        """Test case used to test the 'ProbeUser' class."""
+
+        @classmethod
+        def setUpClass(cls):
+            pass
+
+        def setUp(self):
+            """Initialisation des tests."""
+
+            self.timeout = 2
+
+            self.probe = Probe()
+            self.probe.main = mock.Mock()
+
+            self.probe.start = mock.Mock()
+            self.probe.stop = mock.Mock()
+
+            self.dm = mock.Mock()
+            self.target = mock.Mock()
+            self.logger = mock.Mock()
+
+            self._set_up_specific()
+
+        def _set_up_specific(self):
+            self.probe_user = ProbeUser(self.probe)
+
+        def tearDown(self):
+            pass
+
+        def test_not_started_is_alive(self):
+            self.assertFalse(self.probe_user.is_alive())
+
+        def test_started_is_alive(self):
+            self.probe_user.start(self.dm, self.target, self.logger)
+            self.assertTrue(self.probe_user.is_alive())
+
+        def test_stopped_is_alive(self):
+            self.probe_user.start(self.dm, self.target, self.logger)
+            self.probe_user.stop()
+            self.probe_user.join(self.timeout)
+            self.assertFalse(self.probe_user.is_alive())
+
+        def test_multiple_starts(self):
+            self.probe_user.start(self.dm, self.target, self.logger)
+            self.assertRaises(RuntimeError, self.probe_user.start, self.dm, self.target, self.logger)
+
+        def test_start_and_stop(self):
+            self.probe_user.start(self.dm, self.target, self.logger)
+            self.probe_user.stop()
+            self.probe_user.join(self.timeout)
+            self.probe.start.assert_called_once_with(self.dm, self.target, self.logger)
+            self.probe.stop.assert_called_once_with(self.dm, self.target, self.logger)
+
+        def test_main(self):
+            test_period = 0.5
+            delta = 0.005
+            self.probe_user.set_probe_delay(0.05)
+
+            print("***** test period:                       " + str(test_period))
+            print("***** tolerate delta between executions: " + str(delta))
+            print("***** probe delay:                       " + str(self.probe_user.get_probe_delay()))
+
+            execution_times = []
+
+            def side_effect(*args, **kwargs):
+                execution_times.append(datetime.datetime.now())
+
+            self.probe.main.side_effect = side_effect
+
+            self.probe_user.start(self.dm, self.target, self.logger)
+            time.sleep(test_period)
+            self.probe_user.stop()
+            self.probe_user.join(self.timeout)
+            self.probe.main.assert_called_with(self.dm, self.target, self.logger)
+
+            print("***** probe's main method execution times:             ")
+            for execution in execution_times:
+                print("      " + str(execution))
+
+            self.assertTrue(self.probe.main.call_count >= test_period/self.probe_user.get_probe_delay() - 1)
+
+            for i in range(len(execution_times)):
+                if i+1 < len(execution_times):
+                    self.assertTrue(0 <= (execution_times[i+1] - execution_times[i]).total_seconds()
+                                    - self.probe_user.get_probe_delay() <= delta)
+
 
 
 class TestNodeFeatures(unittest.TestCase):
