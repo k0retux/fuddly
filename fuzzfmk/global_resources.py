@@ -43,17 +43,17 @@ if not os.path.exists(fuddly_data_folder):
     new_fuddly_data_folder = True
 ensure_dir(fuddly_data_folder)
 
-exported_data_folder = fuddly_data_folder + os.sep + 'exported_data' + os.sep
+exported_data_folder = fuddly_data_folder + 'exported_data' + os.sep
 ensure_dir(exported_data_folder)
-imported_data_folder = fuddly_data_folder + os.sep + 'imported_data' + os.sep
+imported_data_folder = fuddly_data_folder + 'imported_data' + os.sep
 ensure_dir(imported_data_folder)
-logs_folder = fuddly_data_folder + os.sep + 'logs' + os.sep
+logs_folder = fuddly_data_folder + 'logs' + os.sep
 ensure_dir(logs_folder)
-workspace_folder = fuddly_data_folder + os.sep + 'workspace' + os.sep
+workspace_folder = fuddly_data_folder + 'workspace' + os.sep
 ensure_dir(workspace_folder)
-external_libs_folder = fuddly_data_folder + os.sep + 'external_libs' + os.sep
+external_libs_folder = fuddly_data_folder + 'external_libs' + os.sep
 ensure_dir(external_libs_folder)
-external_tools_folder = fuddly_data_folder + os.sep + 'external_tools' + os.sep
+external_tools_folder = fuddly_data_folder + 'external_tools' + os.sep
 ensure_dir(external_tools_folder)
 
 user_projects_folder = fuddly_data_folder + 'user_projects' + os.sep

@@ -124,6 +124,16 @@ fuzzfmk.encoders module
     :undoc-members:
     :show-inheritance:
 
+
+fuzzfmk.database module
+-----------------------
+
+.. automodule:: fuzzfmk.database
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
 ..
    fuzzfmk.plumbing module
    -----------------------

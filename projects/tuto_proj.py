@@ -89,8 +89,6 @@ class health_check(Probe):
         pass
 
     def main(self, dm, target, logger):
-        # time.sleep(0.1)
-
         self.cpt += 1
 
         status = 0

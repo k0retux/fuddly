@@ -183,7 +183,7 @@ class FmkTask(threading.Thread):
         self._cleanup_func=cleanup_func
 
     def run(self):
-        while not self._stop.isSet():
+        while not self._stop.is_set():
             try:
                 # print("\n*** Function '{!s}' executed by Task '{!s}' ***".format(self._func, self._name))
                 self._func(self._arg)
@@ -252,7 +252,6 @@ class FmkPlumbing(object):
             raise InvalidFmkDB("The database {:s} is invalid!".format(self.fmkDB.fmk_db_path))
 
         self._fmkDB_insert_dm_and_dmakers('generic', self._generic_tactics)
-        self.fmkDB.commit()
 
         self.group_id = 0
         self._saved_group_id = None  # used by self._recover_target()
@@ -391,7 +390,6 @@ class FmkPlumbing(object):
             if hasattr(self, 'mon'):
                 self.mon.set_data_model(self.dm)
             self._fmkDB_insert_dm_and_dmakers(self.dm.name, dm_params['tactics'])
-            self.fmkDB.commit()
 
         return True
 
@@ -572,7 +570,6 @@ class FmkPlumbing(object):
         self.fmkDB.insert_data_model(Database.DEFAULT_DM_NAME)
         self.fmkDB.insert_dmaker(Database.DEFAULT_DM_NAME, Database.DEFAULT_GTYPE_NAME,
                                  Database.DEFAULT_GEN_NAME, True, True)
-        self.fmkDB.commit()
 
 
     def __import_dm(self, prefix, name, reload_dm=False):
@@ -708,8 +705,6 @@ class FmkPlumbing(object):
                                       prj_params['prj_rld_args'],
                                       reload_prj=False)
                     self.fmkDB.insert_project(prj_params['project'].name)
-
-        self.fmkDB.commit()
 
 
     def _import_project(self, prefix, name, reload_prj=False):
@@ -1241,7 +1236,6 @@ class FmkPlumbing(object):
             self.__add_data_model(new_dm, new_tactics,
                                   (None, dm_list),
                                   reload_dm=reload_dm)
-            self.fmkDB.commit()
 
             # In this case DynGens have already been generated through
             # the reloading of the included DMs

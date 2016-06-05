@@ -2,6 +2,7 @@ import sys
 import os
 import re
 import math
+import threading
 from datetime import datetime
 
 import fuzzfmk.global_resources as gr
@@ -34,61 +35,43 @@ class Database(object):
     DEFAULT_GTYPE_NAME = '__DEFAULT_GTYPE'
     DEFAULT_GEN_NAME = '__DEFAULT_GNAME'
 
+    OUTCOME_ROWID = 1
+    OUTCOME_DATA = 2
+
     def __init__(self, fmkdb_path=None):
         self.name = 'fmkDB.db'
         if fmkdb_path is None:
             self.fmk_db_path = os.path.join(gr.fuddly_data_folder, self.name)
         else:
             self.fmk_db_path = fmkdb_path
-        self._con = None
-        self._cur = None
+        # self._con = None
+        # self._cur = None
         self.enabled = False
 
         self.last_feedback = {}
         self.last_data_id = None
 
-    def start(self):
-        if not sqlite3_module:
-            print("/!\\ WARNING /!\\: Fuddly's FmkDB unavailable because python-sqlite3 is not installed!")
-            return False
+        self._data_id = None
 
-        if os.path.isfile(self.fmk_db_path):
-            self._con = sqlite3.connect(self.fmk_db_path, detect_types=sqlite3.PARSE_DECLTYPES)
-            self._cur = self._con.cursor()
-            ok = self._is_valid(self._cur)
-        else:
-            self._con = sqlite3.connect(self.fmk_db_path, detect_types=sqlite3.PARSE_DECLTYPES)
-            fmk_db_sql = open(gr.fmk_folder + self.DDL_fname).read()
-            ok = False
-            with self._con:
-                self._cur = self._con.cursor()
-                self._cur.executescript(fmk_db_sql)
-                ok = True
+        self._sql_handler_thread = None
+        self._sql_handler_stop_event = threading.Event()
 
-        if ok:
-            self._con.create_function("REGEXP", 2, regexp)
-            self._con.create_function("BINREGEXP", 2, regexp_bin)
+        self._sql_stmt_list_lock = threading.Lock()
+        self._sql_stmt_list = []
+        self._thread_initialized = threading.Event()
+        self._sql_stmt_handled = threading.Event()
+        self._sql_stmt_submitted = threading.Event()
 
-        self.enabled = ok
-        return ok
+        self._sql_stmt_outcome_lock = threading.Lock()
+        self._sql_stmt_outcome = None
 
-    def stop(self):
-        if self._con:
-            self._con.close()
+        self._sync_lock = threading.Lock()
 
-        self._con = None
-        self._cur = None
-        self.enabled = False
+        self._ok = None
 
-    def enable(self):
-        self.enabled = True
-
-    def disable(self):
-        self.enabled = False
-
-    def _is_valid(self, cursor):
+    def _is_valid(self, connection, cursor):
         valid = False
-        with self._con:
+        with connection:
             tmp_con = sqlite3.connect(':memory:', detect_types=sqlite3.PARSE_DECLTYPES)
             fmk_db_sql = open(gr.fmk_folder + self.DDL_fname).read()
             with tmp_con:
@@ -110,73 +93,180 @@ class Database(object):
 
         return valid
 
-
-    def commit(self):
-        try:
-            self._con.commit()
-        except sqlite3.Error as e:
-            self._con.rollback()
-            return -1
+    def _sql_handler(self):
+        if os.path.isfile(self.fmk_db_path):
+            connection = sqlite3.connect(self.fmk_db_path, detect_types=sqlite3.PARSE_DECLTYPES)
+            cursor = connection.cursor()
+            self._ok = self._is_valid(connection, cursor)
         else:
-            return 0
+            connection = sqlite3.connect(self.fmk_db_path, detect_types=sqlite3.PARSE_DECLTYPES)
+            fmk_db_sql = open(gr.fmk_folder + self.DDL_fname).read()
+            self._ok = False
+            with connection:
+                cursor = connection.cursor()
+                cursor.executescript(fmk_db_sql)
+                self._ok = True
 
-    def rollback(self):
-        try:
-            self._con.rollback()
-        except sqlite3.Error as e:
-            return -1
-        else:
-            return 0
+        self._thread_initialized.set()
+
+        if not self._ok:
+            return
+
+        connection.create_function("REGEXP", 2, regexp)
+        connection.create_function("BINREGEXP", 2, regexp_bin)
+
+        no_stmts = []
+
+        while True:
+
+            while not self._sql_stmt_submitted.is_set():
+                self._sql_stmt_submitted.wait(0.01)
+            self._sql_stmt_submitted.clear()
+
+            if self._sql_handler_stop_event.is_set():
+                break
+
+            with self._sql_stmt_list_lock:
+                if self._sql_stmt_list:
+                    sql_stmts = self._sql_stmt_list
+                    self._sql_stmt_list = []
+                else:
+                    sql_stmts = no_stmts
+
+            last_stmt_error = True
+            for stmt in sql_stmts:
+                sql_stmt, sql_params, outcome_type, sql_error = stmt
+                try:
+                    if sql_params is None:
+                        cursor.execute(sql_stmt)
+                    else:
+                        cursor.execute(sql_stmt, sql_params)
+                    connection.commit()
+                except sqlite3.Error as e:
+                    connection.rollback()
+                    print("\n*** ERROR[SQL:{:s}] ".format(e.args[0])+sql_error)
+                    last_stmt_error = True
+                else:
+                    last_stmt_error = False
+
+            if sql_stmts and outcome_type is not None:
+                with self._sql_stmt_outcome_lock:
+                    if self._sql_stmt_outcome is not None:
+                        print("\n*** WARNING: SQL statement outcomes have not been consumed."
+                              "\n    Will be overwritten!")
+
+                    if last_stmt_error:
+                        self._sql_stmt_outcome = None
+                    elif outcome_type == Database.OUTCOME_ROWID:
+                        self._sql_stmt_outcome = cursor.lastrowid
+                    elif outcome_type == Database.OUTCOME_DATA:
+                        self._sql_stmt_outcome = cursor.fetchall()
+                    else:
+                        print("\n*** ERROR: Unrecognized outcome type request")
+                        self._sql_stmt_outcome = None
+
+                self._sql_stmt_handled.set()
+
+            self._sql_handler_stop_event.wait(0.01)
+
+        if connection:
+            connection.close()
+
+    def _stop_sql_handler(self):
+        with self._sync_lock:
+            self._sql_handler_stop_event.set()
+            self._sql_stmt_submitted.set()
+            self._sql_handler_thread.join()
+
+
+    def submit_sql_stmt(self, stmt, params=None, outcome_type=None, error_msg=''):
+        """
+        This method is the only one that should submit request to the threaded SQL handler.
+        It is also synchronized to guarantee request order (especially needed when you wait for
+        the outcomes of your submitted SQL statement).
+
+        Args:
+            stmt (str): SQL statement
+            params (tuple): parameters
+            outcome_type (int): type of the expected outcomes. If `None`, no outcomes are expected
+            error_msg (str): specific error message to display in case of an error
+
+        Returns:
+            `None` or the expected outcomes
+        """
+        with self._sync_lock:
+            with self._sql_stmt_list_lock:
+                self._sql_stmt_list.append((stmt, params, outcome_type, error_msg))
+
+            self._sql_stmt_submitted.set()
+
+            if outcome_type is not None:
+                # If we care about outcomes, then we are sure to get outcomes from the just
+                # submitted SQL statement as this method is 'synchronized'.
+                while not self._sql_stmt_handled.is_set():
+                    self._sql_stmt_handled.wait(0.1)
+                self._sql_stmt_handled.clear()
+
+                with self._sql_stmt_outcome_lock:
+                    ret = self._sql_stmt_outcome
+                    self._sql_stmt_outcome = None
+                    return ret
+
+    def start(self):
+        if self._sql_handler_thread is not None:
+            return
+
+        if not sqlite3_module:
+            print("/!\\ WARNING /!\\: Fuddly's FmkDB unavailable because python-sqlite3 is not installed!")
+            return False
+
+        self._sql_handler_thread = threading.Thread(None, self._sql_handler, 'db_handler')
+        self._sql_handler_thread.start()
+
+        while not self._thread_initialized.is_set():
+            self._thread_initialized.wait(0.1)
+
+        self.enabled = self._ok
+        return self._ok
+
+    def stop(self):
+        self._stop_sql_handler()
+        self.enabled = False
+
+    def enable(self):
+        self.enabled = True
+
+    def disable(self):
+        self.enabled = False
+
 
     def execute_sql_statement(self, sql_stmt, params=None):
-        with self._con:
-            if params:
-                self._cur.execute(sql_stmt, params)
-                rows = self._cur.fetchall()
-            else:
-                self._cur.execute(sql_stmt)
-                rows = self._cur.fetchall()
+        return self.submit_sql_stmt(sql_stmt, params=params, outcome_type=Database.OUTCOME_DATA)
 
-            return rows
 
     def insert_data_model(self, dm_name):
-        try:
-            self._cur.execute(
-                    "INSERT INTO DATAMODEL(NAME) VALUES(?)",
-                    (dm_name,))
-        except sqlite3.Error as e:
-            self._con.rollback()
-            print("\n*** ERROR[SQL:{:s}] while inserting a value into table DATAMODEL!".format(e.args[0]))
-            return -1
-        else:
-            return self._cur.lastrowid
+        stmt = "INSERT INTO DATAMODEL(NAME) VALUES(?)"
+        params = (dm_name,)
+        err_msg = 'while inserting a value into table DATAMODEL!'
+        self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
+
 
     def insert_project(self, prj_name):
-        try:
-            self._cur.execute(
-                    "INSERT INTO PROJECT(NAME) VALUES(?)",
-                    (prj_name,))
-        except sqlite3.Error as e:
-            self._con.rollback()
-            print("\n*** ERROR[SQL:{:s}] while inserting a value into table PROJECT!".format(e.args[0]))
-            return -1
-        else:
-            return self._cur.lastrowid
+        stmt = "INSERT INTO PROJECT(NAME) VALUES(?)"
+        params = (prj_name,)
+        err_msg = 'while inserting a value into table PROJECT!'
+        self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
 
 
     def insert_dmaker(self, dm_name, dtype, name, is_gen, stateful, clone_type=None):
         clone_name = None if clone_type is None else name
-        try:
-            self._cur.execute(
-                    "INSERT INTO DMAKERS(DM_NAME,TYPE,NAME,CLONE_TYPE,CLONE_NAME,GENERATOR,STATEFUL)"
-                    " VALUES(?,?,?,?,?,?,?)",
-                    (dm_name, dtype, name, clone_type, clone_name, is_gen, stateful))
-        except sqlite3.Error as e:
-            self._con.rollback()
-            print("\n*** ERROR[SQL:{:s}] while inserting a value into table DMAKERS!".format(e.args[0]))
-            return -1
-        else:
-            return self._cur.lastrowid
+
+        stmt = "INSERT INTO DMAKERS(DM_NAME,TYPE,NAME,CLONE_TYPE,CLONE_NAME,GENERATOR,STATEFUL)"\
+               " VALUES(?,?,?,?,?,?,?)"
+        params = (dm_name, dtype, name, clone_type, clone_name, is_gen, stateful)
+        err_msg = 'while inserting a value into table DATAMODEL!'
+        self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
+
 
     def insert_data(self, dtype, dm_name, raw_data, sz, sent_date, ack_date,
                     target_name, prj_name, group_id=None):
@@ -184,19 +274,23 @@ class Database(object):
             return None
 
         blob = sqlite3.Binary(raw_data)
-        try:
-            self._cur.execute(
-                    "INSERT INTO DATA(GROUP_ID,TYPE,DM_NAME,CONTENT,SIZE,SENT_DATE,ACK_DATE,"
-                    "TARGET,PRJ_NAME)"
-                    " VALUES(?,?,?,?,?,?,?,?,?)",
-                    (group_id, dtype, dm_name, blob, sz, sent_date, ack_date, target_name, prj_name))
-            self._con.commit()
-        except sqlite3.Error as e:
-            self._con.rollback()
-            print("\n*** ERROR[SQL:{:s}] while inserting a value into table DATA!".format(e.args[0]))
-            return None
+
+        stmt = "INSERT INTO DATA(GROUP_ID,TYPE,DM_NAME,CONTENT,SIZE,SENT_DATE,ACK_DATE,"\
+               "TARGET,PRJ_NAME)"\
+               " VALUES(?,?,?,?,?,?,?,?,?)"
+        params = (group_id, dtype, dm_name, blob, sz, sent_date, ack_date, target_name, prj_name)
+        err_msg = 'while inserting a value into table DATA!'
+
+        if self._data_id is None:
+            did = self.submit_sql_stmt(stmt, params=params, outcome_type=Database.OUTCOME_ROWID,
+                                       error_msg=err_msg)
+            self._data_id = did
         else:
-            return self._cur.lastrowid
+            self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
+            self._data_id += 1
+
+        return self._data_id
+
 
     def insert_steps(self, data_id, step_id, dmaker_type, dmaker_name, data_id_src,
                      user_input, info):
@@ -205,17 +299,13 @@ class Database(object):
 
         if info:
             info = sqlite3.Binary(info)
-        try:
-            self._cur.execute(
-                    "INSERT INTO STEPS(DATA_ID,STEP_ID,DMAKER_TYPE,DMAKER_NAME,DATA_ID_SRC,USER_INPUT,INFO)"
-                    " VALUES(?,?,?,?,?,?,?)",
-                    (data_id, step_id, dmaker_type, dmaker_name, data_id_src, user_input, info))
-        except sqlite3.Error as e:
-            self._con.rollback()
-            print("\n*** ERROR[SQL:{:s}] while inserting a value into table STEPS!".format(e.args[0]))
-            return -1
-        else:
-            return self._cur.lastrowid
+
+        stmt = "INSERT INTO STEPS(DATA_ID,STEP_ID,DMAKER_TYPE,DMAKER_NAME,DATA_ID_SRC,USER_INPUT,INFO)"\
+               " VALUES(?,?,?,?,?,?,?)"
+        params = (data_id, step_id, dmaker_type, dmaker_name, data_id_src, user_input, info)
+        err_msg = 'while inserting a value into table STEPS!'
+        self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
+
 
     def insert_feedback(self, data_id, source, timestamp, content, status_code=None):
 
@@ -239,81 +329,56 @@ class Database(object):
 
         if content:
             content = sqlite3.Binary(content)
-        try:
-            self._cur.execute(
-                    "INSERT INTO FEEDBACK(DATA_ID,SOURCE,DATE,CONTENT,STATUS)"
-                    " VALUES(?,?,?,?,?)",
-                    (data_id, source, timestamp, content, status_code))
-            self._con.commit()
-        except sqlite3.Error as e:
-            self._con.rollback()
-            print("\n*** ERROR[SQL:{:s}] while inserting a value into table FEEDBACK!".format(e.args[0]))
-            return -1
-        else:
-            return self._cur.lastrowid
+
+        stmt = "INSERT INTO FEEDBACK(DATA_ID,SOURCE,DATE,CONTENT,STATUS)"\
+               " VALUES(?,?,?,?,?)"
+        params = (data_id, source, timestamp, content, status_code)
+        err_msg = 'while inserting a value into table FEEDBACK!'
+        self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
+
 
     def insert_comment(self, data_id, content, date):
         if not self.enabled:
             return None
 
-        try:
-            self._cur.execute(
-                    "INSERT INTO COMMENTS(DATA_ID,CONTENT,DATE)"
-                    " VALUES(?,?,?)",
-                    (data_id, content, date))
-            self._con.commit()
-        except sqlite3.Error as e:
-            self._con.rollback()
-            print("\n*** ERROR[SQL:{:s}] while inserting a value into table COMMENTS!".format(e.args[0]))
-            return -1
-        else:
-            return self._cur.lastrowid
+        stmt = "INSERT INTO COMMENTS(DATA_ID,CONTENT,DATE)" \
+               " VALUES(?,?,?)"
+        params = (data_id, content, date)
+        err_msg = 'while inserting a value into table COMMENTS!'
+        self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
+
 
     def insert_fmk_info(self, data_id, content, date, error=False):
         if not self.enabled:
             return None
 
-        try:
-            self._cur.execute(
-                    "INSERT INTO FMKINFO(DATA_ID,CONTENT,DATE,ERROR)"
-                    " VALUES(?,?,?,?)",
-                    (data_id, content, date, error))
-            self._con.commit()
-        except sqlite3.Error as e:
-            try:
-                self._con.rollback()
-                print("\n*** ERROR[SQL:{:s}] while inserting a value into table FMKINFO!".format(e.args[0]))
-                return -1
-            except sqlite3.ProgrammingError as e:
-                print("\n*** ERROR[sqlite3]: {:s}".format(e.args[0]))
-                print("*** Not currently handled by fuddly.")
-                return -1
-        else:
-            return self._cur.lastrowid
+        stmt = "INSERT INTO FMKINFO(DATA_ID,CONTENT,DATE,ERROR)"\
+               " VALUES(?,?,?,?)"
+        params = (data_id, content, date, error)
+        err_msg = 'while inserting a value into table FMKINFO!'
+        self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
 
 
     def fetch_data(self, start_id=1, end_id=-1):
         ign_end_id = '--' if end_id < 1 else ''
-        try:
-            self._cur.execute(
-                '''
-                SELECT DATA.ID, DATA.CONTENT, DATA.TYPE, DMAKERS.NAME, DATA.DM_NAME
-                FROM DATA INNER JOIN DMAKERS
-                  ON DATA.TYPE = DMAKERS.TYPE AND DMAKERS.CLONE_TYPE IS NULL
-                WHERE DATA.ID >= {sid:d} {ign_eid:s} AND DATA.ID <= {eid:d}
-                UNION ALL
-                SELECT DATA.ID, DATA.CONTENT, DMAKERS.CLONE_TYPE AS TYPE, DMAKERS.CLONE_NAME AS NAME,
-                       DATA.DM_NAME
-                FROM DATA INNER JOIN DMAKERS
-                  ON DATA.TYPE = DMAKERS.TYPE AND DMAKERS.CLONE_TYPE IS NOT NULL
-                WHERE DATA.ID >= {sid:d} {ign_eid:s} AND DATA.ID <= {eid:d}
-                '''.format(sid = start_id, eid = end_id, ign_eid = ign_end_id)
-            )
-        except sqlite3.Error as e:
-            print("\n*** ERROR[SQL]: {:s}".format(e.args[0]))
-            return
-        else:
-            return self._cur.fetchall()
+
+        stmt = \
+            '''
+            SELECT DATA.ID, DATA.CONTENT, DATA.TYPE, DMAKERS.NAME, DATA.DM_NAME
+            FROM DATA INNER JOIN DMAKERS
+              ON DATA.TYPE = DMAKERS.TYPE AND DMAKERS.CLONE_TYPE IS NULL
+            WHERE DATA.ID >= {sid:d} {ign_eid:s} AND DATA.ID <= {eid:d}
+            UNION ALL
+            SELECT DATA.ID, DATA.CONTENT, DMAKERS.CLONE_TYPE AS TYPE, DMAKERS.CLONE_NAME AS NAME,
+                   DATA.DM_NAME
+            FROM DATA INNER JOIN DMAKERS
+              ON DATA.TYPE = DMAKERS.TYPE AND DMAKERS.CLONE_TYPE IS NOT NULL
+            WHERE DATA.ID >= {sid:d} {ign_eid:s} AND DATA.ID <= {eid:d}
+            '''.format(sid = start_id, eid = end_id, ign_eid = ign_end_id)
+
+        ret = self.submit_sql_stmt(stmt, outcome_type=Database.OUTCOME_DATA)
+        return ret
+
 
     def _get_color_function(self, colorized):
         if not colorized:

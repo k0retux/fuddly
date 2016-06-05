@@ -3304,4 +3304,6 @@ if __name__ == "__main__":
     # print(test_args, sys.argv)
     args = [sys.argv[0]] + test_args[1]
 
-    unittest.main(verbosity=2, argv=args)
+    unittest.main(verbosity=2, argv=args, exit=False)
+
+    fmk.exit_fmk()

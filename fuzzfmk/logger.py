@@ -247,7 +247,6 @@ class Logger(object):
 
             if self.last_data_id is None:
                 print("\n*** ERROR: Cannot insert the data record in FMKDB!")
-                self.fmkDB.rollback()
                 self.last_data_id = None
                 self.last_data_recordable = None
                 self._reset_current_state()
@@ -276,7 +275,6 @@ class Logger(object):
                                         self._current_src_data_id,
                                         str(user_input), info)
 
-            self.fmkDB.commit()
 
             self._reset_current_state()
 
