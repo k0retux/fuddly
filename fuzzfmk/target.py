@@ -52,8 +52,8 @@ class Target(object):
     '''
     Class abstracting the target we interact with.
     '''
-    _logger=None
-    _time_beetwen_data_emission = None
+    feedback_timeout = None
+    _logger = None
     _probes = None
     _send_data_lock = threading.Lock()
 
@@ -171,6 +171,27 @@ class Target(object):
         '''
         return None
 
+    def set_feedback_timeout(self, fbk_timeout):
+        '''
+        To set dynamically the feedback timeout.
+
+        Args:
+            fbk_timeout: time duration for collecting the feedback
+
+        '''
+        assert fbk_timeout >= 0
+        self.feedback_timeout = fbk_timeout
+        self._set_feedback_timeout_specific(fbk_timeout)
+
+    def _set_feedback_timeout_specific(self, fbk_timeout):
+        '''
+        Overload this function to handle feedback specifics
+
+        Args:
+            fbk_timeout: time duration for collecting the feedback
+
+        '''
+        pass
 
     def get_description(self):
         return None
@@ -360,9 +381,24 @@ class NetworkTarget(Target):
         self.hold_connection[(host, port)] = hold_connection
 
     def set_timeout(self, fbk_timeout, sending_delay):
-        self._feedback_timeout = max(fbk_timeout, 0.2)
-        self._sending_delay = min(sending_delay, max(self._feedback_timeout-0.2, 0))
-        self._time_beetwen_data_emission = self._feedback_timeout + 2
+        '''
+        Set the time duration for feedback gathering and the sending delay above which
+        we give up:
+        - sending data to the target (client mode)
+        - waiting for client connections before sending data to them (server mode)
+
+        Args:
+            fbk_timeout: time duration for feedback gathering (in seconds)
+            sending_delay: sending delay (in seconds)
+        '''
+        assert sending_delay < fbk_timeout
+        self._sending_delay = sending_delay
+        self.set_feedback_timeout(fbk_timeout)
+
+    def _set_feedback_timeout_specific(self, fbk_timeout):
+        self._feedback_timeout = fbk_timeout
+        if self._sending_delay > self._feedback_timeout:
+            self._sending_delay = max(self._feedback_timeout-0.2, 0)
 
     def initialize(self):
         '''
@@ -1358,15 +1394,11 @@ class SIMTarget(Target):
     def stop(self):
         self.ser.close()
 
-    def set_feedback_timeout(self, fbk_timeout):
-        self._feedback_timeout = max(fbk_timeout, 0)
-        self._time_beetwen_data_emission = self._feedback_timeout + 1
-
     def _retrieve_feedback_from_serial(self, timeout=None):
         feedback = b''
         t0 = datetime.datetime.now()
         duration = -1
-        timeout = self._feedback_timeout if timeout is None else timeout
+        timeout = self.feedback_timeout if timeout is None else timeout
         while duration < timeout:
             now = datetime.datetime.now()
             duration = (now - t0).total_seconds()

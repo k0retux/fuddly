@@ -272,13 +272,15 @@ class CallBackOps(object):
     StopProcessingCB = 2 # If True, any callback following this one won't be processed
 
     # Instructions
-    Reg_PeriodicData = 10  # ask for sending periodically a data
-    UnReg_PeriodicData = 11  # ask for stopping a periodic sending
+    Add_PeriodicData = 10  # ask for sending periodically a data
+    Del_PeriodicData = 11  # ask for stopping a periodic sending
+    Set_FbkTimeout = 21  # set the time duration for feedback gathering for the further data sending
 
     def __init__(self, remove_cb=False, stop_process_cb=False):
         self.instr = {
-            CallBackOps.Reg_PeriodicData: {},
-            CallBackOps.UnReg_PeriodicData: [],
+            CallBackOps.Add_PeriodicData: {},
+            CallBackOps.Del_PeriodicData: [],
+            CallBackOps.Set_FbkTimeout: None,
         }
         self.flags = {
             CallBackOps.RemoveCB: remove_cb,
@@ -296,12 +298,16 @@ class CallBackOps(object):
             raise ValueError
         return self.flags[name]
 
-    def add_operation(self, instr_type, id, data=None, period=None):
-        if instr_type == CallBackOps.Reg_PeriodicData:
-            assert data is not None
-            self.instr[instr_type][id] = (data, period)
-        elif instr_type == CallBackOps.UnReg_PeriodicData:
+    def add_operation(self, instr_type, id=None, param=None, period=None):
+        if instr_type == CallBackOps.Add_PeriodicData:
+            assert id is not None and param is not None and isinstance(param, Data)
+            self.instr[instr_type][id] = (param, period)
+        elif instr_type == CallBackOps.Del_PeriodicData:
+            assert id is not None
             self.instr[instr_type].append(id)
+        elif instr_type == CallBackOps.Set_FbkTimeout:
+            assert isinstance(param, int)
+            self.instr[instr_type] = param
         else:
             raise ValueError('Unrecognized Instruction Type')
 

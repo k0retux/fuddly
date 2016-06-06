@@ -32,19 +32,21 @@ class g_test_callback_01(Generator):
             self.fbk = 'NO FEEDBACK'
 
         cbk = CallBackOps(remove_cb=True)
-        cbk.add_operation(CallBackOps.Reg_PeriodicData, id=1,
-                          data=Data('\nTEST Periodic...'), period=5)
+        cbk.add_operation(CallBackOps.Add_PeriodicData, id=1,
+                          param=Data('\nTEST Periodic...'), period=5)
         return cbk
 
     def callback_2(self, feedback):
         print('\n*** callback 2 ***')
         cbk = CallBackOps(stop_process_cb=True, remove_cb=True)
-        cbk.add_operation(CallBackOps.Reg_PeriodicData, id=2,
-                          data=Data('\nTEST One shot!'))
+        cbk.add_operation(CallBackOps.Add_PeriodicData, id=2,
+                          param=Data('\nTEST One shot!'))
+        cbk.add_operation(CallBackOps.Set_FbkTimeout, param=2)
         return cbk
 
     def callback_3(self, feedback):
         print('\n*** callback 3 ***')
         cbk = CallBackOps(remove_cb=True)
-        cbk.add_operation(CallBackOps.UnReg_PeriodicData, id=1)
+        cbk.add_operation(CallBackOps.Del_PeriodicData, id=1)
+        cbk.add_operation(CallBackOps.Set_FbkTimeout, param=5)
         return cbk

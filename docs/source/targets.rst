@@ -83,7 +83,7 @@ Usage Example:
      which means that only data marked with such semantics will be
      routed to this interface.
 
-   line 6-7
+   line 6-8
      We declare another interface for only feedback purpose, where the
      source of the feedback will send data to us in UDP
      (``socket.SOCK_DGRAM``) on the port ``7777``. Note that an
@@ -94,11 +94,11 @@ Usage Example:
      has also an identifier but it is set automatically by the
      ``NetworkTarget``.
 
-   line 8
+   line 9
      We set some time constraints: ``fbk_timeout`` for gathering
      feedback from all the interfaces; ``sending_delay`` for sending
-     data to the target or waiting for client connections before
-     sending data to them.
+     data to the target (client mode) or waiting for client connections before
+     sending data to them (server mode).
 
 
 

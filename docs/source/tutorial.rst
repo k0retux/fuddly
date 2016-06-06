@@ -189,7 +189,7 @@ issuing the following command:
      ignoring the fuzzing delay. (Can be changed through the command
      ``set_burst``)
    - The timeout value for checking target's health. (Can be changed
-     through the command ``set_timeout``)
+     through the command ``set_health_timeout``)
 
 
 Finally, note that if you know the target from the project file you

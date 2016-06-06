@@ -81,7 +81,7 @@ class ExportableFMKOps(object):
     def __init__(self, fmk):
         self.set_fuzz_delay = fmk.set_fuzz_delay
         self.set_fuzz_burst = fmk.set_fuzz_burst
-        self.set_timeout = fmk.set_timeout
+        self.set_health_check_timeout = fmk.set_health_check_timeout
         self.cleanup_all_dmakers = fmk.cleanup_all_dmakers
         self.cleanup_dmaker = fmk.cleanup_dmaker
         self.dynamic_generator_ids = fmk.dynamic_generator_ids
@@ -292,14 +292,15 @@ class FmkPlumbing(object):
         self.cleanup_all_dmakers(reset_existing_seed)
         # Warning: fuzz delay is not set to 0 by default in order to have a time frame
         # where SIGINT is accepted from user
-        self.set_fuzz_delay(0.5)
+        self.set_fuzz_delay(0.1)
         self.set_fuzz_burst(1)
+        self._recompute_health_check_timeout(self.tg.feedback_timeout)
 
-        base_timeout = self.tg._time_beetwen_data_emission
+    def _recompute_health_check_timeout(self, base_timeout):
         if base_timeout is not None:
-            self.set_timeout(base_timeout + 2.0)
+            self.set_health_check_timeout(base_timeout + 2.0)
         else:
-            self.set_timeout(10)
+            self.set_health_check_timeout(10)
 
     def _handle_user_code_exception(self, msg='', context=None):
         self.set_error(msg, code=Error.UserCodeError, context=context)
@@ -1049,7 +1050,8 @@ class FmkPlumbing(object):
         print(colorize(FontStyle.BOLD + '\n-=[ FMK Internals ]=-\n', rgb=Color.INFO))
         print(colorize('                     Fuzz delay: ', rgb=Color.SUBINFO) + str(self._delay))
         print(colorize('   Number of data sent in burst: ', rgb=Color.SUBINFO) + str(self._burst))
-        print(colorize('    Target health-check timeout: ', rgb=Color.SUBINFO) + str(self._timeout))
+        print(colorize('    Target health-check timeout: ', rgb=Color.SUBINFO) + str(self._hc_timeout))
+        print(colorize('        Target feedback timeout: ', rgb=Color.SUBINFO) + str(self.tg.feedback_timeout))
         print(colorize('              Workspace enabled: ', rgb=Color.SUBINFO) + repr(self._wkspace_enabled))
         print(colorize('                  FmkDB enabled: ', rgb=Color.SUBINFO) + repr(self.fmkDB.enabled))
 
@@ -1387,16 +1389,27 @@ class FmkPlumbing(object):
             return False
 
     @EnforceOrder(accepted_states=['S1','S2'])
-    def set_timeout(self, timeout, do_record=False):
+    def set_health_check_timeout(self, timeout, do_record=False):
         if timeout >= 0:
-            self._timeout = timeout
-            self.lg.log_fmk_info('Target health-check timeout = {:.1f}s'.format(self._timeout),
+            self._hc_timeout = timeout
+            self.lg.log_fmk_info('Target health-check timeout = {:.1f}s'.format(self._hc_timeout),
                                  do_record=do_record)
             return True
         else:
             self.lg.log_fmk_info('Wrong timeout value!', do_record=False)
             return False
 
+    @EnforceOrder(accepted_states=['S1','S2'])
+    def set_feedback_timeout(self, timeout, do_record=False):
+        if timeout >= 0:
+            self.tg.set_feedback_timeout(timeout)
+            self.lg.log_fmk_info('Target feedback timeout = {:.1f}s'.format(timeout),
+                                 do_record=do_record)
+            self._recompute_health_check_timeout(timeout)
+            return True
+        else:
+            self.lg.log_fmk_info('Wrong timeout value!', do_record=False)
+            return False
 
     # Used to introduce some delay after sending data
     def __delay_fuzzing(self):
@@ -1457,10 +1470,14 @@ class FmkPlumbing(object):
             pending_ops = data.pending_callback_ops()
             if pending_ops:
                 for op in pending_ops:
-                    for id in op[CallBackOps.UnReg_PeriodicData]:
+                    fbk_timeout = op[CallBackOps.Set_FbkTimeout]
+                    if fbk_timeout is not None:
+                        self.set_feedback_timeout(fbk_timeout)
+
+                    for id in op[CallBackOps.Del_PeriodicData]:
                         self._unregister_task(id)
 
-                    for id, obj in op[CallBackOps.Reg_PeriodicData].items():
+                    for id, obj in op[CallBackOps.Add_PeriodicData].items():
                         data, period = obj
                         task = FmkTask(id, self.tg.send_data_sync, data, period=period,
                                        error_func=self._handle_user_code_exception,
@@ -1832,7 +1849,7 @@ class FmkPlumbing(object):
                 while not self.tg.is_target_ready_for_new_data():
                     time.sleep(0.2)
                     now = datetime.datetime.now()
-                    if (now - t0).total_seconds() > self._timeout:
+                    if (now - t0).total_seconds() > self._hc_timeout:
                         self.lg.log_comment("*** Timeout! The target does not seem to be ready.\n")
                         ret = -1
                         break
@@ -3932,12 +3949,10 @@ class FmkShell(cmd.Cmd):
         self.__error = False
         return False
 
-
-
-    def do_set_timeout(self, line):
+    def do_set_feedback_timeout(self, line):
         '''
-        Set the timeout when the FMK checks the target readiness (Default = 10).
-        |  syntax: set_timeout <arg>
+        Set the time duration for feedback gathering (if supported by the target)
+        |  syntax: set_feedback_timeout <arg>
         |  |_ possible values for <arg>:
         |      0  : no timeout
         |     x>0 : timeout expressed in seconds (fraction is possible)
@@ -3951,7 +3966,32 @@ class FmkShell(cmd.Cmd):
             return False
         try:
             timeout = float(args[0])
-            self.fz.set_timeout(timeout)
+            self.fz.set_feedback_timeout(timeout)
+        except:
+            return False
+
+        self.__error = False
+        return False
+
+
+    def do_set_health_timeout(self, line):
+        '''
+        Set the timeout when the FMK checks the target readiness (Default = 10).
+        |  syntax: set_health_timeout <arg>
+        |  |_ possible values for <arg>:
+        |      0  : no timeout
+        |     x>0 : timeout expressed in seconds (fraction is possible)
+        '''
+        self.__error = True
+
+        args = line.split()
+        args_len = len(args)
+
+        if args_len != 1:
+            return False
+        try:
+            timeout = float(args[0])
+            self.fz.set_health_check_timeout(timeout)
         except:
             return False
 
