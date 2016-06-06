@@ -873,6 +873,14 @@ class INT(VT):
     endian = None
     determinist = True
 
+    mini_gen = None  # automatically set and only used for generation (not absorption)
+    maxi_gen = None  # automatically set and only used for generation (not absorption)
+    GEN_MAX_INT = 2**32  # 'maxi_gen' is set to this when the INT subclass does not define 'maxi'
+                         # and that maxi is not specified by the user
+    GEN_MIN_INT = -2**32  # 'mini_gen' is set to this when the INT subclass does not define 'mini'
+                          # and that mini is not specified by the user
+
+
     def __init__(self, int_list=None, mini=None, maxi=None, determinist=True):
         self.idx = 0
         self.determinist = determinist
@@ -882,25 +890,41 @@ class INT(VT):
         if int_list:
             self.int_list = int_list
             self.int_list_copy = list(self.int_list)
-        elif mini is not None and maxi is not None and maxi - mini < 200:
-            self.int_list = list(range(mini, maxi+1))
-            self.int_list_copy = copy.copy(self.int_list)
-            # we keep that information as it is valuable for fuzzing
-            self.mini = mini
-            self.maxi = maxi
+
         else:
-            self.int_list = None
-            self.int_list_copy = None
-            if self.mini is not None:
-                self.mini = max(mini, self.mini) if mini is not None else self.mini
+            if mini is not None and maxi is not None:
+                assert maxi >= mini
+
+            if mini is not None and maxi is not None and abs(maxi - mini) < 200:
+                self.int_list = list(range(mini, maxi+1))
+                self.int_list_copy = copy.copy(self.int_list)
+                # we keep that information as it is valuable for fuzzing
+                self.mini = self.mini_gen = mini
+                self.maxi = self.maxi_gen = maxi
             else:
-                # case where no size constraints exist (e.g., INT_str)
-                self.mini = mini
-            if self.maxi is not None:
-                self.maxi = min(maxi, self.maxi) if maxi is not None else self.maxi
-            else:
-                # case where no size constraints exist (e.g., INT_str)
-                self.maxi = maxi
+                self.int_list = None
+                self.int_list_copy = None
+                if self.mini is not None:
+                    self.mini = max(mini, self.mini) if mini is not None else self.mini
+                    self.mini_gen = self.mini
+                else:
+                    # case where no size constraints exist (e.g., INT_str)
+                    if mini is None:
+                        self.mini = None
+                        self.mini_gen = INT.GEN_MIN_INT
+                    else:
+                        self.mini = self.mini_gen = mini
+
+                if self.maxi is not None:
+                    self.maxi = min(maxi, self.maxi) if maxi is not None else self.maxi
+                    self.maxi_gen = self.maxi
+                else:
+                    # case where no size constraints exist (e.g., INT_str)
+                    if maxi is None:
+                        self.maxi = None
+                        self.maxi_gen = INT.GEN_MAX_INT
+                    else:
+                        self.maxi = self.maxi_gen = maxi
 
     def make_private(self, forget_current_state):
         self.int_list = copy.copy(self.int_list)
@@ -953,8 +977,10 @@ class INT(VT):
             self.int_list.insert(0, orig_val)
         else:
             if constraints[AbsCsts.Contents]:
-                if orig_val > self.maxi or orig_val < self.mini:
-                    raise ValueError('contents not valid!')
+                if self.maxi is not None and orig_val > self.maxi:
+                    raise ValueError('contents not valid! (max limit)')
+                if self.mini is not None and orig_val < self.mini:
+                    raise ValueError('contents not valid! (min limit)')
             self.int_list = [orig_val]
 
         self.reset_state()
@@ -1067,9 +1093,9 @@ class INT(VT):
                 self.exhausted = False
         else:
             if self.determinist:
-                val = self.mini + self.idx
+                val = self.mini_gen + self.idx
                 self.idx += 1
-                if self.mini + self.idx > self.maxi:
+                if self.mini_gen + self.idx > self.maxi_gen:
                     self.exhausted = True
                     self.idx = 0
                 else:
@@ -1080,9 +1106,9 @@ class INT(VT):
                 # 'int_list'. It avoids cunsuming too much memory and
                 # provide an end result that seems sufficient for such
                 # situation
-                val = random.randint(self.mini, self.maxi)
+                val = random.randint(self.mini_gen, self.maxi_gen)
                 self.idx += 1
-                if self.idx > self.maxi - self.mini:
+                if self.idx > abs(self.maxi_gen - self.mini_gen):
                     self.idx = 0
                     self.exhausted = True
                 else:
@@ -1254,7 +1280,7 @@ class INT_str(with_metaclass(meta_int_str, INT)):
         return True
 
     def _read_value_from(self, blob, size):
-        g = re.match(b'\d+', blob)
+        g = re.match(b'-?\d+', blob)
         if g is None:
             raise ValueError
         else:

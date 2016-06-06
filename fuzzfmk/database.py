@@ -56,11 +56,10 @@ class Database(object):
         self._sql_handler_thread = None
         self._sql_handler_stop_event = threading.Event()
 
-        self._sql_stmt_list_lock = threading.Lock()
-        self._sql_stmt_list = []
         self._thread_initialized = threading.Event()
+        self._sql_stmt_submitted_cond = threading.Condition()
+        self._sql_stmt_list = []
         self._sql_stmt_handled = threading.Event()
-        self._sql_stmt_submitted = threading.Event()
 
         self._sql_stmt_outcome_lock = threading.Lock()
         self._sql_stmt_outcome = None
@@ -115,23 +114,16 @@ class Database(object):
         connection.create_function("REGEXP", 2, regexp)
         connection.create_function("BINREGEXP", 2, regexp_bin)
 
-        no_stmts = []
+        while not self._sql_handler_stop_event.is_set():
 
-        while True:
+            with self._sql_stmt_submitted_cond:
+                self._sql_stmt_submitted_cond.wait(0.01)
 
-            while not self._sql_stmt_submitted.is_set():
-                self._sql_stmt_submitted.wait(0.01)
-            self._sql_stmt_submitted.clear()
-
-            if self._sql_handler_stop_event.is_set():
-                break
-
-            with self._sql_stmt_list_lock:
                 if self._sql_stmt_list:
                     sql_stmts = self._sql_stmt_list
                     self._sql_stmt_list = []
                 else:
-                    sql_stmts = no_stmts
+                    continue
 
             last_stmt_error = True
             for stmt in sql_stmts:
@@ -149,7 +141,7 @@ class Database(object):
                 else:
                     last_stmt_error = False
 
-            if sql_stmts and outcome_type is not None:
+            if outcome_type is not None:
                 with self._sql_stmt_outcome_lock:
                     if self._sql_stmt_outcome is not None:
                         print("\n*** WARNING: SQL statement outcomes have not been consumed."
@@ -175,7 +167,6 @@ class Database(object):
     def _stop_sql_handler(self):
         with self._sync_lock:
             self._sql_handler_stop_event.set()
-            self._sql_stmt_submitted.set()
             self._sql_handler_thread.join()
 
 
@@ -195,10 +186,10 @@ class Database(object):
             `None` or the expected outcomes
         """
         with self._sync_lock:
-            with self._sql_stmt_list_lock:
-                self._sql_stmt_list.append((stmt, params, outcome_type, error_msg))
 
-            self._sql_stmt_submitted.set()
+            with self._sql_stmt_submitted_cond:
+                self._sql_stmt_list.append((stmt, params, outcome_type, error_msg))
+                self._sql_stmt_submitted_cond.notify()
 
             if outcome_type is not None:
                 # If we care about outcomes, then we are sure to get outcomes from the just
