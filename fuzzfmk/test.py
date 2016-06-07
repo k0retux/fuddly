@@ -53,15 +53,44 @@ from fuzzfmk.operator_helpers import *
 from fuzzfmk.data_model_helpers import *
 from fuzzfmk.encoders import *
 
+mock_module = True
+try:
+    import unittest.mock as mock
+except ImportError:
+    try:
+        import mock
+    except ImportError:
+        mock_module = False
+        print('ERROR: python-mock module is not installed! '
+              'Should be installed to be able to run every test.')
+
+ddt_module = True
+try:
+    import ddt
+except ImportError:
+    ddt_module = False
+    print('ERROR: python(3)-ddt module is not installed! '
+          'Should be installed to be able to run every test.')
+
+
+
 parser = argparse.ArgumentParser(description='Process arguments.')
 parser.add_argument('-a', '--all', action='store_true',
                     help='Run all test cases. Some can take lot of time. (Disabled by default.)')
 parser.add_argument('--ignore-dm-specifics', action='store_true',
                     help='Run Data Models specific test cases. (Enabled by default.)')
 
+parser.add_argument('--force', action='store_true',
+                    help='Force testing even if some package dependencies are missing. (Disabled by default.)')
+
 test_args = parser.parse_known_args()
 run_long_tests = test_args[0].all
 ignore_data_model_specifics = test_args[0].ignore_dm_specifics
+force = test_args[0].force
+
+if (not mock_module or not ddt_module) and not force:
+    sys.exit("Some dependencies are missing: use --force to run tests anyway.")
+
 
 class TEST_Fuzzy_INT16(Fuzzy_INT16):
     int_list = ['TEST_OK', 'BLABLA', 'PLOP']
@@ -1815,6 +1844,72 @@ class TestModelWalker(unittest.TestCase):
         print(colorize('number of confs: %d'%idx, rgb=Color.INFO))
 
         self.assertIn(idx, [268, 270]) # previously [148, 149, 150]
+
+
+if mock_module and ddt_module:
+    @ddt.ddt
+    class TestBitFieldCondition(unittest.TestCase):
+
+        @classmethod
+        def setUpClass(cls):
+
+            def side_effect(idx):
+                return [0, 1, 2][idx]
+
+            cls.node = mock.Mock()
+            cls.node.get_subfield = mock.MagicMock(side_effect=side_effect)
+
+
+        @ddt.data((1, 1), (1, [1]), ([1], [1]),
+                      (1, (1,)), ((1,), (1,)),
+              (2, [2, 6, 7]), (2, (2, 6, 7)),
+              ([1, 2], [1, [5, 2, 8]]), ([1, 2], [[1], [5, 6, 2]]),
+              ((1, 2), (1, (5, 2, 8))), ((1, 2), ((1,), (5, 6, 2))))
+        @ddt.unpack
+        def test_with_one_argument(self, sf, val):
+            condition = BitFieldCondition(sf=sf, val=val)
+            self.assertTrue(condition.check(TestBitFieldCondition.node))
+
+            condition = BitFieldCondition(sf=sf, neg_val=val)
+            self.assertFalse(condition.check(TestBitFieldCondition.node))
+
+        @ddt.data(([0, 1, 2], [0, [1, 3], None], [None, None, 5]),
+              ([0, 2], [None, 2], [3, None]))
+        @ddt.unpack
+        def test_true_with_both_arguments(self, sf, val, neg_val):
+            condition = BitFieldCondition(sf=sf, val=val, neg_val=neg_val)
+            self.assertTrue(condition.check(TestBitFieldCondition.node))
+
+        @ddt.data(([0, 1, 2], [[0, 1], [1, 2], None], [None, None, [1, 2, 3]]),
+                  ([0, 1, 2], [[1, 2, 3], [1, 2], None], [None, None, [1, 3, 5]]))
+        @ddt.unpack
+        def test_false_with_both_arguments(self, sf, val, neg_val):
+            condition = BitFieldCondition(sf=sf, val=val, neg_val=neg_val)
+            self.assertFalse(condition.check(TestBitFieldCondition.node))
+
+        def test_true_val_has_priority(self):
+            condition = BitFieldCondition(sf=0, val=[0, 4, 5], neg_val=[0, 4, 5])
+            self.assertTrue(condition.check(TestBitFieldCondition.node))
+
+        def test_false_val_has_priority(self):
+            condition = BitFieldCondition(sf=0, val=[3, 4, 5], neg_val=[3, 4, 5])
+            self.assertFalse(condition.check(TestBitFieldCondition.node))
+
+        @ddt.data((None, [2, 3]), ([1], 1), ((1,), 2),
+              ([1], [2, 1, 4]), ((1,), (2, 1, 4)),
+              ([1, 2], [1]))
+        @ddt.unpack
+        def test_invalid_with_one_argument(self, sf, val):
+            self.assertRaises(Exception, BitFieldCondition, sf=sf, val=val)
+            self.assertRaises(Exception, BitFieldCondition, sf=sf, neg_val=val)
+
+        @ddt.data((1, None, None), (None, 2, 3),
+              ([1, 2], [1, None], [2, None]),
+              ([1, 2], [1, 2], [[1, 2, 3, 4]]),
+              ([1, 2], [1, 2, 3, 4], [[1, 2]]))
+        @ddt.unpack
+        def test_invalid_with_both_arguments(self, sf, val, neg_val):
+            self.assertRaises(Exception, BitFieldCondition, sf=sf, val=val, neg_val=neg_val)
 
 
 

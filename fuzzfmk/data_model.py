@@ -616,37 +616,58 @@ class BitFieldCondition(NodeCondition):
     def __init__(self, sf, val=None, neg_val=None):
         '''
         Args:
-          sf (int): subfield of the BitField() on which the condition apply
-          val (int): integer (or integer list) that satisfies the condition
-          neg_val (int): integer (or integer list) that does NOT satisfy the condition
+          sf (int): subfield (or subfield list) of the BitField() on which the condition apply
+          val (int): integer (or integer list or list of integer list) that satisfies the condition
+          neg_val (int): integer (or integer list or list of integer list) that does NOT satisfy the condition
         '''
+
+        assert(val is not None or neg_val is not None)
+
+        if isinstance(sf, (tuple, list)):
+            assert(len(sf) != 0)
+            if val is not None:
+                assert(isinstance(val, (tuple, list)) and len(sf) == len(val))
+
+            if neg_val is not None:
+                assert(isinstance(neg_val, (tuple, list)) and len(sf) == len(neg_val))
+        else:
+            sf = [sf]
+            if val is not None:
+                val = [val]
+
+            if neg_val is not None:
+                neg_val = [neg_val]
+
         self.sf = sf
 
-        assert((val is not None and neg_val is None) or (val is None and neg_val is not None))
-        if val is not None:
-            self.positive_mode = True
-            self.val = val
-        elif neg_val is not None:
-            self.positive_mode = False
-            self.val = neg_val
+        for sf in self.sf:
+            assert(sf is not None)
+
+
+        self.val = val if val is not None else [None for _ in self.sf]
+        self.neg_val = neg_val if neg_val is not None else [None for _ in self.sf]
+
+        for v, nv in zip(self.val, self.neg_val):
+            assert(v is not None or nv is not None)
+
 
     def check(self, node):
         from fuzzfmk.value_types import BitField
         assert(node.is_typed_value(subkind=BitField))
 
-        if isinstance(self.val, (tuple, list)):
-            if self.positive_mode:
-                result = node.get_subfield(idx=self.sf) in self.val
+        for sf, val, neg_val in zip(self.sf, self.val, self.neg_val):
+            if val is not None:
+                if not isinstance(val, (tuple, list)):
+                    val = [val]
+                result = node.get_subfield(idx=sf) in val
             else:
-                result = node.get_subfield(idx=self.sf) not in self.val
-        else:
-            assert(isinstance(self.val, int))
-            if self.positive_mode:
-                result = node.get_subfield(idx=self.sf) == self.val
-            else:
-                result = node.get_subfield(idx=self.sf) != self.val
+                if not isinstance(neg_val, (tuple, list)):
+                    neg_val = [neg_val]
+                result = node.get_subfield(idx=sf) not in neg_val
+            if not result:
+                return False
 
-        return result
+        return True
 
 
 

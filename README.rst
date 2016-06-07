@@ -87,6 +87,11 @@ Dependencies
   - `paramiko`_: Python implementation of the SSHv2 protocol
   - `serial`_: For serial port access
 
++ For testing:
+
+  - `ddt`_: Used for data-driven tests
+  - `mock`_: Used for mocking (only needed in Python2)
+
 + For documentation generation:
 
   - `sphinx`_: sphinx >= 1.3 (with builtin napoleon extension)
@@ -100,6 +105,8 @@ Dependencies
 .. _rpyc: https://pypi.python.org/pypi/rpyc
 .. _paramiko: http://www.paramiko.org/
 .. _serial: https://github.com/pyserial/pyserial
+.. _ddt: https://github.com/txels/ddt
+.. _mock: https://pypi.python.org/pypi/mock
 .. _sphinx: http://sphinx-doc.org/
 .. _texlive: https://www.tug.org/texlive/
 .. _readthedocs theme: https://github.com/snide/sphinx_rtd_theme
