@@ -228,7 +228,7 @@ class MyDF_DataModel(DataModel):
 
              {'name': 'A32_payload',
               'contents': String(val_list=['$ A32_VALID $', '$ A32_INVALID $'], determinist=False),
-              'exists_if': (BitFieldCondition(sf=2, val=5), 'A3_subopcode')}
+              'exists_if': (BitFieldCondition(sf=[0, 1, 2], val=[[500, 501], [1, 2], 5]), 'A3_subopcode')}
          ]}
 
 
