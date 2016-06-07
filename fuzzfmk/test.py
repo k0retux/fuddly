@@ -2232,7 +2232,7 @@ class TestNodeFeatures(unittest.TestCase):
             print('-----------------------')
 
             print('-----------------------')
-            print('Absorb Status: status=%d, off=%d, sz=%d, name=%s' % (status, off, size, name))
+            print('Absorb Status: status=%s, off=%d, sz=%d, name=%s' % (status, off, size, name))
             print(' \_ length of original data: %d' % len(raw_data))
             print(' \_ remaining: %r' %raw_data[size:])
             print('-----------------------')
@@ -3161,7 +3161,7 @@ class TestDataModel(unittest.TestCase):
                 print('-----------------------')
 
                 print('-----------------------')
-                print('Absorb Status: status=%d, off=%d, sz=%d, name=%s' % (status, off, size, name))
+                print('Absorb Status: status=%s, off=%d, sz=%d, name=%s' % (status, off, size, name))
                 print(' \_ length of original data: %d' % len(raw_data))
                 print(' \_ remaining: %r' %raw_data[size:])
                 print('-----------------------')

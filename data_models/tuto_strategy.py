@@ -14,6 +14,10 @@ class g_test_callback_01(Generator):
         self.d.register_callback(self.callback_1)
         self.d.register_callback(self.callback_2)
         self.d.register_callback(self.callback_3)
+        self.d.register_callback(self.callback_before_sending_1,
+                                 hook=HOOK.before_sending)
+        self.d.register_callback(self.callback_before_sending_2,
+                                 hook=HOOK.before_sending)
         return True
 
     def generate_data(self, dm, monitor, target):
@@ -41,12 +45,22 @@ class g_test_callback_01(Generator):
         cbk = CallBackOps(stop_process_cb=True, remove_cb=True)
         cbk.add_operation(CallBackOps.Add_PeriodicData, id=2,
                           param=Data('\nTEST One shot!'))
-        cbk.add_operation(CallBackOps.Set_FbkTimeout, param=2)
         return cbk
 
     def callback_3(self, feedback):
         print('\n*** callback 3 ***')
         cbk = CallBackOps(remove_cb=True)
         cbk.add_operation(CallBackOps.Del_PeriodicData, id=1)
-        cbk.add_operation(CallBackOps.Set_FbkTimeout, param=5)
+        return cbk
+
+    def callback_before_sending_1(self):
+        print('\n*** callback just before sending data 1 ***')
+        cbk = CallBackOps(stop_process_cb=True, remove_cb=True)
+        cbk.add_operation(CallBackOps.Set_FbkTimeout, param=2)
+        return cbk
+
+    def callback_before_sending_2(self):
+        print('\n*** callback just before sending data 2 ***')
+        cbk = CallBackOps(remove_cb=True)
+        cbk.add_operation(CallBackOps.Set_FbkTimeout, param=8)
         return cbk

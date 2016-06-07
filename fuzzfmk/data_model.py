@@ -34,6 +34,8 @@ import binascii
 import collections
 import traceback
 
+from enum import Enum
+
 sys.path.append('.')
 
 from fuzzfmk.basic_primitives import *
@@ -58,8 +60,9 @@ class Data(object):
         self.info = {}
         self.__info_idx = {}
 
-        self._callbacks = collections.OrderedDict()
-        self._pending_ops = None
+        # callback related
+        self._callbacks = {}
+        self._pending_ops = {}
 
         self._history = None
 
@@ -186,16 +189,16 @@ class Data(object):
         if self.node is not None:
             self.node.freeze()
 
-    def get_contents(self, copy=False):
+    def get_contents(self, do_copy=False):
         if self.node is not None:
             # we freeze the contents before exporting it
             self.node.freeze()
-            if copy:
+            if do_copy:
                 contents = Node(self.node.name, base_node=self.node, ignore_frozen_state=False)
             else:
                 contents = self.node
         else:
-            if copy:
+            if do_copy:
                 contents = copy.copy(self.raw)
             else:
                 contents = self.raw
@@ -210,30 +213,48 @@ class Data(object):
 
     pretty_print = show
 
-    def register_callback(self, callback):
-        self._callbacks[id(callback)] = callback
+    def register_callback(self, callback, hook=HOOK.after_fbk):
+        assert isinstance(hook, HOOK)
+        if hook not in self._callbacks:
+            self._callbacks[hook] = collections.OrderedDict()
+        self._callbacks[hook][id(callback)] = callback
 
-    def cleanup_callbacks(self):
-        self._callbacks = collections.OrderedDict()
+    def cleanup_callbacks(self, hook=HOOK.after_fbk):
+        assert isinstance(hook, HOOK)
+        if hook in self._callbacks:
+            del self._callbacks[hook]
+        if hook in self._pending_ops:
+            del self._pending_ops[hook]
 
-    def run_callbacks(self, feedback):
-        new_cbks = copy.copy(self._callbacks)
-        for cbk_id, cbk in self._callbacks.items():
-            cbk_ops = cbk(feedback)
-            if self._pending_ops is None:
-                self._pending_ops = []
-            self._pending_ops.append(cbk_ops.get_operations())
+    def run_callbacks(self, feedback=None, hook=HOOK.after_fbk):
+        assert isinstance(hook, HOOK)
+        if hook not in self._callbacks:
+            return
+
+        new_cbks = copy.copy(self._callbacks[hook])
+        for cbk_id, cbk in self._callbacks[hook].items():
+            if hook == HOOK.after_fbk:
+                cbk_ops = cbk(feedback)
+            else:
+                cbk_ops = cbk()
+            if hook not in self._pending_ops:
+                self._pending_ops[hook] = []
+            self._pending_ops[hook].append(cbk_ops.get_operations())
             if cbk_ops.is_flag_set(CallBackOps.RemoveCB):
                 del new_cbks[cbk_id]
             if cbk_ops.is_flag_set(CallBackOps.StopProcessingCB):
                 break
 
-        self._callbacks = new_cbks
+        self._callbacks[hook] = new_cbks
 
-    def pending_callback_ops(self):
-        pops = self._pending_ops
-        self._pending_ops = None
-        return pops
+    def pending_callback_ops(self, hook=HOOK.after_fbk):
+        assert isinstance(hook, HOOK)
+        if hook in self._pending_ops:
+            pops = self._pending_ops[hook]
+            del self._pending_ops[hook]
+            return pops
+        else:
+            return None
 
     def __copy__(self):
         new_data = type(self)()
@@ -243,10 +264,13 @@ class Data(object):
         new_data.__info_idx = copy.copy(self.__info_idx)
         new_data._history = copy.copy(self._history)
         new_data.__type = copy.copy(self.__type)
-        new_data._callbacks = collections.OrderedDict()
-        for key, cbk in self._callbacks.items():
-            ncbk = copy.copy(cbk)
-            new_data._callbacks[id(ncbk)] = ncbk
+        new_data._callbacks = {}
+        for hook, cbk_dict in self._callbacks.items():
+            new_data._callbacks[hook] = collections.OrderedDict()
+            for key, cbk in cbk_dict.items():
+                ncbk = copy.copy(cbk)
+                new_data._callbacks[hook][id(ncbk)] = ncbk
+        new_data._pending_ops = {}  # we do not copy pending_ops
 
         if self.node is not None:
             e = Node(self.node.name, base_node=self.node, ignore_frozen_state=False)
@@ -388,20 +412,12 @@ def unconvert_from_internal_repr(val):
 nodes_weight_re = re.compile('(.*?)\((.*)\)')
 
 
-class AbsorbStatus:
+class AbsorbStatus(Enum):
 
     Accept = 1
     Reject = 2
     Absorbed = 3
     FullyAbsorbed = 4
-
-    DESC = {
-        Accept: 'Accept',
-        Reject: 'Reject',
-        Absorbed: 'Absorbed',
-        FullyAbsorbed: 'FullyAbsorbed'
-    }
-
 
 # List of constraints that rules blob absorption
 class AbsCsts(object):

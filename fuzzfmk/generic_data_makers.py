@@ -970,7 +970,7 @@ class d_modify_nodes(Disruptor):
     def _add_info(self, prev_data, n, status, size):
         val_len = len(self.value)
         prev_data.add_info("changed node:     '{:s}'".format(n.name))
-        prev_data.add_info("absorption status: {:s}".format(AbsorbStatus.DESC[status]))
+        prev_data.add_info("absorption status: {:s}".format(status))
         prev_data.add_info("value provided:   '{:s}'".format(self.value))
         prev_data.add_info("__ length:         {:d}".format(val_len))
         if status != AbsorbStatus.FullyAbsorbed:

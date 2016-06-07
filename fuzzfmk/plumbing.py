@@ -1458,16 +1458,40 @@ class FmkPlumbing(object):
         return ret
 
 
-    def _after_feedback_retrieval(self, data_list):
+    def _do_before_sending_data(self, data_list):
+        # Monitor hook function before sending
+        self.mon.do_before_sending_data()
+        self._handle_data_callbacks(data_list, hook=HOOK.before_sending)
+
+    def _do_after_sending_data(self, data_list):
+        self._handle_data_callbacks(data_list, hook=HOOK.after_sending)
+        # Monitor hook function after sending
+        self.mon.do_after_sending_data()
+        # Monitor hook before resuming sending data
+        self.mon.do_before_resuming_sending_data()
+
+        if self.__stats_countdown < 1:
+            self.__stats_countdown = 9
+            self.lg.log_stats()
+        else:
+            self.__stats_countdown -= 1
+
+    def _do_after_feedback_retrieval(self, data_list):
+        self._handle_data_callbacks(data_list, hook=HOOK.after_fbk)
+
+    def _handle_data_callbacks(self, data_list, hook):
         for data in data_list:
             try:
-                data.run_callbacks(copy.copy(self.fmkDB.last_feedback))
+                if hook == HOOK.after_fbk:
+                    data.run_callbacks(feedback=copy.copy(self.fmkDB.last_feedback), hook=hook)
+                else:
+                    data.run_callbacks(feedback=None, hook=hook)
             except:
-                self._handle_user_code_exception("A callback has crashed! (associated to "
-                                                 "Data object '{!r}')".format(data))
+                self._handle_user_code_exception("A callback (called at {!r}) has crashed! (associated to "
+                                                 "Data object '{!r}')".format(hook, data))
                 continue
 
-            pending_ops = data.pending_callback_ops()
+            pending_ops = data.pending_callback_ops(hook=hook)
             if pending_ops:
                 for op in pending_ops:
                     fbk_timeout = op[CallBackOps.Set_FbkTimeout]
@@ -1483,6 +1507,7 @@ class FmkPlumbing(object):
                                        error_func=self._handle_user_code_exception,
                                        cleanup_func=functools.partial(self._unregister_task, id))
                         self._register_task(id, task)
+
 
     def _unregister_task(self, id):
         with self._task_list_lock:
@@ -1542,12 +1567,6 @@ class FmkPlumbing(object):
         self.new_transfer_preamble()
         self.send_data(data_list)
 
-        ret = self.check_target_readiness()
-        if ret < 0:
-            cont0 = False
-        else:
-            cont0 = True
-
         if orig_data_provided:
             for dt_orig in original_data:
                 if dt_orig is not None:
@@ -1557,12 +1576,23 @@ class FmkPlumbing(object):
             dt.make_recordable()
 
         if multiple_data:
-            self.log_data(data_list, original_data=original_data, get_target_ack=cont0,
+            self.log_data(data_list, original_data=original_data,
                           verbose=verbose)
         else:
             orig = None if not orig_data_provided else original_data[0]
-            self.log_data(data_list[0], original_data=orig, get_target_ack=cont0,
+            self.log_data(data_list[0], original_data=orig,
                           verbose=verbose)
+
+        # When checking target readiness, feedback timeout is taken into account indirectly
+        # through the call to Target.is_target_ready_for_new_data()
+        ret = self.check_target_readiness()
+        if ret < 0:
+            cont0 = False
+        else:
+            cont0 = True
+
+        ack_date = self.tg.get_last_target_ack_date()
+        self.lg.log_target_ack_date(ack_date)
 
         if cont0:
             cont1 = self.__delay_fuzzing()
@@ -1578,7 +1608,7 @@ class FmkPlumbing(object):
             cont4 = self.monitor_probes()
             self.tg.cleanup()
 
-        self._after_feedback_retrieval(data_list)
+        self._do_after_feedback_retrieval(data_list)
 
         cont2 = self.mon.do_after_sending_and_logging_data()
 
@@ -1596,8 +1626,7 @@ class FmkPlumbing(object):
                                code=Error.DataInvalid)
                 return
 
-            # Monitor hook function before sending
-            self.mon.do_before_sending_data()
+            self._do_before_sending_data(data_list)
 
             try:
                 if len(data_list) == 1:
@@ -1612,21 +1641,11 @@ class FmkPlumbing(object):
             except:
                 self._handle_user_code_exception()
 
-            if self.__stats_countdown < 1:
-                self.__stats_countdown = 9
-                self.lg.log_stats()
-            else:
-                self.__stats_countdown -= 1
-
-            # Monitor hook function after sending
-            self.mon.do_after_sending_data()
-
-            # Monitor hook before resuming sending data
-            self.mon.do_before_resuming_sending_data()
+            self._do_after_sending_data(data_list)
 
 
     @EnforceOrder(accepted_states=['S2'])
-    def log_data(self, data_list, original_data=None, get_target_ack=True, verbose=False):
+    def log_data(self, data_list, original_data=None, verbose=False):
 
         if self.__send_enabled:
 
@@ -1656,12 +1675,6 @@ class FmkPlumbing(object):
 
             if multiple_data:
                  self.lg.log_fmk_info("MULTIPLE DATA EMISSION", nl_after=True)
-
-            if get_target_ack:
-                ack_date = self.tg.get_last_target_ack_date()
-            else:
-                ack_date = None
-            self.lg.log_target_ack_date(ack_date)
 
             for idx, dt in zip(range(len(data_list)), data_list):
                 dt_mk_h = dt.get_history()
@@ -1847,7 +1860,7 @@ class FmkPlumbing(object):
                 signal.signal(signal.SIGINT, sig_int_handler)
                 ret = 0
                 while not self.tg.is_target_ready_for_new_data():
-                    time.sleep(0.2)
+                    time.sleep(0.1)
                     now = datetime.datetime.now()
                     if (now - t0).total_seconds() > self._hc_timeout:
                         self.lg.log_comment("*** Timeout! The target does not seem to be ready.\n")
@@ -2264,7 +2277,7 @@ class FmkPlumbing(object):
                         self.lg.log_fmk_info("Operator will shutdown because something is going wrong with "
                                              "the target and the recovering procedure did not succeed...")
 
-                self._after_feedback_retrieval(data_list)
+                self._do_after_feedback_retrieval(data_list)
 
                 op_feedback = linst.get_operator_feedback()
                 op_status = linst.get_operator_status()
@@ -2521,14 +2534,14 @@ class FmkPlumbing(object):
                     invalid_data = False
                     if isinstance(dmaker_obj, Generator):
                         if dmaker_obj.produced_seed is not None:
-                            data = Data(dmaker_obj.produced_seed.get_contents(copy=True))
+                            data = Data(dmaker_obj.produced_seed.get_contents(do_copy=True))
                         else:
                             data = dmaker_obj.generate_data(self.dm, self.mon,
                                                             self.tg)
                             if save_seed and dmaker_obj.produced_seed is None:
                                 # Usefull to replay from the beginning a modelwalking sequence
                                 data.materialize()
-                                dmaker_obj.produced_seed = Data(data.get_contents(copy=True))
+                                dmaker_obj.produced_seed = Data(data.get_contents(do_copy=True))
                     elif isinstance(dmaker_obj, Disruptor):
                         if not self._is_data_valid(data):
                             invalid_data = True

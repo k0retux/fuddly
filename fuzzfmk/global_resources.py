@@ -25,6 +25,7 @@ import os
 import fuzzfmk
 import sys
 import inspect
+from enum import Enum
 from libs.utils import ensure_dir, ensure_file
 
 fuddly_version = '0.23.2'
@@ -138,3 +139,8 @@ class Error(object):
 
     def __str__(self):
         return self._code_info[self.code]['name']
+
+class HOOK(Enum):
+    before_sending = 1
+    after_sending = 2
+    after_fbk = 3

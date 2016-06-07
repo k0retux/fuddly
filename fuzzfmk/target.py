@@ -135,7 +135,9 @@ class Target(object):
 
     def is_target_ready_for_new_data(self):
         '''
-        The FMK busy wait on this method() before sending a new data
+        The FMK busy wait on this method() before sending a new data.
+        This method should take into account feedback timeout (that is the maximum
+        time duration for gathering feedback from the target)
         '''
         return True
 
@@ -176,7 +178,7 @@ class Target(object):
         To set dynamically the feedback timeout.
 
         Args:
-            fbk_timeout: time duration for collecting the feedback
+            fbk_timeout: maximum time duration for collecting the feedback
 
         '''
         assert fbk_timeout >= 0
@@ -1068,6 +1070,7 @@ class NetworkTarget(Target):
 
     def _before_sending_data(self, data_list, from_fmk):
         if from_fmk:
+            self._last_ack_date = None
             self._first_send_data_call = True  # related to additional feedback
             self._feedback_handled = False
             self._sending_id += 1
