@@ -1759,6 +1759,8 @@ class BitField(VT_Alt):
         for v, i in zip(val_list,range(val_list_sz)):
             result += v<<(i*8)
 
+        self.drawn_val = result
+
         if self.padding_size != 0:
             if self.lsb_padding:
                 result >>= self.padding_size
@@ -1813,8 +1815,6 @@ class BitField(VT_Alt):
                 first_pass = False
                 insert_idx = 1
 
-        self.drawn_val = orig_val
-                
         return blob, off, self.nb_bytes
 
 
