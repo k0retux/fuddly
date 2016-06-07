@@ -44,10 +44,9 @@ class Operation(object):
             }
 
     def set_flag(self, name):
-        if name in self.flags:
-            self.flags[name] = True
-        else:
+        if name not in self.flags:
             raise ValueError
+        self.flags[name] = True
 
     def is_flag_set(self, name):
         if name not in self.flags:
@@ -58,13 +57,7 @@ class Operation(object):
         self.status = status
 
     def add_instruction(self, actions, orig_data=None):
-        if actions is None:
-            l = None
-        else:
-            l = []
-            for a in actions:
-                l.append(a)
-
+        l = list(actions) if actions is not None else None
         self.action_register.append((l, orig_data))
 
     def get_instructions(self):
@@ -85,10 +78,9 @@ class LastInstruction(object):
             }
 
     def set_instruction(self, name):
-        if name in self.instructions:
-            self.instructions[name] = True
-        else:
+        if name not in self.instructions:
             raise ValueError
+        self.instructions[name] = True
 
     def is_instruction_set(self, name):
         if name not in self.instructions:
