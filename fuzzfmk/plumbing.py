@@ -1463,8 +1463,6 @@ class FmkPlumbing(object):
 
     def _do_after_sending_data(self, data_list):
         self._handle_data_callbacks(data_list, hook=HOOK.after_sending)
-        # Monitor hook function after sending
-        self.mon.do_after_sending_data()
 
         if self.__stats_countdown < 1:
             self.__stats_countdown = 9
@@ -1578,10 +1576,7 @@ class FmkPlumbing(object):
     @EnforceOrder(accepted_states=['S2'])
     def send_data_and_log(self, data_list, original_data=None, verbose=False):
 
-        if original_data is None:
-            orig_data_provided = False
-        else:
-            orig_data_provided = True
+        orig_data_provided = original_data is not None
 
         if isinstance(data_list, Data):
             data_list = [data_list]
@@ -1596,8 +1591,7 @@ class FmkPlumbing(object):
         if self._burst_countdown == self._burst:
             # log residual just before sending new data to avoid
             # polluting feedback logs of the next emission
-            cont = self.log_target_residual_feedback()
-            if not cont:
+            if not self.log_target_residual_feedback():
                 return False
 
         self.new_transfer_preamble()
@@ -1609,6 +1603,7 @@ class FmkPlumbing(object):
                     self.__current.append((original_data[idx], dt))
                 else:
                     self.__current.append((None, dt))
+
 
         if orig_data_provided:
             for dt_orig in original_data:
@@ -1622,9 +1617,8 @@ class FmkPlumbing(object):
             self.log_data(data_list, original_data=original_data,
                           verbose=verbose)
         else:
-            orig = None if not orig_data_provided else original_data[0]
-            self.log_data(data_list[0], original_data=orig,
-                          verbose=verbose)
+            orig = original_data[0] if orig_data_provided else None
+            self.log_data(data_list[0], original_data=orig, verbose=verbose)
 
         # When checking target readiness, feedback timeout is taken into account indirectly
         # through the call to Target.is_target_ready_for_new_data()
@@ -1634,25 +1628,25 @@ class FmkPlumbing(object):
         self.lg.log_target_ack_date(ack_date)
 
         if cont0:
-            cont1 = self.__delay_fuzzing()
+            cont0 = self.__delay_fuzzing()
         else:
-            cont1 = False
             self.mon.do_on_error()
 
-        cont3 = True
-        cont4 = True
+        cont1 = True
+        cont2 = True
         # That means this is the end of a burst
         if self._burst_countdown == self._burst:
-            cont3 = self.log_target_feedback()
+            cont1 = self.log_target_feedback()
             # We handle probe feedback if any
-            cont4 = self.monitor_probes()
+            cont2 = self.monitor_probes()
             self.tg.cleanup()
 
         self._do_after_feedback_retrieval(data_list)
 
-        cont2 = self.mon.do_after_sending_and_logging_data()
+        cont3 = self.mon.do_after_sending_and_logging_data()
 
-        return cont0 and cont1 and cont2 and cont3 and cont4
+        return cont0 and cont1 and cont2 and cont3
+
 
     @EnforceOrder(accepted_states=['S2'])
     def send_data(self, data_list):
@@ -1677,14 +1671,16 @@ class FmkPlumbing(object):
                     raise ValueError
             except TargetStuck as e:
                 self.lg.log_comment("*** WARNING: Unable to send data to the target! [reason: %s]" % str(e))
-
+                self.mon.do_on_error()
             except:
                 self._handle_user_code_exception()
+                self.mon.do_on_error()
+            else:
+                self.mon.do_after_sending_data()
 
             self._do_after_sending_data(data_list)
 
         return data_list
-
 
 
     @EnforceOrder(accepted_states=['S2'])
@@ -2183,12 +2179,14 @@ class FmkPlumbing(object):
         self.__reset_fmk_internals(reset_existing_seed=(not use_existing_seed))
 
         try:
-            if not operator._start(self._exportable_fmk_ops, self.dm, self.mon, self.tg, self.lg, user_input):
-                self.set_error("The _start() method of Operator '%s' has returned an error!" % name,
-                           code=Error.UnrecoverableError)
-                return False
+            ok = operator._start(self._exportable_fmk_ops, self.dm, self.mon, self.tg, self.lg, user_input)
         except:
             self._handle_user_code_exception('Operator has crashed during its start() method')
+            return False
+
+        if not ok:
+            self.set_error("The _start() method of Operator '%s' has returned an error!" % name,
+                           code=Error.UnrecoverableError)
             return False
 
         fmk_feedback = FmkFeedback()
@@ -2199,14 +2197,13 @@ class FmkPlumbing(object):
             try:
                 operation = operator.plan_next_operation(self._exportable_fmk_ops, self.dm,
                                                          self.mon, self.tg, self.lg, fmk_feedback)
-
-                if operation is None:
-                    self.set_error("An operator shall always return an Operation() object in its plan_next_operation()",
-                                   code=Error.UserCodeError)
-                    return False
-
             except:
                 self._handle_user_code_exception('Operator has crashed during its plan_next_operation() method')
+                return False
+
+            if operation is None:
+                self.set_error("An operator shall always return an Operation() object in its plan_next_operation()",
+                               code=Error.UserCodeError)
                 return False
 
             if operation.is_flag_set(Operation.CleanupDMakers):
@@ -2258,10 +2255,7 @@ class FmkPlumbing(object):
                 for d in data_list:
                     fmk_feedback.add_produced_data(d)
 
-                if len(data_list) == 1:
-                    multiple_data = False
-                else:
-                    multiple_data = True
+                multiple_data = len(data_list) > 1
 
                 fmk_feedback.clear_flag(FmkFeedback.NeedChange)
 
@@ -2307,8 +2301,7 @@ class FmkPlumbing(object):
                 self.lg.log_target_ack_date(ack_date)
 
                 # Delay introduced after logging data
-                cont = self.__delay_fuzzing()
-                if not cont:
+                if not self.__delay_fuzzing():
                     exit_operator = True
                     self.lg.log_fmk_info("Operator will shutdown because waiting has been cancelled by the user")
 
@@ -2466,11 +2459,8 @@ class FmkPlumbing(object):
                         return None
 
                     assert(dmaker_obj is not None)
-                    is_gen = True if issubclass(dmaker_obj.__class__, Generator) else False
-                    if is_gen:
-                        stateful = True
-                    else:
-                        stateful = True if issubclass(dmaker_obj.__class__, StatefulDisruptor) else False
+                    is_gen = issubclass(dmaker_obj.__class__, Generator)
+                    stateful = is_gen or issubclass(dmaker_obj.__class__, StatefulDisruptor)
 
                     if not ok:
                         self.set_error(err_msg, code=Error.CloneError)

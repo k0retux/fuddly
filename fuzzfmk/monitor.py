@@ -26,6 +26,7 @@ import threading
 import datetime
 import time
 import traceback
+import six
 
 from libs.external_modules import *
 from fuzzfmk.global_resources import *
@@ -40,27 +41,6 @@ class ProbeUser(object):
         self._thread = None
         self._stop_event = threading.Event()
 
-    def go_on(self):
-        return not self._stop_event.is_set()
-
-    def _wait(self, delay):
-        self._stop_event.wait(delay)
-
-    def stop(self):
-        self._stop_event.set()
-
-    def notify_stop(self):
-        """
-        Notifies to the probe that its master has seen it has stopped
-        """
-        self._stop_event.clear()
-
-    def _clear(self):
-        """
-        Clear all events
-        """
-        self._stop_event.clear()
-
     def start(self, *args, **kwargs):
         if self.is_alive():
             raise RuntimeError
@@ -70,6 +50,15 @@ class ProbeUser(object):
         self._thread.daemon = True
         self._thread.start()
 
+    def stop(self):
+        self._stop_event.set()
+
+    def notify_stop(self):
+        """
+        Used by the Monitor to notify that it has seen that the probe has stopped
+        """
+        self._stop_event.clear()
+
     def join(self, timeout):
         if self.is_alive():
             self._thread.join(ProbeUser.timeout if timeout is None else timeout)
@@ -78,7 +67,28 @@ class ProbeUser(object):
         return self._thread is not None and self._thread.is_alive()
 
     def is_stuck(self):
-        return self.is_alive() and not self.go_on()
+        return self.is_alive() and not self._go_on()
+
+    def get_probe_delay(self):
+        return self._probe.delay
+
+    def set_probe_delay(self, delay):
+        self._probe.delay = delay
+
+    def get_probe_status(self):
+        return self._probe.status
+
+    def _go_on(self):
+        return not self._stop_event.is_set()
+
+    def _wait(self, delay):
+        self._stop_event.wait(delay)
+
+    def _clear(self):
+        """
+        Clear all events
+        """
+        self._stop_event.clear()
 
     def _run(self, *args, **kwargs):
         try:
@@ -90,7 +100,7 @@ class ProbeUser(object):
         if status is not None:
             self._probe.status = status
 
-        while self.go_on():
+        while self._go_on():
             try:
                 self._probe.status = self._probe.main(*args, **kwargs)
             except:
@@ -103,15 +113,6 @@ class ProbeUser(object):
         except:
             self._handle_exception('during stop()')
 
-    def get_probe_delay(self):
-        return self._probe.delay
-
-    def set_probe_delay(self, delay):
-        self._probe.delay = delay
-
-    def get_probe_status(self):
-        return self._probe.status
-
     def _handle_exception(self, context):
         probe_name = self._probe.__class__.__name__
         print("\nException in probe '{:s}' ({:s}):".format(probe_name, context))
@@ -123,8 +124,10 @@ class ProbeUser(object):
 
 class BlockingProbeUser(ProbeUser):
 
-    def __init__(self, probe):
+    def __init__(self, probe, after_feedback_retrieval):
         ProbeUser.__init__(self, probe)
+
+        self._after_feedback_retrieval = after_feedback_retrieval
 
         self._continue_event = threading.Event()
 
@@ -132,6 +135,39 @@ class BlockingProbeUser(ProbeUser):
         self._armed_event = threading.Event()
         self._blocking_event = threading.Event()
 
+    @property
+    def after_feedback_retrieval(self):
+        return self._after_feedback_retrieval
+
+    def stop(self):
+        ProbeUser.stop(self)
+        self.notify_error()
+
+    def notify_data_ready(self):
+        self._arm_event.set()
+
+    def wait_until_armed(self):
+        timeout = datetime.timedelta(seconds=ProbeUser.timeout)
+        start_date = datetime.datetime.now()
+
+        while not self._armed_event.is_set():
+            if timeout.total_seconds() <= 0.0:
+                self.stop()
+            if not self.is_alive() or not self._go_on():
+                break
+            self._armed_event.wait(1)
+            timeout -= start_date - datetime.datetime.now()
+
+        self._armed_event.clear()
+
+    def notify_blocking(self):
+        self._blocking_event.set()
+
+    def notify_error(self):
+        """
+        Used by the Monitor to notify the probe of an error
+        """
+        self._continue_event.set()
 
     def _clear(self):
         ProbeUser._clear(self)
@@ -143,7 +179,7 @@ class BlockingProbeUser(ProbeUser):
 
     def _wait_for_data_ready(self):
         while not self._arm_event.is_set():
-            if not self.go_on():
+            if not self._go_on():
                 return False
             self._arm_event.wait(1)
 
@@ -156,40 +192,13 @@ class BlockingProbeUser(ProbeUser):
     def _wait_for_blocking(self):
         timeout_appended = True
         while not self._blocking_event.is_set():
-            if self._continue_event.is_set() or not self.go_on():
+            if self._continue_event.is_set() or not self._go_on():
                 self._continue_event.clear()
                 timeout_appended = False
                 break
             self._blocking_event.wait(1)
         self._blocking_event.clear()
         return timeout_appended
-
-    def notify_data_ready(self):
-        self._arm_event.set()
-
-    def wait_until_armed(self):
-        timeout = datetime.timedelta(seconds=ProbeUser.timeout)
-        start_date = datetime.datetime.now()
-
-        while not self._armed_event.is_set():
-            if timeout.total_seconds() <= 0.0:
-                self.stop()
-            if not self.is_alive() or not self.go_on():
-                break
-            self._armed_event.wait(1)
-            timeout -= start_date - datetime.datetime.now()
-
-        self._armed_event.clear()
-
-    def notify_blocking(self):
-        self._blocking_event.set()
-
-    def notify_fuzzer_error(self):
-        self._continue_event.set()
-
-    def stop(self):
-        ProbeUser.stop(self)
-        self.notify_fuzzer_error()
 
     def _run(self, *args, **kwargs):
         try:
@@ -201,7 +210,7 @@ class BlockingProbeUser(ProbeUser):
         if status is not None:
             self._probe.status = status
 
-        while self.go_on():
+        while self._go_on():
 
             if not self._wait_for_data_ready():
                 continue
@@ -254,11 +263,14 @@ class Monitor(object):
     def set_data_model(self, dm):
         self._dm = dm
 
-    def add_probe(self, probe, blocking=False):
+    def add_probe(self, probe, blocking=False, after_feedback_retrieval=False):
         if probe.__class__.__name__ in self.probe_users:
             raise AlreadyExistingProbeError(probe.__class_.__name__)
 
-        self.probe_users[probe.__class__.__name__] = BlockingProbeUser(probe) if blocking else ProbeUser(probe)
+        if blocking:
+            self.probe_users[probe.__class__.__name__] = BlockingProbeUser(probe, after_feedback_retrieval)
+        else:
+            self.probe_users[probe.__class__.__name__] = ProbeUser(probe)
 
     def start(self):
         self._logger.print_console('*** Monitor is started ***\n', nl_before=False, rgb=Color.COMPONENT_START)
@@ -274,17 +286,32 @@ class Monitor(object):
     def disable_hooks(self):
         self.__enable = False
 
+    def _get_probe_ref(self, probe):
+        if isinstance(probe, type) and issubclass(probe, Probe):
+            return probe.__name__
+        elif isinstance(probe, six.string_types):
+            return probe
+        raise TypeError
 
-    def start_probe(self, probe_name):
+    def configure_probe(self, probe, *args):
+        try:
+            self.probe_users[self._get_probe_ref(probe)].configure(*args)
+        except KeyError:
+            return False
+        return True
+
+    def start_probe(self, probe):
+        probe_name = self._get_probe_ref(probe)
         if probe_name in self.probe_users:
             try:
                 self.probe_users[probe_name].start(self._dm, self._target, self._logger)
-                return True
             except:
-                pass
-        return False
+                return False
+        return True
 
-    def stop_probe(self, probe_name):
+
+    def stop_probe(self, probe):
+        probe_name = self._get_probe_ref(probe)
         if probe_name in self.probe_users:
             self.probe_users[probe_name].stop()
             self.probe_users[probe_name].join()
@@ -312,20 +339,20 @@ class Monitor(object):
                 self.fmk_ops.set_error("Timeout! Probe '%s' seems to be stuck in its 'main()' method." % probe_name,
                                        code=Error.OperationCancelled)
 
-    def get_probe_status(self, probe_name):
-        return self.probe_users[probe_name].get_probe_status()
+    def get_probe_status(self, probe):
+        return self.probe_users[self._get_probe_ref(probe)].get_probe_status()
 
-    def get_probe_delay(self, probe_name):
-        return self.probe_users[probe_name].get_probe_delay()
+    def get_probe_delay(self, probe):
+        return self.probe_users[self._get_probe_ref(probe)].get_probe_delay()
 
-    def set_probe_delay(self, probe_name, delay):
-        return self.probe_users[probe_name].set_probe_delay(delay)
+    def set_probe_delay(self, probe, delay):
+        return self.probe_users[self._get_probe_ref(probe)].set_probe_delay(delay)
 
-    def is_probe_launched(self, probe_name):
-        return self.probe_users[probe_name].is_alive()
+    def is_probe_launched(self, probe):
+        return self.probe_users[self._get_probe_ref(probe)].is_alive()
 
-    def is_probe_stuck(self, probe_name):
-        return self.probe_users[probe_name].is_stuck()
+    def is_probe_stuck(self, probe):
+        return self.probe_users[self._get_probe_ref(probe)].is_stuck()
 
     def get_probes_names(self):
         probes_names = []
@@ -334,6 +361,9 @@ class Monitor(object):
         return probes_names
 
     def do_before_sending_data(self):
+        if not self.__enable:
+            return
+
         self._target_status = None
 
         for _, probe_user in self.probe_users.items():
@@ -345,7 +375,12 @@ class Monitor(object):
                 probe_user.wait_until_armed()
 
     def do_after_sending_data(self):
-        pass
+        if not self.__enable:
+            return
+
+        for _, probe_user in self.probe_users.items():
+            if isinstance(probe_user, BlockingProbeUser) and not probe_user.after_feedback_retrieval:
+                probe_user.notify_blocking()
 
 
     # Used only in interactive session
@@ -358,14 +393,19 @@ class Monitor(object):
 
 
     def do_after_timeout(self):
+        if not self.__enable:
+            return
         for _, probe_user in self.probe_users.items():
-            if isinstance(probe_user, BlockingProbeUser):
+            if isinstance(probe_user, BlockingProbeUser) and probe_user.after_feedback_retrieval:
                 probe_user.notify_blocking()
 
     def do_on_error(self):
+        if not self.__enable:
+            return
+
         for _, probe_user in self.probe_users.items():
             if isinstance(probe_user, BlockingProbeUser):
-                probe_user.notify_fuzzer_error()
+                probe_user.notify_error()
 
     @property
     def target_status(self):
@@ -613,9 +653,9 @@ def probe(project):
     return internal_func
 
 
-def blocking_probe(project):
+def blocking_probe(project, after_feedback_retrieval=False):
     def internal_func(probe_cls):
-        project.monitor.add_probe(probe_cls(), blocking=True)
+        project.monitor.add_probe(probe_cls(), blocking=True, after_feedback_retrieval=after_feedback_retrieval)
         return probe_cls
 
     return internal_func
