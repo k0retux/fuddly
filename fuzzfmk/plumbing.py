@@ -1585,11 +1585,7 @@ class FmkPlumbing(object):
 
         # When checking target readiness, feedback timeout is taken into account indirectly
         # through the call to Target.is_target_ready_for_new_data()
-        ret = self.check_target_readiness()
-        if ret < 0:
-            cont0 = False
-        else:
-            cont0 = True
+        cont0 = self.check_target_readiness() >= 0
 
         ack_date = self.tg.get_last_target_ack_date()
         self.lg.log_target_ack_date(ack_date)
@@ -2232,20 +2228,6 @@ class FmkPlumbing(object):
 
                 self.send_data(data_list)
 
-                ret = self.check_target_readiness()
-                # Note: the condition (ret = -1) is supposed to be managed by the operator
-                if ret < 0:
-                    get_target_ack = False
-                else:
-                    get_target_ack = True
- 
-                if ret < -1:
-                    exit_operator = True
-                    if ret == -2:
-                        self.lg.log_fmk_info("Operator will shutdown because waiting has been cancelled by the user")
-                    elif ret == -3:
-                        self.lg.log_fmk_info("Operator will shutdown because of exception in user code")
-                
                 try:
                     linst = operator.do_after_all(self._exportable_fmk_ops, self.dm, self.mon, self.tg, self.lg)
                 except:
@@ -2258,9 +2240,21 @@ class FmkPlumbing(object):
                         self.__register_in_data_bank(None, dt)
 
                 if multiple_data:
-                    self.log_data(data_list, get_target_ack=get_target_ack, verbose=verbose)
+                    self.log_data(data_list, verbose=verbose)
                 else:
-                    self.log_data(data_list[0], get_target_ack=get_target_ack, verbose=verbose)
+                    self.log_data(data_list[0], verbose=verbose)
+
+                ret = self.check_target_readiness()
+                # Note: the condition (ret = -1) is supposed to be managed by the operator
+                if ret < -1:
+                    exit_operator = True
+                    if ret == -2:
+                        self.lg.log_fmk_info("Operator will shutdown because waiting has been cancelled by the user")
+                    elif ret == -3:
+                        self.lg.log_fmk_info("Operator will shutdown because of exception in user code")
+
+                ack_date = self.tg.get_last_target_ack_date()
+                self.lg.log_target_ack_date(ack_date)
 
                 # Delay introduced after logging data
                 cont = self.__delay_fuzzing()

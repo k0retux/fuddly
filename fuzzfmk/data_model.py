@@ -118,8 +118,17 @@ class Data(object):
         if self.node:
             val = self.node.to_bytes()
             self.raw = val
-
         return self.raw
+
+    def to_str(self):
+        if self.node:
+            val = self.node.to_str()
+            return val
+        else:
+            if sys.version_info[0] > 2:
+                return self.raw.decode('latin_1')
+            else:
+                return self.raw
 
     def make_unusable(self):
         self.__unusable = True
@@ -279,14 +288,10 @@ class Data(object):
         return new_data
 
     def __str__(self):
-        if self.node:
-            self.raw = self.node.to_bytes()
-        return str(self.raw)
+        return self.to_str()
 
     def __repr__(self):
-        if self.node:
-            self.raw = self.node.to_bytes()
-        return repr(self.raw)
+        return repr(self.to_bytes())
 
 
 class CallBackOps(object):

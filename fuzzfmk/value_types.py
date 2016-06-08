@@ -1759,7 +1759,7 @@ class BitField(VT_Alt):
         for v, i in zip(val_list,range(val_list_sz)):
             result += v<<(i*8)
 
-        self.drawn_val = result
+        decoded_val = result
 
         if self.padding_size != 0:
             if self.lsb_padding:
@@ -1768,7 +1768,9 @@ class BitField(VT_Alt):
                 shift = (val_list_sz-1)*8
                 result &= (((1<<(8-self.padding_size))-1)<<shift) + (1<<shift)-1
 
-        return result
+        # We return the decoded integer
+        # (1: taking padding into consideration, 2: ignoring padding)
+        return decoded_val, result
 
 
     def absorb_auto_helper(self, blob, constraints):
@@ -1787,7 +1789,7 @@ class BitField(VT_Alt):
 
         blob = blob[off:self.nb_bytes]
 
-        orig_val = self._read_value_from(blob, self.nb_bytes, self.endian, constraints)
+        self.drawn_val, orig_val = self._read_value_from(blob, self.nb_bytes, self.endian, constraints)
 
         insert_idx = 0
         first_pass = True

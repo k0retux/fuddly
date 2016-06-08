@@ -129,10 +129,7 @@ class Logger(object):
         def init_logfn(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
                        do_record=True):
             if issubclass(x.__class__, Data):
-                if sys.version_info[0] > 2:
-                    data = repr(x) if self.__export_raw_data else x.to_bytes().decode('latin-1')
-                else:
-                    data = repr(x) if self.__export_raw_data else str(x)
+                data = repr(x) if self.__export_raw_data else str(x)
                 rgb = None
                 style = None
             elif issubclass(x.__class__, bytes) and sys.version_info[0] > 2:
@@ -172,10 +169,7 @@ class Logger(object):
             def intern_func(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
                             do_record=True):
                 if issubclass(x.__class__, Data):
-                    if sys.version_info[0] > 2:
-                        data = repr(x) if self.__export_raw_data else x.to_bytes().decode('latin-1')
-                    else:
-                        data = repr(x) if self.__export_raw_data else str(x)
+                    data = repr(x) if self.__export_raw_data else str(x)
                     rgb = None
                     style = None
                 elif issubclass(x.__class__, bytes) and sys.version_info[0] > 2:
