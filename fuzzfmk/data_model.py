@@ -248,11 +248,12 @@ class Data(object):
                 cbk_ops = cbk()
             if hook not in self._pending_ops:
                 self._pending_ops[hook] = []
-            self._pending_ops[hook].append(cbk_ops.get_operations())
-            if cbk_ops.is_flag_set(CallBackOps.RemoveCB):
-                del new_cbks[cbk_id]
-            if cbk_ops.is_flag_set(CallBackOps.StopProcessingCB):
-                break
+            if cbk_ops is not None:
+                self._pending_ops[hook].append(cbk_ops.get_operations())
+                if cbk_ops.is_flag_set(CallBackOps.RemoveCB):
+                    del new_cbks[cbk_id]
+                if cbk_ops.is_flag_set(CallBackOps.StopProcessingCB):
+                    break
 
         self._callbacks[hook] = new_cbks
 

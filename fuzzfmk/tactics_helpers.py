@@ -23,12 +23,12 @@
 
 from __future__ import print_function
 
-import sys
 import random
-import threading
+import copy
 
 import fuzzfmk.data_model as fdm
 from fuzzfmk.data_model_helpers import modelwalker_inputs_handling_helper, GENERIC_ARGS
+from fuzzfmk.global_resources import *
 
 DEBUG = False
 
@@ -46,6 +46,15 @@ class Tactics(object):
         self.generators = {}
         self.disruptor_clones = {}
         self.generator_clones = {}
+
+    def register_scenarios(self, *scenarios):
+        for sc in scenarios:
+            dyn_generator_from_scenario.scenario = sc
+            dmaker_type = 'SC_' + sc.name.upper()
+            gen_cls_name = 'g_' + sc.name.lower()
+            gen = dyn_generator_from_scenario(gen_cls_name, (DynGeneratorFromScenario,), {})()
+            self.register_new_generator(gen_cls_name, gen, weight=1, dmaker_type=dmaker_type,
+                                        valid=True)
 
     def __register_new_data_maker(self, dict_var, name, obj, weight, dmaker_type, valid):
         if dmaker_type not in dict_var:
@@ -636,6 +645,82 @@ class DynGenerator(Generator):
             node.make_random(all_conf=True, recursive=True)
 
         return fdm.Data(node)
+
+
+class dyn_generator_from_scenario(type):
+    scenario = None
+    def __init__(cls, name, bases, attrs):
+        attrs['_gen_args_desc'] = DynGenerator._gen_args_desc
+        attrs['_args_desc'] = DynGenerator._args_desc
+        type.__init__(cls, name, bases, attrs)
+        cls.scenario = dyn_generator_from_scenario.scenario
+
+class DynGeneratorFromScenario(Generator):
+    scenario = None
+    _gen_args_desc = {}
+    _args_desc = {}
+
+    def setup(self, dm, user_input):
+        if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
+            return False
+        assert dm is not None
+        print(self.__class__)
+        self.__class__.scenario.set_data_model(dm)
+        self.scenario = copy.copy(self.__class__.scenario)
+        assert self.scenario._dm is not None
+        return True
+
+    def generate_data(self, dm, monitor, target):
+        self._scenario_has_changed = False
+        self.step = self.scenario.get_current_step()
+        if self.step.final:
+            self.need_reset()
+            data = fdm.Data()
+            data.make_unusable()
+            return data
+
+        self.next_step = self.scenario.get_next_step()
+
+        data = fdm.Data(self.step.node)
+        data.register_callback(self.callback_dispatcher_before_sending, hook=HOOK.before_sending)
+        data.register_callback(self.callback_dispatcher_after_sending, hook=HOOK.after_sending)
+        data.register_callback(self.callback_dispatcher_after_fbk, hook=HOOK.after_fbk)
+        return data
+
+    def _walk_scenario(self):
+        if not self._scenario_has_changed:
+            self._scenario_has_changed = True
+            self.scenario.do_next_step()
+
+    def callback_dispatcher_before_sending(self):
+        go_on = self.step.run_callback(self.next_step, hook=HOOK.before_sending)
+
+        cbkops = None
+        if self.step.feedback_timeout is not None:
+            cbkops = fdm.CallBackOps()
+            cbkops.add_operation(fdm.CallBackOps.Set_FbkTimeout,
+                                 param=self.step.feedback_timeout)
+        if go_on:
+            self._walk_scenario()
+
+        return cbkops
+
+    def callback_dispatcher_after_sending(self):
+        go_on = self.step.run_callback(self.next_step, hook=HOOK.after_sending)
+        if go_on:
+            self._walk_scenario()
+
+    def callback_dispatcher_after_fbk(self, fbk):
+        go_on = self.step.run_callback(self.next_step, fbk, hook=HOOK.after_fbk)
+
+        cbkops = fdm.CallBackOps()
+        for desc in self.step.periodic_data:
+            cbkops.add_operation(fdm.CallBackOps.Add_PeriodicData, id=id(desc),
+                                 param=desc.data, period=desc.period)
+        if go_on:
+            self._walk_scenario()
+
+        return cbkops
 
 
 class Disruptor(object):

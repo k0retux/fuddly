@@ -1,8 +1,40 @@
 from fuzzfmk.plumbing import *
 from fuzzfmk.tactics_helpers import *
 from fuzzfmk.global_resources import *
+from fuzzfmk.scenario import *
 
 tactics = Tactics()
+
+def cbk_transition1(current_step, next_step):
+    return True
+
+def cbk_transition2(current_step, next_step, fbk):
+    print("\n\n*** The next node named '{:s}' will be modified!".format(next_step.node.name))
+    next_step.node['off_gen/prefix'] = '*MODIFIED*'
+    return True
+
+switch = True
+def cbk_transition3(current_step, next_step):
+    global switch
+    if switch:
+        switch = False
+        return True
+    return False
+
+step1 = Step('exist_cond', fbk_timeout=2, cbk_before_sending=cbk_transition1,
+             periodic_data=[PeriodicData(Data('TEST Periodic\n'),period=5)])
+step2 = Step('separator', fbk_timeout=5, cbk_after_fbk=cbk_transition2)
+step3 = Step('off_gen', fbk_timeout=2, cbk_after_sending=cbk_transition3)
+
+sc1 = Scenario('ex1')
+sc1.add_steps(step1, step2, step3)
+
+step_final = FinalStep()
+
+sc2 = Scenario('ex2')
+sc2.add_steps(step1, step2, step_final)
+
+tactics.register_scenarios(sc1, sc2)
 
 
 @generator(tactics, gtype="CBK", weight=1)
