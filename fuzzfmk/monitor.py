@@ -26,7 +26,6 @@ import threading
 import datetime
 import time
 import traceback
-import six
 
 from libs.external_modules import *
 from fuzzfmk.global_resources import *
@@ -289,9 +288,10 @@ class Monitor(object):
     def _get_probe_ref(self, probe):
         if isinstance(probe, type) and issubclass(probe, Probe):
             return probe.__name__
-        elif isinstance(probe, six.string_types):
+        elif isinstance(probe, str):
             return probe
-        raise TypeError
+        else:
+            raise TypeError
 
     def configure_probe(self, probe, *args):
         try:

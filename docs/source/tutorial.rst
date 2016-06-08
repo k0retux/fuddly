@@ -2324,7 +2324,7 @@ Defining Probes
 
 Probes are special objects that have to implement the method
 :meth:`fuzzfmk.monitor.Probe.main()` which is called either continuously
-(the basic *probe*) or after each data emission (the *blocking
+(the basic *probe*) or after a specific event in the sending process (the *blocking
 probes*). In order to be started, they have to be first associated to one or more
 :class:`fuzzfmk.target.Target` of the project. Then, when such a target is started,
 ``fuddly`` take care of running the probes.
@@ -2342,7 +2342,8 @@ between two decorators:
   call to :meth:`fuzzfmk.monitor.Probe.main()` which is configurable.
 
 - ``@blocking_probe`` for probe which will be run just once after each
-  data emission.
+  data emission (default) or after each feedback retrieval. The default behaviour can be
+  changed by giving a ``after_feedback_retrieval`` parameter set to ``True``.
 
 These *decorators* have to take the reference of the project as
 parameter, in order to register them within. A really basic
@@ -2368,7 +2369,7 @@ information from the target is given here under:
 .. code-block:: python
    :linenos:
 
-   @blocking_probe(project)
+   @blocking_probe(project, after_feedback_retrieval=False)
    class health_check(Probe):
 
        def start(self, dm, target, logger):
