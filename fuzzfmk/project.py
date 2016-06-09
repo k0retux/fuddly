@@ -54,7 +54,7 @@ class Project(object):
     def register_new_operator(self, name, obj):
 
         if name in self.operators:
-            print("\n*** /!\\ ERROR: The operator name '%s' is already used\n" % name)
+            print("\n*** /!\\ ERROR: The operator name '{:s}' is already used\n".format(name))
             raise ValueError
 
         self.operators[name] = obj
@@ -62,8 +62,8 @@ class Project(object):
     def register_new_probe(self, probe, blocking=False):
         try:
             self.monitor.add_probe(probe, blocking)
-        except AlreadyExistingProbeError:
-            print("\n*** /!\\ ERROR: The probe name '%s' is already used\n" % probe.__class__.__name__)
+        except AddExistingProbeToMonitorError as e:
+            print("\n*** /!\\ ERROR: The probe name '{:s}' is already used\n".format(e.probe_name))
             raise ValueError
 
 

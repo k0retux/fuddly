@@ -276,7 +276,7 @@ class Monitor(object):
 
     def add_probe(self, probe, blocking=False, after_feedback_retrieval=False):
         if probe.__class__.__name__ in self.probe_users:
-            raise AlreadyExistingProbeError(probe.__class_.__name__)
+            raise AddExistingProbeToMonitorError(probe.__class_.__name__)
 
         if blocking:
             self.probe_users[probe.__class__.__name__] = BlockingProbeUser(probe, after_feedback_retrieval)
@@ -681,9 +681,13 @@ def blocking_probe(project, after_feedback_retrieval=False):
     return internal_func
 
 
-class AlreadyExistingProbeError(Exception):
+class AddExistingProbeToMonitorError(Exception):
+    """
+    Raised when a probe is being added a second time in a monitor
+    """
     def __init__(self, probe_name):
-        Exception.__init__(self)
         self._probe_name = probe_name
-    def __str__(self):
-        return repr(self._probe_name)
+
+    @property
+    def probe_name(self):
+        return self._probe_name
