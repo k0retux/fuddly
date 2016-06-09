@@ -449,8 +449,25 @@ class Monitor(object):
 class Probe(object):
 
     def __init__(self, delay=1.0):
-        self.status = ProbeStatus(0)
-        self.delay = delay
+        self._status = ProbeStatus(0)
+        self._delay = delay
+
+    @property
+    def status(self):
+        self._status.set_timestamp()
+        return self._status
+
+    @status.setter
+    def status(self, status):
+        self._status = status
+
+    @property
+    def delay(self):
+        return self._delay
+
+    @delay.setter
+    def delay(self, delay):
+        self._delay = delay
 
     def _start(self, dm, target, logger):
         logger.print_console("__ probe '{:s}' is starting __".format(self.__class__.__name__), nl_before=True, nl_after=True)
@@ -517,7 +534,7 @@ class Probe(object):
 class ProbeStatus(object):
 
     def __init__(self, status=None, info=None):
-        self._now = datetime.datetime.now()
+        self._now = None
         self.__status = status
         self.__private = info
 
@@ -536,6 +553,9 @@ class ProbeStatus(object):
 
     def get_private_info(self):
         return self.__private
+
+    def set_timestamp(self):
+        self._now = datetime.datetime.now()
 
     def get_timestamp(self):
         return self._now
