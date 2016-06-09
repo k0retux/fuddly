@@ -819,7 +819,8 @@ class FmkPlumbing(object):
             self.__target_dict[project] = target
             self.__logger_dict[project] = logger
             self.__stats_dict[project] = Stats(self._generic_tactics.get_generators())
-            self.__monitor_dict[project] = Monitor(project, fmk_ops=self._exportable_fmk_ops)
+            self.__monitor_dict[project] = project.monitor
+            self.__monitor_dict[project].set_fmk_ops(fmk_ops=self._exportable_fmk_ops)
             self.__monitor_dict[project].set_logger(self.__logger_dict[project])
             self.__monitor_dict[project].set_target(self.__target_dict[project])
             self._prj_dict[project].set_logger(self.__logger_dict[project])
@@ -830,7 +831,8 @@ class FmkPlumbing(object):
             self.__target_dict[project] = target
             self.__logger_dict[project] = logger
             self.__stats_dict[project] = Stats(self._generic_tactics.get_generators())
-            self.__monitor_dict[project] = Monitor(project, fmk_ops=self._exportable_fmk_ops)
+            self.__monitor_dict[project] = project.monitor
+            self.__monitor_dict[project].set_fmk_ops(fmk_ops=self._exportable_fmk_ops)
             self.__monitor_dict[project].set_logger(self.__logger_dict[project])
             self.__monitor_dict[project].set_target(self.__target_dict[project])
             self._prj_dict[project].set_logger(self.__logger_dict[project])
@@ -907,11 +909,9 @@ class FmkPlumbing(object):
                     self.mon.start()
                     for p in self.tg.probes:
                         pname, delay = self._extract_info_from_probe(p)
-                        if delay is None:
-                            self.mon.start_probe(pname)
-                        else:
+                        if delay is not None:
                             self.mon.set_probe_delay(pname, delay)
-                            self.mon.start_probe(pname)
+                        self.mon.start_probe(pname)
                     self.prj.start()
                     if self.tg.probes:
                         time.sleep(0.5)
@@ -1304,11 +1304,7 @@ class FmkPlumbing(object):
         else:
             self.__set_target(0)
 
-        ok = self.launch()
-        if not ok:
-            return False
-
-        return True
+        return self.launch()
 
 
     @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'], final_state='25_load_dm')
@@ -1456,6 +1452,7 @@ class FmkPlumbing(object):
         else:
             self._burst_countdown -= 1
 
+        self.mon.do_after_timeout()
         return ret
 
 
@@ -1466,10 +1463,6 @@ class FmkPlumbing(object):
 
     def _do_after_sending_data(self, data_list):
         self._handle_data_callbacks(data_list, hook=HOOK.after_sending)
-        # Monitor hook function after sending
-        self.mon.do_after_sending_data()
-        # Monitor hook before resuming sending data
-        self.mon.do_before_resuming_sending_data()
 
         if self.__stats_countdown < 1:
             self.__stats_countdown = 9
@@ -1583,10 +1576,7 @@ class FmkPlumbing(object):
     @EnforceOrder(accepted_states=['S2'])
     def send_data_and_log(self, data_list, original_data=None, verbose=False):
 
-        if original_data is None:
-            orig_data_provided = False
-        else:
-            orig_data_provided = True
+        orig_data_provided = original_data is not None
 
         if isinstance(data_list, Data):
             data_list = [data_list]
@@ -1601,8 +1591,7 @@ class FmkPlumbing(object):
         if self._burst_countdown == self._burst:
             # log residual just before sending new data to avoid
             # polluting feedback logs of the next emission
-            cont = self.log_target_residual_feedback()
-            if not cont:
+            if not self.log_target_residual_feedback():
                 return False
 
         self.new_transfer_preamble()
@@ -1614,6 +1603,7 @@ class FmkPlumbing(object):
                     self.__current.append((original_data[idx], dt))
                 else:
                     self.__current.append((None, dt))
+
 
         if orig_data_provided:
             for dt_orig in original_data:
@@ -1627,9 +1617,8 @@ class FmkPlumbing(object):
             self.log_data(data_list, original_data=original_data,
                           verbose=verbose)
         else:
-            orig = None if not orig_data_provided else original_data[0]
-            self.log_data(data_list[0], original_data=orig,
-                          verbose=verbose)
+            orig = original_data[0] if orig_data_provided else None
+            self.log_data(data_list[0], original_data=orig, verbose=verbose)
 
         # When checking target readiness, feedback timeout is taken into account indirectly
         # through the call to Target.is_target_ready_for_new_data()
@@ -1639,24 +1628,27 @@ class FmkPlumbing(object):
         self.lg.log_target_ack_date(ack_date)
 
         if cont0:
-            cont1 = self.__delay_fuzzing()
+            cont0 = self.__delay_fuzzing()
         else:
-            cont1 = False
+            self.mon.do_on_error()
 
-        cont3 = True
-        cont4 = True
+        self.mon.do_before_feedback_retrieval()
+
+        cont1 = True
+        cont2 = True
         # That means this is the end of a burst
         if self._burst_countdown == self._burst:
-            cont3 = self.log_target_feedback()
+            cont1 = self.log_target_feedback()
             # We handle probe feedback if any
-            cont4 = self.monitor_probes()
+            cont2 = self.monitor_probes()
             self.tg.cleanup()
 
         self._do_after_feedback_retrieval(data_list)
 
-        cont2 = self.mon.do_after_sending_and_logging_data()
+        cont3 = self.mon.do_after_sending_and_logging_data()
 
-        return cont0 and cont1 and cont2 and cont3 and cont4
+        return cont0 and cont1 and cont2 and cont3
+
 
     @EnforceOrder(accepted_states=['S2'])
     def send_data(self, data_list):
@@ -1681,9 +1673,12 @@ class FmkPlumbing(object):
                     raise ValueError
             except TargetStuck as e:
                 self.lg.log_comment("*** WARNING: Unable to send data to the target! [reason: %s]" % str(e))
-
+                self.mon.do_on_error()
             except:
                 self._handle_user_code_exception()
+                self.mon.do_on_error()
+            else:
+                self.mon.do_after_sending_data()
 
             self._do_after_sending_data(data_list)
 
@@ -2169,7 +2164,7 @@ class FmkPlumbing(object):
         self.lg.print_console('')
         for o in operators:
             self.lg.print_console(o, rgb=Color.SUBINFO)
-            desc = self.__dmaker_desc_str(self.prj.get_operator_obj(o))
+            desc = self.__dmaker_desc_str(self.prj.get_operator(o))
             self.lg.print_console(desc, limit_output=False)
 
         self.lg.print_console('\n\n', nl_before=False)
@@ -2178,7 +2173,7 @@ class FmkPlumbing(object):
     @EnforceOrder(accepted_states=['S2'])
     def launch_operator(self, name, user_input, use_existing_seed=True, verbose=False):
         
-        operator = self.prj.get_operator_obj(name)
+        operator = self.prj.get_operator(name)
         if operator is None:
             self.set_error('Invalid operator', code=Error.InvalidOp)
             return False
@@ -2186,12 +2181,14 @@ class FmkPlumbing(object):
         self.__reset_fmk_internals(reset_existing_seed=(not use_existing_seed))
 
         try:
-            if not operator._start(self._exportable_fmk_ops, self.dm, self.mon, self.tg, self.lg, user_input):
-                self.set_error("The _start() method of Operator '%s' has returned an error!" % name,
-                           code=Error.UnrecoverableError)
-                return False
+            ok = operator._start(self._exportable_fmk_ops, self.dm, self.mon, self.tg, self.lg, user_input)
         except:
             self._handle_user_code_exception('Operator has crashed during its start() method')
+            return False
+
+        if not ok:
+            self.set_error("The _start() method of Operator '%s' has returned an error!" % name,
+                           code=Error.UnrecoverableError)
             return False
 
         fmk_feedback = FmkFeedback()
@@ -2202,14 +2199,13 @@ class FmkPlumbing(object):
             try:
                 operation = operator.plan_next_operation(self._exportable_fmk_ops, self.dm,
                                                          self.mon, self.tg, self.lg, fmk_feedback)
-
-                if operation is None:
-                    self.set_error("An operator shall always return an Operation() object in its plan_next_operation()",
-                                   code=Error.UserCodeError)
-                    return False
-
             except:
                 self._handle_user_code_exception('Operator has crashed during its plan_next_operation() method')
+                return False
+
+            if operation is None:
+                self.set_error("An operator shall always return an Operation() object in its plan_next_operation()",
+                               code=Error.UserCodeError)
                 return False
 
             if operation.is_flag_set(Operation.CleanupDMakers):
@@ -2261,10 +2257,7 @@ class FmkPlumbing(object):
                 for d in data_list:
                     fmk_feedback.add_produced_data(d)
 
-                if len(data_list) == 1:
-                    multiple_data = False
-                else:
-                    multiple_data = True
+                multiple_data = len(data_list) > 1
 
                 fmk_feedback.clear_flag(FmkFeedback.NeedChange)
 
@@ -2310,10 +2303,11 @@ class FmkPlumbing(object):
                 self.lg.log_target_ack_date(ack_date)
 
                 # Delay introduced after logging data
-                cont = self.__delay_fuzzing()
-                if not cont:
+                if not self.__delay_fuzzing():
                     exit_operator = True
                     self.lg.log_fmk_info("Operator will shutdown because waiting has been cancelled by the user")
+
+                self.mon.do_before_feedback_retrieval()
 
                 # Target fbk is logged only at the end of a burst
                 if self._burst_countdown == self._burst:
@@ -2469,11 +2463,8 @@ class FmkPlumbing(object):
                         return None
 
                     assert(dmaker_obj is not None)
-                    is_gen = True if issubclass(dmaker_obj.__class__, Generator) else False
-                    if is_gen:
-                        stateful = True
-                    else:
-                        stateful = True if issubclass(dmaker_obj.__class__, StatefulDisruptor) else False
+                    is_gen = issubclass(dmaker_obj.__class__, Generator)
+                    stateful = is_gen or issubclass(dmaker_obj.__class__, StatefulDisruptor)
 
                     if not ok:
                         self.set_error(err_msg, code=Error.CloneError)
@@ -2782,10 +2773,16 @@ class FmkPlumbing(object):
         self.lg.print_console('-=[ Probes ]=-', rgb=Color.INFO, style=FontStyle.BOLD)
         self.lg.print_console('')
         for p in probes:
-            msg = "name: %s (status: %s, delay: %f) --> launched: %r" % \
+            msg = "name: %s (status: %s, delay: %f) --> " % \
                 (p, repr(self.prj.get_probe_status(p).get_status()),
-                 self.prj.get_probe_delay(p),
-                 self.prj.is_probe_launched(p))
+                 self.prj.get_probe_delay(p))
+
+            if self.prj.is_probe_stuck(p):
+                msg += "stuck"
+            elif self.prj.is_probe_launched(p):
+                msg += "launched"
+            else:
+                msg += "stopped"
             self.lg.print_console(msg, rgb=Color.SUBINFO)
 
         self.lg.print_console('\n', nl_before=False)
