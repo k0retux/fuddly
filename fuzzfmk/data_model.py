@@ -305,12 +305,14 @@ class CallBackOps(object):
     Add_PeriodicData = 10  # ask for sending periodically a data
     Del_PeriodicData = 11  # ask for stopping a periodic sending
     Set_FbkTimeout = 21  # set the time duration for feedback gathering for the further data sending
+    Replace_Data = 30  # replace the data by another one
 
     def __init__(self, remove_cb=False, stop_process_cb=False):
         self.instr = {
             CallBackOps.Add_PeriodicData: {},
             CallBackOps.Del_PeriodicData: [],
             CallBackOps.Set_FbkTimeout: None,
+            CallBackOps.Replace_Data: None
         }
         self.flags = {
             CallBackOps.RemoveCB: remove_cb,
@@ -337,6 +339,9 @@ class CallBackOps(object):
             self.instr[instr_type].append(id)
         elif instr_type == CallBackOps.Set_FbkTimeout:
             assert isinstance(param, int)
+            self.instr[instr_type] = param
+        elif instr_type == CallBackOps.Replace_Data:
+            # param is an opaque
             self.instr[instr_type] = param
         else:
             raise ValueError('Unrecognized Instruction Type')

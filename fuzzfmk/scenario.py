@@ -24,24 +24,48 @@
 import copy
 
 from fuzzfmk.global_resources import *
+from fuzzfmk.data_model import Data
 
 class PeriodicData(object):
     def __init__(self, data, period=None):
         self.data = data
         self.period = period
 
+
+class DataProcess(object):
+    def __init__(self, process, seed=None):
+        self.process = process
+        self.seed = seed
+        self.outcomes = None
+
+    def __copy__(self):
+        new_datap = type(self)(self.process, seed=copy.copy(self.seed))
+        assert new_datap.outcomes is None
+        return new_datap
+
 class Step(object):
 
-    def __init__(self, node_name=None, final=False, fbk_timeout=None,
+    def __init__(self, data_desc=None, final=False, fbk_timeout=None,
                  cbk_before_sending=None, cbk_after_sending=None, cbk_after_fbk=None,
                  periodic_data=None):
-        if not final:
-            assert node_name is not None
-        self._dm = None
-        self._node_name = node_name
-        self._node = None
+
         self.final = final
         self.feedback_timeout = fbk_timeout
+
+        if not final:
+            assert data_desc is not None
+            self._data_desc = data_desc
+            if isinstance(data_desc, str):
+                self._node_name = data_desc
+            else:
+                self._node_name = None
+        else:
+            self._node_name = None
+            self._data_desc = None
+
+        self._dm = None
+        self._scenario_env = None
+        self._node = None
         self._periodic_data = periodic_data
         self._callbacks = {}
         if cbk_before_sending:
@@ -54,6 +78,9 @@ class Step(object):
     def set_data_model(self, dm):
         self._dm = dm
 
+    def set_scenario_env(self, env):
+        self._scenario_env = env
+
     def register_callback(self, callback, hook=HOOK.after_fbk):
         assert isinstance(hook, HOOK)
         self._callbacks[hook] = callback
@@ -61,21 +88,37 @@ class Step(object):
     def run_callback(self, next_step, feedback=None, hook=HOOK.after_fbk):
         assert isinstance(hook, HOOK)
         if hook not in self._callbacks:
-            return None
+            return True
 
         cbk = self._callbacks[hook]
         if hook == HOOK.after_fbk:
-            go_on = cbk(self, next_step, feedback)
+            go_on = cbk(self, self._scenario_env, next_step, feedback)
         else:
-            go_on = cbk(self, next_step)
+            go_on = cbk(self, self._scenario_env, next_step)
 
         return go_on
 
     @property
     def node(self):
-        if self._node is None:
-            self._node = self._dm.get_data(self._node_name)
+        if isinstance(self._data_desc, DataProcess) and self._data_desc.outcomes is not None:
+            # that means that a data creation process has been registered and it has been
+            # carried out
+            if self._data_desc.outcomes.node:
+                return self._data_desc.outcomes.node
+            else:
+                return None
+        elif self._node_name is None:
+            # that means that a data creation process has been registered and will be
+            # carried out by the framework through a callback
+            return None
+        else:
+            if self._node is None:
+                self._node = self._dm.get_data(self._node_name)
         return self._node
+
+    @property
+    def data_desc(self):
+        return self._data_desc
 
     @property
     def periodic_data(self):
@@ -88,23 +131,26 @@ class Step(object):
     def __copy__(self):
         new_cbks = copy.copy(self._callbacks)
         new_dm = self._dm
-        new_step = type(self)(node_name=self._node_name, final=self.final,
+        new_env = None
+        new_step = type(self)(data_desc=copy.copy(self._data_desc), final=self.final,
                               fbk_timeout=self.feedback_timeout,
                               periodic_data=copy.copy(self._periodic_data))
-        new_step.__dict__.update(self.__dict__)
         new_step._node = None
         new_step._callbacks = new_cbks
         new_step._dm = new_dm
-
+        new_step._scenario_env = new_env
         return new_step
 
 
 class FinalStep(Step):
-    def __init__(self, node_name=None, final=False, fbk_timeout=None,
+    def __init__(self, data_desc=None, final=False, fbk_timeout=None,
                  cbk_before_sending=None, cbk_after_sending=None, cbk_after_fbk=None,
                  periodic_data=None):
         Step.__init__(self, final=True)
 
+
+class ScenarioEnv(object):
+    pass
 
 class Scenario(object):
 
@@ -113,6 +159,7 @@ class Scenario(object):
         self._dm = None
         self._step_list = []
         self._current_step_idx = 0
+        self._env = ScenarioEnv()
 
     def set_data_model(self, dm):
         self._dm = dm
@@ -121,7 +168,9 @@ class Scenario(object):
 
     def add_steps(self, *steps):
         for st in steps:
-            self._step_list.append(copy.copy(st))
+            st_copy = copy.copy(st)
+            st_copy.set_scenario_env(self._env)
+            self._step_list.append(st_copy)
 
     def do_next_step(self):
         self._current_step_idx += 1
@@ -142,12 +191,16 @@ class Scenario(object):
         orig_dm = self._dm
         orig_step_list = self._step_list
         orig_curr_step_idx = self._current_step_idx
+        orig_env = self._env
         new_sc = type(self)(self.name)
-        new_sc.__dict__.update(self.__dict__)
+        # new_sc.__dict__.update(self.__dict__)
+        new_sc._env = copy.copy(orig_env)
         new_sc._dm = orig_dm
         new_sc._step_list = []
         new_sc._current_step_idx = orig_curr_step_idx
         for step in orig_step_list:
-            new_sc._step_list.append(copy.copy(step))
+            new_step = copy.copy(step)
+            new_step.set_scenario_env(new_sc._env)
+            new_sc._step_list.append(new_step)
 
         return new_sc

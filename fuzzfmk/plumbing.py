@@ -49,6 +49,7 @@ from fuzzfmk.monitor import *
 from fuzzfmk.operator_helpers import *
 from fuzzfmk.project import *
 from fuzzfmk.error_handling import *
+from fuzzfmk.scenario import *
 
 import fuzzfmk.generic_data_makers
 
@@ -1461,7 +1462,7 @@ class FmkPlumbing(object):
     def _do_before_sending_data(self, data_list):
         # Monitor hook function before sending
         self.mon.do_before_sending_data()
-        self._handle_data_callbacks(data_list, hook=HOOK.before_sending)
+        return self._handle_data_callbacks(data_list, hook=HOOK.before_sending)
 
     def _do_after_sending_data(self, data_list):
         self._handle_data_callbacks(data_list, hook=HOOK.after_sending)
@@ -1480,6 +1481,7 @@ class FmkPlumbing(object):
         self._handle_data_callbacks(data_list, hook=HOOK.after_fbk)
 
     def _handle_data_callbacks(self, data_list, hook):
+        new_data_list = []
         for data in data_list:
             try:
                 if hook == HOOK.after_fbk:
@@ -1489,14 +1491,56 @@ class FmkPlumbing(object):
             except:
                 self._handle_user_code_exception("A callback (called at {!r}) has crashed! (associated to "
                                                  "Data object '{!r}')".format(hook, data))
+                new_data_list.append(data)
                 continue
 
+            new_data = data
             pending_ops = data.pending_callback_ops(hook=hook)
             if pending_ops:
                 for op in pending_ops:
                     fbk_timeout = op[CallBackOps.Set_FbkTimeout]
                     if fbk_timeout is not None:
                         self.set_feedback_timeout(fbk_timeout)
+
+                    data_alt = op[CallBackOps.Replace_Data]
+                    if data_alt is None:
+                        new_data = data
+                    elif isinstance(data_alt, Data):
+                        new_data = data_alt
+                    elif isinstance(data_alt, DataProcess):
+                        ok = True
+                        if isinstance(data_alt.seed, str):
+                            try:
+                                seed = self.dm.get_data(data_alt.seed)
+                            except:
+                                self.set_error(msg='Cannot create the seed from the '
+                                                   'name {:s}!'.format(data_alt.seed),
+                                               code=Error.UserCodeError)
+                                ok = False
+                            else:
+                                seed = Data(seed)
+                        else:
+                            seed = data_alt.seed
+
+                        if ok:
+                            new_data = self.get_data(data_alt.process, data_orig=seed)
+                            data_alt.outcomes = new_data
+                            if new_data is None:
+                                self.set_error(msg='Data creation process has failed!',
+                                               code=Error.UserCodeError)
+                                new_data = data
+                        else:
+                            new_data = data
+
+                    elif isinstance(data_alt, str):
+                        try:
+                            new_data = self.dm.get_data(data_alt)
+                        except:
+                            self.set_error(msg='Cannot retrieved a data called {:s}!'.format(data_alt),
+                                           code=Error.UserCodeError)
+                            new_data = data
+                    else:
+                        raise TypeError
 
                     for id in op[CallBackOps.Del_PeriodicData]:
                         self._unregister_task(id)
@@ -1507,6 +1551,10 @@ class FmkPlumbing(object):
                                        error_func=self._handle_user_code_exception,
                                        cleanup_func=functools.partial(self._unregister_task, id))
                         self._register_task(id, task)
+
+            new_data_list.append(new_data)
+
+        return new_data_list
 
 
     def _unregister_task(self, id):
@@ -1550,13 +1598,6 @@ class FmkPlumbing(object):
         else:
             raise ValueError
 
-        if self._wkspace_enabled:
-            for idx, dt in zip(range(len(data_list)), data_list):
-                if orig_data_provided:
-                    self.__current.append((original_data[idx], dt))
-                else:
-                    self.__current.append((None, dt))
-
         if self._burst_countdown == self._burst:
             # log residual just before sending new data to avoid
             # polluting feedback logs of the next emission
@@ -1565,7 +1606,14 @@ class FmkPlumbing(object):
                 return False
 
         self.new_transfer_preamble()
-        self.send_data(data_list)
+        data_list = self.send_data(data_list)
+
+        if self._wkspace_enabled:
+            for idx, dt in zip(range(len(data_list)), data_list):
+                if orig_data_provided:
+                    self.__current.append((original_data[idx], dt))
+                else:
+                    self.__current.append((None, dt))
 
         if orig_data_provided:
             for dt_orig in original_data:
@@ -1622,7 +1670,7 @@ class FmkPlumbing(object):
                                code=Error.DataInvalid)
                 return
 
-            self._do_before_sending_data(data_list)
+            data_list = self._do_before_sending_data(data_list)
 
             try:
                 if len(data_list) == 1:
@@ -1638,6 +1686,8 @@ class FmkPlumbing(object):
                 self._handle_user_code_exception()
 
             self._do_after_sending_data(data_list)
+
+        return data_list
 
 
     @EnforceOrder(accepted_states=['S2'])
@@ -1975,8 +2025,11 @@ class FmkPlumbing(object):
             for dmaker_type, data_maker_name, user_input in data_makers_history:
                 if first_pass:
                     first_pass = False
-                    gen_type_initial, gen_name, gen_ui = data.get_initial_dmaker()
-                    if gen_ui:
+                    gen_info = data.get_initial_dmaker()
+                    gen_type_initial, gen_name, gen_ui = (None, None, None) if gen_info is None else gen_info
+                    if gen_type_initial is None:
+                        msg = "|- data id: %r | no generator (seed was used)"
+                    elif gen_ui:
                         msg = "|- data id: %r | generator type: %s | generator name: %s | User input: %s" % \
                             (data_id, gen_type_initial, gen_name, gen_ui)
                     else:
@@ -2226,7 +2279,7 @@ class FmkPlumbing(object):
 
                 self.new_transfer_preamble()
 
-                self.send_data(data_list)
+                data_list = self.send_data(data_list)
 
                 try:
                     linst = operator.do_after_all(self._exportable_fmk_ops, self.dm, self.mon, self.tg, self.lg)
@@ -2714,14 +2767,6 @@ class FmkPlumbing(object):
         if not ok and error_on_init:
             self.set_error('The specified data maker is not initialized!',
                            code=Error.FmkWarning)
-
-    @EnforceOrder(accepted_states=['S2'])
-    def register_data_to_wkspace(self, data):
-        if not self._wkspace_enabled:
-            self.set_error('Workspace is disabled!', code=Error.CommandError)
-            return
-
-        self.__current.append((None, data, None))
 
     @EnforceOrder(accepted_states=['S2'])
     def set_disruptor_weight(self, dmaker_type, data_maker_name, weight):

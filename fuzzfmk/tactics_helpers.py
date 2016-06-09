@@ -663,11 +663,8 @@ class DynGeneratorFromScenario(Generator):
     def setup(self, dm, user_input):
         if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
             return False
-        assert dm is not None
-        print(self.__class__)
         self.__class__.scenario.set_data_model(dm)
         self.scenario = copy.copy(self.__class__.scenario)
-        assert self.scenario._dm is not None
         return True
 
     def generate_data(self, dm, monitor, target):
@@ -681,7 +678,12 @@ class DynGeneratorFromScenario(Generator):
 
         self.next_step = self.scenario.get_next_step()
 
-        data = fdm.Data(self.step.node)
+        if self.step.node is None:
+            # in this case a data creation process is provided to the framework through the
+            # callback HOOK.before_sending
+            data = fdm.Data('')
+        else:
+            data = fdm.Data(self.step.node)
         data.register_callback(self.callback_dispatcher_before_sending, hook=HOOK.before_sending)
         data.register_callback(self.callback_dispatcher_after_sending, hook=HOOK.after_sending)
         data.register_callback(self.callback_dispatcher_after_fbk, hook=HOOK.after_fbk)
@@ -695,11 +697,14 @@ class DynGeneratorFromScenario(Generator):
     def callback_dispatcher_before_sending(self):
         go_on = self.step.run_callback(self.next_step, hook=HOOK.before_sending)
 
-        cbkops = None
+        cbkops = fdm.CallBackOps()
         if self.step.feedback_timeout is not None:
-            cbkops = fdm.CallBackOps()
             cbkops.add_operation(fdm.CallBackOps.Set_FbkTimeout,
                                  param=self.step.feedback_timeout)
+        if self.step.node is None:
+            cbkops.add_operation(fdm.CallBackOps.Replace_Data,
+                                 param=self.step.data_desc)
+
         if go_on:
             self._walk_scenario()
 
