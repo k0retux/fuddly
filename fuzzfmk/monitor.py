@@ -597,6 +597,8 @@ class ProbePID_SSH(Probe):
         if not ssh_module:
             raise eh.UnavailablePythonModule('Python module for SSH is not available!')
 
+        Probe.__init__(self)
+
     def _get_pid(self, logger):
         ssh_in, ssh_out, ssh_err = \
             self.client.exec_command(self.ssh_command_pattern.format(self.process_name))
