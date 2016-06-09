@@ -228,7 +228,6 @@ class BlockingProbeUser(ProbeUser):
                 self._probe.arm(*args, **kwargs)
             except:
                 self._handle_exception('during arm()')
-                self._notify_armed()
                 return
 
             self._notify_armed()
@@ -454,12 +453,12 @@ class Probe(object):
 
     @property
     def status(self):
-        self._status.set_timestamp()
         return self._status
 
     @status.setter
     def status(self, status):
         self._status = status
+        self._status.set_timestamp()
 
     @property
     def delay(self):
