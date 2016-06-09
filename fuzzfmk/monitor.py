@@ -52,7 +52,7 @@ class ProbeUser(object):
     def stop(self):
         self._stop_event.set()
 
-    def notify_stop(self):
+    def ack_probe_stop(self):
         """
         Used by the Monitor to notify that it has seen that the probe has stopped
         """
@@ -133,6 +133,7 @@ class BlockingProbeUser(ProbeUser):
         self._arm_event = threading.Event()
         self._armed_event = threading.Event()
         self._blocking_event = threading.Event()
+        self._resume_fuzzing_event = threading.Event()
 
     @property
     def after_feedback_retrieval(self):
@@ -145,19 +146,24 @@ class BlockingProbeUser(ProbeUser):
     def notify_data_ready(self):
         self._arm_event.set()
 
-    def wait_until_armed(self):
-        timeout = datetime.timedelta(seconds=ProbeUser.timeout)
+    def _wait_for_event(self, event):
         start_date = datetime.datetime.now()
 
-        while not self._armed_event.is_set():
-            if timeout.total_seconds() <= 0.0:
+        while not event.is_set():
+            if (datetime.datetime.now() - start_date).total_seconds() >= ProbeUser.timeout:
                 self.stop()
             if not self.is_alive() or not self._go_on():
                 break
-            self._armed_event.wait(1)
-            timeout -= start_date - datetime.datetime.now()
+            event.wait(1)
 
+
+    def wait_until_armed(self):
+        self._wait_for_event(self._armed_event)
         self._armed_event.clear()
+        self._resume_fuzzing_event.clear()
+
+    def wait_until_ready(self):
+        self._wait_for_event(self._resume_fuzzing_event)
 
     def notify_blocking(self):
         self._blocking_event.set()
@@ -174,7 +180,7 @@ class BlockingProbeUser(ProbeUser):
         self._armed_event.clear()
         self._blocking_event.clear()
         self._continue_event.clear()
-
+        self._resume_fuzzing_event.clear()
 
     def _wait_for_data_ready(self):
         while not self._arm_event.is_set():
@@ -193,11 +199,15 @@ class BlockingProbeUser(ProbeUser):
         while not self._blocking_event.is_set():
             if self._continue_event.is_set() or not self._go_on():
                 self._continue_event.clear()
+                self._lets_fuzz_continue()
                 timeout_appended = False
                 break
             self._blocking_event.wait(1)
         self._blocking_event.clear()
         return timeout_appended
+
+    def _lets_fuzz_continue(self):
+        self._resume_fuzzing_event.set()
 
     def _run(self, *args, **kwargs):
         try:
@@ -231,6 +241,8 @@ class BlockingProbeUser(ProbeUser):
             except:
                 self._handle_exception('during main()')
                 return
+
+            self._lets_fuzz_continue()
 
         try:
             self._probe._stop(*args, **kwargs)
@@ -319,7 +331,7 @@ class Monitor(object):
                 self.fmk_ops.set_error("Timeout! Probe '%s' seems to be stuck in its 'main()' method." % probe_name,
                                        code=Error.OperationCancelled)
             else:
-                self.probe_users[probe_name].notify_stop()
+                self.probe_users[probe_name].ack_probe_stop()
         else:
             self.fmk_ops.set_error("Probe '%s' does not exist" % probe_name,
                                    code=Error.CommandError)
@@ -334,7 +346,7 @@ class Monitor(object):
             timeout -= start_date - datetime.datetime.now()
             probe_user.join(timeout.total_seconds())
             if not probe_user.is_alive():
-                probe_user.notify_stop()
+                probe_user.ack_probe_stop()
             else:
                 self.fmk_ops.set_error("Timeout! Probe '%s' seems to be stuck in its 'main()' method." % probe_name,
                                        code=Error.OperationCancelled)
@@ -398,6 +410,14 @@ class Monitor(object):
         for _, probe_user in self.probe_users.items():
             if isinstance(probe_user, BlockingProbeUser) and probe_user.after_feedback_retrieval:
                 probe_user.notify_blocking()
+
+    def do_before_feedback_retrieval(self):
+        if not self.__enable:
+            return
+
+        for _, probe_user in self.probe_users.items():
+            if isinstance(probe_user, BlockingProbeUser):
+                probe_user.wait_until_ready()
 
     def do_on_error(self):
         if not self.__enable:

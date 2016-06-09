@@ -1632,6 +1632,8 @@ class FmkPlumbing(object):
         else:
             self.mon.do_on_error()
 
+        self.mon.do_before_feedback_retrieval()
+
         cont1 = True
         cont2 = True
         # That means this is the end of a burst
@@ -2304,6 +2306,8 @@ class FmkPlumbing(object):
                 if not self.__delay_fuzzing():
                     exit_operator = True
                     self.lg.log_fmk_info("Operator will shutdown because waiting has been cancelled by the user")
+
+                self.mon.do_before_feedback_retrieval()
 
                 # Target fbk is logged only at the end of a burst
                 if self._burst_countdown == self._burst:
