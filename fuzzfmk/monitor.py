@@ -52,20 +52,23 @@ class ProbeUser(object):
     def stop(self):
         self._stop_event.set()
 
-    def ack_probe_stop(self):
-        """
-        Used by the Monitor to notify that it has seen that the probe has stopped
-        """
-        self._stop_event.clear()
-
     def join(self, timeout):
         if self.is_alive():
             self._thread.join(ProbeUser.timeout if timeout is None else timeout)
+
+            if self.is_alive():
+                raise ProbeTimeoutError(self.__class__.__name__, timeout, ["start()", "arm()", "main()", "stop()"])
+
+            self._stop_event.clear()
 
     def is_alive(self):
         return self._thread is not None and self._thread.is_alive()
 
     def is_stuck(self):
+        """
+        Tells if the probe has to be considered stuck by the monitor:
+        i.e. if it is really stuck or if its stop was not acknowledged
+        """
         return self.is_alive() and not self._go_on()
 
     def get_probe_delay(self):
@@ -84,9 +87,7 @@ class ProbeUser(object):
         self._stop_event.wait(delay)
 
     def _clear(self):
-        """
-        Clear all events
-        """
+        """ Clear all events """
         self._stop_event.clear()
 
     def _run(self, *args, **kwargs):
@@ -141,37 +142,50 @@ class BlockingProbeUser(ProbeUser):
 
     def stop(self):
         ProbeUser.stop(self)
-        self.notify_error()
+        self._continue_event.set()
 
     def notify_data_ready(self):
         self._arm_event.set()
 
-    def _wait_for_event(self, event):
-        start_date = datetime.datetime.now()
+    def _wait_for_probe(self, event, timeout=None):
+        """
+        Wait for the probe to trigger a specific event
+        """
+        timeout = ProbeUser.timeout if timeout is None else timeout
+        start = datetime.datetime.now()
 
         while not event.is_set():
-            if (datetime.datetime.now() - start_date).total_seconds() >= ProbeUser.timeout:
+            if (datetime.datetime.now() - start).total_seconds() >= timeout:
                 self.stop()
+                raise ProbeTimeoutError(self.__class__.__name__, timeout)
             if not self.is_alive() or not self._go_on():
                 break
             event.wait(1)
 
 
-    def wait_until_armed(self):
-        self._wait_for_event(self._armed_event)
-        self._armed_event.clear()
-        self._resume_fuzzing_event.clear()
+    def wait_until_armed(self, timeout=None):
+        try:
+            self._wait_for_probe(self._armed_event, timeout)
+        except ProbeTimeoutError as e:
+            e.blocking_methods = ["start()", "arm()"]
+            raise
+        finally:
+            self._armed_event.clear()
+            self._resume_fuzzing_event.clear()
 
-    def wait_until_ready(self):
-        self._wait_for_event(self._resume_fuzzing_event)
+    def wait_until_ready(self, timeout=None):
+        try:
+            self._wait_for_probe(self._resume_fuzzing_event, timeout)
+        except ProbeTimeoutError as e:
+            e.blocking_methods = ["main()"]
+            raise e
+
 
     def notify_blocking(self):
         self._blocking_event.set()
 
     def notify_error(self):
-        """
-        Used by the Monitor to notify the probe of an error
-        """
+        """ Informs the probe of an error """
         self._continue_event.set()
 
     def _clear(self):
@@ -183,6 +197,12 @@ class BlockingProbeUser(ProbeUser):
         self._resume_fuzzing_event.clear()
 
     def _wait_for_data_ready(self):
+        """
+        Wait on a request to arm
+        Returns:
+            True if the arm event happened
+            False if a stop was asked or an error was signaled
+        """
         while not self._arm_event.is_set():
             if not self._go_on():
                 return False
@@ -195,6 +215,12 @@ class BlockingProbeUser(ProbeUser):
         self._armed_event.set()
 
     def _wait_for_blocking(self):
+        """
+        Wait on a blocking event: data send or timeout
+        Returns:
+            True if the blocking event happened
+            False if a stop was asked or an error was signaled
+        """
         timeout_appended = True
         while not self._blocking_event.is_set():
             if self._continue_event.is_set() or not self._go_on():
@@ -325,30 +351,17 @@ class Monitor(object):
         probe_name = self._get_probe_ref(probe)
         if probe_name in self.probe_users:
             self.probe_users[probe_name].stop()
-            self.probe_users[probe_name].join()
-            if self.probe_users[probe_name].is_alive():
-                self.fmk_ops.set_error("Timeout! Probe '%s' seems to be stuck in its 'main()' method." % probe_name,
-                                       code=Error.OperationCancelled)
-            else:
-                self.probe_users[probe_name].ack_probe_stop()
+            self._wait_for_probes(ProbeUser, ProbeUser.join, [probe])
         else:
-            self.fmk_ops.set_error("Probe '%s' does not exist" % probe_name,
+            self.fmk_ops.set_error("Probe '{:s}' does not exist".format(probe_name),
                                    code=Error.CommandError)
 
     def stop_all_probes(self):
         for _, probe_user in self.probe_users.items():
             probe_user.stop()
 
-        timeout = datetime.timedelta(seconds=ProbeUser.timeout)
-        start_date = datetime.datetime.now()
-        for probe_name, probe_user in self.probe_users.items():
-            timeout -= start_date - datetime.datetime.now()
-            probe_user.join(timeout.total_seconds())
-            if not probe_user.is_alive():
-                probe_user.ack_probe_stop()
-            else:
-                self.fmk_ops.set_error("Timeout! Probe '%s' seems to be stuck in its 'main()' method." % probe_name,
-                                       code=Error.OperationCancelled)
+        self._wait_for_probes(ProbeUser, ProbeUser.join)
+
 
     def get_probe_status(self, probe):
         return self.probe_users[self._get_probe_ref(probe)].get_probe_status()
@@ -371,19 +384,40 @@ class Monitor(object):
             probes_names.append(probe_name)
         return probes_names
 
+    def _wait_for_probes(self, probe_class, probe_wait_method, probes=None):
+        """
+        Wait for probes to trigger a specific event
+        Args:
+            probe_wait_method (method): name of the probe's method that will be used to wait
+            probes (list of ProbeRunner): probes to wait for. If None all probes will be concerned
+        """
+        probes = self.probe_users.items() if probes is None else probes
+
+        timeout = datetime.timedelta(seconds=ProbeUser.timeout)
+        start = datetime.datetime.now()
+
+        for _, probe_user in probes:
+            if isinstance(probe_user, probe_class):
+                timeout -= start - datetime.datetime.now()
+                try:
+                    probe_wait_method(probe_user, timeout.total_seconds())
+                except ProbeTimeoutError as e:
+                    self.fmk_ops.set_error("Timeout! Probe '{:s}' seems to be stuck in one of these methods: {:s}"
+                                           .format(e.probe_name, e.blocking_methods),
+                                           code=Error.OperationCancelled)
+
     def do_before_sending_data(self):
         if not self.__enable:
             return
-
         self._target_status = None
+
 
         for _, probe_user in self.probe_users.items():
             if isinstance(probe_user, BlockingProbeUser):
                 probe_user.notify_data_ready()
 
-        for _, probe_user in self.probe_users.items():
-            if isinstance(probe_user, BlockingProbeUser):
-                probe_user.wait_until_armed()
+        self._wait_for_probes(BlockingProbeUser, BlockingProbeUser.wait_until_armed)
+
 
     def do_after_sending_data(self):
         if not self.__enable:
@@ -394,15 +428,6 @@ class Monitor(object):
                 probe_user.notify_blocking()
 
 
-    # Used only in interactive session
-    # (not called during Operator execution)
-    def do_after_sending_and_logging_data(self):
-        if not self.__enable:
-            return True
-
-        return self.is_target_ok()
-
-
     def do_after_timeout(self):
         if not self.__enable:
             return
@@ -410,13 +435,21 @@ class Monitor(object):
             if isinstance(probe_user, BlockingProbeUser) and probe_user.after_feedback_retrieval:
                 probe_user.notify_blocking()
 
+
     def do_before_feedback_retrieval(self):
         if not self.__enable:
             return
 
-        for _, probe_user in self.probe_users.items():
-            if isinstance(probe_user, BlockingProbeUser):
-                probe_user.wait_until_ready()
+        self._wait_for_probes(BlockingProbeUser, BlockingProbeUser.wait_until_ready)
+
+
+    # Used only in interactive session
+    # (not called during Operator execution)
+    def do_after_sending_and_logging_data(self):
+        if not self.__enable:
+            return True
+
+        return self.is_target_ok()
 
     def do_on_error(self):
         if not self.__enable:
@@ -712,3 +745,38 @@ class AddExistingProbeToMonitorError(Exception):
     @property
     def probe_name(self):
         return self._probe_name
+
+class ProbeTimeoutError(Exception):
+    """
+    Raised when a probe is considered stuck
+    """
+    def __init__(self, probe_name, timeout, blocking_methods=None):
+        """
+        Args:
+            probe_name (str): name of the probe where the timeout occurred
+            timeout (float): time the probe waited before its timeout
+            blocking_methods (list of str): list of probe_methods where the timeout may have happened
+        """
+        self._probe_name = probe_name
+        self._timeout = timeout
+        self._blocking_methods = [] if blocking_methods is None else blocking_methods
+
+    @property
+    def probe_name(self):
+        return self._probe_name
+
+    @property
+    def timeout(self):
+        return self._timeout
+
+    @property
+    def blocking_methods(self):
+        str = ""
+        for i in range(0, len(self._blocking_methods)):
+            str += self._blocking_methods[i]
+            str += ", " if i != len(self._blocking_methods) - 1 else ""
+        return str
+
+    @blocking_methods.setter
+    def blocking_methods(self, blocking_methods):
+        self._blocking_methods = blocking_methods
