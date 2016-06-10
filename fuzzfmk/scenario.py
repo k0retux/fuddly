@@ -47,7 +47,7 @@ class Step(object):
 
     def __init__(self, data_desc=None, final=False, fbk_timeout=None,
                  cbk_before_sending=None, cbk_after_sending=None, cbk_after_fbk=None,
-                 periodic_data=None):
+                 set_periodic=None, clear_periodic=None):
 
         self.final = final
         self.feedback_timeout = fbk_timeout
@@ -66,7 +66,14 @@ class Step(object):
         self._dm = None
         self._scenario_env = None
         self._node = None
-        self._periodic_data = periodic_data
+        self._periodic_data = set_periodic
+        if clear_periodic:
+            self._periodic_data_to_remove = []
+            for p in clear_periodic:
+                self._periodic_data_to_remove.append(id(p))
+        else:
+            self._periodic_data_to_remove = None
+
         self._callbacks = {}
         if cbk_before_sending:
             self._callbacks[HOOK.before_sending] = cbk_before_sending
@@ -88,7 +95,7 @@ class Step(object):
     def run_callback(self, next_step, feedback=None, hook=HOOK.after_fbk):
         assert isinstance(hook, HOOK)
         if hook not in self._callbacks:
-            return True
+            return None
 
         cbk = self._callbacks[hook]
         if hook == HOOK.after_fbk:
@@ -121,21 +128,33 @@ class Step(object):
         return self._data_desc
 
     @property
-    def periodic_data(self):
+    def periodic_to_set(self):
         if self._periodic_data is None:
             return
         else:
             for pdata in self._periodic_data:
                 yield pdata
 
+    @property
+    def periodic_to_clear(self):
+        if self._periodic_data_to_remove is None:
+            return
+        else:
+            for pid in self._periodic_data_to_remove:
+                yield pid
+
     def __copy__(self):
+        # PeriodicData should not be copied, only the list that contains them.
+        # Indeed their ids (memory addr) are used for registration and cancellation
         new_cbks = copy.copy(self._callbacks)
         new_dm = self._dm
         new_env = None
+        new_periodic_to_rm = copy.copy(self._periodic_data_to_remove)
         new_step = type(self)(data_desc=copy.copy(self._data_desc), final=self.final,
                               fbk_timeout=self.feedback_timeout,
-                              periodic_data=copy.copy(self._periodic_data))
+                              set_periodic=copy.copy(self._periodic_data))
         new_step._node = None
+        new_step._periodic_data_to_remove = new_periodic_to_rm
         new_step._callbacks = new_cbks
         new_step._dm = new_dm
         new_step._scenario_env = new_env
@@ -145,7 +164,7 @@ class Step(object):
 class FinalStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None,
                  cbk_before_sending=None, cbk_after_sending=None, cbk_after_fbk=None,
-                 periodic_data=None):
+                 set_periodic=None):
         Step.__init__(self, final=True)
 
 
@@ -160,6 +179,7 @@ class Scenario(object):
         self._step_list = []
         self._current_step_idx = 0
         self._env = ScenarioEnv()
+        self._periodic_ids = []
 
     def set_data_model(self, dm):
         self._dm = dm
@@ -168,6 +188,8 @@ class Scenario(object):
 
     def add_steps(self, *steps):
         for st in steps:
+            for periodic in st.periodic_to_set:
+                self._periodic_ids.append(id(periodic))
             st_copy = copy.copy(st)
             st_copy.set_scenario_env(self._env)
             self._step_list.append(st_copy)
@@ -187,17 +209,24 @@ class Scenario(object):
         else:
             return self._step_list[next_idx]
 
+    @property
+    def periodic_to_clear(self):
+        for pid in self._periodic_ids:
+            yield pid
+
     def __copy__(self):
         orig_dm = self._dm
         orig_step_list = self._step_list
         orig_curr_step_idx = self._current_step_idx
         orig_env = self._env
+        orig_periodic_ids = copy.copy(self._periodic_ids)
         new_sc = type(self)(self.name)
         # new_sc.__dict__.update(self.__dict__)
         new_sc._env = copy.copy(orig_env)
         new_sc._dm = orig_dm
         new_sc._step_list = []
         new_sc._current_step_idx = orig_curr_step_idx
+        new_sc._periodic_ids = orig_periodic_ids
         for step in orig_step_list:
             new_step = copy.copy(step)
             new_step.set_scenario_env(new_sc._env)

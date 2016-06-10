@@ -18,15 +18,21 @@ def cbk_transition2(env, current_step, next_step, fbk):
 
 def cbk_transition3(env, current_step, next_step):
     if hasattr(env, 'switch'):
+        print('\n**test1')
         return False
     else:
+        print('\n**test2')
         env.switch = False
         return True
 
+periodic1 = PeriodicData(Data('1st Periodic (5s)\n'), period=5)
+periodic2 = PeriodicData(Data('2nd Periodic (3s)\n'), period=3)
+
 step1 = Step('exist_cond', fbk_timeout=2, cbk_before_sending=cbk_transition1,
-             periodic_data=[PeriodicData(Data('TEST Periodic\n'),period=5)])
+             set_periodic=[periodic1, periodic2])
 step2 = Step('separator', fbk_timeout=5, cbk_after_fbk=cbk_transition2)
-step3 = Step('off_gen', fbk_timeout=2, cbk_after_sending=cbk_transition3)
+step3 = Step('off_gen', fbk_timeout=2, cbk_after_sending=cbk_transition3,
+             clear_periodic=[periodic1, periodic2])
 
 sc1 = Scenario('ex1')
 sc1.add_steps(step1, step2, step3)

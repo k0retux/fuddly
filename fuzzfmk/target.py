@@ -847,7 +847,15 @@ class NetworkTarget(Target):
 
         def _check_and_handle_obsolete_socket(socket, error=None, error_list=None):
             # print('\n*** NOTE: Remove obsolete socket {!r}'.format(socket))
-            epobj.unregister(socket)
+            try:
+                epobj.unregister(socket)
+            except ValueError as e:
+                # in python3, file descriptor == -1 witnessed (!?)
+                print('\n*** ERROR: ' + str(e))
+            except socket.error as serr:
+                # in python2, bad file descriptor (errno 9) witnessed
+                print('\n*** ERROR: ' + str(serr))
+
             self._server_thread_lock.acquire()
             if socket in self._last_client_sock2hp.keys():
                 if error is not None:

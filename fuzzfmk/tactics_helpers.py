@@ -668,11 +668,13 @@ class DynGeneratorFromScenario(Generator):
         return True
 
     def generate_data(self, dm, monitor, target):
+        self._go_on = None
         self._scenario_has_changed = False
         self.step = self.scenario.get_current_step()
         if self.step.final:
             self.need_reset()
             data = fdm.Data()
+            data.register_callback(self._callback_cleanup_periodic, hook=HOOK.after_dmaker_production)
             data.make_unusable()
             return data
 
@@ -684,20 +686,24 @@ class DynGeneratorFromScenario(Generator):
             data = fdm.Data('')
         else:
             data = fdm.Data(self.step.node)
-        data.register_callback(self.callback_dispatcher_before_sending, hook=HOOK.before_sending)
-        data.register_callback(self.callback_dispatcher_after_sending, hook=HOOK.after_sending)
-        data.register_callback(self.callback_dispatcher_after_fbk, hook=HOOK.after_fbk)
+        data.register_callback(self._callback_dispatcher_before_sending, hook=HOOK.before_sending)
+        data.register_callback(self._callback_dispatcher_after_sending, hook=HOOK.after_sending)
+        data.register_callback(self._callback_dispatcher_after_fbk, hook=HOOK.after_fbk)
         return data
 
-    def _walk_scenario(self):
-        if not self._scenario_has_changed:
-            self._scenario_has_changed = True
-            self.scenario.do_next_step()
+    def _callback_cleanup_periodic(self):
+        cbkops = fdm.CallBackOps()
+        for periodic_id in self.scenario.periodic_to_clear:
+            cbkops.add_operation(fdm.CallBackOps.Del_PeriodicData, id=periodic_id)
+        return cbkops
 
-    def callback_dispatcher_before_sending(self):
-        go_on = self.step.run_callback(self.next_step, hook=HOOK.before_sending)
+    def _callback_dispatcher_before_sending(self):
+        self._go_on = self.step.run_callback(self.next_step, hook=HOOK.before_sending)
 
         cbkops = fdm.CallBackOps()
+        for periodic_id in self.step.periodic_to_clear:
+            cbkops.add_operation(fdm.CallBackOps.Del_PeriodicData, id=periodic_id)
+
         if self.step.feedback_timeout is not None:
             cbkops.add_operation(fdm.CallBackOps.Set_FbkTimeout,
                                  param=self.step.feedback_timeout)
@@ -705,25 +711,35 @@ class DynGeneratorFromScenario(Generator):
             cbkops.add_operation(fdm.CallBackOps.Replace_Data,
                                  param=self.step.data_desc)
 
-        if go_on:
-            self._walk_scenario()
-
         return cbkops
 
-    def callback_dispatcher_after_sending(self):
+    def _callback_dispatcher_after_sending(self):
         go_on = self.step.run_callback(self.next_step, hook=HOOK.after_sending)
-        if go_on:
-            self._walk_scenario()
+        if self._go_on is None:
+            self._go_on = go_on
+        elif go_on is None:
+            pass
+        else:
+            # continuing (True) is the priority behavior
+            self._go_on = self._go_on or go_on
 
-    def callback_dispatcher_after_fbk(self, fbk):
+    def _callback_dispatcher_after_fbk(self, fbk):
         go_on = self.step.run_callback(self.next_step, fbk, hook=HOOK.after_fbk)
+        if self._go_on is None and go_on is None:
+            self._go_on = True
+        elif self._go_on is None:
+            self._go_on = go_on
+        elif go_on is None:
+            pass
+        else:
+            self._go_on = self._go_on or go_on
 
         cbkops = fdm.CallBackOps()
-        for desc in self.step.periodic_data:
+        for desc in self.step.periodic_to_set:
             cbkops.add_operation(fdm.CallBackOps.Add_PeriodicData, id=id(desc),
                                  param=desc.data, period=desc.period)
-        if go_on:
-            self._walk_scenario()
+        if self._go_on:
+            self.scenario.do_next_step()
 
         return cbkops
 

@@ -266,6 +266,9 @@ class Data(object):
         else:
             return None
 
+    def copy_callback_from(self, data):
+        self._callbacks = copy.copy(data._callbacks)
+
     def __copy__(self):
         new_data = type(self)()
         new_data.__dict__.update(self.__dict__)

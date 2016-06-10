@@ -1473,6 +1473,9 @@ class FmkPlumbing(object):
     def _do_after_feedback_retrieval(self, data_list):
         self._handle_data_callbacks(data_list, hook=HOOK.after_fbk)
 
+    def _do_after_dmaker_data_retrieval(self, data):
+        self._handle_data_callbacks([data], hook=HOOK.after_dmaker_production)
+
     def _handle_data_callbacks(self, data_list, hook):
         new_data_list = []
         for data in data_list:
@@ -1534,6 +1537,8 @@ class FmkPlumbing(object):
                             new_data = data
                     else:
                         raise TypeError
+
+                    new_data.copy_callback_from(data)
 
                     for id in op[CallBackOps.Del_PeriodicData]:
                         self._unregister_task(id)
@@ -2601,6 +2606,7 @@ class FmkPlumbing(object):
                     else:
                         raise ValueError
 
+                    self._do_after_dmaker_data_retrieval(data)
 
                     if invalid_data:
                         unrecoverable_error = True

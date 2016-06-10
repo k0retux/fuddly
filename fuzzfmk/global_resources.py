@@ -141,6 +141,7 @@ class Error(object):
         return self._code_info[self.code]['name']
 
 class HOOK(Enum):
-    before_sending = 1
-    after_sending = 2
-    after_fbk = 3
+    after_dmaker_production = 1
+    before_sending = 2
+    after_sending = 3
+    after_fbk = 4
