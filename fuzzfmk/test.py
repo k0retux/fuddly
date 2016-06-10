@@ -1978,6 +1978,7 @@ if mock_module and ddt_module:
 
             def side_effect(*args, **kwargs):
                 execution_times.append(datetime.datetime.now())
+                return mock.Mock()
 
             self.probe.main.side_effect = side_effect
 
