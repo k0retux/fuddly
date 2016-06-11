@@ -25,6 +25,7 @@ from __future__ import print_function
 
 import random
 import copy
+import collections
 
 import fuzzfmk.data_model as fdm
 from fuzzfmk.data_model_helpers import modelwalker_inputs_handling_helper, GENERIC_ARGS
@@ -668,17 +669,14 @@ class DynGeneratorFromScenario(Generator):
         return True
 
     def generate_data(self, dm, monitor, target):
-        self._go_on = None
-        self._scenario_has_changed = False
-        self.step = self.scenario.get_current_step()
+        self._go_on = collections.OrderedDict()
+        self.step = self.scenario.current_step
         if self.step.final:
             self.need_reset()
             data = fdm.Data()
             data.register_callback(self._callback_cleanup_periodic, hook=HOOK.after_dmaker_production)
             data.make_unusable()
             return data
-
-        self.next_step = self.scenario.get_next_step()
 
         if self.step.node is None:
             # in this case a data creation process is provided to the framework through the
@@ -698,7 +696,8 @@ class DynGeneratorFromScenario(Generator):
         return cbkops
 
     def _callback_dispatcher_before_sending(self):
-        self._go_on = self.step.run_callback(self.next_step, hook=HOOK.before_sending)
+        for tr in self.step.transitions:
+            self._go_on[tr] = tr.run_callback(tr.step, hook=HOOK.before_sending)
 
         cbkops = fdm.CallBackOps()
         for periodic_id in self.step.periodic_to_clear:
@@ -714,32 +713,42 @@ class DynGeneratorFromScenario(Generator):
         return cbkops
 
     def _callback_dispatcher_after_sending(self):
-        go_on = self.step.run_callback(self.next_step, hook=HOOK.after_sending)
-        if self._go_on is None:
-            self._go_on = go_on
-        elif go_on is None:
-            pass
-        else:
-            # continuing (True) is the priority behavior
-            self._go_on = self._go_on or go_on
+        for tr in self.step.transitions:
+            go_on = tr.run_callback(tr.step, hook=HOOK.after_sending)
+
+            if self._go_on[tr] is None:
+                self._go_on[tr] = go_on
+            elif go_on is None:
+                pass
+            else:
+                # going to the next step (True) is the priority behavior
+                self._go_on[tr] = self._go_on[tr] or go_on
 
     def _callback_dispatcher_after_fbk(self, fbk):
-        go_on = self.step.run_callback(self.next_step, fbk, hook=HOOK.after_fbk)
-        if self._go_on is None and go_on is None:
-            self._go_on = True
-        elif self._go_on is None:
-            self._go_on = go_on
-        elif go_on is None:
-            pass
-        else:
-            self._go_on = self._go_on or go_on
+        for tr in self.step.transitions:
+            go_on = tr.run_callback(tr.step, hook=HOOK.after_fbk)
+
+            if self._go_on[tr] is None and go_on is None:
+                self._go_on[tr] = True
+            elif self._go_on[tr] is None:
+                self._go_on[tr] = go_on
+            elif go_on is None:
+                pass
+            else:
+                self._go_on[tr] = self._go_on[tr] or go_on
 
         cbkops = fdm.CallBackOps()
         for desc in self.step.periodic_to_set:
             cbkops.add_operation(fdm.CallBackOps.Add_PeriodicData, id=id(desc),
                                  param=desc.data, period=desc.period)
-        if self._go_on:
-            self.scenario.do_next_step()
+
+        for tr in self.step.transitions:
+            if self._go_on[tr]:
+                self.scenario.set_anchor(tr.step)
+                break
+        else:
+            # we stay on the current step
+            pass
 
         return cbkops
 

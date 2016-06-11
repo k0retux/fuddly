@@ -18,10 +18,8 @@ def cbk_transition2(env, current_step, next_step, fbk):
 
 def cbk_transition3(env, current_step, next_step):
     if hasattr(env, 'switch'):
-        print('\n**test1')
         return False
     else:
-        print('\n**test2')
         env.switch = False
         return True
 
@@ -29,22 +27,46 @@ periodic1 = PeriodicData(DataProcess(process=[('C',None,UI(nb=1)),'tTYPE'], seed
                          period=5)
 periodic2 = PeriodicData(Data('2nd Periodic (3s)\n'), period=3)
 
-step1 = Step('exist_cond', fbk_timeout=2, cbk_before_sending=cbk_transition1,
-             set_periodic=[periodic1, periodic2])
-step2 = Step('separator', fbk_timeout=5, cbk_after_fbk=cbk_transition2)
-step3 = Step('off_gen', fbk_timeout=2, cbk_after_sending=cbk_transition3,
-             clear_periodic=[periodic1, periodic2])
+### SCENARIO 1 ###
+step1 = Step('exist_cond', fbk_timeout=2, set_periodic=[periodic1, periodic2])
+step2 = Step('separator', fbk_timeout=5)
+step3 = Step('off_gen', fbk_timeout=2, clear_periodic=[periodic1, periodic2])
+
+step1_copy = copy.copy(step1) # for scenario 2
+step2_copy = copy.copy(step2) # for scenario 2
+
+step1.connect_to(step2, cbk_before_sending=cbk_transition1)
+step2.connect_to(step3, cbk_after_fbk=cbk_transition2)
+step3.connect_to(step1, cbk_after_sending=cbk_transition3)
 
 sc1 = Scenario('ex1')
-sc1.add_steps(step1, step2, step3)
+sc1.set_anchor(step1)
 
-step4 = Step(DataProcess(process=['tTYPE#2'],seed='shape'))
+### SCENARIO 2 ###
+step4 = Step(DataProcess(process=['tTYPE#2'], seed='shape'))
 step_final = FinalStep()
 
-sc2 = Scenario('ex2')
-sc2.add_steps(step1, step2, step4, step_final)
+step1_copy.connect_to(step2_copy, cbk_before_sending=cbk_transition1)
+step2_copy.connect_to(step4, cbk_after_fbk=cbk_transition2)
+step4.connect_to(step_final)
 
-tactics.register_scenarios(sc1, sc2)
+sc2 = Scenario('ex2')
+sc2.set_anchor(step1_copy)
+
+### SCENARIO 3 ###
+anchor = Step('exist_cond')
+option1 = Step(Data('Option 1'))
+option2 = Step(Data('Option 2'))
+
+anchor.connect_to(option1, cbk_after_sending=cbk_transition3)
+anchor.connect_to(option2)
+option1.connect_to(anchor)
+option2.connect_to(anchor)
+
+sc3 = Scenario('ex3')
+sc3.set_anchor(anchor)
+
+tactics.register_scenarios(sc1, sc2, sc3)
 
 
 @generator(tactics, gtype="CBK", weight=1)

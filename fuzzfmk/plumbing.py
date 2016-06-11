@@ -289,6 +289,9 @@ class FmkPlumbing(object):
     def is_not_ok(self):
         return self.error
 
+    def is_ok(self):
+        return not self.error
+
     def __reset_fmk_internals(self, reset_existing_seed=True):
         self.cleanup_all_dmakers(reset_existing_seed)
         # Warning: fuzz delay is not set to 0 by default in order to have a time frame
@@ -1533,8 +1536,8 @@ class FmkPlumbing(object):
                 else:
                     data.run_callbacks(feedback=None, hook=hook)
             except:
-                self._handle_user_code_exception("A callback (called at {!r}) has crashed! (associated to "
-                                                 "Data object '{!r}')".format(hook, data))
+                self._handle_user_code_exception("A Data callback (called at {!r}) has crashed! "
+                                                 "(Data object internal ID: {:d})".format(hook, id(data)))
                 new_data_list.append(data)
                 continue
 
@@ -1555,10 +1558,13 @@ class FmkPlumbing(object):
                             data_tmp.copy_callback_from(data)
                             new_data = data_tmp
 
-                    for id in op[CallBackOps.Del_PeriodicData]:
-                        self._unregister_task(id)
+                    for idx in op[CallBackOps.Del_PeriodicData]:
+                        self._unregister_task(idx)
+                        if self.is_ok():
+                            self.lg.log_fmk_info('Removal of a periodic data sending '
+                                                 '(Task ID #{!s})'.format(idx))
 
-                    for id, obj in op[CallBackOps.Add_PeriodicData].items():
+                    for idx, obj in op[CallBackOps.Add_PeriodicData].items():
                         data_desc, period = obj
                         if isinstance(data_desc, DataProcess):
                             # In this case each time we send the periodic we walk through the process
@@ -1570,10 +1576,12 @@ class FmkPlumbing(object):
                             func = self.tg.send_data_sync
 
                         if periodic_data is not None:
-                            task = FmkTask(id, func, periodic_data, period=period,
+                            task = FmkTask(idx, func, periodic_data, period=period,
                                            error_func=self._handle_user_code_exception,
-                                           cleanup_func=functools.partial(self._unregister_task, id))
-                            self._register_task(id, task)
+                                           cleanup_func=functools.partial(self._unregister_task, idx))
+                            self._register_task(idx, task)
+                            if self.is_ok():
+                                self.lg.log_fmk_info('A periodic data sending has been registered (Task ID #{!s})'.format(idx))
                         else:
                             self.set_error(msg='Data descriptor is incorrect!',
                                            code=Error.UserCodeError)
@@ -1596,7 +1604,7 @@ class FmkPlumbing(object):
                 self._task_list[id].stop()
                 del self._task_list[id]
             else:
-                self.set_error('ERROR: Task with ID #{!s} does not exist. '
+                self.set_error('ERROR: Task ID #{!s} does not exist. '
                                'Cannot unregister.'.format(id, code=Error.UserCodeError))
 
     def _register_task(self, id, task):
@@ -1612,6 +1620,10 @@ class FmkPlumbing(object):
         for id in self._task_list:
             self._task_list[id].stop()
         self._task_list = {}
+
+    @EnforceOrder(accepted_states=['S2'])
+    def stop_all_tasks(self):
+        self._cleanup_tasks()
 
     @EnforceOrder(accepted_states=['S2'])
     def send_data_and_log(self, data_list, original_data=None, verbose=False):
@@ -1779,7 +1791,8 @@ class FmkPlumbing(object):
                 data_id = dt.get_data_id()
                 # if data_id is not None, the data has been created from fmkDB
                 # because new data have not a data_id yet at this point in the code.
-                if data_id is not None:
+                # if data_id is not None:
+                if dt.from_fmkdb:
                     num = 1
                     self.lg.log_dmaker_step(num)
                     self.lg.log_generator_info(gen_type_initial, gen_name, None, data_id=data_id)
@@ -1995,6 +2008,7 @@ class FmkPlumbing(object):
             data = Data(content)
             data.set_data_id(data_id)
             data.set_initial_dmaker((str(dtype), str(dmk_name), None))
+            data.from_fmkdb = True
             if dm_name != Database.DEFAULT_DM_NAME:
                 dm = self.get_data_model_by_name(dm_name)
                 data.set_data_model(dm)
@@ -2809,6 +2823,18 @@ class FmkPlumbing(object):
         self._tactics.set_generator_weight(generator_type, data_maker_name, weight)
 
     @EnforceOrder(accepted_states=['S2'])
+    def show_tasks(self):
+        self.lg.print_console('-=[ Running Tasks ]=-', rgb=Color.INFO, style=FontStyle.BOLD)
+        self.lg.print_console('')
+        if not self._task_list:
+            self.lg.print_console('No task is currently running', rgb=Color.SUBINFO)
+        else:
+            for tk_id, tk in self._task_list.items():
+                msg = "Task ID #{!s}".format(tk_id)
+                self.lg.print_console(msg, rgb=Color.SUBINFO)
+        self.lg.print_console('\n', nl_before=False)
+
+    @EnforceOrder(accepted_states=['S2'])
     def show_probes(self):
         probes = self.prj.get_probes()
         self.lg.print_console('-=[ Probes ]=-', rgb=Color.INFO, style=FontStyle.BOLD)
@@ -3378,10 +3404,16 @@ class FmkShell(cmd.Cmd):
     def do_launch(self, line):
         '''Launch the loaded project by starting every needed components'''
         self.__error = True
-
         self.fz.launch()
-
         self.__error = False
+        return False
+
+    def do_show_tasks(self, line):
+        self.fz.show_tasks()
+        return False
+
+    def do_stop_all_tasks(self, line):
+        self.fz.stop_all_tasks()
         return False
 
     def do_launch_probe(self, line):

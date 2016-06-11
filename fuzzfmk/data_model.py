@@ -49,10 +49,10 @@ class Data(object):
     def __init__(self, data=None):
         self.node = None
         self.raw = None
+
         self.__type = None
         self._dm = None
         self._data_id = None
-
         self._recordable = False
         self.__unusable = False
 
@@ -65,6 +65,9 @@ class Data(object):
         self._pending_ops = {}
 
         self._history = None
+
+        # This attribute is set to True when the Data content has been retrieved from the fmkDB
+        self.from_fmkdb = False
 
         if data is None:
             return
