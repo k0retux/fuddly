@@ -134,7 +134,7 @@ class BlockingProbeUser(ProbeUser):
         self._arm_event = threading.Event()
         self._armed_event = threading.Event()
         self._blocking_event = threading.Event()
-        self._resume_fuzzing_event = threading.Event()
+        self._probe_status_event = threading.Event()
 
     @property
     def after_feedback_retrieval(self):
@@ -171,11 +171,11 @@ class BlockingProbeUser(ProbeUser):
             raise
         finally:
             self._armed_event.clear()
-            self._resume_fuzzing_event.clear()
+            self._probe_status_event.clear()
 
     def wait_until_ready(self, timeout=None):
         try:
-            self._wait_for_probe(self._resume_fuzzing_event, timeout)
+            self._wait_for_probe(self._probe_status_event, timeout)
         except ProbeTimeoutError as e:
             e.blocking_methods = ["main()"]
             raise e
@@ -194,7 +194,7 @@ class BlockingProbeUser(ProbeUser):
         self._armed_event.clear()
         self._blocking_event.clear()
         self._continue_event.clear()
-        self._resume_fuzzing_event.clear()
+        self._probe_status_event.clear()
 
     def _wait_for_data_ready(self):
         """
@@ -214,9 +214,9 @@ class BlockingProbeUser(ProbeUser):
     def _notify_armed(self):
         self._armed_event.set()
 
-    def _wait_for_blocking(self):
+    def _wait_for_fmk_sync(self):
         """
-        Wait on a blocking event: data send or timeout
+        Wait on a blocking event: data sent or timeout
         Returns:
             True if the blocking event happened
             False if a stop was asked or an error was signaled
@@ -225,15 +225,15 @@ class BlockingProbeUser(ProbeUser):
         while not self._blocking_event.is_set():
             if self._continue_event.is_set() or not self._go_on():
                 self._continue_event.clear()
-                self._lets_fuzz_continue()
+                self._notify_status_retrieved()
                 timeout_appended = False
                 break
             self._blocking_event.wait(1)
         self._blocking_event.clear()
         return timeout_appended
 
-    def _lets_fuzz_continue(self):
-        self._resume_fuzzing_event.set()
+    def _notify_status_retrieved(self):
+        self._probe_status_event.set()
 
     def _run(self, *args, **kwargs):
         try:
@@ -258,7 +258,7 @@ class BlockingProbeUser(ProbeUser):
 
             self._notify_armed()
 
-            if not self._wait_for_blocking():
+            if not self._wait_for_fmk_sync():
                 continue
 
             try:
@@ -267,7 +267,7 @@ class BlockingProbeUser(ProbeUser):
                 self._handle_exception('during main()')
                 return
 
-            self._lets_fuzz_continue()
+            self._notify_status_retrieved()
 
         try:
             self._probe._stop(*args, **kwargs)
@@ -351,7 +351,7 @@ class Monitor(object):
         probe_name = self._get_probe_ref(probe)
         if probe_name in self.probe_users:
             self.probe_users[probe_name].stop()
-            self._wait_for_probes(ProbeUser, ProbeUser.join, [probe])
+            self._wait_for_specific_probes(ProbeUser, ProbeUser.join, [probe])
         else:
             self.fmk_ops.set_error("Probe '{:s}' does not exist".format(probe_name),
                                    code=Error.CommandError)
@@ -360,7 +360,7 @@ class Monitor(object):
         for _, probe_user in self.probe_users.items():
             probe_user.stop()
 
-        self._wait_for_probes(ProbeUser, ProbeUser.join)
+        self._wait_for_specific_probes(ProbeUser, ProbeUser.join)
 
 
     def get_probe_status(self, probe):
@@ -384,7 +384,7 @@ class Monitor(object):
             probes_names.append(probe_name)
         return probes_names
 
-    def _wait_for_probes(self, probe_class, probe_wait_method, probes=None):
+    def _wait_for_specific_probes(self, probe_class, probe_wait_method, probes=None):
         """
         Wait for probes to trigger a specific event
         Args:
@@ -416,7 +416,7 @@ class Monitor(object):
             if isinstance(probe_user, BlockingProbeUser):
                 probe_user.notify_data_ready()
 
-        self._wait_for_probes(BlockingProbeUser, BlockingProbeUser.wait_until_armed)
+        self._wait_for_specific_probes(BlockingProbeUser, BlockingProbeUser.wait_until_armed)
 
 
     def do_after_sending_data(self):
@@ -440,7 +440,7 @@ class Monitor(object):
         if not self.__enable:
             return
 
-        self._wait_for_probes(BlockingProbeUser, BlockingProbeUser.wait_until_ready)
+        self._wait_for_specific_probes(BlockingProbeUser, BlockingProbeUser.wait_until_ready)
 
 
     # Used only in interactive session

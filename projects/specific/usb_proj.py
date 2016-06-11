@@ -194,7 +194,7 @@ class Op1(Operator):
             if self.orig_data[idx] is None:
                 op.add_instruction(instr)
             else:
-                op.add_instruction(None, orig_data=self.orig_data[idx])
+                op.add_instruction(None, seed=self.orig_data[idx])
 
 
         self.count += 1

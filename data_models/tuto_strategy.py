@@ -25,7 +25,8 @@ def cbk_transition3(env, current_step, next_step):
         env.switch = False
         return True
 
-periodic1 = PeriodicData(Data('1st Periodic (5s)\n'), period=5)
+periodic1 = PeriodicData(DataProcess(process=[('C',None,UI(nb=1)),'tTYPE'], seed='enc'),
+                         period=5)
 periodic2 = PeriodicData(Data('2nd Periodic (3s)\n'), period=3)
 
 step1 = Step('exist_cond', fbk_timeout=2, cbk_before_sending=cbk_transition1,
@@ -37,7 +38,7 @@ step3 = Step('off_gen', fbk_timeout=2, cbk_after_sending=cbk_transition3,
 sc1 = Scenario('ex1')
 sc1.add_steps(step1, step2, step3)
 
-step4 = Step(DataProcess(process=['tTYPE'],seed='shape'))
+step4 = Step(DataProcess(process=['tTYPE#2'],seed='shape'))
 step_final = FinalStep()
 
 sc2 = Scenario('ex2')

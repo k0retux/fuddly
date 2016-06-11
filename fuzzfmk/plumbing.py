@@ -1476,7 +1476,55 @@ class FmkPlumbing(object):
     def _do_after_dmaker_data_retrieval(self, data):
         self._handle_data_callbacks([data], hook=HOOK.after_dmaker_production)
 
+    def _handle_data_desc(self, data_desc):
+        if isinstance(data_desc, Data):
+            data = data_desc
+
+        elif isinstance(data_desc, DataProcess):
+            if isinstance(data_desc.seed, str):
+                try:
+                    seed = self.dm.get_data(data_desc.seed)
+                except:
+                    self.set_error(msg='Cannot create the seed from the '
+                                       'name {:s}!'.format(data_desc.seed),
+                                   code=Error.UserCodeError)
+                    return None
+                else:
+                    seed = Data(seed)
+            else:
+                if not isinstance(data_desc.seed, Data):
+                    self.set_error(msg='DataProcess object contains an unrecognized seed type!',
+                                   code=Error.UserCodeError)
+                    return None
+
+                seed = data_desc.seed
+
+            data = self.get_data(data_desc.process, data_orig=seed)
+            data_desc.outcomes = data
+            if data is None:
+                self.set_error(msg='Data creation process has failed!',
+                               code=Error.UserCodeError)
+                return None
+
+        elif isinstance(data_desc, str):
+            try:
+                node = self.dm.get_data(data_desc)
+            except:
+                self.set_error(msg='Cannot retrieved a data called {:s}!'.format(data_desc),
+                               code=Error.UserCodeError)
+                return None
+            else:
+                data = Data(node)
+        else:
+            self.set_error(
+                msg='Data descriptor type is not recognized {!s}!'.format(type(data_desc)),
+                code=Error.UserCodeError)
+            return None
+
+        return data
+
     def _handle_data_callbacks(self, data_list, hook):
+
         new_data_list = []
         for data in data_list:
             try:
@@ -1491,69 +1539,56 @@ class FmkPlumbing(object):
                 continue
 
             new_data = data
+
             pending_ops = data.pending_callback_ops(hook=hook)
             if pending_ops:
                 for op in pending_ops:
+
                     fbk_timeout = op[CallBackOps.Set_FbkTimeout]
                     if fbk_timeout is not None:
                         self.set_feedback_timeout(fbk_timeout)
 
-                    data_alt = op[CallBackOps.Replace_Data]
-                    if data_alt is None:
-                        new_data = data
-                    elif isinstance(data_alt, Data):
-                        new_data = data_alt
-                    elif isinstance(data_alt, DataProcess):
-                        ok = True
-                        if isinstance(data_alt.seed, str):
-                            try:
-                                seed = self.dm.get_data(data_alt.seed)
-                            except:
-                                self.set_error(msg='Cannot create the seed from the '
-                                                   'name {:s}!'.format(data_alt.seed),
-                                               code=Error.UserCodeError)
-                                ok = False
-                            else:
-                                seed = Data(seed)
-                        else:
-                            seed = data_alt.seed
-
-                        if ok:
-                            new_data = self.get_data(data_alt.process, data_orig=seed)
-                            data_alt.outcomes = new_data
-                            if new_data is None:
-                                self.set_error(msg='Data creation process has failed!',
-                                               code=Error.UserCodeError)
-                                new_data = data
-                        else:
-                            new_data = data
-
-                    elif isinstance(data_alt, str):
-                        try:
-                            new_data = self.dm.get_data(data_alt)
-                        except:
-                            self.set_error(msg='Cannot retrieved a data called {:s}!'.format(data_alt),
-                                           code=Error.UserCodeError)
-                            new_data = data
-                    else:
-                        raise TypeError
-
-                    new_data.copy_callback_from(data)
+                    data_desc = op[CallBackOps.Replace_Data]
+                    if data_desc is not None:
+                        data_tmp = self._handle_data_desc(data_desc)
+                        if data_tmp is not None:
+                            data_tmp.copy_callback_from(data)
+                            new_data = data_tmp
 
                     for id in op[CallBackOps.Del_PeriodicData]:
                         self._unregister_task(id)
 
                     for id, obj in op[CallBackOps.Add_PeriodicData].items():
-                        data, period = obj
-                        task = FmkTask(id, self.tg.send_data_sync, data, period=period,
-                                       error_func=self._handle_user_code_exception,
-                                       cleanup_func=functools.partial(self._unregister_task, id))
-                        self._register_task(id, task)
+                        data_desc, period = obj
+                        if isinstance(data_desc, DataProcess):
+                            # In this case each time we send the periodic we walk through the process
+                            # (thus, sending a new data each time)
+                            periodic_data = data_desc
+                            func = self._send_periodic
+                        else:
+                            periodic_data = self._handle_data_desc(data_desc)
+                            func = self.tg.send_data_sync
+
+                        if periodic_data is not None:
+                            task = FmkTask(id, func, periodic_data, period=period,
+                                           error_func=self._handle_user_code_exception,
+                                           cleanup_func=functools.partial(self._unregister_task, id))
+                            self._register_task(id, task)
+                        else:
+                            self.set_error(msg='Data descriptor is incorrect!',
+                                           code=Error.UserCodeError)
 
             new_data_list.append(new_data)
 
         return new_data_list
 
+    def _send_periodic(self, data_desc):
+        data = self._handle_data_desc(data_desc)
+        if data is not None:
+            self.tg.send_data_sync(data)
+        else:
+            self.set_error(msg="Data descriptor handling returned 'None'!", code=Error.UserCodeError)
+            raise TypeError
 
     def _unregister_task(self, id):
         with self._task_list_lock:

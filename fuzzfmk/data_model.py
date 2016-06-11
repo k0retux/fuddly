@@ -335,7 +335,7 @@ class CallBackOps(object):
 
     def add_operation(self, instr_type, id=None, param=None, period=None):
         if instr_type == CallBackOps.Add_PeriodicData:
-            assert id is not None and param is not None and isinstance(param, Data)
+            assert id is not None and param is not None
             self.instr[instr_type][id] = (param, period)
         elif instr_type == CallBackOps.Del_PeriodicData:
             assert id is not None

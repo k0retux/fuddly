@@ -169,7 +169,17 @@ class FinalStep(Step):
 
 
 class ScenarioEnv(object):
-    pass
+
+    def __init__(self):
+        self._dm = None
+
+    def set_data_model(self, dm):
+        self._dm = dm
+
+    @property
+    def dm(self):
+        return self._dm
+
 
 class Scenario(object):
 
@@ -183,6 +193,7 @@ class Scenario(object):
 
     def set_data_model(self, dm):
         self._dm = dm
+        self._env.set_data_model(dm)
         for st in self._step_list:
             st.set_data_model(self._dm)
 
