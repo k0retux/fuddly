@@ -4,7 +4,7 @@ Generic Probes
 **************
 
 The following section present some generic probes that inherit from
-:class:`fuzzfmk.monitor.Probe`. They can be used within your project
+:class:`framework.monitor.Probe`. They can be used within your project
 files (refer to :ref:`tuto:project`) by only inheriting from them
 and providing the expected parameters,
 
@@ -12,7 +12,7 @@ ProbePID_SSH
 ============
 
 Reference:
-  :class:`fuzzfmk.monitor.ProbePID_SSH`
+  :class:`framework.monitor.ProbePID_SSH`
 
 Description:
   This generic probe enables you to monitor a process PID through an

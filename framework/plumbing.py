@@ -39,24 +39,24 @@ import signal
 
 from libs.external_modules import *
 
-from fuzzfmk.database import Database
-from fuzzfmk.tactics_helpers import *
-from fuzzfmk.data_model import *
-from fuzzfmk.data_model_helpers import DataModel
-from fuzzfmk.target import *
-from fuzzfmk.logger import *
-from fuzzfmk.monitor import *
-from fuzzfmk.operator_helpers import *
-from fuzzfmk.project import *
-from fuzzfmk.error_handling import *
-from fuzzfmk.scenario import *
+from framework.database import Database
+from framework.tactics_helpers import *
+from framework.data_model import *
+from framework.data_model_helpers import DataModel
+from framework.target import *
+from framework.logger import *
+from framework.monitor import *
+from framework.operator_helpers import *
+from framework.project import *
+from framework.error_handling import *
+from framework.scenario import *
 
-import fuzzfmk.generic_data_makers
+import framework.generic_data_makers
 
 import data_models
 import projects
 
-from fuzzfmk.global_resources import *
+from framework.global_resources import *
 from libs.utils import *
 
 sys.path.insert(0, gr.fuddly_data_folder)
@@ -219,7 +219,7 @@ class FmkPlumbing(object):
 
         self._exportable_fmk_ops = ExportableFMKOps(self)
 
-        self._generic_tactics = fuzzfmk.generic_data_makers.tactics
+        self._generic_tactics = framework.generic_data_makers.tactics
 
         self.import_text_reg = re.compile('(.*?)(#####)', re.S)
         self.check_clone_re = re.compile('(.*)#(\w{1,20})')

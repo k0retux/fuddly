@@ -22,7 +22,7 @@
 ################################################################################
 
 import os
-import fuzzfmk
+import framework
 import sys
 import inspect
 from enum import Enum
@@ -30,11 +30,11 @@ from libs.utils import ensure_dir, ensure_file
 
 fuddly_version = '0.23.2'
 
-fuzzfmk_folder = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-# fuzzfmk_folder = os.path.dirname(fuzzfmk.__file__)
-fuzzfmk_folder  = '.' if fuzzfmk_folder == '' else fuzzfmk_folder
+framework_folder = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+# framework_folder = os.path.dirname(framework.__file__)
+framework_folder  = '.' if framework_folder == '' else framework_folder
 
-app_folder = os.path.dirname(fuzzfmk_folder)
+app_folder = os.path.dirname(framework_folder)
 app_folder = '.' if app_folder == '' else app_folder
 projects_folder = app_folder + os.sep + 'projects' + os.sep
 data_models_folder = app_folder + os.sep + 'data_models' + os.sep
@@ -64,7 +64,7 @@ user_data_models_folder = fuddly_data_folder + 'user_data_models' + os.sep
 ensure_dir(user_data_models_folder)
 ensure_file(user_data_models_folder + os.sep + '__init__.py')
 
-fmk_folder = app_folder + os.sep + 'fuzzfmk' + os.sep
+fmk_folder = app_folder + os.sep + 'framework' + os.sep
 
 class Error(object):
 

@@ -21,9 +21,9 @@
 #
 ################################################################################import sys
 
-from fuzzfmk.data_model import *
-from fuzzfmk.value_types import *
-from fuzzfmk.data_model_helpers import *
+from framework.data_model import *
+from framework.value_types import *
+from framework.data_model_helpers import *
 
 class SMS_DataModel(DataModel):
 

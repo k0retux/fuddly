@@ -28,8 +28,8 @@ import time
 import traceback
 
 from libs.external_modules import *
-from fuzzfmk.global_resources import *
-import fuzzfmk.error_handling as eh
+from framework.global_resources import *
+import framework.error_handling as eh
 
 
 class ProbeUser(object):
@@ -199,8 +199,9 @@ class BlockingProbeUser(ProbeUser):
     def _wait_for_data_ready(self):
         """
         Wait on a request to arm
+
         Returns:
-            True if the arm event happened
+            True if the arm event happened,
             False if a stop was asked or an error was signaled
         """
         while not self._arm_event.is_set():
@@ -217,8 +218,9 @@ class BlockingProbeUser(ProbeUser):
     def _wait_for_fmk_sync(self):
         """
         Wait on a blocking event: data sent or timeout
+
         Returns:
-            True if the blocking event happened
+            True if the blocking event happened,
             False if a stop was asked or an error was signaled
         """
         timeout_appended = True
@@ -384,12 +386,14 @@ class Monitor(object):
             probes_names.append(probe_name)
         return probes_names
 
-    def _wait_for_specific_probes(self, probe_class, probe_wait_method, probes=None):
+    def _wait_for_specific_probes(self, probe_user_class, probe_user_wait_method, probes=None):
         """
         Wait for probes to trigger a specific event
+
         Args:
-            probe_wait_method (method): name of the probe's method that will be used to wait
-            probes (list of ProbeRunner): probes to wait for. If None all probes will be concerned
+            probe_user_class (ProbeUser): probe_user class that defines the method
+            probe_user_wait_method (method): name of the probe_user's method that will be used to wait
+            probes (list of :class:`ProbeUser`): probes to wait for. If None all probes will be concerned
         """
         probes = self.probe_users.items() if probes is None else probes
 
@@ -397,10 +401,10 @@ class Monitor(object):
         start = datetime.datetime.now()
 
         for _, probe_user in probes:
-            if isinstance(probe_user, probe_class):
+            if isinstance(probe_user, probe_user_class):
                 timeout -= start - datetime.datetime.now()
                 try:
-                    probe_wait_method(probe_user, timeout.total_seconds())
+                    probe_user_wait_method(probe_user, timeout.total_seconds())
                 except ProbeTimeoutError as e:
                     self.fmk_ops.set_error("Timeout! Probe '{:s}' seems to be stuck in one of these methods: {:s}"
                                            .format(e.probe_name, e.blocking_methods),
@@ -555,8 +559,8 @@ class Probe(object):
     def configure(self, *args):
         """
         (Optional method) To be overloaded with any signature that fits your needs
-        Could be called by user code through :meth:`fuzzfmk.monitor.Monitor.configure_probe`
-        Use case example is to call it from an :class:`fuzzfmk.operator_helpers.Operator`
+        Could be called by user code through :meth:`framework.monitor.Monitor.configure_probe`
+        Use case example is to call it from an :class:`framework.operator_helpers.Operator`
 
         Args:
             *args: anything that fits your needs

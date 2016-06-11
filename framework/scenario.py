@@ -23,8 +23,8 @@
 
 import copy
 
-from fuzzfmk.global_resources import *
-from fuzzfmk.data_model import Data
+from framework.global_resources import *
+from framework.data_model import Data
 
 class PeriodicData(object):
     def __init__(self, data, period=None):

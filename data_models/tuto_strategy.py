@@ -1,7 +1,7 @@
-from fuzzfmk.plumbing import *
-from fuzzfmk.tactics_helpers import *
-from fuzzfmk.global_resources import *
-from fuzzfmk.scenario import *
+from framework.plumbing import *
+from framework.tactics_helpers import *
+from framework.global_resources import *
+from framework.scenario import *
 
 tactics = Tactics()
 

@@ -22,7 +22,7 @@
 ################################################################################
 
 from __future__ import print_function
-from fuzzfmk.monitor import *
+from framework.monitor import *
 
 class Project(object):
 

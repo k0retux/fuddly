@@ -48,22 +48,22 @@ About documentation
 Launch fuddly test cases
 ------------------------
 
-The file ``fuzzfmk/test.py`` include all unit & integration test cases
+The file ``framework/test.py`` include all unit & integration test cases
 of ``fuddly`` itself. Usage is as follows:
 
 - To launch all the test, issue the command::
 
-    >> python fuzzfmk/test.py -a
+    >> python framework/test.py -a
 
 - To launch all the test but the longer ones, issue the command::
 
-    >> python fuzzfmk/test.py
+    >> python framework/test.py
 
 - To avoid data model specific test cases use the option ``--ignore-dm-specifics``
 
 - To launch a specific test category issue the folowing command::
 
-    >> python fuzzfmk/test.py <Test_Class>.<test_method>
+    >> python framework/test.py <Test_Class>.<test_method>
 
 
 Miscellaneous

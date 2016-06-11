@@ -21,11 +21,11 @@
 #
 ################################################################################
 
-from fuzzfmk.project import *
-from fuzzfmk.monitor import *
-from fuzzfmk.operator_helpers import *
-from fuzzfmk.plumbing import *
-import fuzzfmk.global_resources as gr
+from framework.project import *
+from framework.monitor import *
+from framework.operator_helpers import *
+from framework.plumbing import *
+import framework.global_resources as gr
 
 project = Project()
 project.default_dm = ['mydf','zip']

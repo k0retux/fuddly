@@ -30,12 +30,12 @@ import functools
 
 sys.path.append('.')
 
-from fuzzfmk.data_model import *
-from fuzzfmk.data_model_helpers import *
-from fuzzfmk.value_types import *
+from framework.data_model import *
+from framework.data_model_helpers import *
+from framework.value_types import *
 
-from fuzzfmk.fuzzing_primitives import *
-from fuzzfmk.basic_primitives import *
+from framework.fuzzing_primitives import *
+from framework.basic_primitives import *
 
 class Example_DataModel(DataModel):
 

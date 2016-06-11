@@ -40,9 +40,9 @@ from six import with_metaclass
 
 sys.path.append('.')
 
-import fuzzfmk.basic_primitives as bp
-from fuzzfmk.data_model import AbsorbStatus, AbsCsts, convert_to_internal_repr, unconvert_from_internal_repr
-from fuzzfmk.encoders import *
+import framework.basic_primitives as bp
+from framework.data_model import AbsorbStatus, AbsCsts, convert_to_internal_repr, unconvert_from_internal_repr
+from framework.encoders import *
 
 DEBUG = False
 

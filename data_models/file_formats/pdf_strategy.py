@@ -21,8 +21,8 @@
 #
 ################################################################################
 
-from fuzzfmk.data_model import Data
-from fuzzfmk.tactics_helpers import *
+from framework.data_model import Data
+from framework.tactics_helpers import *
 
 tactics = Tactics()
 

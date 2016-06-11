@@ -23,14 +23,14 @@
 
 import time
 
-from fuzzfmk.project import *
-from fuzzfmk.monitor import *
-from fuzzfmk.operator_helpers import *
-from fuzzfmk.plumbing import *
-from fuzzfmk.target import *
-from fuzzfmk.logger import *
-from fuzzfmk.data_model import *
-from fuzzfmk.fuzzing_primitives import *
+from framework.project import *
+from framework.monitor import *
+from framework.operator_helpers import *
+from framework.plumbing import *
+from framework.target import *
+from framework.logger import *
+from framework.data_model import *
+from framework.fuzzing_primitives import *
 
 project = Project()
 project.default_dm = 'usb'

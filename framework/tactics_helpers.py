@@ -27,9 +27,9 @@ import random
 import copy
 import collections
 
-import fuzzfmk.data_model as fdm
-from fuzzfmk.data_model_helpers import modelwalker_inputs_handling_helper, GENERIC_ARGS
-from fuzzfmk.global_resources import *
+import framework.data_model as fdm
+from framework.data_model_helpers import modelwalker_inputs_handling_helper, GENERIC_ARGS
+from framework.global_resources import *
 
 DEBUG = False
 

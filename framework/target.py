@@ -42,9 +42,9 @@ import errno
 from socket import error as socket_error
 
 from libs.external_modules import *
-from fuzzfmk.data_model import Data, NodeSemanticsCriteria
-from fuzzfmk.value_types import GSMPhoneNum
-from fuzzfmk.global_resources import *
+from framework.data_model import Data, NodeSemanticsCriteria
+from framework.value_types import GSMPhoneNum
+from framework.global_resources import *
 
 class TargetStuck(Exception): pass
 
@@ -204,7 +204,7 @@ class Target(object):
         with the framework.
 
         Use case example: The user needs to send some message to the target on a regular basis
-        in background. For that purpose, it can quickly define a :class:`fuzzfmk.monitor.Probe` that just
+        in background. For that purpose, it can quickly define a :class:`framework.monitor.Probe` that just
         emits the message by itself.
         '''
         with self._send_data_lock:

@@ -32,7 +32,7 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
 
-from fuzzfmk.database import Database
+from framework.database import Database
 from libs.external_modules import *
 
 import argparse

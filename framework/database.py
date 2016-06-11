@@ -5,7 +5,7 @@ import math
 import threading
 from datetime import datetime
 
-import fuzzfmk.global_resources as gr
+import framework.global_resources as gr
 import libs.external_modules as em
 from libs.external_modules import *
 from libs.utils import ensure_dir, chunk_lines

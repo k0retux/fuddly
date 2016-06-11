@@ -13,7 +13,7 @@ data model, which enables ``fuddly`` to perform more enhanced fuzzing.
 
 .. note:: These parameters will be especially leveraged by the generic
    disruptor ``tTYPE``
-   (:class:`fuzzfmk.generic_data_makers.d_fuzz_typed_nodes`). Refer to
+   (:class:`framework.generic_data_makers.d_fuzz_typed_nodes`). Refer to
    :ref:`dis:generic-disruptors` for more information on it, and to
    :ref:`tuto:disruptors`, for how to create your own *disruptors*.
 
@@ -24,7 +24,7 @@ Integer
 -------
 
 All integer types listed below provide the same interface
-(:class:`fuzzfmk.value_types.INT`). Their constructor take the
+(:class:`framework.value_types.INT`). Their constructor take the
 following parameters:
 
 ``int_list`` [optional, default value: **None**]
@@ -56,28 +56,28 @@ the generic disruptors, quite the opposite.
 Below the different currently defined integer types, and the
 corresponding outputs for a data generated from them:
 
-- :class:`fuzzfmk.value_types.UINT8`: unsigned integer on 8 bit
-- :class:`fuzzfmk.value_types.SINT8`: signed integer on 8 bit (2's complement)
-- :class:`fuzzfmk.value_types.UINT16_be`: unsigned integer on 16 bit, big endian
-- :class:`fuzzfmk.value_types.UINT16_le`: unsigned integer on 16 bit, little endian
-- :class:`fuzzfmk.value_types.SINT16_be`: signed integer on 16 bit (2's complement), big endian
-- :class:`fuzzfmk.value_types.SINT16_le`: signed integer on 16 bit (2's complement), little endian
-- :class:`fuzzfmk.value_types.UINT32_be`: unsigned integer on 32 bit, big endian
-- :class:`fuzzfmk.value_types.UINT32_le`: unsigned integer on 32 bit, little endian
-- :class:`fuzzfmk.value_types.SINT32_be`: signed integer on 32 bit (2's complement), big endian
-- :class:`fuzzfmk.value_types.SINT32_le`: signed integer on 32 bit (2's complement), little endian
-- :class:`fuzzfmk.value_types.UINT64_be`: unsigned integer on 64 bit, big endian
-- :class:`fuzzfmk.value_types.UINT64_le`: unsigned integer on 64 bit, little endian
-- :class:`fuzzfmk.value_types.SINT64_be`: signed integer on 64 bit (2's complement), big endian
-- :class:`fuzzfmk.value_types.SINT64_le`: signed integer on 64 bit (2's complement), little endian
-- :class:`fuzzfmk.value_types.INT_str`: ASCII encoded integer
+- :class:`framework.value_types.UINT8`: unsigned integer on 8 bit
+- :class:`framework.value_types.SINT8`: signed integer on 8 bit (2's complement)
+- :class:`framework.value_types.UINT16_be`: unsigned integer on 16 bit, big endian
+- :class:`framework.value_types.UINT16_le`: unsigned integer on 16 bit, little endian
+- :class:`framework.value_types.SINT16_be`: signed integer on 16 bit (2's complement), big endian
+- :class:`framework.value_types.SINT16_le`: signed integer on 16 bit (2's complement), little endian
+- :class:`framework.value_types.UINT32_be`: unsigned integer on 32 bit, big endian
+- :class:`framework.value_types.UINT32_le`: unsigned integer on 32 bit, little endian
+- :class:`framework.value_types.SINT32_be`: signed integer on 32 bit (2's complement), big endian
+- :class:`framework.value_types.SINT32_le`: signed integer on 32 bit (2's complement), little endian
+- :class:`framework.value_types.UINT64_be`: unsigned integer on 64 bit, big endian
+- :class:`framework.value_types.UINT64_le`: unsigned integer on 64 bit, little endian
+- :class:`framework.value_types.SINT64_be`: signed integer on 64 bit (2's complement), big endian
+- :class:`framework.value_types.SINT64_le`: signed integer on 64 bit (2's complement), little endian
+- :class:`framework.value_types.INT_str`: ASCII encoded integer
 
 
 String
 ------
 
 All string types listed below provide the same interface
-(:class:`fuzzfmk.value_types.String`). Their constructor take the
+(:class:`framework.value_types.String`). Their constructor take the
 following parameters:
 
 ``val_list`` [optional, default value: **None**]
@@ -136,7 +136,7 @@ following parameters:
 ``encoding_arg`` [optional, default value: **None**]
   Only relevant for subclasses that leverage the encoding infrastructure and that
   allow their encoding scheme to be configured. This parameter is directly provided to
-  :meth:`fuzzfmk.value_types.String.init_encoding_scheme`.
+  :meth:`framework.value_types.String.init_encoding_scheme`.
 
 Some String subclasses leverage the ``String`` encoding infrastructure,
 that enables to handle transparently any encoding scheme:
@@ -147,37 +147,37 @@ that enables to handle transparently any encoding scheme:
 
 .. note::
    To define a ``String`` subclass handling a specific encoding, you have to overload
-   the methods: :meth:`fuzzfmk.value_types.String.encode` and :meth:`fuzzfmk.value_types.String.decode`.
-   You may optionally overload: :meth:`fuzzfmk.value_types.String.encoding_test_cases` if you want
+   the methods: :meth:`framework.value_types.String.encode` and :meth:`framework.value_types.String.decode`.
+   You may optionally overload: :meth:`framework.value_types.String.encoding_test_cases` if you want
    to define encoding-related test cases. And if you need to initialize the encoding scheme you
-   should overload the method :meth:`fuzzfmk.value_types.String.init_encoding_scheme`.
+   should overload the method :meth:`framework.value_types.String.init_encoding_scheme`.
 
-   Alternatively and preferably, you should define a subclass of :class:`fuzzfmk.encoders.Encoder`
-   and then create a subclass of String decorated by :func:`fuzzfmk.value_types.from_encoder`
+   Alternatively and preferably, you should define a subclass of :class:`framework.encoders.Encoder`
+   and then create a subclass of String decorated by :func:`framework.value_types.from_encoder`
    with the your encoder subclass in parameter. By doing so, you enable your encoder to be also
    usable by a non-terminal node.
 
 
 Below the different currently defined string types:
 
-- :class:`fuzzfmk.value_types.String`: General purpose character string.
-- :class:`fuzzfmk.value_types.Filename`: Filename. Similar to the type
+- :class:`framework.value_types.String`: General purpose character string.
+- :class:`framework.value_types.Filename`: Filename. Similar to the type
   ``String``, but some disruptors like ``tTYPE`` will generate more specific
   test cases.
-- :class:`fuzzfmk.value_types.UTF8`: ``String`` encoded in ``UTF8``.
-- :class:`fuzzfmk.value_types.UTF16_LE`: ``String`` encoded in ``UTF16`` little-endian.
+- :class:`framework.value_types.UTF8`: ``String`` encoded in ``UTF8``.
+- :class:`framework.value_types.UTF16_LE`: ``String`` encoded in ``UTF16`` little-endian.
   Note that some test cases on the encoding scheme are defined.
-- :class:`fuzzfmk.value_types.UTF16_BE`: ``String`` encoded in ``UTF16`` big-endian.
+- :class:`framework.value_types.UTF16_BE`: ``String`` encoded in ``UTF16`` big-endian.
   Note that some test cases on the encoding scheme are defined.
-- :class:`fuzzfmk.value_types.Codec`: ``String`` encoded in any standard encoding
+- :class:`framework.value_types.Codec`: ``String`` encoded in any standard encoding
   supported by Python. You have to provide the parameter ``encoding_arg`` with the
   codec you want to use. If no codec is provided, this class will behave the same as the class
-  :class:`fuzzfmk.value_types.String`, that is, the ``latin_1`` codec will be used.
-- :class:`fuzzfmk.value_types.GZIP`: ``String`` compressed with ``zlib``. The parameter
+  :class:`framework.value_types.String`, that is, the ``latin_1`` codec will be used.
+- :class:`framework.value_types.GZIP`: ``String`` compressed with ``zlib``. The parameter
   ``encoding_arg`` is used to specify the level of compression (0-9).
-- :class:`fuzzfmk.value_types.GSM7bitPacking`: ``String`` encoded in conformity
+- :class:`framework.value_types.GSM7bitPacking`: ``String`` encoded in conformity
   with ``GSM 7-bits`` packed format.
-- :class:`fuzzfmk.value_types.Wrapper`: to be used as a mean to wrap a ``String`` with
+- :class:`framework.value_types.Wrapper`: to be used as a mean to wrap a ``String`` with
   a prefix and/or a suffix, without defining specific *nodes* for that (meaning you
   don't need to model that part and want to simplify your data description).
 
@@ -185,7 +185,7 @@ Below the different currently defined string types:
 BitField
 --------
 
-The type :class:`fuzzfmk.value_types.BitField` takes the following
+The type :class:`framework.value_types.BitField` takes the following
 parameters:
 
 
@@ -213,7 +213,7 @@ parameters:
 ``padding`` [default value: **0**]
   Should be either set to ``0`` or ``1`` for completion of the
   ``Bitfield`` to a byte boundary if it is not a byte-multiple. Note
-  that the method :func:`fuzzfmk.value_types.BitField.extend_right`
+  that the method :func:`framework.value_types.BitField.extend_right`
   allows to merge two ``BitField`` which could result in padding
   deletion.
 
@@ -238,7 +238,7 @@ parameters:
   purpose. Additionally, note that such nominal generation are not the
   one used by the generic disruptor ``tTYPE`` which rely on
   ``BitField`` *fuzzy mode* (reachable through
-  :func:`fuzzfmk.value_types.VT_Alt.switch_mode`).
+  :func:`framework.value_types.VT_Alt.switch_mode`).
 
   This parameter is for internal usage and will always follow the *hosting*
   node instructions. If you want to change the deterministic order you have
@@ -279,7 +279,7 @@ going through the definition of a data model (for this topic refer to
 
 Note that the output is the first generated value from your
 description. To get another one you will have to call
-:func:`fuzzfmk.value_types.BitField.get_value()` on it. Obviously,
+:func:`framework.value_types.BitField.get_value()` on it. Obviously,
 this kind of stuff is done automatically for you during a fuzzing
 session.
 
@@ -307,14 +307,14 @@ the first example. We additionally specify the parameter
 
 
 .. seealso:: Methods are defined to help for modifying a
-             :class:`fuzzfmk.value_types.BitField`. If you want to
+             :class:`framework.value_types.BitField`. If you want to
              deal with ``BitField`` in your specific disruptors, take
              a look especially at:
 
-             - :func:`fuzzfmk.value_types.BitField.set_subfield`, :func:`fuzzfmk.value_types.BitField.get_subfield`
-             - :func:`fuzzfmk.value_types.BitField.extend_right`
-             - :func:`fuzzfmk.value_types.BitField.reset_state`, :func:`fuzzfmk.value_types.BitField.rewind`
-             - :func:`fuzzfmk.value_types.VT_Alt.switch_mode` (used currently by the disruptor ``tTYPE``)
+             - :func:`framework.value_types.BitField.set_subfield`, :func:`framework.value_types.BitField.get_subfield`
+             - :func:`framework.value_types.BitField.extend_right`
+             - :func:`framework.value_types.BitField.reset_state`, :func:`framework.value_types.BitField.rewind`
+             - :func:`framework.value_types.VT_Alt.switch_mode` (used currently by the disruptor ``tTYPE``)
 
 
 .. _dm:generators:
@@ -324,38 +324,38 @@ Generator Node Templates
 
 Here under the currently implemented *generator templates* (they are
 all defined as static methods of
-:class:`fuzzfmk.data_model_helpers.MH`):
+:class:`framework.data_model_helpers.MH`):
 
-:meth:`fuzzfmk.data_model_helpers.MH.LEN()`
+:meth:`framework.data_model_helpers.MH.LEN()`
       Return a *generator* that returns the length of a node parameter.
 
-:meth:`fuzzfmk.data_model_helpers.MH.QTY()`
+:meth:`framework.data_model_helpers.MH.QTY()`
       Return a *generator* that returns the quantity of child node
       instances (referenced by name) of the node parameter provided to
       the *generator*.
 
-:meth:`fuzzfmk.data_model_helpers.MH.TIMESTAMP()`
+:meth:`framework.data_model_helpers.MH.TIMESTAMP()`
       Return a *generator* that returns the current time (in a String node).
 
-:meth:`fuzzfmk.data_model_helpers.MH.CRC()`
+:meth:`framework.data_model_helpers.MH.CRC()`
       Return a *generator* that returns the CRC (in the chosen type) of
       all the node parameters.
 
-:meth:`fuzzfmk.data_model_helpers.MH.WRAP()`
+:meth:`framework.data_model_helpers.MH.WRAP()`
       Return a *generator* that returns the result (in the chosen
       type) of the provided function applied on the concatenation of
       all the node parameters.
 
-:meth:`fuzzfmk.data_model_helpers.MH.CYCLE()`
+:meth:`framework.data_model_helpers.MH.CYCLE()`
       Return a *generator* that iterates other the provided value list
       and returns at each step a node corresponding to the
       current value.
 
-:meth:`fuzzfmk.data_model_helpers.MH.OFFSET()`
+:meth:`framework.data_model_helpers.MH.OFFSET()`
       Return a *generator* that computes the offset of a child node
       within its parent node.
 
-:meth:`fuzzfmk.data_model_helpers.MH.COPY_VALUE()`
+:meth:`framework.data_model_helpers.MH.COPY_VALUE()`
       Return a *generator* that retrieves the value of another node,
       and then return a `vt` node with this value.
 
@@ -366,7 +366,7 @@ Data Model Keywords
 ===================
 
 This section describe the *keywords* that you could use within the
-frame of the :class:`fuzzfmk.data_model_helpers.ModelHelper`
+frame of the :class:`framework.data_model_helpers.ModelHelper`
 infrastructure. This infrastructure enables you to describe a data
 format in a JSON-like fashion, and will automatically translate this
 description to ``fuddly``'s internal data representation.
@@ -378,7 +378,7 @@ Generic Description Keywords
 name
   Within ``fuddly``'s data model every node has a name that should be
   unique only within its siblings. But when it comes to use the
-  :class:`fuzzfmk.data_model_helpers.ModelHelper` infrastructure to
+  :class:`framework.data_model_helpers.ModelHelper` infrastructure to
   describe your data format, if you want to use the same name in a
   data model description, you have to add an extra key to keep it
   unique within the description, and thus allowing you to refer to
@@ -416,7 +416,7 @@ qty
   Note ``-1`` means infinity. It makes only sense for absorption
   operation (refer to :ref:`tuto:dm-absorption`), because for data
   generation, a strict limit
-  (:const:`fuzzfmk.data_model.NodeInternals_NonTerm.INFINITY_LIMIT`)
+  (:const:`framework.data_model.NodeInternals_NonTerm.INFINITY_LIMIT`)
   is set to avoid getting unintended too big data. If you intend to
   get such kind of data, specify explicitly the maximum, or use a
   disruptor to do so (:ref:`tuto:disruptors`).
@@ -427,7 +427,7 @@ clone
   reference.
 
 type
-  Used only by the :class:`fuzzfmk.data_model_helpers.ModelHelper`
+  Used only by the :class:`framework.data_model_helpers.ModelHelper`
   infrastructure if there is an ambiguity to determine the node
   type. This attributes accept the following values:
 
@@ -486,7 +486,7 @@ custo_set, custo_clear
 
   - ``MH.Custo.Gen.ForwardConfChange``: By default, this mode is *enabled*.
     If enabled, a
-    call to :meth:`fuzzfmk.data_model.Node.set_current_conf()` will be
+    call to :meth:`framework.data_model.Node.set_current_conf()` will be
     called on the generated node (default behavior).
   - ``MH.Custo.Gen.CloneExtNodeArgs``: By default, this mode is *disabled*.
     If enabled, during a cloning operation (e.g., full copy
@@ -499,11 +499,11 @@ custo_set, custo_clear
     still belonging to the full data.
   - ``MH.Custo.Gen.ResetOnUnfreeze``: By default, this mode is *enabled*.
     If enabled, a
-    call to :meth:`fuzzfmk.data_model.Node.unfreeze()` on the node will
+    call to :meth:`framework.data_model.Node.unfreeze()` on the node will
     provoke the reset of the *generator* itself, meaning that the next
     time its value will be asked for, it will be recomputed (default
     behaviour). If unset, a call to the method
-    :meth:`fuzzfmk.data_model.Node.unfreeze()` will provoke the call of
+    :meth:`framework.data_model.Node.unfreeze()` will provoke the call of
     this method on the already existing generated node (and if it
     didn't exist by this time it would have been computed first).
   - ``MH.Custo.Gen.TriggerLast``: By default, this mode is *disabled*.
@@ -667,12 +667,12 @@ unique
 encoder
   If specified, an encoder instance should be provided. The *encoding* will be applied
   transparently when the binary value of the non terminal node will be retrieved
-  (:meth:`fuzzfmk.data_model.Node.to_bytes`). Additionally, during an absorption
+  (:meth:`framework.data_model.Node.to_bytes`). Additionally, during an absorption
   (refer to :ref:`tuto:dm-absorption`), the *decoding* will also be performed automatically.
 
-  Several generic encoders are defined within ``fuzzfmk/encoders.py``. But if they
+  Several generic encoders are defined within ``framework/encoders.py``. But if they
   don't match your need, you can define your own encoder by inheriting from
-  :class:`fuzzfmk.encoders.Encoder` and implementing its interface.
+  :class:`framework.encoders.Encoder` and implementing its interface.
 
   .. note:: Depending on your needs, you could also choose to implement a disruptor
      to perform your encoding (refer to :ref:`tuto:disruptors`).
@@ -688,7 +688,7 @@ node_args
 
 other_args
   List of parameters (which are not a
-  :class:`fuzzfmk.data_model.Node`) to be provided to a *generator*
+  :class:`framework.data_model.Node`) to be provided to a *generator*
   node or a *function* node.
 
 provide_helpers
@@ -696,7 +696,7 @@ provide_helpers
   the user-defined function (last parameter) of the *generator* node
   or the *function* node. Otherwise, this object won't be passed
   (default behavior). This object is an instance of the class
-  :class:`fuzzfmk.data_model.DynNode_Helpers`, which enable the
+  :class:`framework.data_model.DynNode_Helpers`, which enable the
   user-defined function to have some insight on the current structure
   of the modeled data.
 
@@ -744,8 +744,8 @@ set_attrs
 
   - ``MH.Attr.Freezable``: If set, the node will be freezable (default
     behavior), which means that once the node has provided a value
-    (through for instance :meth:`fuzzfmk.data_model.Node.to_bytes()`),
-    the method :meth:`fuzzfmk.data_model.Node.unfreeze()` need to be
+    (through for instance :meth:`framework.data_model.Node.to_bytes()`),
+    the method :meth:`framework.data_model.Node.unfreeze()` need to be
     called on it to get new values, otherwise it won't change. If
     unset, the node will always be recomputed. Can be useful for
     *function* node, if it needs to be recomputed each time a
@@ -781,7 +781,7 @@ set_attrs
             generated node.
 
   .. seealso:: The attributes are defined within
-               :class:`fuzzfmk.data_model.NodeInternals`.
+               :class:`framework.data_model.NodeInternals`.
 
 clear_attrs
   List of attributes to clear on the node. The current attributes are
@@ -844,7 +844,7 @@ exists_if_not
 post_freeze
   To be filled with a function. If specified, the function will be
   called just after the node has been frozen. It takes the node
-  internals as argument (:class:`fuzzfmk.data_model.NodeInternals`).
+  internals as argument (:class:`framework.data_model.NodeInternals`).
 
 
 .. _dm:patterns:
@@ -1021,7 +1021,7 @@ From this data model you could get a data like that:
 .. note:: You can also perform specific *separator mutation* within a
           disruptor (refer to :ref:`tuto:disruptors`), as separator nodes have
           the specific attribute
-          :const:`fuzzfmk.data_model.NodeInternals.Separator` set.
+          :const:`framework.data_model.NodeInternals.Separator` set.
 
 
 .. _dm:pattern:existence-cond:
@@ -1032,7 +1032,7 @@ How to Describe a Data Format Whose Parts Change Depending on Some Fields
 The example below shows how to define a data format based on *opcodes*
 and *sub-opcodes* which change the form of the data itself. We use for
 that purpose the keyword ``exists_if`` with some subclasses of
-:class:`fuzzfmk.data_model.NodeCondition` and node references. 
+:class:`framework.data_model.NodeCondition` and node references.
 
 .. note:: The keyword ``exists_if`` can directly take a node
           reference. In such case, the condition is the existence of
@@ -1160,23 +1160,23 @@ character string in our case.
      ]}
 
 Note the *generator* is just a specific kind of node
-(:class:`fuzzfmk.data_model.NodeInternals_GenFunc`) that embeds a
-function that returns a node (:class:`fuzzfmk.data_model.Node`). In
+(:class:`framework.data_model.NodeInternals_GenFunc`) that embeds a
+function that returns a node (:class:`framework.data_model.Node`). In
 the previous description, the function is provided through the keyword
 ``contents``, and it's a simple lambda function taking a node as
 parameter, on which is called
-:meth:`fuzzfmk.data_model.Node.to_bytes()` to get its bytes
+:meth:`framework.data_model.Node.to_bytes()` to get its bytes
 representation and then the ``len()`` function. The result is used for
 defining a terminal node of type
-:class:`fuzzfmk.value_types.UINT32_be` (refer to section :ref:`vt:integer`).
+:class:`framework.value_types.UINT32_be` (refer to section :ref:`vt:integer`).
 
 This use case can be described by using the specific *generator
-template* :meth:`fuzzfmk.data_model_helpers.MH.LEN()` which will basically
+template* :meth:`framework.data_model_helpers.MH.LEN()` which will basically
 return the previous lambda function. The following example makes use
 of it.
 
 .. note:: Generator templates are defined as static methods of
-          :class:`fuzzfmk.data_model_helpers.MH`. They make the description
+          :class:`framework.data_model_helpers.MH`. They make the description
           of some generic use cases simpler.
 
 .. code-block:: python
@@ -1259,9 +1259,9 @@ for more complex situation.
 
 Finally, let's take the following example that illustrates other
 *generator templates*, namely
-:meth:`fuzzfmk.data_model_helpers.MH.QTY()`,
-:meth:`fuzzfmk.data_model_helpers.MH.CRC()` and
-:meth:`fuzzfmk.data_model_helpers.MH.TIMESTAMP()`.
+:meth:`framework.data_model_helpers.MH.QTY()`,
+:meth:`framework.data_model_helpers.MH.CRC()` and
+:meth:`framework.data_model_helpers.MH.TIMESTAMP()`.
 
 .. code-block:: python
    :linenos:
@@ -1381,11 +1381,11 @@ The example below shows how to describe a data format with some parts encoded in
 
 The non-terminal node named ``enc`` (lines 9-19) has the attribute ``encoder``
 (refer to :ref:`dm:keywords`) which means that it will be encoded following the scheme of the
-specified encoder. In this case it is the :class:`fuzzfmk.encoders.GZIP_Enc` with a level
+specified encoder. In this case it is the :class:`framework.encoders.GZIP_Enc` with a level
 of compression of 6. Within this node is also defined a typed node (lines 17-18) named
 ``data1`` which is encoded in *UTF16 little endian* thanks to the type
-:class:`fuzzfmk.value_types.UTF16_LE` (which inherit from :class:`fuzzfmk.value_types.String`)
-that leverages the encoder :class:`fuzzfmk.encoders.UTF16LE_Enc`.
+:class:`framework.value_types.UTF16_LE` (which inherit from :class:`framework.value_types.String`)
+that leverages the encoder :class:`framework.encoders.UTF16LE_Enc`.
 
 Note also the parameter ``after_encoding=False`` (lines 6 and 14), which is supported by every
 relevant generator node templates (refer to :ref:`dm:generators`) and enable them to act either
@@ -1426,7 +1426,7 @@ If you want to perform some fuzzing on the encoding scheme itself you will have 
 describe its format. Then it boils down to run some generic disruptors on them or some of your own.
 However, note that some value types that support encoding (refer to :ref:`vt:value-types`) embed
 specific test cases on the encoding scheme (which is the case of
-:class:`fuzzfmk.value_types.UTF16_LE` for instance).
+:class:`framework.value_types.UTF16_LE` for instance).
 
 Finally, absorption (refer to :ref:`tuto:dm-absorption`) is also supported when encoding is used
 within your data description. For instance, the following data will be absorbed by the previous
@@ -1440,8 +1440,8 @@ To perform that operation you can write the following python code:
    :linenos:
    :emphasize-lines: 10, 12
 
-   from fuzzfmk.plumbing import *
-   from fuzzfmk.data_model import AbsorbStatus
+   from framework.plumbing import *
+   from framework.data_model import AbsorbStatus
 
    raw_data = b'Plop\x8c\xd6/\x06x\x9cc\raHe(f(aPd\x00\x00\x0bv\x01\xc7Blue'
 

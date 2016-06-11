@@ -28,11 +28,11 @@ import threading
 import itertools
 
 from libs.external_modules import *
-from fuzzfmk.data_model import Data
-from fuzzfmk.global_resources import *
-from fuzzfmk.database import Database
+from framework.data_model import Data
+from framework.global_resources import *
+from framework.database import Database
 from libs.utils import ensure_dir
-import fuzzfmk.global_resources as gr
+import framework.global_resources as gr
 
 import data_models
 
@@ -98,7 +98,7 @@ class Logger(object):
           explicit_data_recording (bool): Used for logging outcomes further to an Operator instruction. If True,
             the operator would have to state explicitly if it wants the just emitted data to be recorded.
             Such notification is possible when the framework call its method
-            :meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`, where the Operator can take its decision
+            :meth:`framework.operator_helpers.Operator.do_after_all()`, where the Operator can take its decision
             after the observation of the target feedback and/or probes outputs.
           export_orig (bool): If True, will also log the original data on which disruptors have been called.
           export_raw_data (bool): If True, will log the data as it is, without trying to interpret it

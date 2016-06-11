@@ -38,9 +38,9 @@ from enum import Enum
 
 sys.path.append('.')
 
-from fuzzfmk.basic_primitives import *
+from framework.basic_primitives import *
 from libs.external_modules import *
-from fuzzfmk.global_resources import *
+from framework.global_resources import *
 
 DEBUG = False
 
@@ -626,7 +626,7 @@ class IntCondition(NodeCondition):
             self.val = neg_val
 
     def check(self, node):
-        from fuzzfmk.value_types import INT
+        from framework.value_types import INT
         assert(node.is_typed_value(subkind=INT))
 
         if isinstance(self.val, (tuple, list)):
@@ -685,7 +685,7 @@ class BitFieldCondition(NodeCondition):
 
 
     def check(self, node):
-        from fuzzfmk.value_types import BitField
+        from framework.value_types import BitField
         assert(node.is_typed_value(subkind=BitField))
 
         for sf, val, neg_val in zip(self.sf, self.val, self.neg_val):
@@ -2655,8 +2655,8 @@ class NodeInternals_NonTerm(NodeInternals):
 
             for delim, sublist in self.__iter_csts(lnode_list[0]):
                 # sublist can be in one of the 2 following forms:                
-                # * [3, [1, [<fuzzfmk.data_model.Node object at 0x7fc49fc56ad0>, 2], 2, [<fuzzfmk.data_model.Node object at 0x7fc49fc56510>, 1, 2]]]
-                # * [[<fuzzfmk.data_model.Node object at 0x7fc49fdb0090>, 1, 3], [<fuzzfmk.data_model.Node object at 0x7fc49fc56ad0>, 3]]
+                # * [3, [1, [<framework.data_model.Node object at 0x7fc49fc56ad0>, 2], 2, [<framework.data_model.Node object at 0x7fc49fc56510>, 1, 2]]]
+                # * [[<framework.data_model.Node object at 0x7fc49fdb0090>, 1, 3], [<framework.data_model.Node object at 0x7fc49fc56ad0>, 3]]
 
                 new_sublist = []
                 if isinstance(sublist[0], list):
@@ -2680,7 +2680,7 @@ class NodeInternals_NonTerm(NodeInternals):
                     for sss in sublist[1]:
                         if isinstance(sss, int):
                             new_sslist.append(sss) # add the relative weight
-                        else:   # it is a list like [<fuzzfmk.data_model.Node object at 0x7fc49fc56ad0>, 2]
+                        else:   # it is a list like [<framework.data_model.Node object at 0x7fc49fc56ad0>, 2]
                             if sss[0] not in old2new_node:
                                 old2new_node[sss[0]] = copy.copy(sss[0])
                             new_node = old2new_node[sss[0]]
@@ -3229,7 +3229,7 @@ class NodeInternals_NonTerm(NodeInternals):
         def handle_encoding(list_to_enc):
 
             if self.custo.collapse_padding_mode:
-                from fuzzfmk.value_types import BitField
+                from framework.value_types import BitField
                 list_to_enc = list(flatten(list_to_enc))
                 if list_to_enc and isinstance(list_to_enc[0], bytes):
                     return list_to_enc
@@ -5181,7 +5181,7 @@ class Node(object):
         conf = self.__check_conf(conf)
 
         if val_list is not None:
-            from fuzzfmk.value_types import String
+            from framework.value_types import String
 
             self.internals[conf] = NodeInternals_TypedValue()
             self.internals[conf].import_value_type(value_type=String(val_list=val_list))

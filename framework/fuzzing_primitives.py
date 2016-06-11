@@ -29,10 +29,10 @@ import re
 
 sys.path.append('.')
 
-import fuzzfmk.value_types as vtype
-import fuzzfmk.data_model as dm
+import framework.value_types as vtype
+import framework.data_model as dm
 
-from fuzzfmk.basic_primitives import *
+from framework.basic_primitives import *
 
 from libs.external_modules import *
 from libs.debug_facility import *

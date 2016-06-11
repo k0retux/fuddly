@@ -30,14 +30,14 @@ import binascii
 import subprocess
 from copy import *
 
-from fuzzfmk.data_model import *
-from fuzzfmk.tactics_helpers import *
-from fuzzfmk.fuzzing_primitives import *
-from fuzzfmk.basic_primitives import *
-from fuzzfmk.value_types import *
-from fuzzfmk.data_model_helpers import GENERIC_ARGS
+from framework.data_model import *
+from framework.tactics_helpers import *
+from framework.fuzzing_primitives import *
+from framework.basic_primitives import *
+from framework.value_types import *
+from framework.data_model_helpers import GENERIC_ARGS
 
-from fuzzfmk.global_resources import *
+from framework.global_resources import *
 
 tactics = Tactics()
 

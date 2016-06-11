@@ -35,23 +35,23 @@ import argparse
 
 sys.path.append('.')
 
-from fuzzfmk.data_model import *
-from fuzzfmk.value_types import *
+from framework.data_model import *
+from framework.value_types import *
 
 from libs.external_modules import *
 
 import data_models.example as example
 import data_models.protocols.usb
 
-from fuzzfmk.fuzzing_primitives import *
-from fuzzfmk.basic_primitives import *
-from fuzzfmk.plumbing import *
-from fuzzfmk.target import *
-from fuzzfmk.logger import *
-from fuzzfmk.operator_helpers import *
+from framework.fuzzing_primitives import *
+from framework.basic_primitives import *
+from framework.plumbing import *
+from framework.target import *
+from framework.logger import *
+from framework.operator_helpers import *
 
-from fuzzfmk.data_model_helpers import *
-from fuzzfmk.encoders import *
+from framework.data_model_helpers import *
+from framework.encoders import *
 
 mock_module = True
 try:

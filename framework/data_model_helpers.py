@@ -21,10 +21,10 @@
 #
 ################################################################################
 
-from fuzzfmk.data_model import *
-import fuzzfmk.value_types as fvt
-from fuzzfmk.value_types import VT
-import fuzzfmk.global_resources as gr
+from framework.data_model import *
+import framework.value_types as fvt
+from framework.value_types import VT
+import framework.global_resources as gr
 
 from libs.external_modules import *
 
@@ -134,7 +134,7 @@ class MH(object):
         Return a *generator* that returns the length of a node parameter.
 
         Args:
-          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+          vt (type): value type used for node generation (refer to :mod:`framework.value_types`)
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False compute the length before any encoding. Can be
@@ -157,7 +157,7 @@ class MH(object):
         by name) of the node parameter provided to the *generator*.
 
         Args:
-          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+          vt (type): value type used for node generation (refer to :mod:`framework.value_types`)
           node_name (str): name of the child node whose instance amount will be returned
             by the generator
           set_attrs (list): attributes that will be set on the generated node.
@@ -204,7 +204,7 @@ class MH(object):
         all the node parameters. (Default CRC is PKZIP CRC32)
 
         Args:
-          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+          vt (type): value type used for node generation (refer to :mod:`framework.value_types`)
           poly (int): CRC polynom
           init_crc (int): initial value used to start the CRC calculation.
           xor_out (int): final value to XOR with the calculated CRC value.
@@ -251,7 +251,7 @@ class MH(object):
 
         Args:
           func (function): function applied on the concatenation
-          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+          vt (type): value type used for node generation (refer to :mod:`framework.value_types`)
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False, execute `func` on node arguments before any encoding.
@@ -292,7 +292,7 @@ class MH(object):
             it is the parent node. Thus, in this case, depending on the drawn quantity
             of parent nodes, the position within the grand-parent determines the index
             of the value to use in the provided list, modulo the quantity.
-          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
+          vt (type): value type used for node generation (refer to :mod:`framework.value_types`).
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
         '''
@@ -355,7 +355,7 @@ class MH(object):
           use_current_position (bool): automate the computation of the child node position
           depth (int): depth of our nth-ancestor used as a reference to compute automatically
             the targeted child node position. Only relevant if `use_current_position` is True.
-          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
+          vt (type): value type used for node generation (refer to :mod:`framework.value_types`).
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False compute the fixed amount part of the offset before
@@ -432,7 +432,7 @@ class MH(object):
           path (str): relative path to the node whose value will be picked.
           depth (int): depth of our nth-ancestor used as a reference to compute automatically
             the targeted base node position.
-          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
+          vt (type): value type used for node generation (refer to :mod:`framework.value_types`).
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False, copy the raw value, otherwise the encoded one. Can be
