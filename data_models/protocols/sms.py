@@ -223,12 +223,13 @@ class SMS_DataModel(DataModel):
                                                   subfield_descs=['ciph algo', 'ciph mode', 'key indic']
                                                   ) },
 
-                            {'name': 'KID',  # Key and algo ID for RC/CC/DS
+                            {'name': 'KID_RC',  # Key and algo ID for CRC  # TS 102 225 (5.1.3.2)
                              'contents': BitField(subfield_sizes=[2,2,4], endian=VT.BigEndian,
-                                                  subfield_val_lists=[[1,0,3], # 1 = DES (default)
-                                                                      [0],     # CBC mode
+                                                  subfield_val_lists=[[1,0,3], # 1 = CRC (default)
+                                                                      [0b01,0b00], # 0b01 = CRC 32
                                                                       [0b1010]],
-                                                  subfield_val_extremums=[None,[0,2],None],
+                                                  subfield_val_extremums=[None,None,
+                                                                          [1,3]], # key version number to be use
                                                   subfield_descs=['ciph algo', 'ciph mode', 'key indic']
                                                   ) },
 
@@ -244,10 +245,15 @@ class SMS_DataModel(DataModel):
                             {'name': 'PCNTR',  # padding counter
                              'contents': UINT8() },
 
-                            {'name': 'RC|CC|DS',  # redundancy check, crypto check, or digital sig
+                            {'name': 'RC|CC|DS',  # redundancy check, (crypto check, or digital sig)
                              'exists_if': (BitFieldCondition(sf=0,val=1), 'SPI_p1'),  # RC only
-                             'contents': MH.CRC(vt=UINT32_be),  # TODO: update checksum algo
-                             'node_args': ['SPI_p1','SPI_p2','KIc','KID','TAR','CNTR','PCNTR','SecData']},
+                             'contents': MH.CRC(poly=0b100000100110000010001110110110111,  # TS 102 225 (5.1.3.2)
+                                                init_crc=0, # init_crc=0xFFFFFFFF match the spec but to
+                                                            # match the example of annex B, init_crc should 0.
+                                                xor_out=0xFFFFFFFF,
+                                                rev=True,
+                                                vt=UINT32_be),
+                             'node_args': ['SPI_p1','SPI_p2','KIc','KID_RC','TAR','CNTR','PCNTR','SecData']},
 
                             {'name': 'SecData',
                              'contents': String(min_sz=1, max_sz=100, determinist=False)}

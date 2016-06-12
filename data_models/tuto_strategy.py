@@ -31,9 +31,9 @@ def cbk_transition3(env, current_step, next_step):
         env.switch = False
         return True
 
-periodic1 = PeriodicData(DataProcess(process=[('C',None,UI(nb=1)),'tTYPE'], seed='enc'),
-                         period=5)
-periodic2 = PeriodicData(Data('2nd Periodic (3s)\n'), period=3)
+periodic1 = Periodic(DataProcess(process=[('C', None, UI(nb=1)), 'tTYPE'], seed='enc'),
+                     period=5)
+periodic2 = Periodic(Data('2nd Periodic (3s)\n'), period=3)
 
 ### SCENARIO 1 ###
 step1 = Step('exist_cond', fbk_timeout=2, set_periodic=[periodic1, periodic2])
@@ -77,7 +77,7 @@ sc3.set_anchor(anchor)
 tactics.register_scenarios(sc1, sc2, sc3)
 
 
-@generator(tactics, gtype="CBK", weight=1)
+@generator(tactics, gtype="CBK")
 class g_test_callback_01(Generator):
 
     def setup(self, dm, user_input):

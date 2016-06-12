@@ -916,7 +916,7 @@ class StatefulDisruptor(object):
             return ret
 
 
-def disruptor(st, dtype, weight, valid=False, gen_args={}, args={}):
+def disruptor(st, dtype, weight=1, valid=False, gen_args={}, args={}):
     def internal_func(disruptor_cls):
         disruptor_cls._gen_args_desc = gen_args
         disruptor_cls._args_desc = args
@@ -944,7 +944,7 @@ def disruptor(st, dtype, weight, valid=False, gen_args={}, args={}):
     return internal_func
 
 
-def generator(st, gtype, weight, valid=False, gen_args={}, args={}):
+def generator(st, gtype, weight=1, valid=False, gen_args={}, args={}):
     def internal_func(generator_cls):
         generator_cls._gen_args_desc = gen_args
         generator_cls._args_desc = args

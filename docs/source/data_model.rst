@@ -674,6 +674,9 @@ encoder
   don't match your need, you can define your own encoder by inheriting from
   :class:`framework.encoders.Encoder` and implementing its interface.
 
+
+  .. seealso:: Refer to :ref:`dm:pattern:encoder` for an example on how to use this keyword.
+
   .. note:: Depending on your needs, you could also choose to implement a disruptor
      to perform your encoding (refer to :ref:`tuto:disruptors`).
 
@@ -1373,6 +1376,7 @@ Which correspond to the following data::
              `True`. Refer to :ref:`dm:keywords` for more information
              on the available keywords.
 
+.. _dm:pattern:encoder:
 
 How to Describe a Data Format With Some Encoded Parts
 -----------------------------------------------------

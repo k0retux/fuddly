@@ -242,9 +242,9 @@ Note that a :class:`framework.data_model_helpers.DataModel` can define any numbe
 types---to model for instance the various atoms within a data format,
 or to represent some specific use cases, ...
 
-When a data model is loaded, a dynamic `generator` is built for each
-data types registered within this data model. A generator is the basic
-block for generating data. In our case, let us consult the generators
+When a data model is loaded, a dynamic `Generator` is built for each
+data types registered within this data model. A `Generator` is the basic
+block for generating data. In our case, let us consult the `Generators`
 available for the ZIP data model:
 
 .. code-block:: none
@@ -1732,6 +1732,19 @@ or because you don't want to for letting more freedom during data
 generation).
 
 
+.. _tuto:protocol:
+
+Describing Protocols Ruling a Data Model
+----------------------------------------
+
+Two compementary options are provided by the framework:
+
+- The `Scenario Infrastructure` that enables you to have access to automatically-created
+  `Generators` that comply to the protocols you described. Refer to :ref:`scenario-desc`.
+
+- The definition of `Virtual Operators`. refer to :ref:`tuto:operator`
+
+
 .. _tuto:disruptors:
 
 Defining Specific Disruptors
@@ -1958,27 +1971,27 @@ like this (which is a simpler version of the generic disruptor
    class disruptor_name(StatefulDisruptor):
 
        def set_seed(self, prev_data):
-	   prev_data.node.get_value()
+           prev_data.node.get_value()
 
-	   ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Separator])
-	   sep_list = set(map(lambda x: x.to_bytes(),
-	                      prev_data.node.get_reachable_nodes(internals_criteria=ic)))
-	   sep_list = list(sep_list)
+           ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Separator])
+           sep_list = set(map(lambda x: x.to_bytes(),
+                              prev_data.node.get_reachable_nodes(internals_criteria=ic)))
+           sep_list = list(sep_list)
 
-	   self.consumer = SeparatorDisruption()
-	   self.walker = iter(ModelWalker(prev_data.node, self.consumer))
+           self.consumer = SeparatorDisruption()
+           self.walker = iter(ModelWalker(prev_data.node, self.consumer))
 
-    def disrupt_data(self, dm, target, data):
-        try:
-            rnode, consumed_node, orig_node_val, idx = next(self.walker)
-        except StopIteration:
-            data.make_unusable()
-            self.handover()
-            return data
+       def disrupt_data(self, dm, target, data):
+           try:
+               rnode, consumed_node, orig_node_val, idx = next(self.walker)
+           except StopIteration:
+               data.make_unusable()
+               self.handover()
+               return data
 
-	data.update_from_node(rnode)
+           data.update_from_node(rnode)
 
-	return data
+           return data
 
 
 .. _tuto:project:
@@ -2183,7 +2196,7 @@ you could embeds all the protocol logic to be able to adapt the
 fuzzing strategy based on various criteria---*e.g.*, monitoring
 feedback, operator choices, and so on. By default, the operator is
 recalled after each data emission to the target, but it can also
-provide to fuddly a batch of instructions, that will be executed prior
+provide to ``fuddly`` a batch of instructions, that will be executed prior
 to its recall. You have also the ability to stimulate the target
 through its different I/O interfaces in parallel, while each of the
 inputs followed a specific protocol. Obviously, a monitoring
@@ -2195,9 +2208,12 @@ process.
              parameters linked to the target or anything else. Refer
              to :ref:`tuto:probes` to learn how to create them.
 
-.. seealso:: To implement complex protocol logic, using a state
-             machine library as `toysm
-             <https://github.com/willakat/toysm>`_ can be helpful.
+.. seealso::
+  To implement the protocol logic you should leverage the `Scenario Infrastructure`.
+  Refer to :ref:`scenario-desc`.
+
+  If ever the `Scenario Infrastructure` does not satisfy your need, using a full-fledged
+  state machine library such as `toysm <https://github.com/willakat/toysm>`_ should do.
 
 
 To define an operator you have to define a class that inherits from

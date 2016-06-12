@@ -133,6 +133,13 @@ framework.database module
     :undoc-members:
     :show-inheritance:
 
+framework.scenario module
+-------------------------
+
+.. automodule:: framework.scenario
+    :members:
+    :undoc-members:
+    :show-inheritance:
 
 ..
    framework.plumbing module

@@ -26,12 +26,6 @@ import copy
 from framework.global_resources import *
 from framework.data_model import Data
 
-class PeriodicData(object):
-    def __init__(self, data, period=None):
-        self.data = data
-        self.period = period
-
-
 class DataProcess(object):
     def __init__(self, process, seed=None):
         self.process = process
@@ -53,6 +47,13 @@ class DataProcess(object):
         new_datap = type(self)(self.process, seed=copy.copy(self.seed))
         new_datap._blocked = new_datap._blocked
         return new_datap
+
+
+class Periodic(object):
+    def __init__(self, data, period=None):
+        self.data = data
+        self.period = period
+
 
 class Step(object):
 
@@ -171,7 +172,7 @@ class Step(object):
         return id(self)
 
     def __copy__(self):
-        # PeriodicData should not be copied, only the list that contains them.
+        # Periodic should not be copied, only the list that contains them.
         # Indeed their ids (memory addr) are used for registration and cancellation
         new_dm = self._dm
         new_periodic_to_rm = copy.copy(self._periodic_data_to_remove)
