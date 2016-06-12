@@ -472,7 +472,7 @@ class Logger(object):
                     new_f = new_f.decode('latin_1')
                     new_f = '{!a}'.format(new_f)
                 new_fbk.append(new_f)
-            if not list(filter(lambda x: x != '', new_fbk)):
+            if not list(filter(lambda x: x != b'', new_fbk)):
                 new_fbk = None
         else:
             new_fbk = feedback.strip()

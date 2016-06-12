@@ -1462,7 +1462,8 @@ class FmkPlumbing(object):
     def _do_before_sending_data(self, data_list):
         # Monitor hook function before sending
         self.mon.do_before_sending_data()
-        return self._handle_data_callbacks(data_list, hook=HOOK.before_sending)
+        data_list = self._handle_data_callbacks(data_list, hook=HOOK.before_sending)
+        return data_list
 
     def _do_after_sending_data(self, data_list):
         self._handle_data_callbacks(data_list, hook=HOOK.after_sending)
@@ -1472,6 +1473,25 @@ class FmkPlumbing(object):
             self.lg.log_stats()
         else:
             self.__stats_countdown -= 1
+
+    def _do_residual_feedback_retrieval(self, data_list):
+        blocked_data = list(filter(lambda x: x.is_blocked(), data_list))
+        data_list = list(filter(lambda x: not x.is_blocked(), data_list))
+
+        go_on = True
+        if self._burst_countdown == self._burst:
+            # log residual just before sending new data to avoid
+            # polluting feedback logs of the next emission
+            if self.tg.collect_feedback_without_sending():
+                self.check_target_readiness()  # this call enable to wait for feedback timeout
+                go_on = self.log_target_residual_feedback()
+                if blocked_data:
+                    self._handle_data_callbacks(blocked_data, hook=HOOK.after_fbk)
+
+        if go_on:
+            return data_list
+        else:
+            raise TargetFeedbackError
 
     def _do_after_feedback_retrieval(self, data_list):
         self._handle_data_callbacks(data_list, hook=HOOK.after_fbk)
@@ -1640,11 +1660,13 @@ class FmkPlumbing(object):
         else:
             raise ValueError
 
-        if self._burst_countdown == self._burst:
-            # log residual just before sending new data to avoid
-            # polluting feedback logs of the next emission
-            if not self.log_target_residual_feedback():
-                return False
+        try:
+            data_list = self._do_residual_feedback_retrieval(data_list)
+        except TargetFeedbackError:
+            return False
+
+        if not data_list:
+            return True
 
         self.new_transfer_preamble()
         data_list = self.send_data(data_list)
@@ -1707,12 +1729,13 @@ class FmkPlumbing(object):
         '''
         @data_list: either a list of Data() or a Data()
         '''
+
         if self.__send_enabled:
 
             if not self._is_data_valid(data_list):
                 self.set_error('Data is empty --> will not be sent',
                                code=Error.DataInvalid)
-                return
+                return data_list
 
             data_list = self._do_before_sending_data(data_list)
 
@@ -1924,7 +1947,6 @@ class FmkPlumbing(object):
         if tg_fbk is not None:
             err_code = tg_fbk.get_error_code()
             if err_code is not None and err_code < 0:
-                # self.lg.log_comment('Error detected with the target (error code: {:d})!'.format(err_code))
                 err_detected = True
 
             if tg_fbk.has_fbk_collector():
@@ -2315,17 +2337,17 @@ class FmkPlumbing(object):
 
                 fmk_feedback.clear_flag(FmkFeedback.NeedChange)
 
-                if self._burst_countdown == self._burst:
-                    # log residual just before sending new data to avoid
-                    # polluting feedback logs of the next emission
-                    cont = self.log_target_residual_feedback()
-                    if not cont:
-                        self.lg.log_fmk_info("Operator will shutdown because residual target "
-                                             "feedback indicate a negative status code")
-                        break
+                try:
+                    data_list = self._do_residual_feedback_retrieval(data_list)
+                except TargetFeedbackError:
+                    self.lg.log_fmk_info("Operator will shutdown because residual target "
+                                         "feedback indicate a negative status code")
+                    break
+
+                if not data_list:
+                    continue
 
                 self.new_transfer_preamble()
-
                 data_list = self.send_data(data_list)
 
                 try:

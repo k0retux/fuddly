@@ -678,12 +678,12 @@ class DynGeneratorFromScenario(Generator):
             data.make_unusable()
             return data
 
-        if self.step.node is None:
+        data = self.step.get_data()
+        if data is None:
             # in this case a data creation process is provided to the framework through the
             # callback HOOK.before_sending
             data = fdm.Data('')
-        else:
-            data = fdm.Data(self.step.node)
+
         data.register_callback(self._callback_dispatcher_before_sending, hook=HOOK.before_sending)
         data.register_callback(self._callback_dispatcher_after_sending, hook=HOOK.after_sending)
         data.register_callback(self._callback_dispatcher_after_fbk, hook=HOOK.after_fbk)
@@ -697,7 +697,7 @@ class DynGeneratorFromScenario(Generator):
 
     def _callback_dispatcher_before_sending(self):
         for tr in self.step.transitions:
-            self._go_on[tr] = tr.run_callback(tr.step, hook=HOOK.before_sending)
+            self._go_on[tr] = tr.run_callback(self.step, hook=HOOK.before_sending)
 
         cbkops = fdm.CallBackOps()
         for periodic_id in self.step.periodic_to_clear:
@@ -714,7 +714,7 @@ class DynGeneratorFromScenario(Generator):
 
     def _callback_dispatcher_after_sending(self):
         for tr in self.step.transitions:
-            go_on = tr.run_callback(tr.step, hook=HOOK.after_sending)
+            go_on = tr.run_callback(self.step, hook=HOOK.after_sending)
 
             if self._go_on[tr] is None:
                 self._go_on[tr] = go_on
@@ -726,7 +726,13 @@ class DynGeneratorFromScenario(Generator):
 
     def _callback_dispatcher_after_fbk(self, fbk):
         for tr in self.step.transitions:
-            go_on = tr.run_callback(tr.step, hook=HOOK.after_fbk)
+            if tr not in self._go_on:
+                # In the case data sending has been blocked by cbk_after_fbk() (of the current step),
+                # this method will be called while the other _callback* won't. This method is called
+                # just after any potential residual feedback has been retrieved.
+                self._go_on[tr] = None
+
+            go_on = tr.run_callback(self.step, feedback=fbk, hook=HOOK.after_fbk)
 
             if self._go_on[tr] is None and go_on is None:
                 self._go_on[tr] = True

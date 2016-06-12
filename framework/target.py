@@ -173,6 +173,16 @@ class Target(object):
         '''
         return None
 
+    def collect_feedback_without_sending(self):
+        """
+        If overloaded, it can be used by the framework to retrieve additional feedback from the
+        target without sending any new data.
+
+        Returns:
+            bool: False if it is not possible, otherwise it should be True
+        """
+        return True
+
     def set_feedback_timeout(self, fbk_timeout):
         '''
         To set dynamically the feedback timeout.
@@ -1048,6 +1058,12 @@ class NetworkTarget(Target):
                     fbk_ids[s] = self._default_fbk_id[(host, port)]
                     fbk_lengths[s] = self.feedback_length
 
+            self._last_fbk_sockets = fbk_sockets
+            self._last_fbk_ids =fbk_ids
+            self._last_fbk_lengths = fbk_lengths
+            self._last_epobj = epobj
+            self._last_fileno2fd = fileno2fd
+
             self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk)
 
         else:
@@ -1088,6 +1104,23 @@ class NetworkTarget(Target):
             self._custom_data_handling_before_emission([data_list])
         else:
             self._custom_data_handling_before_emission(data_list)
+
+
+    def collect_feedback_without_sending(self):
+        """
+        Should only be called after _send_data() has been called at least once
+        """
+        if hasattr(self, '_last_fbk_sockets'):
+            self._last_ack_date = None
+            self._feedback_handled = False
+            self._sending_id += 1
+            self._start_fbk_collector(self._last_fbk_sockets, self._last_fbk_ids,
+                                      self._last_fbk_lengths, self._last_epobj,
+                                      self._last_fileno2fd, from_fmk=True)
+            return True
+        else:
+            # This case could trigger when the target is first started
+            return False
 
     def get_feedback(self):
         return self._feedback

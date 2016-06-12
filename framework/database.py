@@ -261,6 +261,9 @@ class Database(object):
 
     def insert_data(self, dtype, dm_name, raw_data, sz, sent_date, ack_date,
                     target_name, prj_name, group_id=None):
+
+        self.last_feedback = {}
+
         if not self.enabled:
             return None
 

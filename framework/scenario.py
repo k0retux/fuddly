@@ -37,21 +37,32 @@ class DataProcess(object):
         self.process = process
         self.seed = seed
         self.outcomes = None
+        self._blocked = False
+
+    def make_blocked(self):
+        self._blocked = True
+        if self.outcomes is not None:
+            self.outcomes.make_blocked()
+
+    def make_free(self):
+        self._blocked = False
+        if self.outcomes is not None:
+            self.outcomes.make_free()
 
     def __copy__(self):
         new_datap = type(self)(self.process, seed=copy.copy(self.seed))
-        assert new_datap.outcomes is None
+        new_datap._blocked = new_datap._blocked
         return new_datap
 
 class Step(object):
 
     def __init__(self, data_desc=None, final=False, fbk_timeout=None,
-                 # cbk_before_sending=None, cbk_after_sending=None, cbk_after_fbk=None,
                  set_periodic=None, clear_periodic=None):
 
         self.final = final
         self.feedback_timeout = fbk_timeout
         self._transitions = []
+        self._blocked = False
 
         if not final:
             assert data_desc is not None
@@ -75,14 +86,6 @@ class Step(object):
         else:
             self._periodic_data_to_remove = None
 
-        # self._callbacks = {}
-        # if cbk_before_sending:
-        #     self._callbacks[HOOK.before_sending] = cbk_before_sending
-        # if cbk_after_sending:
-        #     self._callbacks[HOOK.after_sending] = cbk_after_sending
-        # if cbk_after_fbk:
-        #     self._callbacks[HOOK.after_fbk] = cbk_after_fbk
-
     def set_data_model(self, dm):
         self._dm = dm
 
@@ -95,22 +98,18 @@ class Step(object):
                         cbk_after_fbk=cbk_after_fbk)
         self._transitions.append(tr)
 
-    # def register_callback(self, callback, hook=HOOK.after_fbk):
-    #     assert isinstance(hook, HOOK)
-    #     self._callbacks[hook] = callback
-    #
-    # def run_callback(self, next_step, feedback=None, hook=HOOK.after_fbk):
-    #     assert isinstance(hook, HOOK)
-    #     if hook not in self._callbacks:
-    #         return None
-    #
-    #     cbk = self._callbacks[hook]
-    #     if hook == HOOK.after_fbk:
-    #         go_on = cbk(self, self._scenario_env, next_step, feedback)
-    #     else:
-    #         go_on = cbk(self, self._scenario_env, next_step)
-    #
-    #     return go_on
+    def make_blocked(self):
+        self._blocked = True
+        if isinstance(self._data_desc, (Data, DataProcess)):
+            self._data_desc.make_blocked()
+
+    def make_free(self):
+        self._blocked = False
+        if isinstance(self._data_desc, (Data, DataProcess)):
+            self._data_desc.make_free()
+
+    def is_blocked(self):
+        return self._blocked
 
     @property
     def transitions(self):
@@ -134,6 +133,15 @@ class Step(object):
             if self._node is None:
                 self._node = self._dm.get_data(self._node_name)
         return self._node
+
+    def get_data(self):
+        if self.node is not None:
+            d = Data(self.node)
+            if self.is_blocked():
+                d.make_blocked()
+            return d
+        else:
+            return None
 
     @property
     def data_desc(self):
@@ -165,9 +173,7 @@ class Step(object):
     def __copy__(self):
         # PeriodicData should not be copied, only the list that contains them.
         # Indeed their ids (memory addr) are used for registration and cancellation
-        # new_cbks = copy.copy(self._callbacks)
         new_dm = self._dm
-        # new_env = None
         new_periodic_to_rm = copy.copy(self._periodic_data_to_remove)
         new_transitions = copy.copy(self._transitions)
         new_step = type(self)(data_desc=copy.copy(self._data_desc), final=self.final,
@@ -175,7 +181,6 @@ class Step(object):
                               set_periodic=copy.copy(self._periodic_data))
         new_step._node = None
         new_step._periodic_data_to_remove = new_periodic_to_rm
-        # new_step._callbacks = new_cbks
         new_step._dm = new_dm
         new_step._scenario_env = None  # we ignore the environment, a new one will be provided
         new_step._transitions = new_transitions
@@ -184,7 +189,6 @@ class Step(object):
 
 class FinalStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None,
-                 # cbk_before_sending=None, cbk_after_sending=None, cbk_after_fbk=None,
                  set_periodic=None):
         Step.__init__(self, final=True)
 
@@ -217,16 +221,16 @@ class Transition(object):
         assert isinstance(hook, HOOK)
         self._callbacks[hook] = callback
 
-    def run_callback(self, next_step, feedback=None, hook=HOOK.after_fbk):
+    def run_callback(self, current_step, feedback=None, hook=HOOK.after_fbk):
         assert isinstance(hook, HOOK)
         if hook not in self._callbacks:
             return None
 
         cbk = self._callbacks[hook]
         if hook == HOOK.after_fbk:
-            go_on = cbk(self, self._scenario_env, next_step, feedback)
+            go_on = cbk(self._scenario_env, current_step, self.step, feedback)
         else:
-            go_on = cbk(self, self._scenario_env, next_step)
+            go_on = cbk(self._scenario_env, current_step, self.step)
 
         return go_on
 

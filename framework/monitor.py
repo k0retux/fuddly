@@ -201,8 +201,8 @@ class BlockingProbeUser(ProbeUser):
         Wait on a request to arm
 
         Returns:
-            True if the arm event happened,
-            False if a stop was asked or an error was signaled
+            bool: True if the arm event happened, False if a stop was asked
+              or an error was signaled
         """
         while not self._arm_event.is_set():
             if not self._go_on():
@@ -220,8 +220,8 @@ class BlockingProbeUser(ProbeUser):
         Wait on a blocking event: data sent or timeout
 
         Returns:
-            True if the blocking event happened,
-            False if a stop was asked or an error was signaled
+            bool: True if the blocking event happened, False if a stop was
+              asked or an error was signaled
         """
         timeout_appended = True
         while not self._blocking_event.is_set():

@@ -50,15 +50,16 @@ class Data(object):
         self.node = None
         self.raw = None
 
-        self.__type = None
+        self._type = None
         self._dm = None
         self._data_id = None
         self._recordable = False
-        self.__unusable = False
+        self._unusable = False
+        self._blocked = False
 
         self.info_list = []
         self.info = {}
-        self.__info_idx = {}
+        self._info_idx = {}
 
         # callback related
         self._callbacks = {}
@@ -86,19 +87,10 @@ class Data(object):
         return self._data_id
 
     def set_initial_dmaker(self, t):
-        self.__type = t
+        self._type = t
 
     def get_initial_dmaker(self):
-        return self.__type
-
-    def flatten_copy(self):
-        d = Data(self.to_bytes())
-        d._dm = self._dm
-        d._recordable = self._recordable
-        d.__unusable = self.__unusable
-        d.info = copy.copy(self.info)
-
-        return d
+        return self._type
 
     def update_from_str_or_bytes(self, data_str):
         if sys.version_info[0] > 2 and not isinstance(data_str, bytes):
@@ -133,14 +125,20 @@ class Data(object):
             else:
                 return self.raw
 
+    def make_blocked(self):
+        self._blocked = True
+
+    def make_free(self):
+        self._blocked = False
+
+    def is_blocked(self):
+        return self._blocked
+
     def make_unusable(self):
-        self.__unusable = True
+        self._unusable = True
 
     def is_unusable(self):
-        if self.__unusable:
-            return True
-        else:
-            return False
+        return self._unusable
 
     # Only taken into account if the Logger has been set to
     # record data only when requested (explicit_data_recording == True)
@@ -164,7 +162,7 @@ class Data(object):
 
     def init_read_info(self):
         for k in self.info:
-            self.__info_idx[k] = 0
+            self._info_idx[k] = 0
 
     def read_info(self, data_maker_name, dmaker_type):
         key = (data_maker_name, dmaker_type)
@@ -177,13 +175,13 @@ class Data(object):
             return ['']
 
         try:
-            ret = info_l[self.__info_idx[key]]
+            ret = info_l[self._info_idx[key]]
         except IndexError:
             print("\n**** No more info associated to the key " \
                       "({:s}, {:s})! ***\n".format(data_maker_name, dmaker_type))
             ret = ['']
 
-        self.__info_idx[key] += 1
+        self._info_idx[key] += 1
         return ret
 
     def set_history(self, hist):
@@ -277,9 +275,9 @@ class Data(object):
         new_data.__dict__.update(self.__dict__)
         new_data.info_list = copy.copy(self.info_list)
         new_data.info = copy.copy(self.info)
-        new_data.__info_idx = copy.copy(self.__info_idx)
+        new_data._info_idx = copy.copy(self._info_idx)
         new_data._history = copy.copy(self._history)
-        new_data.__type = copy.copy(self.__type)
+        new_data._type = copy.copy(self._type)
         new_data._callbacks = {}
         for hook, cbk_dict in self._callbacks.items():
             new_data._callbacks[hook] = collections.OrderedDict()

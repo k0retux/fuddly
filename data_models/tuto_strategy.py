@@ -9,12 +9,20 @@ def cbk_transition1(env, current_step, next_step):
     return True
 
 def cbk_transition2(env, current_step, next_step, fbk):
-    if next_step.node:
-        print("\n\n*** The next node named '{:s}' will be modified!".format(next_step.node.name))
-        next_step.node['off_gen/prefix'] = '*MODIFIED*'
+    if not fbk:
+        print("\n\nNo feedback retrieved. Let's wait for another turn")
+        current_step.make_blocked()
+        return False
     else:
-        print("\n\n*** The next node won't be modified!")
-    return True
+        print("\n\nFeedback received from {!s}. Let's go on".format(fbk.keys()))
+        print(repr(fbk.values()))
+        current_step.make_free()
+        if next_step.node:
+            print("*** The next node named '{:s}' will be modified!".format(next_step.node.name))
+            next_step.node['off_gen/prefix'] = '*MODIFIED*'
+        else:
+            print("*** The next node won't be modified!")
+        return True
 
 def cbk_transition3(env, current_step, next_step):
     if hasattr(env, 'switch'):
@@ -29,8 +37,8 @@ periodic2 = PeriodicData(Data('2nd Periodic (3s)\n'), period=3)
 
 ### SCENARIO 1 ###
 step1 = Step('exist_cond', fbk_timeout=2, set_periodic=[periodic1, periodic2])
-step2 = Step('separator', fbk_timeout=5)
-step3 = Step('off_gen', fbk_timeout=2, clear_periodic=[periodic1, periodic2])
+step2 = Step('separator', fbk_timeout=5, clear_periodic=[periodic1, periodic2])
+step3 = Step('off_gen', fbk_timeout=2)
 
 step1_copy = copy.copy(step1) # for scenario 2
 step2_copy = copy.copy(step2) # for scenario 2
