@@ -3251,6 +3251,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                 new_item2vt.make_private(forget_current_state=False)
                                 new_item1vt.extend_right(new_item2vt)
                                 new_item.import_value_type(new_item1vt)
+                                new_item.frozen_node = new_item.get_value_type().get_current_value()
                                 if i > 0:
                                     new_list = list_to_enc[:i-1]
                                     new_list.append(new_item)

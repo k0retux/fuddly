@@ -1506,10 +1506,28 @@ class BitField(VT_Alt):
 
     def extend_right(self, bitfield):
 
-        if self.drawn_val is not None:
-            self.rewind()
-            # TODO: change rewind() by computing the extended value
-        self.drawn_val = None
+        if self.drawn_val is None:
+            self.get_value()
+        if bitfield.drawn_val is None:
+            bitfield.get_value()
+
+        if self.lsb_padding:
+            term1 = (self.drawn_val>>self.padding_size)
+        else:
+            term1 = self.drawn_val
+
+        if bitfield.lsb_padding:
+            term2 = (bitfield.drawn_val >> bitfield.padding_size)
+        else:
+            term2 = bitfield.drawn_val
+
+        self.drawn_val = (term2 << self.size) + term1
+        sz_mod = (self.size + bitfield.size) % 8
+        new_padding_sz = 8 - sz_mod if sz_mod != 0 else 0
+
+        if self.lsb_padding:
+            self.drawn_val <<= new_padding_sz
+
         self.__count_of_possible_values = None
         if self.exhausted and bitfield.exhausted:
             self.exhausted = True
@@ -1518,7 +1536,7 @@ class BitField(VT_Alt):
         self.exhaustion_cpt += bitfield.exhaustion_cpt
         self.current_val_update_pending = False
         self.idx += bitfield.idx
-        self.idx_inuse = self.idx
+        self.idx_inuse += bitfield.idx_inuse
 
         if self.subfield_descs is not None or bitfield.subfield_descs is not None:
             if self.subfield_descs is None and bitfield.subfield_descs is not None:
