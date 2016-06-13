@@ -24,6 +24,7 @@ List of features
   - replay & logging
   - data manipulation based on disruptors (objects that implement
     specific data transformation)
+  - scenario infrastructure (for modeling protocol logic)
   - virtual operator abstraction
 
 + and so on...

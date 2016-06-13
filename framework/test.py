@@ -1748,6 +1748,48 @@ class TestModelWalker(unittest.TestCase):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 306)
 
+    def test_TypedNodeDisruption_BitfieldCollapse(self):
+        '''
+        Test case similar to test_TermNodeDisruption_1() but with more
+        powerfull TypedNodeDisruption.
+        '''
+        data = fmk.dm.get_external_node(dm_name='sms', data_id='smscmd')
+        data.freeze()
+        data.show()
+
+        print('\norig value: '+repr(data['smscmd/TP-DCS'].to_bytes()))
+        # self.assertEqual(data['smscmd/TP-DCS'].to_bytes(), b'\xF6')
+
+        corrupt_table = {
+            1: b'\xF7',
+            2: b'\xF4',
+            3: b'\xF5',
+            4: b'\xF2',
+            5: b'\xFE',
+            6: b'\x00',
+            7: b'\xE0'
+        }
+
+        tn_consumer = TypedNodeDisruption(max_runs_per_node=1)
+        tn_consumer.set_node_interest(path_regexp='smscmd/TP-DCS')
+        # ic = NodeInternalsCriteria(negative_node_subkinds=[String])
+        # tn_consumer.set_node_interest(internals_criteria=ic)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, tn_consumer,
+                                                                    make_determinist=True, max_steps=7):
+            print(colorize('\n[%d] ' % idx + repr(rnode['smscmd/TP-DCS$'].to_bytes()), rgb=Color.INFO))
+            print('node name: ' + consumed_node.name)
+            print('original value:  {!s} ({!s})'.format(binascii.b2a_hex(orig_node_val),
+                  bin(struct.unpack('B', orig_node_val)[0])))
+            print('corrupted value: {!s} ({!s})'.format(binascii.b2a_hex(consumed_node.to_bytes()),
+                  bin(struct.unpack('B', consumed_node.to_bytes())[0])))
+            print('result: {!s} ({!s})'.format(binascii.b2a_hex(rnode['smscmd/TP-DCS$'].to_bytes()),
+                  bin(struct.unpack('B', rnode['smscmd/TP-DCS$'].to_bytes())[0])))
+            rnode.unfreeze(recursive=True, reevaluate_constraints=True)
+            rnode.freeze()
+            rnode['smscmd/TP-DCS$'].show()
+            self.assertEqual(rnode['smscmd/TP-DCS'].to_bytes(), corrupt_table[idx])
+
+
     def test_TermNodeDisruption_1(self):
         simple  = self.dm.get_data('Simple')
         consumer = TermNodeDisruption()

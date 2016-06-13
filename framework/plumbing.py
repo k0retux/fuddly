@@ -766,7 +766,7 @@ class FmkPlumbing(object):
                         for p in obj:
                             tg.add_probe(p)
                     else:
-                        assert(issubclass(obj.__class__, Target))
+                        assert issubclass(obj.__class__, Target), 'project: {!s}'.format(name)
                         tg = obj
                         tg.remove_probes()
                     new_targets.append(tg)

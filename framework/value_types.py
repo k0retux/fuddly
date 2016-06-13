@@ -1380,14 +1380,15 @@ class BitField(VT_Alt):
             # needed, because some fuzzy values are computed from current values before switching
             self.switch_mode()
 
-    def _reset_idx(self):
+    def _reset_idx(self, reset_idx_inuse=True):
         self.current_idx = 0
         self.idx = [1 for i in self.subfield_limits]
         if not self._fuzzy_mode:
             self.idx[0] = 0
         # initially we don't make copy, as it will be copied anyway
         # during .get_value()
-        self.idx_inuse = self.idx
+        if reset_idx_inuse:
+            self.idx_inuse = self.idx
         
     def set_subfield(self, idx, val):
         '''
@@ -1507,9 +1508,25 @@ class BitField(VT_Alt):
     def extend_right(self, bitfield):
 
         if self.drawn_val is None:
-            self.get_value()
+            self.get_current_value()
         if bitfield.drawn_val is None:
-            bitfield.get_value()
+            bitfield.get_current_value()
+
+        if self.exhausted and bitfield.exhausted:
+            self.exhausted = True
+            self.exhaustion_cpt = 0
+        else:
+            if bitfield.exhausted:
+                bitfield.rewind() # side_effect clear 'drawn_val'
+                bitfield.get_current_value() # to set 'drawn_val'
+            if self.exhausted:
+                self.rewind()
+                self.get_current_value()
+
+            self.exhausted = False
+            self.exhaustion_cpt += bitfield.exhaustion_cpt
+
+        self.__count_of_possible_values = None
 
         if self.lsb_padding:
             term1 = (self.drawn_val>>self.padding_size)
@@ -1528,12 +1545,7 @@ class BitField(VT_Alt):
         if self.lsb_padding:
             self.drawn_val <<= new_padding_sz
 
-        self.__count_of_possible_values = None
-        if self.exhausted and bitfield.exhausted:
-            self.exhausted = True
-        else:
-            self.exhausted = False
-        self.exhaustion_cpt += bitfield.exhaustion_cpt
+
         self.current_val_update_pending = False
         self.idx += bitfield.idx
         self.idx_inuse += bitfield.idx_inuse
@@ -1956,7 +1968,7 @@ class BitField(VT_Alt):
 
             self.current_idx += 1
             if self.current_idx >= len(self.idx):
-                self._reset_idx()
+                self._reset_idx(reset_idx_inuse=False)
                 self.exhausted = True
             else:
                 while True:
@@ -1968,7 +1980,7 @@ class BitField(VT_Alt):
                     if self.idx[self.current_idx] > last:
                         self.current_idx += 1
                         if self.current_idx >= len(self.idx):
-                            self._reset_idx()
+                            self._reset_idx(reset_idx_inuse=False)
                             self.exhausted = True
                             break
                     else:
