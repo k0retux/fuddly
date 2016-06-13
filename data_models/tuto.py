@@ -1,12 +1,12 @@
 import sys
 sys.path.append('.')
 
-from fuzzfmk.plumbing import *
+from framework.plumbing import *
 
-from fuzzfmk.data_model import *
-from fuzzfmk.value_types import *
-from fuzzfmk.data_model_helpers import *
-from fuzzfmk.encoders import *
+from framework.data_model import *
+from framework.value_types import *
+from framework.data_model_helpers import *
+from framework.encoders import *
 
 class MyDF_DataModel(DataModel):
 
@@ -228,7 +228,7 @@ class MyDF_DataModel(DataModel):
 
              {'name': 'A32_payload',
               'contents': String(val_list=['$ A32_VALID $', '$ A32_INVALID $'], determinist=False),
-              'exists_if': (BitFieldCondition(sf=2, val=5), 'A3_subopcode')}
+              'exists_if': (BitFieldCondition(sf=[0, 1, 2], val=[[500, 501], [1, 2], 5]), 'A3_subopcode')}
          ]}
 
 
@@ -257,6 +257,7 @@ class MyDF_DataModel(DataModel):
              {'name': 'body',
               # 'custo_set': MH.Custo.NTerm.MutableClone,
               'shape_type': MH.FullyRandom,
+              'random': True,
               'contents': [
                   {'contents': String(val_list=['AAA']),
                    'qty': 10,

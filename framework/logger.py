@@ -28,11 +28,11 @@ import threading
 import itertools
 
 from libs.external_modules import *
-from fuzzfmk.data_model import Data
-from fuzzfmk.global_resources import *
-from fuzzfmk.database import Database
+from framework.data_model import Data
+from framework.global_resources import *
+from framework.database import Database
 from libs.utils import ensure_dir
-import fuzzfmk.global_resources as gr
+import framework.global_resources as gr
 
 import data_models
 
@@ -98,7 +98,7 @@ class Logger(object):
           explicit_data_recording (bool): Used for logging outcomes further to an Operator instruction. If True,
             the operator would have to state explicitly if it wants the just emitted data to be recorded.
             Such notification is possible when the framework call its method
-            :meth:`fuzzfmk.operator_helpers.Operator.do_after_all()`, where the Operator can take its decision
+            :meth:`framework.operator_helpers.Operator.do_after_all()`, where the Operator can take its decision
             after the observation of the target feedback and/or probes outputs.
           export_orig (bool): If True, will also log the original data on which disruptors have been called.
           export_raw_data (bool): If True, will log the data as it is, without trying to interpret it
@@ -129,10 +129,7 @@ class Logger(object):
         def init_logfn(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
                        do_record=True):
             if issubclass(x.__class__, Data):
-                if sys.version_info[0] > 2:
-                    data = repr(x) if self.__export_raw_data else x.to_bytes().decode('latin-1')
-                else:
-                    data = repr(x) if self.__export_raw_data else str(x)
+                data = repr(x) if self.__export_raw_data else str(x)
                 rgb = None
                 style = None
             elif issubclass(x.__class__, bytes) and sys.version_info[0] > 2:
@@ -172,10 +169,7 @@ class Logger(object):
             def intern_func(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
                             do_record=True):
                 if issubclass(x.__class__, Data):
-                    if sys.version_info[0] > 2:
-                        data = repr(x) if self.__export_raw_data else x.to_bytes().decode('latin-1')
-                    else:
-                        data = repr(x) if self.__export_raw_data else str(x)
+                    data = repr(x) if self.__export_raw_data else str(x)
                     rgb = None
                     style = None
                 elif issubclass(x.__class__, bytes) and sys.version_info[0] > 2:
@@ -247,7 +241,6 @@ class Logger(object):
 
             if self.last_data_id is None:
                 print("\n*** ERROR: Cannot insert the data record in FMKDB!")
-                self.fmkDB.rollback()
                 self.last_data_id = None
                 self.last_data_recordable = None
                 self._reset_current_state()
@@ -276,7 +269,6 @@ class Logger(object):
                                         self._current_src_data_id,
                                         str(user_input), info)
 
-            self.fmkDB.commit()
 
             self._reset_current_state()
 
@@ -411,13 +403,23 @@ class Logger(object):
                     else "### Target Feedback from '{!s}' (status={!s}):".format(source, status_code)
             self.log_fn(msg_hdr, rgb=hdr_color, do_record=record)
             if decoded_feedback:
-                self.log_fn(decoded_feedback, rgb=body_color, do_record=record)
+                if isinstance(decoded_feedback, list):
+                    for dfbk in decoded_feedback:
+                        self.log_fn(dfbk, rgb=body_color, do_record=record)
+                else:
+                    self.log_fn(decoded_feedback, rgb=body_color, do_record=record)
 
             if record:
                 src = 'Default' if source is None else source
-                self.fmkDB.insert_feedback(self.last_data_id, src, timestamp,
-                                           self._encode_target_feedback(feedback),
-                                           status_code=status_code)
+                if isinstance(feedback, list):
+                    for fbk, ts in zip(feedback, timestamp):
+                        self.fmkDB.insert_feedback(self.last_data_id, src, ts,
+                                                   self._encode_target_feedback(fbk),
+                                                   status_code=status_code)
+                else:
+                    self.fmkDB.insert_feedback(self.last_data_id, src, timestamp,
+                                               self._encode_target_feedback(feedback),
+                                               status_code=status_code)
 
         if epilogue is not None:
             self.log_fn(epilogue, do_record=record)
@@ -462,13 +464,27 @@ class Logger(object):
         if feedback is None:
             return feedback
 
-        feedback = feedback.strip()
-        if sys.version_info[0] > 2 and feedback and isinstance(feedback, bytes):
-            feedback = feedback.decode('latin_1')
-            feedback = '{!a}'.format(feedback)
-        return feedback
+        if isinstance(feedback, list):
+            new_fbk = []
+            for f in feedback:
+                new_f = f.strip()
+                if sys.version_info[0] > 2 and new_f and isinstance(new_f, bytes):
+                    new_f = new_f.decode('latin_1')
+                    new_f = '{!a}'.format(new_f)
+                new_fbk.append(new_f)
+            if not list(filter(lambda x: x != b'', new_fbk)):
+                new_fbk = None
+        else:
+            new_fbk = feedback.strip()
+            if sys.version_info[0] > 2 and new_fbk and isinstance(new_fbk, bytes):
+                new_fbk = new_fbk.decode('latin_1')
+                new_fbk = '{!a}'.format(new_fbk)
+
+        return new_fbk
 
     def _encode_target_feedback(self, feedback):
+        if feedback is None:
+            return None
         if sys.version_info[0] > 2 and not isinstance(feedback, bytes):
             feedback = bytes(feedback, 'latin_1')
         return feedback
@@ -553,7 +569,7 @@ class Logger(object):
             self.log_fn('    |_ ' + msg, rgb=Color.DATAINFO)
 
     def log_info(self, info):
-        msg = "### Info: %s" % info
+        msg = "### Info: {:s}".format(info)
         self.log_fn(msg, rgb=Color.INFO)
 
     def log_target_ack_date(self, date):
@@ -565,10 +581,7 @@ class Logger(object):
 
     def log_orig_data(self, data):
 
-        if data is None:
-            exportable = False
-        else:
-            exportable = data.is_recordable()
+        exportable = False if data is None else data.is_recordable()
 
         if self.__explicit_data_recording and not exportable:
             return False
@@ -704,14 +717,8 @@ class Logger(object):
         if raw_limit is None:
             raw_limit = self._console_display_limit
 
-        if nl_before:
-            p = '\n'
-        else:
-            p = ''
-        if nl_after:
-            s = '\n'
-        else:
-            s = ''
+        p = '\n' if nl_before else ''
+        s = '\n' if nl_after else ''
 
         prefix = p + self.p
 

@@ -35,23 +35,44 @@ import argparse
 
 sys.path.append('.')
 
-from fuzzfmk.data_model import *
-from fuzzfmk.value_types import *
+from framework.data_model import *
+from framework.value_types import *
 
 from libs.external_modules import *
 
 import data_models.example as example
 import data_models.protocols.usb
 
-from fuzzfmk.fuzzing_primitives import *
-from fuzzfmk.basic_primitives import *
-from fuzzfmk.plumbing import *
-from fuzzfmk.target import *
-from fuzzfmk.logger import *
-from fuzzfmk.operator_helpers import *
+from framework.fuzzing_primitives import *
+from framework.basic_primitives import *
+from framework.plumbing import *
+from framework.target import *
+from framework.logger import *
+from framework.operator_helpers import *
 
-from fuzzfmk.data_model_helpers import *
-from fuzzfmk.encoders import *
+from framework.data_model_helpers import *
+from framework.encoders import *
+
+mock_module = True
+try:
+    import unittest.mock as mock
+except ImportError:
+    try:
+        import mock
+    except ImportError:
+        mock_module = False
+        print('ERROR: python-mock module is not installed! '
+              'Should be installed to be able to run every test.')
+
+ddt_module = True
+try:
+    import ddt
+except ImportError:
+    ddt_module = False
+    print('ERROR: python(3)-ddt module is not installed! '
+          'Should be installed to be able to run every test.')
+
+
 
 parser = argparse.ArgumentParser(description='Process arguments.')
 parser.add_argument('-a', '--all', action='store_true',
@@ -59,9 +80,17 @@ parser.add_argument('-a', '--all', action='store_true',
 parser.add_argument('--ignore-dm-specifics', action='store_true',
                     help='Run Data Models specific test cases. (Enabled by default.)')
 
+parser.add_argument('--force', action='store_true',
+                    help='Force testing even if some package dependencies are missing. (Disabled by default.)')
+
 test_args = parser.parse_known_args()
 run_long_tests = test_args[0].all
 ignore_data_model_specifics = test_args[0].ignore_dm_specifics
+force = test_args[0].force
+
+if (not mock_module or not ddt_module) and not force:
+    sys.exit("Some dependencies are missing: use --force to run tests anyway.")
+
 
 class TEST_Fuzzy_INT16(Fuzzy_INT16):
     int_list = ['TEST_OK', 'BLABLA', 'PLOP']
@@ -94,32 +123,32 @@ class TestBasics(unittest.TestCase):
 
     def test_01(self):
 
-        print('\n### TEST 0: generate one EX1 ###')
-
+        # print('\n### TEST 0: generate one EX1 ###')
+        #
         node_ex1 = dm.get_data('EX1')
 
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
         l = node_ex1.get_value()
         hk = set(node_ex1.get_all_paths().keys())
-        print(l)
-
-        print('\n\n ####### \n\n')
-
-        print(l[0])
-        print(b' @ ' + b''.join(flatten(l[1])) + b' @ ')
-        print(l[1])
-
-        print('\n\n ####### \n\n')
-
-
-        res1 = b' @ ' + b''.join(flatten(l[1])) + b' @ ' == l[0]
-        print('*** Is the concatenation (first list element) correct? %r' % res1)
-
-        res2 = len(b''.join(flatten(l[1]))) == int(l[2])
-        print('*** Is length of the concatenation correct? %r' % res2)
-
-        results['test0'] = res1 and res2
+        # print(l)
+        #
+        # print('\n\n ####### \n\n')
+        #
+        # print(l[0])
+        # print(b' @ ' + b''.join(flatten(l[1])) + b' @ ')
+        # print(l[1])
+        #
+        # print('\n\n ####### \n\n')
+        #
+        #
+        # res1 = b' @ ' + b''.join(flatten(l[1])) + b' @ ' == l[0]
+        # print('*** Is the concatenation (first list element) correct? %r' % res1)
+        #
+        # res2 = len(b''.join(flatten(l[1]))) == int(l[2])
+        # print('*** Is length of the concatenation correct? %r' % res2)
+        #
+        # results['test0'] = res1 and res2
 
         print('\n### TEST 1: cross check self.node.get_all_paths().keys() and get_nodes_names() ###')
 
@@ -736,7 +765,7 @@ class TestBasics(unittest.TestCase):
             print('Node.env: ', e.env)
             print('Node.value_type: ', e.cc.get_value_type())
             vt[e] = e.cc.get_value_type()
-            if issubclass(vt[e].__class__, VT_Alt): #isinstance(vt[e], BitField) or isinstance(vt[e], String):
+            if issubclass(vt[e].__class__, VT_Alt): #isinstance(vt[e], (BitField, String)):
                 continue
             compat = list(vt[e].compat_cls.values())
             compat.remove(vt[e].__class__)
@@ -1719,6 +1748,48 @@ class TestModelWalker(unittest.TestCase):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 306)
 
+    def test_TypedNodeDisruption_BitfieldCollapse(self):
+        '''
+        Test case similar to test_TermNodeDisruption_1() but with more
+        powerfull TypedNodeDisruption.
+        '''
+        data = fmk.dm.get_external_node(dm_name='sms', data_id='smscmd')
+        data.freeze()
+        data.show()
+
+        print('\norig value: '+repr(data['smscmd/TP-DCS'].to_bytes()))
+        # self.assertEqual(data['smscmd/TP-DCS'].to_bytes(), b'\xF6')
+
+        corrupt_table = {
+            1: b'\xF7',
+            2: b'\xF4',
+            3: b'\xF5',
+            4: b'\xF2',
+            5: b'\xFE',
+            6: b'\x00',
+            7: b'\xE0'
+        }
+
+        tn_consumer = TypedNodeDisruption(max_runs_per_node=1)
+        tn_consumer.set_node_interest(path_regexp='smscmd/TP-DCS')
+        # ic = NodeInternalsCriteria(negative_node_subkinds=[String])
+        # tn_consumer.set_node_interest(internals_criteria=ic)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, tn_consumer,
+                                                                    make_determinist=True, max_steps=7):
+            print(colorize('\n[%d] ' % idx + repr(rnode['smscmd/TP-DCS$'].to_bytes()), rgb=Color.INFO))
+            print('node name: ' + consumed_node.name)
+            print('original value:  {!s} ({!s})'.format(binascii.b2a_hex(orig_node_val),
+                  bin(struct.unpack('B', orig_node_val)[0])))
+            print('corrupted value: {!s} ({!s})'.format(binascii.b2a_hex(consumed_node.to_bytes()),
+                  bin(struct.unpack('B', consumed_node.to_bytes())[0])))
+            print('result: {!s} ({!s})'.format(binascii.b2a_hex(rnode['smscmd/TP-DCS$'].to_bytes()),
+                  bin(struct.unpack('B', rnode['smscmd/TP-DCS$'].to_bytes())[0])))
+            rnode.unfreeze(recursive=True, reevaluate_constraints=True)
+            rnode.freeze()
+            rnode['smscmd/TP-DCS$'].show()
+            self.assertEqual(rnode['smscmd/TP-DCS'].to_bytes(), corrupt_table[idx])
+
+
     def test_TermNodeDisruption_1(self):
         simple  = self.dm.get_data('Simple')
         consumer = TermNodeDisruption()
@@ -1798,7 +1869,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of imgs: %d'%idx, rgb=Color.INFO))
 
-        # self.assertEqual(idx, )
+        # self.assertEqual(idx, 202)
 
 
     def test_USB(self):
@@ -1814,7 +1885,161 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of confs: %d'%idx, rgb=Color.INFO))
 
-        self.assertIn(idx, [148, 149, 150]) # previously 189
+        self.assertIn(idx, [268, 270]) # previously [148, 149, 150]
+
+
+if mock_module and ddt_module:
+    @ddt.ddt
+    class TestBitFieldCondition(unittest.TestCase):
+
+        @classmethod
+        def setUpClass(cls):
+
+            def side_effect(idx):
+                return [0, 1, 2][idx]
+
+            cls.node = mock.Mock()
+            cls.node.get_subfield = mock.MagicMock(side_effect=side_effect)
+
+
+        @ddt.data((1, 1), (1, [1]), ([1], [1]),
+                      (1, (1,)), ((1,), (1,)),
+              (2, [2, 6, 7]), (2, (2, 6, 7)),
+              ([1, 2], [1, [5, 2, 8]]), ([1, 2], [[1], [5, 6, 2]]),
+              ((1, 2), (1, (5, 2, 8))), ((1, 2), ((1,), (5, 6, 2))))
+        @ddt.unpack
+        def test_with_one_argument(self, sf, val):
+            condition = BitFieldCondition(sf=sf, val=val)
+            self.assertTrue(condition.check(TestBitFieldCondition.node))
+
+            condition = BitFieldCondition(sf=sf, neg_val=val)
+            self.assertFalse(condition.check(TestBitFieldCondition.node))
+
+        @ddt.data(([0, 1, 2], [0, [1, 3], None], [None, None, 5]),
+              ([0, 2], [None, 2], [3, None]))
+        @ddt.unpack
+        def test_true_with_both_arguments(self, sf, val, neg_val):
+            condition = BitFieldCondition(sf=sf, val=val, neg_val=neg_val)
+            self.assertTrue(condition.check(TestBitFieldCondition.node))
+
+        @ddt.data(([0, 1, 2], [[0, 1], [1, 2], None], [None, None, [1, 2, 3]]),
+                  ([0, 1, 2], [[1, 2, 3], [1, 2], None], [None, None, [1, 3, 5]]))
+        @ddt.unpack
+        def test_false_with_both_arguments(self, sf, val, neg_val):
+            condition = BitFieldCondition(sf=sf, val=val, neg_val=neg_val)
+            self.assertFalse(condition.check(TestBitFieldCondition.node))
+
+        def test_true_val_has_priority(self):
+            condition = BitFieldCondition(sf=0, val=[0, 4, 5], neg_val=[0, 4, 5])
+            self.assertTrue(condition.check(TestBitFieldCondition.node))
+
+        def test_false_val_has_priority(self):
+            condition = BitFieldCondition(sf=0, val=[3, 4, 5], neg_val=[3, 4, 5])
+            self.assertFalse(condition.check(TestBitFieldCondition.node))
+
+        @ddt.data((None, [2, 3]), ([1], 1), ((1,), 2),
+              ([1], [2, 1, 4]), ((1,), (2, 1, 4)),
+              ([1, 2], [1]))
+        @ddt.unpack
+        def test_invalid_with_one_argument(self, sf, val):
+            self.assertRaises(Exception, BitFieldCondition, sf=sf, val=val)
+            self.assertRaises(Exception, BitFieldCondition, sf=sf, neg_val=val)
+
+        @ddt.data((1, None, None), (None, 2, 3),
+              ([1, 2], [1, None], [2, None]),
+              ([1, 2], [1, 2], [[1, 2, 3, 4]]),
+              ([1, 2], [1, 2, 3, 4], [[1, 2]]))
+        @ddt.unpack
+        def test_invalid_with_both_arguments(self, sf, val, neg_val):
+            self.assertRaises(Exception, BitFieldCondition, sf=sf, val=val, neg_val=neg_val)
+
+    class ProbeUserTest(unittest.TestCase):
+        """Test case used to test the 'ProbeUser' class."""
+
+        @classmethod
+        def setUpClass(cls):
+            pass
+
+        def setUp(self):
+            """Initialisation des tests."""
+
+            self.timeout = 2
+
+            self.probe = Probe()
+            self.probe.main = mock.Mock()
+
+            self.probe.start = mock.Mock()
+            self.probe.stop = mock.Mock()
+
+            self.dm = mock.Mock()
+            self.target = mock.Mock()
+            self.logger = mock.Mock()
+
+            self._set_up_specific()
+
+        def _set_up_specific(self):
+            self.probe_user = ProbeUser(self.probe)
+
+        def tearDown(self):
+            pass
+
+        def test_not_started_is_alive(self):
+            self.assertFalse(self.probe_user.is_alive())
+
+        def test_started_is_alive(self):
+            self.probe_user.start(self.dm, self.target, self.logger)
+            self.assertTrue(self.probe_user.is_alive())
+
+        def test_stopped_is_alive(self):
+            self.probe_user.start(self.dm, self.target, self.logger)
+            self.probe_user.stop()
+            self.probe_user.join(self.timeout)
+            self.assertFalse(self.probe_user.is_alive())
+
+        def test_multiple_starts(self):
+            self.probe_user.start(self.dm, self.target, self.logger)
+            self.assertRaises(RuntimeError, self.probe_user.start, self.dm, self.target, self.logger)
+
+        def test_start_and_stop(self):
+            self.probe_user.start(self.dm, self.target, self.logger)
+            self.probe_user.stop()
+            self.probe_user.join(self.timeout)
+            self.probe.start.assert_called_once_with(self.dm, self.target, self.logger)
+            self.probe.stop.assert_called_once_with(self.dm, self.target, self.logger)
+
+        def test_main(self):
+            test_period = 0.5
+            delta = 0.005
+            self.probe_user.set_probe_delay(0.05)
+
+            print("***** test period:                       " + str(test_period))
+            print("***** tolerate delta between executions: " + str(delta))
+            print("***** probe delay:                       " + str(self.probe_user.get_probe_delay()))
+
+            execution_times = []
+
+            def side_effect(*args, **kwargs):
+                execution_times.append(datetime.datetime.now())
+                return mock.Mock()
+
+            self.probe.main.side_effect = side_effect
+
+            self.probe_user.start(self.dm, self.target, self.logger)
+            time.sleep(test_period)
+            self.probe_user.stop()
+            self.probe_user.join(self.timeout)
+            self.probe.main.assert_called_with(self.dm, self.target, self.logger)
+
+            print("***** probe's main method execution times:             ")
+            for execution in execution_times:
+                print("      " + str(execution))
+
+            self.assertTrue(self.probe.main.call_count >= test_period/self.probe_user.get_probe_delay() - 1)
+
+            for i in range(len(execution_times)):
+                if i+1 < len(execution_times):
+                    self.assertTrue(0 <= (execution_times[i+1] - execution_times[i]).total_seconds()
+                                    - self.probe_user.get_probe_delay() <= delta)
 
 
 
@@ -2110,7 +2335,7 @@ class TestNodeFeatures(unittest.TestCase):
         b.show(raw_limit=400)
 
 
-    def test_exist_condition(self):
+    def test_exist_condition_01(self):
         ''' Test existence condition for generation and absorption
         '''
 
@@ -2137,7 +2362,7 @@ class TestNodeFeatures(unittest.TestCase):
             print('-----------------------')
 
             print('-----------------------')
-            print('Absorb Status: status=%d, off=%d, sz=%d, name=%s' % (status, off, size, name))
+            print('Absorb Status: status=%s, off=%d, sz=%d, name=%s' % (status, off, size, name))
             print(' \_ length of original data: %d' % len(raw_data))
             print(' \_ remaining: %r' %raw_data[size:])
             print('-----------------------')
@@ -2147,7 +2372,65 @@ class TestNodeFeatures(unittest.TestCase):
 
             d.unfreeze()
 
+    def test_exist_condition_02(self):
 
+        cond_desc = \
+        {'name': 'exist_cond',
+         'shape_type': MH.Ordered,
+         'contents': [
+             {'name': 'opcode',
+              'determinist': True,
+              'contents': String(val_list=['A3', 'A2'])},
+
+             {'name': 'command_A3',
+              'exists_if': (RawCondition('A3'), 'opcode'),
+              'contents': [
+                  {'name': 'A3_subopcode',
+                   'contents': BitField(subfield_sizes=[15,2,4], endian=VT.BigEndian,
+                                        subfield_val_lists=[None, [1,2], [5,6,12]],
+                                        subfield_val_extremums=[[500, 600], None, None],
+                                        determinist=False)},
+
+                  {'name': 'A3_int',
+                   'determinist': True,
+                   'contents': UINT16_be(int_list=[10, 20, 30])},
+
+                  {'name': 'A3_deco1',
+                   'exists_if/and': [(IntCondition(val=[10]), 'A3_int'),
+                                     (BitFieldCondition(sf=2, val=[5]), 'A3_subopcode')],
+                   'contents': String(val_list=['$ and_OK $'])},
+
+                  {'name': 'A3_deco2',
+                   'exists_if/and': [(IntCondition(val=[10]), 'A3_int'),
+                                     (BitFieldCondition(sf=2, val=[6]), 'A3_subopcode')],
+                   'contents': String(val_list=['! and_KO !'])}
+              ]},
+
+             {'name': 'A31_payload1',
+              'contents': String(val_list=['$ or_OK $']),
+              'exists_if/or': [(IntCondition(val=[20]), 'A3_int'),
+                               (BitFieldCondition(sf=2, val=[5]), 'A3_subopcode')],
+              },
+
+             {'name': 'A31_payload2',
+              'contents': String(val_list=['! or_KO !']),
+              'exists_if/or': [(IntCondition(val=[20]), 'A3_int'),
+                               (BitFieldCondition(sf=2, val=[6]), 'A3_subopcode')],
+              },
+
+         ]}
+
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(cond_desc)
+
+        print('***')
+        raw = node.to_bytes()
+        node.show()
+        print(raw, len(raw))
+
+        result = b"A3T\x0f\xa0\x00\n$ and_OK $$ or_OK $"
+
+        self.assertEqual(result, raw)
 
     def test_generalized_exist_cond(self):
 
@@ -2217,6 +2500,106 @@ class TestNodeFeatures(unittest.TestCase):
 
         print('***')
         print(result, len(result))
+
+        self.assertEqual(result, raw)
+
+
+    def test_pick_and_cond(self):
+
+        pick_cond_desc = \
+        {'name': 'pick_cond',
+         'shape_type': MH.Ordered,
+         'contents': [
+             {'name': 'opcode',
+              'determinist': True,
+              'contents': String(val_list=['A1', 'A2', 'A3'])},
+             {'name': 'part1',
+              'determinist': True,
+              'shape_type': MH.Pick,
+              'contents': [
+                  {'name': 'option2',
+                   'exists_if': (RawCondition('A2'), 'opcode'),
+                   'contents': String(val_list=[' 1_KO_A2'])},
+                  {'name': 'option3',
+                   'exists_if': (RawCondition('A3'), 'opcode'),
+                   'contents': String(val_list=[' 1_KO_A3'])},
+                  {'name': 'option1',
+                   'exists_if': (RawCondition('A1'), 'opcode'),
+                   'contents': String(val_list=[' 1_OK_A1'])},
+              ]},
+             {'name': 'part2',
+              'determinist': False,
+              'weights': (100, 100, 1),
+              'shape_type': MH.Pick,
+              'contents': [
+                  {'name': 'optionB',
+                   'exists_if': (RawCondition('A2'), 'opcode'),
+                   'contents': String(val_list=[' 2_KO_A2'])},
+                  {'name': 'optionC',
+                   'exists_if': (RawCondition('A3'), 'opcode'),
+                   'contents': String(val_list=[' 2_KO_A3'])},
+                  {'name': 'optionA',
+                   'exists_if': (RawCondition('A1'), 'opcode'),
+                   'contents': String(val_list=[' 2_OK_A1'])},
+              ]},
+         ]}
+
+        mh = ModelHelper(delayed_jobs=True)
+        node = mh.create_graph_from_desc(pick_cond_desc)
+
+        print('***')
+        raw = node.to_bytes()
+        print(raw, len(raw))
+
+        result = b'A1 1_OK_A1 2_OK_A1'
+
+        self.assertEqual(result, raw)
+
+
+    def test_collapse_padding(self):
+
+        padding_desc = \
+        {'name': 'padding',
+         'shape_type': MH.Ordered,
+         'custo_set': MH.Custo.NTerm.CollapsePadding,
+         'contents': [
+             {'name': 'part1',
+              'determinist': True,
+              'contents': BitField(subfield_sizes=[3,1], padding=0, endian=VT.BigEndian,
+                                   subfield_val_lists=[None, [1]],
+                                   subfield_val_extremums=[[1,3], None])
+              },
+             {'name': 'sublevel',
+              'contents': [
+                  {'name': 'part2_o1',
+                   'exists_if': (BitFieldCondition(sf=0, val=[1]), 'part1'),
+                   'contents': BitField(subfield_sizes=[2,2,1], endian=VT.BigEndian,
+                                        subfield_val_lists=[[1,2], [3], [0]])
+                  },
+                  {'name': 'part2_o2',
+                   'exists_if': (BitFieldCondition(sf=0, val=[1]), 'part1'),
+                   'contents': BitField(subfield_sizes=[2,2], endian=VT.BigEndian,
+                                        subfield_val_lists=[[3], [3]])
+                  },
+                  {'name': 'part2_KO',
+                   'exists_if': (BitFieldCondition(sf=0, val=[2]), 'part1'),
+                   'contents': BitField(subfield_sizes=[2,2], endian=VT.BigEndian,
+                                        subfield_val_lists=[[1], [1]])
+                  }
+              ]}
+         ]}
+
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(padding_desc)
+
+        print('***')
+        raw = node.to_bytes()
+        node.show()   # part2_KO should not be displayed
+        print(raw, binascii.b2a_hex(raw),
+              list(map(lambda x: bin(x), struct.unpack('>'+'B'*len(raw), raw))),
+              len(raw))
+
+        result = b'\xf6\xc8'
 
         self.assertEqual(result, raw)
 
@@ -2765,6 +3148,11 @@ class TestDataModel(unittest.TestCase):
     def setUp(self):
         pass
 
+    def test_data_container(self):
+        node = fmk.dm.get_external_node(dm_name='mydf', data_id='exist_cond')
+        data = copy.copy(Data(node))
+        data = copy.copy(Data('TEST'))
+
     @unittest.skipIf(not run_long_tests, "Long test case")
     def test_data_makers(self):
 
@@ -2903,7 +3291,7 @@ class TestDataModel(unittest.TestCase):
                 print('-----------------------')
 
                 print('-----------------------')
-                print('Absorb Status: status=%d, off=%d, sz=%d, name=%s' % (status, off, size, name))
+                print('Absorb Status: status=%s, off=%d, sz=%d, name=%s' % (status, off, size, name))
                 print(' \_ length of original data: %d' % len(raw_data))
                 print(' \_ remaining: %r' %raw_data[size:])
                 print('-----------------------')
@@ -3141,4 +3529,6 @@ if __name__ == "__main__":
     # print(test_args, sys.argv)
     args = [sys.argv[0]] + test_args[1]
 
-    unittest.main(verbosity=2, argv=args)
+    unittest.main(verbosity=2, argv=args, exit=False)
+
+    fmk.exit_fmk()

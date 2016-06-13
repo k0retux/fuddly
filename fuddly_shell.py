@@ -24,7 +24,7 @@
 ################################################################################
 
 import sys
-from fuzzfmk.plumbing import *
+from framework.plumbing import *
 
 fmk = FmkPlumbing()
 

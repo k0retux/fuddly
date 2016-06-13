@@ -1,5 +1,7 @@
 [NEW FEATURES]
 
+- Add support for automatic creation of Generators that play around scenarios
+- Add support for scenario visualization and JSON description of scenario
 - Add GDB/PIN/QEMU probes/managers
 - Add support for evolutionary fuzzing
 - Add FmkDB visualization tools

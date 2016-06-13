@@ -34,13 +34,13 @@ import zlib
 
 sys.path.append('.')
 
-from fuzzfmk.plumbing import *
-from fuzzfmk.data_model import *
-from fuzzfmk.data_model_helpers import *
-from fuzzfmk.value_types import *
-from fuzzfmk.fuzzing_primitives import *
-from fuzzfmk.basic_primitives import *
-import fuzzfmk.global_resources as gr
+from framework.plumbing import *
+from framework.data_model import *
+from framework.data_model_helpers import *
+from framework.value_types import *
+from framework.fuzzing_primitives import *
+from framework.basic_primitives import *
+import framework.global_resources as gr
 
 def gather_pdf_objects(path=gr.imported_data_folder):
 
@@ -1213,7 +1213,7 @@ data_model = PDF_DataModel()
 
 if __name__ == "__main__":
 
-    from fuzzfmk.plumbing import *
+    from framework.plumbing import *
     fmk = FmkPlumbing()
 
     dm = data_model

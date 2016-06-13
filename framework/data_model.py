@@ -34,11 +34,13 @@ import binascii
 import collections
 import traceback
 
+from enum import Enum
+
 sys.path.append('.')
 
-from fuzzfmk.basic_primitives import *
+from framework.basic_primitives import *
 from libs.external_modules import *
-from fuzzfmk.global_resources import *
+from framework.global_resources import *
 
 DEBUG = False
 
@@ -47,25 +49,31 @@ class Data(object):
     def __init__(self, data=None):
         self.node = None
         self.raw = None
-        self.__type = None
+
+        self._type = None
         self._dm = None
         self._data_id = None
-
         self._recordable = False
-        self.__unusable = False
+        self._unusable = False
+        self._blocked = False
 
         self.info_list = []
         self.info = {}
-        self.__info_idx = {}
+        self._info_idx = {}
+
+        # callback related
+        self._callbacks = {}
+        self._pending_ops = {}
 
         self._history = None
+
+        # This attribute is set to True when the Data content has been retrieved from the fmkDB
+        self.from_fmkdb = False
 
         if data is None:
             return
 
-        if isinstance(data, bytes):
-            self.update_from_str_or_bytes(data)
-        elif isinstance(data, Node):
+        if isinstance(data, Node):
             self.update_from_node(data)
         else:
             self.update_from_str_or_bytes(data)
@@ -77,19 +85,10 @@ class Data(object):
         return self._data_id
 
     def set_initial_dmaker(self, t):
-        self.__type = t
+        self._type = t
 
     def get_initial_dmaker(self):
-        return self.__type
-
-    def flatten_copy(self):
-        d = Data(self.to_bytes())
-        d._dm = self._dm
-        d._recordable = self._recordable
-        d.__unusable = self.__unusable
-        d.info = copy.copy(self.info)
-
-        return d
+        return self._type
 
     def update_from_str_or_bytes(self, data_str):
         if sys.version_info[0] > 2 and not isinstance(data_str, bytes):
@@ -112,17 +111,32 @@ class Data(object):
         if self.node:
             val = self.node.to_bytes()
             self.raw = val
-
         return self.raw
 
+    def to_str(self):
+        if self.node:
+            val = self.node.to_str()
+            return val
+        else:
+            if sys.version_info[0] > 2:
+                return self.raw.decode('latin_1')
+            else:
+                return self.raw
+
+    def make_blocked(self):
+        self._blocked = True
+
+    def make_free(self):
+        self._blocked = False
+
+    def is_blocked(self):
+        return self._blocked
+
     def make_unusable(self):
-        self.__unusable = True
+        self._unusable = True
 
     def is_unusable(self):
-        if self.__unusable:
-            return True
-        else:
-            return False
+        return self._unusable
 
     # Only taken into account if the Logger has been set to
     # record data only when requested (explicit_data_recording == True)
@@ -146,7 +160,7 @@ class Data(object):
 
     def init_read_info(self):
         for k in self.info:
-            self.__info_idx[k] = 0
+            self._info_idx[k] = 0
 
     def read_info(self, data_maker_name, dmaker_type):
         key = (data_maker_name, dmaker_type)
@@ -159,13 +173,13 @@ class Data(object):
             return ['']
 
         try:
-            ret = info_l[self.__info_idx[key]]
+            ret = info_l[self._info_idx[key]]
         except IndexError:
             print("\n**** No more info associated to the key " \
                       "({:s}, {:s})! ***\n".format(data_maker_name, dmaker_type))
             ret = ['']
 
-        self.__info_idx[key] += 1
+        self._info_idx[key] += 1
         return ret
 
     def set_history(self, hist):
@@ -183,19 +197,16 @@ class Data(object):
         if self.node is not None:
             self.node.freeze()
 
-    def get_contents(self, copy=False):
+    def get_contents(self, do_copy=False):
         if self.node is not None:
             # we freeze the contents before exporting it
             self.node.freeze()
-            if copy:
+            if do_copy:
                 contents = Node(self.node.name, base_node=self.node, ignore_frozen_state=False)
             else:
                 contents = self.node
         else:
-            if copy:
-                contents = copy.copy(self.raw)
-            else:
-                contents = self.raw
+             contents = copy.copy(self.raw) if do_copy else self.raw
 
         return contents
 
@@ -207,14 +218,68 @@ class Data(object):
 
     pretty_print = show
 
+    def register_callback(self, callback, hook=HOOK.after_fbk):
+        assert isinstance(hook, HOOK)
+        if hook not in self._callbacks:
+            self._callbacks[hook] = collections.OrderedDict()
+        self._callbacks[hook][id(callback)] = callback
+
+    def cleanup_callbacks(self, hook=HOOK.after_fbk):
+        assert isinstance(hook, HOOK)
+        if hook in self._callbacks:
+            del self._callbacks[hook]
+        if hook in self._pending_ops:
+            del self._pending_ops[hook]
+
+    def run_callbacks(self, feedback=None, hook=HOOK.after_fbk):
+        assert isinstance(hook, HOOK)
+        if hook not in self._callbacks:
+            return
+
+        new_cbks = copy.copy(self._callbacks[hook])
+        for cbk_id, cbk in self._callbacks[hook].items():
+            if hook == HOOK.after_fbk:
+                cbk_ops = cbk(feedback)
+            else:
+                cbk_ops = cbk()
+            if hook not in self._pending_ops:
+                self._pending_ops[hook] = []
+            if cbk_ops is not None:
+                self._pending_ops[hook].append(cbk_ops.get_operations())
+                if cbk_ops.is_flag_set(CallBackOps.RemoveCB):
+                    del new_cbks[cbk_id]
+                if cbk_ops.is_flag_set(CallBackOps.StopProcessingCB):
+                    break
+
+        self._callbacks[hook] = new_cbks
+
+    def pending_callback_ops(self, hook=HOOK.after_fbk):
+        assert isinstance(hook, HOOK)
+        if hook in self._pending_ops:
+            pops = self._pending_ops[hook]
+            del self._pending_ops[hook]
+            return pops
+        else:
+            return None
+
+    def copy_callback_from(self, data):
+        self._callbacks = copy.copy(data._callbacks)
+
     def __copy__(self):
         new_data = type(self)()
         new_data.__dict__.update(self.__dict__)
         new_data.info_list = copy.copy(self.info_list)
         new_data.info = copy.copy(self.info)
-        new_data.__info_idx = copy.copy(self.__info_idx)
+        new_data._info_idx = copy.copy(self._info_idx)
         new_data._history = copy.copy(self._history)
-        new_data.__type = copy.copy(self.__type)
+        new_data._type = copy.copy(self._type)
+        new_data._callbacks = {}
+        for hook, cbk_dict in self._callbacks.items():
+            new_data._callbacks[hook] = collections.OrderedDict()
+            for key, cbk in cbk_dict.items():
+                ncbk = copy.copy(cbk)
+                new_data._callbacks[hook][id(ncbk)] = ncbk
+        new_data._pending_ops = {}  # we do not copy pending_ops
 
         if self.node is not None:
             e = Node(self.node.name, base_node=self.node, ignore_frozen_state=False)
@@ -223,15 +288,65 @@ class Data(object):
         return new_data
 
     def __str__(self):
-        if self.node:
-            self.raw = self.node.to_bytes()
-        return str(self.raw)
+        return self.to_str()
 
     def __repr__(self):
-        if self.node:
-            self.raw = self.node.to_bytes()
-        return repr(self.raw)
+        return repr(self.to_bytes())
 
+
+class CallBackOps(object):
+
+    # Flags
+    RemoveCB = 1 # If True, remove this callback after execution
+    StopProcessingCB = 2 # If True, any callback following this one won't be processed
+
+    # Instructions
+    Add_PeriodicData = 10  # ask for sending periodically a data
+    Del_PeriodicData = 11  # ask for stopping a periodic sending
+    Set_FbkTimeout = 21  # set the time duration for feedback gathering for the further data sending
+    Replace_Data = 30  # replace the data by another one
+
+    def __init__(self, remove_cb=False, stop_process_cb=False):
+        self.instr = {
+            CallBackOps.Add_PeriodicData: {},
+            CallBackOps.Del_PeriodicData: [],
+            CallBackOps.Set_FbkTimeout: None,
+            CallBackOps.Replace_Data: None
+        }
+        self.flags = {
+            CallBackOps.RemoveCB: remove_cb,
+            CallBackOps.StopProcessingCB: stop_process_cb
+            }
+
+    def set_flag(self, name):
+        if name in self.flags:
+            self.flags[name] = True
+        else:
+            raise ValueError
+
+    def is_flag_set(self, name):
+        if name not in self.flags:
+            raise ValueError
+        return self.flags[name]
+
+    def add_operation(self, instr_type, id=None, param=None, period=None):
+        if instr_type == CallBackOps.Add_PeriodicData:
+            assert id is not None and param is not None
+            self.instr[instr_type][id] = (param, period)
+        elif instr_type == CallBackOps.Del_PeriodicData:
+            assert id is not None
+            self.instr[instr_type].append(id)
+        elif instr_type == CallBackOps.Set_FbkTimeout:
+            assert isinstance(param, int)
+            self.instr[instr_type] = param
+        elif instr_type == CallBackOps.Replace_Data:
+            # param is an opaque
+            self.instr[instr_type] = param
+        else:
+            raise ValueError('Unrecognized Instruction Type')
+
+    def get_operations(self):
+        return self.instr
 
 
 def split_with(predicate, iterable):
@@ -280,7 +395,7 @@ def split_verbose_with(predicate, iterable):
 
 def flatten(nested):
     for x in nested:
-        if hasattr(x, '__iter__') and not isinstance(x, str) and not isinstance(x, bytes):
+        if hasattr(x, '__iter__') and not isinstance(x, (str, bytes)):
             for y in flatten(x):
                 yield y
         else:
@@ -290,11 +405,10 @@ def flatten(nested):
 def convert_to_internal_repr(val):
     if isinstance(val, int):
         val = bytes(val)
-    else:
-        if not isinstance(val, str) and not isinstance(val, bytes):
-            val = repr(val)
-        if sys.version_info[0] > 2 and not isinstance(val, bytes):
-            val = bytes(val, 'latin_1')
+    elif not isinstance(val, (str, bytes)):
+        val = repr(val)
+    elif sys.version_info[0] > 2 and not isinstance(val, bytes):
+        val = bytes(val, 'latin_1')
     return val
 
 def unconvert_from_internal_repr(val):
@@ -307,20 +421,12 @@ def unconvert_from_internal_repr(val):
 nodes_weight_re = re.compile('(.*?)\((.*)\)')
 
 
-class AbsorbStatus:
+class AbsorbStatus(Enum):
 
     Accept = 1
     Reject = 2
     Absorbed = 3
     FullyAbsorbed = 4
-
-    DESC = {
-        Accept: 'Accept',
-        Reject: 'Reject',
-        Absorbed: 'Absorbed',
-        FullyAbsorbed: 'FullyAbsorbed'
-    }
-
 
 # List of constraints that rules blob absorption
 class AbsCsts(object):
@@ -394,6 +500,54 @@ class SyncScope:
     Existence = 2
     Inexistence = 3
 
+
+class SyncObj(object):
+
+    def __init__(self, sync_list, and_junction=True):
+        self.sync_list = sync_list
+        self.and_clause = and_junction
+
+    def make_private(self, node_dico):
+        new_sl = []
+        for node, cond in self.sync_list:
+            new_node = node_dico.get(node, None)
+            new_param = copy.copy(cond)
+            if new_node is not None:
+                new_sl.append((new_node, new_param))
+            else:
+                # refer to comments of NodeInternals._update_node_refs()
+                pass
+        self.sync_list = new_sl
+
+    def check(self):
+        if self.and_clause:
+            for node, cond in self.sync_list:
+                if not self._condition_satisfied(node, cond):
+                    return False
+            else:
+                return True
+        else:
+            for node, cond in self.sync_list:
+                if self._condition_satisfied(node, cond):
+                    return True
+            else:
+                return False
+
+    def _condition_satisfied(self, node, condition):
+        exist = node.env.node_exists(id(node))
+        crit_1 = True if exist else False
+        crit_2 = True
+        if exist and condition is not None:
+            try:
+                crit_2 = condition.check(node)
+            except Exception as e:
+                print("\n*** ERROR: existence condition is not verifiable " \
+                      "for node '{:s}' (id: {:d})!\n" \
+                      "*** The condition checker raise an exception!".format(node.name, id(node)))
+                raise
+        return crit_1 and crit_2
+
+
 class NodeCondition(object):
     '''
     Base class for every node-related conditions. (Note that NodeCondition
@@ -423,7 +577,7 @@ class RawCondition(NodeCondition):
             self._handle_cond(neg_val)
 
     def _handle_cond(self, val):
-        if isinstance(val, tuple) or isinstance(val, list):
+        if isinstance(val, (tuple, list)):
             self.val = []
             for v in val:
                 self.val.append(convert_to_internal_repr(v))
@@ -434,12 +588,12 @@ class RawCondition(NodeCondition):
         node_val = node._tobytes()
         # node_val = node_val.replace(Node.DEFAULT_DISABLED_VALUE, b'')
         if self.positive_mode:
-            if isinstance(self.val, tuple) or isinstance(self.val, list):
+            if isinstance(self.val, (tuple, list)):
                 result = node_val in self.val
             else:
                 result = node_val == self.val
         else:
-            if isinstance(self.val, tuple) or isinstance(self.val, list):
+            if isinstance(self.val, (tuple, list)):
                 result = node_val not in self.val
             else:
                 result = node_val != self.val
@@ -464,10 +618,10 @@ class IntCondition(NodeCondition):
             self.val = neg_val
 
     def check(self, node):
-        from fuzzfmk.value_types import INT
+        from framework.value_types import INT
         assert(node.is_typed_value(subkind=INT))
 
-        if isinstance(self.val, tuple) or isinstance(self.val, list):
+        if isinstance(self.val, (tuple, list)):
             if self.positive_mode:
                 result = node.get_current_raw_val() in self.val
             else:
@@ -484,26 +638,61 @@ class IntCondition(NodeCondition):
 
 class BitFieldCondition(NodeCondition):
 
-    def __init__(self, sf, val):
+    def __init__(self, sf, val=None, neg_val=None):
         '''
         Args:
-          sf (int): subfield of the BitField() on which the condition apply
-          val (int): integer (or integer list) that satisfy the condition
+          sf (int): subfield (or subfield list) of the BitField() on which the condition apply
+          val (int): integer (or integer list or list of integer list) that satisfies the condition
+          neg_val (int): integer (or integer list or list of integer list) that does NOT satisfy the condition
         '''
+
+        assert(val is not None or neg_val is not None)
+
+        if isinstance(sf, (tuple, list)):
+            assert(len(sf) != 0)
+            if val is not None:
+                assert(isinstance(val, (tuple, list)) and len(sf) == len(val))
+
+            if neg_val is not None:
+                assert(isinstance(neg_val, (tuple, list)) and len(sf) == len(neg_val))
+        else:
+            sf = [sf]
+            if val is not None:
+                val = [val]
+
+            if neg_val is not None:
+                neg_val = [neg_val]
+
         self.sf = sf
-        self.val = val
+
+        for sf in self.sf:
+            assert(sf is not None)
+
+
+        self.val = val if val is not None else [None for _ in self.sf]
+        self.neg_val = neg_val if neg_val is not None else [None for _ in self.sf]
+
+        for v, nv in zip(self.val, self.neg_val):
+            assert(v is not None or nv is not None)
+
 
     def check(self, node):
-        from fuzzfmk.value_types import BitField
+        from framework.value_types import BitField
         assert(node.is_typed_value(subkind=BitField))
 
-        if isinstance(self.val, tuple) or isinstance(self.val, list):
-            result = node.get_subfield(idx=self.sf) in self.val
-        else:
-            assert(isinstance(self.val, int))
-            result = node.get_subfield(idx=self.sf) == self.val
+        for sf, val, neg_val in zip(self.sf, self.val, self.neg_val):
+            if val is not None:
+                if not isinstance(val, (tuple, list)):
+                    val = [val]
+                result = node.get_subfield(idx=sf) in val
+            else:
+                if not isinstance(neg_val, (tuple, list)):
+                    neg_val = [neg_val]
+                result = node.get_subfield(idx=sf) not in neg_val
+            if not result:
+                return False
 
-        return result
+        return True
 
 
 
@@ -551,10 +740,12 @@ class NonTermCusto(NodeCustomization):
     """
     MutableClone = 1
     FrozenCopy = 2
+    CollapsePadding = 3
 
     _custo_items = {
         MutableClone: True,
-        FrozenCopy: True
+        FrozenCopy: True,
+        CollapsePadding: False
     }
 
     @property
@@ -564,6 +755,10 @@ class NonTermCusto(NodeCustomization):
     @property
     def frozen_copy_mode(self):
         return self._custo_items[self.FrozenCopy]
+
+    @property
+    def collapse_padding_mode(self):
+        return self._custo_items[self.CollapsePadding]
 
 
 class GenFuncCusto(NodeCustomization):
@@ -649,7 +844,7 @@ class NodeInternals(object):
             ### GENERIC ###
             NodeInternals.Freezable: True,
             NodeInternals.Mutable: True,
-            NodeInternals.Determinist: False,
+            NodeInternals.Determinist: True,
             NodeInternals.Finite: False,
             # Used for absorption
             NodeInternals.Abs_Postpone: False,
@@ -676,10 +871,15 @@ class NodeInternals(object):
     def get_current_subkind(self):
         raise NotImplementedError
 
-    def set_node_sync(self, node, scope, param=None):
+    def set_node_sync(self, scope, node=None, param=None, sync_obj=None):
         if self._sync_with is None:
             self._sync_with = {}
-        self._sync_with[scope] = (node, param)
+        if sync_obj is not None:
+            assert node is None and param is None
+            self._sync_with[scope] = sync_obj
+        else:
+            assert node is not None
+            self._sync_with[scope] = (node, param)
 
     def get_node_sync(self, scope):
         if self._sync_with is None:
@@ -706,25 +906,30 @@ class NodeInternals(object):
         sync_nodes = copy.copy(self._sync_with)
 
         for scope, obj in sync_nodes.items():
-            node, param = obj
-            new_node = node_dico.get(node, None)
-            new_param = copy.copy(param)
-            if new_node is not None:
-                self._sync_with[scope] = (new_node, new_param)
+            if isinstance(obj, SyncObj):
+                new_obj = copy.copy(obj)
+                new_obj.make_private(node_dico)
+                self._sync_with[scope] = new_obj
             else:
-                # this case only triggers during a call to
-                # NonTerm.get_subnodes_with_csts(), that is when new
-                # subnodes are created during a
-                # Node._get_value(). Indeed, when making copies of a
-                # node within the NonTerm.subnodes_set, the node_dico
-                # of the copies may miss upper nodes. In such a case,
-                # no update needs to be done, as the node ref exist
-                # and is correct for the base_node, and has no meaning
-                # for the copy.
-                pass
-                # print("\n*** WARNING: node refs not updatable for node '%r'!\n" \
-                #       " \_ name: '%s' \n" \
-                #       " \_ updated_node: '%s', scope: '%r'\n" % (node, node.name, debug, scope))
+                node, param = obj
+                new_node = node_dico.get(node, None)
+                new_param = copy.copy(param)
+                if new_node is not None:
+                    self._sync_with[scope] = (new_node, new_param)
+                else:
+                    # this case only triggers during a call to
+                    # NonTerm.get_subnodes_with_csts(), that is when new
+                    # subnodes are created during a
+                    # Node._get_value(). Indeed, when making copies of a
+                    # node within the NonTerm.subnodes_set, the node_dico
+                    # of the copies may miss upper nodes. In such a case,
+                    # no update needs to be done, as the node ref exist
+                    # and is correct for the base_node, and has no meaning
+                    # for the copy.
+                    pass
+                    # print("\n*** WARNING: node refs not updatable for node '%r'!\n" \
+                    #       " \_ name: '%s' \n" \
+                    #       " \_ updated_node: '%s', scope: '%r'\n" % (node, node.name, debug, scope))
 
 
     def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement):
@@ -771,16 +976,10 @@ class NodeInternals(object):
         return self.__attrs[name]
 
     def _make_specific(self, name):
-        if name in [NodeInternals.Determinist, NodeInternals.Finite]:
-            return False
-        else:
-            return True
+        return name not in [NodeInternals.Determinist, NodeInternals.Finite]
 
     def _unmake_specific(self, name):
-        if name in [NodeInternals.Determinist, NodeInternals.Finite]:
-            return False
-        else:
-            return True
+        return name not in [NodeInternals.Determinist, NodeInternals.Finite]
 
     def _match_mandatory_attrs(self, criteria):
         if criteria is None:
@@ -972,7 +1171,7 @@ class NodeInternals(object):
     def pretty_print(self):
         return None
 
-    def _get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
         raise NotImplementedError
 
     def reset_depth_specific(self, depth):
@@ -1065,10 +1264,7 @@ class NodeInternalsCriteria(object):
         self._node_constraints[cst] = required
 
     def get_node_constraint(self, cst):
-        if cst in self._node_constraints:
-            return self._node_constraints[cst]
-        else:
-            return None
+        return self._node_constraints[cst] if cst in self._node_constraints else None
 
     def clear_node_constraint(self, cst):
         if self._node_constraints is None:
@@ -1190,8 +1386,11 @@ class DynNode_Helpers(object):
 
 
 class NodeInternals_Empty(NodeInternals):
-    def _get_value(self, conf=None, recursive=True):
-        return b'<EMPTY>', True
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
+        if return_node_internals:
+            return (Node.DEFAULT_DISABLED_NODEINT, True)
+        else:
+            return (b'<EMPTY>', True)
 
     def set_child_env(self, env):
         print('Empty:', hex(id(self)))
@@ -1413,7 +1612,7 @@ class NodeInternals_GenFunc(NodeInternals):
             self.generator_arg = generator_arg
 
 
-    def _get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
         if self.custo.trigger_last_mode and not self._trigger_registered:
             assert(self.env is not None)
             self._trigger_registered = True
@@ -1421,12 +1620,16 @@ class NodeInternals_GenFunc(NodeInternals):
                                          args=[conf, recursive],
                                          prio=Node.DJOBS_PRIO_genfunc)
 
-            return (Node.DEFAULT_DISABLED_VALUE, False)
+            if return_node_internals:
+                return (Node.DEFAULT_DISABLED_NODEINT, False)
+            else:
+                return (Node.DEFAULT_DISABLED_VALUE, False)
 
         if not self.is_attr_set(NodeInternals.Freezable):
             self.reset_generator()
 
-        ret = self.generated_node._get_value(conf=conf, recursive=recursive)
+        ret = self.generated_node._get_value(conf=conf, recursive=recursive,
+                                             return_node_internals=return_node_internals)
         return (ret, False)
 
     def _get_delayed_value(self, conf=None, recursive=True):
@@ -1482,10 +1685,7 @@ class NodeInternals_GenFunc(NodeInternals):
 
     def is_frozen(self):
         if self.is_attr_set(NodeInternals.Mutable):
-            if self._generated_node is None:
-                return False
-            else:
-                return True
+            return self._generated_node is not None
         else:
             return self.generated_node.is_frozen()
 
@@ -1576,7 +1776,7 @@ class NodeInternals_Term(NodeInternals):
 
     @staticmethod
     def _convert_to_internal_repr(val):
-        if not isinstance(val, str) and not isinstance(val, bytes):
+        if not isinstance(val, (str, bytes)):
             val = repr(val)
         if sys.version_info[0] > 2 and not isinstance(val, bytes):
             val = bytes(val, 'latin_1')
@@ -1597,17 +1797,17 @@ class NodeInternals_Term(NodeInternals):
     def _set_frozen_value(self, val):
         self.frozen_node = val
 
-    def _get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
 
         if self.frozen_node is not None:
-            return (self.frozen_node, False)
+            return (self, False) if return_node_internals else (self.frozen_node, False)
 
         val = self._get_value_specific(conf, recursive)
 
         if self.is_attr_set(NodeInternals.Freezable):
             self.frozen_node = val
 
-        return (val, True)
+        return (self, True) if return_node_internals else (val, True)
 
     def _get_value_specific(self, conf, recursive):
         raise NotImplementedError
@@ -2435,8 +2635,8 @@ class NodeInternals_NonTerm(NodeInternals):
 
             for delim, sublist in self.__iter_csts(lnode_list[0]):
                 # sublist can be in one of the 2 following forms:                
-                # * [3, [1, [<fuzzfmk.data_model.Node object at 0x7fc49fc56ad0>, 2], 2, [<fuzzfmk.data_model.Node object at 0x7fc49fc56510>, 1, 2]]]
-                # * [[<fuzzfmk.data_model.Node object at 0x7fc49fdb0090>, 1, 3], [<fuzzfmk.data_model.Node object at 0x7fc49fc56ad0>, 3]]
+                # * [3, [1, [<framework.data_model.Node object at 0x7fc49fc56ad0>, 2], 2, [<framework.data_model.Node object at 0x7fc49fc56510>, 1, 2]]]
+                # * [[<framework.data_model.Node object at 0x7fc49fdb0090>, 1, 3], [<framework.data_model.Node object at 0x7fc49fc56ad0>, 3]]
 
                 new_sublist = []
                 if isinstance(sublist[0], list):
@@ -2460,7 +2660,7 @@ class NodeInternals_NonTerm(NodeInternals):
                     for sss in sublist[1]:
                         if isinstance(sss, int):
                             new_sslist.append(sss) # add the relative weight
-                        else:   # it is a list like [<fuzzfmk.data_model.Node object at 0x7fc49fc56ad0>, 2]
+                        else:   # it is a list like [<framework.data_model.Node object at 0x7fc49fc56ad0>, 2]
                             if sss[0] not in old2new_node:
                                 old2new_node[sss[0]] = copy.copy(sss[0])
                             new_node = old2new_node[sss[0]]
@@ -2531,23 +2731,29 @@ class NodeInternals_NonTerm(NodeInternals):
         else:
             return None
 
-    @staticmethod
-    def _get_random_component(comp_list, total_weight):
+    def _get_random_component(self, comp_list, total_weight, check_existence=False):
         r = random.uniform(0, total_weight)
         s = 0
 
-        for weight, csts in split_with(lambda x: isinstance(x, int), comp_list):
+        for weight, comp in split_with(lambda x: isinstance(x, int), comp_list):
             s += weight
-            if s >= r:
-                return csts[0]
-        else: # Might occur because of floating point inaccuracies (TBC)
-            return csts[0]
+            if check_existence:
+                shall_exist = self._existence_from_node(comp[0][0])
+                if shall_exist is not None and not shall_exist:
+                    continue
+            if s >= r:  # if check_existence is False, we always return here
+                return comp[0]
+        else:
+            return None
 
-    @staticmethod
-    def _get_heavier_component(comp_list):
+    def _get_heavier_component(self, comp_list, check_existence=False):
         current_weight = -1
         current_comp = None
         for weight, comp in split_with(lambda x: isinstance(x, int), comp_list):
+            if check_existence:
+                shall_exist = self._existence_from_node(comp[0][0])
+                if shall_exist is not None and not shall_exist:
+                    continue
             if weight > current_weight:
                 current_weight = weight
                 current_comp = comp[0]
@@ -2671,6 +2877,9 @@ class NodeInternals_NonTerm(NodeInternals):
                 new_delim = delim[0] + '>'
                 if sublist[0] > -1:
                     for weight, comp in split_with(lambda x: isinstance(x, int), sublist[1]):
+                        shall_exist = self._existence_from_node(comp[0][0])
+                        if shall_exist is not None and not shall_exist:
+                            continue
                         node, mini, maxi = self._handle_node_desc(comp[0])
                         new_nlist = self._copy_nodelist(node_list)
                         new_nlist[idx] = [new_delim, [[node, mini, maxi]]]
@@ -2678,6 +2887,9 @@ class NodeInternals_NonTerm(NodeInternals):
                         expanded_node_list.insert(0, new_nlist)
                 else:
                     for node_desc in sublist[1]:
+                        shall_exist = self._existence_from_node(node_desc[0])
+                        if shall_exist is not None and not shall_exist:
+                            continue
                         node, mini, maxi = self._handle_node_desc(node_desc)
                         new_nlist = self._copy_nodelist(node_list)
                         new_nlist[idx] = [new_delim, [[node, mini, maxi]]]
@@ -2733,10 +2945,7 @@ class NodeInternals_NonTerm(NodeInternals):
                     base_node.tmp_ref_count += 1
                     nid = base_node.name + ':' + str(base_node.tmp_ref_count)
                     # if self.is_attr_set(NodeInternals.Determinist):
-                    if self.custo.frozen_copy_mode:
-                        ignore_fstate = False
-                    else:
-                        ignore_fstate = True
+                    ignore_fstate = not self.custo.frozen_copy_mode
 
                     new_node = Node(nid, base_node=base_node, ignore_frozen_state=ignore_fstate,
                                     accept_external_entanglement=True,
@@ -2749,9 +2958,6 @@ class NodeInternals_NonTerm(NodeInternals):
                         new_node.clear_attr(NodeInternals.Mutable, all_conf=True, recursive=True)
                     else:
                         pass
-
-                if new_node.is_nonterm():
-                    new_node.cc.customize(self.custo)
 
                 new_node._set_clone_info((base_node.tmp_ref_count-1, nb), base_node)
 
@@ -2772,8 +2978,6 @@ class NodeInternals_NonTerm(NodeInternals):
         # set_clone_info() and other methods are applied for 's' mode
         # only once as there is no node copy.
         if new_node is not None and mode == 's':
-            if new_node.is_nonterm():
-                new_node.cc.customize(self.custo)
             new_node._set_clone_info((0,nb), base_node)
 
         if len(to_entangle) > 1:
@@ -2795,10 +2999,8 @@ class NodeInternals_NonTerm(NodeInternals):
             return (self.frozen_node_list, False)
 
         if self.separator is not None:
-            if self.separator.node.is_frozen():
-                ignore_sep_fstate = False
-            else:
-                ignore_sep_fstate = True
+            ignore_sep_fstate = not self.separator.node.is_frozen()
+
             if self.separator.prefix:
                 new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
                                                 ignore_frozen_state=ignore_sep_fstate)
@@ -2836,16 +3038,15 @@ class NodeInternals_NonTerm(NodeInternals):
                         node_list, idx, self.component_seed = self._get_next_random_component(self.subnodes_csts,
                                                                                               excluded_idx=self.excluded_components)
                         self.excluded_components.append(idx)
-                        if len(self.excluded_components) == len(self.subnodes_csts) // 2:
-                            self.exhausted = True
-                        else:
-                            self.exhausted = False
+                        self.exhausted = len(self.excluded_components) == len(self.subnodes_csts) // 2
+
                 else:
                     node_list = self._get_random_component(self.subnodes_csts,
                                                            self.subnodes_csts_total_weight)
 
         if not self._perform_first_step:
             self._perform_first_step = True
+
 
         if self.is_attr_set(NodeInternals.Finite) or determinist:
             if self.expanded_nodelist is None:
@@ -2862,6 +3063,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                                                                           excluded_idx=self.excluded_components,
                                                                                           seed=self.component_seed)
 
+                # If the shape is Pick (=+), the shape is reduced to a singleton
                 self.expanded_nodelist = self._generate_expanded_nodelist(node_list)
             
                 self.expanded_nodelist_origsz = len(self.expanded_nodelist)
@@ -2886,11 +3088,24 @@ class NodeInternals_NonTerm(NodeInternals):
                         self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
                 elif delim[1] == '=':
                     if delim[2] == '+':
+                        # This code seems never reached because, in determinist mode, we already choose
+                        # the node during self.expanded_nodelist creation, and change the sublist
+                        # delimiter to '>' (ordered) to avoid useless further handling.
+                        # TODO: Check if this code can be safely removed.
                         if sublist[0] > -1:
-                            node = NodeInternals_NonTerm._get_heavier_component(sublist[1])
+                            node = self._get_heavier_component(sublist[1], check_existence=True)
                         else:
-                            node = sublist[1][0]
-                        self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
+                            for n in sublist[1]:
+                                shall_exist = self._existence_from_node(n[0])
+                                if shall_exist is None or shall_exist:
+                                    node = n
+                                    break
+                            else:
+                                node = None
+                        if node is None:
+                            continue
+                        else:
+                            self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
                     else:
                         for i, node in enumerate(sublist):
                             self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
@@ -2936,11 +3151,19 @@ class NodeInternals_NonTerm(NodeInternals):
                 # choice of only one component within a list
                 elif delim[2] == '+':
                     if sublist[0] > -1:
-                        node = NodeInternals_NonTerm._get_random_component(comp_list=sublist[1], total_weight=sublist[0])
+                        node = self._get_random_component(comp_list=sublist[1], total_weight=sublist[0],
+                                                          check_existence=True)
                     else:
-                        node = random.choice(sublist[1])
-
-                    self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
+                        ndesc_list = []
+                        for n in sublist[1]:
+                            shall_exist = self._existence_from_node(n[0])
+                            if shall_exist is None or shall_exist:
+                                ndesc_list.append(n)
+                        node = random.choice(ndesc_list) if ndesc_list else None
+                    if node is None:
+                        continue
+                    else:
+                        self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
 
                 else:
                     raise ValueError("delim: '%s'"%delim)
@@ -2960,12 +3183,76 @@ class NodeInternals_NonTerm(NodeInternals):
         return (self.frozen_node_list, True)
 
 
-    def _get_value(self, conf=None, recursive=True, after_encoding=True):
+    def _get_value(self, conf=None, recursive=True, after_encoding=True,
+                   return_node_internals=False):
+
+        '''
+        The parameter return_node_internals is not used for non terminal nodes,
+        only for terminal nodes. However, keeping it also for non terminal nodes
+        avoid additional checks in the code.
+        '''
+
+        def tobytes_helper(node_internals):
+            if isinstance(node_internals, bytes):
+                return node_internals
+            else:
+                return node_internals._get_value(conf=conf, recursive=recursive,
+                                                 return_node_internals=False)[0]
 
         def handle_encoding(list_to_enc):
-            if self.encoder and after_encoding:
+
+            if self.custo.collapse_padding_mode:
+                from framework.value_types import BitField
                 list_to_enc = list(flatten(list_to_enc))
-                blob = b''.join(list_to_enc)
+                if list_to_enc and isinstance(list_to_enc[0], bytes):
+                    return list_to_enc
+
+                while True:
+                    list_sz = len(list_to_enc)
+                    for i in range(list_sz):
+                        if i < list_sz-1:
+                            item1 = list_to_enc[i]
+                            item2 = list_to_enc[i+1]
+                            c1 = isinstance(item1, NodeInternals_TypedValue) and \
+                                 item1.get_current_subkind() == BitField and \
+                                 item1.get_value_type().padding_size != 0
+                            c2 = isinstance(item2, NodeInternals_TypedValue) and \
+                                 item2.get_current_subkind() == BitField
+                            if c1 and c2:
+                                new_item = NodeInternals_TypedValue()
+                                new_item1vt = copy.copy(item1.get_value_type())
+                                new_item1vt.make_private(forget_current_state=False)
+                                new_item2vt = copy.copy(item2.get_value_type())
+                                new_item2vt.make_private(forget_current_state=False)
+                                new_item1vt.extend_right(new_item2vt)
+                                new_item.import_value_type(new_item1vt)
+                                new_item.frozen_node = new_item.get_value_type().get_current_value()
+                                if i > 0:
+                                    new_list = list_to_enc[:i-1]
+                                    new_list.append(new_item)
+                                    if i < list_sz-2:
+                                        new_list += list_to_enc[i+2:]
+                                else:
+                                    new_list = list_to_enc[2:]
+                                    new_list.insert(0, new_item)
+                                list_to_enc = new_list
+                                break
+                    else:
+                        break
+
+                list_to_enc = list(map(tobytes_helper, list_to_enc))
+
+            if self.encoder and after_encoding:
+                if not self.custo.collapse_padding_mode:
+                    list_to_enc = list(flatten(list_to_enc))
+
+                if list_to_enc:
+                    if issubclass(list_to_enc[0].__class__, NodeInternals):
+                        list_to_enc = list(map(tobytes_helper, list_to_enc))
+                    blob = b''.join(list_to_enc)
+                else:
+                    blob = b''
+
                 blob = self.encoder.encode(blob)
                 return blob
             else:
@@ -2977,7 +3264,7 @@ class NodeInternals_NonTerm(NodeInternals):
         djob_group_created = False
         for n in node_list:
             if n.is_attr_set(NodeInternals.DISABLED):
-                val = Node.DEFAULT_DISABLED_VALUE
+                val = Node.DEFAULT_DISABLED_NODEINT
                 if not n.env.is_djob_registered(key=id(n), prio=Node.DJOBS_PRIO_nterm_existence):
                     if not djob_group_created:
                         djob_group_created = True
@@ -2989,8 +3276,10 @@ class NodeInternals_NonTerm(NodeInternals):
                                         args=[n, node_list, len(l), conf, recursive],
                                         prio=Node.DJOBS_PRIO_nterm_existence)
             else:
-                val = n._get_value(conf=conf, recursive=recursive)
+                val = n._get_value(conf=conf, recursive=recursive,
+                                   return_node_internals=True)
 
+            # 'val' is always a NodeInternals except if non-term encoding has been carried out
             l.append(val)
 
         if node_list:
@@ -3038,7 +3327,16 @@ class NodeInternals_NonTerm(NodeInternals):
     def get_raw_value(self):
         raw_list = self._get_value(after_encoding=False)[0]
         raw_list = list(flatten(raw_list))
-        raw = b''.join(raw_list)
+
+        def tobytes_helper(node_internals):
+            return node_internals._get_value(return_node_internals=False)[0]
+
+        if raw_list:
+            if issubclass(raw_list[0].__class__, NodeInternals):
+                raw_list = list(map(tobytes_helper, raw_list))
+            raw = b''.join(raw_list)
+        else:
+            raw = b''
 
         return raw
 
@@ -3181,8 +3479,9 @@ class NodeInternals_NonTerm(NodeInternals):
 
     @staticmethod
     def _qty_from_node(node):
-        sync_node, param = node.synchronized_with(SyncScope.Qty)
-        if sync_node is not None:
+        obj = node.synchronized_with(SyncScope.Qty)
+        if obj is not None:
+            sync_node, param = obj
             nb = node.env.get_drawn_node_qty(id(sync_node))
             if nb is not None:
                 return NodeInternals_NonTerm.qtysync_corrupt_hook(node, nb)
@@ -3195,24 +3494,31 @@ class NodeInternals_NonTerm(NodeInternals):
 
     @staticmethod
     def _existence_from_node(node):
-        sync_node, condition = node.synchronized_with(SyncScope.Existence)
-        if sync_node is not None:
-            exist = node.env.node_exists(id(sync_node))
-            crit_1 = True if exist else False
-            crit_2 = True
-            if exist and condition is not None:
-                try:
-                    crit_2 = condition.check(sync_node)
-                except Exception as e:
-                    print("\n*** ERROR: existence condition is not verifiable " \
-                          "for node '{:s}' (id: {:d})!\n" \
-                          "*** The condition checker raise an exception!".format(node.name, id(node)))
-                    raise
-            correct_reply = crit_1 and crit_2
+        obj = node.synchronized_with(SyncScope.Existence)
+
+        if obj is not None:
+            if isinstance(obj, SyncObj):
+                correct_reply = obj.check()
+            else:
+                sync_node, condition = obj
+                exist = node.env.node_exists(id(sync_node))
+                crit_1 = True if exist else False
+                crit_2 = True
+                if exist and condition is not None:
+                    try:
+                        crit_2 = condition.check(sync_node)
+                    except Exception as e:
+                        print("\n*** ERROR: existence condition is not verifiable " \
+                              "for node '{:s}' (id: {:d})!\n" \
+                              "*** The condition checker raise an exception!".format(node.name, id(node)))
+                        raise
+                correct_reply = crit_1 and crit_2
+
             return NodeInternals_NonTerm.existence_corrupt_hook(node, correct_reply)
 
-        sync_node, condition = node.synchronized_with(SyncScope.Inexistence)
-        if sync_node is not None:
+        obj = node.synchronized_with(SyncScope.Inexistence)
+        if obj is not None:
+            sync_node, _ = obj  # condition is not checked for this scope
             inexist = not node.env.node_exists(id(sync_node))
             correct_reply = True if inexist else False
             return NodeInternals_NonTerm.existence_corrupt_hook(node, correct_reply)
@@ -4296,6 +4602,7 @@ class Node(object):
     DJOBS_PRIO_genfunc = 300
 
     DEFAULT_DISABLED_VALUE = b'' #b'**TO_REMOVE**'
+    DEFAULT_DISABLED_NODEINT = NodeInternals_Empty()
 
     CORRUPT_EXIST_COND = 5
     CORRUPT_QTY_SYNC = 6
@@ -4848,7 +5155,7 @@ class Node(object):
         conf = self.__check_conf(conf)
 
         if val_list is not None:
-            from fuzzfmk.value_types import String
+            from framework.value_types import String
 
             self.internals[conf] = NodeInternals_TypedValue()
             self.internals[conf].import_value_type(value_type=String(val_list=val_list))
@@ -4965,14 +5272,14 @@ class Node(object):
         for c in self.internals:
             self.internals[c].set_clone_info(info, node)
 
-    def make_synchronized_with(self, node, scope, param=None, conf=None):
+    def make_synchronized_with(self, scope, node=None, param=None, sync_obj=None, conf=None):
         conf = self.__check_conf(conf)
-        self.internals[conf].set_node_sync(node, scope=scope, param=param)
+        self.internals[conf].set_node_sync(scope=scope, node=node, param=param, sync_obj=sync_obj)
 
     def synchronized_with(self, scope, conf=None):
         conf = self.__check_conf(conf)
         val = self.internals[conf].get_node_sync(scope)
-        return val if val is not None else (None, None)
+        return val
 
     def set_attr(self, name, conf=None, all_conf=False, recursive=False):
         if all_conf:
@@ -5240,9 +5547,10 @@ class Node(object):
     def get_env(self):
         return self.env
 
-    def freeze(self, conf=None, recursive=True):
+    def freeze(self, conf=None, recursive=True, return_node_internals=False):
         
-        ret = self._get_value(conf=conf, recursive=recursive)
+        ret = self._get_value(conf=conf, recursive=recursive,
+                              return_node_internals=return_node_internals)
 
         if self.env is not None and self.env.delayed_jobs_enabled and not self._delayed_jobs_called:
             self._delayed_jobs_called = True
@@ -5253,13 +5561,14 @@ class Node(object):
             if self.env.djobs_exists(Node.DJOBS_PRIO_genfunc):
                 self.env.execute_basic_djobs(Node.DJOBS_PRIO_genfunc)
 
-            ret = self._get_value(conf=conf, recursive=recursive)
+            ret = self._get_value(conf=conf, recursive=recursive,
+                                  return_node_internals=return_node_internals)
 
         return ret
 
     get_value = freeze
 
-    def _get_value(self, conf=None, recursive=True):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
 
         if recursive:
             next_conf = conf
@@ -5281,7 +5590,8 @@ class Node(object):
                       "been associted to the Node.)".format(self.name))
             raise ValueError
 
-        ret, was_not_frozen = internal._get_value(conf=next_conf, recursive=recursive)
+        ret, was_not_frozen = internal._get_value(conf=next_conf, recursive=recursive,
+                                                  return_node_internals=return_node_internals)
 
         if was_not_frozen:
             self._post_freeze(internal)
@@ -5322,11 +5632,27 @@ class Node(object):
                 e.reset_state(recursive=recursive, exclude_self=exclude_self, conf=next_conf,
                               ignore_entanglement=True)
 
+
     def to_bytes(self, conf=None, recursive=True):
-        val = self.freeze(conf=conf, recursive=recursive)
-        if not isinstance(val, bytes):
-            val = list(flatten(val))
-            val = b''.join(val)
+
+        def tobytes_helper(node_internals):
+            if isinstance(node_internals, bytes):
+                return node_internals
+            else:
+                return node_internals._get_value(conf=conf, recursive=recursive,
+                                                 return_node_internals=False)[0]
+
+        node_int_list = self.freeze(conf=conf, recursive=recursive)
+        if isinstance(node_int_list, list):
+            node_int_list = list(flatten(node_int_list))
+            if node_int_list:
+                if issubclass(node_int_list[0].__class__, NodeInternals):
+                    node_int_list = list(map(tobytes_helper, node_int_list))
+                val = b''.join(node_int_list)
+            else:
+                val = b''
+        else:
+            val = node_int_list
 
         return val
 
@@ -5336,10 +5662,25 @@ class Node(object):
 
 
     def _tobytes(self, conf=None, recursive=True):
-        val = self._get_value(conf=conf, recursive=recursive)
-        if not isinstance(val, bytes):
-            val = list(flatten(val))
-            val = b''.join(val)
+
+        def tobytes_helper(node_internals):
+            if isinstance(node_internals, bytes):
+                return node_internals
+            else:
+                return node_internals._get_value(conf=conf, recursive=recursive,
+                                                 return_node_internals=False)[0]
+
+        node_int_list = self._get_value(conf=conf, recursive=recursive)
+        if isinstance(node_int_list, list):
+            node_int_list = list(flatten(node_int_list))
+            if node_int_list:
+                if issubclass(node_int_list[0].__class__, NodeInternals):
+                    node_int_list = list(map(tobytes_helper, node_int_list))
+                val = b''.join(node_int_list)
+            else:
+                val = b''
+        else:
+            val = node_int_list
 
         return val
 
@@ -5646,6 +5987,10 @@ class Node(object):
                         if node.is_nonterm(conf_tmp) and node.encoder is not None:
                             self._print(' [Encoded by {:s}]'.format(node.encoder.__class__.__name__),
                                         rgb=Color.ND_ENCODED, style=FontStyle.BOLD,
+                                        nl=False, log_func=log_func)
+                        if node.is_nonterm(conf_tmp) and node.custo.collapse_padding_mode:
+                            self._print(' >Collapse Bitfields<',
+                                        rgb=Color.ND_CUSTO, style=FontStyle.BOLD,
                                         nl=False, log_func=log_func)
                         self._print(graph_deco, rgb=Color.ND_DUPLICATED, style=FontStyle.BOLD,
                                     log_func=log_func)

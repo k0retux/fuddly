@@ -42,8 +42,9 @@ import errno
 from socket import error as socket_error
 
 from libs.external_modules import *
-from fuzzfmk.data_model import Data
-from fuzzfmk.global_resources import *
+from framework.data_model import Data, NodeSemanticsCriteria
+from framework.value_types import GSMPhoneNum
+from framework.global_resources import *
 
 class TargetStuck(Exception): pass
 
@@ -51,8 +52,8 @@ class Target(object):
     '''
     Class abstracting the target we interact with.
     '''
-    _logger=None
-    _time_beetwen_data_emission = None
+    feedback_timeout = None
+    _logger = None
     _probes = None
     _send_data_lock = threading.Lock()
 
@@ -134,7 +135,9 @@ class Target(object):
 
     def is_target_ready_for_new_data(self):
         '''
-        The FMK busy wait on this method() before sending a new data
+        The FMK busy wait on this method() before sending a new data.
+        This method should take into account feedback timeout (that is the maximum
+        time duration for gathering feedback from the target)
         '''
         return True
 
@@ -170,6 +173,37 @@ class Target(object):
         '''
         return None
 
+    def collect_feedback_without_sending(self):
+        """
+        If overloaded, it can be used by the framework to retrieve additional feedback from the
+        target without sending any new data.
+
+        Returns:
+            bool: False if it is not possible, otherwise it should be True
+        """
+        return True
+
+    def set_feedback_timeout(self, fbk_timeout):
+        '''
+        To set dynamically the feedback timeout.
+
+        Args:
+            fbk_timeout: maximum time duration for collecting the feedback
+
+        '''
+        assert fbk_timeout >= 0
+        self.feedback_timeout = fbk_timeout
+        self._set_feedback_timeout_specific(fbk_timeout)
+
+    def _set_feedback_timeout_specific(self, fbk_timeout):
+        '''
+        Overload this function to handle feedback specifics
+
+        Args:
+            fbk_timeout: time duration for collecting the feedback
+
+        '''
+        pass
 
     def get_description(self):
         return None
@@ -180,7 +214,7 @@ class Target(object):
         with the framework.
 
         Use case example: The user needs to send some message to the target on a regular basis
-        in background. For that purpose, it can quickly define a :class:`fuzzfmk.monitor.Probe` that just
+        in background. For that purpose, it can quickly define a :class:`framework.monitor.Probe` that just
         emits the message by itself.
         '''
         with self._send_data_lock:
@@ -208,27 +242,48 @@ class Target(object):
 
 
 class TargetFeedback(object):
+    fbk_lock = threading.Lock()
 
     def __init__(self, bstring=b''):
         self.cleanup()
+        self._feedback_collector = collections.OrderedDict()
+        self._feedback_collector_tstamped = collections.OrderedDict()
         self.set_bytes(bstring)
 
     def add_fbk_from(self, ref, fbk):
         now = datetime.datetime.now()
-        self._feedback_collector[ref] = (fbk, now)
+        with self.fbk_lock:
+            if ref not in self._feedback_collector:
+                self._feedback_collector[ref] = []
+                self._feedback_collector_tstamped[ref] = []
+            if fbk.strip() not in self._feedback_collector[ref]:
+                self._feedback_collector[ref].append(fbk)
+                self._feedback_collector_tstamped[ref].append(now)
 
     def has_fbk_collector(self):
         return len(self._feedback_collector) > 0
 
-    def cleanup(self):
-        self._feedback_collector = collections.OrderedDict()
-        self._tstamped_bstring = None
-        self.set_error_code(0)
-
     def __iter__(self):
-        for ref, obj in self._feedback_collector.items():
-            fbk, tstamp = obj
-            yield ref, fbk, tstamp
+        with self.fbk_lock:
+            fbk_collector = copy.copy(self._feedback_collector)
+            fbk_collector_ts = copy.copy(self._feedback_collector_tstamped)
+        for ref, fbk_list in fbk_collector.items():
+            yield ref, fbk_list, fbk_collector_ts[ref]
+
+    def iter_and_cleanup_collector(self):
+        with self.fbk_lock:
+            fbk_collector = self._feedback_collector
+            fbk_collector_ts = self._feedback_collector_tstamped
+            self._feedback_collector = collections.OrderedDict()
+            self._feedback_collector_tstamped = collections.OrderedDict()
+        for ref, fbk_list in fbk_collector.items():
+            yield ref, fbk_list, fbk_collector_ts[ref]
+
+    def set_error_code(self, err_code):
+        self._err_code = err_code
+
+    def get_error_code(self):
+        return self._err_code
 
     def set_bytes(self, bstring):
         now = datetime.datetime.now()
@@ -240,11 +295,11 @@ class TargetFeedback(object):
     def get_timestamp(self):
         return None if self._tstamped_bstring is None else self._tstamped_bstring[1]
 
-    def set_error_code(self, err_code):
-        self._err_code = err_code
-
-    def get_error_code(self):
-        return self._err_code
+    def cleanup(self):
+        # collector cleanup is done during consumption to avoid loss of feedback in
+        # multi-threading context
+        self._tstamped_bstring = None
+        self.set_error_code(0)
 
 
 class EmptyTarget(Target):
@@ -338,9 +393,24 @@ class NetworkTarget(Target):
         self.hold_connection[(host, port)] = hold_connection
 
     def set_timeout(self, fbk_timeout, sending_delay):
-        self._feedback_timeout = max(fbk_timeout, 0.2)
-        self._sending_delay = min(sending_delay, max(self._feedback_timeout-0.2, 0))
-        self._time_beetwen_data_emission = self._feedback_timeout + 2
+        '''
+        Set the time duration for feedback gathering and the sending delay above which
+        we give up:
+        - sending data to the target (client mode)
+        - waiting for client connections before sending data to them (server mode)
+
+        Args:
+            fbk_timeout: time duration for feedback gathering (in seconds)
+            sending_delay: sending delay (in seconds)
+        '''
+        assert sending_delay < fbk_timeout
+        self._sending_delay = sending_delay
+        self.set_feedback_timeout(fbk_timeout)
+
+    def _set_feedback_timeout_specific(self, fbk_timeout):
+        self._feedback_timeout = fbk_timeout
+        if self._sending_delay > self._feedback_timeout:
+            self._sending_delay = max(self._feedback_timeout-0.2, 0)
 
     def initialize(self):
         '''
@@ -680,6 +750,7 @@ class NetworkTarget(Target):
 
         family, sock_type = socket_type
         s = socket.socket(family, sock_type)
+        # s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
 
         try:
             s.connect((host, port))
@@ -786,7 +857,15 @@ class NetworkTarget(Target):
 
         def _check_and_handle_obsolete_socket(socket, error=None, error_list=None):
             # print('\n*** NOTE: Remove obsolete socket {!r}'.format(socket))
-            epobj.unregister(socket)
+            try:
+                epobj.unregister(socket)
+            except ValueError as e:
+                # in python3, file descriptor == -1 witnessed (!?)
+                print('\n*** ERROR: ' + str(e))
+            except socket.error as serr:
+                # in python2, bad file descriptor (errno 9) witnessed
+                print('\n*** ERROR: ' + str(serr))
+
             self._server_thread_lock.acquire()
             if socket in self._last_client_sock2hp.keys():
                 if error is not None:
@@ -857,7 +936,7 @@ class NetworkTarget(Target):
                             print('\n*** ERROR: ' + str(serr))
                             if serr.errno == socket.errno.EAGAIN:
                                 retry += 1
-                                time.sleep(0.2)
+                                time.sleep(2)
                                 continue
                             else:
                                 break
@@ -865,7 +944,7 @@ class NetworkTarget(Target):
                             break
 
                     if chunk == b'':
-                        print('\n*** NOTE: Nothing more to receive from : {!r}'.format(fbk_ids[s]))
+                        print('\n*** NOTE: Nothing more to receive from: {!r}'.format(fbk_ids[s]))
                         fbk_sockets.remove(s)
                         _check_and_handle_obsolete_socket(s)
                         s.close()
@@ -979,6 +1058,12 @@ class NetworkTarget(Target):
                     fbk_ids[s] = self._default_fbk_id[(host, port)]
                     fbk_lengths[s] = self.feedback_length
 
+            self._last_fbk_sockets = fbk_sockets
+            self._last_fbk_ids =fbk_ids
+            self._last_fbk_lengths = fbk_lengths
+            self._last_epobj = epobj
+            self._last_fileno2fd = fileno2fd
+
             self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk)
 
         else:
@@ -1009,6 +1094,7 @@ class NetworkTarget(Target):
 
     def _before_sending_data(self, data_list, from_fmk):
         if from_fmk:
+            self._last_ack_date = None
             self._first_send_data_call = True  # related to additional feedback
             self._feedback_handled = False
             self._sending_id += 1
@@ -1018,6 +1104,23 @@ class NetworkTarget(Target):
             self._custom_data_handling_before_emission([data_list])
         else:
             self._custom_data_handling_before_emission(data_list)
+
+
+    def collect_feedback_without_sending(self):
+        """
+        Should only be called after _send_data() has been called at least once
+        """
+        if hasattr(self, '_last_fbk_sockets'):
+            self._last_ack_date = None
+            self._feedback_handled = False
+            self._sending_id += 1
+            self._start_fbk_collector(self._last_fbk_sockets, self._last_fbk_ids,
+                                      self._last_fbk_lengths, self._last_epobj,
+                                      self._last_fileno2fd, from_fmk=True)
+            return True
+        else:
+            # This case could trigger when the target is first started
+            return False
 
     def get_feedback(self):
         return self._feedback
@@ -1286,22 +1389,14 @@ class LocalTarget(Target):
 class SIMTarget(Target):
     delay_between_write = 0.1  # without, it seems some commands can be lost
 
-    def __init__(self, serial_port, baudrate, pin_code, targeted_tel_num,
-                 zone='33'):
+    def __init__(self, serial_port, baudrate, pin_code, targeted_tel_num):
         self.serial_port = serial_port
         self.baudrate = baudrate
-        self.tel_num = zone
+        self.tel_num = targeted_tel_num
         self.pin_code = pin_code
-        tel = targeted_tel_num[1:]
-        tel_sz = len(tel)
-        for idx in range(0, tel_sz, 2):
-            if idx+1<tel_sz:
-                self.tel_num += tel[idx+1]+tel[idx]
-            else:
-                self.tel_num += 'F'+tel[idx]
         if sys.version_info[0]>2:
-            self.tel_num = bytes(self.tel_num, 'latin_1')
             self.pin_code = bytes(self.pin_code, 'latin_1')
+        self.set_feedback_timeout(2)
 
     def start(self):
 
@@ -1310,14 +1405,15 @@ class SIMTarget(Target):
                   'python-serial module is not installed')
             return False
 
-        self.ser = serial.Serial(self.serial_port, self.baudrate, timeout=2)
+        self.ser = serial.Serial(self.serial_port, self.baudrate, timeout=2,
+                                 dsrdtr=True, rtscts=True)
 
         self.ser.write(b"ATE1\r\n") # echo ON
         time.sleep(self.delay_between_write)
         self.ser.write(b"AT+CMEE=1\r\n") # enable extended error reports
         time.sleep(self.delay_between_write)
         self.ser.write(b"AT+CPIN?\r\n") # need to unlock?
-        cpin_fbk = self._retrieve_feedback_from_serial()
+        cpin_fbk = self._retrieve_feedback_from_serial(timeout=0)
         if cpin_fbk.find(b'SIM PIN') != -1:
             # Note that if SIM is already unlocked modem will answer CME ERROR: 3
             # if we try to unlock it again.
@@ -1331,7 +1427,7 @@ class SIMTarget(Target):
         self.ser.write(b"AT+CSMS=0\r\n") # check if modem can process SMS
         time.sleep(self.delay_between_write)
 
-        fbk = self._retrieve_feedback_from_serial()
+        fbk = self._retrieve_feedback_from_serial(timeout=1)
         code = 0 if fbk.find(b'ERROR') == -1 else -1
         self._logger.collect_target_feedback(fbk, status_code=code)
         if code < 0:
@@ -1342,17 +1438,27 @@ class SIMTarget(Target):
     def stop(self):
         self.ser.close()
 
-    def _retrieve_feedback_from_serial(self):
+    def _retrieve_feedback_from_serial(self, timeout=None):
         feedback = b''
-        while True:
+        t0 = datetime.datetime.now()
+        duration = -1
+        timeout = self.feedback_timeout if timeout is None else timeout
+        while duration < timeout:
+            now = datetime.datetime.now()
+            duration = (now - t0).total_seconds()
+            time.sleep(0.1)
             fbk = self.ser.readline()
             if fbk.strip():
                 feedback += fbk
-            else:
-                break
+
         return feedback
 
     def send_data(self, data, from_fmk=False):
+        node_list = data.node[NodeSemanticsCriteria(mandatory_criteria=['tel num'])]
+        if node_list and len(node_list)==1:
+            node_list[0].set_values(value_type=GSMPhoneNum(val_list=[self.tel_num]))
+        else:
+            print('\nWARNING: Data does not contain a mobile number.')
         pdu = b''
         raw_data = data.to_bytes()
         for c in raw_data:
@@ -1360,7 +1466,8 @@ class SIMTarget(Target):
                 c = ord(c)
             pdu += binascii.b2a_hex(struct.pack('B', c))
         pdu = pdu.upper()
-        pdu = b"0001000B91" + self.tel_num + b"0000" + pdu + b"\x1a\r\n"
+
+        pdu = b'00' + pdu + b"\x1a\r\n"
 
         self.ser.write(b"AT+CMGS=23\r\n") # PDU mode
         time.sleep(self.delay_between_write)

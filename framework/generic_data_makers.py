@@ -30,14 +30,14 @@ import binascii
 import subprocess
 from copy import *
 
-from fuzzfmk.data_model import *
-from fuzzfmk.tactics_helpers import *
-from fuzzfmk.fuzzing_primitives import *
-from fuzzfmk.basic_primitives import *
-from fuzzfmk.value_types import *
-from fuzzfmk.data_model_helpers import GENERIC_ARGS
+from framework.data_model import *
+from framework.tactics_helpers import *
+from framework.fuzzing_primitives import *
+from framework.basic_primitives import *
+from framework.value_types import *
+from framework.data_model_helpers import GENERIC_ARGS
 
-from fuzzfmk.global_resources import *
+from framework.global_resources import *
 
 tactics = Tactics()
 
@@ -202,7 +202,7 @@ class sd_switch_to_alternate_conf(StatefulDisruptor):
         if self.conf is None:
             self.confs_list = all_alternate_confs
         else:
-            if isinstance(self.conf, list) or isinstance(self.conf, tuple):
+            if isinstance(self.conf, (tuple, list)):
                 for c in self.conf:
                     if c in all_alternate_confs:
                         ok = True
@@ -970,7 +970,7 @@ class d_modify_nodes(Disruptor):
     def _add_info(self, prev_data, n, status, size):
         val_len = len(self.value)
         prev_data.add_info("changed node:     '{:s}'".format(n.name))
-        prev_data.add_info("absorption status: {:s}".format(AbsorbStatus.DESC[status]))
+        prev_data.add_info("absorption status: {:s}".format(status))
         prev_data.add_info("value provided:   '{:s}'".format(self.value))
         prev_data.add_info("__ length:         {:d}".format(val_len))
         if status != AbsorbStatus.FullyAbsorbed:

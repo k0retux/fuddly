@@ -20,6 +20,8 @@ Contents:
 
    data_manip
 
+   scenario
+
    disruptors
 
    targets
@@ -38,8 +40,3 @@ Indices and tables
 * :ref:`modindex`
 * :ref:`search`
 
-
-TODO list
-=========
-
-.. todolist::

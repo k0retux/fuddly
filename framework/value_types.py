@@ -40,9 +40,9 @@ from six import with_metaclass
 
 sys.path.append('.')
 
-import fuzzfmk.basic_primitives as bp
-from fuzzfmk.data_model import AbsorbStatus, AbsCsts, convert_to_internal_repr, unconvert_from_internal_repr
-from fuzzfmk.encoders import *
+import framework.basic_primitives as bp
+from framework.data_model import AbsorbStatus, AbsCsts, convert_to_internal_repr, unconvert_from_internal_repr
+from framework.encoders import *
 
 DEBUG = False
 
@@ -95,7 +95,7 @@ class VT(object):
 
     @staticmethod
     def _str2internal(arg):
-        if isinstance(arg, list) or isinstance(arg, tuple):
+        if isinstance(arg, (tuple, list)):
             new_arg = []
             for v in arg:
                 if sys.version_info[0] > 2 and not isinstance(v, bytes):
@@ -103,7 +103,7 @@ class VT(object):
                 else:
                     new_v = v
                 new_arg.append(new_v)
-        elif isinstance(arg, str) or isinstance(arg, bytes):
+        elif isinstance(arg, (str, bytes)):
             if sys.version_info[0] > 2 and not isinstance(arg, bytes):
                 new_arg = bytes(arg, 'latin_1')
             else:
@@ -852,6 +852,16 @@ class String(VT_Alt):
         else:
             return True
 
+    def pretty_print(self):
+        if self.drawn_val is None:
+            self.get_value()
+
+        if self.encoded_string:
+            dec = self.drawn_val
+            return repr(dec) + ' [decoded, sz=' + str(len(dec)) + ']'
+        else:
+            return None
+
 
 class INT(VT):
     '''
@@ -863,6 +873,14 @@ class INT(VT):
     endian = None
     determinist = True
 
+    mini_gen = None  # automatically set and only used for generation (not absorption)
+    maxi_gen = None  # automatically set and only used for generation (not absorption)
+    GEN_MAX_INT = 2**32  # 'maxi_gen' is set to this when the INT subclass does not define 'maxi'
+                         # and that maxi is not specified by the user
+    GEN_MIN_INT = -2**32  # 'mini_gen' is set to this when the INT subclass does not define 'mini'
+                          # and that mini is not specified by the user
+
+
     def __init__(self, int_list=None, mini=None, maxi=None, determinist=True):
         self.idx = 0
         self.determinist = determinist
@@ -872,25 +890,41 @@ class INT(VT):
         if int_list:
             self.int_list = int_list
             self.int_list_copy = list(self.int_list)
-        elif mini is not None and maxi - mini < 200:
-            self.int_list = list(range(mini, maxi+1))
-            self.int_list_copy = copy.copy(self.int_list)
-            # we keep that information as it is valuable for fuzzing
-            self.mini = mini
-            self.maxi = maxi
+
         else:
-            self.int_list = None
-            self.int_list_copy = None
-            if self.mini is not None:
-                self.mini = max(mini, self.mini) if mini is not None else self.mini
+            if mini is not None and maxi is not None:
+                assert maxi >= mini
+
+            if mini is not None and maxi is not None and abs(maxi - mini) < 200:
+                self.int_list = list(range(mini, maxi+1))
+                self.int_list_copy = copy.copy(self.int_list)
+                # we keep that information as it is valuable for fuzzing
+                self.mini = self.mini_gen = mini
+                self.maxi = self.maxi_gen = maxi
             else:
-                # case where no size constraints exist (e.g., INT_str)
-                self.mini = mini
-            if self.maxi is not None:
-                self.maxi = min(maxi, self.maxi) if maxi is not None else self.maxi
-            else:
-                # case where no size constraints exist (e.g., INT_str)
-                self.maxi = maxi
+                self.int_list = None
+                self.int_list_copy = None
+                if self.mini is not None:
+                    self.mini = max(mini, self.mini) if mini is not None else self.mini
+                    self.mini_gen = self.mini
+                else:
+                    # case where no size constraints exist (e.g., INT_str)
+                    if mini is None:
+                        self.mini = None
+                        self.mini_gen = INT.GEN_MIN_INT
+                    else:
+                        self.mini = self.mini_gen = mini
+
+                if self.maxi is not None:
+                    self.maxi = min(maxi, self.maxi) if maxi is not None else self.maxi
+                    self.maxi_gen = self.maxi
+                else:
+                    # case where no size constraints exist (e.g., INT_str)
+                    if maxi is None:
+                        self.maxi = None
+                        self.maxi_gen = INT.GEN_MAX_INT
+                    else:
+                        self.maxi = self.maxi_gen = maxi
 
     def make_private(self, forget_current_state):
         self.int_list = copy.copy(self.int_list)
@@ -943,8 +977,10 @@ class INT(VT):
             self.int_list.insert(0, orig_val)
         else:
             if constraints[AbsCsts.Contents]:
-                if orig_val > self.maxi or orig_val < self.mini:
-                    raise ValueError('contents not valid!')
+                if self.maxi is not None and orig_val > self.maxi:
+                    raise ValueError('contents not valid! (max limit)')
+                if self.mini is not None and orig_val < self.mini:
+                    raise ValueError('contents not valid! (min limit)')
             self.int_list = [orig_val]
 
         self.reset_state()
@@ -1057,9 +1093,9 @@ class INT(VT):
                 self.exhausted = False
         else:
             if self.determinist:
-                val = self.mini + self.idx
+                val = self.mini_gen + self.idx
                 self.idx += 1
-                if self.mini + self.idx > self.maxi:
+                if self.mini_gen + self.idx > self.maxi_gen:
                     self.exhausted = True
                     self.idx = 0
                 else:
@@ -1070,9 +1106,9 @@ class INT(VT):
                 # 'int_list'. It avoids cunsuming too much memory and
                 # provide an end result that seems sufficient for such
                 # situation
-                val = random.randint(self.mini, self.maxi)
+                val = random.randint(self.mini_gen, self.maxi_gen)
                 self.idx += 1
-                if self.idx > self.maxi - self.mini:
+                if self.idx > abs(self.maxi_gen - self.mini_gen):
                     self.idx = 0
                     self.exhausted = True
                 else:
@@ -1193,6 +1229,9 @@ class GZIP(String): pass
 @from_encoder(GSM7bitPacking_Enc)
 class GSM7bitPacking(String): pass
 
+@from_encoder(GSMPhoneNum_Enc)
+class GSMPhoneNum(String): pass
+
 @from_encoder(Wrap_Enc)
 class Wrapper(String): pass
 
@@ -1241,7 +1280,7 @@ class INT_str(with_metaclass(meta_int_str, INT)):
         return True
 
     def _read_value_from(self, blob, size):
-        g = re.match(b'\d+', blob)
+        g = re.match(b'-?\d+', blob)
         if g is None:
             raise ValueError
         else:
@@ -1341,14 +1380,15 @@ class BitField(VT_Alt):
             # needed, because some fuzzy values are computed from current values before switching
             self.switch_mode()
 
-    def _reset_idx(self):
+    def _reset_idx(self, reset_idx_inuse=True):
         self.current_idx = 0
         self.idx = [1 for i in self.subfield_limits]
         if not self._fuzzy_mode:
             self.idx[0] = 0
         # initially we don't make copy, as it will be copied anyway
         # during .get_value()
-        self.idx_inuse = self.idx
+        if reset_idx_inuse:
+            self.idx_inuse = self.idx
         
     def set_subfield(self, idx, val):
         '''
@@ -1396,29 +1436,27 @@ class BitField(VT_Alt):
                      sf_descs=None):
 
         if sf_limits is not None:
-            if sf_val_lists is not None:
-                if len(sf_val_lists) != len(sf_limits):
-                    raise ValueError
-            else:
-                if len(sf_val_extremums) != len(sf_limits):
-                    raise ValueError               
-
             self.subfield_limits = copy.copy(sf_limits)
-
         elif sf_sizes is not None:
-            if sf_val_lists is not None:
-                if len(sf_val_lists) != len(sf_sizes):
-                    raise ValueError
-            else:
-                if len(sf_val_extremums) != len(sf_sizes):
-                    raise ValueError
-
             lim = 0
             for s in sf_sizes:
                 lim += s
                 self.subfield_limits.append(lim)
         else:
             raise ValueError
+
+
+        if sf_val_lists is None:
+            sf_val_lists = [None for i in range(len(self.subfield_limits))]
+        elif len(sf_val_lists) != len(self.subfield_limits):
+            raise ValueError
+
+
+        if sf_val_extremums is None:
+            sf_val_extremums = [None for i in range(len(self.subfield_limits))]
+        elif len(sf_val_extremums) != len(self.subfield_limits):
+            raise ValueError
+
 
         if sf_descs is not None:
             assert(len(self.subfield_limits) == len(sf_descs))
@@ -1434,15 +1472,6 @@ class BitField(VT_Alt):
 
         self._reset_idx()
 
-        if sf_val_lists is None and sf_val_extremums is None:
-            raise ValueError
-
-        if sf_val_lists is None and sf_val_extremums is not None:
-            sf_val_lists = [None for i in range(len(sf_val_extremums))]
-        elif sf_val_extremums is None and sf_val_lists is not None:
-            sf_val_extremums = [None for i in range(len(sf_val_lists))]
-        else:
-            assert(len(sf_val_lists) == len(sf_val_extremums))
 
         self.subfield_vals = []
         self.subfield_extrems = []
@@ -1470,22 +1499,61 @@ class BitField(VT_Alt):
                     raise ValueError(s)
                 self.subfield_vals.append(None)
             else:
-                raise ValueError
+                self.subfield_extrems.append([0, (1 << size) - 1])
+                self.subfield_vals.append(None)
 
             self.subfield_fuzzy_vals.append(None)
             prev_lim = lim
 
     def extend_right(self, bitfield):
 
-        if self._fuzzy_mode:
-            self.switch_mode()
-        if bitfield._fuzzy_mode:
-            bitfield.switch_mode()
+        if self.drawn_val is None:
+            self.get_current_value()
+        if bitfield.drawn_val is None:
+            bitfield.get_current_value()
+
+        if self.exhausted and bitfield.exhausted:
+            self.exhausted = True
+            self.exhaustion_cpt = 0
+        else:
+            if bitfield.exhausted:
+                bitfield.rewind() # side_effect clear 'drawn_val'
+                bitfield.get_current_value() # to set 'drawn_val'
+            if self.exhausted:
+                self.rewind()
+                self.get_current_value()
+
+            self.exhausted = False
+            self.exhaustion_cpt += bitfield.exhaustion_cpt
+
+        self.__count_of_possible_values = None
+
+        if self.lsb_padding:
+            term1 = (self.drawn_val>>self.padding_size)
+        else:
+            term1 = self.drawn_val
+
+        if bitfield.lsb_padding:
+            term2 = (bitfield.drawn_val >> bitfield.padding_size)
+        else:
+            term2 = bitfield.drawn_val
+
+        self.drawn_val = (term2 << self.size) + term1
+        sz_mod = (self.size + bitfield.size) % 8
+        new_padding_sz = 8 - sz_mod if sz_mod != 0 else 0
+
+        if self.lsb_padding:
+            self.drawn_val <<= new_padding_sz
+
+
+        self.current_val_update_pending = False
+        self.idx += bitfield.idx
+        self.idx_inuse += bitfield.idx_inuse
 
         if self.subfield_descs is not None or bitfield.subfield_descs is not None:
             if self.subfield_descs is None and bitfield.subfield_descs is not None:
                 self.subfield_descs = [None for i in self.subfield_limits]
-                desc_extension = bitfield.subfield_sizes
+                desc_extension = bitfield.subfield_descs
             elif self.subfield_descs is not None and bitfield.subfield_descs is None:
                 desc_extension = [None for i in bitfield.subfield_limits]
             self.subfield_descs += desc_extension
@@ -1507,9 +1575,6 @@ class BitField(VT_Alt):
         else:
             self.padding_size = 8 - (self.size % 8)
 
-        # this call will extend automatically self.idx
-        self.reset_state()
-        
 
     def pretty_print(self):
 
@@ -1555,10 +1620,7 @@ class BitField(VT_Alt):
 
 
     def is_compatible(self, integer, size):
-        if 0 <= integer <= (1 << size) - 1:
-            return True
-        else:
-            return False
+        return 0 <= integer <= (1 << size) - 1
 
     def after_enabling_mode(self):
         self.drawn_val = None
@@ -1727,6 +1789,8 @@ class BitField(VT_Alt):
         for v, i in zip(val_list,range(val_list_sz)):
             result += v<<(i*8)
 
+        decoded_val = result
+
         if self.padding_size != 0:
             if self.lsb_padding:
                 result >>= self.padding_size
@@ -1734,7 +1798,9 @@ class BitField(VT_Alt):
                 shift = (val_list_sz-1)*8
                 result &= (((1<<(8-self.padding_size))-1)<<shift) + (1<<shift)-1
 
-        return result
+        # We return the decoded integer
+        # (1: taking padding into consideration, 2: ignoring padding)
+        return decoded_val, result
 
 
     def absorb_auto_helper(self, blob, constraints):
@@ -1753,7 +1819,7 @@ class BitField(VT_Alt):
 
         blob = blob[off:self.nb_bytes]
 
-        orig_val = self._read_value_from(blob, self.nb_bytes, self.endian, constraints)
+        self.drawn_val, orig_val = self._read_value_from(blob, self.nb_bytes, self.endian, constraints)
 
         insert_idx = 0
         first_pass = True
@@ -1781,8 +1847,6 @@ class BitField(VT_Alt):
                 first_pass = False
                 insert_idx = 1
 
-        self.drawn_val = orig_val
-                
         return blob, off, self.nb_bytes
 
 
@@ -1884,7 +1948,7 @@ class BitField(VT_Alt):
                 val += drawn_val << prev_lim
                 
             prev_lim = lim
-            
+
         if not self.determinist:
             # We make an artificial count to trigger exhaustion in
             # case the BitField is in Finite & Random mode. An exact
@@ -1904,7 +1968,7 @@ class BitField(VT_Alt):
 
             self.current_idx += 1
             if self.current_idx >= len(self.idx):
-                self._reset_idx()
+                self._reset_idx(reset_idx_inuse=False)
                 self.exhausted = True
             else:
                 while True:
@@ -1916,7 +1980,7 @@ class BitField(VT_Alt):
                     if self.idx[self.current_idx] > last:
                         self.current_idx += 1
                         if self.current_idx >= len(self.idx):
-                            self._reset_idx()
+                            self._reset_idx(reset_idx_inuse=False)
                             self.exhausted = True
                             break
                     else:

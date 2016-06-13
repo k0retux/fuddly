@@ -20,7 +20,7 @@ Description:
   used.
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.d_modify_nodes`
+  :class:`framework.generic_data_makers.d_modify_nodes`
 
 Parameters:
   .. code-block:: none
@@ -54,7 +54,7 @@ Description:
   produce a new data.
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.d_next_node_content`
+  :class:`framework.generic_data_makers.d_next_node_content`
 
 Parameters:
   .. code-block:: none
@@ -89,7 +89,7 @@ Description:
 	       into existence conditions.
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.d_fix_constraints`
+  :class:`framework.generic_data_makers.d_fix_constraints`
 
 Parameters:
   .. code-block:: none
@@ -113,7 +113,7 @@ Description:
   Switch to an alternate configuration.
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.d_switch_to_alternate_conf`
+  :class:`framework.generic_data_makers.d_switch_to_alternate_conf`
 
 Parameters:
   .. code-block:: none
@@ -141,7 +141,7 @@ Description:
   Corrupt bits on some nodes of the data model.
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.d_corrupt_node_bits`
+  :class:`framework.generic_data_makers.d_corrupt_node_bits`
 
 Parameters:
   .. code-block:: none
@@ -170,7 +170,7 @@ Description:
   Corrupt bit at a specific byte.
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.d_corrupt_bits_by_position`
+  :class:`framework.generic_data_makers.d_corrupt_bits_by_position`
 
 Parameters:
   .. code-block:: none
@@ -194,7 +194,7 @@ Description:
   Call an external program to deal with the data.
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.d_call_external_program`
+  :class:`framework.generic_data_makers.d_call_external_program`
 
 Parameters:
   .. code-block:: none
@@ -220,7 +220,7 @@ Description:
   Truncate the data (or part of the data) to the provided size.
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.d_max_size`
+  :class:`framework.generic_data_makers.d_max_size`
 
 Parameters:
   .. code-block:: none
@@ -243,7 +243,7 @@ Description:
   unordered ones).
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.d_fuzz_model_structure`
+  :class:`framework.generic_data_makers.d_fuzz_model_structure`
 
 Parameters:
   .. code-block:: none
@@ -264,7 +264,7 @@ Description:
   state during the copy.
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.d_shallow_copy`
+  :class:`framework.generic_data_makers.d_shallow_copy`
 
 .. note:: Random seeds are generally set while loading the data
           model. This disruptor enables you to reset the seeds for the
@@ -287,7 +287,7 @@ Description:
   input data) specified in the data model.
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.sd_struct_constraints`
+  :class:`framework.generic_data_makers.sd_struct_constraints`
 
 Parameters:
   .. code-block:: none
@@ -334,7 +334,7 @@ Description:
   alternate configuration.
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.sd_switch_to_alternate_conf`
+  :class:`framework.generic_data_makers.sd_switch_to_alternate_conf`
 
 Parameters:
   .. code-block:: none
@@ -372,7 +372,7 @@ Description:
   considering its type.
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.sd_fuzz_terminal_nodes`
+  :class:`framework.generic_data_makers.sd_fuzz_terminal_nodes`
 
 Parameters:
   .. code-block:: none
@@ -416,7 +416,7 @@ Description:
   allowed values, ...).
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.sd_fuzz_typed_nodes`
+  :class:`framework.generic_data_makers.sd_fuzz_typed_nodes`
 
 Parameters:
   .. code-block:: none
@@ -464,7 +464,7 @@ Description:
   provided data.
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.sd_fuzz_separator_nodes`
+  :class:`framework.generic_data_makers.sd_fuzz_separator_nodes`
 
 Parameters:
   .. code-block:: none
@@ -512,7 +512,7 @@ Description:
   alteration* is performed by this disruptor.
 
 Reference:
-  :class:`fuzzfmk.generic_data_makers.sd_iter_over_data`
+  :class:`framework.generic_data_makers.sd_iter_over_data`
 
 Parameters:
   .. code-block:: none

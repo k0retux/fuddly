@@ -25,8 +25,8 @@ from __future__ import print_function
 
 import datetime
 
-from fuzzfmk.global_resources import *
-from fuzzfmk.tactics_helpers import _handle_user_inputs, _user_input_conformity, _restore_dmaker_internals
+from framework.global_resources import *
+from framework.tactics_helpers import _handle_user_inputs, _user_input_conformity, _restore_dmaker_internals
 
 class Operation(object):
     
@@ -44,10 +44,9 @@ class Operation(object):
             }
 
     def set_flag(self, name):
-        if name in self.flags:
-            self.flags[name] = True
-        else:
+        if name not in self.flags:
             raise ValueError
+        self.flags[name] = True
 
     def is_flag_set(self, name):
         if name not in self.flags:
@@ -57,15 +56,9 @@ class Operation(object):
     def set_status(self, status):
         self.status = status
 
-    def add_instruction(self, actions, orig_data=None):
-        if actions is None:
-            l = None
-        else:
-            l = []
-            for a in actions:
-                l.append(a)
-
-        self.action_register.append((l, orig_data))
+    def add_instruction(self, actions, seed=None):
+        l = list(actions) if actions is not None else None
+        self.action_register.append((l, seed))
 
     def get_instructions(self):
         return self.action_register
@@ -85,10 +78,9 @@ class LastInstruction(object):
             }
 
     def set_instruction(self, name):
-        if name in self.instructions:
-            self.instructions[name] = True
-        else:
+        if name not in self.instructions:
             raise ValueError
+        self.instructions[name] = True
 
     def is_instruction_set(self, name):
         if name not in self.instructions:

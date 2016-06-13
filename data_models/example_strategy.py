@@ -26,12 +26,12 @@ import random
 import array
 from copy import *
 
-from fuzzfmk.plumbing import *
+from framework.plumbing import *
 
-from fuzzfmk.data_model import *
-from fuzzfmk.tactics_helpers import *
-from fuzzfmk.fuzzing_primitives import *
-from fuzzfmk.basic_primitives import *
+from framework.data_model import *
+from framework.tactics_helpers import *
+from framework.fuzzing_primitives import *
+from framework.basic_primitives import *
 
 tactics = Tactics()
 

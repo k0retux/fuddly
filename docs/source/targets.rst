@@ -4,7 +4,7 @@ Generic Targets
 ***************
 
 The following section present some generic targets that inherit from
-:class:`fuzzfmk.target.Target`. They can be directly used as is,
+:class:`framework.target.Target`. They can be directly used as is,
 within your project files (refer to :ref:`tuto:project`), or for some
 of them they can also be customized by inheriting from them and
 implementing some intended methods acting as hooks within the generic
@@ -18,7 +18,7 @@ NetworkTarget
 =============
 
 Reference:
-  :class:`fuzzfmk.target.NetworkTarget`
+  :class:`framework.target.NetworkTarget`
 
 Description:
   This generic target enables you to interact with a network target in
@@ -27,15 +27,15 @@ Description:
   customized by inheriting from it. Especially, the following methods
   are expected to be overloaded, depending on the user needs:
 
-  - :meth:`fuzzfmk.target.NetworkTarget._custom_data_handling_before_emission()`
+  - :meth:`framework.target.NetworkTarget._custom_data_handling_before_emission()`
     for performing some actions related to the data that will be emitted
     right after.
-  - :meth:`fuzzfmk.target.NetworkTarget._feedback_handling()` for
+  - :meth:`framework.target.NetworkTarget._feedback_handling()` for
     filtering/handling feedback in some ways before transferring it to
     ``fuddly``.
-  - :meth:`fuzzfmk.target.NetworkTarget.initialize()` for doing
+  - :meth:`framework.target.NetworkTarget.initialize()` for doing
     specific actions at target initialization.
-  - :meth:`fuzzfmk.target.NetworkTarget.terminate()` for doing
+  - :meth:`framework.target.NetworkTarget.terminate()` for doing
     specific actions at target termination.
 
 
@@ -83,22 +83,22 @@ Usage Example:
      which means that only data marked with such semantics will be
      routed to this interface.
 
-   line 6-7
+   line 6-8
      We declare another interface for only feedback purpose, where the
      source of the feedback will send data to us in UDP
      (``socket.SOCK_DGRAM``) on the port ``7777``. Note that an
      identifier has to be provided (``fbk_id``), and will be used to
      refer to the interface at different points in time. Main
      interfaces (the first one and the ones defined through
-     :meth:`fuzzfmk.target.NetworkTarget.register_new_interface()`)
+     :meth:`framework.target.NetworkTarget.register_new_interface()`)
      has also an identifier but it is set automatically by the
      ``NetworkTarget``.
 
-   line 8
+   line 9
      We set some time constraints: ``fbk_timeout`` for gathering
      feedback from all the interfaces; ``sending_delay`` for sending
-     data to the target or waiting for client connections before
-     sending data to them.
+     data to the target (client mode) or waiting for client connections before
+     sending data to them (server mode).
 
 
 
@@ -106,7 +106,7 @@ LocalTarget
 ===========
 
 Reference:
-  :class:`fuzzfmk.target.LocalTarget`
+  :class:`framework.target.LocalTarget`
 
 Description:
   This generic target enables you to interact with a program running
@@ -114,9 +114,9 @@ Description:
   inheriting from it. The following methods are expected to be
   overloaded, depending on the user needs:
 
-  - :meth:`fuzzfmk.target.LocalTarget.initialize()` for doing
+  - :meth:`framework.target.LocalTarget.initialize()` for doing
     specific actions at target initialization.
-  - :meth:`fuzzfmk.target.LocalTarget.terminate()` for doing
+  - :meth:`framework.target.LocalTarget.terminate()` for doing
     specific actions at target termination.
 
 
@@ -129,7 +129,7 @@ Usage example:
       :linenos:
       :emphasize-lines: 3
 
-       import fuzzfmk.global_resources as gr
+       import framework.global_resources as gr
 
        tg = LocalTarget(tmpfile_ext='.zip')
        tg.set_target_path('unzip')
@@ -148,7 +148,7 @@ Usage example:
      the command to execute for interacting with the targeted
      program. This parameter will be put after the file name, but you
      can also add parameters before it through the method
-     :meth:`fuzzfmk.target.LocalTarget.set_pre_args()`. Note the use
+     :meth:`framework.target.LocalTarget.set_pre_args()`. Note the use
      of the variable ``workspace_folder`` that points to the
      ``fuddly`` workspace directory which is typically used when
      temporary files need to be created.
@@ -159,7 +159,7 @@ PrinterTarget
 =============
 
 Reference:
-  :class:`fuzzfmk.target.PrinterTarget`
+  :class:`framework.target.PrinterTarget`
 
 Description:
   This generic target enables you to interact with a IPP server.
@@ -196,7 +196,7 @@ SIMTarget
 =========
 
 Reference:
-  :class:`fuzzfmk.target.SIMTarget`
+  :class:`framework.target.SIMTarget`
 
 Description:
   This generic target enables you to interact with a SIM card through a serial line

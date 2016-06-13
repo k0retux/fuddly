@@ -23,12 +23,13 @@
 
 from __future__ import print_function
 
-import sys
 import random
-import threading
+import copy
+import collections
 
-import fuzzfmk.data_model as fdm
-from fuzzfmk.data_model_helpers import modelwalker_inputs_handling_helper, GENERIC_ARGS
+import framework.data_model as fdm
+from framework.data_model_helpers import modelwalker_inputs_handling_helper, GENERIC_ARGS
+from framework.global_resources import *
 
 DEBUG = False
 
@@ -46,6 +47,15 @@ class Tactics(object):
         self.generators = {}
         self.disruptor_clones = {}
         self.generator_clones = {}
+
+    def register_scenarios(self, *scenarios):
+        for sc in scenarios:
+            dyn_generator_from_scenario.scenario = sc
+            dmaker_type = 'SC_' + sc.name.upper()
+            gen_cls_name = 'g_' + sc.name.lower()
+            gen = dyn_generator_from_scenario(gen_cls_name, (DynGeneratorFromScenario,), {})()
+            self.register_new_generator(gen_cls_name, gen, weight=1, dmaker_type=dmaker_type,
+                                        valid=True)
 
     def __register_new_data_maker(self, dict_var, name, obj, weight, dmaker_type, valid):
         if dmaker_type not in dict_var:
@@ -493,7 +503,7 @@ class UserInputContainer(object):
         return str(self)
 
 
-### Generator & Disruptor decorator
+### Generator & Disruptor
 
 class DataMakerAttr:
     Active = 1
@@ -636,6 +646,117 @@ class DynGenerator(Generator):
             node.make_random(all_conf=True, recursive=True)
 
         return fdm.Data(node)
+
+
+class dyn_generator_from_scenario(type):
+    scenario = None
+    def __init__(cls, name, bases, attrs):
+        attrs['_gen_args_desc'] = DynGenerator._gen_args_desc
+        attrs['_args_desc'] = DynGenerator._args_desc
+        type.__init__(cls, name, bases, attrs)
+        cls.scenario = dyn_generator_from_scenario.scenario
+
+class DynGeneratorFromScenario(Generator):
+    scenario = None
+    _gen_args_desc = {}
+    _args_desc = {}
+
+    def setup(self, dm, user_input):
+        if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
+            return False
+        self.__class__.scenario.set_data_model(dm)
+        self.scenario = copy.copy(self.__class__.scenario)
+        return True
+
+    def generate_data(self, dm, monitor, target):
+        self._go_on = collections.OrderedDict()
+        self.step = self.scenario.current_step
+        if self.step.final:
+            self.need_reset()
+            data = fdm.Data()
+            data.register_callback(self._callback_cleanup_periodic, hook=HOOK.after_dmaker_production)
+            data.make_unusable()
+            return data
+
+        data = self.step.get_data()
+        if data is None:
+            # in this case a data creation process is provided to the framework through the
+            # callback HOOK.before_sending
+            data = fdm.Data('')
+
+        data.register_callback(self._callback_dispatcher_before_sending, hook=HOOK.before_sending)
+        data.register_callback(self._callback_dispatcher_after_sending, hook=HOOK.after_sending)
+        data.register_callback(self._callback_dispatcher_after_fbk, hook=HOOK.after_fbk)
+        return data
+
+    def _callback_cleanup_periodic(self):
+        cbkops = fdm.CallBackOps()
+        for periodic_id in self.scenario.periodic_to_clear:
+            cbkops.add_operation(fdm.CallBackOps.Del_PeriodicData, id=periodic_id)
+        return cbkops
+
+    def _callback_dispatcher_before_sending(self):
+        for tr in self.step.transitions:
+            self._go_on[tr] = tr.run_callback(self.step, hook=HOOK.before_sending)
+
+        cbkops = fdm.CallBackOps()
+        for periodic_id in self.step.periodic_to_clear:
+            cbkops.add_operation(fdm.CallBackOps.Del_PeriodicData, id=periodic_id)
+
+        if self.step.feedback_timeout is not None:
+            cbkops.add_operation(fdm.CallBackOps.Set_FbkTimeout,
+                                 param=self.step.feedback_timeout)
+        if self.step.node is None:
+            cbkops.add_operation(fdm.CallBackOps.Replace_Data,
+                                 param=self.step.data_desc)
+
+        return cbkops
+
+    def _callback_dispatcher_after_sending(self):
+        for tr in self.step.transitions:
+            go_on = tr.run_callback(self.step, hook=HOOK.after_sending)
+
+            if self._go_on[tr] is None:
+                self._go_on[tr] = go_on
+            elif go_on is None:
+                pass
+            else:
+                # going to the next step (True) is the priority behavior
+                self._go_on[tr] = self._go_on[tr] or go_on
+
+    def _callback_dispatcher_after_fbk(self, fbk):
+        for tr in self.step.transitions:
+            if tr not in self._go_on:
+                # In the case data sending has been blocked by cbk_after_fbk() (of the current step),
+                # this method will be called while the other _callback* won't. This method is called
+                # just after any potential residual feedback has been retrieved.
+                self._go_on[tr] = None
+
+            go_on = tr.run_callback(self.step, feedback=fbk, hook=HOOK.after_fbk)
+
+            if self._go_on[tr] is None and go_on is None:
+                self._go_on[tr] = True
+            elif self._go_on[tr] is None:
+                self._go_on[tr] = go_on
+            elif go_on is None:
+                pass
+            else:
+                self._go_on[tr] = self._go_on[tr] or go_on
+
+        cbkops = fdm.CallBackOps()
+        for desc in self.step.periodic_to_set:
+            cbkops.add_operation(fdm.CallBackOps.Add_PeriodicData, id=id(desc),
+                                 param=desc.data, period=desc.period)
+
+        for tr in self.step.transitions:
+            if self._go_on[tr]:
+                self.scenario.set_anchor(tr.step)
+                break
+        else:
+            # we stay on the current step
+            pass
+
+        return cbkops
 
 
 class Disruptor(object):
@@ -795,7 +916,7 @@ class StatefulDisruptor(object):
             return ret
 
 
-def disruptor(st, dtype, weight, valid=False, gen_args={}, args={}):
+def disruptor(st, dtype, weight=1, valid=False, gen_args={}, args={}):
     def internal_func(disruptor_cls):
         disruptor_cls._gen_args_desc = gen_args
         disruptor_cls._args_desc = args
@@ -823,7 +944,7 @@ def disruptor(st, dtype, weight, valid=False, gen_args={}, args={}):
     return internal_func
 
 
-def generator(st, gtype, weight, valid=False, gen_args={}, args={}):
+def generator(st, gtype, weight=1, valid=False, gen_args={}, args={}):
     def internal_func(generator_cls):
         generator_cls._gen_args_desc = gen_args
         generator_cls._args_desc = args

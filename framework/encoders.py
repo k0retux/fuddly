@@ -25,6 +25,7 @@ import sys
 import struct
 import zlib
 import copy
+import binascii
 
 class Encoder(object):
     def __init__(self, encoding_arg):
@@ -79,14 +80,14 @@ class Encoder(object):
 
     @staticmethod
     def to_bytes(val):
-        if isinstance(val, str) or isinstance(val, bytes):
+        if isinstance(val, (str, bytes)):
             if sys.version_info[0] > 2 and not isinstance(val, bytes):
                 new_val = bytes(val, 'latin_1')
             else:
                 new_val = val
         elif sys.version_info[0] == 2 and isinstance(val, unicode):
             new_val = val.encode('latin_1')
-        elif isinstance(val, list) or isinstance(val, tuple):
+        elif isinstance(val, (tuple, list)):
             new_val = []
             for v in val:
                 if sys.version_info[0] > 2 and not isinstance(v, bytes):
@@ -156,7 +157,7 @@ class Wrap_Enc(Encoder):
             arg (list): Prefix and suffix character strings.
               Can be individually set to None
         """
-        assert(isinstance(arg, list) or isinstance(arg, tuple))
+        assert(isinstance(arg, (tuple, list)))
         self.prefix = Encoder.to_bytes(arg[0])
         self.suffix = Encoder.to_bytes(arg[1])
         self.prefix_sz = 0 if self.prefix is None else len(self.prefix)
@@ -226,3 +227,30 @@ class GSM7bitPacking_Enc(Encoder):
             off_cpt += 1
 
         return b''.join(map(lambda x: struct.pack('B', x), l))
+
+class GSMPhoneNum_Enc(Encoder):
+
+    def encode(self, msg):
+        tel = msg
+        tel_sz = len(tel)
+        tel_num = b''
+        for idx in range(0, tel_sz, 2):
+            if idx+1<tel_sz:
+                tel_num += tel[idx+1:idx+2]+tel[idx:idx+1]
+            else:
+                tel_num += b'F'+tel[idx:idx+1]
+        return binascii.a2b_hex(tel_num)
+
+    def decode(self, msg):
+        tel_num = binascii.b2a_hex(msg)
+        zone = tel_num[0:2]
+        tel_num = tel_num[2:]
+        dec = b''
+        tel_sz = len(tel_num)
+        for idx in range(0, tel_sz, 2):
+            if idx+1<tel_sz:
+                dec += tel_num[idx+1:idx+2]+tel_num[idx:idx+1]
+        if dec[-1:] == b'f':
+            dec = dec[:-1]
+        return zone+dec
+

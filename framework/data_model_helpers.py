@@ -21,10 +21,10 @@
 #
 ################################################################################
 
-from fuzzfmk.data_model import *
-import fuzzfmk.value_types as fvt
-from fuzzfmk.value_types import VT
-import fuzzfmk.global_resources as gr
+from framework.data_model import *
+import framework.value_types as fvt
+from framework.value_types import VT
+import framework.global_resources as gr
 
 from libs.external_modules import *
 
@@ -95,6 +95,7 @@ class MH(object):
         class NTerm:
             MutableClone = NonTermCusto.MutableClone
             FrozenCopy = NonTermCusto.FrozenCopy
+            CollapsePadding = NonTermCusto.CollapsePadding
 
         # Generator node (leaf) custo
         class Gen:
@@ -133,7 +134,7 @@ class MH(object):
         Return a *generator* that returns the length of a node parameter.
 
         Args:
-          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+          vt (type): value type used for node generation (refer to :mod:`framework.value_types`)
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False compute the length before any encoding. Can be
@@ -156,7 +157,7 @@ class MH(object):
         by name) of the node parameter provided to the *generator*.
 
         Args:
-          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+          vt (type): value type used for node generation (refer to :mod:`framework.value_types`)
           node_name (str): name of the child node whose instance amount will be returned
             by the generator
           set_attrs (list): attributes that will be set on the generated node.
@@ -203,7 +204,7 @@ class MH(object):
         all the node parameters. (Default CRC is PKZIP CRC32)
 
         Args:
-          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+          vt (type): value type used for node generation (refer to :mod:`framework.value_types`)
           poly (int): CRC polynom
           init_crc (int): initial value used to start the CRC calculation.
           xor_out (int): final value to XOR with the calculated CRC value.
@@ -220,7 +221,7 @@ class MH(object):
             else:
                 if issubclass(nodes.__class__, NodeAbstraction):
                     nodes = nodes.get_concrete_nodes()
-                elif not isinstance(nodes, tuple) and not isinstance(nodes, list):
+                elif not isinstance(nodes, (tuple, list)):
                     raise TypeError("Contents of 'nodes' parameter is incorrect!")
                 s = b''
                 for n in nodes:
@@ -250,7 +251,7 @@ class MH(object):
 
         Args:
           func (function): function applied on the concatenation
-          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`)
+          vt (type): value type used for node generation (refer to :mod:`framework.value_types`)
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False, execute `func` on node arguments before any encoding.
@@ -262,7 +263,7 @@ class MH(object):
             else:
                 if issubclass(nodes.__class__, NodeAbstraction):
                     nodes = nodes.get_concrete_nodes()
-                elif not isinstance(nodes, tuple) and not isinstance(nodes, list):
+                elif not isinstance(nodes, (tuple, list)):
                     raise TypeError("Contents of 'nodes' parameter is incorrect!")
                 s = b''
                 for n in nodes:
@@ -291,7 +292,7 @@ class MH(object):
             it is the parent node. Thus, in this case, depending on the drawn quantity
             of parent nodes, the position within the grand-parent determines the index
             of the value to use in the provided list, modulo the quantity.
-          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
+          vt (type): value type used for node generation (refer to :mod:`framework.value_types`).
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
         '''
@@ -354,7 +355,7 @@ class MH(object):
           use_current_position (bool): automate the computation of the child node position
           depth (int): depth of our nth-ancestor used as a reference to compute automatically
             the targeted child node position. Only relevant if `use_current_position` is True.
-          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
+          vt (type): value type used for node generation (refer to :mod:`framework.value_types`).
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False compute the fixed amount part of the offset before
@@ -386,7 +387,7 @@ class MH(object):
                 else:
                     if issubclass(nodes.__class__, NodeAbstraction):
                         nodes = nodes.get_concrete_nodes()
-                    elif not isinstance(nodes, tuple) and not isinstance(nodes, list):
+                    elif not isinstance(nodes, (tuple, list)):
                         raise TypeError("Contents of 'nodes' parameter is incorrect!")
 
                     if not self.use_current_position:
@@ -431,7 +432,7 @@ class MH(object):
           path (str): relative path to the node whose value will be picked.
           depth (int): depth of our nth-ancestor used as a reference to compute automatically
             the targeted base node position.
-          vt (type): value type used for node generation (refer to :mod:`fuzzfmk.value_types`).
+          vt (type): value type used for node generation (refer to :mod:`framework.value_types`).
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False, copy the raw value, otherwise the encoded one. Can be
@@ -531,6 +532,7 @@ class ModelHelper(object):
         'absorb_csts', 'absorb_helper',
         'semantics', 'fuzz_weight',
         'sync_qty_with', 'exists_if', 'exists_if_not',
+        'exists_if/and', 'exists_if/or',
         'post_freeze'
     ]
 
@@ -563,7 +565,7 @@ class ModelHelper(object):
         return n
 
     def _handle_name(self, name_desc):
-        if isinstance(name_desc, tuple) or isinstance(name_desc, list):
+        if isinstance(name_desc, (tuple, list)):
             assert(len(name_desc) == 2)
             name = name_desc[0]
             ident = name_desc[1]
@@ -700,8 +702,12 @@ class ModelHelper(object):
         trig_last = desc.get('trigger_last', None)
         if trig_last is not None:
             if trig_last:
+                if not isinstance(custo_set, list):
+                    custo_set = [custo_set]
                 custo_set.append(MH.Custo.Gen.TriggerLast)
             else:
+                if not isinstance(custo_clear, list):
+                    custo_clear = [custo_clear]
                 custo_clear.append(MH.Custo.Gen.TriggerLast)
 
         if custo_set or custo_clear:
@@ -909,17 +915,27 @@ class ModelHelper(object):
         ref = desc.get('sync_qty_with', None)
         if ref is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(ref, SyncScope.Qty, conf),
+                                args=(ref, SyncScope.Qty, conf, None),
                                 unpack_args=True)
         condition = desc.get('exists_if', None)
         if condition is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(condition, SyncScope.Existence, conf),
+                                args=(condition, SyncScope.Existence, conf, None),
+                                unpack_args=True)
+        condition = desc.get('exists_if/and', None)
+        if condition is not None:
+            self._register_todo(node, self._set_sync_node,
+                                args=(condition, SyncScope.Existence, conf, 'and'),
+                                unpack_args=True)
+        condition = desc.get('exists_if/or', None)
+        if condition is not None:
+            self._register_todo(node, self._set_sync_node,
+                                args=(condition, SyncScope.Existence, conf, 'or'),
                                 unpack_args=True)
         condition = desc.get('exists_if_not', None)
         if condition is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(condition, SyncScope.Inexistence, conf),
+                                args=(condition, SyncScope.Inexistence, conf, None),
                                 unpack_args=True)
         fw = desc.get('fuzz_weight', None)
         if fw is not None:
@@ -956,21 +972,39 @@ class ModelHelper(object):
             raise ValueError("arguments refer to an inexistent node ({:s}, {!s})!".format(ref[0], ref[1]))
         parent_node.replace_subnode(node, self.node_dico[ref])
 
-    def _set_sync_node(self, node, arg, scope, conf):
-        if isinstance(arg, tuple) and issubclass(arg[0].__class__, NodeCondition):
-            param = arg[0]
-            sync_with = self.__get_node_from_db(arg[1])
+    def _set_sync_node(self, node, comp, scope, conf, private):
+        sync_obj = None
+        if isinstance(comp, (tuple,list)):
+            if issubclass(comp[0].__class__, NodeCondition):
+                param = comp[0]
+                sync_with = self.__get_node_from_db(comp[1])
+            elif issubclass(comp[0].__class__, (tuple,list)):
+                assert private in ['and', 'or']
+                sync_list = []
+                for subcomp in comp:
+                    assert isinstance(subcomp, (tuple,list)) and len(subcomp) == 2
+                    param = subcomp[0]
+                    sync_with = self.__get_node_from_db(subcomp[1])
+                    sync_list.append((sync_with, param))
+                and_junction = True if private == 'and' else False
+                sync_obj = SyncObj(sync_list, and_junction=and_junction)
+            else:  # in this case this is a node reference in the form ('node name', ID)
+                param = None
+                sync_with = self.__get_node_from_db(comp)
         else:
             param = None
-            sync_with = self.__get_node_from_db(arg)
+            sync_with = self.__get_node_from_db(comp)
 
-        node.make_synchronized_with(sync_with, scope=scope, param=param, conf=conf)
+        if sync_obj is not None:
+            node.make_synchronized_with(scope=scope, sync_obj=sync_obj, conf=conf)
+        else:
+            node.make_synchronized_with(scope=scope, node=sync_with, param=param, conf=conf)
 
     def _complete_func(self, node, args, conf):
         if isinstance(args, str):
             func_args = self.__get_node_from_db(args)
         else:
-            assert(isinstance(args, list) or isinstance(args, tuple))
+            assert(isinstance(args, (tuple, list)))
             func_args = []
             for name_desc in args:
                 func_args.append(self.__get_node_from_db(name_desc))
@@ -982,7 +1016,7 @@ class ModelHelper(object):
            (isinstance(args, tuple) and isinstance(args[1], int)):
             func_args = self.__get_node_from_db(args)
         else:
-            assert(isinstance(args, list) or isinstance(args, tuple))
+            assert(isinstance(args, (tuple, list)))
             func_args = []
             for name_desc in args:
                 func_args.append(self.__get_node_from_db(name_desc))

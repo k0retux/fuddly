@@ -6,4 +6,4 @@ Fuddly API
    
    api_index
 
-   fuzzfmk
+   framework

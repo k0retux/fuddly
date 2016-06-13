@@ -22,18 +22,19 @@
 ################################################################################
 
 import os
-import fuzzfmk
+import framework
 import sys
 import inspect
+from enum import Enum
 from libs.utils import ensure_dir, ensure_file
 
-fuddly_version = '0.23.2'
+fuddly_version = '0.24'
 
-fuzzfmk_folder = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-# fuzzfmk_folder = os.path.dirname(fuzzfmk.__file__)
-fuzzfmk_folder  = '.' if fuzzfmk_folder == '' else fuzzfmk_folder
+framework_folder = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+# framework_folder = os.path.dirname(framework.__file__)
+framework_folder  = '.' if framework_folder == '' else framework_folder
 
-app_folder = os.path.dirname(fuzzfmk_folder)
+app_folder = os.path.dirname(framework_folder)
 app_folder = '.' if app_folder == '' else app_folder
 projects_folder = app_folder + os.sep + 'projects' + os.sep
 data_models_folder = app_folder + os.sep + 'data_models' + os.sep
@@ -43,17 +44,17 @@ if not os.path.exists(fuddly_data_folder):
     new_fuddly_data_folder = True
 ensure_dir(fuddly_data_folder)
 
-exported_data_folder = fuddly_data_folder + os.sep + 'exported_data' + os.sep
+exported_data_folder = fuddly_data_folder + 'exported_data' + os.sep
 ensure_dir(exported_data_folder)
-imported_data_folder = fuddly_data_folder + os.sep + 'imported_data' + os.sep
+imported_data_folder = fuddly_data_folder + 'imported_data' + os.sep
 ensure_dir(imported_data_folder)
-logs_folder = fuddly_data_folder + os.sep + 'logs' + os.sep
+logs_folder = fuddly_data_folder + 'logs' + os.sep
 ensure_dir(logs_folder)
-workspace_folder = fuddly_data_folder + os.sep + 'workspace' + os.sep
+workspace_folder = fuddly_data_folder + 'workspace' + os.sep
 ensure_dir(workspace_folder)
-external_libs_folder = fuddly_data_folder + os.sep + 'external_libs' + os.sep
+external_libs_folder = fuddly_data_folder + 'external_libs' + os.sep
 ensure_dir(external_libs_folder)
-external_tools_folder = fuddly_data_folder + os.sep + 'external_tools' + os.sep
+external_tools_folder = fuddly_data_folder + 'external_tools' + os.sep
 ensure_dir(external_tools_folder)
 
 user_projects_folder = fuddly_data_folder + 'user_projects' + os.sep
@@ -63,7 +64,7 @@ user_data_models_folder = fuddly_data_folder + 'user_data_models' + os.sep
 ensure_dir(user_data_models_folder)
 ensure_file(user_data_models_folder + os.sep + '__init__.py')
 
-fmk_folder = app_folder + os.sep + 'fuzzfmk' + os.sep
+fmk_folder = app_folder + os.sep + 'framework' + os.sep
 
 class Error(object):
 
@@ -138,3 +139,9 @@ class Error(object):
 
     def __str__(self):
         return self._code_info[self.code]['name']
+
+class HOOK(Enum):
+    after_dmaker_production = 1
+    before_sending = 2
+    after_sending = 3
+    after_fbk = 4
