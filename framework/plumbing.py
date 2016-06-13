@@ -71,10 +71,7 @@ sig_int_handler = signal.getsignal(signal.SIGINT)
 
 r_pyfile = re.compile(".*\.py$")
 def is_python_file(fname):
-    if r_pyfile.match(fname):
-        return True
-    else:
-        return False
+    return r_pyfile.match(fname)
 
 
 class ExportableFMKOps(object):

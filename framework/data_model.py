@@ -73,9 +73,7 @@ class Data(object):
         if data is None:
             return
 
-        if isinstance(data, bytes):
-            self.update_from_str_or_bytes(data)
-        elif isinstance(data, Node):
+        if isinstance(data, Node):
             self.update_from_node(data)
         else:
             self.update_from_str_or_bytes(data)
@@ -208,10 +206,7 @@ class Data(object):
             else:
                 contents = self.node
         else:
-            if do_copy:
-                contents = copy.copy(self.raw)
-            else:
-                contents = self.raw
+             contents = copy.copy(self.raw) if do_copy else self.raw
 
         return contents
 
@@ -410,11 +405,10 @@ def flatten(nested):
 def convert_to_internal_repr(val):
     if isinstance(val, int):
         val = bytes(val)
-    else:
-        if not isinstance(val, (str, bytes)):
-            val = repr(val)
-        if sys.version_info[0] > 2 and not isinstance(val, bytes):
-            val = bytes(val, 'latin_1')
+    elif not isinstance(val, (str, bytes)):
+        val = repr(val)
+    elif sys.version_info[0] > 2 and not isinstance(val, bytes):
+        val = bytes(val, 'latin_1')
     return val
 
 def unconvert_from_internal_repr(val):
@@ -982,16 +976,10 @@ class NodeInternals(object):
         return self.__attrs[name]
 
     def _make_specific(self, name):
-        if name in [NodeInternals.Determinist, NodeInternals.Finite]:
-            return False
-        else:
-            return True
+        return name not in [NodeInternals.Determinist, NodeInternals.Finite]
 
     def _unmake_specific(self, name):
-        if name in [NodeInternals.Determinist, NodeInternals.Finite]:
-            return False
-        else:
-            return True
+        return name not in [NodeInternals.Determinist, NodeInternals.Finite]
 
     def _match_mandatory_attrs(self, criteria):
         if criteria is None:
@@ -1276,10 +1264,7 @@ class NodeInternalsCriteria(object):
         self._node_constraints[cst] = required
 
     def get_node_constraint(self, cst):
-        if cst in self._node_constraints:
-            return self._node_constraints[cst]
-        else:
-            return None
+        return self._node_constraints[cst] if cst in self._node_constraints else None
 
     def clear_node_constraint(self, cst):
         if self._node_constraints is None:
@@ -1700,10 +1685,7 @@ class NodeInternals_GenFunc(NodeInternals):
 
     def is_frozen(self):
         if self.is_attr_set(NodeInternals.Mutable):
-            if self._generated_node is None:
-                return False
-            else:
-                return True
+            return self._generated_node is not None
         else:
             return self.generated_node.is_frozen()
 
@@ -2963,10 +2945,7 @@ class NodeInternals_NonTerm(NodeInternals):
                     base_node.tmp_ref_count += 1
                     nid = base_node.name + ':' + str(base_node.tmp_ref_count)
                     # if self.is_attr_set(NodeInternals.Determinist):
-                    if self.custo.frozen_copy_mode:
-                        ignore_fstate = False
-                    else:
-                        ignore_fstate = True
+                    ignore_fstate = not self.custo.frozen_copy_mode
 
                     new_node = Node(nid, base_node=base_node, ignore_frozen_state=ignore_fstate,
                                     accept_external_entanglement=True,
@@ -3020,10 +2999,8 @@ class NodeInternals_NonTerm(NodeInternals):
             return (self.frozen_node_list, False)
 
         if self.separator is not None:
-            if self.separator.node.is_frozen():
-                ignore_sep_fstate = False
-            else:
-                ignore_sep_fstate = True
+            ignore_sep_fstate = not self.separator.node.is_frozen()
+
             if self.separator.prefix:
                 new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
                                                 ignore_frozen_state=ignore_sep_fstate)
@@ -3061,10 +3038,8 @@ class NodeInternals_NonTerm(NodeInternals):
                         node_list, idx, self.component_seed = self._get_next_random_component(self.subnodes_csts,
                                                                                               excluded_idx=self.excluded_components)
                         self.excluded_components.append(idx)
-                        if len(self.excluded_components) == len(self.subnodes_csts) // 2:
-                            self.exhausted = True
-                        else:
-                            self.exhausted = False
+                        self.exhausted = len(self.excluded_components) == len(self.subnodes_csts) // 2
+
                 else:
                     node_list = self._get_random_component(self.subnodes_csts,
                                                            self.subnodes_csts_total_weight)

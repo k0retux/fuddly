@@ -569,7 +569,7 @@ class Logger(object):
             self.log_fn('    |_ ' + msg, rgb=Color.DATAINFO)
 
     def log_info(self, info):
-        msg = "### Info: %s" % info
+        msg = "### Info: {:s}".format(info)
         self.log_fn(msg, rgb=Color.INFO)
 
     def log_target_ack_date(self, date):
@@ -581,10 +581,7 @@ class Logger(object):
 
     def log_orig_data(self, data):
 
-        if data is None:
-            exportable = False
-        else:
-            exportable = data.is_recordable()
+        exportable = False if data is None else data.is_recordable()
 
         if self.__explicit_data_recording and not exportable:
             return False
@@ -720,14 +717,8 @@ class Logger(object):
         if raw_limit is None:
             raw_limit = self._console_display_limit
 
-        if nl_before:
-            p = '\n'
-        else:
-            p = ''
-        if nl_after:
-            s = '\n'
-        else:
-            s = ''
+        p = '\n' if nl_before else ''
+        s = '\n' if nl_after else ''
 
         prefix = p + self.p
 
