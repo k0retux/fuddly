@@ -185,6 +185,8 @@ class FmkTask(threading.Thread):
             try:
                 # print("\n*** Function '{!s}' executed by Task '{!s}' ***".format(self._func, self._name))
                 self._func(self._arg)
+            except DataProcessTermination:
+                break
             except:
                 self._error_func("Task '{!s}' has crashed!".format(self._name))
                 break
@@ -1465,15 +1467,24 @@ class FmkPlumbing(object):
     def _do_after_sending_data(self, data_list):
         self._handle_data_callbacks(data_list, hook=HOOK.after_sending)
 
+        data_list = list(filter(lambda x: not x.is_blocked(), data_list))
+
         if self.__stats_countdown < 1:
             self.__stats_countdown = 9
             self.lg.log_stats()
         else:
             self.__stats_countdown -= 1
 
-    def _do_residual_feedback_retrieval(self, data_list):
+    def _do_sending_and_logging_init(self, data_list):
+
+        for d in data_list:
+            if d.feedback_timeout is not None:
+                self.set_feedback_timeout(d.feedback_timeout)
+
         blocked_data = list(filter(lambda x: x.is_blocked(), data_list))
         data_list = list(filter(lambda x: not x.is_blocked(), data_list))
+
+        self.fmkDB.cleanup_current_state()
 
         go_on = True
         if self._burst_countdown == self._burst:
@@ -1482,8 +1493,11 @@ class FmkPlumbing(object):
             if self.tg.collect_feedback_without_sending():
                 self.check_target_readiness()  # this call enable to wait for feedback timeout
                 go_on = self.log_target_residual_feedback()
-                if blocked_data:
-                    self._handle_data_callbacks(blocked_data, hook=HOOK.after_fbk)
+                self.tg.cleanup()
+            self.monitor_probes()
+
+        if blocked_data:
+            self._handle_data_callbacks(blocked_data, hook=HOOK.after_fbk)
 
         if go_on:
             return data_list
@@ -1613,7 +1627,7 @@ class FmkPlumbing(object):
             self.tg.send_data_sync(data)
         else:
             self.set_error(msg="Data descriptor handling returned 'None'!", code=Error.UserCodeError)
-            raise TypeError
+            raise DataProcessTermination
 
     def _unregister_task(self, id):
         with self._task_list_lock:
@@ -1658,7 +1672,7 @@ class FmkPlumbing(object):
             raise ValueError
 
         try:
-            data_list = self._do_residual_feedback_retrieval(data_list)
+            data_list = self._do_sending_and_logging_init(data_list)
         except TargetFeedbackError:
             return False
 
@@ -1674,7 +1688,6 @@ class FmkPlumbing(object):
                     self.__current.append((original_data[idx], dt))
                 else:
                     self.__current.append((None, dt))
-
 
         if orig_data_provided:
             for dt_orig in original_data:
@@ -2335,7 +2348,7 @@ class FmkPlumbing(object):
                 fmk_feedback.clear_flag(FmkFeedback.NeedChange)
 
                 try:
-                    data_list = self._do_residual_feedback_retrieval(data_list)
+                    data_list = self._do_sending_and_logging_init(data_list)
                 except TargetFeedbackError:
                     self.lg.log_fmk_info("Operator will shutdown because residual target "
                                          "feedback indicate a negative status code")
@@ -3176,7 +3189,7 @@ class FmkShell(cmd.Cmd):
         print('')
         if self.fz.is_not_ok() or self.__error:
             printed_err = True
-            msg = '| ERROR / WARNING |'
+            msg = '| ERROR / WARNING / INFO |'
             print(colorize('-'*len(msg), rgb=Color.WARNING))
             print(colorize(msg, rgb=Color.WARNING))
             print(colorize('-'*len(msg), rgb=Color.WARNING))

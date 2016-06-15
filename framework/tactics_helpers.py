@@ -541,7 +541,7 @@ class Generator(object):
         return self.__attrs[name]
 
     def _setup(self, dm, user_input):
-        sys.stdout.write("\n__ setup generator '%s' __" % self.__class__.__name__)
+        # sys.stdout.write("\n__ setup generator '%s' __" % self.__class__.__name__)
         self.clear_attr(DataMakerAttr.SetupRequired)
         if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
             return False
@@ -559,14 +559,14 @@ class Generator(object):
         return ok
 
     def _cleanup(self):
-        sys.stdout.write("\n__ cleanup generator '%s' __" % self.__class__.__name__)
+        # sys.stdout.write("\n__ cleanup generator '%s' __" % self.__class__.__name__)
         self.set_attr(DataMakerAttr.Active)
         self.set_attr(DataMakerAttr.SetupRequired)
         self.cleanup()
 
 
     def need_reset(self):
-        sys.stdout.write("\n__ generator need reset '%s' __" % self.__class__.__name__)
+        # sys.stdout.write("\n__ generator need reset '%s' __" % self.__class__.__name__)
         self.set_attr(DataMakerAttr.SetupRequired)
         self.cleanup()
 
@@ -679,10 +679,6 @@ class DynGeneratorFromScenario(Generator):
             return data
 
         data = self.step.get_data()
-        if data is None:
-            # in this case a data creation process is provided to the framework through the
-            # callback HOOK.before_sending
-            data = fdm.Data('')
 
         data.register_callback(self._callback_dispatcher_before_sending, hook=HOOK.before_sending)
         data.register_callback(self._callback_dispatcher_after_sending, hook=HOOK.after_sending)
@@ -700,12 +696,6 @@ class DynGeneratorFromScenario(Generator):
             self._go_on[tr] = tr.run_callback(self.step, hook=HOOK.before_sending)
 
         cbkops = fdm.CallBackOps()
-        for periodic_id in self.step.periodic_to_clear:
-            cbkops.add_operation(fdm.CallBackOps.Del_PeriodicData, id=periodic_id)
-
-        if self.step.feedback_timeout is not None:
-            cbkops.add_operation(fdm.CallBackOps.Set_FbkTimeout,
-                                 param=self.step.feedback_timeout)
         if self.step.node is None:
             cbkops.add_operation(fdm.CallBackOps.Replace_Data,
                                  param=self.step.data_desc)
@@ -748,9 +738,12 @@ class DynGeneratorFromScenario(Generator):
             cbkops.add_operation(fdm.CallBackOps.Add_PeriodicData, id=id(desc),
                                  param=desc.data, period=desc.period)
 
+        for periodic_id in self.step.periodic_to_clear:
+            cbkops.add_operation(fdm.CallBackOps.Del_PeriodicData, id=periodic_id)
+
         for tr in self.step.transitions:
             if self._go_on[tr]:
-                self.scenario.set_anchor(tr.step)
+                self.scenario.walk_to(tr.step)
                 break
         else:
             # we stay on the current step
@@ -802,7 +795,7 @@ class Disruptor(object):
 
 
     def _setup(self, dm, user_input):
-        sys.stdout.write("\n__ setup disruptor '%s' __" % self.__class__.__name__)
+        # sys.stdout.write("\n__ setup disruptor '%s' __" % self.__class__.__name__)
         self.clear_attr(DataMakerAttr.SetupRequired)
         if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
             return False
@@ -821,7 +814,7 @@ class Disruptor(object):
 
 
     def _cleanup(self):
-        sys.stdout.write("\n__ cleanup disruptor '%s' __" % self.__class__.__name__)
+        # sys.stdout.write("\n__ cleanup disruptor '%s' __" % self.__class__.__name__)
         self.set_attr(DataMakerAttr.SetupRequired)
         self.set_attr(DataMakerAttr.Active)
         self.cleanup()
@@ -850,7 +843,7 @@ class StatefulDisruptor(object):
         raise NotImplementedError
 
     def handover(self):
-        sys.stdout.write("\n__ disruptor handover '%s' __" % self.__class__.__name__)
+        # sys.stdout.write("\n__ disruptor handover '%s' __" % self.__class__.__name__)
         self.set_attr(DataMakerAttr.HandOver)
         self.set_attr(DataMakerAttr.SetupRequired)
         self.set_attr(DataMakerAttr.NeedSeed)
@@ -885,7 +878,7 @@ class StatefulDisruptor(object):
         return self.__attrs[name]
 
     def _setup(self, dm, user_input):
-        sys.stdout.write("\n__ setup disruptor '%s' __" % self.__class__.__name__)
+        # sys.stdout.write("\n__ setup disruptor '%s' __" % self.__class__.__name__)
         self.clear_attr(DataMakerAttr.SetupRequired)
         if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
             return False
@@ -903,7 +896,7 @@ class StatefulDisruptor(object):
         return ok
 
     def _cleanup(self):
-        sys.stdout.write("\n__ cleanup disruptor '%s' __" % self.__class__.__name__)
+        # sys.stdout.write("\n__ cleanup disruptor '%s' __" % self.__class__.__name__)
         self.set_attr(DataMakerAttr.SetupRequired)
         self.set_attr(DataMakerAttr.NeedSeed)
         self.set_attr(DataMakerAttr.Active)

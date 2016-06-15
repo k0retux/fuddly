@@ -230,6 +230,8 @@ class Database(object):
     def disable(self):
         self.enabled = False
 
+    def cleanup_current_state(self):
+        self.last_feedback = {}
 
     def execute_sql_statement(self, sql_stmt, params=None):
         return self.submit_sql_stmt(sql_stmt, params=params, outcome_type=Database.OUTCOME_DATA)
@@ -262,7 +264,7 @@ class Database(object):
     def insert_data(self, dtype, dm_name, raw_data, sz, sent_date, ack_date,
                     target_name, prj_name, group_id=None):
 
-        self.last_feedback = {}
+        self.cleanup_current_state()
 
         if not self.enabled:
             return None

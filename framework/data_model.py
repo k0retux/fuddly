@@ -57,6 +57,8 @@ class Data(object):
         self._unusable = False
         self._blocked = False
 
+        self.feedback_timeout = None
+
         self.info_list = []
         self.info = {}
         self._info_idx = {}

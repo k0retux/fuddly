@@ -37,15 +37,17 @@ periodic2 = Periodic(Data('2nd Periodic (3s)\n'), period=3)
 
 ### SCENARIO 1 ###
 step1 = Step('exist_cond', fbk_timeout=2, set_periodic=[periodic1, periodic2])
-step2 = Step('separator', fbk_timeout=5, clear_periodic=[periodic1, periodic2])
-step3 = Step('off_gen', fbk_timeout=2)
+step2 = Step('separator', fbk_timeout=5, clear_periodic=[periodic1])
+empty = NoDataStep(clear_periodic=[periodic2])
+step4 = Step('off_gen', fbk_timeout=2, step_desc='overriding the auto-description!')
 
 step1_copy = copy.copy(step1) # for scenario 2
 step2_copy = copy.copy(step2) # for scenario 2
 
 step1.connect_to(step2, cbk_before_sending=cbk_transition1)
-step2.connect_to(step3, cbk_after_fbk=cbk_transition2)
-step3.connect_to(step1, cbk_after_sending=cbk_transition3)
+step2.connect_to(empty, cbk_after_fbk=cbk_transition2)
+empty.connect_to(step4)
+step4.connect_to(step1, cbk_after_sending=cbk_transition3)
 
 sc1 = Scenario('ex1')
 sc1.set_anchor(step1)

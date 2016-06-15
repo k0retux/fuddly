@@ -105,6 +105,10 @@ a client listening on a TCP socket bound to the port 12345::
   [another term] # nc -k -l 12345
 
 
+Finally, note that a step once executed will display a description related to what it did. You
+can override this description by providing the ``step_desc`` parameter of a
+:class:`framework.scenario.Step` constructor with a python string.
+
 Transitions and Callbacks
 =========================
 
@@ -188,19 +192,20 @@ line 10-11 of the following code snippet).
    if you have modeled the responses of the target. Refer to :ref:`tuto:dm-absorption` for further
    explanation on that matter.
 
-Another aspect of callbacks is the ability to prevent the framework from going on to the next step
-until a condition has been reached (related to the target feedback for instance).
-For that purpose, the callback needs to call the method ``make_blocked()`` on the current step
-and to return `False`. In this case, the callback ``cbk_after_fbk`` will be (re)called after
-the feedback gathering time has elapsed once again. Note that you can `block` from any callback,
-but only ``cbk_after_fbk`` will be called further on and will be able to `unblock` the situation.
+Another aspect of callbacks is the ability to prevent the framework from going on (that is
+sending further data, and walking through the scenario) until a condition has been reached
+(related to the target feedback for instance). For that purpose, the callback needs to call the
+method ``make_blocked()`` on the current step and to return `False`. In this case, the callback
+``cbk_after_fbk`` will be (re)called after the feedback gathering time has elapsed once again.
+Note that you can `block` from any callback, but only ``cbk_after_fbk`` will be called further on
+and will be able to `unblock` the situation.
 
 Such ability can be usefull if you are not sure about the time to wait for the answer of a network
 service for instance. This is illustrated in the following example in the lines 2-4.
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 1, 4, 10-11, 18, 25
+   :emphasize-lines: 1, 4, 10-11, 18, 19, 25
 
     def feedback_handler(env, current_step, next_step, feedback):
         if not feedback:
@@ -220,7 +225,7 @@ service for instance. This is illustrated in the following example in the lines 
 
     step1 = Step('exist_cond', fbk_timeout=2, set_periodic=[periodic1, periodic2])
     step2 = Step('separator', fbk_timeout=5, cbk_after_fbk=feedback_handler)
-    step3 = Step('off_gen', fbk_timeout=2)
+    step3 = NoDataStep()
     step4 = Step(DataProcess(process=[('C',None,UI(nb=1)),'tTYPE'], seed='enc'))
 
     step1.connect_to(step2)
@@ -231,7 +236,7 @@ service for instance. This is illustrated in the following example in the lines 
     sc2 = Scenario('ex2')
     sc2.set_anchor(step1)
 
-In line 25 that a :class:`framework.scenario.FinalStep` (a step with its ``final`` attribute set to `True`)
+In line 25 a :class:`framework.scenario.FinalStep` (a step with its ``final`` attribute set to `True`)
 is used to terminate the scenario as well as all the associated periodic tasks that are still running.
 Note that if a callback set the ``final`` attribute of the ``next_step`` to `True`,
 it will trigger the termination of the scenario if this ``next_step`` is indeed the one that will
@@ -239,6 +244,14 @@ be selected next.
 
 .. note:: A step with its ``final`` attribute set to ``True`` will never trigger the sending of the
    data it contains.
+
+Remark also the :class:`framework.scenario.NoDataStep` in line 19 (``step3``) which is a step that
+does not provide data. Thus, the framework won't send anything during the execution of this kind
+of step. Anyway, it is still possible to set or clear some `periodic` in this step (or changing
+feedback timeout, ...)
+
+.. note:: A :class:`framework.scenario.NoDataStep` is actually a step
+   on which ``make_blocked()`` has been called on it and where ``make_free()`` do nothing.
 
 The execution of this scenario will follow the pattern::
 
