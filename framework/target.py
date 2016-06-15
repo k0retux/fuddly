@@ -720,6 +720,9 @@ class NetworkTarget(Target):
 
 
     def _get_data_semantic_key(self, data):
+        if data is None:
+            return self.UNKNOWN_SEMANTIC
+
         if data.node is None:
             if data.raw is None:
                 print('\n*** ERROR: Empty data has been received!')
@@ -998,22 +1001,44 @@ class NetworkTarget(Target):
             self._initial_sending_id = sid
             # self._first_send_data_call = True
 
+        epobj = select.epoll()
+        fileno2fd = {}
+
+        if self._first_send_data_call:
+            self._first_send_data_call = False
+
+            fbk_sockets, fbk_ids, fbk_lengths = self._get_additional_feedback_sockets()
+            if fbk_sockets:
+                for fd in fbk_sockets:
+                    epobj.register(fd, select.EPOLLIN)
+                    fileno2fd[fd.fileno()] = fd
+        else:
+            fbk_sockets, fbk_ids, fbk_lengths = None, None, None
+
+        if data_refs[sockets[0]][0] is None:
+            # We check the data to send. If it is None, we only collect feedback from the sockets.
+            # This is used by self.collect_feedback_without_sending()
+            if fbk_sockets is None:
+                assert fbk_ids is None
+                assert fbk_lengths is None
+                fbk_sockets = []
+                fbk_ids = {}
+                fbk_lengths = {}
+
+            for s in sockets:
+                data, host, port = data_refs[s]
+                epobj.register(s, select.EPOLLIN)
+                fileno2fd[s.fileno()] = s
+                fbk_sockets.append(s)
+                fbk_ids[s] = self._default_fbk_id[(host, port)]
+                fbk_lengths[s] = self.feedback_length
+
+            self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk)
+
+            return
+
         ready_to_read, ready_to_write, in_error = select.select([], sockets, [], self._sending_delay)
         if ready_to_write:
-
-            epobj = select.epoll()
-            fileno2fd = {}
-
-            if self._first_send_data_call:
-                self._first_send_data_call = False
-
-                fbk_sockets, fbk_ids, fbk_lengths = self._get_additional_feedback_sockets()
-                if fbk_sockets:
-                    for fd in fbk_sockets:
-                        epobj.register(fd, select.EPOLLIN)
-                        fileno2fd[fd.fileno()] = fd
-            else:
-                fbk_sockets, fbk_ids, fbk_lengths = None, None, None
 
             for s in ready_to_write:
                 add_main_socket = True
@@ -1045,8 +1070,8 @@ class NetworkTarget(Target):
                         totalsent = totalsent + sent
 
                 if fbk_sockets is None:
-                    assert(fbk_ids is None)
-                    assert(fbk_lengths is None)
+                    assert fbk_ids is None
+                    assert fbk_lengths is None
                     fbk_sockets = []
                     fbk_ids = {}
                     fbk_lengths = {}
@@ -1058,11 +1083,6 @@ class NetworkTarget(Target):
                     fbk_ids[s] = self._default_fbk_id[(host, port)]
                     fbk_lengths[s] = self.feedback_length
 
-            self._last_fbk_sockets = fbk_sockets
-            self._last_fbk_ids =fbk_ids
-            self._last_fbk_lengths = fbk_lengths
-            self._last_epobj = epobj
-            self._last_fileno2fd = fileno2fd
 
             self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk)
 
@@ -1107,20 +1127,8 @@ class NetworkTarget(Target):
 
 
     def collect_feedback_without_sending(self):
-        """
-        Should only be called after _send_data() has been called at least once
-        """
-        if hasattr(self, '_last_fbk_sockets'):
-            self._last_ack_date = None
-            self._feedback_handled = False
-            self._sending_id += 1
-            self._start_fbk_collector(self._last_fbk_sockets, self._last_fbk_ids,
-                                      self._last_fbk_lengths, self._last_epobj,
-                                      self._last_fileno2fd, from_fmk=True)
-            return True
-        else:
-            # This case could trigger when the target is first started
-            return False
+        self.send_data(None, from_fmk=True)
+        return True
 
     def get_feedback(self):
         return self._feedback

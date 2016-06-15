@@ -1490,10 +1490,12 @@ class FmkPlumbing(object):
         if self._burst_countdown == self._burst:
             # log residual just before sending new data to avoid
             # polluting feedback logs of the next emission
-            if self.tg.collect_feedback_without_sending():
+            if blocked_data and self.tg.collect_feedback_without_sending():
+                # we wait for feedback only in the case of blocked data
                 self.check_target_readiness()  # this call enable to wait for feedback timeout
-                go_on = self.log_target_residual_feedback()
-                self.tg.cleanup()
+
+            go_on = self.log_target_residual_feedback()
+            self.tg.cleanup()
             self.monitor_probes()
 
         if blocked_data:
