@@ -666,7 +666,7 @@ class NetworkTarget(Target):
                 err_msg = '>>> WARNING: unable to send data to {:s}:{:d} <<<'.format(host, port)
                 self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
             else:
-                self._send_data([s], {s:(data, host, port)}, self._sending_id, from_fmk)
+                self._send_data([s], {s:(data, host, port, None)}, self._sending_id, from_fmk)
 
 
     def send_multiple_data(self, data_list, from_fmk=False):
@@ -692,7 +692,7 @@ class NetworkTarget(Target):
                 else:
                     if s not in sockets:
                         sockets.append(s)
-                        data_refs[s] = (data, host, port)
+                        data_refs[s] = (data, host, port, None)
 
         self._send_data(sockets, data_refs, self._sending_id, from_fmk)
         t0 = datetime.datetime.now()
@@ -772,23 +772,37 @@ class NetworkTarget(Target):
 
 
     def _listen_to_target(self, host, port, socket_type, func, args=None):
+
+        def start_udp_server(serversocket):
+            serversocket.settimeout(self._sending_delay)
+            server_thread = threading.Thread(None, self._udp_server_main, name='SRV-' + '',
+                                             args=(serversocket, host, port, func))
+            server_thread.start()
+
+        family, sock_type = socket_type
+
         if (host, port) in self._server_sock2hp.values():
             # After data has been sent to the target that first
             # connect to us, new data is sent through the same socket
             # if hold_connection is set for this interface. And new
             # connection will always receive the most recent data to
             # send.
-            with self._server_thread_lock:
-                self._server_thread_share[(host, port)] = args
+            if sock_type == socket.SOCK_DGRAM or sock_type == socket.SOCK_RAW:
+                with self._server_thread_lock:
+                    self._server_thread_share[(host, port)] = args
                 if self.hold_connection[(host, port)] and (host, port) in self._last_client_hp2sock:
-                    csocket, addr = self._last_client_hp2sock[(host, port)]
-                else:
-                    csocket = None
-            if csocket:
-                func(csocket, addr, args)
+                    serversocket, _ = self._last_client_hp2sock[(host, port)]
+                    start_udp_server(serversocket)
+            else:
+                with self._server_thread_lock:
+                    self._server_thread_share[(host, port)] = args
+                    if self.hold_connection[(host, port)] and (host, port) in self._last_client_hp2sock:
+                        csocket, addr = self._last_client_hp2sock[(host, port)]
+                    else:
+                        csocket = None
+                if csocket:
+                    func(csocket, addr, args)
             return True
-
-        family, sock_type = socket_type
 
         serversocket = socket.socket(family, sock_type)
         serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -809,9 +823,10 @@ class NetworkTarget(Target):
                                              args=(serversocket, host, port, func))
             server_thread.start()
 
-        elif sock_type == socket.SOCK_DGRAM:
-            self._handle_connection_to_fbk_server(serversocket, None, args)
-
+        elif sock_type == socket.SOCK_DGRAM or sock_type == socket.SOCK_RAW:
+            self._last_client_hp2sock[(host, port)] = (serversocket, None)
+            self._last_client_sock2hp[serversocket] = (host, port)
+            start_udp_server(serversocket)
         else:
             raise ValueError("Unrecognized socket type")
 
@@ -835,8 +850,23 @@ class NetworkTarget(Target):
                     args = self._server_thread_share[(host, port)]
                 func(clientsocket, address, args)
 
+    def _udp_server_main(self, serversocket, host, port, func):
+        try:
+            # accept UDP from outside
+            data, address = serversocket.recvfrom(self.CHUNK_SZ)
+        except socket.timeout:
+            pass
+        except OSError as e:
+            if e.errno == 9: # [Errno 9] Bad file descriptor
+                pass
+            else:
+                raise
+        else:
+            with self._server_thread_lock:
+                args = self._server_thread_share[(host, port)]
+            func(serversocket, address, args, pre_fbk=data)
 
-    def _handle_connection_to_fbk_server(self, clientsocket, address, args):
+    def _handle_connection_to_fbk_server(self, clientsocket, address, args, pre_fbk=None):
         fbk_id, fbk_length, connected_client_event = args
         connected_client_event.set()
         with self.socket_desc_lock:
@@ -844,30 +874,30 @@ class NetworkTarget(Target):
             self._additional_fbk_ids[clientsocket] = fbk_id
             self._additional_fbk_lengths[clientsocket] = fbk_length
 
-    def _handle_target_connection(self, clientsocket, address, args):
+    def _handle_target_connection(self, clientsocket, address, args, pre_fbk=None):
         data, host, port, connected_client_event, from_fmk = args
         if self.hold_connection[(host, port)]:
             with self._server_thread_lock:
                 self._last_client_hp2sock[(host, port)] = (clientsocket, address)
                 self._last_client_sock2hp[clientsocket] = (host, port)
         connected_client_event.set()
-        self._send_data([clientsocket], {clientsocket:(data, host, port)}, self._sending_id,
-                        from_fmk=from_fmk)
+        self._send_data([clientsocket], {clientsocket:(data, host, port, address)}, self._sending_id,
+                        from_fmk=from_fmk, pre_fbk={clientsocket: pre_fbk})
 
 
     def _collect_feedback_from(self, fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd,
-                               send_id, fbk_timeout, from_fmk):
+                               send_id, fbk_timeout, from_fmk, pre_fbk=None):
 
-        def _check_and_handle_obsolete_socket(socket, error=None, error_list=None):
+        def _check_and_handle_obsolete_socket(skt, error=None, error_list=None):
             # print('\n*** NOTE: Remove obsolete socket {!r}'.format(socket))
             try:
-                epobj.unregister(socket)
+                epobj.unregister(skt)
             except ValueError as e:
                 # in python3, file descriptor == -1 witnessed (!?)
-                print('\n*** ERROR: ' + str(e))
+                print('\n*** ERROR(check obsolete socket): ' + str(e))
             except socket.error as serr:
                 # in python2, bad file descriptor (errno 9) witnessed
-                print('\n*** ERROR: ' + str(serr))
+                print('\n*** ERROR(check obsolete socket): ' + str(serr))
 
             self._server_thread_lock.acquire()
             if socket in self._last_client_sock2hp.keys():
@@ -904,6 +934,8 @@ class NetworkTarget(Target):
         for fd in fbk_sockets:
             bytes_recd[fd] = 0
             chunks[fd] = []
+            if pre_fbk is not None and fd in pre_fbk:
+                chunks[fd].append(pre_fbk[fd])
 
         socket_errors = []
 
@@ -931,12 +963,18 @@ class NetworkTarget(Target):
                         sz = min(fbk_lengths[s] - bytes_recd[s], NetworkTarget.CHUNK_SZ)
 
                     retry = 0
+                    socket_timed_out = False
                     while retry < 3:
                         try:
                             chunk = s.recv(sz)
+                        except socket.timeout:
+                            chunk = b''
+                            socket_timed_out = True  # UDP
+                            break
                         except socket.error as serr:
                             chunk = b''
-                            print('\n*** ERROR: ' + str(serr))
+                            print('\n*** ERROR[{!s}] (while receiving): {:s}'.format(
+                                serr.errno, str(serr)))
                             if serr.errno == socket.errno.EAGAIN:
                                 retry += 1
                                 time.sleep(2)
@@ -950,7 +988,8 @@ class NetworkTarget(Target):
                         print('\n*** NOTE: Nothing more to receive from: {!r}'.format(fbk_ids[s]))
                         fbk_sockets.remove(s)
                         _check_and_handle_obsolete_socket(s)
-                        s.close()
+                        if not socket_timed_out:
+                            s.close()
                         continue
                     else:
                         bytes_recd[s] = bytes_recd[s] + len(chunk)
@@ -996,7 +1035,7 @@ class NetworkTarget(Target):
         return
 
 
-    def _send_data(self, sockets, data_refs, sid, from_fmk):
+    def _send_data(self, sockets, data_refs, sid, from_fmk, pre_fbk=None):
         if sid != self._initial_sending_id:
             self._initial_sending_id = sid
             # self._first_send_data_call = True
@@ -1026,7 +1065,7 @@ class NetworkTarget(Target):
                 fbk_lengths = {}
 
             for s in sockets:
-                data, host, port = data_refs[s]
+                data, host, port, address = data_refs[s]
                 epobj.register(s, select.EPOLLIN)
                 fileno2fd[s.fileno()] = s
                 fbk_sockets.append(s)
@@ -1042,8 +1081,7 @@ class NetworkTarget(Target):
 
             for s in ready_to_write:
                 add_main_socket = True
-                data, host, port = data_refs[s]
-
+                data, host, port, address = data_refs[s]
                 epobj.register(s, select.EPOLLIN)
                 fileno2fd[s.fileno()] = s
 
@@ -1052,10 +1090,13 @@ class NetworkTarget(Target):
                 send_retry = 0
                 while totalsent < len(raw_data) and send_retry < 10:
                     try:
-                        sent = s.send(raw_data[totalsent:])
+                        if address is None:
+                            sent = s.send(raw_data[totalsent:])
+                        else:
+                            sent = s.sendto(raw_data[totalsent:], address)
                     except socket.error as serr:
                         send_retry += 1
-                        print('\n*** ERROR: ' + str(serr))
+                        print('\n*** ERROR(while sending): ' + str(serr))
                         if serr.errno == socket.errno.EWOULDBLOCK:
                             time.sleep(0.2)
                             continue
@@ -1084,20 +1125,23 @@ class NetworkTarget(Target):
                     fbk_lengths[s] = self.feedback_length
 
 
-            self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk)
+            self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk,
+                                      pre_fbk=pre_fbk)
 
         else:
             raise TargetStuck("system not ready for sending data!")
 
 
-    def _start_fbk_collector(self, fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk):
+    def _start_fbk_collector(self, fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk,
+                             pre_fbk=None):
         self._thread_cpt += 1
         if from_fmk:
             self.feedback_thread_qty += 1
         feedback_thread = threading.Thread(None, self._collect_feedback_from,
                                            name='FBK-' + repr(self._sending_id) + '#' + repr(self._thread_cpt),
                                            args=(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd,
-                                                 self._sending_id, self._feedback_timeout, from_fmk))
+                                                 self._sending_id, self._feedback_timeout, from_fmk,
+                                                 pre_fbk))
         feedback_thread.start()
 
 
@@ -1148,6 +1192,21 @@ class NetworkTarget(Target):
     def get_last_target_ack_date(self):
         return self._last_ack_date
 
+    def _get_socket_type(self, host, port):
+        for key, h in self._host.items():
+            if h == host and self._port[key] == port:
+                st = self._socket_type[key]
+                if st[:2] == (socket.AF_INET, socket.SOCK_STREAM):
+                    return 'TCP'
+                elif st[:2] == (socket.AF_INET, socket.SOCK_DGRAM):
+                    return 'UDP'
+                elif st[:2] == (socket.AF_PACKET, socket.SOCK_RAW):
+                    return 'RAW'
+                else:
+                    return repr(st)
+        else:
+            return None
+
     def get_description(self):
         desc_added = []
         desc = ''
@@ -1158,7 +1217,9 @@ class NetworkTarget(Target):
             desc_added.append((host, port))
             server_mode = self.server_mode[(host, port)]
             hold_connection = self.hold_connection[(host, port)]
-            desc += '{:s}:{:d} (serv:{!r},hold:{!r}), '.format(host, port, server_mode, hold_connection)
+            socket_type = self._get_socket_type(host, port)
+            desc += '{:s}:{:d}#{!s} (serv:{!r},hold:{!r}), '.format(
+                host, port, socket_type, server_mode, hold_connection)
 
         return desc[:-2]
 

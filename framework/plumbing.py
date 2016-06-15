@@ -1399,11 +1399,12 @@ class FmkPlumbing(object):
             return False
 
     @EnforceOrder(accepted_states=['S1','S2'])
-    def set_feedback_timeout(self, timeout, do_record=False):
+    def set_feedback_timeout(self, timeout, do_record=False, do_show=True):
         if timeout >= 0:
             self.tg.set_feedback_timeout(timeout)
-            self.lg.log_fmk_info('Target feedback timeout = {:.1f}s'.format(timeout),
-                                 do_record=do_record)
+            if do_show:
+                self.lg.log_fmk_info('Target feedback timeout = {:.1f}s'.format(timeout),
+                                     do_record=do_record)
             self._recompute_health_check_timeout(timeout)
             return True
         else:
@@ -1490,11 +1491,17 @@ class FmkPlumbing(object):
         if self._burst_countdown == self._burst:
             # log residual just before sending new data to avoid
             # polluting feedback logs of the next emission
-            if blocked_data and self.tg.collect_feedback_without_sending():
-                # we wait for feedback only in the case of blocked data
-                self.check_target_readiness()  # this call enable to wait for feedback timeout
+            if not blocked_data:
+                fbk_timeout = self.tg.feedback_timeout
+                self.set_feedback_timeout(0, do_show=False)
 
+            if self.tg.collect_feedback_without_sending():
+                self.check_target_readiness()  # this call enable to wait for feedback timeout
             go_on = self.log_target_residual_feedback()
+
+            if not blocked_data:
+                self.set_feedback_timeout(fbk_timeout, do_show=False)
+
             self.tg.cleanup()
             self.monitor_probes()
 

@@ -31,7 +31,7 @@ project = Project()
 project.default_dm = 'mydf'
 
 logger = Logger(export_data=False, explicit_data_recording=False, export_orig=False,
-                export_raw_data=False, enable_file_logging=False)
+                export_raw_data=True, enable_file_logging=False)
 
 class TutoNetTarget(NetworkTarget):
 
@@ -52,7 +52,17 @@ tuto_tg.add_additional_feedback_interface('localhost', 7777, (socket.AF_INET, so
                                           fbk_id='My Feedback Source', server_mode=True)
 tuto_tg.set_timeout(fbk_timeout=5, sending_delay=2)
 
-net_tg = NetworkTarget(host='localhost', port=12345, hold_connection=True)
+net_tg = NetworkTarget(host='localhost', port=12345,
+                       socket_type=(socket.AF_INET, socket.SOCK_STREAM),
+                       hold_connection=True, server_mode=False)
+
+udpnet_tg = NetworkTarget(host='localhost', port=12345,
+                          socket_type=(socket.AF_INET, socket.SOCK_DGRAM),
+                          hold_connection=True, server_mode=False)
+
+udpnetsrv_tg = NetworkTarget(host='localhost', port=12345,
+                          socket_type=(socket.AF_INET, socket.SOCK_DGRAM),
+                          hold_connection=True, server_mode=True)
 
 ### PROBE DEFINITION ###
 
@@ -103,7 +113,7 @@ class health_check(Probe):
 ### TARGETS ALLOCATION ###
 
 targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
-           tuto_tg, net_tg]
+           tuto_tg, net_tg, udpnet_tg, udpnetsrv_tg]
 
 ### OPERATOR DEFINITION ###
 
