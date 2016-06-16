@@ -345,6 +345,9 @@ class NetworkTarget(Target):
             we close the related socket.
         '''
 
+        if not self._is_valid_socket_type(socket_type):
+            raise ValueError("Unrecognized socket type")
+
         self._host = {}
         self._port = {}
         self._socket_type = {}
@@ -381,8 +384,24 @@ class NetworkTarget(Target):
         self._server_thread_lock = threading.Lock()
 
 
+    def _is_valid_socket_type(self, socket_type):
+        skt_sz = len(socket_type)
+        if skt_sz == 3:
+            family, sock_type, proto = socket_type
+            if sock_type != socket.SOCK_RAW:
+                return False
+        elif skt_sz == 2:
+            family, sock_type = socket_type
+            if sock_type not in [socket.SOCK_STREAM, socket.SOCK_DGRAM]:
+                return False
+        return True
+
     def register_new_interface(self, host, port, socket_type, data_semantics, server_mode=False,
                                hold_connection=False):
+
+        if not self._is_valid_socket_type(socket_type):
+            raise ValueError("Unrecognized socket type")
+
         self.multiple_destination = True
         self._host[data_semantics] = host
         self._port[data_semantics] = port
@@ -774,12 +793,15 @@ class NetworkTarget(Target):
     def _listen_to_target(self, host, port, socket_type, func, args=None):
 
         def start_udp_server(serversocket):
-            serversocket.settimeout(self._sending_delay)
-            server_thread = threading.Thread(None, self._udp_server_main, name='SRV-' + '',
+            server_thread = threading.Thread(None, self._raw_server_main, name='SRV-' + '',
                                              args=(serversocket, host, port, func))
             server_thread.start()
 
-        family, sock_type = socket_type
+        skt_sz = len(socket_type)
+        if skt_sz == 2:
+            family, sock_type = socket_type
+        else:
+            family, sock_type, proto = socket_type
 
         if (host, port) in self._server_sock2hp.values():
             # After data has been sent to the target that first
@@ -804,13 +826,21 @@ class NetworkTarget(Target):
                     func(csocket, addr, args)
             return True
 
-        serversocket = socket.socket(family, sock_type)
-        serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        serversocket.settimeout(0.2)
+        serversocket = socket.socket(*socket_type)
+        if sock_type != socket.SOCK_RAW:
+            serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if sock_type == socket.SOCK_STREAM:
+                serversocket.settimeout(0.2)
+
+        if sock_type == socket.SOCK_DGRAM or sock_type == socket.SOCK_RAW:
+            serversocket.settimeout(self._sending_delay)
+            if sock_type == socket.SOCK_RAW:
+                assert port == socket.ntohs(proto)
+
         try:
             serversocket.bind((host, port))
         except socket.error as serr:
-            print('\n*** ERROR: ' + str(serr))
+            print('\n*** ERROR(while binding socket): ' + str(serr))
             return False
 
         self._server_sock2hp[serversocket] = (host, port)
@@ -850,21 +880,29 @@ class NetworkTarget(Target):
                     args = self._server_thread_share[(host, port)]
                 func(clientsocket, address, args)
 
-    def _udp_server_main(self, serversocket, host, port, func):
-        try:
-            # accept UDP from outside
-            data, address = serversocket.recvfrom(self.CHUNK_SZ)
-        except socket.timeout:
-            pass
-        except OSError as e:
-            if e.errno == 9: # [Errno 9] Bad file descriptor
-                pass
+    def _raw_server_main(self, serversocket, host, port, func):
+        retry = 0
+        while retry < 10:
+            try:
+                # accept UDP from outside
+                data, address = serversocket.recvfrom(self.CHUNK_SZ)
+            except socket.timeout:
+                break
+            except OSError as e:
+                if e.errno == 9: # [Errno 9] Bad file descriptor
+                    break
+                elif e.errno == 11: # [Errno 11] Resource temporarily unavailable
+                    retry += 1
+                    time.sleep(0.1)
+                    continue
+                else:
+                    raise
             else:
-                raise
-        else:
-            with self._server_thread_lock:
-                args = self._server_thread_share[(host, port)]
-            func(serversocket, address, args, pre_fbk=data)
+                with self._server_thread_lock:
+                    args = self._server_thread_share[(host, port)]
+                serversocket.settimeout(self.feedback_timeout)
+                func(serversocket, address, args, pre_fbk=data)
+                break
 
     def _handle_connection_to_fbk_server(self, clientsocket, address, args, pre_fbk=None):
         fbk_id, fbk_length, connected_client_event = args
@@ -1093,6 +1131,7 @@ class NetworkTarget(Target):
                         if address is None:
                             sent = s.send(raw_data[totalsent:])
                         else:
+                            # with SOCK_RAW, address is ignored
                             sent = s.sendto(raw_data[totalsent:], address)
                     except socket.error as serr:
                         send_retry += 1
