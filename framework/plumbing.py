@@ -1400,7 +1400,11 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S1','S2'])
     def set_feedback_timeout(self, timeout, do_record=False, do_show=True):
-        if timeout >= 0:
+        if timeout is None:
+            # This case occurs in self._do_sending_and_logging_init()
+            # if the Target has not defined a feedback_timeout (like the EmptyTarget)
+            self._recompute_health_check_timeout(timeout)
+        elif timeout >= 0:
             self.tg.set_feedback_timeout(timeout)
             if do_show:
                 self.lg.log_fmk_info('Target feedback timeout = {:.1f}s'.format(timeout),

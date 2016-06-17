@@ -1762,7 +1762,13 @@ class NodeInternals_GenFunc(NodeInternals):
                                                ignore_entanglement=ignore_entanglement)
 
     def get_child_all_path(self, name, htable, conf, recursive):
-        self.generated_node._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False)
+        if self.env is not None:
+            self.generated_node._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False)
+        else:
+            # If self.env is None, that means that a node graph is not fully constructed
+            # thus we avoid a freeze side-effect (by resolving 'generated_node') of the
+            # graph while it is currently manipulated in some way.
+            pass
 
     def set_clone_info(self, info, node):
         self._node_helpers.set_graph_info(node, info)
@@ -2678,7 +2684,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
                     new_sublist.append(new_sslist)
                 else:
-                    raise ValueError
+                    raise ValueError('{!r}'.format(sublist[0]))
 
                 l.append([copy.copy(delim), new_sublist])
 
@@ -4699,11 +4705,11 @@ class Node(object):
             else:
                 self.make_empty()
 
-    def get_clone(self, name, ignore_frozen_state=False, new_env=True):
+    def get_clone(self, name=None, ignore_frozen_state=False, new_env=True):
         '''Create a new node. To be used wihtin a graph-based data model.
         
         Args:
-          name (str): name of the new Node instance
+          name (str): name of the new Node instance. If ``None`` the current name will be used.
           ignore_frozen_state (bool): if set to False, the clone function will produce
             a Node with the same state as the duplicated Node. Otherwise, the only the state won't be kept.
           new_env (bool): If True, the current :class:`Env()` will be copied.
@@ -4712,6 +4718,9 @@ class Node(object):
         Returns:
           Node: duplicated Node object
         '''
+
+        if name is None:
+            name = self.name
 
         return Node(name, base_node=self, ignore_frozen_state=ignore_frozen_state, new_env=new_env)
 

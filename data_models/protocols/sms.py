@@ -19,7 +19,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with fuddly. If not, see <http://www.gnu.org/licenses/>
 #
-################################################################################import sys
+################################################################################
 
 from framework.data_model import *
 from framework.value_types import *
@@ -40,6 +40,7 @@ class SMS_DataModel(DataModel):
         {'name': 'smstxt',
          'contents': [
              {'name': 'SMS-SUBMIT',  # refer to TS 100 901 (chapter 9.2.3)
+              'mutable': False,
               'contents': BitField(subfield_sizes=[2,1,2,1,1,1], endian=VT.BigEndian,
                                    subfield_val_lists=[
                                        [0b01], # message type indicator,
@@ -52,8 +53,10 @@ class SMS_DataModel(DataModel):
                                    subfield_descs=['mti','rd','vpf','srr','udhi','rp']
                                    ) },
              {'name': 'TP-MR',  # Message Reference (refer to TS 100 901)
+              'mutable': False,
               'contents': UINT8(int_list=[0])},
              {'name': 'TP-DA',  # Destination Address (refer to TS 100 901 - chapter 9.1.2.5)
+              'mutable': False,
               'contents': [
                   {'name': 'addr_len',
                    'contents': MH.LEN(vt=UINT8, after_encoding=False),
@@ -99,6 +102,7 @@ class SMS_DataModel(DataModel):
         {'name': 'smscmd',   # refer to GSM 03.48
          'contents': [
              {'name': 'SMS-SUBMIT',  # refer to TS 100 901 (chapter 9.2.3)
+              'mutable': False,
               'contents': BitField(subfield_sizes=[2,1,2,1,1,1], endian=VT.BigEndian,
                                    subfield_val_lists=[
                                        [0b01], # message type indicator,
@@ -111,8 +115,10 @@ class SMS_DataModel(DataModel):
                                    subfield_descs=['mti','rd','vpf','srr','udhi','rp']
                                    ) },
              {'name': 'TP-MR',  # Message Reference (refer to TS 100 901)
+              'mutable': False,
               'contents': UINT8(int_list=[0])},
              {'name': 'TP-DA',  # Destination Address (refer to TS 100 901 - chapter 9.1.2.5)
+              'mutable': False,
               'contents': [
                   {'name': 'addr_len',
                    'contents': MH.LEN(vt=UINT8, after_encoding=False),

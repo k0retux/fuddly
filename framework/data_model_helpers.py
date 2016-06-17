@@ -536,9 +536,29 @@ class ModelHelper(object):
         'post_freeze'
     ]
 
-    def __init__(self, dm=None, delayed_jobs=True):
+    def __init__(self, dm=None, delayed_jobs=True, add_env=True):
+        """
+        Help the process of data description. This class is able to construct a
+        :class:`framework.data_model.Node` object from a JSON-like description.
+
+        Args:
+            dm (DataModel): a DataModel object, only required if the 'import_from' statement is used
+              with :meth:`create_graph_from_desc`.
+            delayed_jobs (bool): Enable or disabled delayed jobs feature. Used for instance for
+              delaying constraint that cannot be solved immediately.
+            add_env (bool): If `True`, an :class:`framework.data_model.Env` object
+              will be assigned to the generated :class:`framework.data_model.Node`
+              from :meth:`create_graph_from_desc`. Should be set to ``False`` if you consider using
+              the generated `Node` within another description or if you will copy it for building
+              a new node type. Keeping an ``Env()`` object can be dangerous if you make some clones of
+              it and don't pay attention to set a new ``Env()`` for each copy, because. A graph node
+              SHALL have only one ``Env()`` shared between all the nodes and an Env() shall not be
+              shared between independent graph (otherwise it could lead to
+              unexpected results).
+        """
         self.dm = dm
         self.delayed_jobs = delayed_jobs
+        self._add_env_to_the_node = add_env
 
     def _verify_keys_conformity(self, desc):
         for k in desc.keys():
@@ -553,7 +573,8 @@ class ModelHelper(object):
         
         n = self._create_graph_from_desc(desc, None)
 
-        self._register_todo(n, self._set_env, prio=self.LOW_PRIO)
+        if self._add_env_to_the_node:
+            self._register_todo(n, self._set_env, prio=self.LOW_PRIO)
         self._create_todo_list()
 
         for node, func, args, unpack_args in self.todo:
@@ -729,7 +750,7 @@ class ModelHelper(object):
         if not cts:
             raise ValueError
 
-        if isinstance(cts[0], list):
+        if isinstance(cts[0], (list,tuple)):
             # thus contains at least something that is not a
             # node_desc, that is directly a node. Thus, only one
             # shape!
@@ -784,8 +805,8 @@ class ModelHelper(object):
         
         def _handle_section(nodes_desc, sh):
             for n in nodes_desc:
-                if isinstance(n, list) and (len(n) == 2 or len(n) == 3):
-                    sh.append(n)
+                if isinstance(n, (list,tuple)) and (len(n) == 2 or len(n) == 3):
+                    sh.append(list(n))
                 elif isinstance(n, dict):
                     qty = n.get('qty', 1)
                     if isinstance(qty, tuple):
@@ -810,7 +831,7 @@ class ModelHelper(object):
         for section_desc in shapes:
 
             # check if it is directly a node
-            if isinstance(section_desc, list):
+            if isinstance(section_desc, (list,tuple)):
                 if prev_section_exist or first_pass:
                     prev_section_exist = False
                     first_pass = False
