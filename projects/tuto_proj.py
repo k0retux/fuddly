@@ -64,6 +64,12 @@ udpnetsrv_tg = NetworkTarget(host='localhost', port=12345,
                           socket_type=(socket.AF_INET, socket.SOCK_DGRAM),
                           hold_connection=True, server_mode=True)
 
+ETH_P_ALL = 3
+rawnetsrv_tg = NetworkTarget(host='eth0', port=ETH_P_ALL,
+                             socket_type=(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL)),
+                             hold_connection=True, server_mode=True)
+
+
 ### PROBE DEFINITION ###
 
 @probe(project)
@@ -113,7 +119,7 @@ class health_check(Probe):
 ### TARGETS ALLOCATION ###
 
 targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
-           tuto_tg, net_tg, udpnet_tg, udpnetsrv_tg]
+           tuto_tg, net_tg, udpnet_tg, udpnetsrv_tg, rawnetsrv_tg]
 
 ### OPERATOR DEFINITION ###
 
