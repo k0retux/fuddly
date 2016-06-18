@@ -696,7 +696,7 @@ class DynGeneratorFromScenario(Generator):
             self._go_on[tr] = tr.run_callback(self.step, hook=HOOK.before_sending)
 
         cbkops = fdm.CallBackOps()
-        if self.step.node is None:
+        if self.step.has_dataprocess():
             cbkops.add_operation(fdm.CallBackOps.Replace_Data,
                                  param=self.step.data_desc)
 

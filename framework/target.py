@@ -41,6 +41,8 @@ import binascii
 import errno
 from socket import error as socket_error
 
+from uuid import getnode
+
 from libs.external_modules import *
 from framework.data_model import Data, NodeSemanticsCriteria
 from framework.value_types import GSMPhoneNum
@@ -319,9 +321,11 @@ class NetworkTarget(Target):
 
     UNKNOWN_SEMANTIC = 42
     CHUNK_SZ = 2048
+    _INTERNALS_ID = 'NetworkTarget()'
 
     def __init__(self, host='localhost', port=12345, socket_type=(socket.AF_INET, socket.SOCK_STREAM),
-                 data_semantics=UNKNOWN_SEMANTIC, server_mode=False, hold_connection=False):
+                 data_semantics=UNKNOWN_SEMANTIC, server_mode=False, hold_connection=False,
+                 mac_src=None, mac_dst=None):
         '''
         Args:
           host (str): the IP address of the target to connect to, or
@@ -347,6 +351,11 @@ class NetworkTarget(Target):
 
         if not self._is_valid_socket_type(socket_type):
             raise ValueError("Unrecognized socket type")
+
+        self._mac_src = struct.pack('>Q', getnode())[2:] if mac_src is None else mac_src
+        self._mac_dst = mac_dst
+        self._mac_src_semantic = NodeSemanticsCriteria(mandatory_criteria=['mac_src'])
+        self._mac_dst_semantic = NodeSemanticsCriteria(mandatory_criteria=['mac_dst'])
 
         self._host = {}
         self._port = {}
@@ -673,17 +682,21 @@ class NetworkTarget(Target):
             self._listen_to_target(host, port, socket_type,
                                    self._handle_target_connection,
                                    args=(data, host, port, connected_client_event, from_fmk))
-            connected_client_event.wait(self._sending_delay)
-            if not connected_client_event.is_set():
+            if data is not None:
+                connected_client_event.wait(self._sending_delay)
+            if socket_type[1] == socket.SOCK_STREAM and not connected_client_event.is_set():
                 self._feedback.set_error_code(-2)
-                err_msg = ">>> WARNING: unable to send data because the target did not connect to us <<<".format(host, port)
-                self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
+                err_msg = ">>> WARNING: unable to send data because the target did not connect" \
+                          " to us [{:s}:{:d}] <<<".format(host, port)
+                # self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
+                self._feedback.add_fbk_from(self._INTERNALS_ID, err_msg)
         else:
             s = self._connect_to_target(host, port, socket_type)
             if s is None:
                 self._feedback.set_error_code(-1)
                 err_msg = '>>> WARNING: unable to send data to {:s}:{:d} <<<'.format(host, port)
-                self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
+                # self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
+                self._feedback.add_fbk_from(self._INTERNALS_ID, err_msg)
             else:
                 self._send_data([s], {s:(data, host, port, None)}, self._sending_id, from_fmk)
 
@@ -707,7 +720,8 @@ class NetworkTarget(Target):
                 if s is None:
                     self._feedback.set_error_code(-2)
                     err_msg = '>>> WARNING: unable to send data to {:s}:{:d} <<<'.format(host, port)
-                    self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
+                    # self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
+                    self._feedback.add_fbk_from(self._INTERNALS_ID, err_msg)
                 else:
                     if s not in sockets:
                         sockets.append(s)
@@ -734,9 +748,10 @@ class NetworkTarget(Target):
                 host, port = ref
                 if not event.is_set():
                     self._feedback.set_error_code(-1)
-                    err_msg = ">>> WARNING: unable to send data because the target did not connect to us <<<"
-                    self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
-
+                    err_msg = ">>> WARNING: unable to send data because the target did not connect" \
+                              " to us [{:s}:{:d}] <<<".format(host, port)
+                    # self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
+                    self._feedback.add_fbk_from(self._INTERNALS_ID, err_msg)
 
     def _get_data_semantic_key(self, data):
         if data is None:
@@ -770,18 +785,32 @@ class NetworkTarget(Target):
         if self.hold_connection[(host, port)] and (host, port) in self._hclient_hp2sock.keys():
             return self._hclient_hp2sock[(host, port)]
 
-        family, sock_type = socket_type
-        s = socket.socket(family, sock_type)
+        skt_sz = len(socket_type)
+        if skt_sz == 2:
+            family, sock_type = socket_type
+            proto = 0
+        else:
+            family, sock_type, proto = socket_type
+
+        s = socket.socket(*socket_type)
         # s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
 
-        try:
-            s.connect((host, port))
-        except socket_error as serr:
-            # if serr.errno != errno.ECONNREFUSED:
-            print('\n*** ERROR: ' + str(serr))
-            return None
+        if sock_type == socket.SOCK_RAW:
+            assert port == socket.ntohs(proto)
+            try:
+                s.bind((host, port))
+            except socket.error as serr:
+                print('\n*** ERROR(while binding socket): ' + str(serr))
+                return False
+        else:
+            try:
+                s.connect((host, port))
+            except socket_error as serr:
+                # if serr.errno != errno.ECONNREFUSED:
+                print('\n*** ERROR(while connecting): ' + str(serr))
+                return None
 
-        s.setblocking(0)
+            s.setblocking(0)
 
         if self.hold_connection[(host, port)]:
             self._hclient_sock2hp[s] = (host, port)
@@ -792,7 +821,7 @@ class NetworkTarget(Target):
 
     def _listen_to_target(self, host, port, socket_type, func, args=None):
 
-        def start_udp_server(serversocket):
+        def start_raw_server(serversocket):
             server_thread = threading.Thread(None, self._raw_server_main, name='SRV-' + '',
                                              args=(serversocket, host, port, func))
             server_thread.start()
@@ -800,6 +829,7 @@ class NetworkTarget(Target):
         skt_sz = len(socket_type)
         if skt_sz == 2:
             family, sock_type = socket_type
+            proto = 0
         else:
             family, sock_type, proto = socket_type
 
@@ -814,7 +844,7 @@ class NetworkTarget(Target):
                     self._server_thread_share[(host, port)] = args
                 if self.hold_connection[(host, port)] and (host, port) in self._last_client_hp2sock:
                     serversocket, _ = self._last_client_hp2sock[(host, port)]
-                    start_udp_server(serversocket)
+                    start_raw_server(serversocket)
             else:
                 with self._server_thread_lock:
                     self._server_thread_share[(host, port)] = args
@@ -856,7 +886,7 @@ class NetworkTarget(Target):
         elif sock_type == socket.SOCK_DGRAM or sock_type == socket.SOCK_RAW:
             self._last_client_hp2sock[(host, port)] = (serversocket, None)
             self._last_client_sock2hp[serversocket] = (host, port)
-            start_udp_server(serversocket)
+            start_raw_server(serversocket)
         else:
             raise ValueError("Unrecognized socket type")
 
@@ -881,11 +911,18 @@ class NetworkTarget(Target):
                 func(clientsocket, address, args)
 
     def _raw_server_main(self, serversocket, host, port, func):
+
+        with self._server_thread_lock:
+            args = self._server_thread_share[(host, port)]
+
         retry = 0
         while retry < 10:
             try:
                 # accept UDP from outside
-                data, address = serversocket.recvfrom(self.CHUNK_SZ)
+                if args[0] is not None:
+                    data, address = serversocket.recvfrom(self.CHUNK_SZ)
+                else:
+                    data, address = None, None
             except socket.timeout:
                 break
             except OSError as e:
@@ -893,13 +930,16 @@ class NetworkTarget(Target):
                     break
                 elif e.errno == 11: # [Errno 11] Resource temporarily unavailable
                     retry += 1
-                    time.sleep(0.1)
+                    time.sleep(0.5)
                     continue
                 else:
                     raise
+            except socket.error as serr:
+                if serr.errno == 11:  # [Errno 11] Resource temporarily unavailable
+                    retry += 1
+                    time.sleep(0.5)
+                    continue
             else:
-                with self._server_thread_lock:
-                    args = self._server_thread_share[(host, port)]
                 serversocket.settimeout(self.feedback_timeout)
                 func(serversocket, address, args, pre_fbk=data)
                 break
@@ -924,7 +964,7 @@ class NetworkTarget(Target):
 
 
     def _collect_feedback_from(self, fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd,
-                               send_id, fbk_timeout, from_fmk, pre_fbk=None):
+                               send_id, fbk_timeout, from_fmk, pre_fbk):
 
         def _check_and_handle_obsolete_socket(skt, error=None, error_list=None):
             # print('\n*** NOTE: Remove obsolete socket {!r}'.format(socket))
@@ -1139,10 +1179,12 @@ class NetworkTarget(Target):
                         if serr.errno == socket.errno.EWOULDBLOCK:
                             time.sleep(0.2)
                             continue
+                        elif serr.errno == socket.errno.EMSGSIZE:  # for SOCK_RAW
+                            self._feedback.add_fbk_from(self._INTERNALS_ID, 'Message was not sent because it was too long!')
+                            break
                         else:
-                            add_main_socket = False
-                            raise TargetStuck("system not ready for sending data!")
-                            # break
+                            # add_main_socket = False
+                            raise TargetStuck("system not ready for sending data! {!r}".format(serr))
                     else:
                         if sent == 0:
                             s.close()
@@ -1203,10 +1245,30 @@ class NetworkTarget(Target):
             self._sending_id += 1
         else:
             self._first_send_data_call = False  # we ignore all additional feedback
+
+        if data_list is None:
+            return
+
         if isinstance(data_list, Data):
-            self._custom_data_handling_before_emission([data_list])
-        else:
-            self._custom_data_handling_before_emission(data_list)
+            data_list = [data_list]
+
+        for data in data_list:
+            if data.node is None:
+                continue
+            _, _, socket_type, _ = self._get_net_info_from(data)
+            if socket_type[1] == socket.SOCK_RAW:
+                data.node.freeze()
+                try:
+                    data.node[self._mac_src_semantic] = self._mac_src
+                except ValueError:
+                    self._logger.log_comment('WARNING: Unable to set the MAC SOURCE on the packet')
+                if self._mac_dst is not None:
+                    try:
+                        data.node[self._mac_dst_semantic] = self._mac_dst
+                    except ValueError:
+                        self._logger.log_comment('WARNING: Unable to set the MAC DESTINATION on the packet')
+
+        self._custom_data_handling_before_emission(data_list)
 
 
     def collect_feedback_without_sending(self):
@@ -1236,9 +1298,9 @@ class NetworkTarget(Target):
             if h == host and self._port[key] == port:
                 st = self._socket_type[key]
                 if st[:2] == (socket.AF_INET, socket.SOCK_STREAM):
-                    return 'TCP'
+                    return 'STREAM'
                 elif st[:2] == (socket.AF_INET, socket.SOCK_DGRAM):
-                    return 'UDP'
+                    return 'DGRAM'
                 elif st[:2] == (socket.AF_PACKET, socket.SOCK_RAW):
                     return 'RAW'
                 else:

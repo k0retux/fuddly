@@ -160,13 +160,13 @@ A brief explantion is provided below:
        :linenos:
 
         {'feedback source name 1':
-            {'timestamp': timestamp_1,
-             'content': content_1,
-             'status': status_code_1 },
+            [ {'timestamp': timestamp_1,
+               'content': content_1,
+               'status': status_code_1 }, ... ]
          'feedback source name 2':
-            {'timestamp': timestamp_2,
-             'content': content_2,
-             'status': status_code_2 },
+            [ {'timestamp': timestamp_2,
+               'content': content_2,
+               'status': status_code_2 }, ... ]
 
         # and so on...
         }
@@ -184,9 +184,11 @@ with usefull information. In our example, the ``node`` is updated with the ident
 line 10-11 of the following code snippet).
 
 .. note:: Accessing to ``next_step.node`` from a callback will provide `None` in the case the next
-   step include a raw data but also if it includes a ``DataProcess`` because this data process
-   would not have been carried out at the time of the callback execution. (Refer to the section
-   :ref:`sc:dataprocess`)
+   step include a raw data. In the case it includes a ``DataProcess``, ``next_step.node`` will
+   provide the :class:`framework.data_model.Node` corresponding to the ``DataProcess``'s ``seed`` or
+   ``None`` (if no seed is available or the seed is raw data). In the latter case, the data process would
+   not have been carried out at the time of the callback execution, hence the ``None`` value.
+   (Refer to the section :ref:`sc:dataprocess`)
 
 .. note:: You can leverage the dissection/absorption mechanism of ``Fuddly`` to deal with the feedback
    if you have modeled the responses of the target. Refer to :ref:`tuto:dm-absorption` for further
@@ -309,7 +311,7 @@ is described by a `data descriptor` which can be:
 
 
 A :class:`framework.scenario.DataProcess` is composed of a chain of generators and/or disruptors
-(with or without parameters) and a ``seed`` on which the chain of disruptor will be applied to (if no
+(with or without parameters) and optionally a ``seed`` on which the chain of disruptor will be applied to (if no
 generator is provided at the start of the chain).
 
 .. seealso:: Refer to :ref:`tuto:dmaker-chain` for more information on disruptor chaining.

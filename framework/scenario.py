@@ -45,7 +45,7 @@ class DataProcess(object):
             self.outcomes.make_free()
 
     def __copy__(self):
-        new_datap = type(self)(self.process, seed=copy.copy(self.seed))
+        new_datap = type(self)(self.process, seed=self.seed)
         new_datap._blocked = new_datap._blocked
         new_datap.feedback_timeout = self.feedback_timeout
         return new_datap
@@ -121,6 +121,9 @@ class Step(object):
         if isinstance(self._data_desc, DataProcess):
             self._data_desc.outcomes = None
 
+    def has_dataprocess(self):
+        return isinstance(self._data_desc, DataProcess)
+
     @property
     def feedback_timeout(self):
         return self._feedback_timeout
@@ -138,11 +141,20 @@ class Step(object):
 
     @property
     def node(self):
-        if isinstance(self._data_desc, DataProcess) and self._data_desc.outcomes is not None:
-            # that means that a data creation process has been registered and it has been
-            # carried out
-            if self._data_desc.outcomes.node:
+        if isinstance(self._data_desc, DataProcess):
+            if self._data_desc.outcomes is not None and self._data_desc.outcomes.node:
+                # that means that a data creation process has been registered and it has been
+                # carried out
                 return self._data_desc.outcomes.node
+            elif self._data_desc.seed is not None:
+                if isinstance(self._data_desc.seed, str):
+                    node = self._dm.get_data(self._data_desc.seed)
+                    self._data_desc.seed = Data(node)
+                    return node
+                elif isinstance(self._data_desc.seed, Data):
+                    return self._data_desc.seed.node  # if data is raw, .node is None
+                else:
+                    return None
             else:
                 return None
         elif self._node_name is None:
@@ -152,7 +164,7 @@ class Step(object):
         else:
             if self._node is None:
                 self._node = self._dm.get_data(self._node_name)
-        return self._node
+            return self._node
 
     def get_data(self):
         if self.node is not None:
@@ -349,6 +361,7 @@ class Scenario(object):
                 new_sc._periodic_ids.add(id(periodic))
 
             for tr in init_step.transitions:
+                tr.set_scenario_env(new_sc._env)
                 if tr.step in dico.values():
                     continue
                 if tr.step in dico:
@@ -358,15 +371,15 @@ class Scenario(object):
                     dico[tr.step] = new_step
                 new_step.set_data_model(self._dm)
                 tr.set_step(new_step)
-                tr.set_scenario_env(new_sc._env)
                 graph_copy(new_step, dico)
 
 
         orig_dm = self._dm
+        orig_env = self._env
         new_anchor = copy.copy(self._anchor)
         new_anchor.set_data_model(self._dm)
+        new_anchor.set_scenario_env(orig_env)
         dico = {self._anchor: new_anchor}
-        orig_env = self._env
         new_sc = type(self)(self.name)
         new_sc._env = copy.copy(orig_env)
         new_sc._dm = orig_dm

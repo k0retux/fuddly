@@ -744,6 +744,13 @@ class String(VT_Alt):
             self.max_sz = sz
             self.min_sz = 0
 
+        elif max_encoded_sz is not None:
+            # If we reach this condition, that means no size has been provided, we thus decide
+            # an arbitrary default value for max_sz. Regarding absorption, this arbitrary choice will
+            # have no influence, as only max_encoded_sz will be used.
+            self.min_sz = 0
+            self.max_sz = max_encoded_sz
+
         else:
             raise ValueError
 

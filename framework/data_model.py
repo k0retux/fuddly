@@ -279,8 +279,8 @@ class Data(object):
         for hook, cbk_dict in self._callbacks.items():
             new_data._callbacks[hook] = collections.OrderedDict()
             for key, cbk in cbk_dict.items():
-                ncbk = copy.copy(cbk)
-                new_data._callbacks[hook][id(ncbk)] = ncbk
+                # ncbk = copy.copy(cbk)
+                new_data._callbacks[hook][id(cbk)] = cbk
         new_data._pending_ops = {}  # we do not copy pending_ops
 
         if self.node is not None:
@@ -4940,7 +4940,7 @@ class Node(object):
 
         if node.internals[node.current_conf]: # When an Node is created empty, there is None internals
             node.internals[node.current_conf].set_child_current_conf(node, conf, reverse,
-                                                                   ignore_entanglement=ignore_entanglement)
+                                                                     ignore_entanglement=ignore_entanglement)
 
         if not ignore_entanglement and node.entangled_nodes is not None:
             for e in node.entangled_nodes:
@@ -4957,7 +4957,7 @@ class Node(object):
             node_list = self.get_reachable_nodes(path_regexp=root_regexp)
         else:
             node_list = [self]
-        
+
         for e in node_list:
             if recursive:
                 self._set_subtrees_current_conf(e, conf, reverse, ignore_entanglement=ignore_entanglement)
@@ -6067,7 +6067,7 @@ class Node(object):
                     raise ValueError
             else:
                 for n in nodes:
-                    status, off, size, name = nodes.absorb(convert_to_internal_repr(val),
+                    status, off, size, name = n.absorb(convert_to_internal_repr(val),
                                                            constraints=AbsNoCsts())
                     if status != AbsorbStatus.FullyAbsorbed:
                         raise ValueError
