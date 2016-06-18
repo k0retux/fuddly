@@ -3926,6 +3926,8 @@ class FmkShell(cmd.Cmd):
         '''
         Loop ( Carry out multiple fuzzing steps in sequence )
         |_ syntax: send_loop <#loop> <generator_type> [disruptor_type_1 ... disruptor_type_n]
+
+        Note: To loop indefinitely use -1 for #loop. To stop the loop use Ctrl+C
         '''
         args = line.split()
 
@@ -3934,8 +3936,8 @@ class FmkShell(cmd.Cmd):
         if len(args) < 2:
             return False
         try:
-            nb = int(args.pop(0))
-            if nb < 2:
+            max_loop = int(args.pop(0))
+            if max_loop < 2 and max_loop != -1:
                 return False
         except ValueError:
             return False
@@ -3945,14 +3947,14 @@ class FmkShell(cmd.Cmd):
             self.__error_msg = "Syntax Error!"
             return False
 
-        for i in range(nb):
+        # for i in range(nb):
+        cpt = 0
+        while cpt < max_loop or max_loop == -1:
+            cpt += 1
             data = self.fz.get_data(t, valid_gen=valid_gen, save_seed=use_existing_seed)
-
             if data is None:
                 return False
-
             cont = self.fz.send_data_and_log(data)
-
             if not cont:
                 break
  

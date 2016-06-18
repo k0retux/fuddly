@@ -128,13 +128,14 @@ class MH(object):
     ###########################
 
     @staticmethod
-    def LEN(vt=fvt.INT_str,
+    def LEN(vt=fvt.INT_str, base_len=0,
             set_attrs=[], clear_attrs=[], after_encoding=True):
         '''
         Return a *generator* that returns the length of a node parameter.
 
         Args:
-          vt (type): value type used for node generation (refer to :mod:`framework.value_types`)
+          vt (type): value type used for node generation (refer to :mod:`framework.value_types`).
+          base_len (int): this base length will be added to the computed length.
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False compute the length before any encoding. Can be
@@ -142,7 +143,7 @@ class MH(object):
         '''
         def length(vt, set_attrs, clear_attrs, node):
             blob = node.to_bytes() if after_encoding else node.get_raw_value()
-            n = Node('cts', value_type=vt(int_list=[len(blob)]))
+            n = Node('cts', value_type=vt(int_list=[len(blob)+base_len]))
             n.set_semantics(NodeSemantics(['len']))
             MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
@@ -918,12 +919,18 @@ class ModelHelper(object):
             node.make_infinite(conf=conf)
         param = desc.get('clear_attrs', None)
         if param is not None:
-            for a in param:
-                node.clear_attr(a, conf=conf)
+            if isinstance(param, (list, tuple)):
+                for a in param:
+                    node.clear_attr(a, conf=conf)
+            else:
+                node.clear_attr(param, conf=conf)
         param = desc.get('set_attrs', None)
         if param is not None:
-           for a in param:
-                node.set_attr(a, conf=conf)
+            if isinstance(param, (list, tuple)):
+                for a in param:
+                    node.set_attr(a, conf=conf)
+            else:
+                node.set_attr(param, conf=conf)
         param = desc.get('absorb_csts', None)
         if param is not None:
             node.enforce_absorb_constraints(param, conf=conf)
