@@ -1656,8 +1656,9 @@ class BitField(VT_Alt):
             # max is needed because self.idx[0] is equal to 0 in this case
             curr_idx = max(self.idx[idx]-1, 0)
 
-            if self.subfield_vals[idx] is not None:                        
-                current = self.subfield_vals[idx][curr_idx]
+            curr_val_list = self.subfield_vals[idx]
+            if curr_val_list is not None:
+                current = curr_val_list[curr_idx]
             else:
                 mini, maxi = self.subfield_extrems[idx]
                 current = mini + curr_idx
@@ -1687,6 +1688,26 @@ class BitField(VT_Alt):
                 l.append(a)
             if b not in l and self.is_compatible(b, sz):
                 l.append(b)
+
+            if curr_val_list is not None:
+                orig_set = set(curr_val_list)
+                max_oset = max(orig_set)
+                min_oset = min(orig_set)
+                if min_oset != max_oset:
+                    diff_sorted = sorted(set(range(min_oset, max_oset+1)) - orig_set)
+                    if diff_sorted:
+                        item1 = diff_sorted[0]
+                        item2 = diff_sorted[-1]
+                        if item1 not in l and self.is_compatible(item1, sz):
+                            l.append(item1)
+                        if item2 not in l and self.is_compatible(item2, sz):
+                            l.append(item2)
+                    beyond_max_oset = max_oset+1
+                    if beyond_max_oset not in l and self.is_compatible(beyond_max_oset, sz):
+                        l.append(beyond_max_oset)
+                    below_min_oset = min_oset-1
+                    if below_min_oset not in l and self.is_compatible(below_min_oset, sz):
+                        l.append(below_min_oset)
 
         self.determinist_save = self.determinist
         self.determinist = True
