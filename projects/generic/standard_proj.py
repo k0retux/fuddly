@@ -28,7 +28,7 @@ from framework.plumbing import *
 import framework.global_resources as gr
 
 project = Project()
-project.default_dm = ['mydf','zip']
+project.default_dm = ['mydf','jpg']
 # If you only want one default DM, provide its name directly as follows:
 # project.default_dm = 'mydf'
 

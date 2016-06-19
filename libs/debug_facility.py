@@ -24,6 +24,10 @@
 DEBUG = False
 LEVEL = 0
 
+# related to data_model.py
+DM_DEBUG = False
+ABS_DEBUG = False
+
 try:
     from xtermcolor import colorize
 except ImportError:

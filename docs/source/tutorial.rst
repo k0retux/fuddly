@@ -1716,6 +1716,11 @@ remove the *helper* stuff, while still keeping the
 ``NodeInternals.Abs_Postpone`` attribute on the node
 ``variable_string``, and everything will work as expected.
 
+.. note::
+   ``NodeInternals.Abs_Postpone`` allows to postpone the node absorption only if this node
+   shares the same non-terminal node as the next one that will eventually start absorption.
+   Besides, these two nodes need to be side-by-side.
+
 .. seealso:: The already defined auto-helper functions, behave
              accordingly to the typed value contents. They are more
              elaborated than the example *helper* function defined

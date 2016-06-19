@@ -1851,11 +1851,7 @@ class TestModelWalker(unittest.TestCase):
 
 
     def test_JPG(self):
-        '''
-        Test assertion depends on input JPG
-        TODO: include specific jpg, to fix assertion
-        '''
-        nt = self.dm.get_data('JPG')
+        nt = self.dm.get_data('jpg')
         tn_consumer = TypedNodeDisruption()
 
         walker = iter(ModelWalker(nt, tn_consumer, make_determinist=True))
@@ -1868,7 +1864,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of imgs: %d'%idx, rgb=Color.INFO))
 
-        # self.assertEqual(idx, 202)
+        self.assertEqual(idx, 115)
 
 
     def test_USB(self):

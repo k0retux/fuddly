@@ -41,8 +41,9 @@ sys.path.append('.')
 from framework.basic_primitives import *
 from libs.external_modules import *
 from framework.global_resources import *
+import libs.debug_facility as dbg
 
-DEBUG = False
+DEBUG = dbg.DM_DEBUG
 
 class Data(object):
 
@@ -3631,7 +3632,7 @@ class NodeInternals_NonTerm(NodeInternals):
         def _try_absorption_with(base_node, min_node, max_node, blob, consumed_size,
                                  postponed_node_desc, force_clone=False):
 
-            DEBUG = False
+            DEBUG = dbg.ABS_DEBUG
 
             consumed_nb = 0
 
@@ -3675,9 +3676,10 @@ class NodeInternals_NonTerm(NodeInternals):
                         break
                 elif st == AbsorbStatus.Absorbed or st == AbsorbStatus.FullyAbsorbed:
                     if DEBUG:
-                        print('\nABSORBED: %s, abort: %r, blob: %r ... , consumed: %d' \
-                              % (node.name, abort, blob[off:sz][:100], sz))
-                        
+                        print('\nABSORBED: %s, abort: %r, off: %d, consumed_sz: %d, blob: %r ...' \
+                              % (node.name, abort, off, sz, blob[off:sz][:100]))
+                        print('\nPostpone Node: %r' % postponed_node_desc)
+
                     nb_absorbed = node_no
                     sz2 = 0
                     if postponed_node_desc is not None:

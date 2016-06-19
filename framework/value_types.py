@@ -277,6 +277,7 @@ class String(VT_Alt):
           specific test cases.
     """
 
+    DEFAULT_MAX_SZ = 10000
     encoded_string = False
 
     def encode(self, val):
@@ -722,7 +723,7 @@ class String(VT_Alt):
             self.min_sz = min_sz
             # for string with no size limit, we set a threshold to
             # 10000 char
-            self.max_sz = 10000
+            self.max_sz = self.DEFAULT_MAX_SZ
             
         elif max_sz is not None:
             self.max_sz = max_sz
@@ -752,7 +753,10 @@ class String(VT_Alt):
             self.max_sz = max_encoded_sz
 
         else:
-            raise ValueError
+            self.min_sz = 0
+            self.max_sz = self.DEFAULT_MAX_SZ
+
+            # raise ValueError
 
         self._check_sizes()
 
@@ -895,7 +899,7 @@ class INT(VT):
         self.drawn_val = None
 
         if int_list:
-            self.int_list = int_list
+            self.int_list = list(int_list)
             self.int_list_copy = list(self.int_list)
 
         else:
@@ -934,7 +938,6 @@ class INT(VT):
                         self.maxi = self.maxi_gen = maxi
 
     def make_private(self, forget_current_state):
-        self.int_list = copy.copy(self.int_list)
         if forget_current_state:
             self.int_list_copy = copy.copy(self.int_list)
             self.idx = 0
@@ -988,7 +991,8 @@ class INT(VT):
                     raise ValueError('contents not valid! (max limit)')
                 if self.mini is not None and orig_val < self.mini:
                     raise ValueError('contents not valid! (min limit)')
-            self.int_list = [orig_val]
+            # self.int_list = [orig_val]
+            self.idx = orig_val - self.mini
 
         self.reset_state()
         self.drawn_val = orig_val

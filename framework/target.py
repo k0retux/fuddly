@@ -1516,6 +1516,9 @@ class LocalTarget(Target):
         self._data_sent = True
         
     def cleanup(self):
+        if self.__app is None:
+            return
+
         try:
             os.kill(self.__app.pid, signal.SIGTERM)
         except:
