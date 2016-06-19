@@ -41,8 +41,9 @@ sys.path.append('.')
 from framework.basic_primitives import *
 from libs.external_modules import *
 from framework.global_resources import *
+import libs.debug_facility as dbg
 
-DEBUG = False
+DEBUG = dbg.DM_DEBUG
 
 class Data(object):
 
@@ -56,6 +57,8 @@ class Data(object):
         self._recordable = False
         self._unusable = False
         self._blocked = False
+
+        self.feedback_timeout = None
 
         self.info_list = []
         self.info = {}
@@ -277,8 +280,8 @@ class Data(object):
         for hook, cbk_dict in self._callbacks.items():
             new_data._callbacks[hook] = collections.OrderedDict()
             for key, cbk in cbk_dict.items():
-                ncbk = copy.copy(cbk)
-                new_data._callbacks[hook][id(ncbk)] = ncbk
+                # ncbk = copy.copy(cbk)
+                new_data._callbacks[hook][id(cbk)] = cbk
         new_data._pending_ops = {}  # we do not copy pending_ops
 
         if self.node is not None:
@@ -1760,7 +1763,13 @@ class NodeInternals_GenFunc(NodeInternals):
                                                ignore_entanglement=ignore_entanglement)
 
     def get_child_all_path(self, name, htable, conf, recursive):
-        self.generated_node._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False)
+        if self.env is not None:
+            self.generated_node._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False)
+        else:
+            # If self.env is None, that means that a node graph is not fully constructed
+            # thus we avoid a freeze side-effect (by resolving 'generated_node') of the
+            # graph while it is currently manipulated in some way.
+            pass
 
     def set_clone_info(self, info, node):
         self._node_helpers.set_graph_info(node, info)
@@ -2676,7 +2685,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
                     new_sublist.append(new_sslist)
                 else:
-                    raise ValueError
+                    raise ValueError('{!r}'.format(sublist[0]))
 
                 l.append([copy.copy(delim), new_sublist])
 
@@ -3623,7 +3632,7 @@ class NodeInternals_NonTerm(NodeInternals):
         def _try_absorption_with(base_node, min_node, max_node, blob, consumed_size,
                                  postponed_node_desc, force_clone=False):
 
-            DEBUG = False
+            DEBUG = dbg.ABS_DEBUG
 
             consumed_nb = 0
 
@@ -3667,9 +3676,10 @@ class NodeInternals_NonTerm(NodeInternals):
                         break
                 elif st == AbsorbStatus.Absorbed or st == AbsorbStatus.FullyAbsorbed:
                     if DEBUG:
-                        print('\nABSORBED: %s, abort: %r, blob: %r ... , consumed: %d' \
-                              % (node.name, abort, blob[off:sz][:100], sz))
-                        
+                        print('\nABSORBED: %s, abort: %r, off: %d, consumed_sz: %d, blob: %r ...' \
+                              % (node.name, abort, off, sz, blob[off:sz][:100]))
+                        print('\nPostpone Node: %r' % postponed_node_desc)
+
                     nb_absorbed = node_no
                     sz2 = 0
                     if postponed_node_desc is not None:
@@ -4697,11 +4707,11 @@ class Node(object):
             else:
                 self.make_empty()
 
-    def get_clone(self, name, ignore_frozen_state=False, new_env=True):
+    def get_clone(self, name=None, ignore_frozen_state=False, new_env=True):
         '''Create a new node. To be used wihtin a graph-based data model.
         
         Args:
-          name (str): name of the new Node instance
+          name (str): name of the new Node instance. If ``None`` the current name will be used.
           ignore_frozen_state (bool): if set to False, the clone function will produce
             a Node with the same state as the duplicated Node. Otherwise, the only the state won't be kept.
           new_env (bool): If True, the current :class:`Env()` will be copied.
@@ -4710,6 +4720,9 @@ class Node(object):
         Returns:
           Node: duplicated Node object
         '''
+
+        if name is None:
+            name = self.name
 
         return Node(name, base_node=self, ignore_frozen_state=ignore_frozen_state, new_env=new_env)
 
@@ -4929,7 +4942,7 @@ class Node(object):
 
         if node.internals[node.current_conf]: # When an Node is created empty, there is None internals
             node.internals[node.current_conf].set_child_current_conf(node, conf, reverse,
-                                                                   ignore_entanglement=ignore_entanglement)
+                                                                     ignore_entanglement=ignore_entanglement)
 
         if not ignore_entanglement and node.entangled_nodes is not None:
             for e in node.entangled_nodes:
@@ -4946,7 +4959,7 @@ class Node(object):
             node_list = self.get_reachable_nodes(path_regexp=root_regexp)
         else:
             node_list = [self]
-        
+
         for e in node_list:
             if recursive:
                 self._set_subtrees_current_conf(e, conf, reverse, ignore_entanglement=ignore_entanglement)
@@ -6056,7 +6069,7 @@ class Node(object):
                     raise ValueError
             else:
                 for n in nodes:
-                    status, off, size, name = nodes.absorb(convert_to_internal_repr(val),
+                    status, off, size, name = n.absorb(convert_to_internal_repr(val),
                                                            constraints=AbsNoCsts())
                     if status != AbsorbStatus.FullyAbsorbed:
                         raise ValueError

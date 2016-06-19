@@ -1177,7 +1177,7 @@ class PDF_DataModel(DataModel):
                
         PDFObj.external_pdf_objs = gather_pdf_objects()
 
-        e_jpg = self.get_external_node(dm_name='jpg', data_id='JPG')
+        e_jpg = self.get_external_node(dm_name='jpg', data_id='jpg_00')
 
         PDFObj.jpg_node = e_jpg
 

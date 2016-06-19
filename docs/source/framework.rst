@@ -27,6 +27,9 @@ framework.data_model_helpers module
 .. automodule:: framework.data_model_helpers
     :members:
     :undoc-members:
+    :private-members:
+    :special-members:
+    :exclude-members: __dict__, __weakref__
     :show-inheritance:
 
 

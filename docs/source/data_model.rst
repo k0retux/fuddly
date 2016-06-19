@@ -770,9 +770,10 @@ set_attrs
     disruptors can leverage this attribute to perform their
     alteration.
 
-  .. note:: Most of the generic stateful disruptors will recursively
-	    set the attributes ``MH.Attr.Determinist`` and ``MH.Attr.Finite``
-	    on the provided data before performing any alteration.
+  .. note::
+     Most of the generic stateful disruptors will recursively
+     set the attributes ``MH.Attr.Determinist`` and ``MH.Attr.Finite``
+     on the provided data before performing any alteration.
 
   .. note:: *Generator* node will transfer the generic attributes to
             the generated node, except for ``MH.Attr.Freezable``, and

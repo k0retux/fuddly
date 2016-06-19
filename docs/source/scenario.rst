@@ -105,6 +105,10 @@ a client listening on a TCP socket bound to the port 12345::
   [another term] # nc -k -l 12345
 
 
+Finally, note that a step once executed will display a description related to what it did. You
+can override this description by providing the ``step_desc`` parameter of a
+:class:`framework.scenario.Step` constructor with a python string.
+
 Transitions and Callbacks
 =========================
 
@@ -156,13 +160,13 @@ A brief explantion is provided below:
        :linenos:
 
         {'feedback source name 1':
-            {'timestamp': timestamp_1,
-             'content': content_1,
-             'status': status_code_1 },
+            [ {'timestamp': timestamp_1,
+               'content': content_1,
+               'status': status_code_1 }, ... ]
          'feedback source name 2':
-            {'timestamp': timestamp_2,
-             'content': content_2,
-             'status': status_code_2 },
+            [ {'timestamp': timestamp_2,
+               'content': content_2,
+               'status': status_code_2 }, ... ]
 
         # and so on...
         }
@@ -180,27 +184,30 @@ with usefull information. In our example, the ``node`` is updated with the ident
 line 10-11 of the following code snippet).
 
 .. note:: Accessing to ``next_step.node`` from a callback will provide `None` in the case the next
-   step include a raw data but also if it includes a ``DataProcess`` because this data process
-   would not have been carried out at the time of the callback execution. (Refer to the section
-   :ref:`sc:dataprocess`)
+   step include a raw data. In the case it includes a ``DataProcess``, ``next_step.node`` will
+   provide the :class:`framework.data_model.Node` corresponding to the ``DataProcess``'s ``seed`` or
+   ``None`` (if no seed is available or the seed is raw data). In the latter case, the data process would
+   not have been carried out at the time of the callback execution, hence the ``None`` value.
+   (Refer to the section :ref:`sc:dataprocess`)
 
 .. note:: You can leverage the dissection/absorption mechanism of ``Fuddly`` to deal with the feedback
    if you have modeled the responses of the target. Refer to :ref:`tuto:dm-absorption` for further
    explanation on that matter.
 
-Another aspect of callbacks is the ability to prevent the framework from going on to the next step
-until a condition has been reached (related to the target feedback for instance).
-For that purpose, the callback needs to call the method ``make_blocked()`` on the current step
-and to return `False`. In this case, the callback ``cbk_after_fbk`` will be (re)called after
-the feedback gathering time has elapsed once again. Note that you can `block` from any callback,
-but only ``cbk_after_fbk`` will be called further on and will be able to `unblock` the situation.
+Another aspect of callbacks is the ability to prevent the framework from going on (that is
+sending further data, and walking through the scenario) until a condition has been reached
+(related to the target feedback for instance). For that purpose, the callback needs to call the
+method ``make_blocked()`` on the current step and to return `False`. In this case, the callback
+``cbk_after_fbk`` will be (re)called after the feedback gathering time has elapsed once again.
+Note that you can `block` from any callback, but only ``cbk_after_fbk`` will be called further on
+and will be able to `unblock` the situation.
 
 Such ability can be usefull if you are not sure about the time to wait for the answer of a network
 service for instance. This is illustrated in the following example in the lines 2-4.
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 1, 4, 10-11, 18, 25
+   :emphasize-lines: 1, 4, 10-11, 18, 19, 25
 
     def feedback_handler(env, current_step, next_step, feedback):
         if not feedback:
@@ -220,7 +227,7 @@ service for instance. This is illustrated in the following example in the lines 
 
     step1 = Step('exist_cond', fbk_timeout=2, set_periodic=[periodic1, periodic2])
     step2 = Step('separator', fbk_timeout=5, cbk_after_fbk=feedback_handler)
-    step3 = Step('off_gen', fbk_timeout=2)
+    step3 = NoDataStep()
     step4 = Step(DataProcess(process=[('C',None,UI(nb=1)),'tTYPE'], seed='enc'))
 
     step1.connect_to(step2)
@@ -231,7 +238,7 @@ service for instance. This is illustrated in the following example in the lines 
     sc2 = Scenario('ex2')
     sc2.set_anchor(step1)
 
-In line 25 that a :class:`framework.scenario.FinalStep` (a step with its ``final`` attribute set to `True`)
+In line 25 a :class:`framework.scenario.FinalStep` (a step with its ``final`` attribute set to `True`)
 is used to terminate the scenario as well as all the associated periodic tasks that are still running.
 Note that if a callback set the ``final`` attribute of the ``next_step`` to `True`,
 it will trigger the termination of the scenario if this ``next_step`` is indeed the one that will
@@ -239,6 +246,14 @@ be selected next.
 
 .. note:: A step with its ``final`` attribute set to ``True`` will never trigger the sending of the
    data it contains.
+
+Remark also the :class:`framework.scenario.NoDataStep` in line 19 (``step3``) which is a step that
+does not provide data. Thus, the framework won't send anything during the execution of this kind
+of step. Anyway, it is still possible to set or clear some `periodic` in this step (or changing
+feedback timeout, ...)
+
+.. note:: A :class:`framework.scenario.NoDataStep` is actually a step
+   on which ``make_blocked()`` has been called on it and where ``make_free()`` do nothing.
 
 The execution of this scenario will follow the pattern::
 
@@ -296,7 +311,7 @@ is described by a `data descriptor` which can be:
 
 
 A :class:`framework.scenario.DataProcess` is composed of a chain of generators and/or disruptors
-(with or without parameters) and a ``seed`` on which the chain of disruptor will be applied to (if no
+(with or without parameters) and optionally a ``seed`` on which the chain of disruptor will be applied to (if no
 generator is provided at the start of the chain).
 
 .. seealso:: Refer to :ref:`tuto:dmaker-chain` for more information on disruptor chaining.

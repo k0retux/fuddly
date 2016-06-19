@@ -277,6 +277,7 @@ class String(VT_Alt):
           specific test cases.
     """
 
+    DEFAULT_MAX_SZ = 10000
     encoded_string = False
 
     def encode(self, val):
@@ -722,7 +723,7 @@ class String(VT_Alt):
             self.min_sz = min_sz
             # for string with no size limit, we set a threshold to
             # 10000 char
-            self.max_sz = 10000
+            self.max_sz = self.DEFAULT_MAX_SZ
             
         elif max_sz is not None:
             self.max_sz = max_sz
@@ -744,8 +745,18 @@ class String(VT_Alt):
             self.max_sz = sz
             self.min_sz = 0
 
+        elif max_encoded_sz is not None:
+            # If we reach this condition, that means no size has been provided, we thus decide
+            # an arbitrary default value for max_sz. Regarding absorption, this arbitrary choice will
+            # have no influence, as only max_encoded_sz will be used.
+            self.min_sz = 0
+            self.max_sz = max_encoded_sz
+
         else:
-            raise ValueError
+            self.min_sz = 0
+            self.max_sz = self.DEFAULT_MAX_SZ
+
+            # raise ValueError
 
         self._check_sizes()
 
@@ -888,7 +899,7 @@ class INT(VT):
         self.drawn_val = None
 
         if int_list:
-            self.int_list = int_list
+            self.int_list = list(int_list)
             self.int_list_copy = list(self.int_list)
 
         else:
@@ -927,7 +938,6 @@ class INT(VT):
                         self.maxi = self.maxi_gen = maxi
 
     def make_private(self, forget_current_state):
-        self.int_list = copy.copy(self.int_list)
         if forget_current_state:
             self.int_list_copy = copy.copy(self.int_list)
             self.idx = 0
@@ -981,7 +991,8 @@ class INT(VT):
                     raise ValueError('contents not valid! (max limit)')
                 if self.mini is not None and orig_val < self.mini:
                     raise ValueError('contents not valid! (min limit)')
-            self.int_list = [orig_val]
+            # self.int_list = [orig_val]
+            self.idx = orig_val - self.mini
 
         self.reset_state()
         self.drawn_val = orig_val
@@ -1649,8 +1660,9 @@ class BitField(VT_Alt):
             # max is needed because self.idx[0] is equal to 0 in this case
             curr_idx = max(self.idx[idx]-1, 0)
 
-            if self.subfield_vals[idx] is not None:                        
-                current = self.subfield_vals[idx][curr_idx]
+            curr_val_list = self.subfield_vals[idx]
+            if curr_val_list is not None:
+                current = curr_val_list[curr_idx]
             else:
                 mini, maxi = self.subfield_extrems[idx]
                 current = mini + curr_idx
@@ -1680,6 +1692,26 @@ class BitField(VT_Alt):
                 l.append(a)
             if b not in l and self.is_compatible(b, sz):
                 l.append(b)
+
+            if curr_val_list is not None:
+                orig_set = set(curr_val_list)
+                max_oset = max(orig_set)
+                min_oset = min(orig_set)
+                if min_oset != max_oset:
+                    diff_sorted = sorted(set(range(min_oset, max_oset+1)) - orig_set)
+                    if diff_sorted:
+                        item1 = diff_sorted[0]
+                        item2 = diff_sorted[-1]
+                        if item1 not in l and self.is_compatible(item1, sz):
+                            l.append(item1)
+                        if item2 not in l and self.is_compatible(item2, sz):
+                            l.append(item2)
+                    beyond_max_oset = max_oset+1
+                    if beyond_max_oset not in l and self.is_compatible(beyond_max_oset, sz):
+                        l.append(beyond_max_oset)
+                    below_min_oset = min_oset-1
+                    if below_min_oset not in l and self.is_compatible(below_min_oset, sz):
+                        l.append(below_min_oset)
 
         self.determinist_save = self.determinist
         self.determinist = True

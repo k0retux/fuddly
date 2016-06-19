@@ -37,18 +37,24 @@ class PNG_DataModel(DataModel):
     name = 'png'
 
     def absorb(self, data, idx):
-        
-        png = self.png.get_clone('PNG_{:0>2d}'.format(idx))
+        nm = 'PNG_{:0>2d}'.format(idx)
+        png = self.png.get_clone(nm, new_env=True)
         status, off, size, name = png.absorb(data, constraints=AbsNoCsts(size=True))
 
-        # print(status, off, size, name)
+        print('{:s} Absorb Status: {!r}, {:d}, {:d}, {:s}'.format(nm, status, off, size, name))
+        print(' \_ length of original png: {:d}'.format(len(data)))
+        print(' \_ remaining: {!r}'.format(data[size:size+1000]))
 
-        return png
+        if status == AbsorbStatus.FullyAbsorbed:
+            print("--> Create {:s} from provided PNG samples.".format(nm))
+            return png
+        else:
+            return Node(nm, values=['PNG ABSORBSION FAILED'])
 
 
     def build_data_model(self):
 
-        png_desc = \
+        png_simple_desc = \
         {'name': 'PNG_model',
          'contents': [
              {'name': 'sig',
@@ -66,11 +72,11 @@ class PNG_DataModel(DataModel):
                    {'name': 'crc32_gen',
                     'contents': MH.CRC(vt=UINT32_be, clear_attrs=[MH.Attr.Mutable]),
                     'node_args': ['type', 'data_gen'],
-                    'clear_attrs': [MH.Attr.Freezable]}
+                    'clear_attrs': MH.Attr.Freezable}
               ]}
          ]}
 
-        png_desc_complex = \
+        png_desc = \
         {'name': 'PNG_model',
          'contents': [
              {'name': 'sig',
@@ -114,13 +120,13 @@ class PNG_DataModel(DataModel):
                   {'name': 'crc32_gen',
                    'contents': MH.CRC(vt=UINT32_be, clear_attrs=[MH.Attr.Mutable]),
                    'node_args': ['chk'],
-                   'clear_attrs': [MH.Attr.Freezable]}
+                   'clear_attrs': MH.Attr.Freezable}
               ]}
          ]}
 
 
         mh = ModelHelper()
-        self.png = mh.create_graph_from_desc(png_desc_complex)
+        self.png = mh.create_graph_from_desc(png_desc)
 
         self.png_dict = self.import_file_contents(extension='png')
        

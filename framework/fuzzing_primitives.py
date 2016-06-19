@@ -881,6 +881,24 @@ class TypedNodeDisruption(NodeConsumerStub):
             # don't use a set to preserve determinism if needed
             supp_list = [val + 1, val - 1]
 
+            if vt.int_list is not None:
+                orig_set = set(vt.int_list)
+                max_oset = max(orig_set)
+                min_oset = min(orig_set)
+                if min_oset != max_oset:
+                    diff_sorted = sorted(set(range(min_oset, max_oset+1)) - orig_set)
+                    if diff_sorted:
+                        item1 = diff_sorted[0]
+                        item2 = diff_sorted[-1]
+                        if item1 not in supp_list:
+                            supp_list.append(item1)
+                        if item2 not in supp_list:
+                            supp_list.append(item2)
+                    if max_oset+1 not in supp_list:
+                        supp_list.append(max_oset+1)
+                    if min_oset-1 not in supp_list:
+                        supp_list.append(min_oset-1)
+
             if vt.mini is not None:
                 cond1 = False
                 if hasattr(vt, 'size'):

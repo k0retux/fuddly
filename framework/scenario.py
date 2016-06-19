@@ -32,6 +32,7 @@ class DataProcess(object):
         self.seed = seed
         self.outcomes = None
         self._blocked = False
+        self.feedback_timeout = None
 
     def make_blocked(self):
         self._blocked = True
@@ -44,8 +45,9 @@ class DataProcess(object):
             self.outcomes.make_free()
 
     def __copy__(self):
-        new_datap = type(self)(self.process, seed=copy.copy(self.seed))
+        new_datap = type(self)(self.process, seed=self.seed)
         new_datap._blocked = new_datap._blocked
+        new_datap.feedback_timeout = self.feedback_timeout
         return new_datap
 
 
@@ -58,12 +60,11 @@ class Periodic(object):
 class Step(object):
 
     def __init__(self, data_desc=None, final=False, fbk_timeout=None,
-                 set_periodic=None, clear_periodic=None):
+                 set_periodic=None, clear_periodic=None, step_desc=None):
 
         self.final = final
-        self.feedback_timeout = fbk_timeout
+        self._step_desc = step_desc
         self._transitions = []
-        self._blocked = False
 
         if not final:
             assert data_desc is not None
@@ -75,6 +76,10 @@ class Step(object):
         else:
             self._node_name = None
             self._data_desc = None
+
+        self.make_free()
+
+        self.feedback_timeout = fbk_timeout
 
         self._dm = None
         self._scenario_env = None
@@ -112,6 +117,23 @@ class Step(object):
     def is_blocked(self):
         return self._blocked
 
+    def cleanup(self):
+        if isinstance(self._data_desc, DataProcess):
+            self._data_desc.outcomes = None
+
+    def has_dataprocess(self):
+        return isinstance(self._data_desc, DataProcess)
+
+    @property
+    def feedback_timeout(self):
+        return self._feedback_timeout
+
+    @feedback_timeout.setter
+    def feedback_timeout(self, fbk_timeout):
+        self._feedback_timeout = fbk_timeout
+        if isinstance(self._data_desc, (Data, DataProcess)):
+            self._data_desc.feedback_timeout = fbk_timeout
+
     @property
     def transitions(self):
         for tr in self._transitions:
@@ -119,11 +141,20 @@ class Step(object):
 
     @property
     def node(self):
-        if isinstance(self._data_desc, DataProcess) and self._data_desc.outcomes is not None:
-            # that means that a data creation process has been registered and it has been
-            # carried out
-            if self._data_desc.outcomes.node:
+        if isinstance(self._data_desc, DataProcess):
+            if self._data_desc.outcomes is not None and self._data_desc.outcomes.node:
+                # that means that a data creation process has been registered and it has been
+                # carried out
                 return self._data_desc.outcomes.node
+            elif self._data_desc.seed is not None:
+                if isinstance(self._data_desc.seed, str):
+                    node = self._dm.get_data(self._data_desc.seed)
+                    self._data_desc.seed = Data(node)
+                    return node
+                elif isinstance(self._data_desc.seed, Data):
+                    return self._data_desc.seed.node  # if data is raw, .node is None
+                else:
+                    return None
             else:
                 return None
         elif self._node_name is None:
@@ -133,16 +164,38 @@ class Step(object):
         else:
             if self._node is None:
                 self._node = self._dm.get_data(self._node_name)
-        return self._node
+            return self._node
 
     def get_data(self):
         if self.node is not None:
             d = Data(self.node)
-            if self.is_blocked():
-                d.make_blocked()
-            return d
         else:
-            return None
+            # in this case a data creation process is provided to the framework through the
+            # callback HOOK.before_sending
+            d = Data('')
+        if self._step_desc is None:
+            if isinstance(self._data_desc, DataProcess):
+                step_desc = 'generate ' + repr(self._data_desc)
+            elif isinstance(self._data_desc, Data):
+                step_desc = 'use provided Data(...)'
+            else:
+                assert isinstance(self._data_desc, str)
+                d.add_info("instantiate a node '{:s}' from the model".format(self._node_name))
+            if self._periodic_data is not None:
+                p_sz = len(self._periodic_data)
+                d.add_info("set {:d} periodic{:s}".format(p_sz, 's' if p_sz > 1 else ''))
+            if self._periodic_data_to_remove is not None:
+                p_sz = len(self._periodic_data_to_remove)
+                d.add_info("clear {:d} periodic{:s}".format(p_sz, 's' if p_sz > 1 else ''))
+        else:
+            d.add_info(self._step_desc)
+
+        if self.is_blocked():
+            d.make_blocked()
+        if self._feedback_timeout is not None:
+            d.feedback_timeout = self._feedback_timeout
+
+        return d
 
     @property
     def data_desc(self):
@@ -179,7 +232,8 @@ class Step(object):
         new_transitions = copy.copy(self._transitions)
         new_step = type(self)(data_desc=copy.copy(self._data_desc), final=self.final,
                               fbk_timeout=self.feedback_timeout,
-                              set_periodic=copy.copy(self._periodic_data))
+                              set_periodic=copy.copy(self._periodic_data),
+                              step_desc=self._step_desc)
         new_step._node = None
         new_step._periodic_data_to_remove = new_periodic_to_rm
         new_step._dm = new_dm
@@ -190,9 +244,19 @@ class Step(object):
 
 class FinalStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None,
-                 set_periodic=None):
+                 set_periodic=None, clear_periodic=None , step_desc=None):
         Step.__init__(self, final=True)
 
+class NoDataStep(Step):
+    def __init__(self, data_desc=None, final=False, fbk_timeout=None,
+                 set_periodic=None, clear_periodic=None, step_desc=None):
+        Step.__init__(self, data_desc=Data(''), final=final, fbk_timeout=fbk_timeout,
+                      set_periodic=set_periodic, clear_periodic=clear_periodic,
+                      step_desc=step_desc)
+        self.make_blocked()
+
+    def make_free(self):
+        pass
 
 class Transition(object):
 
@@ -275,6 +339,10 @@ class Scenario(object):
     def set_anchor(self, step):
         self._anchor = step
 
+    def walk_to(self, step):
+        step.cleanup()
+        self._anchor = step
+
     @property
     def current_step(self):
         return self._anchor
@@ -293,6 +361,7 @@ class Scenario(object):
                 new_sc._periodic_ids.add(id(periodic))
 
             for tr in init_step.transitions:
+                tr.set_scenario_env(new_sc._env)
                 if tr.step in dico.values():
                     continue
                 if tr.step in dico:
@@ -302,15 +371,15 @@ class Scenario(object):
                     dico[tr.step] = new_step
                 new_step.set_data_model(self._dm)
                 tr.set_step(new_step)
-                tr.set_scenario_env(new_sc._env)
                 graph_copy(new_step, dico)
 
 
         orig_dm = self._dm
+        orig_env = self._env
         new_anchor = copy.copy(self._anchor)
         new_anchor.set_data_model(self._dm)
+        new_anchor.set_scenario_env(orig_env)
         dico = {self._anchor: new_anchor}
-        orig_env = self._env
         new_sc = type(self)(self.name)
         new_sc._env = copy.copy(orig_env)
         new_sc._dm = orig_dm

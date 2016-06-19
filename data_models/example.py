@@ -217,7 +217,7 @@ class Example_DataModel(DataModel):
         e_pre2 = Node('pre2', values=['  [1]  ', '  [2]  ', '  [3]  ', '  [4]  '])
         e_post = Node('post', values=[' [A]', ' [B]', ' [C]', ' [D]'])
 
-        e_jpg = self.get_external_node(dm_name='jpg', data_id='JPG')
+        e_jpg = self.get_external_node(dm_name='jpg', data_id='jpg')
 
         e_mid = Node('mid', subnodes=[e_pre2, e_jpg, e_post])
 

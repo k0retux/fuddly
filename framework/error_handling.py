@@ -23,4 +23,6 @@
 
 class UnavailablePythonModule(Exception): pass
 class InvalidFmkDB(Exception): pass
+
 class TargetFeedbackError(Exception): pass
+class DataProcessTermination(Exception): pass

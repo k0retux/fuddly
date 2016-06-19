@@ -28,7 +28,7 @@ from framework.plumbing import *
 import framework.global_resources as gr
 
 project = Project()
-project.default_dm = ['mydf','zip']
+project.default_dm = ['mydf','jpg']
 # If you only want one default DM, provide its name directly as follows:
 # project.default_dm = 'mydf'
 
@@ -55,12 +55,17 @@ net_tg.add_additional_feedback_interface('localhost', 7777, (socket.AF_INET, soc
                                      fbk_id='My Feedback Source', server_mode=True)
 net_tg.set_timeout(fbk_timeout=5, sending_delay=3)
 
+netsrv_tg = NetworkTarget(host='localhost', port=12345, hold_connection=True, server_mode=True)
 
+ETH_P_ALL = 3
+rawnetsrv_tg = NetworkTarget(host='eth0', port=ETH_P_ALL,
+                             socket_type=(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL)),
+                             hold_connection=True, server_mode=True)
 
 targets = [local_tg,
            local2_tg,
            local3_tg,
-           printer1_tg, net_tg]
+           printer1_tg, net_tg, netsrv_tg, rawnetsrv_tg]
 
 
 @operator(project,

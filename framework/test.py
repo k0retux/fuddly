@@ -989,7 +989,7 @@ class TestMisc(unittest.TestCase):
         prev_path = None
         turn_nb_list = []
         tn_consumer = TypedNodeDisruption()
-        for rnode, node, orig_node_val, i in ModelWalker(evt, tn_consumer, make_determinist=True, max_steps=200):
+        for rnode, node, orig_node_val, i in ModelWalker(evt, tn_consumer, make_determinist=True, max_steps=300):
             print('=======[ %d ]========' % i)
             print('  orig:    ', rnode.to_bytes())
             print('  ----')
@@ -1020,8 +1020,7 @@ class TestMisc(unittest.TestCase):
                 break
 
         print('\nTurn number when Node has changed: %r, number of test cases: %d' % (turn_nb_list, i))
-        good_list = [1, 9, 17, 25, 33, 42, 51, 59, 67, 75, 83, 91, 99, 107, 115, 124, 132, 140, 148, 154, 163, 169, 182]
-
+        good_list = [1, 9, 17, 25, 33, 42, 51, 59, 67, 75, 83, 91, 99, 107, 115, 124, 132, 140, 148, 157, 166, 172, 187]
         msg = "If Fuzzy_<TypedValue>.int_list have been modified in size, the good_list should be updated.\n" \
               "If BitField are in random mode [currently put in determinist mode], the fuzzy_mode can produce more" \
               " or less value depending on drawn value when .get_value() is called (if the drawn value is" \
@@ -1252,10 +1251,10 @@ class TestMisc(unittest.TestCase):
             print('*** [%d] ' % i, val[i])
 
 
-        print(list(val.values())[:13])
-        self.assertEqual(list(val.values())[:13],
-                         [b'c062',b'0062',b'4062',b'806f', b'8060',b'8063',b'8061',b'8072',
-                          b'8042',b'8052',b'80e2',b'8022',b'80a2'])
+        print(list(val.values())[:15])
+        self.assertEqual(list(val.values())[:15],
+                         [b'c062',b'0062',b'4062',b'806f', b'8060',b'8063',b'8061',
+                          b'8064',b'806e',b'8072',b'8042',b'8052',b'80e2',b'8022',b'80a2'])
         
         print('\n********\n')
 
@@ -1723,7 +1722,7 @@ class TestModelWalker(unittest.TestCase):
         tn_consumer.set_node_interest(internals_criteria=ic)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True, max_steps=300):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 23)
+        self.assertEqual(idx, 27)
 
 
     def test_TypedNodeDisruption_2(self):
@@ -1746,7 +1745,7 @@ class TestModelWalker(unittest.TestCase):
         # tn_consumer.set_node_interest(internals_criteria=ic)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True, max_steps=-1):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 306)
+        self.assertEqual(idx, 310)
 
     def test_TypedNodeDisruption_BitfieldCollapse(self):
         '''
@@ -1852,11 +1851,7 @@ class TestModelWalker(unittest.TestCase):
 
 
     def test_JPG(self):
-        '''
-        Test assertion depends on input JPG
-        TODO: include specific jpg, to fix assertion
-        '''
-        nt = self.dm.get_data('JPG')
+        nt = self.dm.get_data('jpg')
         tn_consumer = TypedNodeDisruption()
 
         walker = iter(ModelWalker(nt, tn_consumer, make_determinist=True))
@@ -1869,7 +1864,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of imgs: %d'%idx, rgb=Color.INFO))
 
-        # self.assertEqual(idx, 202)
+        self.assertEqual(idx, 115)
 
 
     def test_USB(self):
@@ -1885,7 +1880,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of confs: %d'%idx, rgb=Color.INFO))
 
-        self.assertIn(idx, [268, 270]) # previously [148, 149, 150]
+        self.assertIn(idx, [284])
 
 
 if mock_module and ddt_module:
