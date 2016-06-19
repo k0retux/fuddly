@@ -437,6 +437,12 @@ class NetworkTarget(Target):
 
     def _set_feedback_timeout_specific(self, fbk_timeout):
         self._feedback_timeout = fbk_timeout
+        if fbk_timeout == 0:
+            # In this case, we do not alter 'sending_delay', as setting feedback timeout to 0
+            # is a special case for retrieving residual feedback and because an alteration
+            # of 'sending_delay' from this method is not recoverable.
+            return
+
         if self._sending_delay > self._feedback_timeout:
             self._sending_delay = max(self._feedback_timeout-0.2, 0)
 
@@ -675,15 +681,22 @@ class NetworkTarget(Target):
 
     def send_data(self, data, from_fmk=False):
         self._before_sending_data(data, from_fmk)
-        connected_client_event = None
         host, port, socket_type, server_mode = self._get_net_info_from(data)
+
+        if data is None and (not self.hold_connection[(host, port)] or self.feedback_timeout == 0):
+            # If data is None, it means that we want to collect feedback without sending data.
+            # And that case makes sense only if we keep the socket (thus, 'hold_connection'
+            # has to be True) or if a data callback wait for feedback (thus, in this case,
+            # feedback_timeout will be > 0)
+            return
+
+        connected_client_event = None
         if server_mode:
             connected_client_event = threading.Event()
             self._listen_to_target(host, port, socket_type,
                                    self._handle_target_connection,
                                    args=(data, host, port, connected_client_event, from_fmk))
-            if data is not None:
-                connected_client_event.wait(self._sending_delay)
+            connected_client_event.wait(self._sending_delay)
             if socket_type[1] == socket.SOCK_STREAM and not connected_client_event.is_set():
                 self._feedback.set_error_code(-2)
                 err_msg = ">>> WARNING: unable to send data because the target did not connect" \
@@ -1012,7 +1025,7 @@ class NetworkTarget(Target):
         for fd in fbk_sockets:
             bytes_recd[fd] = 0
             chunks[fd] = []
-            if pre_fbk is not None and fd in pre_fbk:
+            if pre_fbk is not None and fd in pre_fbk and pre_fbk[fd] is not None:
                 chunks[fd].append(pre_fbk[fd])
 
         socket_errors = []

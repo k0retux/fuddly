@@ -299,11 +299,14 @@ class FmkPlumbing(object):
         self.set_fuzz_burst(1)
         self._recompute_health_check_timeout(self.tg.feedback_timeout)
 
-    def _recompute_health_check_timeout(self, base_timeout):
+    def _recompute_health_check_timeout(self, base_timeout, do_show=True):
         if base_timeout is not None:
-            self.set_health_check_timeout(base_timeout + 2.0)
+            if base_timeout != 0:
+                self.set_health_check_timeout(base_timeout + 2.0, do_show=do_show)
+            else:
+                self.set_health_check_timeout(0, do_show=do_show)
         else:
-            self.set_health_check_timeout(10)
+            self.set_health_check_timeout(10, do_show=do_show)
 
     def _handle_user_code_exception(self, msg='', context=None):
         self.set_error(msg, code=Error.UserCodeError, context=context)
@@ -1388,11 +1391,12 @@ class FmkPlumbing(object):
             return False
 
     @EnforceOrder(accepted_states=['S1','S2'])
-    def set_health_check_timeout(self, timeout, do_record=False):
+    def set_health_check_timeout(self, timeout, do_record=False, do_show=True):
         if timeout >= 0:
             self._hc_timeout = timeout
-            self.lg.log_fmk_info('Target health-check timeout = {:.1f}s'.format(self._hc_timeout),
-                                 do_record=do_record)
+            if do_show:
+                self.lg.log_fmk_info('Target health-check timeout = {:.1f}s'.format(self._hc_timeout),
+                                     do_record=do_record)
             return True
         else:
             self.lg.log_fmk_info('Wrong timeout value!', do_record=False)
@@ -1403,13 +1407,13 @@ class FmkPlumbing(object):
         if timeout is None:
             # This case occurs in self._do_sending_and_logging_init()
             # if the Target has not defined a feedback_timeout (like the EmptyTarget)
-            self._recompute_health_check_timeout(timeout)
+            self._recompute_health_check_timeout(timeout, do_show=do_show)
         elif timeout >= 0:
             self.tg.set_feedback_timeout(timeout)
             if do_show:
                 self.lg.log_fmk_info('Target feedback timeout = {:.1f}s'.format(timeout),
                                      do_record=do_record)
-            self._recompute_health_check_timeout(timeout)
+            self._recompute_health_check_timeout(timeout, do_show=do_show)
             return True
         else:
             self.lg.log_fmk_info('Wrong timeout value!', do_record=False)
