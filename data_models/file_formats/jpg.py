@@ -74,15 +74,14 @@ class JPG_DataModel(DataModel):
         jpg_desc = \
         {'name': 'jpg',
          'contents': [
+             {'name': 'before_SOF',
+              'contents': String(size=0),
+              'absorb_csts': AbsNoCsts(),
+              'set_attrs': MH.Attr.Abs_Postpone,
+              'mutable': False},
+
              {'name': 'SOF_hdr',
               'contents': [
-                  {'name': 'before_SOF',
-                   'contents': String(size=0),
-                   'absorb_csts': AbsNoCsts(),
-                   'set_attrs': MH.Attr.Abs_Postpone,  # Only works if it is side-by-side with the
-                                                       # the node that will provide the constraint
-                   'mutable': False},
-
                   {'name': 'F_marker',
                    'contents': UINT16_be(int_list=[m for m in markers['SOF'].values()])},
                   {'name': 'Lf',
@@ -123,15 +122,15 @@ class JPG_DataModel(DataModel):
                    ]},
               ]},
 
+             {'name': 'between_SOF_SOS',
+              'contents': String(),
+              'random': True,
+              'absorb_csts': AbsNoCsts(),
+              'set_attrs': MH.Attr.Abs_Postpone,
+              'mutable': False},
+
              {'name': 'SOS_hdr',
               'contents': [
-                  {'name': 'between_SOF_SOS',
-                   'contents': String(),
-                   'random': True,
-                   'absorb_csts': AbsNoCsts(),
-                   'set_attrs': MH.Attr.Abs_Postpone,
-                   'mutable': False},
-
                   {'name': 'S_marker',
                    'contents': UINT16_be(int_list=[markers['SOS']])},
                   {'name': 'Ls',

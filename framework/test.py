@@ -3247,6 +3247,7 @@ class TestDataModel(unittest.TestCase):
                 print("\n*** Builded Node ('%s') match the original image" % jpg.name)
             else:
                 print("\n*** ERROR: Builded Node ('%s') does not match the original image!" % jpg.name)
+                print('    [original size={:d}, generated size={:d}]'.format(len(orig_buff), len(jpg_buff)))
 
             self.assertEqual(jpg_buff, orig_buff)
 

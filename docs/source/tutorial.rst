@@ -1717,9 +1717,9 @@ remove the *helper* stuff, while still keeping the
 ``variable_string``, and everything will work as expected.
 
 .. note::
-   ``NodeInternals.Abs_Postpone`` allows to postpone the node absorption only if this node
-   shares the same non-terminal node as the next one that will eventually start absorption.
-   Besides, these two nodes need to be side-by-side.
+   ``NodeInternals.Abs_Postpone`` allows to postpone the node absorption until the next node
+   successfully absorbs part of the provided data. If this latter node fails, the postponed absorption
+   will also fail.
 
 .. seealso:: The already defined auto-helper functions, behave
              accordingly to the typed value contents. They are more

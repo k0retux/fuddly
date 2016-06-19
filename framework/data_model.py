@@ -939,7 +939,7 @@ class NodeInternals(object):
         pass
 
 
-    def absorb(self, blob, constraints, conf):
+    def absorb(self, blob, constraints, conf, pending_postpone_desc=None):
         raise NotImplementedError
 
     def set_absorb_helper(self, helper):
@@ -1640,7 +1640,7 @@ class NodeInternals_GenFunc(NodeInternals):
         ret = self.generated_node._get_value(conf=conf, recursive=recursive)
         return (ret, False)
 
-    def absorb(self, blob, constraints, conf):
+    def absorb(self, blob, constraints, conf, pending_postpone_desc=None):
         # We make the generator freezable to be sure that _get_value()
         # won't reset it after absorption
         self.set_attr(NodeInternals.Freezable)
@@ -1651,14 +1651,15 @@ class NodeInternals_GenFunc(NodeInternals):
         # Will help for possible future node types, as the current
         # node types that can raise exceptions, handle them already.
         try:
-            st, off, sz, name = self.generated_node.absorb(blob, constraints=constraints, conf=conf)
+            st, off, sz, name = self.generated_node.absorb(blob, constraints=constraints, conf=conf,
+                                                           pending_postpone_desc=pending_postpone_desc)
         except (ValueError, AssertionError) as e:
             st, off, sz = AbsorbStatus.Reject, 0, None
 
         # if st is AbsorbStatus.Reject:
         #     self.reset_generator()
 
-        return st, off, sz
+        return st, off, sz, None
 
     def cancel_absorb(self):
         self.generated_node.reset_state()
@@ -1822,7 +1823,7 @@ class NodeInternals_Term(NodeInternals):
         raise NotImplementedError
 
 
-    def absorb(self, blob, constraints, conf):
+    def absorb(self, blob, constraints, conf, pending_postpone_desc=None):
         status = None
         size = None
 
@@ -1852,7 +1853,7 @@ class NodeInternals_Term(NodeInternals):
         else:
             raise ValueError
 
-        return st, off, size
+        return st, off, size, None
 
     def cancel_absorb(self):
         self.do_revert_absorb()
@@ -2192,7 +2193,7 @@ class NodeInternals_Func(NodeInternals_Term):
         # The call to 'self._node_helpers.make_private()' is performed
         # the latest that is during self.make_args_private()
 
-    def absorb(self, blob, constraints, conf):
+    def absorb(self, blob, constraints, conf, pending_postpone_desc=None):
         # we make the generator freezable to be sure that _get_value()
         # won't reset it after absorption
         self.set_attr(NodeInternals.Freezable)
@@ -2201,7 +2202,7 @@ class NodeInternals_Func(NodeInternals_Term):
 
         self._set_frozen_value(blob[:sz])
 
-        return AbsorbStatus.Absorbed, 0, sz
+        return AbsorbStatus.Absorbed, 0, sz, None
 
     def cancel_absorb(self):
         self._set_frozen_value(None)
@@ -3574,7 +3575,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
 
 
-    def absorb(self, blob, constraints, conf):
+    def absorb(self, blob, constraints, conf, pending_postpone_desc=None):
         '''
         TOFIX: Checking existence condition independently from data
                description order is not supported. Only supported
@@ -3630,7 +3631,8 @@ class NodeInternals_NonTerm(NodeInternals):
 
         # Helper function
         def _try_absorption_with(base_node, min_node, max_node, blob, consumed_size,
-                                 postponed_node_desc, force_clone=False):
+                                 postponed_node_desc, force_clone=False,
+                                 pending_upper_postpone=pending_postpone_desc):
 
             DEBUG = dbg.ABS_DEBUG
 
@@ -3647,7 +3649,7 @@ class NodeInternals_NonTerm(NodeInternals):
                         max_node = min_node = 0
 
             if max_node == 0:
-                return None, blob, consumed_size, consumed_nb
+                return None, blob, consumed_size, consumed_nb, None
 
             orig_blob = blob
             orig_consumed_size = consumed_size
@@ -3655,17 +3657,30 @@ class NodeInternals_NonTerm(NodeInternals):
             abort = False
             tmp_list = []
 
+            first_pass = True
+            if postponed_node_desc is not None or pending_upper_postpone is not None:
+                postponed = postponed_node_desc if postponed_node_desc is not None else pending_upper_postpone
+            else:
+                postponed = None
+
+            pending_postponed_to_send_back = None
+            prepend_postponed = None
+            postponed_appended = None
+
             node_no = 1
             while node_no <= max_node or max_node < 0: # max_node < 0 means infinity
                 node = self._clone_node(base_node, node_no-1, force_clone)
 
                 # We try to absorb the blob
-                st, off, sz, name = node.absorb(blob, constraints, conf=conf)
+                st, off, sz, name = node.absorb(blob, constraints, conf=conf, pending_postpone_desc=postponed)
+                postponed_sent_back = node.abs_postpone_sent_back
+                node.abs_postpone_sent_back = None
 
                 if st == AbsorbStatus.Reject:
                     nb_absorbed = node_no-1
                     if DEBUG:
                         print('REJECT: %s, blob: %r ...' % (node.name, blob[:4]))
+                        print(blob.find(b'\xFF\xDA'))
                     if min_node == 0:
                         # abort = False
                         break
@@ -3678,24 +3693,44 @@ class NodeInternals_NonTerm(NodeInternals):
                     if DEBUG:
                         print('\nABSORBED: %s, abort: %r, off: %d, consumed_sz: %d, blob: %r ...' \
                               % (node.name, abort, off, sz, blob[off:sz][:100]))
-                        print('\nPostpone Node: %r' % postponed_node_desc)
+                        print('\nPostpone Node: %r' % postponed)
 
                     nb_absorbed = node_no
                     sz2 = 0
-                    if postponed_node_desc is not None:
+
+                    if postponed_sent_back is not None:
+                        if postponed_node_desc is not None:
+                            prepend_postponed = postponed_sent_back
+                            postponed = None
+                        else:
+                            pending_postponed_to_send_back = postponed_sent_back
+                            postponed = None
+
+                    elif postponed is not None:
+
                         # we only support one postponed node between two nodes
-                        st2, off2, sz2, name2 = postponed_node_desc[0].absorb(blob[:off], constraints, conf=conf)
+                        st2, off2, sz2, name2 = \
+                            postponed[0].absorb(blob[:off], constraints, conf=conf, pending_postpone_desc=None)
+
                         if st2 == AbsorbStatus.Reject:
-                            postponed_node_desc = None
+                            postponed = None
                             abort = True
                             break
                         elif st2 == AbsorbStatus.Absorbed or st2 == AbsorbStatus.FullyAbsorbed:
-                            tmp_list.append(postponed_node_desc[0])
-                            postponed_node_desc = None
+                            if DEBUG:
+                                print('\nABSORBED (of postponed): %s, off: %d, consumed_sz: %d, blob: %r ...' \
+                                    % (postponed[0].name, off2, sz2, blob[off2:sz2][:100]))
+
+                            if pending_upper_postpone is not None: # meaning postponed_node_desc is None
+                                pending_postponed_to_send_back = postponed[0]
+                            else:
+                                postponed_appended = postponed[0]
+                                tmp_list.append(postponed_appended)
+                            postponed = None
                         else:
                             raise ValueError
                     else:
-                        if off != 0:
+                        if off != 0 and (not first_pass or pending_upper_postpone is None):
                             # In this case, no postponed node exist
                             # but the node finds something that match
                             # its expectation at off>0.
@@ -3715,8 +3750,8 @@ class NodeInternals_NonTerm(NodeInternals):
                             else:   # no need to check max_node, the loop stop at it
                                 # abort = False
                                 break
-                            
-                    if sz2 == off:                        
+
+                    if sz2 == off:
                         blob = blob[off+sz:]
                         consumed_size += sz+sz2 # off+sz
                         consumed_nb = nb_absorbed
@@ -3738,6 +3773,10 @@ class NodeInternals_NonTerm(NodeInternals):
 
                 node_no += 1
 
+                if first_pass:
+                    # considering a postpone node desc from a parent node only in the first loop
+                    first_pass = False
+
             if abort:
                 blob = orig_blob
                 consumed_size = orig_consumed_size
@@ -3749,15 +3788,26 @@ class NodeInternals_NonTerm(NodeInternals):
                         nd.reset_state(conf=conf)
                 for n in tmp_list:
                     n.cancel_absorb()
+                if pending_postponed_to_send_back is not None:
+                    pending_postponed_to_send_back.cancel_absorb()
+                    pending_postponed_to_send_back = None
                 self._clear_drawn_node_attrs(base_node)
             else:
                 self._set_drawn_node_attrs(base_node, nb=nb_absorbed, sz=len(base_node._tobytes()))
-                for n, idx in zip(tmp_list, range(nb_absorbed)):
+                idx = 0
+                for n in tmp_list:
+                    if postponed_appended is not None and n is postponed_appended:
+                        continue
                     n._set_clone_info((idx, nb_absorbed), base_node)
+                    idx += 1
+                if prepend_postponed is not None:
+                    self.frozen_node_list.append(prepend_postponed)
+                    pending_postponed_to_send_back = None
                 self.frozen_node_list += tmp_list
 
-            return abort, blob, consumed_size, consumed_nb
+            return abort, blob, consumed_size, consumed_nb, pending_postponed_to_send_back
 
+        postponed_to_send_back = None
 
         while not abs_exhausted and status == AbsorbStatus.Reject:
 
@@ -3797,16 +3847,18 @@ class NodeInternals_NonTerm(NodeInternals):
                         base_node, min_node, max_node = NodeInternals_NonTerm._parse_node_desc(node_desc)
 
                         if base_node.is_attr_set(NodeInternals.Abs_Postpone):
-                            if postponed_node_desc:
+                            if postponed_node_desc or pending_postpone_desc:
                                 raise ValueError("\nERROR: Only one node at a time (current:%s) delaying" \
                                                  " its dissection is supported!" % postponed_node_desc)
                             postponed_node_desc = node_desc
                             continue
                         else:
-                            abort, blob, consumed_size, consumed_nb = _try_absorption_with(base_node,
-                                                                              min_node, max_node,
-                                                                              blob, consumed_size,
-                                                                              postponed_node_desc)
+                            # pending_upper_postpone = pending_postpone_desc
+                            abort, blob, consumed_size, consumed_nb, postponed_sent_back = \
+                                _try_absorption_with(base_node, min_node, max_node,
+                                                     blob, consumed_size,
+                                                     postponed_node_desc,
+                                                     pending_upper_postpone=pending_postpone_desc)
 
                             # In this case max_node is 0
                             if abort is None:
@@ -3818,7 +3870,11 @@ class NodeInternals_NonTerm(NodeInternals):
                             # succeeded or because it didn't work and
                             # we need to abort and try another high
                             # level component)
+                            if postponed_sent_back is not None:
+                                postponed_to_send_back = postponed_sent_back
                             postponed_node_desc = None
+                            pending_postpone_desc = None
+                            # pending_upper_postpone = None
 
                         if abort:
                             break
@@ -3854,7 +3910,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                 base_node, min_node, max_node = NodeInternals_NonTerm._parse_node_desc(node_desc)
 
                                 # postponed_node_desc is not supported here as it does not make sense
-                                abort, blob, consumed_size, consumed_nb = _try_absorption_with(base_node, min_node, max_node,
+                                abort, blob, consumed_size, consumed_nb, _ = _try_absorption_with(base_node, min_node, max_node,
                                                                                         blob, consumed_size,
                                                                                         postponed_node_desc=postponed_node_desc)
                                 # if abort is None:
@@ -3904,7 +3960,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                 
                                     if max_node != 0:
                                         # postponed_node_desc is not supported here as it does not make sense
-                                        tmp_abort, blob, consumed_size, consumed_nb = _try_absorption_with(base_node,
+                                        tmp_abort, blob, consumed_size, consumed_nb, _ = _try_absorption_with(base_node,
                                                                                         fake_min_node,
                                                                                         max_node,
                                                                                         blob, consumed_size,
@@ -3958,22 +4014,30 @@ class NodeInternals_NonTerm(NodeInternals):
                             base_node, min_node, max_node = NodeInternals_NonTerm._parse_node_desc(node_desc)
 
                             if base_node.is_attr_set(NodeInternals.Abs_Postpone):
-                                if postponed_node_desc:
+                                if postponed_node_desc or pending_postpone_desc:
                                     raise ValueError("\nERROR: Only one node at a time (current:%s) delaying" \
                                                      " its dissection is supported!" % postponed_node_desc)
                                 postponed_node_desc = node_desc
                                 continue
 
                             else:
-                                abort, blob, consumed_size, consumed_nb = _try_absorption_with(base_node, min_node, max_node,
-                                                                                               blob, consumed_size,
-                                                                                               postponed_node_desc)
+                                # pending_upper_postpone = pending_postpone_desc
+                                abort, blob, consumed_size, consumed_nb, postponed_sent_back = \
+                                    _try_absorption_with(base_node, min_node, max_node,
+                                                         blob, consumed_size,
+                                                         postponed_node_desc,
+                                                         pending_upper_postpone=pending_postpone_desc)
 
                                 if abort is None or abort:
                                     continue
                                 else:
                                     dont_stop = False
+                                    # postponed_node_desc = None
+                                    if postponed_sent_back is not None:
+                                        postponed_to_send_back = postponed_sent_back
                                     postponed_node_desc = None
+                                    pending_postpone_desc = None
+                                    # pending_upper_postpone = None
 
                     else:
                         raise ValueError
@@ -4003,7 +4067,7 @@ class NodeInternals_NonTerm(NodeInternals):
         if self.encoder:
             consumed_size = len(original_blob)
 
-        return status, 0, consumed_size
+        return status, 0, consumed_size, postponed_to_send_back
 
     def cancel_absorb(self):
         for n in self.subnodes_set:
@@ -4662,6 +4726,8 @@ class Node(object):
         self.depth = 0
         self.tmp_ref_count = 1
 
+        self.abs_postpone_sent_back = None
+
         if base_node is not None and subnodes is None and values is None and value_type is None:
 
             self._delayed_jobs_called = base_node._delayed_jobs_called
@@ -5227,10 +5293,14 @@ class Node(object):
         conf = self.__check_conf(conf)
         return isinstance(self.internals[conf], NodeInternals_Empty)
 
-    def absorb(self, blob, constraints=AbsCsts(), conf=None):
+    def absorb(self, blob, constraints=AbsCsts(), conf=None, pending_postpone_desc=None):
         conf, next_conf = self._compute_confs(conf=conf, recursive=True)
         blob = convert_to_internal_repr(blob)
-        status, off, sz = self.internals[conf].absorb(blob, constraints=constraints, conf=next_conf)
+        status, off, sz, postpone_sent_back = self.internals[conf].absorb(blob, constraints=constraints, conf=next_conf,
+                                                                          pending_postpone_desc=pending_postpone_desc)
+        if postpone_sent_back is not None:
+            self.abs_postpone_sent_back = postpone_sent_back
+
         if len(blob) == sz and status == AbsorbStatus.Absorbed:
             status = AbsorbStatus.FullyAbsorbed
             self.internals[conf].confirm_absorb()
