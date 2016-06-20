@@ -532,7 +532,8 @@ class ModelHelper(object):
         'clear_attrs', 'set_attrs',
         'absorb_csts', 'absorb_helper',
         'semantics', 'fuzz_weight',
-        'sync_qty_with', 'exists_if', 'exists_if_not',
+        'sync_qty_with', 'qty_from',
+        'exists_if', 'exists_if_not',
         'exists_if/and', 'exists_if/or',
         'post_freeze'
     ]
@@ -945,6 +946,11 @@ class ModelHelper(object):
             self._register_todo(node, self._set_sync_node,
                                 args=(ref, SyncScope.Qty, conf, None),
                                 unpack_args=True)
+        qty_from = desc.get('qty_from', None)
+        if qty_from is not None:
+            self._register_todo(node, self._set_sync_node,
+                                args=(qty_from, SyncScope.QtyFrom, conf, None),
+                                unpack_args=True)
         condition = desc.get('exists_if', None)
         if condition is not None:
             self._register_todo(node, self._set_sync_node,
@@ -1002,26 +1008,35 @@ class ModelHelper(object):
 
     def _set_sync_node(self, node, comp, scope, conf, private):
         sync_obj = None
-        if isinstance(comp, (tuple,list)):
-            if issubclass(comp[0].__class__, NodeCondition):
-                param = comp[0]
-                sync_with = self.__get_node_from_db(comp[1])
-            elif issubclass(comp[0].__class__, (tuple,list)):
-                assert private in ['and', 'or']
-                sync_list = []
-                for subcomp in comp:
-                    assert isinstance(subcomp, (tuple,list)) and len(subcomp) == 2
-                    param = subcomp[0]
-                    sync_with = self.__get_node_from_db(subcomp[1])
-                    sync_list.append((sync_with, param))
-                and_junction = True if private == 'and' else False
-                sync_obj = SyncObj(sync_list, and_junction=and_junction)
-            else:  # in this case this is a node reference in the form ('node name', ID)
+
+        if scope == SyncScope.QtyFrom:
+            if isinstance(comp, (tuple,list)):
+                node_ref, base_qty = comp
+            else:
+                node_ref, base_qty = comp, 0
+            sync_with = self.__get_node_from_db(node_ref)
+            sync_obj = SyncQtyFromObj(sync_with, base_qty=base_qty)
+        else:
+            if isinstance(comp, (tuple,list)):
+                if issubclass(comp[0].__class__, NodeCondition):
+                    param = comp[0]
+                    sync_with = self.__get_node_from_db(comp[1])
+                elif issubclass(comp[0].__class__, (tuple,list)):
+                    assert private in ['and', 'or']
+                    sync_list = []
+                    for subcomp in comp:
+                        assert isinstance(subcomp, (tuple,list)) and len(subcomp) == 2
+                        param = subcomp[0]
+                        sync_with = self.__get_node_from_db(subcomp[1])
+                        sync_list.append((sync_with, param))
+                    and_junction = private == 'and'
+                    sync_obj = SyncExistenceObj(sync_list, and_junction=and_junction)
+                else:  # in this case this is a node reference in the form ('node name', ID)
+                    param = None
+                    sync_with = self.__get_node_from_db(comp)
+            else:
                 param = None
                 sync_with = self.__get_node_from_db(comp)
-        else:
-            param = None
-            sync_with = self.__get_node_from_db(comp)
 
         if sync_obj is not None:
             node.make_synchronized_with(scope=scope, sync_obj=sync_obj, conf=conf)

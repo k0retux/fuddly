@@ -498,29 +498,94 @@ class AbsFullCsts(AbsCsts):
 
 ### Materials for Node Synchronization ###
 
-class SyncScope:
+class SyncScope(Enum):
     Qty = 1
-    Existence = 2
-    Inexistence = 3
+    QtyFrom = 2
+    Existence = 10
+    Inexistence = 11
 
 
 class SyncObj(object):
+
+    def get_node_containers(self):
+        """
+        Shall return either a :class:`Node` or a list of ``Nodes`` or a list of ``(Node, param)``
+        where ``param`` should provide ``__copy__`` method if needed.
+        """
+        raise NotImplementedError
+
+    def put_node_containers(self, new_containers):
+        """
+        This method will be called to provide updated containers that should
+        replace the old ones.
+
+        Args:
+            new_containers: the updated containers
+        """
+        raise NotImplementedError
+
+    def make_private(self, node_dico):
+        node_containers = self.get_node_containers()
+        if node_containers:
+            if isinstance(node_containers, Node):
+                new_node = node_dico.get(node_containers, None)
+                if new_node is not None:
+                    self.put_node_containers(new_node)
+                else:
+                    # refer to comments of NodeInternals._update_node_refs()
+                    pass
+            elif isinstance(node_containers, (tuple, list)):
+                new_node_containers = []
+                for ctr in node_containers:
+                    if isinstance(node_containers, Node):
+                        node, param = ctr, None
+                    else:
+                        assert isinstance(node_containers, (tuple, list)) and len(node_containers) == 2
+                        node, param = ctr
+                    new_node = node_dico.get(node, None)
+                    if new_node is not None:
+                        if param is None:
+                            new_node_containers.append(new_node)
+                        else:
+                            new_param = copy.copy(param)
+                            new_node_containers.append((new_node, new_param))
+                    else:
+                        # refer to comments of NodeInternals._update_node_refs()
+                        pass
+                self.put_node_containers(new_node_containers)
+            else:
+                raise TypeError
+
+
+class SyncQtyFromObj(SyncObj):
+
+    def __init__(self, node, base_qty=0):
+        assert node.is_typed_value()
+        self._node = node
+        self._base_qty = base_qty
+
+    def get_node_containers(self):
+        return self._node
+
+    def put_node_containers(self, new_containers):
+        self._node = new_containers
+
+    @property
+    def qty(self):
+        return self._node.get_raw_value() + self._base_qty
+
+
+class SyncExistenceObj(SyncObj):
 
     def __init__(self, sync_list, and_junction=True):
         self.sync_list = sync_list
         self.and_clause = and_junction
 
-    def make_private(self, node_dico):
-        new_sl = []
-        for node, cond in self.sync_list:
-            new_node = node_dico.get(node, None)
-            new_param = copy.copy(cond)
-            if new_node is not None:
-                new_sl.append((new_node, new_param))
-            else:
-                # refer to comments of NodeInternals._update_node_refs()
-                pass
-        self.sync_list = new_sl
+    def get_node_containers(self):
+        return self.sync_list
+
+    def put_node_containers(self, new_containers):
+        self.sync_list = new_containers
 
     def check(self):
         if self.and_clause:
@@ -549,6 +614,8 @@ class SyncObj(object):
                       "*** The condition checker raise an exception!".format(node.name, id(node)))
                 raise
         return crit_1 and crit_2
+
+
 
 
 class NodeCondition(object):
@@ -3499,7 +3566,18 @@ class NodeInternals_NonTerm(NodeInternals):
                 print("\n*** WARNING: synchronization is not possible " \
                       "for node '{:s}' (id: {:d})!".format(node.name, id(node)))
                 return None
-                
+
+        obj = node.synchronized_with(SyncScope.QtyFrom)
+        if obj is not None:
+            assert isinstance(obj, SyncQtyFromObj)
+            nb = obj.qty
+            if nb is not None:
+                return NodeInternals_NonTerm.qtysync_corrupt_hook(node, nb)
+            else:
+                print("\n*** WARNING: synchronization is not possible " \
+                      "for node '{:s}' (id: {:d})!".format(node.name, id(node)))
+                return None
+
         return None
 
     @staticmethod
@@ -3507,12 +3585,12 @@ class NodeInternals_NonTerm(NodeInternals):
         obj = node.synchronized_with(SyncScope.Existence)
 
         if obj is not None:
-            if isinstance(obj, SyncObj):
+            if isinstance(obj, SyncExistenceObj):
                 correct_reply = obj.check()
             else:
                 sync_node, condition = obj
                 exist = node.env.node_exists(id(sync_node))
-                crit_1 = True if exist else False
+                crit_1 = exist
                 crit_2 = True
                 if exist and condition is not None:
                     try:
@@ -6170,10 +6248,7 @@ class Env4NT(object):
 
     def node_exists(self, node_id):
         qty, sz = self.drawn_node_attrs.get(node_id, (0, 0))
-        if qty > 0 and sz > 0:
-            return True
-        else:
-            return False
+        return qty > 0 and sz > 0
 
     def clear_drawn_node_attrs(self, node_id):
         if node_id in self.drawn_node_attrs:

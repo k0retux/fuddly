@@ -98,17 +98,12 @@ class JPG_DataModel(DataModel):
                   {'name': 'X',
                    'contents': UINT16_be(mini=1, maxi=65535)},
                   {'name': 'Nf',
-                   'contents': MH.QTY(node_name='F_Comp', vt=UINT8),
-                   'node_args': 'F_CompGroup',
-                   'alt': [
-                       {'conf': 'ABS',
-                        'contents': UINT8(mini=1, maxi=255)},
-                   ]},
+                   'contents': UINT8(mini=1, maxi=255)},
                   {'name': 'F_CompGroup',
                    'custo_clear': MH.Custo.NTerm.MutableClone,
                    'contents': [
                        {'name': 'F_Comp',
-                        'qty': (1, 255),
+                        'qty_from': 'Nf',
                         'contents': [
                            {'name': 'Cf',
                             'contents': UINT8(mini=0, maxi=255)},
@@ -141,17 +136,12 @@ class JPG_DataModel(DataModel):
                         'contents': UINT16_be()}
                    ]},
                   {'name': 'Ns',
-                   'contents': MH.QTY(node_name='S_Comp', vt=UINT8),
-                   'node_args': 'S_CompGroup',
-                   'alt': [
-                       {'conf': 'ABS',
-                        'contents': UINT8(mini=1, maxi=255)},
-                   ]},
+                   'contents': UINT8(mini=1, maxi=4)},
                   {'name': 'S_CompGroup',
                    'custo_clear': MH.Custo.NTerm.MutableClone,
                    'contents': [
                        {'name': 'S_Comp',
-                        'qty': (1, 4),
+                        'qty_from': 'Ns',
                         'contents': [
                             {'name': 'Cs',
                              'contents': UINT8()},

@@ -813,6 +813,16 @@ sync_qty_with
   Allows to synchronize the number of node instances to generate or to
   absorb with the one specified by reference.
 
+qty_from
+  Allows to synchronize the number of node instances to generate or to
+  absorb with the value of the one specified by reference. You can also specify
+  an optional *base quantity* that will be added to the retrieved value. In this case, you
+  shall provide a ``list``/``tuple`` with first the node reference then the *base quantity*.
+  This keyword is the counterpart of the *generator template* :class:`framework.data_model_helpers.MH.QTY`.
+  It is preferable to this *generator* when the node from which the quantity is retrieved
+  is already resolved at retrieval time. In this case *generation* and *absorption* operations
+  are handled transparently.
+
 exists_if
   Enable to determine the existence of this node based on a given
   condition.
