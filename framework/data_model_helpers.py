@@ -510,6 +510,98 @@ class MH(object):
             n.clear_attr(ca)
 
 
+class State(object):
+    def run(self, context):
+        raise NotImplementedError
+
+class RegexParser(object):
+
+    # supported special char ()\
+
+    class InitialState(State):
+
+        def run(self, context):
+            if context.input == '(':
+                context.flush()
+                return RegexParser.InsideParenthesis
+            elif context.input == ')':
+                raise Exception("Can not close ) without opening it")
+            elif context.input == '\\':
+                return RegexParser.Escaping
+            else:
+                context.buffer += context.input
+                return self.__class__
+
+    class Escaping(object):
+
+        def run(self, context):
+            context.buffer += context.input
+            return context.last_state.__class__
+
+    class InsideParenthesis(State):
+
+        def run(self, context):
+            if context.input == '(':
+                raise Exception("Can not open parenthesis multiple times")
+            elif context.input == ')':
+                context.flush()
+                return RegexParser.InitialState
+            elif context.input == '\\':
+                return RegexParser.Escaping
+            else:
+                context.buffer += context.input
+                return self.__class__
+
+
+
+    def __init__(self):
+        self.current_state = RegexParser.InitialState()
+        self._name = None
+        self._input = None
+        self._buffer = ""
+
+        self.last_state = None
+
+        self._terminal_nodes = []
+
+    @property
+    def input(self):
+        return self._input
+
+    @property
+    def buffer(self):
+        return self._buffer
+
+    @buffer.setter
+    def buffer(self, buffer):
+        self._buffer = buffer
+
+    def flush(self):
+        if len(self._buffer) > 0:
+            type = fvt.INT_str if self._buffer.isdigit() else fvt.String
+            self._terminal_nodes.append(self._create_terminal_node(self._name + str(len(self._terminal_nodes)+1),
+                                                                   type, contents=[self._buffer]))
+            self._buffer = ""
+
+    def run(self, inputs, name):
+
+        self._name = name
+
+        for self._input in inputs:
+            next_state = self.current_state.run(self)
+            self.last_state = self.current_state
+            self.current_state = next_state()
+
+        if not isinstance(self.current_state, RegexParser.InitialState):
+            raise
+
+        return self._terminal_nodes
+
+
+    def _create_terminal_node(self, name, type, contents=None, alphabet=None, qty=None):
+        return Node(name=name, vt=fvt.String(val_list=contents))
+
+
 class ModelHelper(object):
 
     HIGH_PRIO = 1
