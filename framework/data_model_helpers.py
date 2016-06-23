@@ -525,7 +525,7 @@ class RegexParser(object):
                 if len(ctx.buffer) == 0:
                     raise Exception
 
-                if not isinstance(ctx.old_state, RegexParser.InsideParenthesis):
+                if not isinstance(ctx.old_state, (RegexParser.InsideParenthesis, RegexParser.InsideSquareBrackets)):
                     buffer = ctx.buffer[-1]
                     ctx.buffer = ctx.buffer[:-1]
                     ctx.flush()
@@ -544,7 +544,9 @@ class RegexParser(object):
                 ctx.flush()
 
             else:
-                if isinstance(ctx.old_state, (RegexParser.InsideParenthesis, RegexParser.QtyState)):
+                if isinstance(ctx.old_state, (RegexParser.InsideParenthesis,
+                                              RegexParser.InsideSquareBrackets,
+                                              RegexParser.QtyState)):
                     ctx.flush()
 
                 if ctx.input == '}':
@@ -552,9 +554,16 @@ class RegexParser(object):
                 elif ctx.input == ')':
                     raise Exception
 
+                elif ctx.input == ']':
+                    raise Exception
+
                 elif ctx.input == '(':
                     ctx.flush()
                     return RegexParser.InsideParenthesis
+
+                elif ctx.input == '[':
+                    ctx.flush()
+                    return RegexParser.InsideSquareBrackets
 
                 elif ctx.input == '\\':
                     return RegexParser.Escaping
@@ -613,7 +622,8 @@ class RegexParser(object):
     class InsideParenthesis(State):
 
         def run(self, context):
-            if context.input in ('(', '?', '*', '+', '{', '}'):
+            if context.input in ('(', '[', ']', '?', '*', '+', '{', '}'):
+                print context.input
                 raise Exception
             elif context.input == ')':
                 return RegexParser.InitialState
@@ -624,6 +634,19 @@ class RegexParser(object):
 
             return self.__class__
 
+    class InsideSquareBrackets(State):
+
+        def run(self, context):
+            if context.input in ('[', '(', ')', '?', '*', '+', '{', '}'):
+                raise Exception
+            elif context.input == ']':
+                return RegexParser.InitialState
+            elif context.input == '\\':
+                return RegexParser.Escaping
+            else:
+                context.alphabet += context.input
+
+            return self.__class__
 
 
     def __init__(self):
@@ -632,6 +655,7 @@ class RegexParser(object):
         self._name = None
         self._input = None
         self._buffer = ""
+        self._alphabet = ""
 
         self.min = None
         self.max = None
@@ -651,20 +675,40 @@ class RegexParser(object):
     def buffer(self, buffer):
         self._buffer = buffer
 
+    @property
+    def alphabet(self):
+        return self._alphabet
+
+    @alphabet.setter
+    def alphabet(self, alphabet):
+        self._alphabet = alphabet
+
     def flush(self):
-        if len(self._buffer) > 0:
+
+        if not (len(self._buffer) == 0 and len(self._alphabet) == 0):
 
             if self.min is None and self.max is None:
                 self.min = self.max = 1
 
+            # print "buffer: " + self._buffer
+            # print "alphabet: " + self._alphabet
+            # print
+            # print
+
             type = fvt.INT_str if self._buffer.isdigit() else fvt.String
-            terminal_node = self._create_terminal_node(self._name + str(len(self._terminal_nodes)+1),
-                                                       type, contents=[self._buffer], qty=(self.min, self.max))
+            name = self._name + str(len(self._terminal_nodes)+1)
+            contents = [self._buffer] if len(self._buffer) > 0 else None
+            alphabet = self._alphabet if len(self._alphabet) > 0 else None
+
+            terminal_node = self._create_terminal_node(name, type, contents=contents, alphabet=alphabet,
+                                                       qty=(self.min, self.max))
             self._terminal_nodes.append(terminal_node)
             self.reset()
 
+
     def reset(self):
         self._buffer = ""
+        self._alphabet = ""
         self.min = None
         self.max = None
 
@@ -679,7 +723,7 @@ class RegexParser(object):
 
         if not isinstance(self.current_state, RegexParser.InitialState):
             raise Exception
-        elif len(self.buffer) > 0:
+        elif len(self._buffer) > 0 or len(self._alphabet) > 0 :
             self.flush()
 
         return self._terminal_nodes
