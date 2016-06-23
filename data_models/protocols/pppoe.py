@@ -46,55 +46,42 @@ class PPPOE_DataModel(DataModel):
                                               0x0110,0x201,0x0202,0x0203]),
               'absorb_csts': AbsFullCsts()},
              {'name': 'len',
-              'trigger_last': True,
-              'contents': MH.LEN(vt=UINT16_be),
-              'node_args': 'value',
-              'alt': [
-                  {'conf': 'ABS',
-                   'contents': UINT16_be()}
-              ]},
+              'exists_if': (IntCondition(neg_val=[0,0x0110]), 'type'),
+              'contents': UINT16_be(),
+              'absorb_csts': AbsNoCsts(),
+              },
+             {'name': 'len_0',
+              'exists_if': (IntCondition(0), 'type'),
+              'contents': UINT16_be(int_list=[0])},
+             {'name': 'len_12',
+              'exists_if': (IntCondition(0x0110), 'type'),
+              'contents': UINT16_be(int_list=[12])},
              {'name': 'value',
               'contents': [
-                  {'name': 'v000',
+                  {'name': 'v000', # Final Tag (optional)
                    'exists_if': (IntCondition(0), 'type'),
                    'contents': String(size=0)},
-                  {'name': 'v101',
+                  {'name': 'v101', # Service Name
                    'exists_if': (IntCondition(0x0101), 'type'),
-                   'contents': UTF8(val_list=['my \xfcber service']), # ü encoded in latin1
-                   'alt': [
-                       {'conf': 'ABS',
-                        'exists_if': (IntCondition(0x0101), 'type'),
-                        'contents': lambda x: Node('cts', vt=UTF8(max_encoded_sz=x.get_raw_value())),
-                        'node_args': 'len'}]
+                   'sync_enc_size_with': 'len',
+                   'contents': UTF8(val_list=['my \xfcber service']), # \xfc=ü encoded in latin1
                    },
-                  {'name': 'v102',
+                  {'name': 'v102', # AC name
                    'exists_if': (IntCondition(0x0102), 'type'),
+                   'sync_enc_size_with': 'len',
                    'contents': UTF8(val_list=['AC name']),
-                   'alt': [
-                       {'conf': 'ABS',
-                        'exists_if': (IntCondition(0x0102), 'type'),
-                        'contents': lambda x: Node('cts', vt=UTF8(max_encoded_sz=x.get_raw_value())),
-                        'node_args': 'len'}]
                    },
-                  {'name': 'v103',
+                  {'name': 'v103', # Host Identifier
                    'exists_if': (IntCondition(0x0103), 'type'),
+                   'sync_enc_size_with': 'len',
                    'contents': UTF8(val_list=['Host Identifier']),
-                   'alt': [
-                       {'conf': 'ABS',
-                        'exists_if': (IntCondition(0x0103), 'type'),
-                        'contents': lambda x: Node('cts', vt=UTF8(max_encoded_sz=x.get_raw_value())),
-                        'node_args': 'len'}]
                    },
-                  {'name': 'v104',
+                  {'name': 'v104', # Cookie
                    'exists_if': (IntCondition(0x0104), 'type'),
+                   'sync_size_with': 'len',
                    'contents': String(val_list=['Cookie'], min_sz=0,max_sz=1000),
-                   'alt': [
-                       {'conf': 'ABS',
-                        'exists_if': (IntCondition(0x0104), 'type'),
-                        'contents': lambda x: Node('cts', vt=String(size=x.get_raw_value())),
-                        'node_args': 'len'}]
                    },
-                  {'name': 'v105',
+                  {'name': 'v105', # Vendor Specific
                    'exists_if': (IntCondition(0x0105), 'type'),
                    'contents': [
                        {'name': 'vendorID',
@@ -102,12 +89,8 @@ class PPPOE_DataModel(DataModel):
                                              subfield_val_lists=[None,[0]],
                                              subfield_descs=['type','version']) },
                        {'name': 'remainder',
+                        'sync_size_with': ('len', 4),
                         'contents': String(val_list=['unspecified...'], min_sz=0,max_sz=1000),
-                        'alt': [
-                            {'conf': 'ABS',
-                             'contents': lambda x: Node('cts',
-                                                        vt=String(size=max(0,x.get_raw_value()-4))),
-                             'node_args': 'len'}]
                         },
                    ]},
                   {'name': 'v110', # Relay session ID
@@ -115,26 +98,19 @@ class PPPOE_DataModel(DataModel):
                    'contents': String(size=12)},
                   {'name': 'v201',
                    'exists_if': (IntCondition([0x201, 0x202]), 'type'),
+                   'sync_enc_size_with': 'len',
                    'contents': UTF8(val_list=['Service Name Error or AC System Error!']),
-                   'alt': [
-                       {'conf': 'ABS',
-                        'exists_if': (IntCondition([0x201, 0x202]), 'type'),
-                        'contents': lambda x: Node('cts', vt=UTF8(max_encoded_sz=x.get_raw_value())),
-                        'node_args': 'len'}]
                    },
-                  {'name': 'v203',
+                  {'name': 'v203', # Generic Error
                    'exists_if': (IntCondition(0x0203), 'type'),
+                   'sync_enc_size_with': 'len',
                    'contents': UTF8(val_list=['Generic Error!']),
                    'alt': [
-                       {'conf': 'ABS',
-                        'exists_if': (IntCondition(0x0203), 'type'),
-                        'contents': lambda x: Node('cts',
-                                                   vt=UTF8(max_encoded_sz=x.get_raw_value())),
-                        'node_args': 'len'},
                        {'conf': 'null-terminated',  # RFC2516 says it MUST NOT be null terminated
                         'exists_if': (IntCondition(0x0203), 'type'),
                         'contents': [
                             {'name': 'data',
+                             'sync_enc_size_with': ('len', -1),
                              'contents': UTF8(val_list=['Generic Error!'])},
                             {'name': 'null',
                              'mutable': False,
@@ -150,16 +126,12 @@ class PPPOE_DataModel(DataModel):
 
         tag_service_name = tag_node.get_clone('tag_sn')
         tag_service_name['.*/type'].set_values(value_type=UINT16_be(int_list=[0x0101]))
-        # tag_service_name['.*/type'].enforce_absorb_constraints(AbsFullCsts())
 
-        # Access Concentrator Name
-        tag_ac_name = tag_node.get_clone('tag_ac_name')
+        tag_ac_name = tag_node.get_clone('tag_ac_name') # Access Concentrator Name
         tag_ac_name['.*/type'].set_values(value_type=UINT16_be(int_list=[0x0102]))
-        # tag_ac_name['.*/type'].enforce_absorb_constraints(AbsFullCsts())
 
         tag_sn_error = tag_node.get_clone('tag_sn_error')  # Service Name Error
         tag_sn_error['.*/type'].set_values(value_type=UINT16_be(int_list=[0x0202]))
-        # tag_sn_error['.*/type'].enforce_absorb_constraints(AbsFullCsts())
 
         pppoe_desc = \
         {'name': 'pppoe',

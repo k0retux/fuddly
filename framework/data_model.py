@@ -41,6 +41,8 @@ sys.path.append('.')
 from framework.basic_primitives import *
 from libs.external_modules import *
 from framework.global_resources import *
+from framework.error_handling import *
+
 import libs.debug_facility as dbg
 
 DEBUG = dbg.DM_DEBUG
@@ -503,7 +505,7 @@ class SyncScope(Enum):
     QtyFrom = 2
     Existence = 10
     Inexistence = 11
-
+    Size = 20
 
 class SyncObj(object):
 
@@ -572,8 +574,33 @@ class SyncQtyFromObj(SyncObj):
 
     @property
     def qty(self):
-        return self._node.get_raw_value() + self._base_qty
+        return max(0, self._node.get_raw_value() + self._base_qty)
 
+
+class SyncSizeObj(SyncObj):
+
+    def __init__(self, node, base_size=0, apply_to_enc_size=False):
+        assert node.is_typed_value()
+        self._node = node
+        self.base_size = base_size
+        self.apply_to_enc_size = apply_to_enc_size
+
+    def get_node_containers(self):
+        return self._node
+
+    def put_node_containers(self, new_containers):
+        self._node = new_containers
+
+    @property
+    def size_for_absorption(self):
+        return max(0, self._node.get_raw_value() - self.base_size)
+
+    def set_size_on_source_node(self, size):
+        try:
+            self._node.update_raw_value(size)
+            self._node.set_frozen_value(self._node.get_current_encoded_value())
+        except:
+            raise DataModelDefinitionError("The node '{:s}' is not compatible with integer absorption".format(self._node.name))
 
 class SyncExistenceObj(SyncObj):
 
@@ -1015,6 +1042,9 @@ class NodeInternals(object):
     def enforce_absorb_constraints(self, csts):
         assert(isinstance(csts, AbsCsts))
         self.absorb_constraints = csts
+
+    def set_size_from_constraints(self, size, encoded_size):
+        raise NotImplementedError
 
     def set_attr(self, name):
         if name not in self.__attrs:
@@ -1846,6 +1876,12 @@ class NodeInternals_GenFunc(NodeInternals):
     def clear_clone_info_since(self, node):
         self._node_helpers.clear_graph_info_since(node)
 
+    def set_size_from_constraints(self, size, encoded_size):
+        if self.env is not None:
+            self.generated_node.set_size_from_constraints(size=size, encoded_size=encoded_size)
+        else:
+            # look at .get_child_all_path() comments
+            pass
 
 class NodeInternals_Term(NodeInternals):
     def _init_specific(self, arg):
@@ -2031,6 +2067,9 @@ class NodeInternals_TypedValue(NodeInternals_Term):
 
     def get_value_type(self):
         return self.value_type
+
+    def set_size_from_constraints(self, size, encoded_size):
+        self.value_type.set_size_from_constraints(size=size, encoded_size=encoded_size)
 
     def set_specific_fuzzy_values(self, vals):
         self.__fuzzy_values = vals
@@ -2372,6 +2411,9 @@ class NodeInternals_Func(NodeInternals_Term):
 
         return NodeInternals_Term._convert_to_internal_repr(ret)
 
+    def set_size_from_constraints(self, size, encoded_size):
+        # not supported
+        raise DataModelDefinitionError
 
 
 class NodeSeparator(object):
@@ -2982,6 +3024,22 @@ class NodeInternals_NonTerm(NodeInternals):
 
     def _construct_subnodes(self, node_desc, subnode_list, mode, ignore_sep_fstate, ignore_separator=False, lazy_mode=True):
 
+        def _sync_size_handling(node):
+            obj = node.synchronized_with(SyncScope.Size)
+            if obj is not None:
+                if obj.apply_to_enc_size:
+                    sz = len(node.to_bytes())
+                else:
+                    decoded_val = node.get_raw_value()
+                    if isinstance(decoded_val, bytes):
+                        sz = len(decoded_val)
+                    else:
+                        # In this case, this is a BitField or an INT-based object, which are
+                        # fixed size object
+                        raise DataModelDefinitionError('size sync should not be used for fixed sized object!')
+                sz += obj.base_size
+                obj.set_size_on_source_node(NodeInternals_NonTerm.sizesync_corrupt_hook(node, sz))
+
         node_attrs = node_desc[1:]
         # node = node_desc[0]
         node, mini, maxi = self._handle_node_desc(node_desc)
@@ -3037,6 +3095,7 @@ class NodeInternals_NonTerm(NodeInternals):
                         pass
 
                 new_node._set_clone_info((base_node.tmp_ref_count-1, nb), base_node)
+                _sync_size_handling(new_node)
 
             # 'same' mode
             elif mode == 's':
@@ -3056,6 +3115,7 @@ class NodeInternals_NonTerm(NodeInternals):
         # only once as there is no node copy.
         if new_node is not None and mode == 's':
             new_node._set_clone_info((0,nb), base_node)
+            _sync_size_handling(new_node)
 
         if len(to_entangle) > 1:
             make_entangled_nodes(to_entangle)
@@ -3553,6 +3613,27 @@ class NodeInternals_NonTerm(NodeInternals):
         if self.separator is not None:
             self.separator.node.tmp_ref_count = 1
 
+    @staticmethod
+    def _size_from_node(node, for_encoded_size=False):
+        # This method is only used for absorption. For generation, dealing with size
+        # is performed by the function _sync_size_handling() that is nested within
+        # the method self._construct_subnodes()
+        obj = node.synchronized_with(SyncScope.Size)
+        if obj is not None:
+            assert isinstance(obj, SyncSizeObj)
+            size = obj.size_for_absorption
+            if size is not None:
+                if obj.apply_to_enc_size == for_encoded_size:
+                    return size  # Corrupt hook is not called because only used for absorption.
+                                 # To be reconsidered if usage is extended
+                else:
+                    return None
+            else:
+                print("\n*** WARNING: synchronization is not possible " \
+                      "for node '{:s}' (id: {:d})!".format(node.name, id(node)))
+                return None
+
+        return None
 
     @staticmethod
     def _qty_from_node(node):
@@ -3651,6 +3732,16 @@ class NodeInternals_NonTerm(NodeInternals):
         else:
             return mini, maxi
 
+    @staticmethod
+    def sizesync_corrupt_hook(node, length):
+        if node in node.env.nodes_to_corrupt:
+            corrupt_type, corrupt_op = node.env.nodes_to_corrupt[node]
+            if corrupt_type == Node.CORRUPT_SIZE_SYNC or corrupt_type is None:
+                return corrupt_op(length)
+            else:
+                return length
+        else:
+            return length
 
 
     def absorb(self, blob, constraints, conf, pending_postpone_desc=None):
@@ -3720,6 +3811,14 @@ class NodeInternals_NonTerm(NodeInternals):
                 qty = self._qty_from_node(base_node)
                 if qty is not None:
                     max_node = min_node = qty
+
+                size = self._size_from_node(base_node)
+                if size is not None:
+                    base_node.set_size_from_constraints(size=size)
+                else:
+                    enc_size = self._size_from_node(base_node, for_encoded_size=True)
+                    if enc_size is not None:
+                        base_node.set_size_from_constraints(encoded_size=enc_size)
 
                 shall_exist = self._existence_from_node(base_node)
                 if shall_exist is not None:
@@ -4464,6 +4563,9 @@ class NodeInternals_NonTerm(NodeInternals):
         for e in iterable:
             e._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False)
 
+    def set_size_from_constraints(self, size, encoded_size):
+        # not supported
+        raise DataModelDefinitionError
 
 
 ########### Node() High Level Facilities ##############
@@ -4759,6 +4861,7 @@ class Node(object):
     CORRUPT_EXIST_COND = 5
     CORRUPT_QTY_SYNC = 6
     CORRUPT_NODE_QTY = 7
+    CORRUPT_SIZE_SYNC = 8
 
     def __init__(self, name, base_node=None, copy_dico=None, ignore_frozen_state=False,
                  accept_external_entanglement=False, acceptance_set=None,
@@ -5391,6 +5494,10 @@ class Node(object):
     def enforce_absorb_constraints(self, csts, conf=None):
         conf = self.__check_conf(conf)
         self.internals[conf].enforce_absorb_constraints(csts)
+
+    def set_size_from_constraints(self, size=None, encoded_size=None, conf=None):
+        conf = self.__check_conf(conf)
+        self.internals[conf].set_size_from_constraints(size=size, encoded_size=encoded_size)
 
     # Does not affect function/generator Nodes
     def make_determinist(self, conf=None, all_conf=False, recursive=False):
@@ -6205,10 +6312,10 @@ class Node(object):
         elif isinstance(val, int):
             if isinstance(nodes, Node):
                 # Method defined by INT object (within TypedValue nodes)
-                nodes.set_raw_values(val)
+                nodes.update_raw_value(val)
             else:
                 for n in nodes:
-                    n.set_raw_values(val)
+                    n.update_raw_value(val)
         else:
             if isinstance(nodes, Node):
                 status, off, size, name = nodes.absorb(convert_to_internal_repr(val),

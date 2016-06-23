@@ -43,6 +43,7 @@ sys.path.append('.')
 import framework.basic_primitives as bp
 from framework.data_model import AbsorbStatus, AbsCsts, convert_to_internal_repr, unconvert_from_internal_repr
 from framework.encoders import *
+from framework.error_handling import *
 
 DEBUG = False
 
@@ -89,6 +90,9 @@ class VT(object):
 
     def is_exhausted(self):
         return False
+
+    def set_size_from_constraints(self, size=None, encoded_size=None):
+        raise NotImplementedError
 
     def pretty_print(self):
         return None
@@ -706,9 +710,10 @@ class String(VT_Alt):
             self.is_val_list_provided = True  # distinguish cases where
                                            # val_list is provided or
                                            # created based on size
+            self.user_provided_list = copy.copy(self.val_list)
         else:
             self.is_val_list_provided = False
-            
+            self.user_provided_list = None
 
         if size is not None:
             self.min_sz = size
@@ -722,7 +727,7 @@ class String(VT_Alt):
         elif min_sz is not None:
             self.min_sz = min_sz
             # for string with no size limit, we set a threshold to
-            # 10000 char
+            # DEFAULT_MAX_SZ chars
             self.max_sz = self.DEFAULT_MAX_SZ
             
         elif max_sz is not None:
@@ -731,16 +736,13 @@ class String(VT_Alt):
 
         elif val_list is not None:
             sz = 0
-            if self.encoded_string and max_encoded_sz is None:
-                self.max_encoded_sz = 0
-            for v in val_list:
+            for v in self.val_list:
                 length = len(v)
                 if length > sz:
                     sz = length
-                if self.encoded_string:
-                    length_enc = len(self.encode(VT._str2internal(v)))
-                    if length_enc > self.max_encoded_sz:
-                        self.max_encoded_sz = length_enc
+                if not self._check_compliance(v, force_max_enc_sz=max_encoded_sz is not None,
+                                              update_list=False):
+                    raise DataModelDefinitionError
 
             self.max_sz = sz
             self.min_sz = 0
@@ -761,29 +763,57 @@ class String(VT_Alt):
         self._check_sizes()
 
         if val_list is None:
-            self._populate_val_list()
-            if self.encoded_string:
-                if max_encoded_sz is None:
-                    self.max_encoded_sz = 0
-                for v in self.val_list:
-                    length = len(self.encode(v))
-                    if length > self.max_encoded_sz:
-                        self.max_encoded_sz = length
+            self._populate_val_list(force_max_enc_sz=max_encoded_sz is not None)
 
         self.determinist = determinist
 
 
-    def _populate_val_list(self):
+    def _check_compliance(self, value, force_max_enc_sz, update_list=True):
+        if self.encoded_string:
+            val_sz = len(self.encode(value))
+            if not force_max_enc_sz:
+                if self.max_encoded_sz is None or val_sz > self.max_encoded_sz:
+                    self.max_encoded_sz = val_sz
+                if update_list:
+                    self.val_list.append(value)
+                return True
+            else:
+                if val_sz <= self.max_encoded_sz:
+                    if update_list:
+                        self.val_list.append(value)
+                    return True
+                else:
+                    return False
+        else:
+            if update_list:
+                self.val_list.append(value)
+            return True
+
+    def _populate_val_list(self, force_max_enc_sz=False):
         self.val_list = []
         alpbt = string.printable if self.alphabet is None else unconvert_from_internal_repr(self.alphabet)
         if self.min_sz < self.max_sz:
-            self.val_list.append(bp.rand_string(size=self.max_sz, str_set=alpbt))
-            self.val_list.append(bp.rand_string(size=self.min_sz, str_set=alpbt))
+            self._check_compliance(bp.rand_string(size=self.max_sz, str_set=alpbt),
+                                   force_max_enc_sz=force_max_enc_sz)
+            self._check_compliance(bp.rand_string(size=self.min_sz, str_set=alpbt),
+                                   force_max_enc_sz=force_max_enc_sz)
         else:
-            self.val_list.append(bp.rand_string(size=self.max_sz, str_set=alpbt))
-
+            self._check_compliance(bp.rand_string(size=self.max_sz, str_set=alpbt),
+                                   force_max_enc_sz=force_max_enc_sz)
         if self.min_sz+1 < self.max_sz:
-            self.val_list += [bp.rand_string(mini=self.min_sz+1, maxi=self.max_sz-1, str_set=alpbt) for i in range(3)]
+            NB_VALS_MAX = 3
+            for idx in range(NB_VALS_MAX):
+                nb_vals = 0
+                retry_cpt = 0
+                while nb_vals < NB_VALS_MAX and retry_cpt < 5:
+                    val = bp.rand_string(mini=self.min_sz+1, maxi=self.max_sz-1, str_set=alpbt)
+                    if self._check_compliance(val, force_max_enc_sz=force_max_enc_sz):
+                        nb_vals += 1
+                    else:
+                        retry_cpt += 1
+
+        if len(self.val_list) == 0:
+            raise DataModelDefinitionError
 
     def get_current_raw_val(self):
         if self.drawn_val is None:
@@ -862,6 +892,23 @@ class String(VT_Alt):
             return False
         else:
             return True
+
+    def set_size_from_constraints(self, size=None, encoded_size=None):
+        # This method is used only for absorption purpose, thus no modification
+        # is performed on self.val_list. To be reconsidered in the case the method
+        # has to be used for an another purpose.
+
+        assert size is not None or encoded_size is not None
+        if self.encoded_string and encoded_size is not None:
+            if encoded_size == self.max_encoded_sz:
+                return
+            self.max_encoded_sz = encoded_size
+        elif size is not None:
+            if size == self.max_sz and size == self.min_sz:
+                return
+            self.min_sz = self.max_sz = size
+        else:
+            raise ValueError
 
     def pretty_print(self):
         if self.drawn_val is None:
@@ -985,6 +1032,7 @@ class INT(VT):
                 if orig_val not in self.int_list:
                     raise ValueError('contents not valid!')
             self.int_list.insert(0, orig_val)
+            self.int_list_copy = copy.copy(self.int_list)
         else:
             if constraints[AbsCsts.Contents]:
                 if self.maxi is not None and orig_val > self.maxi:
@@ -994,7 +1042,8 @@ class INT(VT):
             # self.int_list = [orig_val]
             self.idx = orig_val - self.mini
 
-        self.reset_state()
+        # self.reset_state()
+        self.exhausted = False
         self.drawn_val = orig_val
 
         return val, off, sz
@@ -1041,6 +1090,7 @@ class INT(VT):
             l = list(filter(self.is_compatible, new_list))
             if l:
                 self.int_list = l
+                self.int_list_copy = copy.copy(self.int_list)
                 self.idx = 0
                 ret = True
 
@@ -1128,6 +1178,13 @@ class INT(VT):
         self.drawn_val = val
         return self._convert_value(val)
 
+    def get_current_encoded_value(self):
+        if self.drawn_val is None:
+            self.get_value()
+        return self._convert_value(self.drawn_val)
+
+    def set_size_from_constraints(self, size=None, encoded_size=None):
+        raise DataModelDefinitionError
 
     def pretty_print(self):
         if self.drawn_val is None:
@@ -1179,13 +1236,25 @@ class INT(VT):
         self.exhausted = False
         self.drawn_val = None
 
-    def set_raw_values(self, val):
+    def update_raw_value(self, val):
         if isinstance(val, int):
-            self.int_list = [val]
+            if self.int_list is not None:
+                self.int_list.append(val)
+                self.int_list_copy = copy.copy(self.int_list)
+            else:
+                self.idx = val - self.mini
         else:
-            assert(isinstance(val, list))
-            self.int_list = val
-        self.reset_state()
+            raise TypeError
+        # else:
+        #     # in this case we change raw value with something else
+        #     assert(isinstance(val, list))
+        #     self.int_list = val
+        #     self.int_list_copy = copy.copy(self.int_list)
+        #     self.drawn_val = val[0]
+
+        self.drawn_val = val
+        self.exhausted = False
+        # self.reset_state()
 
     # To be used after calling get_value()
     def is_exhausted(self):
@@ -1585,6 +1654,10 @@ class BitField(VT_Alt):
             self.padding_size = 0
         else:
             self.padding_size = 8 - (self.size % 8)
+
+
+    def set_size_from_constraints(self, size=None, encoded_size=None):
+        raise DataModelDefinitionError
 
 
     def pretty_print(self):

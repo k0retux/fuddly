@@ -810,18 +810,45 @@ fuzz_weight
   heavier the weight, the higher the priority of handling the node.
 
 sync_qty_with
-  Allows to synchronize the number of node instances to generate or to
+  Allow to synchronize the number of node instances to generate or to
   absorb with the one specified by reference.
 
 qty_from
-  Allows to synchronize the number of node instances to generate or to
-  absorb with the value of the one specified by reference. You can also specify
+  Allow to synchronize the number of node instances to generate or to
+  absorb with the *value* of the one specified by reference. You can also specify
   an optional *base quantity* that will be added to the retrieved value. In this case, you
   shall provide a ``list``/``tuple`` with first the node reference then the *base quantity*.
+
   This keyword is the counterpart of the *generator template* :class:`framework.data_model_helpers.MH.QTY`.
   It is preferable to this *generator* when the node from which the quantity is retrieved
   is already resolved at retrieval time. In this case *generation* and *absorption* operations
-  are handled transparently.
+  will be handled transparently.
+
+sync_size_with, sync_enc_size_with
+  Allow to synchronize the length of the described node (the one where this keyword is used)
+  with the *value* of the node specified by reference (which should be an
+  :class:`framework.value_types.INT`-based typed-node). These keywords are useful for size-variable
+  node types. They are currently supported for typed-nodes which are
+  :class:`framework.value_types.String`-based with or without an encoding (e.g.,
+  :class:`framework.value_types.UTF8`, ...). Non-terminal nodes are not supported (for absorption).
+  The distinction between ``sync_size_with`` and ``sync_enc_size_with`` is that the synchronization
+  will be performed either with respect to the length of the data retrieved from the node
+  (or the decoded data for encoded node), or with respect to the length of the encoded data
+  (only usable in the case of an encoded node).
+
+  Generation and absorption deal with these keywords differently, in order to achieve the expected
+  behavior. For generation, the synchronization goes from the described node to the referenced node
+  (meaning that the data is first pulled from the size-variable node, then the referenced node is
+  set with the length of the pulled data). Whereas for the absorption it goes the other way around.
+
+  Note also that you can provide an optional *base size* that will be added to the length
+  before synchronization in the case of generation, and removed from the length in the case
+  of absorption. In this case, you shall provide a ``list``/``tuple`` with first the node reference
+  then the *base size*.
+
+  These keywords are the counterpart of the *generator template* :class:`framework.data_model_helpers.MH.LEN`.
+  They are preferable to this *generator* (when the size-variable node is not a non-terminal),
+  because *generation* and *absorption* operations will be handled transparently thanks to them.
 
 exists_if
   Enable to determine the existence of this node based on a given

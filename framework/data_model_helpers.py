@@ -535,6 +535,7 @@ class ModelHelper(object):
         'sync_qty_with', 'qty_from',
         'exists_if', 'exists_if_not',
         'exists_if/and', 'exists_if/or',
+        'sync_size_with', 'sync_enc_size_with',
         'post_freeze'
     ]
 
@@ -951,6 +952,18 @@ class ModelHelper(object):
             self._register_todo(node, self._set_sync_node,
                                 args=(qty_from, SyncScope.QtyFrom, conf, None),
                                 unpack_args=True)
+
+        sync_size_with = desc.get('sync_size_with', None)
+        sync_enc_size_with = desc.get('sync_enc_size_with', None)
+        assert sync_size_with is None or sync_enc_size_with is None
+        if sync_size_with is not None:
+            self._register_todo(node, self._set_sync_node,
+                                args=(sync_size_with, SyncScope.Size, conf, False),
+                                unpack_args=True)
+        if sync_enc_size_with is not None:
+            self._register_todo(node, self._set_sync_node,
+                                args=(sync_enc_size_with, SyncScope.Size, conf, True),
+                                unpack_args=True)
         condition = desc.get('exists_if', None)
         if condition is not None:
             self._register_todo(node, self._set_sync_node,
@@ -1016,6 +1029,15 @@ class ModelHelper(object):
                 node_ref, base_qty = comp, 0
             sync_with = self.__get_node_from_db(node_ref)
             sync_obj = SyncQtyFromObj(sync_with, base_qty=base_qty)
+
+        if scope == SyncScope.Size:
+            if isinstance(comp, (tuple,list)):
+                node_ref, base_size = comp
+            else:
+                node_ref, base_size = comp, 0
+            sync_with = self.__get_node_from_db(node_ref)
+            sync_obj = SyncSizeObj(sync_with, base_size=base_size,
+                                   apply_to_enc_size=private)
         else:
             if isinstance(comp, (tuple,list)):
                 if issubclass(comp[0].__class__, NodeCondition):
