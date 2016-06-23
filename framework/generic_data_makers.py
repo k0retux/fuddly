@@ -384,6 +384,7 @@ class sd_struct_constraints(StatefulDisruptor):
 
         ic_exist_cst = NodeInternalsCriteria(required_csts=[SyncScope.Existence])
         ic_qty_cst = NodeInternalsCriteria(required_csts=[SyncScope.Qty])
+        ic_size_cst = NodeInternalsCriteria(required_csts=[SyncScope.Size])
         ic_minmax_cst = NodeInternalsCriteria(node_kinds=[NodeInternals_NonTerm])
 
         self.exist_cst_nodelist = self.seed.get_reachable_nodes(internals_criteria=ic_exist_cst, path_regexp=self.path,
@@ -410,6 +411,14 @@ class sd_struct_constraints(StatefulDisruptor):
 
         self.qty_cst_nodelist_2 = copy.copy(self.qty_cst_nodelist_1)
 
+        self.size_cst_nodelist_1 = self.seed.get_reachable_nodes(internals_criteria=ic_size_cst, path_regexp=self.path,
+                                                               ignore_fstate=True)
+        nodelist = copy.copy(self.size_cst_nodelist_1)
+        for n in nodelist:
+            if n.get_path_from(self.seed) is None:
+                self.size_cst_nodelist_1.remove(n)
+        self.size_cst_nodelist_2 = copy.copy(self.size_cst_nodelist_1)
+
         if self.deep:
             minmax_cst_nodelist = self.seed.get_reachable_nodes(internals_criteria=ic_minmax_cst, path_regexp=self.path,
                                                                 ignore_fstate=True)
@@ -433,7 +442,8 @@ class sd_struct_constraints(StatefulDisruptor):
         else:
             self.minmax_cst_nodelist_1 = self.minmax_cst_nodelist_2 = []
 
-        self.max_runs = len(self.exist_cst_nodelist) + 2*len(self.qty_cst_nodelist_1) + 2*len(self.minmax_cst_nodelist_1)
+        self.max_runs = len(self.exist_cst_nodelist) + 2*len(self.size_cst_nodelist_1) + \
+                        2*len(self.qty_cst_nodelist_1) + 2*len(self.minmax_cst_nodelist_1)
         
 
     def disrupt_data(self, dm, target, data):
@@ -454,6 +464,16 @@ class sd_struct_constraints(StatefulDisruptor):
                 self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_QTY_SYNC,
                                                   corrupt_op=lambda x: max(x-1, 0))
                 op_performed = 'decrease quantity constraint by 1'
+            elif self.size_cst_nodelist_1:
+                consumed_node = self.size_cst_nodelist_1.pop()
+                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_SIZE_SYNC,
+                                                  corrupt_op=lambda x: x+1)
+                op_performed = 'increase size constraint by 1'
+            elif self.size_cst_nodelist_2:
+                consumed_node = self.size_cst_nodelist_2.pop()
+                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_SIZE_SYNC,
+                                                  corrupt_op=lambda x: max(x-1, 0))
+                op_performed = 'decrease size constraint by 1'
             elif self.deep and self.minmax_cst_nodelist_1:
                 consumed_node, mini, maxi = self.minmax_cst_nodelist_1.pop()
                 new_mini = max(0, mini-1)

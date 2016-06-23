@@ -280,9 +280,8 @@ tSTRUCT - Alter Data Structure
 
 Description:
   For each node associated to existence constraints or quantity
-  constraints, alter the constraint, one at a time, after each call
-  to this disruptor.
-  If `deep` is set, enable new structure corruption cases, based on
+  constraints or size constraints, alter the constraint, one at a time, after each call
+  to this disruptor. If `deep` is set, enable new structure corruption cases, based on
   the minimum and maximum amount of non-terminal nodes (within the
   input data) specified in the data model.
 
