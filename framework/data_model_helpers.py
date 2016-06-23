@@ -516,53 +516,128 @@ class State(object):
 
 class RegexParser(object):
 
-    # supported special char ()\
-
     class InitialState(State):
 
-        def run(self, context):
-            if context.input == '(':
-                context.flush()
-                return RegexParser.InsideParenthesis
-            elif context.input == ')':
-                raise Exception("Can not close ) without opening it")
-            elif context.input == '\\':
-                return RegexParser.Escaping
+        def run(self, ctx):
+
+            if ctx.input in ('?', '*', '+', '{'):
+
+                if len(ctx.buffer) == 0:
+                    raise Exception
+
+                if not isinstance(ctx.old_state, RegexParser.InsideParenthesis):
+                    buffer = ctx.buffer[-1]
+                    ctx.buffer = ctx.buffer[:-1]
+                    ctx.flush()
+                    ctx.buffer = buffer
+
+                if ctx.input == '{':
+                    return RegexParser.QtyState
+                elif ctx.input == '+':
+                    ctx.min = 1
+                elif ctx.input == '?':
+                    ctx.max = 1
+
+                if ctx.min is None:
+                    ctx.min = 0
+
+                ctx.flush()
+
             else:
-                context.buffer += context.input
-                return self.__class__
+                if isinstance(ctx.old_state, (RegexParser.InsideParenthesis, RegexParser.QtyState)):
+                    ctx.flush()
+
+                if ctx.input == '}':
+                    raise Exception
+                elif ctx.input == ')':
+                    raise Exception
+
+                elif ctx.input == '(':
+                    ctx.flush()
+                    return RegexParser.InsideParenthesis
+
+                elif ctx.input == '\\':
+                    return RegexParser.Escaping
+
+                else:
+                    ctx.buffer += ctx.input
+
+            return self.__class__
+
+
+    class QtyState(State):
+
+        def __init__(self):
+            pass
+
+        def run(self, ctx):
+
+            if ctx.input == ',':
+                ctx.max = ""
+            elif ctx.input.isdigit():
+                if ctx.max is not None:
+                    ctx.max += ctx.input
+                else:
+                    if ctx.min is None:
+                        ctx.min = ""
+                    ctx.min += ctx.input
+            elif ctx.input == "}":
+
+                ctx.min = 0 if ctx.min is None else int(ctx.min)
+
+                if ctx.max is None:
+                    ctx.max = ctx.min
+                elif len(ctx.max) == 0:
+                    ctx.max = None
+                else:
+                    ctx.max = int(ctx.max)
+
+                if ctx.max is not None and (ctx.min > ctx.max or ctx.min == ctx.max == 0):
+                    raise Exception
+
+                return RegexParser.InitialState
+            elif ctx.input.isspace():
+                pass
+            else:
+                raise Exception
+
+            return self.__class__
+
 
     class Escaping(object):
 
         def run(self, context):
             context.buffer += context.input
-            return context.last_state.__class__
+            return context.old_state.__class__
 
     class InsideParenthesis(State):
 
         def run(self, context):
-            if context.input == '(':
-                raise Exception("Can not open parenthesis multiple times")
+            if context.input in ('(', '?', '*', '+', '{', '}'):
+                raise Exception
             elif context.input == ')':
-                context.flush()
                 return RegexParser.InitialState
             elif context.input == '\\':
                 return RegexParser.Escaping
             else:
                 context.buffer += context.input
-                return self.__class__
+
+            return self.__class__
 
 
 
     def __init__(self):
-        self.current_state = RegexParser.InitialState()
+        self.current_state = RegexParser.InitialState() # last ended state
+        self.old_state = self.current_state
         self._name = None
         self._input = None
         self._buffer = ""
 
-        self.last_state = None
+        self.min = None
+        self.max = None
 
         self._terminal_nodes = []
+
 
     @property
     def input(self):
@@ -578,22 +653,34 @@ class RegexParser(object):
 
     def flush(self):
         if len(self._buffer) > 0:
+
+            if self.min is None and self.max is None:
+                self.min = self.max = 1
+
             type = fvt.INT_str if self._buffer.isdigit() else fvt.String
-            self._terminal_nodes.append(self._create_terminal_node(self._name + str(len(self._terminal_nodes)+1),
-                                                                   type, contents=[self._buffer]))
-            self._buffer = ""
+            terminal_node = self._create_terminal_node(self._name + str(len(self._terminal_nodes)+1),
+                                                       type, contents=[self._buffer], qty=(self.min, self.max))
+            self._terminal_nodes.append(terminal_node)
+            self.reset()
+
+    def reset(self):
+        self._buffer = ""
+        self.min = None
+        self.max = None
 
     def run(self, inputs, name):
 
         self._name = name
 
         for self._input in inputs:
-            next_state = self.current_state.run(self)
-            self.last_state = self.current_state
-            self.current_state = next_state()
+            next_state_class = self.current_state.run(self)
+            self.old_state = self.current_state
+            self.current_state = next_state_class()
 
         if not isinstance(self.current_state, RegexParser.InitialState):
-            raise
+            raise Exception
+        elif len(self.buffer) > 0:
+            self.flush()
 
         return self._terminal_nodes
 
