@@ -46,20 +46,14 @@ class PPPOE_DataModel(DataModel):
                                               0x0110,0x201,0x0202,0x0203]),
               'absorb_csts': AbsFullCsts()},
              {'name': 'len',
-              'exists_if': (IntCondition(neg_val=[0,0x0110]), 'type'),
               'contents': UINT16_be(),
               'absorb_csts': AbsNoCsts(),
               },
-             {'name': 'len_0',
-              'exists_if': (IntCondition(0), 'type'),
-              'contents': UINT16_be(int_list=[0])},
-             {'name': 'len_12',
-              'exists_if': (IntCondition(0x0110), 'type'),
-              'contents': UINT16_be(int_list=[12])},
              {'name': 'value',
               'contents': [
                   {'name': 'v000', # Final Tag (optional)
                    'exists_if': (IntCondition(0), 'type'),
+                   'sync_size_with': 'len',
                    'contents': String(size=0)},
                   {'name': 'v101', # Service Name
                    'exists_if': (IntCondition(0x0101), 'type'),
@@ -95,6 +89,7 @@ class PPPOE_DataModel(DataModel):
                    ]},
                   {'name': 'v110', # Relay session ID
                    'exists_if': (IntCondition(0x0110), 'type'),
+                   'sync_size_with': 'len',
                    'contents': String(size=12)},
                   {'name': 'v201',
                    'exists_if': (IntCondition([0x201, 0x202]), 'type'),
@@ -168,7 +163,7 @@ class PPPOE_DataModel(DataModel):
                    'exists_if': (IntCondition(0x9), 'code'),
                    'contents': [
                        (tag_service_name, 1),
-                       (tag_node, 0, 4)
+                       (tag_node, 0, 30)
                    ]},
                   {'name': '4pado',
                    'shape_type': MH.FullyRandom,

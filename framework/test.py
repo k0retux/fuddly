@@ -1880,7 +1880,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of confs: %d'%idx, rgb=Color.INFO))
 
-        self.assertIn(idx, [284])
+        self.assertIn(idx, [159])
 
 
 if mock_module and ddt_module:
@@ -3195,7 +3195,8 @@ class TestDataModel(unittest.TestCase):
         dm = fmk.get_data_model_by_name('usb')
         dm.build_data_model()
 
-        msd_conf = dm.get_data('MSD_CONF')
+        msd_conf = dm.get_data('CONF')
+        msd_conf.set_current_conf('MSD', recursive=True)
         msd_conf.show()
         
         self.assertEqual(len(msd_conf.to_bytes()), 32)

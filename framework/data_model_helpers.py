@@ -72,6 +72,8 @@ class MH(object):
     Generator = 2
     Leaf = 3
 
+    Node = 4  # if a Node() is provided
+
     ##################################
     ### Non-Terminal Node Specific ###
     ##################################
@@ -608,6 +610,8 @@ class ModelHelper(object):
             pre_ntype = top_desc.get('type', None)
             if isinstance(contents, list) and pre_ntype in [None, MH.NonTerminal]:
                 ntype = MH.NonTerminal
+            elif isinstance(contents, Node) and pre_ntype in [None, MH.Node]:
+                ntype = MH.Node
             elif hasattr(contents, '__call__') and pre_ntype in [None, MH.Generator]:
                 ntype = MH.Generator
             else:
@@ -619,7 +623,8 @@ class ModelHelper(object):
         contents = desc.get('contents', None)
         dispatcher = {MH.NonTerminal: self._create_non_terminal_node,
                       MH.Generator:  self._create_generator_node,
-                      MH.Leaf:  self._create_leaf_node}
+                      MH.Leaf: self._create_leaf_node,
+                      MH.Node: self._update_provided_node}
 
         if contents is None:
             nd = self.__handle_clone(desc, parent_node)
@@ -645,7 +650,10 @@ class ModelHelper(object):
         return nd
 
     def __handle_clone(self, desc, parent_node):
-        name, ident = self._handle_name(desc['name'])
+        if isinstance(desc.get('contents'), Node):
+            name, ident = self._handle_name(desc['contents'].name)
+        else:
+            name, ident = self._handle_name(desc['name'])
 
         exp = desc.get('import_from', None)
         if exp is not None:
@@ -683,6 +691,9 @@ class ModelHelper(object):
             conf = desc['conf']
             node.add_conf(conf)
             n = node
+        elif isinstance(desc['contents'], Node):
+            n = desc['contents']
+            conf = None
         else:
             conf = None
             ref = self._handle_name(desc['name'])
@@ -694,9 +705,16 @@ class ModelHelper(object):
 
     def __post_handling(self, desc, node):
         if not isinstance(node.cc, NodeInternals_Empty):
-            ref = self._handle_name(desc['name'])
+            if isinstance(desc.get('contents'), Node):
+                ref = self._handle_name(desc['contents'].name)
+            else:
+                ref = self._handle_name(desc['name'])
             self.node_dico[ref] = node
 
+    def _update_provided_node(self, desc, node=None):
+        n, conf = self.__pre_handling(desc, node)
+        self._handle_common_attr(n, desc, conf)
+        return n
 
     def _create_generator_node(self, desc, node=None):
 
@@ -759,7 +777,7 @@ class ModelHelper(object):
             # shape!
             w = None
         else:
-            w = cts[0].get('weight')
+            w = cts[0].get('weight', None)
 
         if w is not None:
             # in this case there are multiple shapes, as shape can be
@@ -842,7 +860,7 @@ class ModelHelper(object):
                 _handle_section([section_desc], sh)
 
             # check if it is a section description
-            elif section_desc.get('name') is None:
+            elif section_desc.get('name') is None and not isinstance(section_desc.get('contents'), Node):
                 prev_section_exist = True
                 self._verify_keys_conformity(section_desc)
                 sec_type = section_desc.get('section_type', MH.Ordered)
