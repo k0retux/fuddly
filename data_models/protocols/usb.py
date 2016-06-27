@@ -145,7 +145,7 @@ class USB_DataModel(DataModel):
         interface_desc = \
         {'name': 'Interface',
          'contents': [
-             {'name': ('hdr', 2),
+             {'name': ('Ihdr', 2),
               'contents': [
                   {'name': ('bLength', 2),
                    'contents': UINT8(int_list=[9])},
@@ -156,7 +156,8 @@ class USB_DataModel(DataModel):
                   {'name': 'bAlternateSetting',
                    'contents': UINT8(int_list=[0, 1, 2, 3, 4])},
                   {'name': 'bNumEndpoints',
-                   'contents': UINT8(int_list=[4,1,2,3,5,6,7,8]),
+                   # 'random': True,
+                   'contents': UINT8(mini=1, maxi=8, default=4),
                    'alt': [
                        {'conf': 'MSD',
                         'contents': UINT8(int_list=[2])}
@@ -249,12 +250,12 @@ class USB_DataModel(DataModel):
                   {'conf': 'MSD',
                    'contents': [
                        {'qty': 1,
-                        'contents': intf_node}
+                        'contents': intf_node.get_clone()}
                   ]},
                   {'conf': 'BIGCONF',
                    'contents': [
                        {'qty': 1700,
-                        'contents': intf_node}
+                        'contents': intf_node.get_clone()}
                    ]} ]
               },
          ]}

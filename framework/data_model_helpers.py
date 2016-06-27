@@ -1048,7 +1048,7 @@ class ModelHelper(object):
             sync_with = self.__get_node_from_db(node_ref)
             sync_obj = SyncQtyFromObj(sync_with, base_qty=base_qty)
 
-        if scope == SyncScope.Size:
+        elif scope == SyncScope.Size:
             if isinstance(comp, (tuple,list)):
                 node_ref, base_size = comp
             else:

@@ -29,13 +29,16 @@ following parameters:
 
 ``int_list`` [optional, default value: **None**]
   List of the integers that are considered valid for the node backed
-  by this *Integer object*.
+  by this *Integer object*. The default value is the first element of the list.
 
 ``mini`` [optional, default value: **None**]
   Minimum valid value for the node backed by this *Integer object*.
 
 ``maxi`` [optional, default value: **None**]
   Maximum valid value for the node backed by this *Integer object*.
+
+``default`` [optional, default value: **None**]
+  If ``int_list`` is not provided, this value if provided will be used as the default one.
 
 ``determinist`` [default value: **True**]
   If set to ``True`` generated values will be in a deterministic
@@ -82,7 +85,7 @@ following parameters:
 
 ``val_list`` [optional, default value: **None**]
   List of the character strings that are considered valid for the node
-  backed by this *String object*.
+  backed by this *String object*. The default string is the first element of the list.
 
 ``size`` [optional, default value: **None**]
   Valid character string size for the node backed by this *String
@@ -204,7 +207,8 @@ parameters:
 
 ``subfield_val_lists`` [optional, default value: **None**]
   List of valid values for each sub-fields. Look at the following
-  examples for usage.
+  examples for usage. For each sub-field value list, the first value is the
+  default.
 
 ``subfield_val_extremums`` [optional, default value: **None**]
   List of minimum and maximum value for each sub-fields. Look at the
@@ -245,10 +249,14 @@ parameters:
   to do it at the node level by using the data model keyword ``determinist``
   (refer to :ref:`dm:node_prop_keywords`).
 
+``defaults`` [optional, default value: **None**]
+  List of default value for each sub-field. Used only when the related sub-field is
+  not described through ``subfield_val_lists``. If ``subfield_val_lists`` describes the related
+  sub-field, then a ``None`` item should be inserted at the corresponding position in the list.
 
 ``subfield_descs`` [optional, default value: **None**]
   List of descriptions (character strings) for each sub-field. To
-  describe only part of the sub-fields, put a ``None`` entry for the
+  describe only part of the sub-fields, put a ``None`` item for the
   others. This parameter is used for display purpose. Look at the
   following examples for usage.
 

@@ -939,13 +939,15 @@ class INT(VT):
                           # and that mini is not specified by the user
 
 
-    def __init__(self, int_list=None, mini=None, maxi=None, determinist=True):
+    def __init__(self, int_list=None, mini=None, maxi=None, default=None, determinist=True):
         self.idx = 0
         self.determinist = determinist
         self.exhausted = False
         self.drawn_val = None
+        self.default = None
 
         if int_list:
+            assert default is None
             self.int_list = list(int_list)
             self.int_list_copy = list(self.int_list)
 
@@ -955,10 +957,17 @@ class INT(VT):
 
             if mini is not None and maxi is not None and abs(maxi - mini) < 200:
                 self.int_list = list(range(mini, maxi+1))
-                self.int_list_copy = copy.copy(self.int_list)
-                # we keep that information as it is valuable for fuzzing
+                # we keep min/max information as it may be valuable for fuzzing
                 self.mini = self.mini_gen = mini
                 self.maxi = self.maxi_gen = maxi
+                if default is not None:
+                    assert mini <= default <= maxi
+                    self.int_list.remove(default)
+                    self.int_list.insert(0,default)
+                    # Once inserted at this place, its position is preserved, especially with reset_state()
+                    # (assuming do_absorb() is not called), so we do not save 'default' value in this case
+                self.int_list_copy = copy.copy(self.int_list)
+
             else:
                 self.int_list = None
                 self.int_list_copy = None
@@ -984,7 +993,13 @@ class INT(VT):
                     else:
                         self.maxi = self.maxi_gen = maxi
 
+                if default is not None:
+                    assert self.mini_gen <= default <= self.maxi_gen
+                    self.default = default
+                    self.idx = default - self.mini_gen
+
     def make_private(self, forget_current_state):
+        # no need to copy self.default (that should not be modified)
         if forget_current_state:
             self.int_list_copy = copy.copy(self.int_list)
             self.idx = 0
@@ -1230,7 +1245,10 @@ class INT(VT):
         return struct.pack(self.cformat, val), sz
 
     def reset_state(self):
-        self.idx = 0
+        if self.default is not None:
+            self.idx = self.default - self.mini_gen
+        else:
+            self.idx = 0
         if self.int_list is not None:
             self.int_list_copy = copy.copy(self.int_list)
         self.exhausted = False
@@ -1245,16 +1263,9 @@ class INT(VT):
                 self.idx = val - self.mini
         else:
             raise TypeError
-        # else:
-        #     # in this case we change raw value with something else
-        #     assert(isinstance(val, list))
-        #     self.int_list = val
-        #     self.int_list_copy = copy.copy(self.int_list)
-        #     self.drawn_val = val[0]
 
         self.drawn_val = val
         self.exhausted = False
-        # self.reset_state()
 
     # To be used after calling get_value()
     def is_exhausted(self):
@@ -1406,7 +1417,7 @@ class BitField(VT_Alt):
                       subfield_val_lists=None, subfield_val_extremums=None,
                       padding=0, lsb_padding=True,
                       endian=VT.LittleEndian, determinist=True,
-                      subfield_descs=None):
+                      subfield_descs=None, defaults=None):
 
         self.drawn_val = None
         self.exhausted = False
@@ -1433,9 +1444,11 @@ class BitField(VT_Alt):
         self.idx = None
         self.idx_inuse = None
         self.set_bitfield(sf_val_lists=subfield_val_lists, sf_val_extremums=subfield_val_extremums,
-                          sf_limits=subfield_limits, sf_sizes=subfield_sizes, sf_descs=subfield_descs)
+                          sf_limits=subfield_limits, sf_sizes=subfield_sizes, sf_descs=subfield_descs,
+                          sf_defaults=defaults)
 
     def make_private(self, forget_current_state):
+        # no need to copy self.default (that should not be modified)
         self.subfield_limits = copy.copy(self.subfield_limits)
         self.subfield_sizes = copy.copy(self.subfield_sizes)
         self.subfield_vals = copy.copy(self.subfield_vals)
@@ -1451,6 +1464,10 @@ class BitField(VT_Alt):
 
     def reset_state(self):
         self._reset_idx()
+        for i, default in enumerate(self.subfield_defaults):
+            if default is not None:
+                mini, _ = self.subfield_extrems[i]
+                self.idx[i] = default - mini
         self.drawn_val = None
         self.__count_of_possible_values = None
         self.exhausted = False
@@ -1513,7 +1530,7 @@ class BitField(VT_Alt):
 
         
     def set_bitfield(self, sf_val_lists=None, sf_val_extremums=None, sf_limits=None, sf_sizes=None,
-                     sf_descs=None):
+                     sf_descs=None, sf_defaults=None):
 
         if sf_limits is not None:
             self.subfield_limits = copy.copy(sf_limits)
@@ -1523,25 +1540,28 @@ class BitField(VT_Alt):
                 lim += s
                 self.subfield_limits.append(lim)
         else:
-            raise ValueError
-
+            raise DataModelDefinitionError
 
         if sf_val_lists is None:
             sf_val_lists = [None for i in range(len(self.subfield_limits))]
         elif len(sf_val_lists) != len(self.subfield_limits):
-            raise ValueError
-
+            raise DataModelDefinitionError
 
         if sf_val_extremums is None:
             sf_val_extremums = [None for i in range(len(self.subfield_limits))]
         elif len(sf_val_extremums) != len(self.subfield_limits):
-            raise ValueError
-
+            raise DataModelDefinitionError
 
         if sf_descs is not None:
             assert(len(self.subfield_limits) == len(sf_descs))
             self.subfield_descs = copy.copy(sf_descs)
-            
+
+        if sf_defaults is not None:
+            assert len(sf_defaults) == len(self.subfield_limits)
+            self.subfield_defaults = copy.copy(sf_defaults)
+        else:
+            self.subfield_defaults = [None for i in range(len(self.subfield_limits))]
+
         self.size = self.subfield_limits[-1]
         self.nb_bytes = int(math.ceil(self.size / 8.0))
 
@@ -1552,35 +1572,46 @@ class BitField(VT_Alt):
 
         self._reset_idx()
 
-
         self.subfield_vals = []
         self.subfield_extrems = []
 
         prev_lim = 0
         # provided limits are not included in the subfields
-        for lim, val_list, extrems in zip(self.subfield_limits, sf_val_lists, sf_val_extremums):
+        for idx, lim in enumerate(self.subfield_limits):
+
+            val_list = sf_val_lists[idx]
+            extrems = sf_val_extremums[idx]
+
             size = lim - prev_lim
             self.subfield_sizes.append(size)
 
             if val_list is not None:
+                default = self.subfield_defaults[idx]
+                assert default is None
                 l = []
                 for v in val_list:
                     if self.is_compatible(v, size):
                         l.append(v)
                 self.subfield_vals.append(l)
                 self.subfield_extrems.append(None)
-            elif extrems is not None:
-                mini, maxi = extrems
-                if self.is_compatible(mini, size) and self.is_compatible(maxi, size):
-                    assert(mini != maxi)
-                    self.subfield_extrems.append([mini, maxi])
-                else:
-                    s = '*** ERROR: min({:d}) / max({:d}) values are out of range!'.format(mini, maxi)
-                    raise ValueError(s)
-                self.subfield_vals.append(None)
             else:
-                self.subfield_extrems.append([0, (1 << size) - 1])
-                self.subfield_vals.append(None)
+                if extrems is not None:
+                    mini, maxi = extrems
+                    if self.is_compatible(mini, size) and self.is_compatible(maxi, size):
+                        assert(mini != maxi)
+                        self.subfield_extrems.append([mini, maxi])
+                    else:
+                        s = '*** ERROR: min({:d}) / max({:d}) values are out of range!'.format(mini, maxi)
+                        raise ValueError(s)
+                    self.subfield_vals.append(None)
+                else:
+                    mini, maxi = 0, (1 << size) - 1
+                    self.subfield_extrems.append([mini, maxi])
+                    self.subfield_vals.append(None)
+
+                default = self.subfield_defaults[idx]
+                if default is not None:
+                    self.idx[idx] = default - mini
 
             self.subfield_fuzzy_vals.append(None)
             prev_lim = lim
@@ -1641,7 +1672,8 @@ class BitField(VT_Alt):
         self.subfield_sizes += bitfield.subfield_sizes
         self.subfield_vals += bitfield.subfield_vals
         self.subfield_extrems += bitfield.subfield_extrems
-        
+        self.subfield_defaults += bitfield.subfield_defaults
+
         for l in bitfield.subfield_limits:
             self.subfield_limits.append(self.size + l)
 
@@ -2027,7 +2059,7 @@ class BitField(VT_Alt):
                         if val_list is not None and len(val_list) == 1:
                             cursor = 0
                         else:
-                            if i > self.current_idx:
+                            if i > self.current_idx and self.subfield_defaults[i] is None:
                                 # Note on the use of max(): in the
                                 # case of val_list, idx is always > 1,
                                 # whereas when it is extrems, idx can
