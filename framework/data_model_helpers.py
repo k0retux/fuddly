@@ -510,97 +510,120 @@ class MH(object):
             n.clear_attr(ca)
 
 
+
+
+
 class State(object):
     def run(self, context):
         raise NotImplementedError
 
+
+
+
 class RegexParser(object):
+
+    class PickState(State):
+
+        def run(self, ctx):
+            if ctx.input == '|' and (len(ctx.terminal_nodes) == 0 or
+                                    (len(ctx.terminal_nodes) == 1 and ctx.buffer is None)):
+                ctx.pick = True
+
+            if ctx.pick and ctx.input != '|' or not ctx.pick and ctx.input == '|':
+                raise Exception
+            elif ctx.pick and ctx.input == '|':
+                ctx.append_to_contents("")
+
+                return RegexParser.InitialState
+            else:
+                return RegexParser.InitialState().run(ctx)
+
 
     class InitialState(State):
 
         def run(self, ctx):
 
-            if ctx.input in ('?', '*', '+', '{'):
+            if ctx.input == '|':
+                return RegexParser.PickState().run(ctx)
 
-                # if there is nothing to quantify
-                if len(ctx.buffer) == len(ctx.alphabet) == 0 and len(ctx.contents) == 1:
-                    raise Exception
-
-                # if only one char is quantified
-                if not isinstance(ctx.old_state, (RegexParser.InsideParenthesis, RegexParser.InsideSquareBrackets))\
-                        and len(ctx.contents) > 1:
-                    raise Exception
-                elif not isinstance(ctx.old_state, (RegexParser.InsideParenthesis, RegexParser.InsideSquareBrackets)):
-                    alphabet = ctx.buffer[-1]
-                    ctx.buffer = ctx.buffer[:-1]
-                    ctx.flush()
-                    ctx.alphabet = alphabet
-
-                if ctx.input == '{':
-                    return RegexParser.QtyState
-                elif ctx.input == '+':
-                    ctx.min = 1
-                elif ctx.input == '?':
-                    ctx.max = 1
-
-                if ctx.min is None:
-                    ctx.min = 0
-
-                # flush the buffer only
+            if ctx.input == '(':
+                if ctx.buffer is not None and len(ctx.buffer) == 0:
+                    ctx.contents = ctx.contents[:-1]
+                if ctx.contents is not None and len(ctx.contents) == 0:
+                    ctx.contents = None
                 ctx.flush()
+                ctx.append_to_contents("")
+                return RegexParser.InsideParenthesis
+
+            elif ctx.input == '[':
+                if ctx.buffer is not None and len(ctx.buffer) == 0:
+                    ctx.contents = ctx.contents[:-1]
+
+                if ctx.contents is not None and len(ctx.contents) == 0:
+                    ctx.contents = None
+                ctx.flush()
+                ctx.append_to_alphabet("")
+                return RegexParser.InsideSquareBrackets
+
+            elif ctx.input in ('?', '*', '+', '{', '}', ')', ']'):
+                raise Exception
+
+            elif ctx.input == '\\':
+                return RegexParser.Escaping
 
             else:
+                ctx.append_to_buffer(ctx.input)
 
-                if isinstance(ctx.old_state, (RegexParser.QtyState, RegexParser.InsideSquareBrackets)):
-                    # flush the buffer only
-                    ctx.flush()
-
-                if ctx.input == '|':
-                    # no terminal_node because | has priority
-                    if len(ctx.terminal_nodes) > 0:
-                        raise Exception
-
-                    ctx.contents.append("")
-
-                else:
-
-                    if isinstance(ctx.old_state, RegexParser.InsideParenthesis):
-                        ctx.flush()
-
-                    if ctx.input == '}':
-                        raise Exception
-                    elif ctx.input == ')':
-                        raise Exception
-
-                    elif ctx.input == ']':
-                        raise Exception
-
-                    elif ctx.input == '(':
-                        if len(ctx.buffer) > 0 and len(ctx.contents) > 1:
-                            raise Exception
-
-                        if len(ctx.contents) == 1 and len(ctx.contents[0]) > 0:
-                            ctx.flush()
-                        return RegexParser.InsideParenthesis
-
-                    elif ctx.input == '[':
-                        if len(ctx.contents) > 1:
-                            raise Exception
-
-                        if len(ctx.contents) == 1 and len(ctx.contents[0]) > 0:
-                            ctx.flush()
-                        return RegexParser.InsideSquareBrackets
-
-                    elif ctx.input == '\\':
-                        return RegexParser.Escaping
-
-                    else:
-                        ctx.buffer += ctx.input
-
-            return self.__class__
+            return RegexParser.QtyState
 
 
     class QtyState(State):
+
+        def run(self, ctx):
+
+            if ctx.input not in ('?', '*', '+', '{'):
+
+                # cases: (...) & [...] without any quantifier
+                if isinstance(ctx.old_state, (RegexParser.InsideParenthesis, RegexParser.InsideSquareBrackets)):
+                    ctx.flush()
+
+                return RegexParser.InitialState().run(ctx)
+
+            if not isinstance(ctx.old_state, (RegexParser.InsideParenthesis, RegexParser.InsideSquareBrackets)):
+
+                if ctx.pick and len(ctx.contents) > 1 and len(ctx.buffer) > 1:
+                    raise Exception
+
+                if len(ctx.buffer) == 1:
+                    if len(ctx.contents) > 1:
+                        content = ctx.buffer
+                        ctx.contents = ctx.contents[:-1]
+                        ctx.flush()
+                        ctx.append_to_buffer(content)
+
+                else: # len(ctx.buffer) > 1
+                    content = ctx.buffer[-1]
+                    ctx.buffer = ctx.buffer[:-1]
+                    ctx.flush()
+                    ctx.append_to_buffer(content)
+
+            if ctx.input == '{':
+                return RegexParser.InsideBrackets
+            elif ctx.input == '+':
+                ctx.min = 1
+            elif ctx.input == '?':
+                ctx.max = 1
+
+            if ctx.min is None:
+                ctx.min = 0
+
+            # flush the buffer only
+            ctx.flush()
+
+            return RegexParser.PickState
+
+
+    class InsideBrackets(State):
 
         def __init__(self):
             pass
@@ -627,10 +650,11 @@ class RegexParser(object):
                 else:
                     ctx.max = int(ctx.max)
 
-                if ctx.max is not None and (ctx.min > ctx.max or ctx.min == ctx.max == 0):
+                if ctx.max is not None and ctx.min > ctx.max:
                     raise Exception
 
-                return RegexParser.InitialState
+                ctx.flush()
+                return RegexParser.PickState
             elif ctx.input.isspace():
                 pass
             else:
@@ -648,42 +672,50 @@ class RegexParser(object):
     class InsideParenthesis(State):
 
         def run(self, ctx):
+
             if ctx.input in ('(', '[', ']', '?', '*', '+', '{', '}'):
                 raise Exception
             elif ctx.input == ')':
-                return RegexParser.InitialState
+                return RegexParser.QtyState
             elif ctx.input == '\\':
                 return RegexParser.Escaping
             elif ctx.input == '|':
-                ctx.contents.append("")
+                ctx.append_to_contents("")
             else:
-                ctx.buffer += ctx.input
+                ctx.append_to_buffer(ctx.input)
 
             return self.__class__
 
     class InsideSquareBrackets(State):
 
-        def run(self, context):
-            if context.input in ('[', '(', ')', '?', '*', '+', '{', '}'):
-                raise Exception
-            elif context.input == ']':
-                return RegexParser.InitialState
-            elif context.input == '\\':
+        def run(self, ctx):
+
+            if ctx.input == ']':
+                return RegexParser.QtyState
+            elif ctx.input == '\\':
                 return RegexParser.Escaping
+            elif ctx.input in ('[', '(', ')', '?', '*', '+', '{', '}'):
+                raise Exception
             else:
-                context.alphabet += context.input
+                ctx.append_to_alphabet(ctx.input)
 
             return self.__class__
+
+
 
 
     def __init__(self):
         self.current_state = RegexParser.InitialState() # last ended state
         self.old_state = self.current_state
 
+        self.state = []
+
         self._name = None
         self._input = None
-        self._contents = [""]
-        self._alphabet = ""
+        self.contents = [""]
+        self.alphabet = None
+
+        self.pick = False  # pick context ?
 
         self.min = None
         self.max = None
@@ -695,25 +727,31 @@ class RegexParser(object):
     def input(self):
         return self._input
 
+    def append_to_contents(self, content):
+        if self.contents is None:
+            self.contents = []
+        self.contents.append(content)
+
+    def append_to_buffer(self, str):
+        if self.contents is None:
+            self.contents = [""]
+        self.contents[-1] += str
+
+    def append_to_alphabet(self, alphabet):
+        if self.alphabet is None:
+            self.alphabet = ""
+        self.alphabet += alphabet
+
     @property
     def buffer(self):
-        return self._contents[-1]
+        return None if self.contents is None else self.contents[-1]
 
     @buffer.setter
     def buffer(self, buffer):
-        self._contents[-1] = buffer
+        if self.contents is None:
+            self.contents = [""]
+        self.contents[-1] = buffer
 
-    @property
-    def contents(self):
-        return self._contents
-
-    @property
-    def alphabet(self):
-        return self._alphabet
-
-    @alphabet.setter
-    def alphabet(self, alphabet):
-        self._alphabet = alphabet
 
     @property
     def terminal_nodes(self):
@@ -721,56 +759,44 @@ class RegexParser(object):
 
     def flush(self):
 
+        if self.contents is None and self.alphabet is None:
+            return
+
         if self.min is None and self.max is None:
             self.min = self.max = 1
-
-        # print "buffer: " + self._buffer
-        # print "alphabet: " + self._alphabet
-        # print
-        # print
 
         # type = fvt.INT_str if all(content.isdigit() for content in self.contents) else fvt.String
         type = fvt.String
         name = self._name + str(len(self._terminal_nodes) + 1)
 
-        if len(self.alphabet) > 0:
-            contents = None
-            alphabet = self._alphabet
-        else:
-            if all(len(content) == 1 for content in self.contents):
-                alphabet = "".join(self.contents)
-                contents = None
-            else:
-                contents = self.contents
-                alphabet = None
 
-
-        terminal_node = self._create_terminal_node(name, type, contents=contents, alphabet=alphabet,
+        terminal_node = self._create_terminal_node(name, type, contents=self.contents, alphabet=self.alphabet,
                                                    qty=(self.min, self.max))
         self._terminal_nodes.append(terminal_node)
         self.reset()
 
 
     def reset(self):
-        self._contents = [""]
-        self._alphabet = ""
+        self.contents = None
+        self.alphabet = None
         self.min = None
         self.max = None
 
     def run(self, inputs, name):
 
         self._name = name
-
         for self._input in inputs:
             next_state_class = self.current_state.run(self)
             self.old_state = self.current_state
             self.current_state = next_state_class()
 
-        if not isinstance(self.current_state, RegexParser.InitialState):
+        if isinstance(self.current_state, (RegexParser.InsideParenthesis, RegexParser.InsideSquareBrackets)):
             raise Exception
 
-        if len(self._contents[0]) > 0 or len(self._contents) > 1 or len(self._alphabet) > 0 or inputs == "":
-            self.flush()
+        if inputs == "":
+            self.append_to_buffer("")
+
+        self.flush()
 
         return self._terminal_nodes
 
