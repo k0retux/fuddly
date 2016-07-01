@@ -62,6 +62,7 @@ def wait_for_padi(env, current_step, next_step, feedback):
 
 step_wait_padi = NoDataStep(fbk_timeout=2)
 step_send_pado = Step(DataProcess(process=['tTYPE'], seed='pado'))
+# step_send_pado = Step('pado')
 step_end = Step('padt')
 
 step_wait_padi.connect_to(step_send_pado, cbk_after_fbk=wait_for_padi)

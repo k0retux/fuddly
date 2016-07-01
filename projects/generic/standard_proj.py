@@ -60,7 +60,7 @@ netsrv_tg = NetworkTarget(host='localhost', port=12345, hold_connection=True, se
 ETH_P_ALL = 3
 rawnetsrv_tg = NetworkTarget(host='eth0', port=ETH_P_ALL,
                              socket_type=(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL)),
-                             hold_connection=True, server_mode=True)
+                             hold_connection=True, server_mode=False)
 
 targets = [local_tg,
            local2_tg,

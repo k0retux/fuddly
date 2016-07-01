@@ -1495,6 +1495,7 @@ class FmkPlumbing(object):
 
         self.fmkDB.cleanup_current_state()
 
+        user_interrupt = False
         go_on = True
         if self._burst_countdown == self._burst:
             # log residual just before sending new data to avoid
@@ -1504,7 +1505,8 @@ class FmkPlumbing(object):
                 self.set_feedback_timeout(0, do_show=False)
 
             if self.tg.collect_feedback_without_sending():
-                self.check_target_readiness()  # this call enable to wait for feedback timeout
+                ret = self.check_target_readiness()  # this call enable to wait for feedback timeout
+                user_interrupt = ret == -2
             go_on = self.log_target_residual_feedback()
 
             if not blocked_data:
@@ -1516,7 +1518,9 @@ class FmkPlumbing(object):
         if blocked_data:
             self._handle_data_callbacks(blocked_data, hook=HOOK.after_fbk)
 
-        if go_on:
+        if user_interrupt:
+            raise UserInterruption
+        elif go_on:
             return data_list
         else:
             raise TargetFeedbackError
@@ -1690,7 +1694,7 @@ class FmkPlumbing(object):
 
         try:
             data_list = self._do_sending_and_logging_init(data_list)
-        except TargetFeedbackError:
+        except (TargetFeedbackError, UserInterruption):
             return False
 
         if not data_list:

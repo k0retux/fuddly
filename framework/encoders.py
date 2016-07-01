@@ -86,7 +86,10 @@ class Encoder(object):
             else:
                 new_val = val
         elif sys.version_info[0] == 2 and isinstance(val, unicode):
-            new_val = val.encode('latin_1')
+            try:
+                new_val = val.encode('latin_1')
+            except UnicodeEncodeError:
+                new_val = val.encode('utf8')
         elif isinstance(val, (tuple, list)):
             new_val = []
             for v in val:

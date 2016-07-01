@@ -144,6 +144,7 @@ class PPPOE_DataModel(DataModel):
                                    subfield_val_lists=[[1],[1]],
                                    subfield_descs=['type','version'])},
              {'name': 'code',
+              'mutable': False,
               'contents': UINT8(int_list=[0x9,0x7,0x19,0x65,0xa7]),
               'absorb_csts': AbsFullCsts()},
              {'name': 'session_id',
@@ -224,6 +225,7 @@ class PPPOE_DataModel(DataModel):
 
         pado = pppoe_msg.get_clone('pado')
         pado['.*/code'].set_values(value_type=UINT8(int_list=[0x7]))
+        pado['.*/code'].clear_attr(MH.Attr.Mutable)
 
         padr = pppoe_msg.get_clone('padr')
         padr['.*/code'].set_values(value_type=UINT8(int_list=[0x19]))
