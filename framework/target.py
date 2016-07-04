@@ -796,7 +796,20 @@ class NetworkTarget(Target):
 
     def _connect_to_target(self, host, port, socket_type):
         if self.hold_connection[(host, port)] and (host, port) in self._hclient_hp2sock.keys():
-            return self._hclient_hp2sock[(host, port)]
+            try:
+                fd = self._hclient_hp2sock[(host, port)].fileno()
+                if fd == -1:
+                    # if the socket has been closed, -1 is received by python3
+                    # (with python2 previous instruction raise a Bad file descriptor Exception)
+                    raise OSError
+            except Exception:
+                print('\n*** WARNING: Current socket was closed unexpectedly! --> create new one.')
+                # we remove the bad references then go on with the rest of the function
+                with self.socket_desc_lock:
+                    del self._hclient_sock2hp[self._hclient_hp2sock[(host, port)]]
+                    del self._hclient_hp2sock[(host, port)]
+            else:
+                return self._hclient_hp2sock[(host, port)]
 
         skt_sz = len(socket_type)
         if skt_sz == 2:
@@ -991,28 +1004,28 @@ class NetworkTarget(Target):
                 print('\n*** ERROR(check obsolete socket): ' + str(serr))
 
             self._server_thread_lock.acquire()
-            if socket in self._last_client_sock2hp.keys():
+            if skt in self._last_client_sock2hp.keys():
                 if error is not None:
-                    error_list.append((fbk_ids[socket], error))
-                host, port = self._last_client_sock2hp[socket]
-                del self._last_client_sock2hp[socket]
+                    error_list.append((fbk_ids[skt], error))
+                host, port = self._last_client_sock2hp[skt]
+                del self._last_client_sock2hp[skt]
                 del self._last_client_hp2sock[(host, port)]
                 self._server_thread_lock.release()
             else:
                 self._server_thread_lock.release()
                 with self.socket_desc_lock:
-                    if socket in self._hclient_sock2hp.keys():
+                    if skt in self._hclient_sock2hp.keys():
                         if error is not None:
-                            error_list.append((fbk_ids[socket], error))
-                        host, port = self._hclient_sock2hp[socket]
-                        del self._hclient_sock2hp[socket]
+                            error_list.append((fbk_ids[skt], error))
+                        host, port = self._hclient_sock2hp[skt]
+                        del self._hclient_sock2hp[skt]
                         del self._hclient_hp2sock[(host, port)]
-                    if socket in self._additional_fbk_sockets:
+                    if skt in self._additional_fbk_sockets:
                         if error is not None:
-                            error_list.append((self._additional_fbk_ids[socket], error))
-                        self._additional_fbk_sockets.remove(socket)
-                        del self._additional_fbk_ids[socket]
-                        del self._additional_fbk_lengths[socket]
+                            error_list.append((self._additional_fbk_ids[skt], error))
+                        self._additional_fbk_sockets.remove(skt)
+                        del self._additional_fbk_ids[skt]
+                        del self._additional_fbk_lengths[skt]
 
         chunks = collections.OrderedDict()
         t0 = datetime.datetime.now()
