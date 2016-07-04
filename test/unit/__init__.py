@@ -24,5 +24,5 @@
 __all__ = []
 
 from test.unit.test_data_model import *
-from test.unit.test_data_model_helper import *
+from test.unit.test_data_model_helpers import *
 from test.unit.test_monitor import *
