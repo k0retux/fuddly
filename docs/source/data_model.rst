@@ -895,6 +895,11 @@ post_freeze
   called just after the node has been frozen. It takes the node
   internals as argument (:class:`framework.data_model.NodeInternals`).
 
+specific_fuzzy_vals
+  Usable for *typed-nodes* only. This keyword allows to specify a list of additional values to
+  be leveraged by the *disruptor* ``tTYPE`` (:ref:`dis:ttype`) while dealing with the related node.
+  These additional values are added to the test cases planned by the *disruptor* (if not already
+  planned).
 
 .. _dm:patterns:
 

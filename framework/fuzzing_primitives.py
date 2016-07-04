@@ -915,7 +915,8 @@ class TypedNodeDisruption(NodeConsumerStub):
 
             if specific_fuzzy_vals is not None:
                 for v in specific_fuzzy_vals:
-                    supp_list.append(v)
+                    if v not in supp_list:
+                        supp_list.append(v)
 
             fuzzy_vt_obj = None
             for o in flist:

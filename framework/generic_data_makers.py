@@ -117,7 +117,7 @@ class sd_iter_over_data(StatefulDisruptor):
                           'will reset its walk through the children nodes', True, bool)})
 class sd_fuzz_typed_nodes(StatefulDisruptor):
     '''
-    Perform alterations on typed nodes (one at a time) accordingly to
+    Perform alterations on typed nodes (one at a time) according to
     its type and various complementary information (such as size,
     allowed values, ...).
     '''

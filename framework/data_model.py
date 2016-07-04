@@ -1202,41 +1202,32 @@ class NodeInternals(object):
 
 
     def match(self, internals_criteria):
-        c1 = self._match_mandatory_attrs(internals_criteria.mandatory_attrs)
-        if not c1:
+        if not self._match_mandatory_attrs(internals_criteria.mandatory_attrs):
             return False
 
-        c2 = self._match_negative_attrs(internals_criteria.negative_attrs)
-        if not c2:
+        if not self._match_negative_attrs(internals_criteria.negative_attrs):
             return False
 
-        c3 = self._match_mandatory_custo(internals_criteria.mandatory_custo)
-        if not c3:
+        if not self._match_mandatory_custo(internals_criteria.mandatory_custo):
             return False
 
-        c4 = self._match_negative_custo(internals_criteria.negative_custo)
-        if not c4:
+        if not self._match_negative_custo(internals_criteria.negative_custo):
             return False
 
-        c5 = self._match_node_kinds(internals_criteria.node_kinds)
-        if not c5:
+        if not self._match_node_kinds(internals_criteria.node_kinds):
             return False
 
-        c6 = self._match_negative_node_kinds(internals_criteria.negative_node_kinds)
-        if not c6:
+        if not self._match_negative_node_kinds(internals_criteria.negative_node_kinds):
             return False
 
-        c7 = self._match_node_subkinds(internals_criteria.node_subkinds)
-        if not c7:
+        if not self._match_node_subkinds(internals_criteria.node_subkinds):
             return False
 
-        c8 = self._match_negative_node_subkinds(internals_criteria.negative_node_subkinds)
-        if not c8:
+        if not self._match_negative_node_subkinds(internals_criteria.negative_node_subkinds):
             return False
 
         if internals_criteria.has_node_constraints():
-            c9 = self._match_node_constraints(internals_criteria.get_all_node_constraints())
-            if not c9:
+            if not self._match_node_constraints(internals_criteria.get_all_node_constraints()):
                 return False
 
         return True
@@ -5267,6 +5258,10 @@ class Node(object):
 
     c = property(fget=__get_internals)
     '''Property linked to `self.internals` (read only)'''
+
+    def conf(self, conf=None):
+        conf = self.__check_conf(conf)
+        return self.internals[conf]
     
     def get_internals_backup(self):
         return Node(self.name, base_node=self, ignore_frozen_state=False,

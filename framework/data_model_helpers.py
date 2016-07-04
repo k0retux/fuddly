@@ -72,7 +72,7 @@ class MH(object):
     Generator = 2
     Leaf = 3
 
-    Node = 4  # if a Node() is provided
+    RawNode = 4  # if a Node() is provided
 
     ##################################
     ### Non-Terminal Node Specific ###
@@ -527,6 +527,8 @@ class ModelHelper(object):
         'encoder',
         # Generator/Function description keys
         'node_args', 'other_args', 'provide_helpers', 'trigger_last',
+        # Typed-node description keys
+        'specific_fuzzy_vals',
         # Import description keys
         'import_from', 'data_id',        
         # node properties description keys
@@ -610,8 +612,8 @@ class ModelHelper(object):
             pre_ntype = top_desc.get('type', None)
             if isinstance(contents, list) and pre_ntype in [None, MH.NonTerminal]:
                 ntype = MH.NonTerminal
-            elif isinstance(contents, Node) and pre_ntype in [None, MH.Node]:
-                ntype = MH.Node
+            elif isinstance(contents, Node) and pre_ntype in [None, MH.RawNode]:
+                ntype = MH.RawNode
             elif hasattr(contents, '__call__') and pre_ntype in [None, MH.Generator]:
                 ntype = MH.Generator
             else:
@@ -624,7 +626,7 @@ class ModelHelper(object):
         dispatcher = {MH.NonTerminal: self._create_non_terminal_node,
                       MH.Generator:  self._create_generator_node,
                       MH.Leaf: self._create_leaf_node,
-                      MH.Node: self._update_provided_node}
+                      MH.RawNode: self._update_provided_node}
 
         if contents is None:
             nd = self.__handle_clone(desc, parent_node)
@@ -919,6 +921,11 @@ class ModelHelper(object):
         return n
 
     def _handle_common_attr(self, node, desc, conf):
+        vals = desc.get('specific_fuzzy_vals', None)
+        if vals is not None:
+            if not node.is_typed_value(conf=conf):
+                raise DataModelDefinitionError("'specific_fuzzy_vals' is only usable with Typed-nodes")
+            node.conf(conf).set_specific_fuzzy_values(vals)
         param = desc.get('mutable', None)
         if param is not None:
             if param:

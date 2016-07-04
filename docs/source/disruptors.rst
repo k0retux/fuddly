@@ -406,11 +406,13 @@ Parameters:
 	 |      | default: False [type: bool]
 
 
+.. _dis:ttype:
+
 tTYPE - Advanced Alteration of Terminal Typed Node
 --------------------------------------------------
 
 Description:
-  Perform alterations on typed nodes (one at a time) accordingly to
+  Perform alterations on typed nodes (one at a time) according to
   its type and various complementary information (such as size,
   allowed values, ...).
 

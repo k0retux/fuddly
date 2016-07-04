@@ -1864,7 +1864,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of imgs: %d'%idx, rgb=Color.INFO))
 
-        self.assertEqual(idx, 115)
+        self.assertEqual(idx, 116)
 
 
     def test_USB(self):
