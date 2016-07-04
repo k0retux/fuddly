@@ -4884,6 +4884,8 @@ class Node(object):
            will be copied. Otherwise, the same will be used.
         '''
 
+        assert '/' not in name  # '/' is a reserved character
+
         self.internals = {}
         self.name = name
         self.env = None

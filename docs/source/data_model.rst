@@ -399,6 +399,7 @@ name
 
   These names serve as *node references* during data description.
 
+  .. note:: The character ``/`` is reserved and shall not be used in a *name*.
 
 contents
   Every node description has at least a ``name`` and a ``contents``
@@ -412,6 +413,11 @@ contents
     terminal node
   - a python ``function`` (or everything with a ``__call__`` method)
     will be considered as a generator.
+  - a :class:`framework.data_model.Node` will be used as a baseline for
+    the description. If no additional keyword is provided, the provided node
+    will be used as is. Otherwise, the additional keywords will be used to complement the
+    description. Note that the *keyword* ``name`` should not be provided as it will be
+    picked from the provided node.
 
   Note that for defining a *function node* and not a generator node,
   you have to state the type attribute to ``MH.Leaf``.
