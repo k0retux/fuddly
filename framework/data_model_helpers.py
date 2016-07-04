@@ -71,6 +71,7 @@ class MH(object):
     NonTerminal = 1
     Generator = 2
     Leaf = 3
+    Regex = 5
 
     RawNode = 4  # if a Node() is provided
 
@@ -798,11 +799,37 @@ class RegexParser(object):
 
         self.flush()
 
-        return self._terminal_nodes
+        return self._create_non_terminal_node()
 
 
     def _create_terminal_node(self, name, type, contents=None, alphabet=None, qty=None):
-        return Node(name=name, vt=fvt.String(val_list=contents))
+
+        assert(contents is not None or alphabet is not None)
+
+        if alphabet is not None:
+            return [Node(name=name,
+                         vt=fvt.String(alphabet=alphabet,
+                                       min_sz=-1 if qty[0] is None else qty[0],
+                                       max_sz=-1 if qty[1] is None else qty[1])),
+                    1, 1]
+        else:
+            return [Node(name=name, vt=fvt.String(val_list=contents)),
+                    -1 if qty[0] is None else qty[0],
+                    -1 if qty[1] is None else qty[1]]
+
+    def _create_non_terminal_node(self):
+        non_terminal = [1, [MH.Copy + MH.Ordered]]
+        formatted_terminal = non_terminal[1]
+
+        for terminal in self.terminal_nodes:
+            formatted_terminal.append(terminal)
+            if self.pick:
+                non_terminal.append(1)
+                formatted_terminal = [MH.Copy + MH.Ordered]
+                non_terminal.append(formatted_terminal)
+
+        return non_terminal
+
 
 
 class ModelHelper(object):
@@ -913,6 +940,8 @@ class ModelHelper(object):
                 ntype = MH.RawNode
             elif hasattr(contents, '__call__') and pre_ntype in [None, MH.Generator]:
                 ntype = MH.Generator
+            elif isinstance(contents, str) and pre_ntype in [None, MH.Regex]:
+                ntype = MH.Regex
             else:
                 ntype = MH.Leaf
             return ntype
@@ -921,6 +950,7 @@ class ModelHelper(object):
 
         contents = desc.get('contents', None)
         dispatcher = {MH.NonTerminal: self._create_non_terminal_node,
+                      MH.Regex: self._create_non_terminal_node_from_regex,
                       MH.Generator:  self._create_generator_node,
                       MH.Leaf: self._create_leaf_node,
                       MH.RawNode: self._update_provided_node}
@@ -1039,6 +1069,31 @@ class ModelHelper(object):
             raise ValueError("*** ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
         self._handle_custo(n, desc, conf)
+        self._handle_common_attr(n, desc, conf)
+
+        return n
+
+
+    def _create_non_terminal_node_from_regex(self, desc, node=None):
+
+        n, conf = self.__pre_handling(desc, node)
+
+        name =  desc.get('name')
+        regexp =  desc.get('contents')
+        assert isinstance(regexp, str)
+
+        parser = RegexParser()
+        non_terminal_node = parser.run(regexp, name)
+        n.set_subnodes_with_csts(non_terminal_node, conf=conf)
+
+        custo_set = desc.get('custo_set', None)
+        custo_clear = desc.get('custo_clear', None)
+
+        if custo_set or custo_clear:
+            custo = NonTermCusto(items_to_set=custo_set, items_to_clear=custo_clear)
+            internals = n.cc if conf is None else n.c[conf]
+            internals.customize(custo)
+
         self._handle_common_attr(n, desc, conf)
 
         return n

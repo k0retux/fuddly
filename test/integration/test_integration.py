@@ -3126,6 +3126,38 @@ class TestDataModel(unittest.TestCase):
             self.assertEqual(zip_buff, orig_buff, msg=err_msg)
 
 
+class TestDataModelHelpers(unittest.TestCase):
+
+    def test_regex(self):
+        HTTP_version_classic = \
+            {'name': 'HTTP_version_classic',
+             'contents': [
+                 {'name': 'HTTP_name', 'contents': String(val_list=["HTTP"])},
+                 {'name': 'slash', 'contents': String(val_list=["/"])},
+                 {'name': 'major_version_digit', 'contents': String(size=1, val_list=["0", "1", "2", "3", "4",
+                                                                                      "5", "6", "7", "8", "9"])},
+
+                 {'name': '.', 'contents': String(val_list=["."])},
+                 {'name': 'minor_version_digit', 'clone': 'major_version_digit'},
+             ]}
+
+        HTTP_version_regex = \
+            {'name': 'HTTP_version_regex', 'contents': "(HTTP)(/)(0|1|2|3|4|5|6|7|8|9)(.)(0|1|2|3|4|5|6|7|8|9)"}
+
+        mh = ModelHelper()
+        node_classic = mh.create_graph_from_desc(HTTP_version_classic)
+        node_classic.make_determinist(recursive=True)
+
+        mh = ModelHelper()
+        node_regex = mh.create_graph_from_desc(HTTP_version_regex)
+        node_regex.make_determinist(recursive=True)
+
+        node_regex.show()
+        node_classic.show()
+
+        self.assertEqual(node_regex.to_bytes(), node_classic.to_bytes())
+
+
 class TestFMK(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
