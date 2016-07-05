@@ -491,6 +491,17 @@ custo_set, custo_clear
     of the node, meaning that it will be the exact copy of the original one at
     the time of the copy. If disabled, the instantiation process will ignore the frozen
     state, and thus will release all the constraints.
+
+    .. note::
+		Note that if the node is not frozen
+		at the time of the copy, this customization won't have any effect. The main interest is
+		in conjunction with the *disruptors* (like ``tTYPE``, ``tWALK``, ...) which are based on the
+		``ModelWalker`` infrastructure  (refer to :ref:`tuto:modelwalker`). Indeed, this infrastructure
+		releases constraints on non-terminal nodes before providing a new model instance. Releasing
+		constraints triggers child nodes reconstruction for each non-terminal. And as the terminal
+		children will be frozen at that time, the reconstruction will take into account this
+		customization mode.
+
   - ``MH.Custo.NTerm.CollapsePadding``: By default, this mode is *disabled*.
     When enabled, every time two adjacent BitFields (within its scope) are found, they
     will be merged in order to remove any padding in between. This is done

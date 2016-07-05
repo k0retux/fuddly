@@ -422,6 +422,13 @@ class String(VT_Alt):
             if self.encoded_string:
                 self.encoding_arg = copy.copy(self.encoding_arg)
 
+    def make_determinist(self):
+        self.determinist = True
+
+    def make_random(self):
+        if not self._fuzzy_mode:
+            self.determinist = False
+
     def absorb_auto_helper(self, blob, constraints):
         off = 0
         size = self.max_encoded_sz

@@ -1549,9 +1549,9 @@ second data model instance ``data_abs`` and will call its
 
 The following tuple will be returned::
 
-  (4, 0, 102, 'TestNode')  # --> (status, offset, size, name)
+  (<AbsorbStatus.FullyAbsorbed: 4>, 0, 102, 'TestNode')  # --> (status, offset, size, name)
 
-The *status* is ``4`` which means that everything went well, that is,
+The *status* is ``<AbsorbStatus.FullyAbsorbed: 4>`` which means that everything went well, that is,
 all the provided data has been absorbed. The *offset* and *size* give
 the part of the data that has been absorbed. In our case, it maps the
 full length of the original data, namely ``102`` bytes.

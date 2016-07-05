@@ -582,13 +582,15 @@ class ModelHelper(object):
 
         if self._add_env_to_the_node:
             self._register_todo(n, self._set_env, prio=self.LOW_PRIO)
-        self._create_todo_list()
 
-        for node, func, args, unpack_args in self.todo:
-            if isinstance(args, tuple) and unpack_args:
-                func(node, *args)
-            else:
-                func(node, args)
+        todo = self._create_todo_list()
+        while todo:
+            for node, func, args, unpack_args in todo:
+                if isinstance(args, tuple) and unpack_args:
+                    func(node, *args)
+                else:
+                    func(node, args)
+            todo = self._create_todo_list()
 
         return n
 
@@ -671,7 +673,7 @@ class ModelHelper(object):
         clone_ref = desc.get('clone', None)
         if clone_ref is not None:
             ref = self._handle_name(clone_ref)
-            self._register_todo(nd, self._clone_from_dict, args=ref, unpack_args=False,
+            self._register_todo(nd, self._clone_from_dict, args=(ref, desc),
                                 prio=self.MEDIUM_PRIO)
             self.node_dico[(name, ident)] = nd
         else:
@@ -715,6 +717,7 @@ class ModelHelper(object):
 
     def _update_provided_node(self, desc, node=None):
         n, conf = self.__pre_handling(desc, node)
+        self._handle_custo(n, desc, conf)
         self._handle_common_attr(n, desc, conf)
         return n
 
@@ -740,25 +743,7 @@ class ModelHelper(object):
         else:
             raise ValueError("*** ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
-        custo_set = desc.get('custo_set', [])
-        custo_clear = desc.get('custo_clear', [])
-
-        trig_last = desc.get('trigger_last', None)
-        if trig_last is not None:
-            if trig_last:
-                if not isinstance(custo_set, list):
-                    custo_set = [custo_set]
-                custo_set.append(MH.Custo.Gen.TriggerLast)
-            else:
-                if not isinstance(custo_clear, list):
-                    custo_clear = [custo_clear]
-                custo_clear.append(MH.Custo.Gen.TriggerLast)
-
-        if custo_set or custo_clear:
-            custo = GenFuncCusto(items_to_set=custo_set, items_to_clear=custo_clear)
-            internals = n.cc if conf is None else n.c[conf]
-            internals.customize(custo)
-
+        self._handle_custo(n, desc, conf)
         self._handle_common_attr(n, desc, conf)
 
         return n
@@ -801,13 +786,7 @@ class ModelHelper(object):
 
         n.set_subnodes_with_csts(shapes, conf=conf)
 
-        custo_set = desc.get('custo_set', None)
-        custo_clear = desc.get('custo_clear', None)
-
-        if custo_set or custo_clear:
-            custo = NonTermCusto(items_to_set=custo_set, items_to_clear=custo_clear)
-            internals = n.cc if conf is None else n.c[conf]
-            internals.customize(custo)
+        self._handle_custo(n, desc, conf)
 
         sep_desc = desc.get('separator', None)
         if sep_desc is not None:
@@ -908,17 +887,50 @@ class ModelHelper(object):
         else:
             raise ValueError("ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
-        custo_set = desc.get('custo_set', None)
-        custo_clear = desc.get('custo_clear', None)
-
-        if custo_set or custo_clear:
-            custo = FuncCusto(items_to_set=custo_set, items_to_clear=custo_clear)
-            internals = n.cc if conf is None else n.c[conf]
-            internals.customize(custo)
-
+        self._handle_custo(n, desc, conf)
         self._handle_common_attr(n, desc, conf)
 
         return n
+
+    def _handle_custo(self, node, desc, conf):
+        custo_set = desc.get('custo_set', None)
+        custo_clear = desc.get('custo_clear', None)
+
+        if node.is_genfunc(conf=conf):
+            Custo = GenFuncCusto
+            trig_last = desc.get('trigger_last', None)
+            if trig_last is not None:
+                if trig_last:
+                    if custo_set is None:
+                        custo_set = []
+                    elif not isinstance(custo_set, list):
+                        custo_set = [custo_set]
+                    custo_set.append(MH.Custo.Gen.TriggerLast)
+                else:
+                    if custo_clear is None:
+                        custo_clear = []
+                    elif not isinstance(custo_clear, list):
+                        custo_clear = [custo_clear]
+                    custo_clear.append(MH.Custo.Gen.TriggerLast)
+
+        elif node.is_nonterm(conf=conf):
+            Custo = NonTermCusto
+
+        elif node.is_func(conf=conf):
+            Custo = FuncCusto
+
+        else:
+            if custo_set or custo_clear:
+                raise DataModelDefinitionError('Customization is not compatible with this '
+                                               'node kind! [Guilty Node: {:s}]'.format(node.name))
+            else:
+                return
+
+        if custo_set or custo_clear:
+            custo = Custo(items_to_set=custo_set, items_to_clear=custo_clear)
+            internals = node.conf(conf)
+            internals.customize(custo)
+
 
     def _handle_common_attr(self, node, desc, conf):
         vals = desc.get('specific_fuzzy_vals', None)
@@ -1025,19 +1037,23 @@ class ModelHelper(object):
         self.sorted_todo[prio].insert(0, (node, func, args, unpack_args))
 
     def _create_todo_list(self):
-        self.todo = []
+        todo = []
         tdl = sorted(self.sorted_todo.items(), key=lambda x: x[0])
+        self.sorted_todo = {}
         for prio, sub_tdl in tdl:
-            self.todo += sub_tdl
+            todo += sub_tdl
+        return todo
 
     # Should be called at the last time to avoid side effects (e.g.,
     # when creating generator/function nodes, the node arguments are
     # provided at a later time. If set_contents()---which copy nodes---is called
     # in-between, node arguments risk to not be copied)
-    def _clone_from_dict(self, node, ref):
+    def _clone_from_dict(self, node, ref, desc):
         if ref not in self.node_dico:
             raise ValueError("arguments refer to an inexistent node ({:s}, {!s})!".format(ref[0], ref[1]))
         node.set_contents(self.node_dico[ref])
+        self._handle_custo(node, desc, conf=None)
+        self._handle_common_attr(node, desc, conf=None)
 
     def _get_from_dict(self, node, ref, parent_node):
         if ref not in self.node_dico:
