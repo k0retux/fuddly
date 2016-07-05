@@ -130,7 +130,7 @@ class TestBasics(unittest.TestCase):
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
         l = node_ex1.get_value()
-        hk = set(node_ex1.get_all_paths().keys())
+        hk = list(node_ex1.iter_paths(only_paths=True))
         # print(l)
         #
         # print('\n\n ####### \n\n')
@@ -152,7 +152,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n### TEST 1: cross check self.node.get_all_paths().keys() and get_nodes_names() ###')
 
-        print('*** Hkeys from self.node.get_all_paths().keys():')
+        print('*** Hkeys from self.node.iter_paths(only_paths=True):')
         hk = sorted(hk)
         for k in hk:
             print(k)
@@ -725,26 +725,20 @@ class TestBasics(unittest.TestCase):
         print('\n*** test 12.1:')
 
         node_ex1 = dm.get_data('EX1')
-        htbl = node_ex1.get_all_paths()
-        l = sorted(list(htbl.keys()))
-        for i in l:
+        for i in node_ex1.iter_paths(only_paths=True):
             print(i)
 
         print('\n******\n')
 
         node_ex1.get_value()
-        htbl = node_ex1.get_all_paths()
-        l = sorted(list(htbl.keys()))
-        for i in l:
+        for i in node_ex1.iter_paths(only_paths=True):
             print(i)
 
         print('\n******\n')
 
         node_ex1.unfreeze_all()
         node_ex1.get_value()
-        htbl = node_ex1.get_all_paths()
-        l = sorted(list(htbl.keys()))
-        for i in l:
+        for i in node_ex1.iter_paths(only_paths=True):
             print(i)
 
         print('\n*** test 13: test typed_value Node')
@@ -956,9 +950,7 @@ class TestMisc(unittest.TestCase):
 
         print('=======[ PATHS ]========')
 
-        htbl = evt.get_all_paths()
-        l = sorted(list(htbl.keys()))
-        for i in l:
+        for i in evt.iter_paths(only_paths=True):
             print(i)
 
         print('\n=======[ Typed Nodes ]========')

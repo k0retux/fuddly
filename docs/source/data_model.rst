@@ -494,7 +494,8 @@ custo_set, custo_clear
   - ``MH.Custo.NTerm.CollapsePadding``: By default, this mode is *disabled*.
     When enabled, every time two adjacent BitFields (within its scope) are found, they
     will be merged in order to remove any padding in between. This is done
-    "recursively" until any inner padding is removed.
+    "recursively" until any inner padding is removed. (Note this customization is currently
+    only supported for *generation* purpose and not for *absorption*.)
 
   For *generator* node, the customizable behavior modes are:
 

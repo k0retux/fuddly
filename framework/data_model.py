@@ -4551,8 +4551,9 @@ class NodeInternals_NonTerm(NodeInternals):
             if self.separator is not None:
                 iterable.add(self.separator.node)
 
-        for e in iterable:
-            e._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False)
+        for idx, e in enumerate(iterable):
+            e._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False,
+                                 clone_idx=idx)
 
     def set_size_from_constraints(self, size, encoded_size):
         # not supported
@@ -4900,7 +4901,8 @@ class Node(object):
         self.depth = 0
         self.tmp_ref_count = 1
 
-        self.abs_postpone_sent_back = None
+        self.abs_postpone_sent_back = None  # used for absorption to transfer a resolved postpone
+                                            # node back to where it was defined
 
         if base_node is not None and subnodes is None and values is None and value_type is None:
 
@@ -5720,18 +5722,17 @@ class Node(object):
         The set of nodes that is used to perform the search include
         the node itself and all the subnodes behind it.
         '''
-        htable = self.get_all_paths(conf=conf)
-
         if path is None:
             assert(path_regexp is not None)
             # Find *one* Node whose path match the regexp
-            for n, e in htable.items():
+            for n, e in self.iter_paths(conf=conf):
                 if re.search(path_regexp, n):
                     ret = e
                     break
             else:
                 ret = None
         else:
+            htable = self.get_all_paths(conf=conf)
             # Find the Node through exact path
             try:
                 ret = htable[path]
@@ -5741,7 +5742,7 @@ class Node(object):
         return ret
 
 
-    def _get_all_paths_rec(self, pname, htable, conf, recursive, first=True):
+    def _get_all_paths_rec(self, pname, htable, conf, recursive, first=True, clone_idx=0):
 
         if recursive:
             next_conf = conf
@@ -5757,12 +5758,20 @@ class Node(object):
         else:
             name = pname + '/' + self.name
 
-        htable[name] = self
+        if name in htable:
+            htable[(name, clone_idx)] = self
+        else:
+            htable[name] = self
 
         internal.get_child_all_path(name, htable, conf=next_conf, recursive=recursive)
 
 
     def get_all_paths(self, conf=None, recursive=True, depth_min=None, depth_max=None):
+        """
+        Returns:
+            dict: the keys are either a 'path' or a tuple ('path', int) when the path already
+              exists (case of the same node used more than once within the same non-terminal)
+        """
         htable = collections.OrderedDict()
         self._get_all_paths_rec('', htable, conf, recursive=recursive)
 
@@ -5779,10 +5788,17 @@ class Node(object):
                 
         return htable
 
+    def iter_paths(self, conf=None, recursive=True, depth_min=None, depth_max=None, only_paths=False):
+        htable = self.get_all_paths(conf=conf, recursive=recursive, depth_min=depth_min,
+                                    depth_max=depth_max)
+        for path, node in htable.items():
+            if isinstance(path, tuple):
+                yield path[0] if only_paths else (path[0], node)
+            else:
+                yield path if only_paths else (path, node)
 
     def get_path_from(self, node, conf=None):
-        htable = node.get_all_paths(conf=conf)
-        for n, e in htable.items():
+        for n, e in node.iter_paths(conf=conf):
             if e == self:
                 return n
         else:
@@ -5790,16 +5806,12 @@ class Node(object):
 
 
     def get_all_paths_from(self, node, conf=None):
-        htable = node.get_all_paths(conf=conf)
         l = []
-        for n, e in htable.items():
+        for n, e in node.iter_paths(conf=conf):
             if e == self:
                 l.append(n)
         return l
 
-    
-    def get_hkeys(self, conf=None):
-        return set(self.get_all_paths(conf=conf).keys())
 
     def __set_env_rec(self, env):
         self.env = env
@@ -6001,11 +6013,8 @@ class Node(object):
         return self.internals[conf].pretty_print()
 
     def get_nodes_names(self, conf=None, verbose=False, terminal_only=False):
-
-        htable = self.get_all_paths(conf=conf)
-
         l = []
-        for n, e in htable.items():
+        for n, e in self.iter_paths(conf=conf):
             if terminal_only:
                 conf = e.__check_conf(conf)
                 if not e.is_term(conf):
@@ -6128,9 +6137,8 @@ class Node(object):
         # in case the node is not frozen
         self.freeze()
 
-        htable = self.get_all_paths(conf=conf)
         l = []
-        for n, e in htable.items():
+        for n, e in self.iter_paths(conf=conf):
             l.append((n, e))
 
         if alpha_order:
