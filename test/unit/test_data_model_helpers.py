@@ -24,59 +24,20 @@ class RegexParserTest(unittest.TestCase):
     @ddt.data(r"(sa(lu))(les)(louloux)", r"(salut)(les(louloux)", r"(salut))les(louloux)",
               r"(sal*ut)oo", r"(sal?ut)oo", r"sal{utoo", r"(sal+ut)oo", r"(sal{u)too",
               r"(sal{2}u)too", r"sal{2,1}utoo", r"sal(u[t]o)o",
-              r"whatever|toto?ff", r"whate?ver|toto", r"(toto)*ohoho|haha", r"(toto)ohoho|haha")
+              r"whatever|toto?ff", r"whate?ver|toto", r"(toto)*ohoho|haha", r"(toto)ohoho|haha",
+              'salut[abcd]{,15}rr', r"[]whatever", r"t{,15}")
     def test_invalid_regexes(self, regex):
-        self.assertRaises(Exception, self._parser.run, regex, "toto")
+        self.assertRaises(Exception, self._parser.run, regex, "name")
 
-    @ddt.data(r"", r"b", r"salut")
-    def test_one_word(self, regex):
-        self._parser.run(regex, "toto")
-        self._parser._create_terminal_node.assert_called_once_with("toto1", vt.String,
-                                                                   contents=[regex],
-                                                                   alphabet=None, qty=(1, 1))
-
-    @ddt.data(r"(salut)(les)(louloux)", r"(salut)les(louloux)",
-              r"salut(les)(louloux)", r"(salut)(les)louloux", r"salut(les)louloux")
-    def test_with_parenthesis(self, regex):
-        nodes = self._parser.run(regex, "toto")
-        self.assertEquals(len(nodes), 3)
-        self._parser._create_terminal_node.assert_has_calls(
-            [mock.call("toto1", vt.String, contents=["salut"], alphabet=None, qty=(1, 1)),
-             mock.call("toto2", vt.String, contents=["les"], alphabet=None, qty=(1, 1)),
-             mock.call("toto3", vt.String, contents=["louloux"], alphabet=None, qty=(1, 1))])
-
-
-    @ddt.data(r"salut(l\(es)(lou\\loux)cmoi", r"salut(l\(es)lou\\loux(cmoi)")
-    def test_escape_char(self, regex):
-        nodes = self._parser.run(regex, "toto")
-        self.assertEquals(len(nodes), 4)
-        self._parser._create_terminal_node.assert_has_calls(
-            [mock.call("toto1", vt.String, contents=["salut"], alphabet=None, qty=(1, 1)),
-             mock.call("toto2", vt.String, contents=["l(es"], alphabet=None, qty=(1, 1)),
-             mock.call("toto3", vt.String, contents=["lou\loux"], alphabet=None, qty=(1, 1)),
-             mock.call("toto4", vt.String, contents=["cmoi"], alphabet=None, qty=(1, 1))])
 
     @ddt.unpack
     @ddt.data(('?', (0, 1)), ('*', (0, None)), ('+', (1, None)),
               ('{7}', (7, 7)), ('{2,7}', (2, 7)),
               ('{0}', (0, 0)), ('{0,0}', (0, 0)),
-              ('{3,}', (3, None)), ('{,15}', (0, 15)))
+              ('{3,}', (3, None)))
     def test_7(self, char, qty):
-        nodes = self._parser.run(r"salut" + char + "ooo", "toto")
-        self.assertEquals(len(nodes), 3)
-        self._parser._create_terminal_node.assert_has_calls(
-            [mock.call("toto1", vt.String, contents=["salu"], alphabet=None, qty=(1, 1)),
-             mock.call("toto2", vt.String, contents=["t"], alphabet=None, qty=qty),
-             mock.call("toto3", vt.String, contents=["ooo"], alphabet=None, qty=(1, 1))])
-
-    @ddt.unpack
-    @ddt.data(('?', (0, 1)), ('*', (0, None)), ('+', (1, None)),
-              ('{7}', (7, 7)), ('{2,7}', (2, 7)),
-              ('{0}', (0, 0)), ('{0,0}', (0, 0)),
-              ('{3,}', (3, None)), ('{,15}', (0, 15)))
-    def test_7(self, char, qty):
-        nodes = self._parser.run(r"salut[abcd]" + char + "ooo", "toto")
-        self.assertEquals(len(nodes), 3)
+        self._parser.run(r"salut[abcd]" + char + "ooo", "toto")
+        self.assertEquals(self._parser._create_terminal_node.call_count, 3)
         self._parser._create_terminal_node.assert_has_calls(
             [mock.call("toto1", vt.String, contents=["salut"], alphabet=None, qty=(1, 1)),
              mock.call("toto2", vt.String, contents=None, alphabet="abcd", qty=qty),
@@ -86,46 +47,85 @@ class RegexParserTest(unittest.TestCase):
     @ddt.data(('?', (0, 1)), ('*', (0, None)), ('+', (1, None)),
               ('{7}', (7, 7)), ('{2,7}', (2, 7)),
               ('{0}', (0, 0)), ('{0,0}', (0, 0)),
-              ('{3,}', (3, None)), ('{,15}', (0, 15)))
+              ('{3,}', (3, None)))
     def test_8(self, char, qty):
-        nodes = self._parser.run(r"salu(ttteee|whatever)"
-                                 + char
-                                 + "ooo", "toto")
-        self.assertEquals(len(nodes), 3)
+        self._parser.run(r"salu(ttteee|whatever)" + char + "ooo", "toto")
+        self.assertEquals(self._parser._create_terminal_node.call_count, 3)
         self._parser._create_terminal_node.assert_has_calls(
             [mock.call("toto1", vt.String, contents=["salu"], alphabet=None, qty=(1, 1)),
              mock.call("toto2", vt.String, contents=["ttteee", "whatever"], alphabet=None, qty=qty),
              mock.call("toto3", vt.String, contents=["ooo"], alphabet=None, qty=(1, 1))])
 
 
-    def test_alphabet(self):
-        nodes = self._parser.run(r"salut[abc]ooo", "toto")
-        self.assertEquals(len(nodes), 3)
-        self._parser._create_terminal_node.assert_has_calls(
-            [mock.call("toto1", vt.String, contents=["salut"], alphabet=None, qty=(1, 1)),
-             mock.call("toto2", vt.String, contents=None, alphabet="abc", qty=(1, 1)),
-             mock.call("toto3", vt.String, contents=["ooo"], alphabet=None, qty=(1, 1))])
+    @ddt.unpack
+    @ddt.data(
+        (r"",                               [([""], None, (1, 1))]),
+
+        (r"a",                              [(["a"], None, (1, 1))]),
+
+        (r"foo",                            [(["foo"], None, (1, 1))]),
+
+        (r"(salut)(les)(loulous)",          [(["salut"], None, (1, 1)),
+                                             (["les"], None, (1, 1)),
+                                             (["loulous"], None, (1, 1))]),
+
+        (r"(salut)les(foo)",                [(["salut"], None, (1, 1)),
+                                             (["les"], None, (1, 1)),
+                                             (["foo"], None, (1, 1))]),
+
+        (r"salut(les)(loulous)",        [(["salut"], None, (1, 1)),
+                                         (["les"], None, (1, 1)),
+                                         (["loulous"], None, (1, 1))]),
+
+        (r"(salut)(les)loulous",        [(["salut"], None, (1, 1)),
+                                         (["les"], None, (1, 1)),
+                                         (["loulous"], None, (1, 1))]),
+
+        (r"salut(les)loulous", [(["salut"], None, (1, 1)),
+                                  (["les"], None, (1, 1)),
+                                  (["loulous"], None, (1, 1))]),
+
+        (r"salut(l\(es)(lou\\lous)cmoi", [(["salut"], None, (1, 1)),
+                                (["l(es"], None, (1, 1)),
+                                (["lou\lous"], None, (1, 1)),
+                                (["cmoi"], None, (1, 1))]),
+
+        (r"salut(l\(es)lou\\lous(cmoi)", [(["salut"], None, (1, 1)),
+                                (["l(es"], None, (1, 1)),
+                                (["lou\lous"], None, (1, 1)),
+                                          (["cmoi"], None, (1, 1))]),
+
+        (r"()+whatever",            [([""], None, (1, None)),
+                                     (["whatever"], None, (1, 1))]),
+
+        (r"salut[abc]ooo",          [(["salut"], None, (1, 1)),
+                                     (None, "abc", (1, 1)),
+                                     (["ooo"], None, (1, 1))]),
+    )
+    def test_various(self, regex, nodes):
+        self.regex_assert(regex, nodes)
 
 
-    def test_empty_parenthesis_before(self):
-        nodes = self._parser.run(r"()+whatever", "toto")
-        self.assertEquals(len(nodes), 2)
-        self._parser._create_terminal_node.assert_has_calls(
-            [mock.call("toto1", vt.String, contents=[""], alphabet=None, qty=(1, None)),
-             mock.call("toto2", vt.String, contents=["whatever"], alphabet=None, qty=(1, 1))])
 
-    def test_empty_brackets(self):
-        nodes = self._parser.run(r"[]whatever", "toto")
-        self.assertEquals(len(nodes), 2)
-        self._parser._create_terminal_node.assert_has_calls(
-            [mock.call("toto1", vt.String, contents=None, alphabet="", qty=(1, 1)),
-             mock.call("toto2", vt.String, contents=["whatever"], alphabet=None, qty=(1, 1))])
+    @ddt.data(r"?", r"*", r"+", r"{1,2}", r"what{,}ever", r"bj{}er"
+              r"what{1, 2}", r"what{,3}ever", r"ee{l1, 2}ever", r"whddddat{\13, 2}eyyyver",
+              r"wat{3, 2d}eyyyver", r"w**r", r"w+*r", r"w*?r")
+    def test_quantifier_raise(self, regex):
+        self.regex_raise(regex)
+
+    @ddt.data(r"salut(", r"dd[", r"(", r"[", r"{0")
+    def test_wrong_end_raise(self, regex):
+        self.regex_raise(regex)
+
+
+    def regex_raise(self, regex):
+        self.assertRaises(Exception, self._parser.run, regex, "name")
 
 
     def regex_assert(self, regex, nodes):
 
-        ns = self._parser.run(regex, "name")
-        self.assertEquals(len(ns), len(nodes))
+        self._parser.run(regex, "name")
+        self.assertEquals(self._parser._create_terminal_node.call_count, len(nodes))
 
         calls = []
         for node in nodes:
@@ -195,3 +195,23 @@ class RegexParserTest(unittest.TestCase):
     )
     def test_pick(self, regex, nodes):
         self.regex_assert(regex, nodes)
+
+
+    @ddt.data(
+        {'regex': r"bar", 'nodes': [{"contents": ["bar"], "alphabet": None, "qty": (1, 1)}]}
+    )
+    def test_json(self, test_case):
+        self.regex_assert_json(test_case)
+
+
+    def regex_assert_json(self, test_case):
+
+        self._parser.run(test_case['regex'], "name")
+        self.assertEquals(self._parser._create_terminal_node.call_count, len(test_case['nodes']))
+
+        calls = []
+        for node in test_case['nodes']:
+            calls.append(mock.call("name" + str(test_case['nodes'].index(node) + 1), vt.String,
+                                   contents=node['contents'], alphabet=node['alphabet'], qty=node['qty']))
+
+        self._parser._create_terminal_node.assert_has_calls(calls)

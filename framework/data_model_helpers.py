@@ -1,3 +1,4 @@
+
 ################################################################################
 #
 #  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
@@ -511,19 +512,44 @@ class MH(object):
             n.clear_attr(ca)
 
 
+class StateMachine(object):
+    def run(self, inputs, name):
+        raise NotImplementedError
+
+class State(object):
+    def run(self, context):
+        raise NotImplementedError
+
+    def check_transitions(self, context):
+        raise NotImplementedError
 
 
-class RegexParser(object):
+class RegexParser(StateMachine):
 
-    class State(object):
-        def run(self, context):
-            raise NotImplementedError
+    class SubStateMachine(State):
 
-        def check_transitions(self, context):
-            raise NotImplementedError
+        class Initial(State):
+            pass
+
+        class Final(State):
+            pass
+
+        def __init__(self):
+            self.state = self.__class__.Initial()
+
+        def run(self, ctx):
+            while True:
+                self.state.run(ctx)
+                if isinstance(self.state, self.__class__.Final):
+                    break
+                ctx.inputs.pop(0)
+                self.state = self.state.check_transitions(ctx)
+
+        def check_transitions(self, ctx):
+            return self.state.check_transitions(ctx)
 
 
-    class InitialState(State):
+    class Initial(State):
 
         def run(self, ctx):
             pass
@@ -533,23 +559,23 @@ class RegexParser(object):
                 raise Exception
 
             if ctx.input == '[':
-                return RegexParser.InsideSquareBrackets()
+                return RegexParser.SquareBrackets()
             elif ctx.input == '(':
                 return RegexParser.InsideParenthesis()
             else:
                 ctx.append_to_buffer("")
 
                 if ctx.input == '\\':
-                    return RegexParser.Escaping()
+                    return RegexParser.Escape()
                 elif ctx.input == '|':
                     return RegexParser.PickState()
                 elif ctx.input is None:
-                    return RegexParser.FinalState()
+                    return RegexParser.Final()
                 else:
                     return RegexParser.MainState()
 
 
-    class FinalState(State):
+    class Final(State):
 
         def run(self, ctx):
             ctx.flush()
@@ -568,10 +594,10 @@ class RegexParser(object):
                 return RegexParser.InsideParenthesis()
 
             elif ctx.input == '[':
-                return RegexParser.InsideSquareBrackets()
+                return RegexParser.SquareBrackets()
 
             elif ctx.input == '\\':
-                return RegexParser.Escaping()
+                return RegexParser.Escape()
 
             elif ctx.input == '|':
                 return RegexParser.PickState()
@@ -579,13 +605,13 @@ class RegexParser(object):
             elif ctx.input in ('?', '*', '+', '{'):
 
                 # pick
-                if ctx.pick and len(ctx.contents) > 1 and len(ctx.buffer) > 1:
+                if ctx.pick and len(ctx.values) > 1 and len(ctx.buffer) > 1:
                     raise Exception
 
                 if len(ctx.buffer) == 1:
-                    if len(ctx.contents) > 1:
+                    if len(ctx.values) > 1:
                         content = ctx.buffer
-                        ctx.contents = ctx.contents[:-1]
+                        ctx.values = ctx.values[:-1]
                         ctx.flush()
                         ctx.append_to_buffer(content)
 
@@ -604,7 +630,7 @@ class RegexParser(object):
                 raise Exception
 
             elif ctx.input is None:
-                return RegexParser.FinalState()
+                return RegexParser.Final()
 
             return self
 
@@ -623,7 +649,7 @@ class RegexParser(object):
             if ctx.input == '(':
                 return RegexParser.InsideParenthesis()
             elif ctx.input == '[':
-                return RegexParser.InsideSquareBrackets()
+                return RegexParser.SquareBrackets()
             else:
 
                 ctx.append_to_contents("")
@@ -631,7 +657,7 @@ class RegexParser(object):
                 if ctx.input == '|':
                     return self
                 elif ctx.input is None:
-                    return RegexParser.FinalState()
+                    return RegexParser.Final()
                 else:
                     return RegexParser.MainState()
 
@@ -657,13 +683,13 @@ class RegexParser(object):
             if ctx.input == '(':
                 return RegexParser.InsideParenthesis()
             elif ctx.input == '[':
-                return RegexParser.InsideSquareBrackets()
+                return RegexParser.SquareBrackets()
             elif ctx.input == '|':
                 return RegexParser.PickState()
             elif ctx.input == '\\':
-                return RegexParser.Escaping()
+                return RegexParser.Escape()
             elif ctx.input is None:
-                return RegexParser.FinalState()
+                return RegexParser.Final()
             else:
                 return RegexParser.MainState()
 
@@ -716,7 +742,7 @@ class RegexParser(object):
                 if ctx.input == '|':
                     return RegexParser.PickState()
                 elif ctx.input is None:
-                    return RegexParser.FinalState()
+                    return RegexParser.Final()
                 else:
                     if ctx.pick:
                         raise Exception
@@ -726,12 +752,12 @@ class RegexParser(object):
                     elif ctx.input == '(':
                         return RegexParser.InsideParenthesis()
                     elif ctx.input == '[':
-                        return RegexParser.InsideSquareBrackets()
+                        return RegexParser.SquareBrackets()
                     else:
                         return RegexParser.MainState()
 
 
-    class Escaping(object):
+    class Escape(State):
 
         def __init__(self):
             self._started = False
@@ -749,7 +775,7 @@ class RegexParser(object):
 
         def check_transitions(self, ctx):
             if self._closed:
-                return RegexParser.FinalState() if ctx.input is None else ctx.context()
+                return RegexParser.Final() if ctx.input is None else ctx.context()
             else:
                 if ctx.input is None:
                     raise Exception
@@ -780,7 +806,7 @@ class RegexParser(object):
                 if ctx.input in ('*', '+', '?', '{', '(', '['):
                     raise Exception
                 elif ctx.input == '\\':
-                    return RegexParser.Escaping()
+                    return RegexParser.Escape()
                 else:
                     return self
 
@@ -806,47 +832,60 @@ class RegexParser(object):
                 if ctx.input == '(':
                     return self
                 elif ctx.input == '[':
-                    return RegexParser.InsideSquareBrackets()
+                    return RegexParser.SquareBrackets()
                 elif ctx.input == '\\':
-                    return RegexParser.Escaping()
+                    return RegexParser.Escape()
                 elif ctx.input is None:
-                    return RegexParser.FinalState()
+                    return RegexParser.Final()
                 else:
                     return RegexParser.MainState()
 
 
+    class SquareBrackets(SubStateMachine):
 
-    class InsideSquareBrackets(State):
+        class Initial(State):
 
-        def run(self, ctx):
-            if ctx.input == '[':
+            def run(self, ctx):
                 ctx.flush()
                 ctx.append_to_alphabet("")
-                ctx.context = self.__class__
-            elif ctx.input == ']':
-                if len(ctx.alphabet) == 0:
-                    raise Exception
-                ctx.context = RegexParser.MainState
-            else:
-                ctx.append_to_alphabet(ctx.input)
 
-        def check_transitions(self, ctx):
-            if ctx.input in ('}', ')'):
-                raise Exception
-
-            # inside
-            if ctx.context == self.__class__:
-                if ctx.input in ('*', '+', '?', '{', '(', '[', '|'):
+            def check_transitions(self, ctx):
+                if ctx.input in ('*', '+', '?', '{', '}', '(', ')', '[', ']', '|', None):
                     raise Exception
                 elif ctx.input == '\\':
-                    return RegexParser.Escaping()
+                    return RegexParser.SquareBrackets.Escape()
+                else:
+                    return RegexParser.SquareBrackets.Inside()
+
+        class Inside(State):
+            def run(self, ctx):
+                ctx.append_to_alphabet(ctx.input)
+
+            def check_transitions(self, ctx):
+                if ctx.input in ('*', '+', '?', '{', '}', '(', ')', '[', '|', None):
+                    raise Exception
+                elif ctx.input == '\\':
+                    return RegexParser.SquareBrackets.Escape()
+                elif ctx.input == ']':
+                    return RegexParser.SquareBrackets.Final()
                 else:
                     return self
 
-            # outside
-            else:
-                if ctx.input == ')':
+        class Escape(State):
+            def run(self, ctx):
+                pass
+
+            def check_transitions(self, ctx):
+                pass
+
+        class Final(State):
+            def run(self, ctx):
+                pass
+
+            def check_transitions(self, ctx):
+                if ctx.input in (')', '}', ']'):
                     raise Exception
+
                 # quantifier specified
                 elif ctx.input in ('*', '+', '?'):
                     return RegexParser.QtyState()
@@ -862,28 +901,27 @@ class RegexParser(object):
                     raise Exception
 
                 # continue with something else
-
                 if ctx.input == '(':
                     return RegexParser.InsideParenthesis()
                 elif ctx.input == '[':
                     return self
                 elif ctx.input == '\\':
-                    return RegexParser.Escaping()
+                    return RegexParser.Escape()
                 elif ctx.input is None:
-                    return RegexParser.FinalState()
+                    return RegexParser.Final()
                 else:
                     return RegexParser.MainState()
 
 
 
     def __init__(self):
-        self.current_state = RegexParser.InitialState()
+        self.current_state = RegexParser.Initial()
 
         self.context = RegexParser.MainState
 
         self._name = None
-        self._input = None
-        self.contents = None
+        self.inputs = None
+        self.values = None
         self.alphabet = None
 
         self.pick = False
@@ -896,17 +934,17 @@ class RegexParser(object):
 
     @property
     def input(self):
-        return self._input
+        return None if self.inputs is None or len(self.inputs) == 0 else self.inputs[0]
 
     def append_to_contents(self, content):
-        if self.contents is None:
-            self.contents = []
-        self.contents.append(content)
+        if self.values is None:
+            self.values = []
+        self.values.append(content)
 
     def append_to_buffer(self, str):
-        if self.contents is None:
-            self.contents = [""]
-        self.contents[-1] += str
+        if self.values is None:
+            self.values = [""]
+        self.values[-1] += str
 
     def append_to_alphabet(self, alphabet):
         if self.alphabet is None:
@@ -915,13 +953,13 @@ class RegexParser(object):
 
     @property
     def buffer(self):
-        return None if self.contents is None else self.contents[-1]
+        return None if self.values is None else self.values[-1]
 
     @buffer.setter
     def buffer(self, buffer):
-        if self.contents is None:
-            self.contents = [""]
-        self.contents[-1] = buffer
+        if self.values is None:
+            self.values = [""]
+        self.values[-1] = buffer
 
     @property
     def nodes(self):
@@ -929,11 +967,9 @@ class RegexParser(object):
 
     @property
     def nothing_to_flush(self):
-        return self.contents is None and self.alphabet is None
+        return self.values is None and self.alphabet is None
 
     def flush(self):
-
-
 
         if self.nothing_to_flush:
             return
@@ -946,7 +982,7 @@ class RegexParser(object):
         name = self._name + str(len(self.nodes) + 1)
 
         node = self._create_terminal_node(name, type,
-                                          contents=self.contents,
+                                          contents=self.values,
                                           alphabet=self.alphabet,
                                           qty=(self.min, self.max))
         self.nodes.append(node)
@@ -954,7 +990,7 @@ class RegexParser(object):
 
 
     def reset(self):
-        self.contents = None
+        self.values = None
         self.alphabet = None
         self.min = None
         self.max = None
@@ -963,9 +999,12 @@ class RegexParser(object):
         self._name = name
 
         # None indicates the end of the regex
-        for self._input in list(inputs) + [None]:
+        self.inputs = list(inputs) + [None]
+
+        while self.inputs:
             self.current_state = self.current_state.check_transitions(self)
             self.current_state.run(self)
+            self.inputs.pop(0)
 
         return self._create_non_terminal_node()
 
