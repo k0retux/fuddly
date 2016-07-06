@@ -304,7 +304,10 @@ class FmkPlumbing(object):
             if base_timeout != 0:
                 self.set_health_check_timeout(base_timeout + 2.0, do_show=do_show)
             else:
-                self.set_health_check_timeout(0, do_show=do_show)
+                # base_timeout comes from feedback_timeout, if it is equal to 0
+                # this is a special meaning used internally to collect residual feedback.
+                # Thus, we don't change the current health_check timeout.
+                return
         else:
             self.set_health_check_timeout(10, do_show=do_show)
 
@@ -1502,9 +1505,13 @@ class FmkPlumbing(object):
             # polluting feedback logs of the next emission
             if not blocked_data:
                 fbk_timeout = self.tg.feedback_timeout
+                # we change feedback timeout has the target could use it to determine if it is
+                # ready to accept new data (check_target_readiness). For instance, the NetworkTarget
+                # launch a thread when collect_feedback_without_sending() is called for a duration
+                # of 'feedback_timeout'. 0 has a special meaning
                 self.set_feedback_timeout(0, do_show=False)
 
-            if self.tg.collect_feedback_without_sending():
+            if self.tg.collect_feedback_without_sending() and blocked_data:
                 ret = self.check_target_readiness()  # this call enable to wait for feedback timeout
                 user_interrupt = ret == -2
             go_on = self.log_target_residual_feedback()
@@ -1609,6 +1616,9 @@ class FmkPlumbing(object):
                         if data_tmp is not None:
                             data_tmp.copy_callback_from(data)
                             new_data = data_tmp
+                        else:
+                            new_data = Data()
+                            new_data.make_unusable()
 
                     for idx in op[CallBackOps.Del_PeriodicData]:
                         self._unregister_task(idx)
@@ -1700,8 +1710,9 @@ class FmkPlumbing(object):
         if not data_list:
             return True
 
-        self.new_transfer_preamble()
-        data_list = self.send_data(data_list)
+        data_list = self.send_data(data_list, add_preamble=True)
+        if data_list is None:
+            return False
 
         if self._wkspace_enabled:
             for idx, dt in zip(range(len(data_list)), data_list):
@@ -1756,7 +1767,7 @@ class FmkPlumbing(object):
 
 
     @EnforceOrder(accepted_states=['S2'])
-    def send_data(self, data_list):
+    def send_data(self, data_list, add_preamble=False):
         '''
         @data_list: either a list of Data() or a Data()
         '''
@@ -1764,11 +1775,20 @@ class FmkPlumbing(object):
         if self.__send_enabled:
 
             if not self._is_data_valid(data_list):
-                self.set_error('Data is empty --> will not be sent',
+                self.set_error('send_data(): Data has been provided empty --> will not be sent '
+                               'nor logged',
                                code=Error.DataInvalid)
-                return data_list
+                return None #data_list
 
             data_list = self._do_before_sending_data(data_list)
+
+            if not self._is_data_valid(data_list):
+                self.set_error('send_data(): Data became empty --> will not be sent nor logged',
+                               code=Error.DataInvalid)
+                return None #data_list
+
+            if add_preamble:
+                self.new_transfer_preamble()
 
             try:
                 if len(data_list) == 1:
@@ -2378,8 +2398,7 @@ class FmkPlumbing(object):
                 if not data_list:
                     continue
 
-                self.new_transfer_preamble()
-                data_list = self.send_data(data_list)
+                data_list = self.send_data(data_list, add_preamble=True)
 
                 try:
                     linst = operator.do_after_all(self._exportable_fmk_ops, self.dm, self.mon, self.tg, self.lg)

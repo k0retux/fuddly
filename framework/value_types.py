@@ -910,6 +910,7 @@ class String(VT_Alt):
             if encoded_size == self.max_encoded_sz:
                 return
             self.max_encoded_sz = encoded_size
+            self.min_sz = self.max_encoded_sz
         elif size is not None:
             if size == self.max_sz and size == self.min_sz:
                 return

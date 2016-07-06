@@ -67,8 +67,8 @@ class PPPOE_DataModel(DataModel):
                    },
                   {'name': 'v103', # Host Identifier
                    'exists_if': (IntCondition(0x0103), 'type'),
-                   'sync_enc_size_with': 'len',
-                   'contents': UTF8(val_list=['Host Identifier']),
+                   'sync_size_with': 'len',
+                   'contents': String(val_list=['Host Identifier']),
                    },
                   {'name': 'v104', # Cookie
                    'exists_if': (IntCondition(0x0104), 'type'),
