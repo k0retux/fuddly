@@ -512,76 +512,128 @@ class MH(object):
             n.clear_attr(ca)
 
 
-class StateMachine(object):
-    def run(self, inputs, name):
-        raise NotImplementedError
-
 class State(object):
+    """
+    State at the lower level
+    """
+    def __init__(self, machine):
+        """
+        Args:
+            state_machine (StateMachine): state machine where it lives
+        """
+        self.machine = machine
+
     def run(self, context):
         raise NotImplementedError
 
-    def check_transitions(self, context):
+    def advance(self, context):
         raise NotImplementedError
 
 
-class RegexParser(StateMachine):
+class FinalState(State):
 
-    class SubStateMachine(State):
+    def advance(self, context):
+        pass
 
-        class Initial(State):
-            pass
 
-        class Final(State):
-            pass
+class StateMachine(object):
 
-        def __init__(self):
-            self.state = self.__class__.Initial()
+    class Initial(State):
+        pass
+
+    class Final(State):
+        pass
+
+    def __init__(self):
+        self.states = {}
+
+        for name, cls in inspect.getmembers(self.__class__):
+            if inspect.isclass(cls) and issubclass(cls, State):
+                self.states[cls] = cls(self)
+
+    def run(self, context):
+        self.state = self.states[self.Initial]
+        while True:
+            self.state.run(context)
+            if isinstance(self.state, self.Final):
+                break
+            context.inputs.pop(0)
+            self.state = self.states[self.state.advance(context)]
+
+
+
+class SubStateMachine(State, StateMachine):
+    """
+    Seen as a State from outside
+    Act like a StateMachine in the inside
+    """
+    def __init__(self, machine):
+        State.__init__(self, machine)
+        StateMachine.__init__(self)
+
+    def run(self, context):
+        StateMachine.run(self, context)
+
+
+
+class EscapeState(SubStateMachine):
+    class Initial(State):
 
         def run(self, ctx):
-            while True:
-                self.state.run(ctx)
-                if isinstance(self.state, self.__class__.Final):
-                    break
-                ctx.inputs.pop(0)
-                self.state = self.state.check_transitions(ctx)
+            pass
 
-        def check_transitions(self, ctx):
-            return self.state.check_transitions(ctx)
+        def advance(self, ctx):
+            if ctx.input == None:
+                raise Exception
+            return self.machine.Final
 
+    class Final(FinalState):
+
+        def run(self, ctx):
+            if ctx.buffer is not None:
+                ctx.append_to_buffer(ctx.input)
+            elif ctx.alphabet is not None:
+                ctx.append_to_alphabet(ctx.input)
+
+
+class RegexParser(StateMachine):
 
     class Initial(State):
 
         def run(self, ctx):
             pass
 
-        def check_transitions(self, ctx):
+        def advance(self, ctx):
             if ctx.input in ('?', '*', '+', '{', '}', ')', ']'):
                 raise Exception
 
             if ctx.input == '[':
-                return RegexParser.SquareBrackets()
+                return self.machine.SquareBrackets
             elif ctx.input == '(':
-                return RegexParser.InsideParenthesis()
+                return self.machine.Parenthesis
             else:
                 ctx.append_to_buffer("")
 
                 if ctx.input == '\\':
-                    return RegexParser.Escape()
+                    return self.machine.Escape
                 elif ctx.input == '|':
-                    return RegexParser.PickState()
+                    return self.machine.PickState
                 elif ctx.input is None:
-                    return RegexParser.Final()
+                    return self.machine.Final
                 else:
-                    return RegexParser.MainState()
+                    return self.machine.MainState
 
 
-    class Final(State):
+    class Final(FinalState):
 
         def run(self, ctx):
             ctx.flush()
 
-        def check_transitions(self, ctx):
-            pass
+
+    class Escape(EscapeState):
+
+        def advance(self, ctx):
+            return self.machine.states[self.machine.MainState].advance(ctx)
 
 
     class MainState(State):
@@ -589,18 +641,18 @@ class RegexParser(StateMachine):
         def run(self, ctx):
             ctx.append_to_buffer(ctx.input)
 
-        def check_transitions(self, ctx):
+        def advance(self, ctx):
             if ctx.input == '(':
-                return RegexParser.InsideParenthesis()
+                return self.machine.Parenthesis
 
             elif ctx.input == '[':
-                return RegexParser.SquareBrackets()
+                return self.machine.SquareBrackets
 
             elif ctx.input == '\\':
-                return RegexParser.Escape()
+                return self.machine.Escape
 
             elif ctx.input == '|':
-                return RegexParser.PickState()
+                return self.machine.PickState
 
             elif ctx.input in ('?', '*', '+', '{'):
 
@@ -622,17 +674,17 @@ class RegexParser(StateMachine):
                     ctx.append_to_buffer(content)
 
                 if ctx.input == '{':
-                    return RegexParser.InsideBrackets()
+                    return self.machine.InsideBrackets
                 else:
-                    return RegexParser.QtyState()
+                    return self.machine.QtyState
 
             elif ctx.input in ('}', ')', ']'):
                 raise Exception
 
             elif ctx.input is None:
-                return RegexParser.Final()
+                return self.machine.Final
 
-            return self
+            return self.__class__
 
 
     class PickState(State):
@@ -645,21 +697,21 @@ class RegexParser(StateMachine):
                 else:
                     raise Exception
 
-        def check_transitions(self, ctx):
+        def advance(self, ctx):
             if ctx.input == '(':
-                return RegexParser.InsideParenthesis()
+                return self.machine.Parenthesis
             elif ctx.input == '[':
-                return RegexParser.SquareBrackets()
+                return self.machine.SquareBrackets
             else:
 
                 ctx.append_to_contents("")
 
                 if ctx.input == '|':
-                    return self
+                    return self.__class__
                 elif ctx.input is None:
-                    return RegexParser.Final()
+                    return self.machine.Final
                 else:
-                    return RegexParser.MainState()
+                    return self.machine.MainState
 
 
 
@@ -676,22 +728,22 @@ class RegexParser(StateMachine):
 
             ctx.flush()
 
-        def check_transitions(self, ctx):
+        def advance(self, ctx):
             if ctx.input in ('*', '+', '?', '{', '}', ')', ']'):
                 raise Exception
 
             if ctx.input == '(':
-                return RegexParser.InsideParenthesis()
+                return self.machine.Parenthesis
             elif ctx.input == '[':
-                return RegexParser.SquareBrackets()
+                return self.machine.SquareBrackets
             elif ctx.input == '|':
-                return RegexParser.PickState()
+                return self.machine.PickState
             elif ctx.input == '\\':
-                return RegexParser.Escape()
+                return self.machine.Escape
             elif ctx.input is None:
-                return RegexParser.Final()
+                return self.machine.Final
             else:
-                return RegexParser.MainState()
+                return self.machine.MainState
 
 
     class InsideBrackets(State):
@@ -729,20 +781,20 @@ class RegexParser(StateMachine):
                         ctx.min = ""
                     ctx.min += ctx.input
 
-        def check_transitions(self, ctx):
+        def advance(self, ctx):
             if ctx.input in ('*', '+', '?', '{', ')', ']'):
                 raise Exception
 
             if ctx.context == self.__class__:
                 if ctx.input.isdigit() or ctx.input in (',', '}'):
-                    return self
+                    return self.__class__
                 else:
                     raise Exception
             else:
                 if ctx.input == '|':
-                    return RegexParser.PickState()
+                    return self.machine.PickState
                 elif ctx.input is None:
-                    return RegexParser.Final()
+                    return self.machine.Final
                 else:
                     if ctx.pick:
                         raise Exception
@@ -750,95 +802,86 @@ class RegexParser(StateMachine):
                     if ctx.input == '}':
                         raise Exception
                     elif ctx.input == '(':
-                        return RegexParser.InsideParenthesis()
+                        return self.machine.Parenthesis
                     elif ctx.input == '[':
-                        return RegexParser.SquareBrackets()
+                        return self.machine.SquareBrackets
                     else:
-                        return RegexParser.MainState()
+                        return self.machine.MainState
 
 
-    class Escape(State):
+    class Parenthesis(SubStateMachine):
 
-        def __init__(self):
-            self._started = False
-            self._closed = False
+        class Initial(State):
 
-        def run(self, ctx):
-            if not self._started:
-                self._started = True
-            else:
-                if ctx.buffer is not None:
-                    ctx.append_to_buffer(ctx.input)
-                elif ctx.alphabet is not None:
-                    ctx.append_to_alphabet(ctx.input)
-                self._closed = True
-
-        def check_transitions(self, ctx):
-            if self._closed:
-                return RegexParser.Final() if ctx.input is None else ctx.context()
-            else:
-                if ctx.input is None:
-                    raise Exception
-                else:
-                    return self
-
-
-    class InsideParenthesis(State):
-
-        def run(self, ctx):
-            if ctx.input == '(':
+            def run(self, ctx):
                 ctx.flush()
                 ctx.append_to_buffer("")
-                ctx.context = self.__class__
-            elif ctx.input == ')':
-                ctx.context = RegexParser.MainState
-            elif ctx.input == '|':
-                ctx.append_to_contents("")
-            else:
-                ctx.append_to_buffer(ctx.input)
 
-        def check_transitions(self, ctx):
-            if ctx.input in ('}', ']'):
+            def advance(self, ctx):
+                if ctx.input in ('*', '+', '?', '{', '}', '(', '[', ']', None):
+                    raise Exception
+                elif ctx.input == '\\':
+                    return self.machine.Escape
+                elif ctx.input == ')':
+                    return self.machine.Final
+                else:
+                    return self.machine.Inside
+
+        class Inside(State):
+            def run(self, ctx):
+                if ctx.input == '|':
+                    ctx.append_to_contents("")
+                else:
+                    ctx.append_to_buffer(ctx.input)
+
+            def advance(self, ctx):
+                if ctx.input in ('*', '+', '?', '{', '}', '(', '[', ']', None):
+                    raise Exception
+                elif ctx.input == '\\':
+                    return self.machine.Escape
+                elif ctx.input == ')':
+                    return self.machine.Final
+                else:
+                    return self.__class__
+
+        class Escape(EscapeState):
+
+            def advance(self, ctx):
+                return self.machine.states[self.machine.Inside].advance(ctx)
+
+        class Final(FinalState):
+            def run(self, ctx):
+                pass
+
+        def advance(self, ctx):
+            if ctx.input in (')', '}', ']'):
                 raise Exception
 
-            # inside
-            if ctx.context == self.__class__:
-                if ctx.input in ('*', '+', '?', '{', '(', '['):
-                    raise Exception
-                elif ctx.input == '\\':
-                    return RegexParser.Escape()
-                else:
-                    return self
-
-            # outside
+            # quantifier specified
+            elif ctx.input in ('*', '+', '?'):
+                return self.machine.QtyState
+            elif ctx.input == '{':
+                return self.machine.InsideBrackets
             else:
-                if ctx.input == ')':
-                    raise Exception
-                # quantifier specified
-                if ctx.input in ('*', '+', '?'):
-                    return RegexParser.QtyState()
-                elif ctx.input == '{':
-                    return RegexParser.InsideBrackets()
-                else:
-                    ctx.flush()
+                ctx.flush()
 
-                # pick
-                if ctx.input == '|':
-                    return RegexParser.PickState()
-                elif ctx.pick:
-                    raise Exception
+            # pick
+            if ctx.input == '|':
+                return self.machine.PickState
+            elif ctx.pick:
+                raise Exception
 
-                # continue with something else
-                if ctx.input == '(':
-                    return self
-                elif ctx.input == '[':
-                    return RegexParser.SquareBrackets()
-                elif ctx.input == '\\':
-                    return RegexParser.Escape()
-                elif ctx.input is None:
-                    return RegexParser.Final()
-                else:
-                    return RegexParser.MainState()
+            # continue with something else
+            if ctx.input == '(':
+                return self.machine.Parenthesis
+            elif ctx.input == '[':
+                return self.machine.SquareBrackets
+            elif ctx.input == '\\':
+                return self.machine.Escape
+            elif ctx.input is None:
+                return self.machine.Final
+            else:
+                return self.machine.MainState
 
 
     class SquareBrackets(SubStateMachine):
@@ -849,75 +892,71 @@ class RegexParser(StateMachine):
                 ctx.flush()
                 ctx.append_to_alphabet("")
 
-            def check_transitions(self, ctx):
+            def advance(self, ctx):
                 if ctx.input in ('*', '+', '?', '{', '}', '(', ')', '[', ']', '|', None):
                     raise Exception
                 elif ctx.input == '\\':
-                    return RegexParser.SquareBrackets.Escape()
+                    return self.machine.Escape
                 else:
-                    return RegexParser.SquareBrackets.Inside()
+                    return self.machine.Inside
 
         class Inside(State):
             def run(self, ctx):
                 ctx.append_to_alphabet(ctx.input)
 
-            def check_transitions(self, ctx):
+            def advance(self, ctx):
                 if ctx.input in ('*', '+', '?', '{', '}', '(', ')', '[', '|', None):
                     raise Exception
                 elif ctx.input == '\\':
-                    return RegexParser.SquareBrackets.Escape()
+                    return self.machine.Escape
                 elif ctx.input == ']':
-                    return RegexParser.SquareBrackets.Final()
+                    return self.machine.Final
                 else:
-                    return self
+                    return self.__class__
 
-        class Escape(State):
+        class Escape(EscapeState):
+
+            def advance(self, ctx):
+                return self.machine.states[self.machine.Inside].advance(ctx)
+
+        class Final(FinalState):
             def run(self, ctx):
                 pass
 
-            def check_transitions(self, ctx):
-                pass
+        def advance(self, ctx):
+            if ctx.input in (')', '}', ']'):
+                raise Exception
 
-        class Final(State):
-            def run(self, ctx):
-                pass
+            # quantifier specified
+            elif ctx.input in ('*', '+', '?'):
+                return self.machine.QtyState
+            elif ctx.input == '{':
+                return self.machine.InsideBrackets
+            else:
+                ctx.flush()
 
-            def check_transitions(self, ctx):
-                if ctx.input in (')', '}', ']'):
-                    raise Exception
+            # pick
+            if ctx.input == '|':
+                return self.machine.PickState
+            elif ctx.pick:
+                raise Exception
 
-                # quantifier specified
-                elif ctx.input in ('*', '+', '?'):
-                    return RegexParser.QtyState()
-                elif ctx.input == '{':
-                    return RegexParser.InsideBrackets()
-                else:
-                    ctx.flush()
-
-                # pick
-                if ctx.input == '|':
-                    return RegexParser.PickState()
-                elif ctx.pick:
-                    raise Exception
-
-                # continue with something else
-                if ctx.input == '(':
-                    return RegexParser.InsideParenthesis()
-                elif ctx.input == '[':
-                    return self
-                elif ctx.input == '\\':
-                    return RegexParser.Escape()
-                elif ctx.input is None:
-                    return RegexParser.Final()
-                else:
-                    return RegexParser.MainState()
+            # continue with something else
+            if ctx.input == '(':
+                return self.machine.Parenthesis
+            elif ctx.input == '[':
+                return self.__class__
+            elif ctx.input == '\\':
+                return self.machine.Escape
+            elif ctx.input is None:
+                return self.machine.Final
+            else:
+                return self.machine.MainState
 
 
 
     def __init__(self):
-        self.current_state = RegexParser.Initial()
-
-        self.context = RegexParser.MainState
+        StateMachine.__init__(self)
 
         self._name = None
         self.inputs = None
@@ -974,6 +1013,11 @@ class RegexParser(StateMachine):
         if self.nothing_to_flush:
             return
 
+        print("buffer: " + str(self.values))
+        print("alphabet: " + str(self.alphabet))
+        print
+        print
+
         if self.min is None and self.max is None:
             self.min = self.max = 1
 
@@ -995,16 +1039,13 @@ class RegexParser(StateMachine):
         self.min = None
         self.max = None
 
-    def run(self, inputs, name):
+    def parse(self, inputs, name):
         self._name = name
 
-        # None indicates the end of the regex
-        self.inputs = list(inputs) + [None]
+        # None indicates the beginning and the end of the regex
+        self.inputs = [None] + list(inputs) + [None]
 
-        while self.inputs:
-            self.current_state = self.current_state.check_transitions(self)
-            self.current_state.run(self)
-            self.inputs.pop(0)
+        self.run(self)
 
         return self._create_non_terminal_node()
 
@@ -1014,15 +1055,12 @@ class RegexParser(StateMachine):
         assert(contents is not None or alphabet is not None)
 
         if alphabet is not None:
-            return [Node(name=name,
-                         vt=fvt.String(alphabet=alphabet,
-                                       min_sz=-1 if qty[0] is None else qty[0],
-                                       max_sz=-1 if qty[1] is None else qty[1])),
-                    1, 1]
+            return [Node(name=name, vt=fvt.String(alphabet=alphabet,
+                         min_sz=-1 if qty[0] is None else qty[0],
+                         max_sz=-1 if qty[1] is None else qty[1])), 1, 1]
         else:
-            return [Node(name=name, vt=fvt.String(val_list=contents)),
-                    -1 if qty[0] is None else qty[0],
-                    -1 if qty[1] is None else qty[1]]
+            return [Node(name=name, vt=fvt.String(val_list=contents)), -1 if qty[0] is None else qty[0],
+                                                                       -1 if qty[1] is None else qty[1]]
 
     def _create_non_terminal_node(self):
         non_terminal = [1, [MH.Copy + MH.Ordered]]
@@ -1290,7 +1328,7 @@ class ModelHelper(object):
         assert isinstance(regexp, str)
 
         parser = RegexParser()
-        non_terminal_node = parser.run(regexp, name)
+        non_terminal_node = parser.parse(regexp, name)
         n.set_subnodes_with_csts(non_terminal_node, conf=conf)
 
         custo_set = desc.get('custo_set', None)

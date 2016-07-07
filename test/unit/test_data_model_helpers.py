@@ -27,7 +27,7 @@ class RegexParserTest(unittest.TestCase):
               r"whatever|toto?ff", r"whate?ver|toto", r"(toto)*ohoho|haha", r"(toto)ohoho|haha",
               'salut[abcd]{,15}rr', r"[]whatever", r"t{,15}")
     def test_invalid_regexes(self, regex):
-        self.assertRaises(Exception, self._parser.run, regex, "name")
+        self.assertRaises(Exception, self._parser.parse, regex, "name")
 
 
     @ddt.unpack
@@ -36,7 +36,7 @@ class RegexParserTest(unittest.TestCase):
               ('{0}', (0, 0)), ('{0,0}', (0, 0)),
               ('{3,}', (3, None)))
     def test_7(self, char, qty):
-        self._parser.run(r"salut[abcd]" + char + "ooo", "toto")
+        self._parser.parse(r"salut[abcd]" + char + "ooo", "toto")
         self.assertEquals(self._parser._create_terminal_node.call_count, 3)
         self._parser._create_terminal_node.assert_has_calls(
             [mock.call("toto1", vt.String, contents=["salut"], alphabet=None, qty=(1, 1)),
@@ -49,7 +49,7 @@ class RegexParserTest(unittest.TestCase):
               ('{0}', (0, 0)), ('{0,0}', (0, 0)),
               ('{3,}', (3, None)))
     def test_8(self, char, qty):
-        self._parser.run(r"salu(ttteee|whatever)" + char + "ooo", "toto")
+        self._parser.parse(r"salu(ttteee|whatever)" + char + "ooo", "toto")
         self.assertEquals(self._parser._create_terminal_node.call_count, 3)
         self._parser._create_terminal_node.assert_has_calls(
             [mock.call("toto1", vt.String, contents=["salu"], alphabet=None, qty=(1, 1)),
@@ -119,12 +119,12 @@ class RegexParserTest(unittest.TestCase):
 
 
     def regex_raise(self, regex):
-        self.assertRaises(Exception, self._parser.run, regex, "name")
+        self.assertRaises(Exception, self._parser.parse, regex, "name")
 
 
     def regex_assert(self, regex, nodes):
 
-        self._parser.run(regex, "name")
+        self._parser.parse(regex, "name")
         self.assertEquals(self._parser._create_terminal_node.call_count, len(nodes))
 
         calls = []
@@ -206,7 +206,7 @@ class RegexParserTest(unittest.TestCase):
 
     def regex_assert_json(self, test_case):
 
-        self._parser.run(test_case['regex'], "name")
+        self._parser.parse(test_case['regex'], "name")
         self.assertEquals(self._parser._create_terminal_node.call_count, len(test_case['nodes']))
 
         calls = []
