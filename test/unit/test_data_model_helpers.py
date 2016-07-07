@@ -27,7 +27,7 @@ class RegexParserTest(unittest.TestCase):
               r"whatever|toto?ff", r"whate?ver|toto", r"(toto)*ohoho|haha", r"(toto)ohoho|haha",
               'salut[abcd]{,15}rr', r"[]whatever", r"t{,15}")
     def test_invalid_regexes(self, regex):
-        self.assertRaises(Exception, self._parser.parse, regex, "name")
+        self.assert_regex_is_invalid(regex)
 
 
     @ddt.unpack
@@ -57,27 +57,17 @@ class RegexParserTest(unittest.TestCase):
              mock.call("toto3", vt.String, contents=["ooo"], alphabet=None, qty=(1, 1))])
 
 
-    @ddt.unpack
     @ddt.data(
-        (r"salut(l\(es)(lou\\lous)cmoi", [(["salut"], None, (1, 1)),
-                                (["l(es"], None, (1, 1)),
-                                (["lou\lous"], None, (1, 1)),
-                                (["cmoi"], None, (1, 1))]),
-
-        (r"salut(l\(es)lou\\lous(cmoi)", [(["salut"], None, (1, 1)),
-                                (["l(es"], None, (1, 1)),
-                                (["lou\lous"], None, (1, 1)),
-                                          (["cmoi"], None, (1, 1))]),
-
-        (r"()+whatever",            [([""], None, (1, None)),
-                                     (["whatever"], None, (1, 1))]),
-
-        (r"salut[abc]ooo",          [(["salut"], None, (1, 1)),
-                                     (None, "abc", (1, 1)),
-                                     (["ooo"], None, (1, 1))]),
+        {'regex': r"salut(l\(es)(lou\\lous)cmoi",
+         'nodes': [
+             {"contents": ["salut"]},
+             {"contents": ["l(es"]},
+             {"contents": ["lou\lous"]},
+             {"contents": ["cmoi"]},
+         ]},
     )
-    def test_various(self, regex, nodes):
-        self.regex_assert(regex, nodes)
+    def test_escape(self, test_case):
+        self.assert_regex_is_valid(test_case)
 
 
 
@@ -85,28 +75,11 @@ class RegexParserTest(unittest.TestCase):
               r"what{1, 2}", r"what{,3}ever", r"ee{l1, 2}ever", r"whddddat{\13, 2}eyyyver",
               r"wat{3,2d}eyyyver", r"w**r", r"w+*r", r"w*?r")
     def test_quantifier_raise(self, regex):
-        self.regex_raise(regex)
+        self.assert_regex_is_invalid(regex)
 
     @ddt.data(r"salut(", r"dd[", r"(", r"[", r"{0")
     def test_wrong_end_raise(self, regex):
-        self.regex_raise(regex)
-
-
-    def regex_raise(self, regex):
-        self.assertRaises(Exception, self._parser.parse, regex, "name")
-
-
-    def regex_assert(self, regex, nodes):
-
-        self._parser.parse(regex, "name")
-        self.assertEquals(self._parser._create_terminal_node.call_count, len(nodes))
-
-        calls = []
-        for node in nodes:
-            calls.append(mock.call("name" + str(nodes.index(node) + 1), vt.String,
-                                   contents=node[0], alphabet=node[1], qty=node[2]))
-
-        self._parser._create_terminal_node.assert_has_calls(calls)
+        self.assert_regex_is_invalid(regex)
 
 
     @ddt.data(
@@ -121,57 +94,7 @@ class RegexParserTest(unittest.TestCase):
          ]},
     )
     def test_complete(self, test_case):
-        self.regex_assert_json(test_case)
-
-
-    @ddt.unpack
-    @ddt.data(
-        (r"(ab|cd|)+", [(["ab", "cd", ""], None, (1, None))]),
-        (r"(ab||cd)", [(["ab", "", "cd"], None, (1, 1))]),
-        (r"(|ab|cd|ef|gh)+", [(["", "ab", "cd", "ef", "gh"], None, (1, None))]),
-        (r"(|)+", [(["", ""], None, (1, None))]),
-        (r"(|||)+", [(["", "", "", ""], None, (1, None))]),
-    )
-    def test_or_in_parenthesis(self, regex, nodes):
-        self.regex_assert(regex, nodes)
-
-
-    @ddt.unpack
-    @ddt.data(
-        (r"tata|haha|c*|b*|[abcd]+",        [(["tata", "haha"],         None,   (1, 1)),
-                                             (["c"],                    None,   (0, None)),
-                                             (["b"],                    None,   (0, None)),
-                                             (None,                     "abcd", (1, None))]),
-
-        (r"(tata)+|haha|tata||b*|[abcd]+",  [(["tata"],                 None,   (1, None)),
-                                             (["haha", "tata", ""],     None,   (1, 1)),
-                                             (["b"],                    None,   (0, None)),
-                                             (None,                     "abcd", (1, None))]),
-
-        (r"toto|titi|tata",                 [(["toto", "titi", "tata"], None,   (1, 1))]),
-
-        (r"|",                              [(["",""],                  None,   (1, 1))]),
-
-        (r"coucou|[abcd]|",                 [(["coucou"],               None,   (1, 1)),
-                                             (None,                     "abcd", (1, 1)),
-                                             ([""],                     None,   (1, 1))]),
-
-        (r"[whatever]+|[hao]|[salut]?",     [(None,                     "whatever", (1, None)),
-                                             (None,                     "hao", (1, 1)),
-                                             (None,                     "salut", (0, 1))]),
-
-        (r"|[hao]|[salut]?",                [([""],                     None, (1, 1)),
-                                             (None,                     "hao", (1, 1)),
-                                             (None,                     "salut", (0, 1))]),
-        (r"coucou||[salut]?",               [(["coucou", ""],           None, (1, 1)),
-                                             (None,                     "salut", (0, 1))]),
-        (r"coucou||||[salut]?",             [(["coucou", "", "", ""], None, (1, 1)),
-                                             (None, "salut", (0, 1))])
-    )
-    def test_pick(self, regex, nodes):
-        self.regex_assert(regex, nodes)
-
-
+        self.assert_regex_is_valid(test_case)
 
 
     @ddt.data(
@@ -214,7 +137,20 @@ class RegexParserTest(unittest.TestCase):
          'nodes': [{"contents": [""]}, {"contents": [""]}, {"contents": [""]}]},
     )
     def test_basic_parenthesis(self, test_case):
-        self.regex_assert_json(test_case)
+        self.assert_regex_is_valid(test_case)
+
+
+
+
+    @ddt.data(
+        {'regex': r"(ab|cd|)+", 'nodes': [{"contents": ["ab", "cd", ""], "qty": (1, None)}]},
+        {'regex': r"(ab||cd)", 'nodes': [{"contents": ["ab", "", "cd"]}]},
+        {'regex': r"(|ab|cd|ef|gh)+", 'nodes': [{"contents": ["", "ab", "cd", "ef", "gh"], "qty": (1, None)}]},
+        {'regex': r"(|)+", 'nodes': [{"contents": ["", ""], "qty": (1, None)}]},
+        {'regex': r"(|||)+", 'nodes': [{"contents": ["", "", "", ""], "qty": (1, None)}]},
+    )
+    def test_or_in_parenthesis(self, test_case):
+        self.assert_regex_is_valid(test_case)
 
 
 
@@ -240,15 +176,69 @@ class RegexParserTest(unittest.TestCase):
          'nodes': [{"contents": ["new"]}, {"alphabet": "york"}, {"contents": ["city"]}]},
     )
     def test_basic_square_brackets(self, test_case):
-        self.regex_assert_json(test_case)
+        self.assert_regex_is_valid(test_case)
 
 
     @ddt.data(r"[]", r"stronger[]baby", r"strongerbaby[]", r"[]strongerbaby", r"stro[]nger[]baby[]")
     def test_basic_square_brackets_raise(self, regex):
-        self.regex_raise(regex)
+        self.assert_regex_is_invalid(regex)
 
 
-    def regex_assert_json(self, test_case):
+
+    @ddt.data(
+
+        {'regex': r"|", 'nodes': [{"contents": ["",""]}]},
+        {'regex': r"|||", 'nodes': [{"contents": ["", "", "", ""]}]},
+        {'regex': r"toto|titi|tata", 'nodes': [{"contents": ["toto", "titi", "tata"]}]},
+        {'regex': r"toto|titi|", 'nodes': [{"contents": ["toto", "titi", ""]}]},
+        {'regex': r"toto||tata", 'nodes': [{"contents": ["toto", "", "tata"]}]},
+        {'regex': r"|titi|tata", 'nodes': [{"contents": ["", "titi", "tata"]}]},
+        {'regex': r"coucou|[abcd]|", 'nodes': [{"contents": ["coucou"]}, {"alphabet": "abcd"}, {"contents": [""]}]},
+
+        {'regex': r"|[hao]|[salut]?",
+         'nodes': [{"contents": [""]}, {"alphabet": "hao"}, {"alphabet": "salut", "qty": (0, 1)}]},
+
+        {'regex': r"coucou||[salut]?",
+         'nodes': [{"contents": ["coucou", ""]}, {"alphabet": "salut", "qty": (0, 1)}]},
+
+        {'regex': r"coucou||||[salut]?",
+         'nodes': [{"contents": ["coucou", "", "", ""]}, {"alphabet": "salut", "qty": (0, 1)}]},
+
+        {'regex': r"[whatever]+|[hao]|[salut]?",
+         'nodes': [
+             {"alphabet": "whatever", "qty": (1, None)},
+             {"alphabet": "hao"},
+             {"alphabet": "salut", "qty": (0, 1)}
+         ]},
+
+        {'regex': r"(whatever)+|(hao)|(salut)?",
+         'nodes': [
+             {"contents": ["whatever"], "qty": (1, None)},
+             {"contents": ["hao"]},
+             {"contents": ["salut"], "qty": (0, 1)}
+         ]},
+
+
+        {'regex': r"tata|haha|c*|b*|[abcd]+", 'nodes': [
+            {"contents": ["tata", "haha"]},
+            {"contents": ["c"], "qty": (0, None)},
+            {"contents": ["b"], "qty": (0, None)},
+            {"alphabet": "abcd", "qty": (1, None)}
+        ]},
+
+        {'regex': r"(tata)+|haha|tata||b*|[abcd]+", 'nodes': [
+            {"contents": ["tata"], "qty": (1, None)},
+            {"contents": ["haha", "tata", ""]},
+            {"contents": ["b"], "qty": (0, None)},
+            {"alphabet": "abcd", "qty": (1, None)}
+        ]},
+    )
+    def test_shape(self, test_case):
+        self.assert_regex_is_valid(test_case)
+
+
+
+    def assert_regex_is_valid(self, test_case):
 
         self._parser.parse(test_case['regex'], "name")
         self.assertEquals(self._parser._create_terminal_node.call_count, len(test_case['nodes']))
@@ -264,3 +254,7 @@ class RegexParserTest(unittest.TestCase):
             calls.append(mock.call("name" + str(i + 1), vt.String, contents=contents, alphabet=alphabet, qty=qty))
 
         self._parser._create_terminal_node.assert_has_calls(calls)
+
+
+    def assert_regex_is_invalid(self, regex):
+        self.assertRaises(Exception, self._parser.parse, regex, "name")
