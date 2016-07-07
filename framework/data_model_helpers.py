@@ -674,7 +674,7 @@ class RegexParser(StateMachine):
                     ctx.append_to_buffer(content)
 
                 if ctx.input == '{':
-                    return self.machine.InsideBrackets
+                    return self.machine.Brackets
                 else:
                     return self.machine.QtyState
 
@@ -746,16 +746,63 @@ class RegexParser(StateMachine):
                 return self.machine.MainState
 
 
-    class InsideBrackets(State):
+    class Brackets(SubStateMachine):
 
-        def run(self, ctx):
-            if ctx.input == '{':
-                ctx.context = self.__class__
-            elif ctx.input == '}':
-                ctx.context = RegexParser.MainState
+        class Initial(State):
 
-                if ctx.min is not None:
-                    ctx.min = int(ctx.min)
+            def run(self, ctx):
+                ctx.min = ""
+
+            def advance(self, ctx):
+                if ctx.input.isdigit():
+                    return self.machine.BeforeComma
+                else:
+                    raise Exception
+
+        class BeforeComma(State):
+
+            def run(self, ctx):
+                ctx.min += ctx.input
+
+            def advance(self, context):
+                if context.input.isdigit():
+                    return self.machine.BeforeComma
+                elif context.input == ',':
+                    return self.machine.Comma
+                elif context.input == '}':
+                    return self.machine.Final
+                else:
+                    raise Exception
+
+        class Comma(State):
+
+            def run(self, ctx):
+                ctx.max = ""
+
+            def advance(self, context):
+                if context.input.isdigit():
+                    return self.machine.AfterComma
+                elif context.input == '}':
+                    return self.machine.Final
+                else:
+                    raise Exception
+
+        class AfterComma(State):
+
+            def run(self, ctx):
+                ctx.max += ctx.input
+
+            def advance(self, context):
+                if context.input.isdigit():
+                    return self.machine.AfterComma
+                elif context.input == '}':
+                    return self.machine.Final
+                else:
+                    raise Exception
+
+        class Final(State):
+            def run(self, ctx):
+                ctx.min = int(ctx.min)
 
                 if ctx.max is None:
                     ctx.max = ctx.min
@@ -769,44 +816,25 @@ class RegexParser(StateMachine):
 
                 ctx.flush()
 
-            elif ctx.input == ',':
-                if ctx.min is None:
-                    raise Exception
-                ctx.max = ""
-            elif ctx.input.isdigit():
-                if ctx.max is not None:
-                    ctx.max += ctx.input
-                else:
-                    if ctx.min is None:
-                        ctx.min = ""
-                    ctx.min += ctx.input
-
         def advance(self, ctx):
             if ctx.input in ('*', '+', '?', '{', ')', ']'):
                 raise Exception
-
-            if ctx.context == self.__class__:
-                if ctx.input.isdigit() or ctx.input in (',', '}'):
-                    return self.__class__
-                else:
-                    raise Exception
+            elif ctx.input == '|':
+                return self.machine.PickState
+            elif ctx.input is None:
+                return self.machine.Final
             else:
-                if ctx.input == '|':
-                    return self.machine.PickState
-                elif ctx.input is None:
-                    return self.machine.Final
-                else:
-                    if ctx.pick:
-                        raise Exception
+                if ctx.pick:
+                    raise Exception
 
-                    if ctx.input == '}':
-                        raise Exception
-                    elif ctx.input == '(':
-                        return self.machine.Parenthesis
-                    elif ctx.input == '[':
-                        return self.machine.SquareBrackets
-                    else:
-                        return self.machine.MainState
+                if ctx.input == '}':
+                    raise Exception
+                elif ctx.input == '(':
+                    return self.machine.Parenthesis
+                elif ctx.input == '[':
+                    return self.machine.SquareBrackets
+                else:
+                    return self.machine.MainState
 
 
     class Parenthesis(SubStateMachine):
@@ -861,7 +889,7 @@ class RegexParser(StateMachine):
             elif ctx.input in ('*', '+', '?'):
                 return self.machine.QtyState
             elif ctx.input == '{':
-                return self.machine.InsideBrackets
+                return self.machine.Brackets
             else:
                 ctx.flush()
 
@@ -931,7 +959,7 @@ class RegexParser(StateMachine):
             elif ctx.input in ('*', '+', '?'):
                 return self.machine.QtyState
             elif ctx.input == '{':
-                return self.machine.InsideBrackets
+                return self.machine.Brackets
             else:
                 ctx.flush()
 
