@@ -278,6 +278,8 @@ class FmkPlumbing(object):
     def set_error(self, msg='', context=None, code=Error.Reserved):
         self.error = True
         self.fmk_error.append(Error(msg, context=context, code=code))
+        if hasattr(self, 'lg'):
+            self.lg.log_fmk_info(msg)
 
     def get_error(self):
         self.error = False
@@ -503,11 +505,11 @@ class FmkPlumbing(object):
         return target_recovered
 
     def monitor_probes(self, force_record=False):
-        probes = self.prj.get_probes()
+        probes = self.mon.get_probes_names()
         ok = True
         for pname in probes:
-            if self.prj.is_probe_launched(pname):
-                pstatus = self.prj.get_probe_status(pname)
+            if self.mon.is_probe_launched(pname):
+                pstatus = self.mon.get_probe_status(pname)
                 err = pstatus.get_status()
                 if err < 0 or force_record:
                     if err < 0:
@@ -1479,8 +1481,6 @@ class FmkPlumbing(object):
     def _do_after_sending_data(self, data_list):
         self._handle_data_callbacks(data_list, hook=HOOK.after_sending)
 
-        data_list = list(filter(lambda x: not x.is_blocked(), data_list))
-
         if self.__stats_countdown < 1:
             self.__stats_countdown = 9
             self.lg.log_stats()
@@ -1648,7 +1648,8 @@ class FmkPlumbing(object):
                             self.set_error(msg='Data descriptor is incorrect!',
                                            code=Error.UserCodeError)
 
-            new_data_list.append(new_data)
+            if not new_data.is_unusable():
+                new_data_list.append(new_data)
 
         return new_data_list
 
@@ -1761,9 +1762,7 @@ class FmkPlumbing(object):
 
         self._do_after_feedback_retrieval(data_list)
 
-        cont3 = self.mon.do_after_sending_and_logging_data()
-
-        return cont0 and cont1 and cont2 and cont3
+        return cont0 and cont1 and cont2
 
 
     @EnforceOrder(accepted_states=['S2'])
@@ -1775,17 +1774,21 @@ class FmkPlumbing(object):
         if self.__send_enabled:
 
             if not self._is_data_valid(data_list):
-                self.set_error('send_data(): Data has been provided empty --> will not be sent '
-                               'nor logged',
+                self.set_error("send_data(): Data has been provided empty --> won't be sent",
                                code=Error.DataInvalid)
-                return None #data_list
+                return None
 
             data_list = self._do_before_sending_data(data_list)
 
+            if not data_list:
+                self.set_error("send_data(): No more data to send",
+                               code=Error.HandOver)
+                return None
+
             if not self._is_data_valid(data_list):
-                self.set_error('send_data(): Data became empty --> will not be sent nor logged',
+                self.set_error("send_data(): Data became empty --> won't be sent",
                                code=Error.DataInvalid)
-                return None #data_list
+                return None
 
             if add_preamble:
                 self.new_transfer_preamble()
@@ -2399,6 +2402,9 @@ class FmkPlumbing(object):
                     continue
 
                 data_list = self.send_data(data_list, add_preamble=True)
+                if data_list is None:
+                    self.lg.log_fmk_info("Operator will shutdown because there is no data to send")
+                    break
 
                 try:
                     linst = operator.do_after_all(self._exportable_fmk_ops, self.dm, self.mon, self.tg, self.lg)

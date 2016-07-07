@@ -322,7 +322,7 @@ class String(VT_Alt):
         """
         return
 
-    def encoding_test_cases(self, current_val, max_sz, min_sz, max_encoded_sz):
+    def encoding_test_cases(self, current_val, max_sz, min_sz, min_encoded__sz, max_encoded_sz):
         """
         To be optionally overloaded by a subclass that deals with encoding
         in order to provide specific test cases on encoding scheme.
@@ -331,6 +331,7 @@ class String(VT_Alt):
             current_val: the current value (not encoded)
             max_sz: maximum size for a not encoded string
             min_sz: minimum size for a not encoded string
+            min_encoded_sz: minimum encoded size for a string
             max_encoded_sz: maximum encoded size for a string
 
         Returns:
@@ -348,7 +349,7 @@ class String(VT_Alt):
     def init_specific(self, val_list=None, size=None, min_sz=None,
                       max_sz=None, determinist=True, ascii_mode=False,
                       extra_fuzzy_list=None, absorb_regexp=None,
-                      alphabet=None, max_encoded_sz=None, encoding_arg=None):
+                      alphabet=None, min_encoded_sz=None, max_encoded_sz=None, encoding_arg=None):
 
         """
         Initialize the String
@@ -377,6 +378,8 @@ class String(VT_Alt):
             alphabet: The alphabet to use for generating data, in case no `val_list` is
               provided. Also use during absorption to validate the contents. It is
               checked if there is no `val_list`.
+            min_encoded_sz: Only relevant for subclasses that leverage the encoding infrastructure.
+              Enable to provide the minimum legitimate size for an encoded string.
             max_encoded_sz: Only relevant for subclasses that leverage the encoding infrastructure.
               Enable to provide the maximum legitimate size for an encoded string.
             encoding_arg: Only relevant for subclasses that leverage the encoding infrastructure
@@ -407,7 +410,7 @@ class String(VT_Alt):
                              max_sz=max_sz, determinist=determinist,
                              ascii_mode=ascii_mode, extra_fuzzy_list=extra_fuzzy_list,
                              absorb_regexp=absorb_regexp, alphabet=alphabet,
-                             max_encoded_sz=max_encoded_sz)
+                             min_encoded_sz=min_encoded_sz, max_encoded_sz=max_encoded_sz)
 
     def make_private(self, forget_current_state):
         if forget_current_state:
@@ -511,6 +514,7 @@ class String(VT_Alt):
         """
 
         self.orig_max_sz = self.max_sz
+        self.orig_min_encoded_sz = self.min_encoded_sz
         self.orig_max_encoded_sz = self.max_encoded_sz
         self.orig_min_sz = self.min_sz
         self.orig_val_list = copy.copy(self.val_list)
@@ -523,11 +527,17 @@ class String(VT_Alt):
             else:
                 sz = size if size is not None and size < self.max_sz else self.max_sz
 
+            # if encoded string, val is returned decoded
             val = self._read_value_from(blob[off:sz+off], constraints)
 
-            val_sz = len(val) # maybe different from sz if blob is smaller
-            if val_sz < self.min_sz:
-                raise ValueError('min_sz constraint not respected!')
+            if self.encoded_string:
+                val_enc_sz = len(self.encode(val)) # maybe different from sz if blob is smaller
+                if val_enc_sz < self.min_encoded_sz:
+                    raise ValueError('min_encoded_sz constraint not respected!')
+            else:
+                val_sz = len(val) # maybe different from sz if blob is smaller
+                if val_sz < self.min_sz:
+                    raise ValueError('min_sz constraint not respected!')
         else:
             blob = blob[off:] #blob[off:size+off] if size is not None else blob[off:]
             val = self._read_value_from(blob, constraints)
@@ -561,6 +571,8 @@ class String(VT_Alt):
             if self.encoded_string:
                 if val_enc_sz > self.max_encoded_sz:
                     self.max_encoded_sz = val_enc_sz
+                elif val_enc_sz < self.min_encoded_sz:
+                    self.min_encoded_sz = val_enc_sz
 
         if self.val_list is None:
             self.val_list = []
@@ -613,6 +625,7 @@ class String(VT_Alt):
             self.val_list_copy = self.orig_val_list_copy
             self.min_sz = self.orig_min_sz
             self.max_sz = self.orig_max_sz
+            self.min_encoded_sz = self.orig_min_encoded_sz
             self.max_encoded_sz = self.orig_max_encoded_sz
             self.drawn_val = self.orig_drawn_val
 
@@ -671,11 +684,12 @@ class String(VT_Alt):
                         max_sz=None, determinist=True,
                         ascii_mode=False, extra_fuzzy_list=None,
                         absorb_regexp=None, alphabet=None,
-                        max_encoded_sz=None):
+                        min_encoded_sz=None, max_encoded_sz=None):
         '''
         @size take precedence over @min_sz and @max_sz
         '''
         self.max_encoded_sz = max_encoded_sz
+        self.min_encoded_sz = min_encoded_sz
 
         if alphabet is not None:
             self.alphabet = convert_to_internal_repr(alphabet)
@@ -707,8 +721,13 @@ class String(VT_Alt):
         if val_list is not None:
             assert(isinstance(val_list, list))
             self.val_list = VT._str2internal(val_list)
-            if self.alphabet is not None:
-                for val in self.val_list:
+            for val in self.val_list:
+                if not self._check_compliance(val, force_max_enc_sz=max_encoded_sz is not None,
+                                              force_min_enc_sz=min_encoded_sz is not None,
+                                              update_list=False):
+                    raise DataModelDefinitionError
+
+                if self.alphabet is not None:
                     for l in val:
                         if l not in self.alphabet:
                             raise ValueError("The value '%s' does not conform to the alphabet!" % val)
@@ -747,9 +766,6 @@ class String(VT_Alt):
                 length = len(v)
                 if length > sz:
                     sz = length
-                if not self._check_compliance(v, force_max_enc_sz=max_encoded_sz is not None,
-                                              update_list=False):
-                    raise DataModelDefinitionError
 
             self.max_sz = sz
             self.min_sz = 0
@@ -765,27 +781,47 @@ class String(VT_Alt):
             self.min_sz = 0
             self.max_sz = self.DEFAULT_MAX_SZ
 
-            # raise ValueError
 
         self._check_sizes()
 
         if val_list is None:
-            self._populate_val_list(force_max_enc_sz=max_encoded_sz is not None)
+            self._populate_val_list(force_max_enc_sz=max_encoded_sz is not None,
+                                    force_min_enc_sz=min_encoded_sz is not None)
 
         self.determinist = determinist
 
 
-    def _check_compliance(self, value, force_max_enc_sz, update_list=True):
+    def _check_compliance(self, value, force_max_enc_sz, force_min_enc_sz, update_list=True):
         if self.encoded_string:
             val_sz = len(self.encode(value))
-            if not force_max_enc_sz:
+            if not force_max_enc_sz and not force_min_enc_sz:
                 if self.max_encoded_sz is None or val_sz > self.max_encoded_sz:
                     self.max_encoded_sz = val_sz
+                if self.min_encoded_sz is None or val_sz < self.min_encoded_sz:
+                    self.min_encoded_sz = val_sz
                 if update_list:
                     self.val_list.append(value)
                 return True
-            else:
+            elif force_max_enc_sz and not force_min_enc_sz:
                 if val_sz <= self.max_encoded_sz:
+                    if self.min_encoded_sz is None or val_sz < self.min_encoded_sz:
+                        self.min_encoded_sz = val_sz
+                    if update_list:
+                        self.val_list.append(value)
+                    return True
+                else:
+                    return False
+            elif not force_max_enc_sz and force_min_enc_sz:
+                if val_sz >= self.min_encoded_sz:
+                    if self.max_encoded_sz is None or val_sz > self.max_encoded_sz:
+                        self.max_encoded_sz = val_sz
+                    if update_list:
+                        self.val_list.append(value)
+                    return True
+                else:
+                    return False
+            else:
+                if val_sz <= self.max_encoded_sz and val_sz >= self.min_encoded_sz:
                     if update_list:
                         self.val_list.append(value)
                     return True
@@ -796,17 +832,17 @@ class String(VT_Alt):
                 self.val_list.append(value)
             return True
 
-    def _populate_val_list(self, force_max_enc_sz=False):
+    def _populate_val_list(self, force_max_enc_sz=False, force_min_enc_sz=False):
         self.val_list = []
         alpbt = string.printable if self.alphabet is None else unconvert_from_internal_repr(self.alphabet)
         if self.min_sz < self.max_sz:
             self._check_compliance(bp.rand_string(size=self.max_sz, str_set=alpbt),
-                                   force_max_enc_sz=force_max_enc_sz)
+                                   force_max_enc_sz=force_max_enc_sz, force_min_enc_sz=force_min_enc_sz)
             self._check_compliance(bp.rand_string(size=self.min_sz, str_set=alpbt),
-                                   force_max_enc_sz=force_max_enc_sz)
+                                   force_max_enc_sz=force_max_enc_sz, force_min_enc_sz=force_min_enc_sz)
         else:
             self._check_compliance(bp.rand_string(size=self.max_sz, str_set=alpbt),
-                                   force_max_enc_sz=force_max_enc_sz)
+                                   force_max_enc_sz=force_max_enc_sz, force_min_enc_sz=force_min_enc_sz)
         if self.min_sz+1 < self.max_sz:
             NB_VALS_MAX = 3
             for idx in range(NB_VALS_MAX):
@@ -814,7 +850,8 @@ class String(VT_Alt):
                 retry_cpt = 0
                 while nb_vals < NB_VALS_MAX and retry_cpt < 5:
                     val = bp.rand_string(mini=self.min_sz+1, maxi=self.max_sz-1, str_set=alpbt)
-                    if self._check_compliance(val, force_max_enc_sz=force_max_enc_sz):
+                    if self._check_compliance(val, force_max_enc_sz=force_max_enc_sz,
+                                              force_min_enc_sz=force_min_enc_sz):
                         nb_vals += 1
                     else:
                         retry_cpt += 1
@@ -870,7 +907,7 @@ class String(VT_Alt):
                 self.val_list_fuzzy.append(v)
 
         enc_cases = self.encoding_test_cases(orig_val, self.max_sz, self.min_sz,
-                                             self.max_encoded_sz)
+                                             self.min_encoded_sz, self.max_encoded_sz)
         if enc_cases:
             self.val_list_fuzzy += enc_cases
 
@@ -910,7 +947,7 @@ class String(VT_Alt):
             if encoded_size == self.max_encoded_sz:
                 return
             self.max_encoded_sz = encoded_size
-            self.min_sz = self.max_encoded_sz
+            self.min_encoded_sz = self.max_encoded_sz
         elif size is not None:
             if size == self.max_sz and size == self.min_sz:
                 return
@@ -1307,7 +1344,7 @@ class Codec(String): pass
 
 @from_encoder(PythonCodec_Enc, 'utf_16_le')
 class UTF16_LE(String):
-    def encoding_test_cases(self, current_val, max_sz, min_sz, max_encoded_sz):
+    def encoding_test_cases(self, current_val, max_sz, min_sz, min_encoded_sz, max_encoded_sz):
         l = None
         if max_sz > 0:
             if max_encoded_sz % 2 == 1:

@@ -1,3 +1,5 @@
+# -*- coding: latin-1 -*-
+
 ################################################################################
 #
 #  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
@@ -2904,7 +2906,7 @@ class TestNode_TypedValue(unittest.TestCase):
         self.assertEqual(raw_data[size:], b'FEND')
 
 
-    def test_encoded_str(self):
+    def test_encoded_str_1(self):
 
         class EncodedStr(String):
 
@@ -3024,6 +3026,49 @@ class TestNode_TypedValue(unittest.TestCase):
         enc = vtype.encode(msg)
         dec = vtype.decode(enc)
         self.assertEqual(msg, dec)
+
+    def test_encoded_str_2(self):
+
+        enc_desc = \
+        {'name': 'enc',
+         'contents': [
+             {'name': 'len',
+              'contents': UINT8()},
+             {'name': 'user_data',
+              'sync_enc_size_with': 'len',
+              'contents': UTF8(val_list=['TEST'])},
+             {'name': 'padding',
+              'contents': String(max_sz=0),
+              'absorb_csts': AbsNoCsts()},
+         ]}
+
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(enc_desc)
+        node.set_env(Env())
+
+        node_abs = Node('enc_abs', base_node=node, new_env=True)
+        node_abs.set_env(Env())
+        node_abs2 = node_abs.get_clone()
+
+        node_abs.show()
+
+        raw_data = b'\x0C' + b'\xC6\x67' + b'garbage'  # \xC6\x67 --> invalid UTF8
+        status, off, size, name = node_abs.absorb(raw_data, constraints=AbsNoCsts(size=True, struct=True))
+
+        self.assertEqual(status, AbsorbStatus.Reject)
+
+        raw_data = b'\x05' + b'\xC3\xBCber' + b'padding' # \xC3\xBC = ü in UTF8
+
+        status, off, size, name = node_abs2.absorb(raw_data, constraints=AbsNoCsts(size=True, struct=True))
+
+        print('Absorb Status:', status, off, size, name)
+        print(' \_ length of original data:', len(raw_data))
+        print(' \_ remaining:', raw_data[size:])
+        raw_data_abs = node_abs2.to_bytes()
+        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        node_abs2.show()
+
+        self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
 
 
 class TestHLAPI(unittest.TestCase):

@@ -447,14 +447,6 @@ class Monitor(object):
         self._wait_for_specific_probes(BlockingProbeUser, BlockingProbeUser.wait_until_ready)
 
 
-    # Used only in interactive session
-    # (not called during Operator execution)
-    def do_after_sending_and_logging_data(self):
-        if not self.__enable:
-            return True
-
-        return self.is_target_ok()
-
     def do_on_error(self):
         if not self.__enable:
             return

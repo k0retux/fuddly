@@ -19,7 +19,7 @@ def cbk_transition2(env, current_step, next_step, fbk):
         current_step.make_free()
         if next_step.node:
             print("*** The next node named '{:s}' will be modified!".format(next_step.node.name))
-            next_step.node['off_gen/prefix'] = '*MODIFIED*'
+            next_step.node['.*/prefix.?'] = '*MODIFIED*'
         else:
             print("*** The next node won't be modified!")
         return True

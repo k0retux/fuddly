@@ -88,20 +88,5 @@ class Project(object):
     def get_operators(self):
         return self.operators
 
-    def is_probe_launched(self, name):
-        return self.monitor.is_probe_launched(name)
-
-    def is_probe_stuck(self, name):
-        return self.monitor.is_probe_stuck(name)
-
-    def set_probe_delay(self, name, delay):
-        self.monitor.set_probe_delay(name, delay)
-
-    def get_probe_delay(self, name):
-        return self.monitor.get_probe_delay(name)
-
-    def get_probe_status(self, name):
-        return self.monitor.get_probe_status(name)
-
     def get_probes(self):
         return self.monitor.get_probes_names()
