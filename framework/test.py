@@ -3057,7 +3057,7 @@ class TestNode_TypedValue(unittest.TestCase):
 
         self.assertEqual(status, AbsorbStatus.Reject)
 
-        raw_data = b'\x05' + b'\xC3\xBCber' + b'padding' # \xC3\xBC = ü in UTF8
+        raw_data = b'\x05' + b'\xC3\xBCber' + b'padding' # \xC3\xBC = ï¿½ in UTF8
 
         status, off, size, name = node_abs2.absorb(raw_data, constraints=AbsNoCsts(size=True, struct=True))
 
@@ -3435,10 +3435,10 @@ class TestFMK(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        fmk.run_project(name='tuto', dm_name='mydf')
+        fmk.run_project(name='tuto', dm_name='mydf', tg=0)
     
     def setUp(self):
-        pass
+        fmk.reload_all(tg_num=0)
 
     def test_generic_disruptors_01(self):
         dmaker_type = 'TESTNODE'
@@ -3547,6 +3547,34 @@ class TestFMK(unittest.TestCase):
 
         self.assertEqual(idx, expected_idx)
 
+    def test_operator_1(self):
+
+        fmk.launch_operator('MyOp', user_input=UserInputContainer(specific=UI(max_steps=100, mode=1)))
+        print('\n*** Last data ID: {:d}'.format(fmk.lg.last_data_id))
+        fmkinfo = fmk.fmkDB.execute_sql_statement(
+            "SELECT CONTENT FROM FMKINFO "
+            "WHERE DATA_ID == {data_id:d} "
+            "ORDER BY ERROR DESC;".format(data_id=fmk.lg.last_data_id)
+        )
+        self.assertTrue(fmkinfo)
+        for info in fmkinfo:
+            if 'Exhausted data maker' in info[0]:
+                break
+        else:
+            raise ValueError('the data maker should be exhausted and trigger the end of the operator')
+
+    @unittest.skipIf(not run_long_tests, "Long test case")
+    def test_operator_2(self):
+
+        fmk.launch_operator('MyOp')
+        fbk = fmk.fmkDB.last_feedback["Operator 'MyOp'"][0]['content']
+        print(fbk)
+        self.assertIn(b'You win!', fbk)
+
+        fmk.launch_operator('MyOp')
+        fbk = fmk.fmkDB.last_feedback["Operator 'MyOp'"][0]['content']
+        print(fbk)
+        self.assertIn(b'You loose!', fbk)
 
 
 if __name__ == "__main__":

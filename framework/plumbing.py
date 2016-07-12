@@ -2301,7 +2301,7 @@ class FmkPlumbing(object):
 
 
     @EnforceOrder(accepted_states=['S2'])
-    def launch_operator(self, name, user_input, use_existing_seed=True, verbose=False):
+    def launch_operator(self, name, user_input=UserInputContainer(), use_existing_seed=True, verbose=False):
         
         operator = self.prj.get_operator(name)
         if operator is None:
