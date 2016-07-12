@@ -27,8 +27,7 @@ from framework.data_model import AbsorbStatus, AbsNoCsts
 
 tactics = Tactics()
 
-
-def wait_for_padi(env, current_step, next_step, feedback):
+def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi'):
     if not feedback:
         print('\n\n*** No Feedback!')
         return False
@@ -37,39 +36,106 @@ def wait_for_padi(env, current_step, next_step, feedback):
 
         for source, fbks in feedback.items():
             for item in fbks:
-                padi = env.dm.get_data('padi')
-                padi.set_current_conf('ABS', recursive=True)
+                msg_x = env.dm.get_data(x)
+                msg_x.set_current_conf('ABS', recursive=True)
                 data = item['content']
-                off = data.find(b'\xff\xff\xff\xff\xff\xff')
+                if x == 'padi':
+                    mac_dst = b'\xff\xff\xff\xff\xff\xff'
+                elif x == 'padr':
+                    if current_step.node is not None:
+                        mac_src = current_step.node['.*/mac_src']
+                        env.mac_src = mac_src
+                    else:
+                        mac_src = env.mac_src
+                    if mac_src is not None:
+                        mac_dst = mac_src.to_bytes()
+                        print('\n*** Destination MAC will be set to: {!r}'.format(mac_dst))
+                    else:
+                        raise ValueError
+                else:
+                    raise ValueError
+                off = data.find(mac_dst)
                 data = data[off:]
-                result = padi.absorb(data, constraints=AbsNoCsts(size=True, struct=True))
+                result = msg_x.absorb(data, constraints=AbsNoCsts(size=True, struct=True))
                 if result[0] == AbsorbStatus.FullyAbsorbed:
                     try:
-                        service_name = padi['.*/value/v101'].to_bytes()
-                        mac_src = padi['.*/mac_src'].to_bytes()
+                        service_name = msg_x['.*/value/v101'].to_bytes()
+                        mac_src = msg_x['.*/mac_src'].to_bytes()
                     except:
                         continue
-                    print(' [ PADI received! ]')
+                    print(' [ {:s} received! ]'.format(x.upper()))
                     next_step.node.freeze()
                     next_step.node['.*/mac_dst'] = mac_src
-                    next_step.node['.*/tag_sn/value/v101'] = service_name
+
+                    error_msg = '\n*** The node has no path to: {:s}. Thus, ignore it.\n'\
+                                '    (probable reason: the node has been fuzzed in a way that makes the' \
+                                'path unavailable)'
+                    try:
+                        next_step.node['.*/tag_sn/value/v101'] = service_name
+                    except:
+                        print(error_msg.format('service_name'))
+                    host_uniq = msg_x['.*/value/v103']
+                    if host_uniq is not None:
+                        host_uniq = host_uniq.to_bytes()
+                        env.host_uniq = host_uniq
+                    elif hasattr(env, 'host_uniq'):
+                        host_uniq = env.host_uniq
+                    else:
+                        pass
+
+                    if host_uniq is not None:
+                        new_tag = env.dm.get_data('tag_host_uniq')
+                        try:
+                            new_tag['.*/v103'] = host_uniq
+                        except:
+                            print(error_msg.format('service_name'))
+                        else:
+                            next_step.node['.*/host_uniq_stub'].set_contents(new_tag)
+                    else:
+                        print('\n***WARNING: Host-Uniq not provided')
                     next_step.node.unfreeze(recursive=True, reevaluate_constraints=True)
                     return True
 
-        print(' [ PADI not found ]')
+        print(' [ {:s} not found! ]'.format(x.upper()))
 
         return False
 
-step_wait_padi = NoDataStep(fbk_timeout=2)
-step_send_pado = Step(DataProcess(process=['tTYPE'], seed='pado'))
+
+def retrieve_padr_from_feedback(env, current_step, next_step, feedback):
+    return retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padr')
+
+def retrieve_padi_from_feedback(env, current_step, next_step, feedback):
+    return retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi')
+
+
+### PADI fuzz scenario ###
+step_wait_padi = NoDataStep(fbk_timeout=1)
+step_send_pado = Step(DataProcess(process=[('tTYPE', UI(init=1), UI(order=True))], seed='pado'))
 # step_send_pado = Step('pado')
 step_end = Step('padt')
 
-step_wait_padi.connect_to(step_send_pado, cbk_after_fbk=wait_for_padi)
+step_wait_padi.connect_to(step_send_pado, cbk_after_fbk=retrieve_padi_from_feedback)
 step_send_pado.connect_to(step_end)
 step_end.connect_to(step_wait_padi)
 
 sc1 = Scenario('PADO')
 sc1.set_anchor(step_wait_padi)
 
-tactics.register_scenarios(sc1)
+### PADS fuzz scenario ###
+step_wait_padi = NoDataStep(fbk_timeout=1)
+step_send_valid_pado = Step('pado')
+step_send_fuzzed_pads = Step(DataProcess(process=[('tTYPE#2', UI(init=1), UI(order=True))], seed='pads'))
+step_wait_padr = NoDataStep(fbk_timeout=1)
+
+step_wait_padi.connect_to(step_send_valid_pado, cbk_after_fbk=retrieve_padi_from_feedback)
+step_send_valid_pado.connect_to(step_send_fuzzed_pads, cbk_after_fbk=retrieve_padr_from_feedback)
+
+step_send_fuzzed_pads.connect_to(step_wait_padr)
+
+step_wait_padr.connect_to(step_send_fuzzed_pads, cbk_after_fbk=retrieve_padr_from_feedback)
+step_wait_padr.connect_to(step_send_valid_pado, cbk_after_fbk=retrieve_padi_from_feedback)
+
+sc2 = Scenario('PADS')
+sc2.set_anchor(step_wait_padi)
+
+tactics.register_scenarios(sc1, sc2)

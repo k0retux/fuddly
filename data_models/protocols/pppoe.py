@@ -122,6 +122,9 @@ class PPPOE_DataModel(DataModel):
         tag_service_name = tag_node.get_clone('tag_sn')
         tag_service_name['.*/type'].set_values(value_type=UINT16_be(int_list=[0x0101]))
 
+        tag_host_uniq = tag_node.get_clone('tag_host_uniq')
+        tag_host_uniq['.*/type'].set_values(value_type=UINT16_be(int_list=[0x0103]))
+
         tag_ac_name = tag_node.get_clone('tag_ac_name') # Access Concentrator Name
         tag_ac_name['.*/type'].set_values(value_type=UINT16_be(int_list=[0x0102]))
 
@@ -133,11 +136,14 @@ class PPPOE_DataModel(DataModel):
          'contents': [
              {'name': 'mac_dst',
               'semantics': 'mac_dst',
+              'mutable': False,
               'contents': String(size=6)},
              {'name': 'mac_src',
               'semantics': 'mac_src',
+              'mutable': False,
               'contents': String(size=6)},
              {'name': 'proto',
+              'mutable': False,
               'contents': UINT16_be(int_list=[0x8863])},
              {'name': 'version-type',
               'contents': BitField(subfield_sizes=[4,4], endian=VT.BigEndian,
@@ -164,7 +170,7 @@ class PPPOE_DataModel(DataModel):
                    'exists_if': (IntCondition(0x9), 'code'),
                    'contents': [
                        (tag_service_name, 1),
-                       (tag_node, 0, 30)
+                       (tag_node, 0, 4)
                    ]},
                   {'name': '4pado',
                    'shape_type': MH.FullyRandom,
@@ -173,6 +179,8 @@ class PPPOE_DataModel(DataModel):
                    'contents': [
                        (tag_ac_name, 1),
                        (tag_service_name.get_clone(), 1),
+                       {'name': 'host_uniq_stub',
+                        'contents': String(val_list=[''])},
                        (tag_node.get_clone(), 0, 4)
                    ]},
                   {'name': '4padr',
@@ -192,12 +200,15 @@ class PPPOE_DataModel(DataModel):
                        {'weight': 10,
                         'contents': [
                             (tag_ac_name.get_clone(), 1),
+                            {'name': ('host_uniq_stub', 2),
+                             'contents': String(val_list=[''])},
                             (tag_node_4pads, 0, 4)
                         ]},
                        # Reject PPPoE session Case
                        {'weight': 2,
                         'contents': [
                             (tag_sn_error, 1),
+                            {'name': ('host_uniq_stub', 2)},
                             (tag_node_4pads, 0, 4)
                         ]},
                    ]},
@@ -236,7 +247,7 @@ class PPPOE_DataModel(DataModel):
         padt = pppoe_msg.get_clone('padt')
         padt['.*/code'].set_values(value_type=UINT8(int_list=[0xa7]))
 
-        self.register(pppoe_msg, padi, pado, padr, pads, padt)
+        self.register(pppoe_msg, padi, pado, padr, pads, padt, tag_host_uniq)
 
 
 data_model = PPPOE_DataModel()

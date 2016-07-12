@@ -723,7 +723,7 @@ class Logger(object):
         prefix = p + self.p
 
         if sys.version_info[0] > 2:
-            if issubclass(msg.__class__, Data) or issubclass(msg.__class__, bytes):
+            if issubclass(msg.__class__, Data) or isinstance(msg, bytes):
                 msg = repr(msg)
         else:
             if issubclass(msg.__class__, Data):
