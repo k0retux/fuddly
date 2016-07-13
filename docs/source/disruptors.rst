@@ -280,9 +280,8 @@ tSTRUCT - Alter Data Structure
 
 Description:
   For each node associated to existence constraints or quantity
-  constraints, alter the constraint, one at a time, after each call
-  to this disruptor.
-  If `deep` is set, enable new structure corruption cases, based on
+  constraints or size constraints, alter the constraint, one at a time, after each call
+  to this disruptor. If `deep` is set, enable new structure corruption cases, based on
   the minimum and maximum amount of non-terminal nodes (within the
   input data) specified in the data model.
 
@@ -407,11 +406,13 @@ Parameters:
 	 |      | default: False [type: bool]
 
 
+.. _dis:ttype:
+
 tTYPE - Advanced Alteration of Terminal Typed Node
 --------------------------------------------------
 
 Description:
-  Perform alterations on typed nodes (one at a time) accordingly to
+  Perform alterations on typed nodes (one at a time) according to
   its type and various complementary information (such as size,
   allowed values, ...).
 

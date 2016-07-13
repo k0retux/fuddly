@@ -26,3 +26,6 @@ class InvalidFmkDB(Exception): pass
 
 class TargetFeedbackError(Exception): pass
 class DataProcessTermination(Exception): pass
+class UserInterruption(Exception): pass
+
+class DataModelDefinitionError(Exception): pass

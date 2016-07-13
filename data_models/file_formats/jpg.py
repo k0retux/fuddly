@@ -74,15 +74,14 @@ class JPG_DataModel(DataModel):
         jpg_desc = \
         {'name': 'jpg',
          'contents': [
+             {'name': 'before_SOF',
+              'contents': String(size=0),
+              'absorb_csts': AbsNoCsts(),
+              'set_attrs': MH.Attr.Abs_Postpone,
+              'mutable': False},
+
              {'name': 'SOF_hdr',
               'contents': [
-                  {'name': 'before_SOF',
-                   'contents': String(size=0),
-                   'absorb_csts': AbsNoCsts(),
-                   'set_attrs': MH.Attr.Abs_Postpone,  # Only works if it is side-by-side with the
-                                                       # the node that will provide the constraint
-                   'mutable': False},
-
                   {'name': 'F_marker',
                    'contents': UINT16_be(int_list=[m for m in markers['SOF'].values()])},
                   {'name': 'Lf',
@@ -95,21 +94,17 @@ class JPG_DataModel(DataModel):
                   {'name': 'P',
                    'contents': UINT8(int_list=[8,12])},
                   {'name': 'Y',
-                   'contents': UINT16_be(maxi=65535)},
+                   'contents': UINT16_be(maxi=65535),
+                   'specific_fuzzy_vals': [65500]},
                   {'name': 'X',
                    'contents': UINT16_be(mini=1, maxi=65535)},
                   {'name': 'Nf',
-                   'contents': MH.QTY(node_name='F_Comp', vt=UINT8),
-                   'node_args': 'F_CompGroup',
-                   'alt': [
-                       {'conf': 'ABS',
-                        'contents': UINT8(mini=1, maxi=255)},
-                   ]},
+                   'contents': UINT8(mini=1, maxi=255)},
                   {'name': 'F_CompGroup',
                    'custo_clear': MH.Custo.NTerm.MutableClone,
                    'contents': [
                        {'name': 'F_Comp',
-                        'qty': (1, 255),
+                        'qty_from': 'Nf',
                         'contents': [
                            {'name': 'Cf',
                             'contents': UINT8(mini=0, maxi=255)},
@@ -123,15 +118,15 @@ class JPG_DataModel(DataModel):
                    ]},
               ]},
 
+             {'name': 'between_SOF_SOS',
+              'contents': String(),
+              'random': True,
+              'absorb_csts': AbsNoCsts(),
+              'set_attrs': MH.Attr.Abs_Postpone,
+              'mutable': False},
+
              {'name': 'SOS_hdr',
               'contents': [
-                  {'name': 'between_SOF_SOS',
-                   'contents': String(),
-                   'random': True,
-                   'absorb_csts': AbsNoCsts(),
-                   'set_attrs': MH.Attr.Abs_Postpone,
-                   'mutable': False},
-
                   {'name': 'S_marker',
                    'contents': UINT16_be(int_list=[markers['SOS']])},
                   {'name': 'Ls',
@@ -142,17 +137,12 @@ class JPG_DataModel(DataModel):
                         'contents': UINT16_be()}
                    ]},
                   {'name': 'Ns',
-                   'contents': MH.QTY(node_name='S_Comp', vt=UINT8),
-                   'node_args': 'S_CompGroup',
-                   'alt': [
-                       {'conf': 'ABS',
-                        'contents': UINT8(mini=1, maxi=255)},
-                   ]},
+                   'contents': UINT8(mini=1, maxi=4)},
                   {'name': 'S_CompGroup',
                    'custo_clear': MH.Custo.NTerm.MutableClone,
                    'contents': [
                        {'name': 'S_Comp',
-                        'qty': (1, 4),
+                        'qty_from': 'Ns',
                         'contents': [
                             {'name': 'Cs',
                              'contents': UINT8()},

@@ -139,7 +139,7 @@ class Op1(Operator):
         if self.mode == 1:
             self.instr_list.append([('DEV', UI(finite=True)), ('tTYPE', UI(init=self.init))])
         elif self.mode == 2:
-            self.instr_list.append([('DEV_MS', UI(finite=True))])
+            self.instr_list.append([('DEV', ('ALT', None, UI(conf='MS')), UI(finite=True))])
         else:
             self.instr_list.append([('DEV', UI(finite=True))])
 

@@ -41,6 +41,8 @@ sys.path.append('.')
 from framework.basic_primitives import *
 from libs.external_modules import *
 from framework.global_resources import *
+from framework.error_handling import *
+
 import libs.debug_facility as dbg
 
 DEBUG = dbg.DM_DEBUG
@@ -498,29 +500,119 @@ class AbsFullCsts(AbsCsts):
 
 ### Materials for Node Synchronization ###
 
-class SyncScope:
+class SyncScope(Enum):
     Qty = 1
-    Existence = 2
-    Inexistence = 3
-
+    QtyFrom = 2
+    Existence = 10
+    Inexistence = 11
+    Size = 20
 
 class SyncObj(object):
+
+    def get_node_containers(self):
+        """
+        Shall return either a :class:`Node` or a list of ``Nodes`` or a list of ``(Node, param)``
+        where ``param`` should provide ``__copy__`` method if needed.
+        """
+        raise NotImplementedError
+
+    def put_node_containers(self, new_containers):
+        """
+        This method will be called to provide updated containers that should
+        replace the old ones.
+
+        Args:
+            new_containers: the updated containers
+        """
+        raise NotImplementedError
+
+    def make_private(self, node_dico):
+        node_containers = self.get_node_containers()
+        if node_containers:
+            if isinstance(node_containers, Node):
+                new_node = node_dico.get(node_containers, None)
+                if new_node is not None:
+                    self.put_node_containers(new_node)
+                else:
+                    # refer to comments of NodeInternals._update_node_refs()
+                    pass
+            elif isinstance(node_containers, (tuple, list)):
+                new_node_containers = []
+                for ctr in node_containers:
+                    if isinstance(node_containers, Node):
+                        node, param = ctr, None
+                    else:
+                        assert isinstance(node_containers, (tuple, list)) and len(node_containers) == 2
+                        node, param = ctr
+                    new_node = node_dico.get(node, None)
+                    if new_node is not None:
+                        if param is None:
+                            new_node_containers.append(new_node)
+                        else:
+                            new_param = copy.copy(param)
+                            new_node_containers.append((new_node, new_param))
+                    else:
+                        # refer to comments of NodeInternals._update_node_refs()
+                        pass
+                self.put_node_containers(new_node_containers)
+            else:
+                raise TypeError
+
+
+class SyncQtyFromObj(SyncObj):
+
+    def __init__(self, node, base_qty=0):
+        assert node.is_typed_value()
+        self._node = node
+        self._base_qty = base_qty
+
+    def get_node_containers(self):
+        return self._node
+
+    def put_node_containers(self, new_containers):
+        self._node = new_containers
+
+    @property
+    def qty(self):
+        return max(0, self._node.get_raw_value() + self._base_qty)
+
+
+class SyncSizeObj(SyncObj):
+
+    def __init__(self, node, base_size=0, apply_to_enc_size=False):
+        assert node.is_typed_value()
+        self._node = node
+        self.base_size = base_size
+        self.apply_to_enc_size = apply_to_enc_size
+
+    def get_node_containers(self):
+        return self._node
+
+    def put_node_containers(self, new_containers):
+        self._node = new_containers
+
+    @property
+    def size_for_absorption(self):
+        return max(0, self._node.get_raw_value() - self.base_size)
+
+    def set_size_on_source_node(self, size):
+        try:
+            self._node.update_raw_value(size)
+            self._node.set_frozen_value(self._node.get_current_encoded_value())
+        except:
+            raise DataModelDefinitionError("The node '{:s}' is not compatible with integer absorption".format(self._node.name))
+
+class SyncExistenceObj(SyncObj):
 
     def __init__(self, sync_list, and_junction=True):
         self.sync_list = sync_list
         self.and_clause = and_junction
 
-    def make_private(self, node_dico):
-        new_sl = []
-        for node, cond in self.sync_list:
-            new_node = node_dico.get(node, None)
-            new_param = copy.copy(cond)
-            if new_node is not None:
-                new_sl.append((new_node, new_param))
-            else:
-                # refer to comments of NodeInternals._update_node_refs()
-                pass
-        self.sync_list = new_sl
+    def get_node_containers(self):
+        return self.sync_list
+
+    def put_node_containers(self, new_containers):
+        self.sync_list = new_containers
 
     def check(self):
         if self.and_clause:
@@ -549,6 +641,8 @@ class SyncObj(object):
                       "*** The condition checker raise an exception!".format(node.name, id(node)))
                 raise
         return crit_1 and crit_2
+
+
 
 
 class NodeCondition(object):
@@ -939,7 +1033,7 @@ class NodeInternals(object):
         pass
 
 
-    def absorb(self, blob, constraints, conf):
+    def absorb(self, blob, constraints, conf, pending_postpone_desc=None):
         raise NotImplementedError
 
     def set_absorb_helper(self, helper):
@@ -948,6 +1042,9 @@ class NodeInternals(object):
     def enforce_absorb_constraints(self, csts):
         assert(isinstance(csts, AbsCsts))
         self.absorb_constraints = csts
+
+    def set_size_from_constraints(self, size, encoded_size):
+        raise NotImplementedError
 
     def set_attr(self, name):
         if name not in self.__attrs:
@@ -1105,41 +1202,32 @@ class NodeInternals(object):
 
 
     def match(self, internals_criteria):
-        c1 = self._match_mandatory_attrs(internals_criteria.mandatory_attrs)
-        if not c1:
+        if not self._match_mandatory_attrs(internals_criteria.mandatory_attrs):
             return False
 
-        c2 = self._match_negative_attrs(internals_criteria.negative_attrs)
-        if not c2:
+        if not self._match_negative_attrs(internals_criteria.negative_attrs):
             return False
 
-        c3 = self._match_mandatory_custo(internals_criteria.mandatory_custo)
-        if not c3:
+        if not self._match_mandatory_custo(internals_criteria.mandatory_custo):
             return False
 
-        c4 = self._match_negative_custo(internals_criteria.negative_custo)
-        if not c4:
+        if not self._match_negative_custo(internals_criteria.negative_custo):
             return False
 
-        c5 = self._match_node_kinds(internals_criteria.node_kinds)
-        if not c5:
+        if not self._match_node_kinds(internals_criteria.node_kinds):
             return False
 
-        c6 = self._match_negative_node_kinds(internals_criteria.negative_node_kinds)
-        if not c6:
+        if not self._match_negative_node_kinds(internals_criteria.negative_node_kinds):
             return False
 
-        c7 = self._match_node_subkinds(internals_criteria.node_subkinds)
-        if not c7:
+        if not self._match_node_subkinds(internals_criteria.node_subkinds):
             return False
 
-        c8 = self._match_negative_node_subkinds(internals_criteria.negative_node_subkinds)
-        if not c8:
+        if not self._match_negative_node_subkinds(internals_criteria.negative_node_subkinds):
             return False
 
         if internals_criteria.has_node_constraints():
-            c9 = self._match_node_constraints(internals_criteria.get_all_node_constraints())
-            if not c9:
+            if not self._match_node_constraints(internals_criteria.get_all_node_constraints()):
                 return False
 
         return True
@@ -1640,7 +1728,7 @@ class NodeInternals_GenFunc(NodeInternals):
         ret = self.generated_node._get_value(conf=conf, recursive=recursive)
         return (ret, False)
 
-    def absorb(self, blob, constraints, conf):
+    def absorb(self, blob, constraints, conf, pending_postpone_desc=None):
         # We make the generator freezable to be sure that _get_value()
         # won't reset it after absorption
         self.set_attr(NodeInternals.Freezable)
@@ -1651,14 +1739,15 @@ class NodeInternals_GenFunc(NodeInternals):
         # Will help for possible future node types, as the current
         # node types that can raise exceptions, handle them already.
         try:
-            st, off, sz, name = self.generated_node.absorb(blob, constraints=constraints, conf=conf)
+            st, off, sz, name = self.generated_node.absorb(blob, constraints=constraints, conf=conf,
+                                                           pending_postpone_desc=pending_postpone_desc)
         except (ValueError, AssertionError) as e:
             st, off, sz = AbsorbStatus.Reject, 0, None
 
         # if st is AbsorbStatus.Reject:
         #     self.reset_generator()
 
-        return st, off, sz
+        return st, off, sz, None
 
     def cancel_absorb(self):
         self.generated_node.reset_state()
@@ -1778,6 +1867,12 @@ class NodeInternals_GenFunc(NodeInternals):
     def clear_clone_info_since(self, node):
         self._node_helpers.clear_graph_info_since(node)
 
+    def set_size_from_constraints(self, size, encoded_size):
+        if self.env is not None:
+            self.generated_node.set_size_from_constraints(size=size, encoded_size=encoded_size)
+        else:
+            # look at .get_child_all_path() comments
+            pass
 
 class NodeInternals_Term(NodeInternals):
     def _init_specific(self, arg):
@@ -1822,7 +1917,7 @@ class NodeInternals_Term(NodeInternals):
         raise NotImplementedError
 
 
-    def absorb(self, blob, constraints, conf):
+    def absorb(self, blob, constraints, conf, pending_postpone_desc=None):
         status = None
         size = None
 
@@ -1852,7 +1947,7 @@ class NodeInternals_Term(NodeInternals):
         else:
             raise ValueError
 
-        return st, off, size
+        return st, off, size, None
 
     def cancel_absorb(self):
         self.do_revert_absorb()
@@ -1963,6 +2058,9 @@ class NodeInternals_TypedValue(NodeInternals_Term):
 
     def get_value_type(self):
         return self.value_type
+
+    def set_size_from_constraints(self, size, encoded_size):
+        self.value_type.set_size_from_constraints(size=size, encoded_size=encoded_size)
 
     def set_specific_fuzzy_values(self, vals):
         self.__fuzzy_values = vals
@@ -2192,7 +2290,7 @@ class NodeInternals_Func(NodeInternals_Term):
         # The call to 'self._node_helpers.make_private()' is performed
         # the latest that is during self.make_args_private()
 
-    def absorb(self, blob, constraints, conf):
+    def absorb(self, blob, constraints, conf, pending_postpone_desc=None):
         # we make the generator freezable to be sure that _get_value()
         # won't reset it after absorption
         self.set_attr(NodeInternals.Freezable)
@@ -2201,7 +2299,7 @@ class NodeInternals_Func(NodeInternals_Term):
 
         self._set_frozen_value(blob[:sz])
 
-        return AbsorbStatus.Absorbed, 0, sz
+        return AbsorbStatus.Absorbed, 0, sz, None
 
     def cancel_absorb(self):
         self._set_frozen_value(None)
@@ -2304,6 +2402,9 @@ class NodeInternals_Func(NodeInternals_Term):
 
         return NodeInternals_Term._convert_to_internal_repr(ret)
 
+    def set_size_from_constraints(self, size, encoded_size):
+        # not supported
+        raise DataModelDefinitionError
 
 
 class NodeSeparator(object):
@@ -2914,6 +3015,22 @@ class NodeInternals_NonTerm(NodeInternals):
 
     def _construct_subnodes(self, node_desc, subnode_list, mode, ignore_sep_fstate, ignore_separator=False, lazy_mode=True):
 
+        def _sync_size_handling(node):
+            obj = node.synchronized_with(SyncScope.Size)
+            if obj is not None:
+                if obj.apply_to_enc_size:
+                    sz = len(node.to_bytes())
+                else:
+                    decoded_val = node.get_raw_value()
+                    if isinstance(decoded_val, bytes):
+                        sz = len(decoded_val)
+                    else:
+                        # In this case, this is a BitField or an INT-based object, which are
+                        # fixed size object
+                        raise DataModelDefinitionError('size sync should not be used for fixed sized object!')
+                sz += obj.base_size
+                obj.set_size_on_source_node(NodeInternals_NonTerm.sizesync_corrupt_hook(node, sz))
+
         node_attrs = node_desc[1:]
         # node = node_desc[0]
         node, mini, maxi = self._handle_node_desc(node_desc)
@@ -2969,6 +3086,7 @@ class NodeInternals_NonTerm(NodeInternals):
                         pass
 
                 new_node._set_clone_info((base_node.tmp_ref_count-1, nb), base_node)
+                _sync_size_handling(new_node)
 
             # 'same' mode
             elif mode == 's':
@@ -2988,6 +3106,7 @@ class NodeInternals_NonTerm(NodeInternals):
         # only once as there is no node copy.
         if new_node is not None and mode == 's':
             new_node._set_clone_info((0,nb), base_node)
+            _sync_size_handling(new_node)
 
         if len(to_entangle) > 1:
             make_entangled_nodes(to_entangle)
@@ -3485,6 +3604,27 @@ class NodeInternals_NonTerm(NodeInternals):
         if self.separator is not None:
             self.separator.node.tmp_ref_count = 1
 
+    @staticmethod
+    def _size_from_node(node, for_encoded_size=False):
+        # This method is only used for absorption. For generation, dealing with size
+        # is performed by the function _sync_size_handling() that is nested within
+        # the method self._construct_subnodes()
+        obj = node.synchronized_with(SyncScope.Size)
+        if obj is not None:
+            assert isinstance(obj, SyncSizeObj)
+            size = obj.size_for_absorption
+            if size is not None:
+                if obj.apply_to_enc_size == for_encoded_size:
+                    return size  # Corrupt hook is not called because only used for absorption.
+                                 # To be reconsidered if usage is extended
+                else:
+                    return None
+            else:
+                print("\n*** WARNING: synchronization is not possible " \
+                      "for node '{:s}' (id: {:d})!".format(node.name, id(node)))
+                return None
+
+        return None
 
     @staticmethod
     def _qty_from_node(node):
@@ -3498,7 +3638,18 @@ class NodeInternals_NonTerm(NodeInternals):
                 print("\n*** WARNING: synchronization is not possible " \
                       "for node '{:s}' (id: {:d})!".format(node.name, id(node)))
                 return None
-                
+
+        obj = node.synchronized_with(SyncScope.QtyFrom)
+        if obj is not None:
+            assert isinstance(obj, SyncQtyFromObj)
+            nb = obj.qty
+            if nb is not None:
+                return NodeInternals_NonTerm.qtysync_corrupt_hook(node, nb)
+            else:
+                print("\n*** WARNING: synchronization is not possible " \
+                      "for node '{:s}' (id: {:d})!".format(node.name, id(node)))
+                return None
+
         return None
 
     @staticmethod
@@ -3506,12 +3657,12 @@ class NodeInternals_NonTerm(NodeInternals):
         obj = node.synchronized_with(SyncScope.Existence)
 
         if obj is not None:
-            if isinstance(obj, SyncObj):
+            if isinstance(obj, SyncExistenceObj):
                 correct_reply = obj.check()
             else:
                 sync_node, condition = obj
                 exist = node.env.node_exists(id(sync_node))
-                crit_1 = True if exist else False
+                crit_1 = exist
                 crit_2 = True
                 if exist and condition is not None:
                     try:
@@ -3572,9 +3723,19 @@ class NodeInternals_NonTerm(NodeInternals):
         else:
             return mini, maxi
 
+    @staticmethod
+    def sizesync_corrupt_hook(node, length):
+        if node in node.env.nodes_to_corrupt:
+            corrupt_type, corrupt_op = node.env.nodes_to_corrupt[node]
+            if corrupt_type == Node.CORRUPT_SIZE_SYNC or corrupt_type is None:
+                return corrupt_op(length)
+            else:
+                return length
+        else:
+            return length
 
 
-    def absorb(self, blob, constraints, conf):
+    def absorb(self, blob, constraints, conf, pending_postpone_desc=None):
         '''
         TOFIX: Checking existence condition independently from data
                description order is not supported. Only supported
@@ -3630,7 +3791,8 @@ class NodeInternals_NonTerm(NodeInternals):
 
         # Helper function
         def _try_absorption_with(base_node, min_node, max_node, blob, consumed_size,
-                                 postponed_node_desc, force_clone=False):
+                                 postponed_node_desc, force_clone=False,
+                                 pending_upper_postpone=pending_postpone_desc):
 
             DEBUG = dbg.ABS_DEBUG
 
@@ -3641,13 +3803,21 @@ class NodeInternals_NonTerm(NodeInternals):
                 if qty is not None:
                     max_node = min_node = qty
 
+                size = self._size_from_node(base_node)
+                if size is not None:
+                    base_node.set_size_from_constraints(size=size)
+                else:
+                    enc_size = self._size_from_node(base_node, for_encoded_size=True)
+                    if enc_size is not None:
+                        base_node.set_size_from_constraints(encoded_size=enc_size)
+
                 shall_exist = self._existence_from_node(base_node)
                 if shall_exist is not None:
                     if not shall_exist:
                         max_node = min_node = 0
 
             if max_node == 0:
-                return None, blob, consumed_size, consumed_nb
+                return None, blob, consumed_size, consumed_nb, None
 
             orig_blob = blob
             orig_consumed_size = consumed_size
@@ -3655,17 +3825,30 @@ class NodeInternals_NonTerm(NodeInternals):
             abort = False
             tmp_list = []
 
+            first_pass = True
+            if postponed_node_desc is not None or pending_upper_postpone is not None:
+                postponed = postponed_node_desc if postponed_node_desc is not None else pending_upper_postpone
+            else:
+                postponed = None
+
+            pending_postponed_to_send_back = None
+            prepend_postponed = None
+            postponed_appended = None
+
             node_no = 1
             while node_no <= max_node or max_node < 0: # max_node < 0 means infinity
                 node = self._clone_node(base_node, node_no-1, force_clone)
 
                 # We try to absorb the blob
-                st, off, sz, name = node.absorb(blob, constraints, conf=conf)
+                st, off, sz, name = node.absorb(blob, constraints, conf=conf, pending_postpone_desc=postponed)
+                postponed_sent_back = node.abs_postpone_sent_back
+                node.abs_postpone_sent_back = None
 
                 if st == AbsorbStatus.Reject:
                     nb_absorbed = node_no-1
                     if DEBUG:
                         print('REJECT: %s, blob: %r ...' % (node.name, blob[:4]))
+                        print(blob.find(b'\xFF\xDA'))
                     if min_node == 0:
                         # abort = False
                         break
@@ -3678,24 +3861,44 @@ class NodeInternals_NonTerm(NodeInternals):
                     if DEBUG:
                         print('\nABSORBED: %s, abort: %r, off: %d, consumed_sz: %d, blob: %r ...' \
                               % (node.name, abort, off, sz, blob[off:sz][:100]))
-                        print('\nPostpone Node: %r' % postponed_node_desc)
+                        print('\nPostpone Node: %r' % postponed)
 
                     nb_absorbed = node_no
                     sz2 = 0
-                    if postponed_node_desc is not None:
+
+                    if postponed_sent_back is not None:
+                        if postponed_node_desc is not None:
+                            prepend_postponed = postponed_sent_back
+                            postponed = None
+                        else:
+                            pending_postponed_to_send_back = postponed_sent_back
+                            postponed = None
+
+                    elif postponed is not None:
+
                         # we only support one postponed node between two nodes
-                        st2, off2, sz2, name2 = postponed_node_desc[0].absorb(blob[:off], constraints, conf=conf)
+                        st2, off2, sz2, name2 = \
+                            postponed[0].absorb(blob[:off], constraints, conf=conf, pending_postpone_desc=None)
+
                         if st2 == AbsorbStatus.Reject:
-                            postponed_node_desc = None
+                            postponed = None
                             abort = True
                             break
                         elif st2 == AbsorbStatus.Absorbed or st2 == AbsorbStatus.FullyAbsorbed:
-                            tmp_list.append(postponed_node_desc[0])
-                            postponed_node_desc = None
+                            if DEBUG:
+                                print('\nABSORBED (of postponed): %s, off: %d, consumed_sz: %d, blob: %r ...' \
+                                    % (postponed[0].name, off2, sz2, blob[off2:sz2][:100]))
+
+                            if pending_upper_postpone is not None: # meaning postponed_node_desc is None
+                                pending_postponed_to_send_back = postponed[0]
+                            else:
+                                postponed_appended = postponed[0]
+                                tmp_list.append(postponed_appended)
+                            postponed = None
                         else:
                             raise ValueError
                     else:
-                        if off != 0:
+                        if off != 0 and (not first_pass or pending_upper_postpone is None):
                             # In this case, no postponed node exist
                             # but the node finds something that match
                             # its expectation at off>0.
@@ -3715,8 +3918,8 @@ class NodeInternals_NonTerm(NodeInternals):
                             else:   # no need to check max_node, the loop stop at it
                                 # abort = False
                                 break
-                            
-                    if sz2 == off:                        
+
+                    if sz2 == off:
                         blob = blob[off+sz:]
                         consumed_size += sz+sz2 # off+sz
                         consumed_nb = nb_absorbed
@@ -3738,6 +3941,10 @@ class NodeInternals_NonTerm(NodeInternals):
 
                 node_no += 1
 
+                if first_pass:
+                    # considering a postpone node desc from a parent node only in the first loop
+                    first_pass = False
+
             if abort:
                 blob = orig_blob
                 consumed_size = orig_consumed_size
@@ -3749,15 +3956,26 @@ class NodeInternals_NonTerm(NodeInternals):
                         nd.reset_state(conf=conf)
                 for n in tmp_list:
                     n.cancel_absorb()
+                if pending_postponed_to_send_back is not None:
+                    pending_postponed_to_send_back.cancel_absorb()
+                    pending_postponed_to_send_back = None
                 self._clear_drawn_node_attrs(base_node)
             else:
                 self._set_drawn_node_attrs(base_node, nb=nb_absorbed, sz=len(base_node._tobytes()))
-                for n, idx in zip(tmp_list, range(nb_absorbed)):
+                idx = 0
+                for n in tmp_list:
+                    if postponed_appended is not None and n is postponed_appended:
+                        continue
                     n._set_clone_info((idx, nb_absorbed), base_node)
+                    idx += 1
+                if prepend_postponed is not None:
+                    self.frozen_node_list.append(prepend_postponed)
+                    pending_postponed_to_send_back = None
                 self.frozen_node_list += tmp_list
 
-            return abort, blob, consumed_size, consumed_nb
+            return abort, blob, consumed_size, consumed_nb, pending_postponed_to_send_back
 
+        postponed_to_send_back = None
 
         while not abs_exhausted and status == AbsorbStatus.Reject:
 
@@ -3797,16 +4015,18 @@ class NodeInternals_NonTerm(NodeInternals):
                         base_node, min_node, max_node = NodeInternals_NonTerm._parse_node_desc(node_desc)
 
                         if base_node.is_attr_set(NodeInternals.Abs_Postpone):
-                            if postponed_node_desc:
+                            if postponed_node_desc or pending_postpone_desc:
                                 raise ValueError("\nERROR: Only one node at a time (current:%s) delaying" \
                                                  " its dissection is supported!" % postponed_node_desc)
                             postponed_node_desc = node_desc
                             continue
                         else:
-                            abort, blob, consumed_size, consumed_nb = _try_absorption_with(base_node,
-                                                                              min_node, max_node,
-                                                                              blob, consumed_size,
-                                                                              postponed_node_desc)
+                            # pending_upper_postpone = pending_postpone_desc
+                            abort, blob, consumed_size, consumed_nb, postponed_sent_back = \
+                                _try_absorption_with(base_node, min_node, max_node,
+                                                     blob, consumed_size,
+                                                     postponed_node_desc,
+                                                     pending_upper_postpone=pending_postpone_desc)
 
                             # In this case max_node is 0
                             if abort is None:
@@ -3818,7 +4038,11 @@ class NodeInternals_NonTerm(NodeInternals):
                             # succeeded or because it didn't work and
                             # we need to abort and try another high
                             # level component)
+                            if postponed_sent_back is not None:
+                                postponed_to_send_back = postponed_sent_back
                             postponed_node_desc = None
+                            pending_postpone_desc = None
+                            # pending_upper_postpone = None
 
                         if abort:
                             break
@@ -3854,7 +4078,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                 base_node, min_node, max_node = NodeInternals_NonTerm._parse_node_desc(node_desc)
 
                                 # postponed_node_desc is not supported here as it does not make sense
-                                abort, blob, consumed_size, consumed_nb = _try_absorption_with(base_node, min_node, max_node,
+                                abort, blob, consumed_size, consumed_nb, _ = _try_absorption_with(base_node, min_node, max_node,
                                                                                         blob, consumed_size,
                                                                                         postponed_node_desc=postponed_node_desc)
                                 # if abort is None:
@@ -3904,7 +4128,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                 
                                     if max_node != 0:
                                         # postponed_node_desc is not supported here as it does not make sense
-                                        tmp_abort, blob, consumed_size, consumed_nb = _try_absorption_with(base_node,
+                                        tmp_abort, blob, consumed_size, consumed_nb, _ = _try_absorption_with(base_node,
                                                                                         fake_min_node,
                                                                                         max_node,
                                                                                         blob, consumed_size,
@@ -3958,22 +4182,30 @@ class NodeInternals_NonTerm(NodeInternals):
                             base_node, min_node, max_node = NodeInternals_NonTerm._parse_node_desc(node_desc)
 
                             if base_node.is_attr_set(NodeInternals.Abs_Postpone):
-                                if postponed_node_desc:
+                                if postponed_node_desc or pending_postpone_desc:
                                     raise ValueError("\nERROR: Only one node at a time (current:%s) delaying" \
                                                      " its dissection is supported!" % postponed_node_desc)
                                 postponed_node_desc = node_desc
                                 continue
 
                             else:
-                                abort, blob, consumed_size, consumed_nb = _try_absorption_with(base_node, min_node, max_node,
-                                                                                               blob, consumed_size,
-                                                                                               postponed_node_desc)
+                                # pending_upper_postpone = pending_postpone_desc
+                                abort, blob, consumed_size, consumed_nb, postponed_sent_back = \
+                                    _try_absorption_with(base_node, min_node, max_node,
+                                                         blob, consumed_size,
+                                                         postponed_node_desc,
+                                                         pending_upper_postpone=pending_postpone_desc)
 
                                 if abort is None or abort:
                                     continue
                                 else:
                                     dont_stop = False
+                                    # postponed_node_desc = None
+                                    if postponed_sent_back is not None:
+                                        postponed_to_send_back = postponed_sent_back
                                     postponed_node_desc = None
+                                    pending_postpone_desc = None
+                                    # pending_upper_postpone = None
 
                     else:
                         raise ValueError
@@ -4003,7 +4235,7 @@ class NodeInternals_NonTerm(NodeInternals):
         if self.encoder:
             consumed_size = len(original_blob)
 
-        return status, 0, consumed_size
+        return status, 0, consumed_size, postponed_to_send_back
 
     def cancel_absorb(self):
         for n in self.subnodes_set:
@@ -4319,9 +4551,13 @@ class NodeInternals_NonTerm(NodeInternals):
             if self.separator is not None:
                 iterable.add(self.separator.node)
 
-        for e in iterable:
-            e._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False)
+        for idx, e in enumerate(iterable):
+            e._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False,
+                                 clone_idx=idx)
 
+    def set_size_from_constraints(self, size, encoded_size):
+        # not supported
+        raise DataModelDefinitionError
 
 
 ########### Node() High Level Facilities ##############
@@ -4617,6 +4853,7 @@ class Node(object):
     CORRUPT_EXIST_COND = 5
     CORRUPT_QTY_SYNC = 6
     CORRUPT_NODE_QTY = 7
+    CORRUPT_SIZE_SYNC = 8
 
     def __init__(self, name, base_node=None, copy_dico=None, ignore_frozen_state=False,
                  accept_external_entanglement=False, acceptance_set=None,
@@ -4648,6 +4885,8 @@ class Node(object):
            will be copied. Otherwise, the same will be used.
         '''
 
+        assert '/' not in name  # '/' is a reserved character
+
         self.internals = {}
         self.name = name
         self.env = None
@@ -4661,6 +4900,9 @@ class Node(object):
 
         self.depth = 0
         self.tmp_ref_count = 1
+
+        self.abs_postpone_sent_back = None  # used for absorption to transfer a resolved postpone
+                                            # node back to where it was defined
 
         if base_node is not None and subnodes is None and values is None and value_type is None:
 
@@ -5020,6 +5262,10 @@ class Node(object):
 
     c = property(fget=__get_internals)
     '''Property linked to `self.internals` (read only)'''
+
+    def conf(self, conf=None):
+        conf = self.__check_conf(conf)
+        return self.internals[conf]
     
     def get_internals_backup(self):
         return Node(self.name, base_node=self, ignore_frozen_state=False,
@@ -5227,10 +5473,14 @@ class Node(object):
         conf = self.__check_conf(conf)
         return isinstance(self.internals[conf], NodeInternals_Empty)
 
-    def absorb(self, blob, constraints=AbsCsts(), conf=None):
+    def absorb(self, blob, constraints=AbsCsts(), conf=None, pending_postpone_desc=None):
         conf, next_conf = self._compute_confs(conf=conf, recursive=True)
         blob = convert_to_internal_repr(blob)
-        status, off, sz = self.internals[conf].absorb(blob, constraints=constraints, conf=next_conf)
+        status, off, sz, postpone_sent_back = self.internals[conf].absorb(blob, constraints=constraints, conf=next_conf,
+                                                                          pending_postpone_desc=pending_postpone_desc)
+        if postpone_sent_back is not None:
+            self.abs_postpone_sent_back = postpone_sent_back
+
         if len(blob) == sz and status == AbsorbStatus.Absorbed:
             status = AbsorbStatus.FullyAbsorbed
             self.internals[conf].confirm_absorb()
@@ -5243,6 +5493,10 @@ class Node(object):
     def enforce_absorb_constraints(self, csts, conf=None):
         conf = self.__check_conf(conf)
         self.internals[conf].enforce_absorb_constraints(csts)
+
+    def set_size_from_constraints(self, size=None, encoded_size=None, conf=None):
+        conf = self.__check_conf(conf)
+        self.internals[conf].set_size_from_constraints(size=size, encoded_size=encoded_size)
 
     # Does not affect function/generator Nodes
     def make_determinist(self, conf=None, all_conf=False, recursive=False):
@@ -5468,18 +5722,17 @@ class Node(object):
         The set of nodes that is used to perform the search include
         the node itself and all the subnodes behind it.
         '''
-        htable = self.get_all_paths(conf=conf)
-
         if path is None:
             assert(path_regexp is not None)
             # Find *one* Node whose path match the regexp
-            for n, e in htable.items():
+            for n, e in self.iter_paths(conf=conf):
                 if re.search(path_regexp, n):
                     ret = e
                     break
             else:
                 ret = None
         else:
+            htable = self.get_all_paths(conf=conf)
             # Find the Node through exact path
             try:
                 ret = htable[path]
@@ -5489,7 +5742,7 @@ class Node(object):
         return ret
 
 
-    def _get_all_paths_rec(self, pname, htable, conf, recursive, first=True):
+    def _get_all_paths_rec(self, pname, htable, conf, recursive, first=True, clone_idx=0):
 
         if recursive:
             next_conf = conf
@@ -5505,12 +5758,20 @@ class Node(object):
         else:
             name = pname + '/' + self.name
 
-        htable[name] = self
+        if name in htable:
+            htable[(name, clone_idx)] = self
+        else:
+            htable[name] = self
 
         internal.get_child_all_path(name, htable, conf=next_conf, recursive=recursive)
 
 
     def get_all_paths(self, conf=None, recursive=True, depth_min=None, depth_max=None):
+        """
+        Returns:
+            dict: the keys are either a 'path' or a tuple ('path', int) when the path already
+              exists (case of the same node used more than once within the same non-terminal)
+        """
         htable = collections.OrderedDict()
         self._get_all_paths_rec('', htable, conf, recursive=recursive)
 
@@ -5527,10 +5788,17 @@ class Node(object):
                 
         return htable
 
+    def iter_paths(self, conf=None, recursive=True, depth_min=None, depth_max=None, only_paths=False):
+        htable = self.get_all_paths(conf=conf, recursive=recursive, depth_min=depth_min,
+                                    depth_max=depth_max)
+        for path, node in htable.items():
+            if isinstance(path, tuple):
+                yield path[0] if only_paths else (path[0], node)
+            else:
+                yield path if only_paths else (path, node)
 
     def get_path_from(self, node, conf=None):
-        htable = node.get_all_paths(conf=conf)
-        for n, e in htable.items():
+        for n, e in node.iter_paths(conf=conf):
             if e == self:
                 return n
         else:
@@ -5538,16 +5806,12 @@ class Node(object):
 
 
     def get_all_paths_from(self, node, conf=None):
-        htable = node.get_all_paths(conf=conf)
         l = []
-        for n, e in htable.items():
+        for n, e in node.iter_paths(conf=conf):
             if e == self:
                 l.append(n)
         return l
 
-    
-    def get_hkeys(self, conf=None):
-        return set(self.get_all_paths(conf=conf).keys())
 
     def __set_env_rec(self, env):
         self.env = env
@@ -5749,11 +6013,8 @@ class Node(object):
         return self.internals[conf].pretty_print()
 
     def get_nodes_names(self, conf=None, verbose=False, terminal_only=False):
-
-        htable = self.get_all_paths(conf=conf)
-
         l = []
-        for n, e in htable.items():
+        for n, e in self.iter_paths(conf=conf):
             if terminal_only:
                 conf = e.__check_conf(conf)
                 if not e.is_term(conf):
@@ -5876,9 +6137,8 @@ class Node(object):
         # in case the node is not frozen
         self.freeze()
 
-        htable = self.get_all_paths(conf=conf)
         l = []
-        for n, e in htable.items():
+        for n, e in self.iter_paths(conf=conf):
             l.append((n, e))
 
         if alpha_order:
@@ -6057,10 +6317,10 @@ class Node(object):
         elif isinstance(val, int):
             if isinstance(nodes, Node):
                 # Method defined by INT object (within TypedValue nodes)
-                nodes.set_raw_values(val)
+                nodes.update_raw_value(val)
             else:
                 for n in nodes:
-                    n.set_raw_values(val)
+                    n.update_raw_value(val)
         else:
             if isinstance(nodes, Node):
                 status, off, size, name = nodes.absorb(convert_to_internal_repr(val),
@@ -6100,10 +6360,7 @@ class Env4NT(object):
 
     def node_exists(self, node_id):
         qty, sz = self.drawn_node_attrs.get(node_id, (0, 0))
-        if qty > 0 and sz > 0:
-            return True
-        else:
-            return False
+        return qty > 0 and sz > 0
 
     def clear_drawn_node_attrs(self, node_id):
         if node_id in self.drawn_node_attrs:

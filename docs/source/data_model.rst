@@ -29,13 +29,16 @@ following parameters:
 
 ``int_list`` [optional, default value: **None**]
   List of the integers that are considered valid for the node backed
-  by this *Integer object*.
+  by this *Integer object*. The default value is the first element of the list.
 
 ``mini`` [optional, default value: **None**]
   Minimum valid value for the node backed by this *Integer object*.
 
 ``maxi`` [optional, default value: **None**]
   Maximum valid value for the node backed by this *Integer object*.
+
+``default`` [optional, default value: **None**]
+  If ``int_list`` is not provided, this value if provided will be used as the default one.
 
 ``determinist`` [default value: **True**]
   If set to ``True`` generated values will be in a deterministic
@@ -82,7 +85,7 @@ following parameters:
 
 ``val_list`` [optional, default value: **None**]
   List of the character strings that are considered valid for the node
-  backed by this *String object*.
+  backed by this *String object*. The default string is the first element of the list.
 
 ``size`` [optional, default value: **None**]
   Valid character string size for the node backed by this *String
@@ -204,7 +207,8 @@ parameters:
 
 ``subfield_val_lists`` [optional, default value: **None**]
   List of valid values for each sub-fields. Look at the following
-  examples for usage.
+  examples for usage. For each sub-field value list, the first value is the
+  default.
 
 ``subfield_val_extremums`` [optional, default value: **None**]
   List of minimum and maximum value for each sub-fields. Look at the
@@ -245,10 +249,14 @@ parameters:
   to do it at the node level by using the data model keyword ``determinist``
   (refer to :ref:`dm:node_prop_keywords`).
 
+``defaults`` [optional, default value: **None**]
+  List of default value for each sub-field. Used only when the related sub-field is
+  not described through ``subfield_val_lists``. If ``subfield_val_lists`` describes the related
+  sub-field, then a ``None`` item should be inserted at the corresponding position in the list.
 
 ``subfield_descs`` [optional, default value: **None**]
   List of descriptions (character strings) for each sub-field. To
-  describe only part of the sub-fields, put a ``None`` entry for the
+  describe only part of the sub-fields, put a ``None`` item for the
   others. This parameter is used for display purpose. Look at the
   following examples for usage.
 
@@ -391,6 +399,7 @@ name
 
   These names serve as *node references* during data description.
 
+  .. note:: The character ``/`` is reserved and shall not be used in a *name*.
 
 contents
   Every node description has at least a ``name`` and a ``contents``
@@ -404,6 +413,11 @@ contents
     terminal node
   - a python ``function`` (or everything with a ``__call__`` method)
     will be considered as a generator.
+  - a :class:`framework.data_model.Node` will be used as a baseline for
+    the description. If no additional keyword is provided, the provided node
+    will be used as is. Otherwise, the additional keywords will be used to complement the
+    description. Note that the *keyword* ``name`` should not be provided as it will be
+    picked from the provided node.
 
   Note that for defining a *function node* and not a generator node,
   you have to state the type attribute to ``MH.Leaf``.
@@ -477,10 +491,22 @@ custo_set, custo_clear
     of the node, meaning that it will be the exact copy of the original one at
     the time of the copy. If disabled, the instantiation process will ignore the frozen
     state, and thus will release all the constraints.
+
+    .. note::
+		Note that if the node is not frozen
+		at the time of the copy, this customization won't have any effect. The main interest is
+		in conjunction with the *disruptors* (like ``tTYPE``, ``tWALK``, ...) which are based on the
+		``ModelWalker`` infrastructure  (refer to :ref:`tuto:modelwalker`). Indeed, this infrastructure
+		releases constraints on non-terminal nodes before providing a new model instance. Releasing
+		constraints triggers child nodes reconstruction for each non-terminal. And as the terminal
+		children will be frozen at that time, the reconstruction will take into account this
+		customization mode.
+
   - ``MH.Custo.NTerm.CollapsePadding``: By default, this mode is *disabled*.
     When enabled, every time two adjacent BitFields (within its scope) are found, they
     will be merged in order to remove any padding in between. This is done
-    "recursively" until any inner padding is removed.
+    "recursively" until any inner padding is removed. (Note this customization is currently
+    only supported for *generation* purpose and not for *absorption*.)
 
   For *generator* node, the customizable behavior modes are:
 
@@ -810,8 +836,45 @@ fuzz_weight
   heavier the weight, the higher the priority of handling the node.
 
 sync_qty_with
-  Allows to synchronize the number of node instances to generate or to
+  Allow to synchronize the number of node instances to generate or to
   absorb with the one specified by reference.
+
+qty_from
+  Allow to synchronize the number of node instances to generate or to
+  absorb with the *value* of the one specified by reference. You can also specify
+  an optional *base quantity* that will be added to the retrieved value. In this case, you
+  shall provide a ``list``/``tuple`` with first the node reference then the *base quantity*.
+
+  This keyword is the counterpart of the *generator template* :class:`framework.data_model_helpers.MH.QTY`.
+  It is preferable to this *generator* when the node from which the quantity is retrieved
+  is already resolved at retrieval time. In this case *generation* and *absorption* operations
+  will be handled transparently.
+
+sync_size_with, sync_enc_size_with
+  Allow to synchronize the length of the described node (the one where this keyword is used)
+  with the *value* of the node specified by reference (which should be an
+  :class:`framework.value_types.INT`-based typed-node). These keywords are useful for size-variable
+  node types. They are currently supported for typed-nodes which are
+  :class:`framework.value_types.String`-based with or without an encoding (e.g.,
+  :class:`framework.value_types.UTF8`, ...). Non-terminal nodes are not supported (for absorption).
+  The distinction between ``sync_size_with`` and ``sync_enc_size_with`` is that the synchronization
+  will be performed either with respect to the length of the data retrieved from the node
+  (or the decoded data for encoded node), or with respect to the length of the encoded data
+  (only usable in the case of an encoded node).
+
+  Generation and absorption deal with these keywords differently, in order to achieve the expected
+  behavior. For generation, the synchronization goes from the described node to the referenced node
+  (meaning that the data is first pulled from the size-variable node, then the referenced node is
+  set with the length of the pulled data). Whereas for the absorption it goes the other way around.
+
+  Note also that you can provide an optional *base size* that will be added to the length
+  before synchronization in the case of generation, and removed from the length in the case
+  of absorption. In this case, you shall provide a ``list``/``tuple`` with first the node reference
+  then the *base size*.
+
+  These keywords are the counterpart of the *generator template* :class:`framework.data_model_helpers.MH.LEN`.
+  They are preferable to this *generator* (when the size-variable node is not a non-terminal),
+  because *generation* and *absorption* operations will be handled transparently thanks to them.
 
 exists_if
   Enable to determine the existence of this node based on a given
@@ -850,6 +913,11 @@ post_freeze
   called just after the node has been frozen. It takes the node
   internals as argument (:class:`framework.data_model.NodeInternals`).
 
+specific_fuzzy_vals
+  Usable for *typed-nodes* only. This keyword allows to specify a list of additional values to
+  be leveraged by the *disruptor* ``tTYPE`` (:ref:`dis:ttype`) while dealing with the related node.
+  These additional values are added to the test cases planned by the *disruptor* (if not already
+  planned).
 
 .. _dm:patterns:
 

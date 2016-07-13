@@ -1,3 +1,5 @@
+# -*- coding: latin-1 -*-
+
 ################################################################################
 #
 #  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
@@ -130,7 +132,7 @@ class TestBasics(unittest.TestCase):
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
         l = node_ex1.get_value()
-        hk = set(node_ex1.get_all_paths().keys())
+        hk = list(node_ex1.iter_paths(only_paths=True))
         # print(l)
         #
         # print('\n\n ####### \n\n')
@@ -152,7 +154,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n### TEST 1: cross check self.node.get_all_paths().keys() and get_nodes_names() ###')
 
-        print('*** Hkeys from self.node.get_all_paths().keys():')
+        print('*** Hkeys from self.node.iter_paths(only_paths=True):')
         hk = sorted(hk)
         for k in hk:
             print(k)
@@ -725,26 +727,20 @@ class TestBasics(unittest.TestCase):
         print('\n*** test 12.1:')
 
         node_ex1 = dm.get_data('EX1')
-        htbl = node_ex1.get_all_paths()
-        l = sorted(list(htbl.keys()))
-        for i in l:
+        for i in node_ex1.iter_paths(only_paths=True):
             print(i)
 
         print('\n******\n')
 
         node_ex1.get_value()
-        htbl = node_ex1.get_all_paths()
-        l = sorted(list(htbl.keys()))
-        for i in l:
+        for i in node_ex1.iter_paths(only_paths=True):
             print(i)
 
         print('\n******\n')
 
         node_ex1.unfreeze_all()
         node_ex1.get_value()
-        htbl = node_ex1.get_all_paths()
-        l = sorted(list(htbl.keys()))
-        for i in l:
+        for i in node_ex1.iter_paths(only_paths=True):
             print(i)
 
         print('\n*** test 13: test typed_value Node')
@@ -956,9 +952,7 @@ class TestMisc(unittest.TestCase):
 
         print('=======[ PATHS ]========')
 
-        htbl = evt.get_all_paths()
-        l = sorted(list(htbl.keys()))
-        for i in l:
+        for i in evt.iter_paths(only_paths=True):
             print(i)
 
         print('\n=======[ Typed Nodes ]========')
@@ -1864,7 +1858,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of imgs: %d'%idx, rgb=Color.INFO))
 
-        self.assertEqual(idx, 115)
+        self.assertEqual(idx, 116)
 
 
     def test_USB(self):
@@ -1880,7 +1874,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of confs: %d'%idx, rgb=Color.INFO))
 
-        self.assertIn(idx, [284])
+        self.assertIn(idx, [159])
 
 
 if mock_module and ddt_module:
@@ -2912,7 +2906,7 @@ class TestNode_TypedValue(unittest.TestCase):
         self.assertEqual(raw_data[size:], b'FEND')
 
 
-    def test_encoded_str(self):
+    def test_encoded_str_1(self):
 
         class EncodedStr(String):
 
@@ -3032,6 +3026,49 @@ class TestNode_TypedValue(unittest.TestCase):
         enc = vtype.encode(msg)
         dec = vtype.decode(enc)
         self.assertEqual(msg, dec)
+
+    def test_encoded_str_2(self):
+
+        enc_desc = \
+        {'name': 'enc',
+         'contents': [
+             {'name': 'len',
+              'contents': UINT8()},
+             {'name': 'user_data',
+              'sync_enc_size_with': 'len',
+              'contents': UTF8(val_list=['TEST'])},
+             {'name': 'padding',
+              'contents': String(max_sz=0),
+              'absorb_csts': AbsNoCsts()},
+         ]}
+
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(enc_desc)
+        node.set_env(Env())
+
+        node_abs = Node('enc_abs', base_node=node, new_env=True)
+        node_abs.set_env(Env())
+        node_abs2 = node_abs.get_clone()
+
+        node_abs.show()
+
+        raw_data = b'\x0C' + b'\xC6\x67' + b'garbage'  # \xC6\x67 --> invalid UTF8
+        status, off, size, name = node_abs.absorb(raw_data, constraints=AbsNoCsts(size=True, struct=True))
+
+        self.assertEqual(status, AbsorbStatus.Reject)
+
+        raw_data = b'\x05' + b'\xC3\xBCber' + b'padding' # \xC3\xBC = � in UTF8
+
+        status, off, size, name = node_abs2.absorb(raw_data, constraints=AbsNoCsts(size=True, struct=True))
+
+        print('Absorb Status:', status, off, size, name)
+        print(' \_ length of original data:', len(raw_data))
+        print(' \_ remaining:', raw_data[size:])
+        raw_data_abs = node_abs2.to_bytes()
+        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        node_abs2.show()
+
+        self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
 
 
 class TestHLAPI(unittest.TestCase):
@@ -3195,7 +3232,8 @@ class TestDataModel(unittest.TestCase):
         dm = fmk.get_data_model_by_name('usb')
         dm.build_data_model()
 
-        msd_conf = dm.get_data('MSD_CONF')
+        msd_conf = dm.get_data('CONF')
+        msd_conf.set_current_conf('MSD', recursive=True)
         msd_conf.show()
         
         self.assertEqual(len(msd_conf.to_bytes()), 32)
@@ -3247,6 +3285,7 @@ class TestDataModel(unittest.TestCase):
                 print("\n*** Builded Node ('%s') match the original image" % jpg.name)
             else:
                 print("\n*** ERROR: Builded Node ('%s') does not match the original image!" % jpg.name)
+                print('    [original size={:d}, generated size={:d}]'.format(len(orig_buff), len(jpg_buff)))
 
             self.assertEqual(jpg_buff, orig_buff)
 
@@ -3396,10 +3435,10 @@ class TestFMK(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        fmk.run_project(name='tuto', dm_name='mydf')
+        fmk.run_project(name='tuto', dm_name='mydf', tg=0)
     
     def setUp(self):
-        pass
+        fmk.reload_all(tg_num=0)
 
     def test_generic_disruptors_01(self):
         dmaker_type = 'TESTNODE'
@@ -3508,6 +3547,67 @@ class TestFMK(unittest.TestCase):
 
         self.assertEqual(idx, expected_idx)
 
+    def test_operator_1(self):
+
+        fmk.launch_operator('MyOp', user_input=UserInputContainer(specific=UI(max_steps=100, mode=1)))
+        print('\n*** Last data ID: {:d}'.format(fmk.lg.last_data_id))
+        fmkinfo = fmk.fmkDB.execute_sql_statement(
+            "SELECT CONTENT FROM FMKINFO "
+            "WHERE DATA_ID == {data_id:d} "
+            "ORDER BY ERROR DESC;".format(data_id=fmk.lg.last_data_id)
+        )
+        self.assertTrue(fmkinfo)
+        for info in fmkinfo:
+            if 'Exhausted data maker' in info[0]:
+                break
+        else:
+            raise ValueError('the data maker should be exhausted and trigger the end of the operator')
+
+    @unittest.skipIf(not run_long_tests, "Long test case")
+    def test_operator_2(self):
+
+        fmk.launch_operator('MyOp')
+        fbk = fmk.fmkDB.last_feedback["Operator 'MyOp'"][0]['content']
+        print(fbk)
+        self.assertIn(b'You win!', fbk)
+
+        fmk.launch_operator('MyOp')
+        fbk = fmk.fmkDB.last_feedback["Operator 'MyOp'"][0]['content']
+        print(fbk)
+        self.assertIn(b'You loose!', fbk)
+
+
+    def test_scenario_infra(self):
+
+        print('\n*** test scenario SC_NO_REGEN')
+
+        base_qty = 0
+        for i in range(100):
+            data = fmk.get_data(['SC_NO_REGEN'])
+            data_list = fmk.send_data([data])  # needed to make the scenario progress
+            # send_data_and_log() should be used for more complex scenarios
+            # hooking the framework in more places.
+            if not data_list:
+                base_qty = i
+                break
+        else:
+            raise ValueError
+
+        err_list = fmk.get_error()
+        code_vector = [str(e) for e in err_list]
+        print('\n*** Retrieved error code vector: {!r}'.format(code_vector))
+
+        self.assertEqual(code_vector, ['DataUnusable', 'HandOver', 'DataUnusable', 'HandOver',
+                                       'DPHandOver', 'NoMoreData'])
+        self.assertEqual(base_qty, 37)
+
+        print('\n*** test scenario SC_AUTO_REGEN')
+
+        for i in range(base_qty*3):
+            data = fmk.get_data(['SC_AUTO_REGEN'])
+            data_list = fmk.send_data([data])
+            if not data_list:
+                raise ValueError
 
 
 if __name__ == "__main__":

@@ -27,12 +27,54 @@ from framework.global_resources import *
 from framework.data_model import Data
 
 class DataProcess(object):
-    def __init__(self, process, seed=None):
-        self.process = process
+    def __init__(self, process, seed=None, auto_regen=False):
+        """
+        Describe a process to generate a data.
+
+        Args:
+            process (list): List of disruptors (possibly complemented by parameters) to apply to
+              a ``seed``. However, if the list begin with a generator, the disruptor chain will apply
+              to the outcome of the generator. The generic form for a process is:
+              ``[action_1, (action_2, generic_UI_2, specific_UI_2), ... action_n]``
+              where ``action_N`` can be either: ``dmaker_type_N`` or ``(dmaker_type_N, dmaker_name_N)``
+            seed: (Optional) Can be a registered :class:`framework.data_model.Node` name or
+              a :class:`framework.data_model.Data`. Will be provided to the first disruptor in
+              the disruptor chain (described by the parameter ``process``) if it does not begin
+              with a generator.
+            auto_regen (boolean): If ``True``, the data process will notify the framework to
+              rerun the data maker chain after a disruptor has yielded (meaning it is exhausted with
+              the data that has been provided to it).
+              It will make the chain going on with new data coming either from the first
+              non-exhausted disruptor (preceding the exhausted one), or from the generator if
+              all disruptors are exhausted. If ``False``, the data process won't notify the
+              framework to rerun the data maker chain, thus triggering the end of the scenario
+              that embeds this data process.
+        """
         self.seed = seed
+        self.auto_regen = auto_regen
         self.outcomes = None
-        self._blocked = False
         self.feedback_timeout = None
+        self._process = [process]
+        self._process_idx = 0
+        self._blocked = False
+
+    def append_new_process(self, process):
+        """
+        Append a new process to the list.
+        """
+        self._process.append(process)
+
+    def next_process(self):
+        if self._process_idx == len(self._process) - 1:
+            self._process_idx = 0
+            return False
+        else:
+            self._process_idx += 1
+            return True
+
+    @property
+    def process(self):
+        return self._process[self._process_idx]
 
     def make_blocked(self):
         self._blocked = True
@@ -45,8 +87,10 @@ class DataProcess(object):
             self.outcomes.make_free()
 
     def __copy__(self):
-        new_datap = type(self)(self.process, seed=self.seed)
-        new_datap._blocked = new_datap._blocked
+        new_datap = type(self)(self.process, seed=self.seed, auto_regen=self.auto_regen)
+        new_datap._process = copy.copy(self._process)
+        new_datap._process_idx = self._process_idx
+        new_datap._blocked = self._blocked
         new_datap.feedback_timeout = self.feedback_timeout
         return new_datap
 

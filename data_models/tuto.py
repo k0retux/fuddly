@@ -32,7 +32,10 @@ class MyDF_DataModel(DataModel):
                    'name': 'val1',
                    'qty': (1, 5)},
                   
-                  {'name': 'val2'},
+                  {'name': 'val22'},
+
+                  {'name': 'val21-qty',
+                   'contents': UINT16_be(int_list=[2,4])},
                   
                   {'name': 'middle',
                    'custo_set': MH.Custo.NTerm.FrozenCopy,
@@ -49,6 +52,7 @@ class MyDF_DataModel(DataModel):
                             'qty': (1, 3)},
                            
                            {'name': 'val21',
+                            'qty_from': 'val21-qty',
                             'clone': 'val1'},
                            
                            {'name': 'USB_desc',
@@ -92,7 +96,7 @@ class MyDF_DataModel(DataModel):
                   
                   {'contents': UINT8(int_list=[2, 4, 6, 8]),
                    'qty': (2, 3),
-                   'name': ('val22', 2)}
+                   'name': 'val7'}
               ]}
          ]}
 

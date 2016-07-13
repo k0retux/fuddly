@@ -661,6 +661,16 @@ class DynGeneratorFromScenario(Generator):
     _gen_args_desc = {}
     _args_desc = {}
 
+    @property
+    def produced_seed(self):
+        return None
+
+    @produced_seed.setter
+    def produced_seed(self, val):
+        # The scenario infrastructure needs to prevent the triggering of the 'produced_seed'
+        # mechanism
+        pass
+
     def setup(self, dm, user_input):
         if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
             return False

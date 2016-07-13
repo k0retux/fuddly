@@ -28,7 +28,7 @@ import inspect
 from enum import Enum
 from libs.utils import ensure_dir, ensure_file
 
-fuddly_version = '0.24.1'
+fuddly_version = '0.24.2'
 
 framework_folder = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 # framework_folder = os.path.dirname(framework.__file__)
@@ -89,6 +89,12 @@ class Error(object):
     InvalidOp = -20
     WrongOpPlan = -21
 
+    # FmkPlumbing DataProcess-handling related code
+    DPHandOver = -30  # when a data process yields
+
+    # FmkPlumbing.send_data() code
+    NoMoreData = -40
+
     _code_info = {
         Reserved: {'name': 'Reserved', 'color': 0xFFFFFF},
 
@@ -107,6 +113,9 @@ class Error(object):
 
         InvalidOp: {'name': 'InvalidOp', 'color': 0xB00000},
         WrongOpPlan: {'name': 'WrongOpPlan', 'color': 0xE00000},
+
+        DPHandOver: {'name': 'DPHandOver', 'color': 0x00B500},
+        NoMoreData: {'name': 'NoMoreData', 'color': 0xCC0099},
         }
 
 

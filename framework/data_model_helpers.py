@@ -72,6 +72,8 @@ class MH(object):
     Generator = 2
     Leaf = 3
 
+    RawNode = 4  # if a Node() is provided
+
     ##################################
     ### Non-Terminal Node Specific ###
     ##################################
@@ -525,6 +527,8 @@ class ModelHelper(object):
         'encoder',
         # Generator/Function description keys
         'node_args', 'other_args', 'provide_helpers', 'trigger_last',
+        # Typed-node description keys
+        'specific_fuzzy_vals',
         # Import description keys
         'import_from', 'data_id',        
         # node properties description keys
@@ -532,8 +536,10 @@ class ModelHelper(object):
         'clear_attrs', 'set_attrs',
         'absorb_csts', 'absorb_helper',
         'semantics', 'fuzz_weight',
-        'sync_qty_with', 'exists_if', 'exists_if_not',
+        'sync_qty_with', 'qty_from',
+        'exists_if', 'exists_if_not',
         'exists_if/and', 'exists_if/or',
+        'sync_size_with', 'sync_enc_size_with',
         'post_freeze'
     ]
 
@@ -576,13 +582,15 @@ class ModelHelper(object):
 
         if self._add_env_to_the_node:
             self._register_todo(n, self._set_env, prio=self.LOW_PRIO)
-        self._create_todo_list()
 
-        for node, func, args, unpack_args in self.todo:
-            if isinstance(args, tuple) and unpack_args:
-                func(node, *args)
-            else:
-                func(node, args)
+        todo = self._create_todo_list()
+        while todo:
+            for node, func, args, unpack_args in todo:
+                if isinstance(args, tuple) and unpack_args:
+                    func(node, *args)
+                else:
+                    func(node, args)
+            todo = self._create_todo_list()
 
         return n
 
@@ -606,6 +614,8 @@ class ModelHelper(object):
             pre_ntype = top_desc.get('type', None)
             if isinstance(contents, list) and pre_ntype in [None, MH.NonTerminal]:
                 ntype = MH.NonTerminal
+            elif isinstance(contents, Node) and pre_ntype in [None, MH.RawNode]:
+                ntype = MH.RawNode
             elif hasattr(contents, '__call__') and pre_ntype in [None, MH.Generator]:
                 ntype = MH.Generator
             else:
@@ -617,7 +627,8 @@ class ModelHelper(object):
         contents = desc.get('contents', None)
         dispatcher = {MH.NonTerminal: self._create_non_terminal_node,
                       MH.Generator:  self._create_generator_node,
-                      MH.Leaf:  self._create_leaf_node}
+                      MH.Leaf: self._create_leaf_node,
+                      MH.RawNode: self._update_provided_node}
 
         if contents is None:
             nd = self.__handle_clone(desc, parent_node)
@@ -643,7 +654,10 @@ class ModelHelper(object):
         return nd
 
     def __handle_clone(self, desc, parent_node):
-        name, ident = self._handle_name(desc['name'])
+        if isinstance(desc.get('contents'), Node):
+            name, ident = self._handle_name(desc['contents'].name)
+        else:
+            name, ident = self._handle_name(desc['name'])
 
         exp = desc.get('import_from', None)
         if exp is not None:
@@ -659,7 +673,7 @@ class ModelHelper(object):
         clone_ref = desc.get('clone', None)
         if clone_ref is not None:
             ref = self._handle_name(clone_ref)
-            self._register_todo(nd, self._clone_from_dict, args=ref, unpack_args=False,
+            self._register_todo(nd, self._clone_from_dict, args=(ref, desc),
                                 prio=self.MEDIUM_PRIO)
             self.node_dico[(name, ident)] = nd
         else:
@@ -681,6 +695,9 @@ class ModelHelper(object):
             conf = desc['conf']
             node.add_conf(conf)
             n = node
+        elif isinstance(desc['contents'], Node):
+            n = desc['contents']
+            conf = None
         else:
             conf = None
             ref = self._handle_name(desc['name'])
@@ -692,9 +709,17 @@ class ModelHelper(object):
 
     def __post_handling(self, desc, node):
         if not isinstance(node.cc, NodeInternals_Empty):
-            ref = self._handle_name(desc['name'])
+            if isinstance(desc.get('contents'), Node):
+                ref = self._handle_name(desc['contents'].name)
+            else:
+                ref = self._handle_name(desc['name'])
             self.node_dico[ref] = node
 
+    def _update_provided_node(self, desc, node=None):
+        n, conf = self.__pre_handling(desc, node)
+        self._handle_custo(n, desc, conf)
+        self._handle_common_attr(n, desc, conf)
+        return n
 
     def _create_generator_node(self, desc, node=None):
 
@@ -718,25 +743,7 @@ class ModelHelper(object):
         else:
             raise ValueError("*** ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
-        custo_set = desc.get('custo_set', [])
-        custo_clear = desc.get('custo_clear', [])
-
-        trig_last = desc.get('trigger_last', None)
-        if trig_last is not None:
-            if trig_last:
-                if not isinstance(custo_set, list):
-                    custo_set = [custo_set]
-                custo_set.append(MH.Custo.Gen.TriggerLast)
-            else:
-                if not isinstance(custo_clear, list):
-                    custo_clear = [custo_clear]
-                custo_clear.append(MH.Custo.Gen.TriggerLast)
-
-        if custo_set or custo_clear:
-            custo = GenFuncCusto(items_to_set=custo_set, items_to_clear=custo_clear)
-            internals = n.cc if conf is None else n.c[conf]
-            internals.customize(custo)
-
+        self._handle_custo(n, desc, conf)
         self._handle_common_attr(n, desc, conf)
 
         return n
@@ -757,7 +764,7 @@ class ModelHelper(object):
             # shape!
             w = None
         else:
-            w = cts[0].get('weight')
+            w = cts[0].get('weight', None)
 
         if w is not None:
             # in this case there are multiple shapes, as shape can be
@@ -779,13 +786,7 @@ class ModelHelper(object):
 
         n.set_subnodes_with_csts(shapes, conf=conf)
 
-        custo_set = desc.get('custo_set', None)
-        custo_clear = desc.get('custo_clear', None)
-
-        if custo_set or custo_clear:
-            custo = NonTermCusto(items_to_set=custo_set, items_to_clear=custo_clear)
-            internals = n.cc if conf is None else n.c[conf]
-            internals.customize(custo)
+        self._handle_custo(n, desc, conf)
 
         sep_desc = desc.get('separator', None)
         if sep_desc is not None:
@@ -840,7 +841,7 @@ class ModelHelper(object):
                 _handle_section([section_desc], sh)
 
             # check if it is a section description
-            elif section_desc.get('name') is None:
+            elif section_desc.get('name') is None and not isinstance(section_desc.get('contents'), Node):
                 prev_section_exist = True
                 self._verify_keys_conformity(section_desc)
                 sec_type = section_desc.get('section_type', MH.Ordered)
@@ -886,19 +887,57 @@ class ModelHelper(object):
         else:
             raise ValueError("ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
-        custo_set = desc.get('custo_set', None)
-        custo_clear = desc.get('custo_clear', None)
-
-        if custo_set or custo_clear:
-            custo = FuncCusto(items_to_set=custo_set, items_to_clear=custo_clear)
-            internals = n.cc if conf is None else n.c[conf]
-            internals.customize(custo)
-
+        self._handle_custo(n, desc, conf)
         self._handle_common_attr(n, desc, conf)
 
         return n
 
+    def _handle_custo(self, node, desc, conf):
+        custo_set = desc.get('custo_set', None)
+        custo_clear = desc.get('custo_clear', None)
+
+        if node.is_genfunc(conf=conf):
+            Custo = GenFuncCusto
+            trig_last = desc.get('trigger_last', None)
+            if trig_last is not None:
+                if trig_last:
+                    if custo_set is None:
+                        custo_set = []
+                    elif not isinstance(custo_set, list):
+                        custo_set = [custo_set]
+                    custo_set.append(MH.Custo.Gen.TriggerLast)
+                else:
+                    if custo_clear is None:
+                        custo_clear = []
+                    elif not isinstance(custo_clear, list):
+                        custo_clear = [custo_clear]
+                    custo_clear.append(MH.Custo.Gen.TriggerLast)
+
+        elif node.is_nonterm(conf=conf):
+            Custo = NonTermCusto
+
+        elif node.is_func(conf=conf):
+            Custo = FuncCusto
+
+        else:
+            if custo_set or custo_clear:
+                raise DataModelDefinitionError('Customization is not compatible with this '
+                                               'node kind! [Guilty Node: {:s}]'.format(node.name))
+            else:
+                return
+
+        if custo_set or custo_clear:
+            custo = Custo(items_to_set=custo_set, items_to_clear=custo_clear)
+            internals = node.conf(conf)
+            internals.customize(custo)
+
+
     def _handle_common_attr(self, node, desc, conf):
+        vals = desc.get('specific_fuzzy_vals', None)
+        if vals is not None:
+            if not node.is_typed_value(conf=conf):
+                raise DataModelDefinitionError("'specific_fuzzy_vals' is only usable with Typed-nodes")
+            node.conf(conf).set_specific_fuzzy_values(vals)
         param = desc.get('mutable', None)
         if param is not None:
             if param:
@@ -945,6 +984,23 @@ class ModelHelper(object):
             self._register_todo(node, self._set_sync_node,
                                 args=(ref, SyncScope.Qty, conf, None),
                                 unpack_args=True)
+        qty_from = desc.get('qty_from', None)
+        if qty_from is not None:
+            self._register_todo(node, self._set_sync_node,
+                                args=(qty_from, SyncScope.QtyFrom, conf, None),
+                                unpack_args=True)
+
+        sync_size_with = desc.get('sync_size_with', None)
+        sync_enc_size_with = desc.get('sync_enc_size_with', None)
+        assert sync_size_with is None or sync_enc_size_with is None
+        if sync_size_with is not None:
+            self._register_todo(node, self._set_sync_node,
+                                args=(sync_size_with, SyncScope.Size, conf, False),
+                                unpack_args=True)
+        if sync_enc_size_with is not None:
+            self._register_todo(node, self._set_sync_node,
+                                args=(sync_enc_size_with, SyncScope.Size, conf, True),
+                                unpack_args=True)
         condition = desc.get('exists_if', None)
         if condition is not None:
             self._register_todo(node, self._set_sync_node,
@@ -981,19 +1037,23 @@ class ModelHelper(object):
         self.sorted_todo[prio].insert(0, (node, func, args, unpack_args))
 
     def _create_todo_list(self):
-        self.todo = []
+        todo = []
         tdl = sorted(self.sorted_todo.items(), key=lambda x: x[0])
+        self.sorted_todo = {}
         for prio, sub_tdl in tdl:
-            self.todo += sub_tdl
+            todo += sub_tdl
+        return todo
 
     # Should be called at the last time to avoid side effects (e.g.,
     # when creating generator/function nodes, the node arguments are
     # provided at a later time. If set_contents()---which copy nodes---is called
     # in-between, node arguments risk to not be copied)
-    def _clone_from_dict(self, node, ref):
+    def _clone_from_dict(self, node, ref, desc):
         if ref not in self.node_dico:
             raise ValueError("arguments refer to an inexistent node ({:s}, {!s})!".format(ref[0], ref[1]))
         node.set_contents(self.node_dico[ref])
+        self._handle_custo(node, desc, conf=None)
+        self._handle_common_attr(node, desc, conf=None)
 
     def _get_from_dict(self, node, ref, parent_node):
         if ref not in self.node_dico:
@@ -1002,26 +1062,44 @@ class ModelHelper(object):
 
     def _set_sync_node(self, node, comp, scope, conf, private):
         sync_obj = None
-        if isinstance(comp, (tuple,list)):
-            if issubclass(comp[0].__class__, NodeCondition):
-                param = comp[0]
-                sync_with = self.__get_node_from_db(comp[1])
-            elif issubclass(comp[0].__class__, (tuple,list)):
-                assert private in ['and', 'or']
-                sync_list = []
-                for subcomp in comp:
-                    assert isinstance(subcomp, (tuple,list)) and len(subcomp) == 2
-                    param = subcomp[0]
-                    sync_with = self.__get_node_from_db(subcomp[1])
-                    sync_list.append((sync_with, param))
-                and_junction = True if private == 'and' else False
-                sync_obj = SyncObj(sync_list, and_junction=and_junction)
-            else:  # in this case this is a node reference in the form ('node name', ID)
+
+        if scope == SyncScope.QtyFrom:
+            if isinstance(comp, (tuple,list)):
+                node_ref, base_qty = comp
+            else:
+                node_ref, base_qty = comp, 0
+            sync_with = self.__get_node_from_db(node_ref)
+            sync_obj = SyncQtyFromObj(sync_with, base_qty=base_qty)
+
+        elif scope == SyncScope.Size:
+            if isinstance(comp, (tuple,list)):
+                node_ref, base_size = comp
+            else:
+                node_ref, base_size = comp, 0
+            sync_with = self.__get_node_from_db(node_ref)
+            sync_obj = SyncSizeObj(sync_with, base_size=base_size,
+                                   apply_to_enc_size=private)
+        else:
+            if isinstance(comp, (tuple,list)):
+                if issubclass(comp[0].__class__, NodeCondition):
+                    param = comp[0]
+                    sync_with = self.__get_node_from_db(comp[1])
+                elif issubclass(comp[0].__class__, (tuple,list)):
+                    assert private in ['and', 'or']
+                    sync_list = []
+                    for subcomp in comp:
+                        assert isinstance(subcomp, (tuple,list)) and len(subcomp) == 2
+                        param = subcomp[0]
+                        sync_with = self.__get_node_from_db(subcomp[1])
+                        sync_list.append((sync_with, param))
+                    and_junction = private == 'and'
+                    sync_obj = SyncExistenceObj(sync_list, and_junction=and_junction)
+                else:  # in this case this is a node reference in the form ('node name', ID)
+                    param = None
+                    sync_with = self.__get_node_from_db(comp)
+            else:
                 param = None
                 sync_with = self.__get_node_from_db(comp)
-        else:
-            param = None
-            sync_with = self.__get_node_from_db(comp)
 
         if sync_obj is not None:
             node.make_synchronized_with(scope=scope, sync_obj=sync_obj, conf=conf)

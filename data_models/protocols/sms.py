@@ -200,21 +200,23 @@ class SMS_DataModel(DataModel):
                         'contents': [
                             {'name': 'SPI_p1',  # Security Parameter Indicator (part 1)
                              'contents': BitField(subfield_sizes=[2,1,2,3], endian=VT.BigEndian,
-                                                  subfield_val_lists=[[1], # redundancy check
-                                                                      [0], # no ciphering
-                                                                      [0], # no counter
-                                                                      [0b000]],
+                                                  subfield_val_lists=[None,None,None,[0b000]],
                                                   subfield_val_extremums=[[0,3],[0,1],[0,3],None],
+                                                  defaults = [1, # redundancy check
+                                                              0, # no ciphering
+                                                              0, # no counter
+                                                              None],
                                                   subfield_descs=['chksum', 'ciph', 'count', 'reserved']
                                                   ) },
 
                             {'name': 'SPI_p2',  # Security Parameter Indicator (part 1)
                              'contents': BitField(subfield_sizes=[2,2,1,1,2], endian=VT.BigEndian,
-                                                  subfield_val_lists=[[1], # PoR required
-                                                                      [3], # PoR Digital Signature required
-                                                                      [0], # PoR not ciphered
-                                                                      [1], # PoR through SMS-SUBMIT
-                                                                      [0b00]],
+                                                  subfield_val_lists=[None,None,None,None,[0b00]],
+                                                  defaults = [1, # PoR required
+                                                              3, # PoR Digital Signature required
+                                                              0, # PoR not ciphered
+                                                              1, # PoR through SMS-SUBMIT
+                                                              None],
                                                   subfield_val_extremums=[[0,2],[0,3],[0,1],[0,1],None],
                                                   subfield_descs=['PoR', 'PoR chk', 'PoR ciph',
                                                                   'delivery', 'reserved']

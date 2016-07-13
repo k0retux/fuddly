@@ -63,17 +63,17 @@ class ZIP_DataModel(DataModel):
         zip_desc = \
         {'name': 'ZIP',
          'contents': [
-             # {'name': 'start_padding',
-             #  'contents': String(size=0),
-             #  'qty': (0, 1),
-             #  'clear_attrs': MH.Attr.Mutable,
-             #  'alt': [
-             #      {'conf': 'ABS',
-             #       'contents': String(size=0),
-             #       'set_attrs': MH.Attr.Abs_Postpone,
-             #       'clear_attrs': MH.Attr.Mutable,
-             #       'absorb_csts': AbsNoCsts()}
-             #  ]},
+             {'name': 'start_padding',
+              'contents': String(size=0),
+              'qty': (0, 1),
+              'clear_attrs': MH.Attr.Mutable,
+              'alt': [
+                  {'conf': 'ABS',
+                   'contents': String(size=0),
+                   'set_attrs': MH.Attr.Abs_Postpone,
+                   'clear_attrs': MH.Attr.Mutable,
+                   'absorb_csts': AbsNoCsts()}
+              ]},
              {'name': 'file_list',
               'contents': [
                   {'name': 'file',
@@ -224,8 +224,7 @@ class ZIP_DataModel(DataModel):
                         'fuzz_weight': 10,
                         # 'custo_set': MH.Custo.Gen.ResetOnUnfreeze,
                         'contents': MH.OFFSET(vt=UINT32_le),
-                        # 'node_args': ['start_padding', 'file_list'],
-                        'node_args': 'file_list'},
+                        'node_args': ['start_padding', 'file_list']},
                        {'name': ('file_name', 2),
                         'contents': MH.COPY_VALUE(path='header/file_name/cts$', depth=1),
                         'node_args': 'file_list',
@@ -313,10 +312,9 @@ class ZIP_DataModel(DataModel):
                    'type': MH.Generator,
                    'contents': lambda x: Node('cts', value_type=\
                                               UINT32_le(int_list=[len(x[0].to_bytes()) \
-                                                                 + len(x[1].to_bytes()) ])),
-                                                                 # + len(x[2].to_bytes())])),
-                   # 'node_args': ['start_padding', 'file_list', 'archive_desc_header'],
-                   'node_args': ['file_list', 'archive_desc_header']},
+                                                                 + len(x[1].to_bytes()) #])),
+                                                                 + len(x[2].to_bytes())])),
+                   'node_args': ['start_padding', 'file_list', 'archive_desc_header']},
                   {'name': 'optional',
                    'qty': (0,1),
                    'contents': [

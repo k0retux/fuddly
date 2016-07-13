@@ -627,7 +627,7 @@ been disabled as explained before.
    | ERROR / WARNING |
    -------------------
        (_ FMK [#DataUnusable]: The data maker (tTYPE) has returned unusable data. _)
-       (_ FMK [#HandOver]: Disruptor 'd_fuzz_typed_nodes' (tTYPE) has handed over! _)
+       (_ FMK [#HandOver]: Disruptor 'd_fuzz_typed_nodes' (tTYPE) has yielded! _)
    >> 
 
 
@@ -1549,9 +1549,9 @@ second data model instance ``data_abs`` and will call its
 
 The following tuple will be returned::
 
-  (4, 0, 102, 'TestNode')  # --> (status, offset, size, name)
+  (<AbsorbStatus.FullyAbsorbed: 4>, 0, 102, 'TestNode')  # --> (status, offset, size, name)
 
-The *status* is ``4`` which means that everything went well, that is,
+The *status* is ``<AbsorbStatus.FullyAbsorbed: 4>`` which means that everything went well, that is,
 all the provided data has been absorbed. The *offset* and *size* give
 the part of the data that has been absorbed. In our case, it maps the
 full length of the original data, namely ``102`` bytes.
@@ -1717,9 +1717,9 @@ remove the *helper* stuff, while still keeping the
 ``variable_string``, and everything will work as expected.
 
 .. note::
-   ``NodeInternals.Abs_Postpone`` allows to postpone the node absorption only if this node
-   shares the same non-terminal node as the next one that will eventually start absorption.
-   Besides, these two nodes need to be side-by-side.
+   ``NodeInternals.Abs_Postpone`` allows to postpone the node absorption until the next node
+   successfully absorbs part of the provided data. If this latter node fails, the postponed absorption
+   will also fail.
 
 .. seealso:: The already defined auto-helper functions, behave
              accordingly to the typed value contents. They are more

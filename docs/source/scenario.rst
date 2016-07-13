@@ -314,6 +314,21 @@ A :class:`framework.scenario.DataProcess` is composed of a chain of generators a
 (with or without parameters) and optionally a ``seed`` on which the chain of disruptor will be applied to (if no
 generator is provided at the start of the chain).
 
+A :class:`framework.scenario.DataProcess` can trigger the end of the scenario if a disruptor in the
+chain yields (meaning it has terminated its job with the provided data: it is *exhausted*).
+If you prefer that the scenario goes on, then
+you have to set the ``auto_regen`` parameter to ``True``. In such a case, when the step embedding
+the data process will be reached again, the framework will rerun the chain. This action will reset
+the exhausted disruptor and make new data available to it (by pulling data from preceding data makers
+in the chain or by using the *seed* again).
+
+Additional *data maker chains* can be added to a :class:`framework.scenario.DataProcess` thanks to
+:meth:`framework.scenario.DataProcess.append_new_process`. Switching from the current process to the
+next one is carried out when the current one is interrupted by a yielding disruptor.
+Note that in the case the data process has its
+``auto_regen`` parameter set to ``True``, the current interrupted chain won't be rerun until every other
+chain has also get a chance to be executed.
+
 .. seealso:: Refer to :ref:`tuto:dmaker-chain` for more information on disruptor chaining.
 
 .. note:: It follows the same pattern as the instructions that can set a virtual operator
