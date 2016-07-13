@@ -40,6 +40,9 @@ framework.value_types module
     :members:
     :undoc-members:
     :show-inheritance:
+    :private-members:
+    :special-members:
+    :exclude-members: __dict__, __weakref__
 
 
 framework.generic_data_makers module
@@ -49,6 +52,9 @@ framework.generic_data_makers module
     :members:
     :undoc-members:
     :show-inheritance:
+    :private-members:
+    :special-members:
+    :exclude-members: __dict__, __weakref__
 
 
 framework.target module
@@ -70,6 +76,9 @@ framework.project module
     :members:
     :undoc-members:
     :show-inheritance:
+    :private-members:
+    :special-members:
+    :exclude-members: __dict__, __weakref__
 
 
 framework.operator_helpers module
@@ -79,6 +88,9 @@ framework.operator_helpers module
     :members:
     :undoc-members:
     :show-inheritance:
+    :private-members:
+    :special-members:
+    :exclude-members: __dict__, __weakref__
 
 
 framework.logger module
@@ -99,50 +111,65 @@ framework.monitor module
    :members:
    :undoc-members:
    :show-inheritance:
-
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
 
 framework.tactics_helpers module
 --------------------------------
 
 .. automodule:: framework.tactics_helpers
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
 
 framework.fuzzing_primitives module
 -----------------------------------
 
 .. automodule:: framework.fuzzing_primitives
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
 
 framework.encoders module
 -------------------------
 
 .. automodule:: framework.encoders
-    :members:
-    :undoc-members:
-    :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
 
 
 framework.database module
 -------------------------
 
 .. automodule:: framework.database
-    :members:
-    :undoc-members:
-    :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
 
 framework.scenario module
 -------------------------
 
 .. automodule:: framework.scenario
-    :members:
-    :undoc-members:
-    :show-inheritance:
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
 
 ..
    framework.plumbing module

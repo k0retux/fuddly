@@ -3577,6 +3577,39 @@ class TestFMK(unittest.TestCase):
         self.assertIn(b'You loose!', fbk)
 
 
+    def test_scenario_infra(self):
+
+        print('\n*** test scenario SC_NO_REGEN')
+
+        base_qty = 0
+        for i in range(100):
+            data = fmk.get_data(['SC_NO_REGEN'])
+            data_list = fmk.send_data([data])  # needed to make the scenario progress
+            # send_data_and_log() should be used for more complex scenarios
+            # hooking the framework in more places.
+            if not data_list:
+                base_qty = i
+                break
+        else:
+            raise ValueError
+
+        err_list = fmk.get_error()
+        code_vector = [str(e) for e in err_list]
+        print('\n*** Retrieved error code vector: {!r}'.format(code_vector))
+
+        self.assertEqual(code_vector, ['DataUnusable', 'HandOver', 'DataUnusable', 'HandOver',
+                                       'DPHandOver', 'NoMoreData'])
+        self.assertEqual(base_qty, 37)
+
+        print('\n*** test scenario SC_AUTO_REGEN')
+
+        for i in range(base_qty*3):
+            data = fmk.get_data(['SC_AUTO_REGEN'])
+            data_list = fmk.send_data([data])
+            if not data_list:
+                raise ValueError
+
+
 if __name__ == "__main__":
 
     results = collections.OrderedDict()

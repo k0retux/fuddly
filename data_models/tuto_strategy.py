@@ -76,7 +76,22 @@ option2.connect_to(anchor)
 sc3 = Scenario('ex3')
 sc3.set_anchor(anchor)
 
-tactics.register_scenarios(sc1, sc2, sc3)
+### SCENARIO 4 & 5 ###
+dp = DataProcess(['tTYPE#NOREG'], seed='exist_cond', auto_regen=False)
+dp.append_new_process([('tSTRUCT#NOREG', None, UI(deep=True))])
+unique_step = Step(dp)
+unique_step.connect_to(unique_step)
+sc4 = Scenario('no_regen')
+sc4.set_anchor(unique_step)
+
+dp = DataProcess(['tTYPE#REG'], seed='exist_cond', auto_regen=True)
+dp.append_new_process([('tSTRUCT#REG', None, UI(deep=True))])
+unique_step = Step(dp)
+unique_step.connect_to(unique_step)
+sc5 = Scenario('auto_regen')
+sc5.set_anchor(unique_step)
+
+tactics.register_scenarios(sc1, sc2, sc3, sc4, sc5)
 
 
 @generator(tactics, gtype="CBK")

@@ -110,7 +110,10 @@ def retrieve_padi_from_feedback(env, current_step, next_step, feedback):
 
 ### PADI fuzz scenario ###
 step_wait_padi = NoDataStep(fbk_timeout=1)
-step_send_pado = Step(DataProcess(process=[('tTYPE', UI(init=1), UI(order=True))], seed='pado'))
+
+dp_pado = DataProcess(process=[('tTYPE', UI(init=1), UI(order=True))], seed='pado')
+dp_pado.append_new_process([('tSTRUCT', UI(init=1), UI(deep=True))])
+step_send_pado = Step(dp_pado)
 # step_send_pado = Step('pado')
 step_end = Step('padt')
 
@@ -124,7 +127,10 @@ sc1.set_anchor(step_wait_padi)
 ### PADS fuzz scenario ###
 step_wait_padi = NoDataStep(fbk_timeout=1)
 step_send_valid_pado = Step('pado')
-step_send_fuzzed_pads = Step(DataProcess(process=[('tTYPE#2', UI(init=1), UI(order=True))], seed='pads'))
+
+dp_pads = DataProcess(process=[('tTYPE#2', UI(init=1), UI(order=True))], seed='pads')
+dp_pads.append_new_process([('tSTRUCT#2', UI(init=1), UI(deep=True))])
+step_send_fuzzed_pads = Step(dp_pads)
 step_wait_padr = NoDataStep(fbk_timeout=1)
 
 step_wait_padi.connect_to(step_send_valid_pado, cbk_after_fbk=retrieve_padi_from_feedback)

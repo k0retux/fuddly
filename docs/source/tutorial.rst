@@ -627,7 +627,7 @@ been disabled as explained before.
    | ERROR / WARNING |
    -------------------
        (_ FMK [#DataUnusable]: The data maker (tTYPE) has returned unusable data. _)
-       (_ FMK [#HandOver]: Disruptor 'd_fuzz_typed_nodes' (tTYPE) has handed over! _)
+       (_ FMK [#HandOver]: Disruptor 'd_fuzz_typed_nodes' (tTYPE) has yielded! _)
    >> 
 
 

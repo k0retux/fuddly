@@ -1562,10 +1562,12 @@ class FmkPlumbing(object):
                 seed = data_desc.seed
 
             data = self.get_data(data_desc.process, data_orig=seed)
+            if data is None and (data_desc.next_process() or data_desc.auto_regen):
+                data = self.get_data(data_desc.process, data_orig=seed)
             data_desc.outcomes = data
             if data is None:
-                self.set_error(msg='Data creation process has failed!',
-                               code=Error.UserCodeError)
+                self.set_error(msg='Data creation process has yielded!',
+                               code=Error.DPHandOver)
                 return None
 
         elif isinstance(data_desc, str):
@@ -1782,7 +1784,7 @@ class FmkPlumbing(object):
 
             if not data_list:
                 self.set_error("send_data(): No more data to send",
-                               code=Error.HandOver)
+                               code=Error.NoMoreData)
                 return None
 
             if not self._is_data_valid(data_list):
@@ -2486,7 +2488,7 @@ class FmkPlumbing(object):
         '''
         @action_list shall have the following formats:
         [(action_1, generic_UI_1, specific_UI_1), ...,
-         (action_n, generic_UI_1, specific_UI_1)]
+         (action_n, generic_UI_n, specific_UI_n)]
 
         [action_1, (action_2, generic_UI_2, specific_UI_2), ... action_n]
 
@@ -2760,7 +2762,7 @@ class FmkPlumbing(object):
                                                      "method of Data Maker '%s' has crashed!" % dmaker_ref)
 
 
-                # If a generator need a reset or a ('controller') disruptor has handed over
+                # If a generator need a reset or a ('controller') disruptor has yielded
                 if dmaker_obj.is_attr_set(DataMakerAttr.SetupRequired):
                     assert(dmaker_obj in self.__initialized_dmakers)
                     self.__initialized_dmakers[dmaker_obj] = (False, None)
@@ -2788,7 +2790,7 @@ class FmkPlumbing(object):
                 # Apply to controller disruptor only
                 if dmaker_obj.is_attr_set(DataMakerAttr.HandOver):
                     _handle_disruptors_handover(current_dmobj_list)
-                    self.set_error("Disruptor '{:s}' ({:s}) has handed over!".format(dmaker_name, dmaker_type),
+                    self.set_error("Disruptor '{:s}' ({:s}) has yielded!".format(dmaker_name, dmaker_type),
                                    context={'dmaker_name': dmaker_name, 'dmaker_type': dmaker_type},
                                    code=Error.HandOver)
                     return None
