@@ -7,14 +7,13 @@ from test import mock
 
 @ddt.ddt
 class RegexParserTest(unittest.TestCase):
-    """Test case used to test the 'ProbeUser' class."""
+    """Test case used to test the 'RegexParser' class."""
 
     @classmethod
     def setUpClass(cls):
         pass
 
     def setUp(self):
-        """Initialisation des tests."""
         self._parser = RegexParser()
         self._parser._create_terminal_node = mock.Mock()
 
@@ -174,10 +173,24 @@ class RegexParserTest(unittest.TestCase):
 
         {'regex': r"new[york]city",
          'nodes': [{"contents": ["new"]}, {"alphabet": "york"}, {"contents": ["city"]}]},
+
+        {'regex': r"[a-e]", 'nodes': [{"alphabet": "abcde"}]},
+        {'regex': r"[a-ewxy]", 'nodes': [{"alphabet": "abcdewxy"}]},
+        {'regex': r"[1-9]", 'nodes': [{"alphabet": "123456789"}]},
+        {'regex': r"[what1-9]", 'nodes': [{"alphabet": "what123456789"}]},
+        {'regex': r"[a-c1-9]", 'nodes': [{"alphabet": "abc123456789"}]},
+        {'regex': r"[a-c1-9fin]", 'nodes': [{"alphabet": "abc123456789fin"}]},
+
+        {'regex': r"[\x33]", 'nodes': [{"alphabet": "\x33"}]},
+        {'regex': r"[\x33-\x35]", 'nodes': [{"alphabet": "\x33\x34\x35"}]},
+        {'regex': r"[e\x33-\x35a]", 'nodes': [{"alphabet": "e\x33\x34\x35a"}]}
     )
     def test_basic_square_brackets(self, test_case):
         self.assert_regex_is_valid(test_case)
 
+    @ddt.data(r"[\x33-\x23]", r"[3-1]", r"[y-a]", r"[\x3-\x34]", r"[\x3g]")
+    def test_wrong_alphabet(self, regex):
+        self.assert_regex_is_invalid(regex)
 
     @ddt.data(r"[]", r"stronger[]baby", r"strongerbaby[]", r"[]strongerbaby", r"stro[]nger[]baby[]")
     def test_basic_square_brackets_raise(self, regex):

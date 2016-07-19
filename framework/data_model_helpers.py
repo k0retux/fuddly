@@ -512,133 +512,250 @@ class MH(object):
             n.clear_attr(ca)
 
 
+
 class State(object):
     """
-    State at the lower level
+    Represent a state at the lower level
     """
     def __init__(self, machine):
         """
         Args:
-            state_machine (StateMachine): state machine where it lives
+            machine (StateMachine): state machine where it lives (local context)
         """
         self.machine = machine
+        self.init_specific()
 
-    def run(self, context):
-        raise NotImplementedError
-
-    def advance(self, context):
-        raise NotImplementedError
-
-
-class FinalState(State):
-
-    def advance(self, context):
+    def init_specific(self):
         pass
 
+    def _run(self, context):
+        """
+        Do some actions on the current character.
+        Args:
+            context (StateMachine): root state machine (global context)
+        """
+        raise NotImplementedError
 
-class StateMachine(object):
+    def run(self, context):
+        self._run(context)
+        context.inputs.pop(0)
+
+    def advance(self, context):
+        """
+        Check transitions using the first non-run character.
+        Args:
+            context (StateMachine): root state machine (global context)
+
+        Returns:
+            Class of the next state de run or None if we are in a final state
+        """
+        raise NotImplementedError
+
+
+class StateMachine(State):
 
     class Initial(State):
         pass
 
-    class Final(State):
-        pass
-
-    def __init__(self):
+    def __init__(self, machine=None):
         self.states = {}
+        self.inputs = None
 
         for name, cls in inspect.getmembers(self.__class__):
             if inspect.isclass(cls) and issubclass(cls, State):
                 self.states[cls] = cls(self)
 
+        State.__init__(self, self if machine is None else machine)
+
+    @property
+    def input(self):
+        return None if self.inputs is None or len(self.inputs) == 0 else self.inputs[0]
+
+    def _run(self, context):
+        while self.state is not None:
+            self.state.run(context)
+            next_state = self.state.advance(context)
+            self.state = self.states[next_state] if next_state is not None else None
+
     def run(self, context):
         self.state = self.states[self.Initial]
-        while True:
-            self.state.run(context)
-            if isinstance(self.state, self.Final):
-                break
-            context.inputs.pop(0)
-            self.state = self.states[self.state.advance(context)]
+        self._run(context)
 
 
+class EscapeState(StateMachine):
 
-class SubStateMachine(State, StateMachine):
-    """
-    Seen as a State from outside
-    Act like a StateMachine in the inside
-    """
-    def __init__(self, machine):
-        State.__init__(self, machine)
-        StateMachine.__init__(self)
+    def init_specific(self):
+        self.escaped = None
 
-    def run(self, context):
-        StateMachine.run(self, context)
-
-
-
-class EscapeState(SubStateMachine):
     class Initial(State):
 
-        def run(self, ctx):
-            pass
+        def _run(self, ctx):
+            self.machine.escaped = ""
 
         def advance(self, ctx):
             if ctx.input == None:
-                raise Exception
+                raise EscapeError("Nothing to escape.")
+            elif ctx.input == 'x':
+                return self.machine.Hexadecimal
+            elif ctx.input in ('s','S','d','D','w','W','\\','(',')','[',']','{','}','+','?','*','|','-'):
+                return self.machine.Final
+            else:
+                raise EscapeError("Character to escape is not special. It is useless to escape it.")
+
+    class Hexadecimal(State):
+
+        def _run(self, ctx):
+            pass
+
+        def advance(self, ctx):
+            if ctx.input in string.hexdigits:
+                return self.machine.Digit
+            else:
+                raise EscapeError("\\x must be followed with two hexadecimal digits: none provided.")
+
+    class Digit(State):
+
+        def _run(self, ctx):
+            self.machine.escaped += ctx.input
+
+        def advance(self, ctx):
+            if ctx.input in string.hexdigits and len(self.machine.escaped) == 1:
+                return self.__class__
+            elif len(self.machine.escaped) == 2:
+                self.machine.escaped = self.machine.escaped.decode("hex")
+                return None
+            else:
+                raise EscapeError("\\x must be followed with two hexadecimal digits: only one provided.")
+
+    class Final(State):
+
+        def _run(self, ctx):
+
+            def get_complement(not_allowed_chars):
+                return ''.join([chr(int(i)) for i in range(0, 0xFF) if chr(int(i)) not in not_allowed_chars])
+
+            shortcuts = {'s': string.whitespace,
+                         'S': get_complement(string.whitespace),
+                         'd': string.digits,
+                         'D': get_complement(string.digits),
+                         'w': string.letters + string.digits + '_',
+                         'W': get_complement(string.letters + string.digits + '_')}
+
+            self.machine.escaped = shortcuts[ctx.input] if ctx.input in shortcuts else ctx.input
+
+        def advance(self, context):
+            return None
+
+
+
+class GroupingState(StateMachine):
+
+    class Final(State):
+
+        def _run(self, context):
+            pass
+
+        def advance(self, context):
+            return None
+
+    def advance(self, ctx):
+        if ctx.input in (')', '}', ']'):
+            raise Exception
+
+        # quantifier specified
+        elif ctx.input in ('*', '+', '?'):
+            return self.machine.QtyState
+        elif ctx.input == '{':
+            return self.machine.Brackets
+        else:
+            ctx.flush()
+
+        # pick
+        if ctx.input == '|':
+            return self.machine.Pick
+        elif ctx.pick:
+            raise Exception
+
+        # continue with something else
+        if ctx.input == '(':
+            return self.machine.Parenthesis
+        elif ctx.input == '[':
+            return self.machine.SquareBrackets
+        elif ctx.input == '\\':
+            return self.machine.Escape
+        elif ctx.input is None:
             return self.machine.Final
-
-    class Final(FinalState):
-
-        def run(self, ctx):
-            if ctx.buffer is not None:
-                ctx.append_to_buffer(ctx.input)
-            elif ctx.alphabet is not None:
-                ctx.append_to_alphabet(ctx.input)
+        else:
+            return self.machine.Main
 
 
 class RegexParser(StateMachine):
 
     class Initial(State):
 
-        def run(self, ctx):
+        def _run(self, ctx):
             pass
 
         def advance(self, ctx):
-            if ctx.input in ('?', '*', '+', '{', '}', ')', ']'):
-                raise Exception
-
-            if ctx.input == '[':
+            if ctx.input in ('?', '*', '+', '{'):
+                raise QuantificationError("Nothing to quantify.")
+            elif ctx.input in ('}', ')', ']'):
+                raise GroupingError("Unopened " + ctx.input)
+            elif ctx.input == '[':
                 return self.machine.SquareBrackets
             elif ctx.input == '(':
                 return self.machine.Parenthesis
+            elif ctx.input == '\\':
+                return self.machine.Escape
             else:
                 ctx.append_to_buffer("")
 
-                if ctx.input == '\\':
-                    return self.machine.Escape
-                elif ctx.input == '|':
-                    return self.machine.PickState
+                if ctx.input == '|':
+                    return self.machine.Pick
                 elif ctx.input is None:
                     return self.machine.Final
                 else:
-                    return self.machine.MainState
+                    return self.machine.Main
 
+    class Final(State):
 
-    class Final(FinalState):
-
-        def run(self, ctx):
+        def _run(self, ctx):
             ctx.flush()
+
+        def advance(self, ctx):
+            return None
 
 
     class Escape(EscapeState):
 
         def advance(self, ctx):
-            return self.machine.states[self.machine.MainState].advance(ctx)
+
+            if len(self.escaped) > 1:
+
+                if ctx.pick and len(ctx.values) > 1 and len(ctx.buffer) > 1:
+                    raise UnconvertibleRegexError()
+
+                if ctx.buffer is not None:
+
+                    if len(ctx.buffer) == 0:
+
+                        if len(ctx.values[:-1]) > 0:
+                            ctx.values = ctx.values[:-1]
+                            ctx.flush()
+                    else:
+                        ctx.flush()
+
+                ctx.append_to_alphabet(self.escaped)
+                return self.machine.states[self.machine.SquareBrackets].advance(ctx)
+
+            else:
+                ctx.append_to_buffer(self.escaped)
+                return self.machine.states[self.machine.Main].advance(ctx)
 
 
-    class MainState(State):
+    class Main(State):
 
-        def run(self, ctx):
+        def _run(self, ctx):
             ctx.append_to_buffer(ctx.input)
 
         def advance(self, ctx):
@@ -652,13 +769,13 @@ class RegexParser(StateMachine):
                 return self.machine.Escape
 
             elif ctx.input == '|':
-                return self.machine.PickState
+                return self.machine.Pick
 
             elif ctx.input in ('?', '*', '+', '{'):
 
                 # pick
                 if ctx.pick and len(ctx.values) > 1 and len(ctx.buffer) > 1:
-                    raise Exception
+                    raise UnconvertibleRegexError()
 
                 if len(ctx.buffer) == 1:
                     if len(ctx.values) > 1:
@@ -678,8 +795,8 @@ class RegexParser(StateMachine):
                 else:
                     return self.machine.QtyState
 
-            elif ctx.input in ('}', ')', ']'):
-                raise Exception
+            elif ctx.input in ('}',')',']'):
+                raise GroupingError("Unopened " + ctx.input)
 
             elif ctx.input is None:
                 return self.machine.Final
@@ -687,23 +804,24 @@ class RegexParser(StateMachine):
             return self.__class__
 
 
-    class PickState(State):
+    class Pick(State):
 
-        def run(self, ctx):
+        def _run(self, ctx):
 
             if not ctx.pick:
                 if len(ctx.nodes) == 0 or (len(ctx.nodes) == 1 and ctx.buffer is None):
                     ctx.pick = True
                 else:
-                    raise Exception
+                    raise UnconvertibleRegexError()
 
         def advance(self, ctx):
             if ctx.input == '(':
                 return self.machine.Parenthesis
             elif ctx.input == '[':
                 return self.machine.SquareBrackets
+            elif ctx.input == '\\':
+                return self.machine.SquareBrackets
             else:
-
                 ctx.append_to_contents("")
 
                 if ctx.input == '|':
@@ -711,13 +829,12 @@ class RegexParser(StateMachine):
                 elif ctx.input is None:
                     return self.machine.Final
                 else:
-                    return self.machine.MainState
-
+                    return self.machine.Main
 
 
     class QtyState(State):
 
-        def run(self, ctx):
+        def _run(self, ctx):
             if ctx.input == '+':
                 ctx.min = 1
             elif ctx.input == '?':
@@ -729,39 +846,42 @@ class RegexParser(StateMachine):
             ctx.flush()
 
         def advance(self, ctx):
-            if ctx.input in ('*', '+', '?', '{', '}', ')', ']'):
-                raise Exception
+            if ctx.input in ('?', '*', '+', '{'):
+                raise QuantificationError("Nothing to quantify.")
 
-            if ctx.input == '(':
+            elif ctx.input in ('}', ')', ']'):
+                raise GroupingError("Unopened " + ctx.input)
+
+            elif ctx.input == '(':
                 return self.machine.Parenthesis
             elif ctx.input == '[':
                 return self.machine.SquareBrackets
             elif ctx.input == '|':
-                return self.machine.PickState
+                return self.machine.Pick
             elif ctx.input == '\\':
                 return self.machine.Escape
             elif ctx.input is None:
                 return self.machine.Final
             else:
-                return self.machine.MainState
+                return self.machine.Main
 
 
-    class Brackets(SubStateMachine):
+    class Brackets(StateMachine):
 
         class Initial(State):
 
-            def run(self, ctx):
+            def _run(self, ctx):
                 ctx.min = ""
 
             def advance(self, ctx):
                 if ctx.input.isdigit():
                     return self.machine.BeforeComma
                 else:
-                    raise Exception
+                    raise QuantificationError("{} content needs to start with digit(s).")
 
         class BeforeComma(State):
 
-            def run(self, ctx):
+            def _run(self, ctx):
                 ctx.min += ctx.input
 
             def advance(self, context):
@@ -772,11 +892,11 @@ class RegexParser(StateMachine):
                 elif context.input == '}':
                     return self.machine.Final
                 else:
-                    raise Exception
+                    raise QuantificationError("{} can only contain digits and a comma.")
 
         class Comma(State):
 
-            def run(self, ctx):
+            def _run(self, ctx):
                 ctx.max = ""
 
             def advance(self, context):
@@ -785,11 +905,11 @@ class RegexParser(StateMachine):
                 elif context.input == '}':
                     return self.machine.Final
                 else:
-                    raise Exception
+                    raise QuantificationError("{} can only contain digits and a comma.")
 
         class AfterComma(State):
 
-            def run(self, ctx):
+            def _run(self, ctx):
                 ctx.max += ctx.input
 
             def advance(self, context):
@@ -801,7 +921,7 @@ class RegexParser(StateMachine):
                     raise Exception
 
         class Final(State):
-            def run(self, ctx):
+            def _run(self, ctx):
                 ctx.min = int(ctx.min)
 
                 if ctx.max is None:
@@ -812,15 +932,18 @@ class RegexParser(StateMachine):
                     ctx.max = int(ctx.max)
 
                 if ctx.max is not None and ctx.min > ctx.max:
-                    raise Exception
+                    raise QuantificationError("{a,b}: a <= b not verified.")
 
                 ctx.flush()
+
+            def advance(self, context):
+                return None
 
         def advance(self, ctx):
             if ctx.input in ('*', '+', '?', '{', ')', ']'):
                 raise Exception
             elif ctx.input == '|':
-                return self.machine.PickState
+                return self.machine.Pick
             elif ctx.input is None:
                 return self.machine.Final
             else:
@@ -834,14 +957,13 @@ class RegexParser(StateMachine):
                 elif ctx.input == '[':
                     return self.machine.SquareBrackets
                 else:
-                    return self.machine.MainState
+                    return self.machine.Main
 
-
-    class Parenthesis(SubStateMachine):
+    class Parenthesis(GroupingState):
 
         class Initial(State):
 
-            def run(self, ctx):
+            def _run(self, ctx):
                 ctx.flush()
                 ctx.append_to_buffer("")
 
@@ -853,10 +975,10 @@ class RegexParser(StateMachine):
                 elif ctx.input == ')':
                     return self.machine.Final
                 else:
-                    return self.machine.Inside
+                    return self.machine.Main
 
-        class Inside(State):
-            def run(self, ctx):
+        class Main(State):
+            def _run(self, ctx):
                 if ctx.input == '|':
                     ctx.append_to_contents("")
                 else:
@@ -872,56 +994,32 @@ class RegexParser(StateMachine):
                 else:
                     return self.__class__
 
+
         class Escape(EscapeState):
 
             def advance(self, ctx):
-                return self.machine.states[self.machine.Inside].advance(ctx)
 
-        class Final(FinalState):
-            def run(self, ctx):
-                pass
-
-        def advance(self, ctx):
-            if ctx.input in (')', '}', ']'):
-                raise Exception
-
-            # quantifier specified
-            elif ctx.input in ('*', '+', '?'):
-                return self.machine.QtyState
-            elif ctx.input == '{':
-                return self.machine.Brackets
-            else:
-                ctx.flush()
-
-            # pick
-            if ctx.input == '|':
-                return self.machine.PickState
-            elif ctx.pick:
-                raise Exception
-
-            # continue with something else
-            if ctx.input == '(':
-                return self.machine.Parenthesis
-            elif ctx.input == '[':
-                return self.machine.SquareBrackets
-            elif ctx.input == '\\':
-                return self.machine.Escape
-            elif ctx.input is None:
-                return self.machine.Final
-            else:
-                return self.machine.MainState
+                if len(self.escaped) > 1:
+                    raise UnconvertibleRegexError()
+                else:
+                    ctx.append_to_buffer(self.escaped)
+                    return self.machine.states[self.machine.Main].advance(ctx)
 
 
-    class SquareBrackets(SubStateMachine):
+    class SquareBrackets(GroupingState):
+
+        def init_specific(self):
+            self.range = None
 
         class Initial(State):
 
-            def run(self, ctx):
+            def _run(self, ctx):
+                self.machine.range = False
                 ctx.flush()
                 ctx.append_to_alphabet("")
 
             def advance(self, ctx):
-                if ctx.input in ('*', '+', '?', '{', '}', '(', ')', '[', ']', '|', None):
+                if ctx.input in ('*', '+', '?', '{', '}', '(', ')', '[', ']', '|', '-', None):
                     raise Exception
                 elif ctx.input == '\\':
                     return self.machine.Escape
@@ -929,8 +1027,18 @@ class RegexParser(StateMachine):
                     return self.machine.Inside
 
         class Inside(State):
-            def run(self, ctx):
-                ctx.append_to_alphabet(ctx.input)
+            def _run(self, ctx):
+                if self.machine.range:
+                    self.machine.range = False
+                    if ctx.alphabet[-1] > ctx.input:
+                        raise Exception
+                    elif ctx.input == ctx.alphabet[-1]:
+                        pass
+                    else:
+                        for i in range(ord(ctx.alphabet[-1]) + 1, ord(ctx.input) + 1):
+                            ctx.append_to_alphabet(chr(i))
+                else:
+                    ctx.append_to_alphabet(ctx.input)
 
             def advance(self, ctx):
                 if ctx.input in ('*', '+', '?', '{', '}', '(', ')', '[', '|', None):
@@ -939,55 +1047,46 @@ class RegexParser(StateMachine):
                     return self.machine.Escape
                 elif ctx.input == ']':
                     return self.machine.Final
+                elif ctx.input == '-':
+                    return self.machine.Range
                 else:
                     return self.__class__
+
+        class Range(State):
+            def _run(self, ctx):
+                self.machine.range = True
+
+            def advance(self, ctx):
+                if ctx.input in ('*', '+', '?', '{', '}', '(', ')', '[', ']', '-', '|', None):
+                    raise Exception
+                elif ctx.input == '\\':
+                    return self.machine.Escape
+                else:
+                    return self.machine.Inside
 
         class Escape(EscapeState):
 
             def advance(self, ctx):
+                if self.machine.range:
+                    self.machine.range = False
+                    if len(self.escaped) > 1:
+                        raise Exception
+                    elif ctx.alphabet[-1] > self.escaped:
+                        raise Exception
+                    elif self.escaped == ctx.alphabet[-1]:
+                        pass
+                    else:
+                        for i in range(ord(ctx.alphabet[-1]) + 1, ord(self.escaped) + 1):
+                            ctx.append_to_alphabet(chr(i))
+                else:
+                    ctx.append_to_alphabet(self.escaped)
+
                 return self.machine.states[self.machine.Inside].advance(ctx)
 
-        class Final(FinalState):
-            def run(self, ctx):
-                pass
-
-        def advance(self, ctx):
-            if ctx.input in (')', '}', ']'):
-                raise Exception
-
-            # quantifier specified
-            elif ctx.input in ('*', '+', '?'):
-                return self.machine.QtyState
-            elif ctx.input == '{':
-                return self.machine.Brackets
-            else:
-                ctx.flush()
-
-            # pick
-            if ctx.input == '|':
-                return self.machine.PickState
-            elif ctx.pick:
-                raise Exception
-
-            # continue with something else
-            if ctx.input == '(':
-                return self.machine.Parenthesis
-            elif ctx.input == '[':
-                return self.__class__
-            elif ctx.input == '\\':
-                return self.machine.Escape
-            elif ctx.input is None:
-                return self.machine.Final
-            else:
-                return self.machine.MainState
 
 
-
-    def __init__(self):
-        StateMachine.__init__(self)
-
+    def init_specific(self):
         self._name = None
-        self.inputs = None
         self.values = None
         self.alphabet = None
 
@@ -999,10 +1098,6 @@ class RegexParser(StateMachine):
         self._nodes = []
 
 
-    @property
-    def input(self):
-        return None if self.inputs is None or len(self.inputs) == 0 else self.inputs[0]
-
     def append_to_contents(self, content):
         if self.values is None:
             self.values = []
@@ -1011,6 +1106,8 @@ class RegexParser(StateMachine):
     def append_to_buffer(self, str):
         if self.values is None:
             self.values = [""]
+        if self.values[-1] is None:
+            self.values[-1] = ""
         self.values[-1] += str
 
     def append_to_alphabet(self, alphabet):
@@ -1041,18 +1138,12 @@ class RegexParser(StateMachine):
         if self.nothing_to_flush:
             return
 
-        print("buffer: " + str(self.values))
-        print("alphabet: " + str(self.alphabet))
-        print
-        print
-
         if self.min is None and self.max is None:
             self.min = self.max = 1
 
         # type = fvt.INT_str if all(content.isdigit() for content in self.contents) else fvt.String
         type = fvt.String
         name = self._name + str(len(self.nodes) + 1)
-
         node = self._create_terminal_node(name, type,
                                           contents=self.values,
                                           alphabet=self.alphabet,

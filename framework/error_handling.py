@@ -29,3 +29,9 @@ class DataProcessTermination(Exception): pass
 class UserInterruption(Exception): pass
 
 class DataModelDefinitionError(Exception): pass
+
+class RegexParserError(DataModelDefinitionError): pass
+class EscapeError(RegexParserError): pass
+class QuantificationError(RegexParserError): pass
+class GroupingError(RegexParserError): pass
+class UnconvertibleRegexError(RegexParserError): pass
