@@ -619,7 +619,7 @@ class EscapeState(StateMachine):
             self.machine.escaped += ctx.input
 
         def advance(self, ctx):
-            if ctx.input in string.hexdigits and len(self.machine.escaped) == 1:
+            if ctx.input in list(string.hexdigits) and len(self.machine.escaped) == 1:
                 return self.__class__
             elif len(self.machine.escaped) == 2:
                 self.machine.escaped = self.machine.escaped.decode("hex")

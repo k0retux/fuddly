@@ -28,32 +28,18 @@ class RegexParserTest(unittest.TestCase):
     def test_invalid_regexes(self, regex):
         self.assert_regex_is_invalid(regex)
 
-
-    @ddt.unpack
-    @ddt.data(('?', (0, 1)), ('*', (0, None)), ('+', (1, None)),
-              ('{7}', (7, 7)), ('{2,7}', (2, 7)),
-              ('{0}', (0, 0)), ('{0,0}', (0, 0)),
-              ('{3,}', (3, None)))
-    def test_7(self, char, qty):
-        self._parser.parse(r"salut[abcd]" + char + "ooo", "toto")
-        self.assertEquals(self._parser._create_terminal_node.call_count, 3)
-        self._parser._create_terminal_node.assert_has_calls(
-            [mock.call("toto1", vt.String, contents=["salut"], alphabet=None, qty=(1, 1)),
-             mock.call("toto2", vt.String, contents=None, alphabet="abcd", qty=qty),
-             mock.call("toto3", vt.String, contents=["ooo"], alphabet=None, qty=(1, 1))])
-
-    @ddt.unpack
-    @ddt.data(('?', (0, 1)), ('*', (0, None)), ('+', (1, None)),
-              ('{7}', (7, 7)), ('{2,7}', (2, 7)),
-              ('{0}', (0, 0)), ('{0,0}', (0, 0)),
-              ('{3,}', (3, None)))
-    def test_8(self, char, qty):
-        self._parser.parse(r"salu(ttteee|whatever)" + char + "ooo", "toto")
-        self.assertEquals(self._parser._create_terminal_node.call_count, 3)
-        self._parser._create_terminal_node.assert_has_calls(
-            [mock.call("toto1", vt.String, contents=["salu"], alphabet=None, qty=(1, 1)),
-             mock.call("toto2", vt.String, contents=["ttteee", "whatever"], alphabet=None, qty=qty),
-             mock.call("toto3", vt.String, contents=["ooo"], alphabet=None, qty=(1, 1))])
+    @ddt.data(
+        {'regex': r"[abcd]?", 'nodes': [{"alphabet": "abcd", "qty": (0, 1)}]},
+        {'regex': r"[abcd]*", 'nodes': [{"alphabet": "abcd", "qty": (0, None)}]},
+        {'regex': r"[abcd]+", 'nodes': [{"alphabet": "abcd", "qty": (1, None)}]},
+        {'regex': r"[abcd]{7}", 'nodes': [{"alphabet": "abcd", "qty": (7, 7)}]},
+        {'regex': r"[abcd]{2,7}", 'nodes': [{"alphabet": "abcd", "qty": (2, 7)}]},
+        {'regex': r"[abcd]{0}", 'nodes': [{"alphabet": "abcd", "qty": (0, 0)}]},
+        {'regex': r"[abcd]{0,0}", 'nodes': [{"alphabet": "abcd", "qty": (0, 0)}]},
+        {'regex': r"[abcd]{3,}", 'nodes': [{"alphabet": "abcd", "qty": (3, None)}]},
+    )
+    def test_quantifiers(self, test_case):
+        self.assert_regex_is_valid(test_case)
 
 
     @ddt.data(
@@ -64,10 +50,18 @@ class RegexParserTest(unittest.TestCase):
              {"contents": ["lou\lous"]},
              {"contents": ["cmoi"]},
          ]},
+        {'regex': r"hi\x58", 'nodes': [{"contents": ["hi\x58"]}]},
+        {'regex': r"hi\x00hola", 'nodes': [{"contents": ["hi\x00hola"]}]},
+        {'regex': r"\xFFdom", 'nodes': [{"contents": ["\xFFdom"]}]},
+        {'regex': r"\ddom", 'nodes': [{"alphabet": "0123456789"}, {"contents": ["dom"]}]},
+        {'regex': r"dom[abcd\d]", 'nodes': [{"contents": ["dom"]}, {"alphabet": "abcd0123456789"}]},
+        {'regex': r"[abcd]\x33", 'nodes': [{"alphabet": "abcd"}, {"contents": ["\x33"]}]},
+        {'regex': r"(abcd)\x33", 'nodes': [{"contents": ["abcd"]}, {"contents": ["\x33"]}]},
+        {'regex': r"\x33[abcd]", 'nodes': [{"contents": ["\x33"]}, {"alphabet": "abcd"}]},
+        {'regex': r"\x33(abcd)", 'nodes': [{"contents": ["\x33"]}, {"contents": ["abcd"]}]},
     )
     def test_escape(self, test_case):
         self.assert_regex_is_valid(test_case)
-
 
 
     @ddt.data(r"?", r"*", r"+", r"{1,2}", r"what{,}ever", r"bj{}er"
@@ -180,6 +174,8 @@ class RegexParserTest(unittest.TestCase):
         {'regex': r"[what1-9]", 'nodes': [{"alphabet": "what123456789"}]},
         {'regex': r"[a-c1-9]", 'nodes': [{"alphabet": "abc123456789"}]},
         {'regex': r"[a-c1-9fin]", 'nodes': [{"alphabet": "abc123456789fin"}]},
+        {'regex': r"[a-c9-9fin]", 'nodes': [{"alphabet": "abc9fin"}]},
+        {'regex': r"[pa-cwho1-9fin]", 'nodes': [{"alphabet": "pabcwho123456789fin"}]},
 
         {'regex': r"[\x33]", 'nodes': [{"alphabet": "\x33"}]},
         {'regex': r"[\x33-\x35]", 'nodes': [{"alphabet": "\x33\x34\x35"}]},
@@ -199,7 +195,6 @@ class RegexParserTest(unittest.TestCase):
 
 
     @ddt.data(
-
         {'regex': r"|", 'nodes': [{"contents": ["",""]}]},
         {'regex': r"|||", 'nodes': [{"contents": ["", "", "", ""]}]},
         {'regex': r"toto|titi|tata", 'nodes': [{"contents": ["toto", "titi", "tata"]}]},
