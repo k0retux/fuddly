@@ -1144,9 +1144,7 @@ class RegexParser(StateMachine):
         # type = fvt.INT_str if all(content.isdigit() for content in self.contents) else fvt.String
         type = fvt.String
         name = self._name + str(len(self.nodes) + 1)
-        node = self._create_terminal_node(name, type,
-                                          contents=self.values,
-                                          alphabet=self.alphabet,
+        node = self._create_terminal_node(name, type, contents=self.values, alphabet=self.alphabet,
                                           qty=(self.min, self.max))
         self.nodes.append(node)
         self.reset()
@@ -1176,8 +1174,7 @@ class RegexParser(StateMachine):
         if alphabet is not None:
             return [Node(name=name, vt=fvt.String(alphabet=alphabet, min_sz=qty[0], max_sz=qty[1])), 1, 1]
         else:
-            return [Node(name=name, vt=fvt.String(val_list=contents)), -1 if qty[0] is None else qty[0],
-                                                                       -1 if qty[1] is None else qty[1]]
+            return [Node(name=name, vt=fvt.String(val_list=contents)), qty[0], -1 if qty[1] is None else qty[1]]
 
     def _create_non_terminal_node(self):
         non_terminal = [1, [MH.Copy + MH.Ordered]]
@@ -1185,7 +1182,7 @@ class RegexParser(StateMachine):
 
         for terminal in self.nodes:
             formatted_terminal.append(terminal)
-            if self.pick:
+            if self.pick and len(self.nodes) > 1:
                 non_terminal.append(1)
                 formatted_terminal = [MH.Copy + MH.Ordered]
                 non_terminal.append(formatted_terminal)
