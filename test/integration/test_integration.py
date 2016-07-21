@@ -24,6 +24,7 @@ from __future__ import print_function
 
 import sys
 import unittest
+import ddt
 
 sys.path.append('.')
 
@@ -3126,9 +3127,11 @@ class TestDataModel(unittest.TestCase):
             self.assertEqual(zip_buff, orig_buff, msg=err_msg)
 
 
+@ddt.ddt
 class TestDataModelHelpers(unittest.TestCase):
 
-    def test_regex(self):
+    @ddt.data("HTTP_version_regex", ("HTTP_version_regex", 17), ("HTTP_version_regex", "whatever"))
+    def test_regex(self, regex_node_name):
         HTTP_version_classic = \
             {'name': 'HTTP_version_classic',
              'contents': [
@@ -3142,7 +3145,7 @@ class TestDataModelHelpers(unittest.TestCase):
              ]}
 
         HTTP_version_regex = \
-            {'name': 'HTTP_version_regex', 'contents': "(HTTP)(/)(0|1|2|3|4|5|6|7|8|9)(.)(0|1|2|3|4|5|6|7|8|9)"}
+            {'name': regex_node_name, 'contents': "(HTTP)(/)(0|1|2|3|4|5|6|7|8|9)(.)(0|1|2|3|4|5|6|7|8|9)"}
 
         mh = ModelHelper()
         node_classic = mh.create_graph_from_desc(HTTP_version_classic)

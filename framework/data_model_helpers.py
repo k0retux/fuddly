@@ -1174,9 +1174,7 @@ class RegexParser(StateMachine):
         assert(contents is not None or alphabet is not None)
 
         if alphabet is not None:
-            return [Node(name=name, vt=fvt.String(alphabet=alphabet,
-                         min_sz=-1 if qty[0] is None else qty[0],
-                         max_sz=-1 if qty[1] is None else qty[1])), 1, 1]
+            return [Node(name=name, vt=fvt.String(alphabet=alphabet, min_sz=qty[0], max_sz=qty[1])), 1, 1]
         else:
             return [Node(name=name, vt=fvt.String(val_list=contents)), -1 if qty[0] is None else qty[0],
                                                                        -1 if qty[1] is None else qty[1]]
@@ -1442,7 +1440,9 @@ class ModelHelper(object):
 
         n, conf = self.__pre_handling(desc, node)
 
-        name =  desc.get('name')
+        name =  desc.get('name') if desc.get('name') is not None else node.name
+        if isinstance(name, tuple):
+            name = name[0]
         regexp =  desc.get('contents')
         assert isinstance(regexp, str)
 
