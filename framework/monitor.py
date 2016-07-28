@@ -303,7 +303,7 @@ class Monitor(object):
 
     def add_probe(self, probe, blocking=False, after_feedback_retrieval=False):
         if probe.__class__.__name__ in self.probe_users:
-            raise AddExistingProbeToMonitorError(probe.__class_.__name__)
+            raise AddExistingProbeToMonitorError(probe.__class__.__name__)
 
         if blocking:
             self.probe_users[probe.__class__.__name__] = BlockingProbeUser(probe, after_feedback_retrieval)
@@ -588,55 +588,133 @@ class ProbeStatus(object):
     def get_timestamp(self):
         return self._now
 
-class ProbePID_SSH(Probe):
+
+
+class SSH_Backend(object):
+
+    def __init__(self, sshd_ip, sshd_port=2, username='', password=''):
+        if not ssh_module:
+            raise eh.UnavailablePythonModule('Python module for SSH is not available!')
+
+        self.sshd_ip = sshd_ip
+        self.sshd_port = sshd_port
+        self.username = username
+        self.password = password
+
+        self.client = None
+
+    def start(self):
+        self.client = ssh.SSHClient()
+        self.client.set_missing_host_key_policy(ssh.AutoAddPolicy())
+        self.client.connect(self.sshd_ip, port=self.sshd_port,
+                            username=self.username,
+                            password=self.password)
+
+    def stop(self):
+        self.client.close()
+
+    def exec_command(self, cmd):
+        ssh_in, ssh_out, ssh_err = \
+            self.client.exec_command(cmd)
+
+        if ssh_err.read():
+            # the command does not exist on the system
+            raise BackendError('The command does not exist on the host')
+        else:
+            return ssh_out.read()
+
+
+class Serial_Backend(object):
+
+    def __init__(self, serial_port, baudrate=115200, read_duration=2, username=None, password=None):
+        if not serial_module:
+            raise eh.UnavailablePythonModule('Python module for Serial is not available!')
+
+        self.serial_port = serial_port
+        self.baudrate = baudrate
+        self.read_duration = read_duration
+        self.username = username
+        self.password = password
+
+        self.client = None
+
+    def start(self):
+        self.ser = serial.Serial(self.serial_port, self.baudrate, timeout=1,
+                                 dsrdtr=True, rtscts=True)
+        if self.username is not None:
+            assert self.password is not None
+            time.sleep(0.1)
+            self.ser.flushInput()
+            self.ser.write(self.username)
+            time.sleep(0.1)
+            pass_prompt = self.ser.read(1)
+            retry = 0
+            while pass_prompt.find('p') == -1:
+                time.sleep(1)
+                retry += 1
+                if retry > 2:
+                    raise BackendError('Unable to establish a connection with the serial line.')
+                else:
+                    pass_prompt = self.ser.readline()
+            time.sleep(0.1)
+            self.ser.write(self.password)
+
+    def stop(self):
+        self.ser.close()
+
+    def exec_command(self, cmd):
+        self.ser.flushInput()
+        self.ser.write(cmd)
+        result = b''
+        t0 = datetime.datetime.now()
+        duration = -1
+        try:
+            while duration < self.read_duration:
+                now = datetime.datetime.now()
+                duration = (now - t0).total_seconds()
+                time.sleep(0.1)
+                res = self.ser.readline()
+                result += res
+        except serial.SerialException:
+            raise BackendError('Exception while reading serial line')
+        else:
+            return result
+
+
+class BackendError(Exception): pass
+
+class ProbePID(Probe):
     """
-    This generic probe enables you to monitor a process PID through an
-    SSH connection.
+    This is the base class for the generic probes that enable you to monitor a process PID.
+    The monitoring can be done through different backend. The current ones are SSH and Serial.
 
     Attributes:
         process_name (str): name of the process to monitor.
-        sshd_ip (str): IP of the SSH server.
-        sshd_port (int): port of the SSH server.
-        username (str): username to connect with.
-        password (str): password related to the username.
         max_attempts (int): maximum number of attempts for getting
           the process ID.
         delay_between_attempts (float): delay in seconds between
           each attempt.
         delay (float): delay before retrieving the process PID.
-        ssh_command_pattern (str): format string for the ssh command. '{0:s}' refer
+        command_pattern (str): format string for the ssh command. '{0:s}' refer
           to the process name.
     """
     process_name = None
-    sshd_ip = None
-    sshd_port = 22
-    username = None
-    password = None
+    command_pattern = 'pgrep {0:s}'
     max_attempts = 10
     delay_between_attempts = 0.1
     delay = 0.5
-    ssh_command_pattern = 'pgrep {0:s}'
 
-    def __init__(self):
-        assert(self.process_name != None)
-        assert(self.sshd_ip != None)
-        assert(self.username != None)
-        assert(self.password != None)
-
-        if not ssh_module:
-            raise eh.UnavailablePythonModule('Python module for SSH is not available!')
-
+    def __init__(self, backend):
+        assert self.process_name != None
+        self._backend = backend
         Probe.__init__(self)
 
     def _get_pid(self, logger):
-        ssh_in, ssh_out, ssh_err = \
-            self.client.exec_command(self.ssh_command_pattern.format(self.process_name))
-
-        if ssh_err.read():
-            # fallback method as previous command does not exist on the system
+        try:
+            res = self._backend.exec_command(self.command_pattern.format(self.process_name))
+        except BackendError:
             fallback_cmd = 'ps a -opid,comm'
-            ssh_in, ssh_out, ssh_err = self.client.exec_command(fallback_cmd)
-            res = ssh_out.read()
+            res = self._backend.exec_command(fallback_cmd)
             if sys.version_info[0] > 2:
                 res = res.decode('latin_1')
             pid_list = res.split('\n')
@@ -648,7 +726,6 @@ class ProbePID_SSH(Probe):
                 # process not found
                 pid = -1
         else:
-            res = ssh_out.read()
             if sys.version_info[0] > 2:
                 res = res.decode('latin_1')
             l = res.split()
@@ -667,11 +744,7 @@ class ProbePID_SSH(Probe):
         return pid
 
     def start(self, dm, target, logger):
-        self.client = ssh.SSHClient()
-        self.client.set_missing_host_key_policy(ssh.AutoAddPolicy())
-        self.client.connect(self.sshd_ip, port=self.sshd_port,
-                            username=self.username,
-                            password=self.password)
+        self._backend.start()
         self._saved_pid = self._get_pid(logger)
         if self._saved_pid < 0:
             msg = "*** INIT ERROR: unable to retrieve process PID ***\n"
@@ -684,7 +757,7 @@ class ProbePID_SSH(Probe):
         return ProbeStatus(self._saved_pid, info=msg)
 
     def stop(self, dm, target, logger):
-        self.client.close()
+        self._backend.stop()
 
     def main(self, dm, target, logger):
         cpt = self.max_attempts
@@ -714,6 +787,52 @@ class ProbePID_SSH(Probe):
 
         return status
 
+
+class ProbePID_SSH(ProbePID):
+    """
+    Generic probe that enable you to monitor a process PID through SSH.
+
+    Attributes:
+        sshd_ip (str): IP of the SSH server.
+        sshd_port (int): port of the SSH server.
+        username (str): username to connect with.
+        password (str): password related to the username.
+    """
+    sshd_ip = None
+    sshd_port = 22
+    username = None
+    password = None
+
+    def __init__(self):
+        assert self.sshd_ip != None
+        assert self.username != None
+        assert self.password != None
+        ProbePID.__init__(self, SSH_Backend(sshd_ip=self.sshd_ip, sshd_port=self.sshd_port,
+                                            username=self.username, password=self.password))
+
+class ProbePID_Serial(ProbePID):
+    """
+    Generic probe that enable you to monitor a process PID through a Serial line.
+
+    Attributes:
+        serial_port (str): path to the tty device file
+        baudrate (int): baudrate of the serial line
+        read_duration (str): time duration for retrieving characters from the serial line.
+        username (str): username to connect with. If None, no authentication step will be attempted.
+        password (str): password related to the username.
+    """
+
+    serial_port = None
+    baudrate=115200
+    read_duration=2
+    username = None
+    password = None
+
+    def __init__(self):
+        assert self.serial_port != None
+        ProbePID.__init__(self, Serial_Backend(serial_port=self.serial_port, baudrate=self.baudrate,
+                                               read_duration=self.read_duration,
+                                               username=self.username, password=self.password))
 
 def probe(project):
     def internal_func(probe_cls):

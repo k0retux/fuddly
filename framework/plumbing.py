@@ -2921,7 +2921,7 @@ class FmkPlumbing(object):
         self.lg.print_console('')
         for p in probes:
             msg = "name: %s (status: %s, delay: %f) --> " % \
-                (p, repr(self.prj.get_probe_status(p).get_status()),
+                (p, repr(self.mon.get_probe_status(p).get_status()),
                  self.prj.get_probe_delay(p))
 
             if self.prj.is_probe_stuck(p):
