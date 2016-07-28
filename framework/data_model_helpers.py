@@ -1444,8 +1444,14 @@ class ModelHelper(object):
         assert isinstance(regexp, str)
 
         parser = RegexParser()
-        non_terminal_node = parser.parse(regexp, name)
-        n.set_subnodes_with_csts(non_terminal_node, conf=conf)
+        nodes = parser.parse(regexp, name)
+
+        if len(nodes) == 2 and len(nodes[1]) == 2 and (nodes[1][1][1] == nodes[1][1][2] == 1 or
+                 isinstance(nodes[1][1][0], fvt.String) and nodes[1][1][0].alphabet is not None):
+            n.set_values(value_type=nodes[1][1][0].internals[nodes[1][1][0].current_conf].value_type, conf=conf)
+        else:
+            n.set_subnodes_with_csts(nodes, conf=conf)
+
 
         custo_set = desc.get('custo_set', None)
         custo_clear = desc.get('custo_clear', None)
@@ -1454,6 +1460,16 @@ class ModelHelper(object):
             custo = NonTermCusto(items_to_set=custo_set, items_to_clear=custo_clear)
             internals = n.cc if conf is None else n.c[conf]
             internals.customize(custo)
+
+        sep_desc = desc.get('separator', None)
+        if sep_desc is not None:
+            sep_node_desc = sep_desc.get('contents', None)
+            assert (sep_node_desc is not None)
+            sep_node = self._create_graph_from_desc(sep_node_desc, n)
+            prefix = sep_desc.get('prefix', True)
+            suffix = sep_desc.get('suffix', True)
+            unique = sep_desc.get('unique', False)
+            n.set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique)
 
         self._handle_common_attr(n, desc, conf)
 
