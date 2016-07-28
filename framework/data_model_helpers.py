@@ -673,6 +673,8 @@ class GroupingState(StateMachine):
         # pick
         if ctx.input == '|':
             return self.machine.Pick
+        elif ctx.input is None:
+            return self.machine.Final
         elif ctx.pick:
             raise Exception
 
@@ -683,8 +685,6 @@ class GroupingState(StateMachine):
             return self.machine.SquareBrackets
         elif ctx.input == '\\':
             return self.machine.Escape
-        elif ctx.input is None:
-            return self.machine.Final
         else:
             return self.machine.Main
 
@@ -1141,10 +1141,14 @@ class RegexParser(StateMachine):
         if self.min is None and self.max is None:
             self.min = self.max = 1
 
-        # type = fvt.INT_str if all(content.isdigit() for content in self.contents) else fvt.String
-        type = fvt.String
+        if self.values is not None and all(val.isdigit() for val in self.values):
+            self.values = [int(i) for i in self.values]
+            type = fvt.INT_str
+        else:
+            type = fvt.String
+
         name = self._name + str(len(self.nodes) + 1)
-        node = self._create_terminal_node(name, type, contents=self.values, alphabet=self.alphabet,
+        node = self._create_terminal_node(name, type, values=self.values, alphabet=self.alphabet,
                                           qty=(self.min, self.max))
         self.nodes.append(node)
         self.reset()
@@ -1167,14 +1171,19 @@ class RegexParser(StateMachine):
         return self._create_non_terminal_node()
 
 
-    def _create_terminal_node(self, name, type, contents=None, alphabet=None, qty=None):
+    def _create_terminal_node(self, name, type, values=None, alphabet=None, qty=None):
 
-        assert(contents is not None or alphabet is not None)
+        assert(values is not None or alphabet is not None)
 
         if alphabet is not None:
             return [Node(name=name, vt=fvt.String(alphabet=alphabet, min_sz=qty[0], max_sz=qty[1])), 1, 1]
         else:
-            return [Node(name=name, vt=fvt.String(val_list=contents)), qty[0], -1 if qty[1] is None else qty[1]]
+            if type == fvt.String:
+                node = Node(name=name, vt=fvt.String(val_list=values))
+            else:
+                node = Node(name=name, vt=fvt.INT_str(int_list=values))
+
+            return [node, qty[0], -1 if qty[1] is None else qty[1]]
 
     def _create_non_terminal_node(self):
         non_terminal = [1, [MH.Copy + MH.Ordered]]

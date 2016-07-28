@@ -45,20 +45,20 @@ class RegexParserTest(unittest.TestCase):
     @ddt.data(
         {'regex': r"salut(l\(es)(lou\\lous)cmoi",
          'nodes': [
-             {"contents": ["salut"]},
-             {"contents": ["l(es"]},
-             {"contents": ["lou\lous"]},
-             {"contents": ["cmoi"]},
+             {"values": ["salut"]},
+             {"values": ["l(es"]},
+             {"values": ["lou\lous"]},
+             {"values": ["cmoi"]},
          ]},
-        {'regex': r"hi\x58", 'nodes': [{"contents": ["hi\x58"]}]},
-        {'regex': r"hi\x00hola", 'nodes': [{"contents": ["hi\x00hola"]}]},
-        {'regex': r"\xFFdom", 'nodes': [{"contents": ["\xFFdom"]}]},
-        {'regex': r"\ddom", 'nodes': [{"alphabet": "0123456789"}, {"contents": ["dom"]}]},
-        {'regex': r"dom[abcd\d]", 'nodes': [{"contents": ["dom"]}, {"alphabet": "abcd0123456789"}]},
-        {'regex': r"[abcd]\x33", 'nodes': [{"alphabet": "abcd"}, {"contents": ["\x33"]}]},
-        {'regex': r"(abcd)\x33", 'nodes': [{"contents": ["abcd"]}, {"contents": ["\x33"]}]},
-        {'regex': r"\x33[abcd]", 'nodes': [{"contents": ["\x33"]}, {"alphabet": "abcd"}]},
-        {'regex': r"\x33(abcd)", 'nodes': [{"contents": ["\x33"]}, {"contents": ["abcd"]}]},
+        {'regex': r"hi\x58", 'nodes': [{"values": ["hi\x58"]}]},
+        {'regex': r"hi\x00hola", 'nodes': [{"values": ["hi\x00hola"]}]},
+        {'regex': r"\xFFdom", 'nodes': [{"values": ["\xFFdom"]}]},
+        {'regex': r"\ddom", 'nodes': [{"alphabet": "0123456789"}, {"values": ["dom"]}]},
+        {'regex': r"dom[abcd\d]", 'nodes': [{"values": ["dom"]}, {"alphabet": "abcd0123456789"}]},
+        {'regex': r"[abcd]\x43", 'nodes': [{"alphabet": "abcd"}, {"values": ["\x43"]}]},
+        {'regex': r"(abcd)\x53", 'nodes': [{"values": ["abcd"]}, {"values": ["\x53"]}]},
+        {'regex': r"\x43[abcd]", 'nodes': [{"values": ["\x43"]}, {"alphabet": "abcd"}]},
+        {'regex': r"\x43(abcd)", 'nodes': [{"values": ["\x43"]}, {"values": ["abcd"]}]},
     )
     def test_escape(self, test_case):
         self.assert_regex_is_valid(test_case)
@@ -79,11 +79,11 @@ class RegexParserTest(unittest.TestCase):
         {'regex': r"[abcd]*toto(|\(ab\)|cd)+what?ever",
          'nodes': [
              {"alphabet": "abcd", "qty": (0, None)},
-             {"contents": ["toto"]},
-             {"contents": ["", "(ab)", "cd"], "qty": (1, None)},
-             {"contents": ["wha"]},
-             {"contents": ["t"], "qty": (0, 1)},
-             {"contents": ["ever"]}
+             {"values": ["toto"]},
+             {"values": ["", "(ab)", "cd"], "qty": (1, None)},
+             {"values": ["wha"]},
+             {"values": ["t"], "qty": (0, 1)},
+             {"values": ["ever"]}
          ]},
     )
     def test_complete(self, test_case):
@@ -91,43 +91,43 @@ class RegexParserTest(unittest.TestCase):
 
 
     @ddt.data(
-        {'regex': r"()", 'nodes': [{"contents": [""]}]},
-        {'regex': r"(z)", 'nodes': [{"contents": ["z"]}]},
-        {'regex': r"(cat)", 'nodes': [{"contents": ["cat"]}]},
+        {'regex': r"()", 'nodes': [{"values": [""]}]},
+        {'regex': r"(z)", 'nodes': [{"values": ["z"]}]},
+        {'regex': r"(cat)", 'nodes': [{"values": ["cat"]}]},
 
         {'regex': r"hello(boat)",
-         'nodes': [{"contents": ["hello"]}, {"contents": ["boat"]}]},
+         'nodes': [{"values": ["hello"]}, {"values": ["boat"]}]},
 
         {'regex': r"(cake)awesome",
-         'nodes': [{"contents": ["cake"]}, {"contents": ["awesome"]}]},
+         'nodes': [{"values": ["cake"]}, {"values": ["awesome"]}]},
 
         {'regex': r"(foo)(bar)(foo)",
-         'nodes': [{"contents": ["foo"]}, {"contents": ["bar"]}, {"contents": ["foo"]}]},
+         'nodes': [{"values": ["foo"]}, {"values": ["bar"]}, {"values": ["foo"]}]},
 
         {'regex': r"dashboard(apple)(purple)",
-         'nodes': [{"contents": ["dashboard"]}, {"contents": ["apple"]}, {"contents": ["purple"]}]},
+         'nodes': [{"values": ["dashboard"]}, {"values": ["apple"]}, {"values": ["purple"]}]},
 
         {'regex': r"(harder)better(faster)",
-         'nodes': [{"contents": ["harder"]}, {"contents": ["better"]}, {"contents": ["faster"]}]},
+         'nodes': [{"values": ["harder"]}, {"values": ["better"]}, {"values": ["faster"]}]},
 
         {'regex': r"(stronger)(it is me)baby",
-         'nodes': [{"contents": ["stronger"]}, {"contents": ["it is me"]}, {"contents": ["baby"]}]},
+         'nodes': [{"values": ["stronger"]}, {"values": ["it is me"]}, {"values": ["baby"]}]},
 
         {'regex': r"new(york)city",
-         'nodes': [{"contents": ["new"]}, {"contents": ["york"]}, {"contents": ["city"]}]},
+         'nodes': [{"values": ["new"]}, {"values": ["york"]}, {"values": ["city"]}]},
 
         {'regex': r"()whatever",
-         'nodes': [{"contents": [""]}, {"contents": ["whatever"]}]},
+         'nodes': [{"values": [""]}, {"values": ["whatever"]}]},
 
         {'regex': r"this is it()",
-         'nodes': [{"contents": ["this is it"]}, {"contents": [""]}]},
+         'nodes': [{"values": ["this is it"]}, {"values": [""]}]},
 
         {'regex': r"this()parser()is()working",
-         'nodes': [{"contents": ["this"]}, {"contents": [""]}, {"contents": ["parser"]}, {"contents": [""]},
-                   {"contents": ["is"]},   {"contents": [""]}, {"contents": ["working"]}]},
+         'nodes': [{"values": ["this"]}, {"values": [""]}, {"values": ["parser"]}, {"values": [""]},
+                   {"values": ["is"]},   {"values": [""]}, {"values": ["working"]}]},
 
         {'regex': r"()()()",
-         'nodes': [{"contents": [""]}, {"contents": [""]}, {"contents": [""]}]},
+         'nodes': [{"values": [""]}, {"values": [""]}, {"values": [""]}]},
     )
     def test_basic_parenthesis(self, test_case):
         self.assert_regex_is_valid(test_case)
@@ -136,13 +136,32 @@ class RegexParserTest(unittest.TestCase):
 
 
     @ddt.data(
-        {'regex': r"(ab|cd|)+", 'nodes': [{"contents": ["ab", "cd", ""], "qty": (1, None)}]},
-        {'regex': r"(ab||cd)", 'nodes': [{"contents": ["ab", "", "cd"]}]},
-        {'regex': r"(|ab|cd|ef|gh)+", 'nodes': [{"contents": ["", "ab", "cd", "ef", "gh"], "qty": (1, None)}]},
-        {'regex': r"(|)+", 'nodes': [{"contents": ["", ""], "qty": (1, None)}]},
-        {'regex': r"(|||)+", 'nodes': [{"contents": ["", "", "", ""], "qty": (1, None)}]},
+        {'regex': r"(ab|cd|)+", 'nodes': [{"values": ["ab", "cd", ""], "qty": (1, None)}]},
+        {'regex': r"(ab||cd)", 'nodes': [{"values": ["ab", "", "cd"]}]},
+        {'regex': r"(|ab|cd|ef|gh)+", 'nodes': [{"values": ["", "ab", "cd", "ef", "gh"], "qty": (1, None)}]},
+        {'regex': r"(|)+", 'nodes': [{"values": ["", ""], "qty": (1, None)}]},
+        {'regex': r"(|||)+", 'nodes': [{"values": ["", "", "", ""], "qty": (1, None)}]},
     )
     def test_or_in_parenthesis(self, test_case):
+        self.assert_regex_is_valid(test_case)
+
+
+    @ddt.data(
+        {'regex': r"1|2|3", 'nodes': [{"type": fvt.INT_str, "values": [1,2,3]}]},
+        {'regex': r"1|2|3|foo", 'nodes': [{"values": ['1', '2', '3', 'foo']}]},
+        {'regex': r"1|foo|2|3", 'nodes': [{"values": ['1', 'foo', '2', '3']}]},
+        {'regex': r"foo|1|2|3", 'nodes': [{"values": ['foo', '1', '2', '3']}]},
+        {'regex': r"(11|12|13)bar",
+         'nodes': [{"type": fvt.INT_str, "values": [11, 12, 13]}, {"values": ['bar']}]},
+        {'regex': r"(11|12|13|bar)",
+         'nodes': [{"values": ['11', '12', '13', 'bar']}]},
+        {'regex': r"234whatever23", 'nodes': [{"values": ['234whatever23']}]},
+        {'regex': r"(234whatever23)foobar",
+         'nodes': [{"values": ['234whatever23']}, {"values": ['foobar']}]},
+        {'regex': r"1113|3435|3344|(hay)",
+         'nodes': [{"type": fvt.INT_str, "values": [1113, 3435, 3344]}, {"values": ['hay']}]},
+    )
+    def test_types_recognition(self, test_case):
         self.assert_regex_is_valid(test_case)
 
 
@@ -151,22 +170,22 @@ class RegexParserTest(unittest.TestCase):
         {'regex': r"[e]", 'nodes': [{"alphabet": "e"}]},
         {'regex': r"[caty]", 'nodes': [{"alphabet": "caty"}]},
         {'regex': r"[abcd][efghij]", 'nodes': [{"alphabet": "abcd"}, {"alphabet": "efghij"}]},
-        {'regex': r"[cake]awesome", 'nodes': [{"alphabet": "cake"}, {"contents": ["awesome"]}]},
+        {'regex': r"[cake]awesome", 'nodes': [{"alphabet": "cake"}, {"values": ["awesome"]}]},
 
         {'regex': r"[foo][bar][foo]",
          'nodes': [{"alphabet": "foo"}, {"alphabet": "bar"}, {"alphabet": "foo"}]},
 
         {'regex': r"dashboard[apple][purple]",
-         'nodes': [{"contents": ["dashboard"]}, {"alphabet": "apple"}, {"alphabet": "purple"}]},
+         'nodes': [{"values": ["dashboard"]}, {"alphabet": "apple"}, {"alphabet": "purple"}]},
 
         {'regex': r"[harder]better[faster]",
-         'nodes': [{"alphabet": "harder"}, {"contents": ["better"]}, {"alphabet": "faster"}]},
+         'nodes': [{"alphabet": "harder"}, {"values": ["better"]}, {"alphabet": "faster"}]},
 
         {'regex': r"[stronger][it is me]baby",
-         'nodes': [{"alphabet": "stronger"}, {"alphabet": "it is me"}, {"contents": ["baby"]}]},
+         'nodes': [{"alphabet": "stronger"}, {"alphabet": "it is me"}, {"values": ["baby"]}]},
 
         {'regex': r"new[york]city",
-         'nodes': [{"contents": ["new"]}, {"alphabet": "york"}, {"contents": ["city"]}]},
+         'nodes': [{"values": ["new"]}, {"alphabet": "york"}, {"values": ["city"]}]},
 
         {'regex': r"[a-e]", 'nodes': [{"alphabet": "abcde"}]},
         {'regex': r"[a-ewxy]", 'nodes': [{"alphabet": "abcdewxy"}]},
@@ -195,22 +214,22 @@ class RegexParserTest(unittest.TestCase):
 
 
     @ddt.data(
-        {'regex': r"|", 'nodes': [{"contents": ["",""]}]},
-        {'regex': r"|||", 'nodes': [{"contents": ["", "", "", ""]}]},
-        {'regex': r"toto|titi|tata", 'nodes': [{"contents": ["toto", "titi", "tata"]}]},
-        {'regex': r"toto|titi|", 'nodes': [{"contents": ["toto", "titi", ""]}]},
-        {'regex': r"toto||tata", 'nodes': [{"contents": ["toto", "", "tata"]}]},
-        {'regex': r"|titi|tata", 'nodes': [{"contents": ["", "titi", "tata"]}]},
-        {'regex': r"coucou|[abcd]|", 'nodes': [{"contents": ["coucou"]}, {"alphabet": "abcd"}, {"contents": [""]}]},
+        {'regex': r"|", 'nodes': [{"values": ["",""]}]},
+        {'regex': r"|||", 'nodes': [{"values": ["", "", "", ""]}]},
+        {'regex': r"toto|titi|tata", 'nodes': [{"values": ["toto", "titi", "tata"]}]},
+        {'regex': r"toto|titi|", 'nodes': [{"values": ["toto", "titi", ""]}]},
+        {'regex': r"toto||tata", 'nodes': [{"values": ["toto", "", "tata"]}]},
+        {'regex': r"|titi|tata", 'nodes': [{"values": ["", "titi", "tata"]}]},
+        {'regex': r"coucou|[abcd]|", 'nodes': [{"values": ["coucou"]}, {"alphabet": "abcd"}, {"values": [""]}]},
 
         {'regex': r"|[hao]|[salut]?",
-         'nodes': [{"contents": [""]}, {"alphabet": "hao"}, {"alphabet": "salut", "qty": (0, 1)}]},
+         'nodes': [{"values": [""]}, {"alphabet": "hao"}, {"alphabet": "salut", "qty": (0, 1)}]},
 
         {'regex': r"coucou||[salut]?",
-         'nodes': [{"contents": ["coucou", ""]}, {"alphabet": "salut", "qty": (0, 1)}]},
+         'nodes': [{"values": ["coucou", ""]}, {"alphabet": "salut", "qty": (0, 1)}]},
 
         {'regex': r"coucou||||[salut]?",
-         'nodes': [{"contents": ["coucou", "", "", ""]}, {"alphabet": "salut", "qty": (0, 1)}]},
+         'nodes': [{"values": ["coucou", "", "", ""]}, {"alphabet": "salut", "qty": (0, 1)}]},
 
         {'regex': r"[whatever]+|[hao]|[salut]?",
          'nodes': [
@@ -221,23 +240,23 @@ class RegexParserTest(unittest.TestCase):
 
         {'regex': r"(whatever)+|(hao)|(salut)?",
          'nodes': [
-             {"contents": ["whatever"], "qty": (1, None)},
-             {"contents": ["hao"]},
-             {"contents": ["salut"], "qty": (0, 1)}
+             {"values": ["whatever"], "qty": (1, None)},
+             {"values": ["hao"]},
+             {"values": ["salut"], "qty": (0, 1)}
          ]},
 
 
         {'regex': r"tata|haha|c*|b*|[abcd]+", 'nodes': [
-            {"contents": ["tata", "haha"]},
-            {"contents": ["c"], "qty": (0, None)},
-            {"contents": ["b"], "qty": (0, None)},
+            {"values": ["tata", "haha"]},
+            {"values": ["c"], "qty": (0, None)},
+            {"values": ["b"], "qty": (0, None)},
             {"alphabet": "abcd", "qty": (1, None)}
         ]},
 
         {'regex': r"(tata)+|haha|tata||b*|[abcd]+", 'nodes': [
-            {"contents": ["tata"], "qty": (1, None)},
-            {"contents": ["haha", "tata", ""]},
-            {"contents": ["b"], "qty": (0, None)},
+            {"values": ["tata"], "qty": (1, None)},
+            {"values": ["haha", "tata", ""]},
+            {"values": ["b"], "qty": (0, None)},
             {"alphabet": "abcd", "qty": (1, None)}
         ]},
     )
@@ -255,11 +274,12 @@ class RegexParserTest(unittest.TestCase):
         nodes = test_case['nodes']
         for i in range(0, len(nodes)):
 
-            contents = nodes[i]['contents'] if 'contents' in nodes[i] else None
+            type = nodes[i]['type'] if 'type' in nodes[i] else vt.String
+            values = nodes[i]['values'] if 'values' in nodes[i] else None
             alphabet = nodes[i]['alphabet'] if 'alphabet' in nodes[i] else None
             qty = nodes[i]['qty'] if 'qty' in nodes[i] else (1, 1)
 
-            calls.append(mock.call("name" + str(i + 1), vt.String, contents=contents, alphabet=alphabet, qty=qty))
+            calls.append(mock.call("name" + str(i + 1), type, values=values, alphabet=alphabet, qty=qty))
 
         self._parser._create_terminal_node.assert_has_calls(calls)
 
