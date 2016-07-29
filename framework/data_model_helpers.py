@@ -1010,7 +1010,7 @@ class RegexParser(StateMachine):
                         pass
                     else:
                         for i in range(ord(ctx.alphabet[-1]) + 1, ord(ctx.input) + 1):
-                            ctx.append_to_alphabet(chr(i))
+                            ctx.append_to_alphabet(six.unichr(i))
                 else:
                     ctx.append_to_alphabet(ctx.input)
 

@@ -59,6 +59,8 @@ class RegexParserTest(unittest.TestCase):
         {'regex': u"(abcd)\x53", 'nodes': [{"values": [u"abcd"]}, {"values": [u"\x53"]}]},
         {'regex': u"\x43[abcd]", 'nodes': [{"values": [u"\x43"]}, {"alphabet": u"abcd"}]},
         {'regex': u"\x43(abcd)", 'nodes': [{"values": [u"\x43"]}, {"values": [u"abcd"]}]},
+        {'regex': u"\u0443(abcd)", 'nodes': [{"values": [u"\u0443"]}, {"values": [u"abcd"]}]},
+        {'regex': u"hi(ab\u0443cd)", 'nodes': [{"values": [u"hi"]}, {"values": [u"ab\u0443cd"]}]},
     )
     def test_escape(self, test_case):
         self.assert_regex_is_valid(test_case)
@@ -198,12 +200,17 @@ class RegexParserTest(unittest.TestCase):
 
         {'regex': u"[\x33]", 'nodes': [{"alphabet": u"\x33"}]},
         {'regex': u"[\x33-\x35]", 'nodes': [{"alphabet": u"\x33\x34\x35"}]},
-        {'regex': u"[e\x33-\x35a]", 'nodes': [{"alphabet": u"e\x33\x34\x35a"}]}
+        {'regex': u"[e\x33-\x35a]", 'nodes': [{"alphabet": u"e\x33\x34\x35a"}]},
+
+        {'regex': u"[\u0033]", 'nodes': [{"alphabet": u"\u0033"}]},
+        {'regex': u"[\u0003-\u0005]", 'nodes': [{"alphabet": u"\u0003\u0004\u0005"}]},
+        {'regex': u"[\u0333-\u0335]", 'nodes': [{"alphabet": u"\u0333\u0334\u0335"}]},
+        {'regex': u"[e\u4133-\u4135a]", 'nodes': [{"alphabet": u"e\u4133\u4134\u4135a"}]}
     )
     def test_basic_square_brackets(self, test_case):
         self.assert_regex_is_valid(test_case)
 
-    @ddt.data(u"[\x33-\x23]", u"[3-1]", u"[y-a]")
+    @ddt.data(u"[\x33-\x23]", u"[\u7633-\u7323]", u"[3-1]", u"[y-a]")
     def test_wrong_alphabet(self, regex):
         self.assert_regex_is_invalid(regex)
 
