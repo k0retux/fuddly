@@ -31,6 +31,7 @@ from libs.external_modules import *
 
 import traceback
 import datetime
+import six
 
 ################################
 # ModelWalker Helper Functions #
@@ -595,51 +596,24 @@ class EscapeState(StateMachine):
         def advance(self, ctx):
             if ctx.input == None:
                 raise EscapeError("Nothing to escape.")
-            elif ctx.input == 'x':
-                return self.machine.Hexadecimal
             elif ctx.input in ('s','S','d','D','w','W','\\','(',')','[',']','{','}','+','?','*','|','-'):
                 return self.machine.Final
             else:
                 raise EscapeError("Character to escape is not special. It is useless to escape it.")
-
-    class Hexadecimal(State):
-
-        def _run(self, ctx):
-            pass
-
-        def advance(self, ctx):
-            if ctx.input in string.hexdigits:
-                return self.machine.Digit
-            else:
-                raise EscapeError("\\x must be followed with two hexadecimal digits: none provided.")
-
-    class Digit(State):
-
-        def _run(self, ctx):
-            self.machine.escaped += ctx.input
-
-        def advance(self, ctx):
-            if ctx.input in list(string.hexdigits) and len(self.machine.escaped) == 1:
-                return self.__class__
-            elif len(self.machine.escaped) == 2:
-                self.machine.escaped = self.machine.escaped.decode("hex")
-                return None
-            else:
-                raise EscapeError("\\x must be followed with two hexadecimal digits: only one provided.")
 
     class Final(State):
 
         def _run(self, ctx):
 
             def get_complement(not_allowed_chars):
-                return ''.join([chr(int(i)) for i in range(0, 0xFF) if chr(int(i)) not in not_allowed_chars])
+                return ''.join([six.unichr(int(i)) for i in range(0, 0xFFFF) if six.unichr(int(i)) not in not_allowed_chars])
 
             shortcuts = {'s': string.whitespace,
                          'S': get_complement(string.whitespace),
                          'd': string.digits,
                          'D': get_complement(string.digits),
-                         'w': string.letters + string.digits + '_',
-                         'W': get_complement(string.letters + string.digits + '_')}
+                         'w': string.ascii_letters + string.digits + '_',
+                         'W': get_complement(string.ascii_letters + string.digits + '_')}
 
             self.machine.escaped = shortcuts[ctx.input] if ctx.input in shortcuts else ctx.input
 
@@ -1077,7 +1051,7 @@ class RegexParser(StateMachine):
                         pass
                     else:
                         for i in range(ord(ctx.alphabet[-1]) + 1, ord(self.escaped) + 1):
-                            ctx.append_to_alphabet(chr(i))
+                            ctx.append_to_alphabet(six.unichr(i))
                 else:
                     ctx.append_to_alphabet(self.escaped)
 
