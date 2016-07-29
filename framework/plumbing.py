@@ -922,6 +922,7 @@ class FmkPlumbing(object):
                         if delay is not None:
                             self.mon.set_probe_delay(pname, delay)
                         self.mon.start_probe(pname)
+                    self.mon.do_after_probes_init()
                     self.prj.start()
                     if self.tg.probes:
                         time.sleep(0.5)
@@ -2317,6 +2318,8 @@ class FmkPlumbing(object):
         except:
             self._handle_user_code_exception('Operator has crashed during its start() method')
             return False
+        finally:
+            self.mon.do_after_probes_init() # operator.start() can start probes.
 
         if not ok:
             self.set_error("The _start() method of Operator '%s' has returned an error!" % name,
@@ -2922,11 +2925,11 @@ class FmkPlumbing(object):
         for p in probes:
             msg = "name: %s (status: %s, delay: %f) --> " % \
                 (p, repr(self.mon.get_probe_status(p).get_status()),
-                 self.prj.get_probe_delay(p))
+                 self.mon.get_probe_delay(p))
 
-            if self.prj.is_probe_stuck(p):
+            if self.mon.is_probe_stuck(p):
                 msg += "stuck"
-            elif self.prj.is_probe_launched(p):
+            elif self.mon.is_probe_launched(p):
                 msg += "launched"
             else:
                 msg += "stopped"
@@ -2941,6 +2944,8 @@ class FmkPlumbing(object):
         if not ok:
             self.set_error('Probe does not exist (or already launched)',
                            code=Error.CommandError)
+        self.mon.do_after_probes_init()
+
         return ok
 
     @EnforceOrder(accepted_states=['S2'])

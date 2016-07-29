@@ -36,3 +36,31 @@ Usage Example:
 
    .. seealso:: Refer to the class definition itself to look for the parameters available.
 
+
+ProbePID_Serial
+===============
+
+Reference:
+  :class:`framework.monitor.ProbePID_Serial`
+
+Description:
+  This generic probe enables you to monitor a process PID through a
+  Serial console.
+
+Usage Example:
+   Within your project file you can add such a probe like this:
+
+   .. code-block:: python
+      :linenos:
+
+        # Assuming your Project() is referred by the 'project' variable
+
+        @blocking_probe(project)
+        class health_check(ProbePID_Serial):
+            process_name = 'the_process_to_monitor'
+            serial_port = '/dev/ttyUSB0'
+            username = 'user'
+            password = 'pass'
+
+   .. seealso:: Refer to the class definition itself to look for the parameters available.
+

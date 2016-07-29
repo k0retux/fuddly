@@ -115,11 +115,19 @@ class health_check(Probe):
 
         return ProbeStatus(status)
 
+@blocking_probe(project)
+class serial_probe_test(ProbePID_Serial):
+    process_name = 'bash'
+    serial_port = '/dev/ttyUSB0'
+    slowness_factor = 4
+    username = 'test'
+    password = 'test'
 
 ### TARGETS ALLOCATION ###
 
 targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
-           tuto_tg, net_tg, udpnet_tg, udpnetsrv_tg, rawnetsrv_tg]
+           tuto_tg, net_tg, udpnet_tg, udpnetsrv_tg, rawnetsrv_tg,
+           (EmptyTarget(), serial_probe_test)]
 
 ### OPERATOR DEFINITION ###
 

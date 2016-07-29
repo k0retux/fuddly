@@ -33,11 +33,12 @@ import framework.error_handling as eh
 
 
 class ProbeUser(object):
-    timeout = 10.0
+    timeout = 20.0
 
     def __init__(self, probe):
         self._probe = probe
         self._thread = None
+        self._started_event = threading.Event()
         self._stop_event = threading.Event()
 
     def start(self, *args, **kwargs):
@@ -61,6 +62,17 @@ class ProbeUser(object):
 
             self._stop_event.clear()
 
+    def wait_for_probe_init(self, timeout=None):
+        try:
+            self._wait_for_probe(self._started_event, timeout)
+        except ProbeTimeoutError as e:
+            e.blocking_methods = ["start()"]
+            raise e
+
+        # Once a probe has started we do not clear self._started_event to avoid blocking the framework
+        # in the situation where this method will be called again while the probe won't have been
+        # restarted (currently in launch_operator, after having started the operator).
+
     def is_alive(self):
         return self._thread is not None and self._thread.is_alive()
 
@@ -80,14 +92,33 @@ class ProbeUser(object):
     def get_probe_status(self):
         return self._probe.status
 
+    def _notify_probe_started(self):
+        self._started_event.set()
+
     def _go_on(self):
         return not self._stop_event.is_set()
 
     def _wait(self, delay):
         self._stop_event.wait(delay)
 
+    def _wait_for_probe(self, event, timeout=None):
+        """
+        Wait for the probe to trigger a specific event
+        """
+        timeout = ProbeUser.timeout if timeout is None else timeout
+        start = datetime.datetime.now()
+
+        while not event.is_set():
+            if (datetime.datetime.now() - start).total_seconds() >= timeout:
+                self.stop()
+                raise ProbeTimeoutError(self.__class__.__name__, timeout)
+            if not self.is_alive() or not self._go_on():
+                break
+            event.wait(1)
+
     def _clear(self):
         """ Clear all events """
+        self._started_event.clear()
         self._stop_event.clear()
 
     def _run(self, *args, **kwargs):
@@ -99,6 +130,8 @@ class ProbeUser(object):
 
         if status is not None:
             self._probe.status = status
+
+        self._notify_probe_started()
 
         while self._go_on():
             try:
@@ -147,27 +180,12 @@ class BlockingProbeUser(ProbeUser):
     def notify_data_ready(self):
         self._arm_event.set()
 
-    def _wait_for_probe(self, event, timeout=None):
-        """
-        Wait for the probe to trigger a specific event
-        """
-        timeout = ProbeUser.timeout if timeout is None else timeout
-        start = datetime.datetime.now()
-
-        while not event.is_set():
-            if (datetime.datetime.now() - start).total_seconds() >= timeout:
-                self.stop()
-                raise ProbeTimeoutError(self.__class__.__name__, timeout)
-            if not self.is_alive() or not self._go_on():
-                break
-            event.wait(1)
-
 
     def wait_until_armed(self, timeout=None):
         try:
             self._wait_for_probe(self._armed_event, timeout)
         except ProbeTimeoutError as e:
-            e.blocking_methods = ["start()", "arm()"]
+            e.blocking_methods = ["arm()"]
             raise
         finally:
             self._armed_event.clear()
@@ -179,7 +197,6 @@ class BlockingProbeUser(ProbeUser):
         except ProbeTimeoutError as e:
             e.blocking_methods = ["main()"]
             raise e
-
 
     def notify_blocking(self):
         self._blocking_event.set()
@@ -246,6 +263,8 @@ class BlockingProbeUser(ProbeUser):
 
         if status is not None:
             self._probe.status = status
+
+        self._notify_probe_started()
 
         while self._go_on():
 
@@ -348,7 +367,6 @@ class Monitor(object):
                 return False
         return True
 
-
     def stop_probe(self, probe):
         probe_name = self._get_probe_ref(probe)
         if probe_name in self.probe_users:
@@ -410,11 +428,13 @@ class Monitor(object):
                                            .format(e.probe_name, e.blocking_methods),
                                            code=Error.OperationCancelled)
 
+    def do_after_probes_init(self):
+        self._wait_for_specific_probes(ProbeUser, ProbeUser.wait_for_probe_init)
+
     def do_before_sending_data(self):
         if not self.__enable:
             return
         self._target_status = None
-
 
         for _, probe_user in self.probe_users.items():
             if isinstance(probe_user, BlockingProbeUser):
@@ -626,15 +646,20 @@ class SSH_Backend(object):
 
 class Serial_Backend(object):
 
-    def __init__(self, serial_port, baudrate=115200, read_duration=2, username=None, password=None):
+    def __init__(self, serial_port, baudrate=115200, username=None, password=None,
+                 slowness_factor=5):
         if not serial_module:
             raise eh.UnavailablePythonModule('Python module for Serial is not available!')
 
         self.serial_port = serial_port
         self.baudrate = baudrate
-        self.read_duration = read_duration
-        self.username = username
-        self.password = password
+        self.slowness_factor = slowness_factor
+        if sys.version_info[0] > 2:
+            self.username = bytes(username, 'latin_1')
+            self.password = bytes(password, 'latin_1')
+        else:
+            self.username = username
+            self.password = password
 
         self.client = None
 
@@ -643,42 +668,74 @@ class Serial_Backend(object):
                                  dsrdtr=True, rtscts=True)
         if self.username is not None:
             assert self.password is not None
-            time.sleep(0.1)
             self.ser.flushInput()
-            self.ser.write(self.username)
+            self.ser.write(self.username+b'\r\n')
             time.sleep(0.1)
-            pass_prompt = self.ser.read(1)
+            self.ser.readline() # we read login echo
+            pass_prompt = self.ser.readline()
             retry = 0
-            while pass_prompt.find('p') == -1:
-                time.sleep(1)
+            eot_sent = False
+            while pass_prompt.lower().find(b'password') == -1:
                 retry += 1
-                if retry > 2:
+                if retry > 3 and eot_sent:
+                    self.stop()
                     raise BackendError('Unable to establish a connection with the serial line.')
-                else:
+                elif retry > 3:
+                    # we send an EOT if ever the console was not in its initial state
+                    # (already logged, or with the password prompt, ...) when we first write on
+                    # the serial line.
+                    self.ser.write(b'\x04\r\n')
+                    time.sleep(self.slowness_factor*0.6)
+                    self.ser.flushInput()
+                    self.ser.write(self.username+b'\r\n')
+                    time.sleep(0.1)
+                    self.ser.readline() # we consume the login echo
                     pass_prompt = self.ser.readline()
+                    retry = 0
+                    eot_sent = True
+                else:
+                    pass_prompt = b''.join(self._read_serial(duration=self.slowness_factor*0.2))
             time.sleep(0.1)
-            self.ser.write(self.password)
+            self.ser.write(self.password+b'\r\n')
+            time.sleep(self.slowness_factor)
 
     def stop(self):
+        self.ser.write(b'\x04\r\n') # we send an EOT (Ctrl+D)
         self.ser.close()
 
     def exec_command(self, cmd):
+        if sys.version_info[0] > 2:
+            cmd = bytes(cmd, 'latin_1')
+        cmd += b'\r\n'
         self.ser.flushInput()
         self.ser.write(cmd)
-        result = b''
-        t0 = datetime.datetime.now()
-        duration = -1
+        time.sleep(0.1)
+        self.ser.readline() # we consume the 'writing echo' from the input
         try:
-            while duration < self.read_duration:
-                now = datetime.datetime.now()
-                duration = (now - t0).total_seconds()
-                time.sleep(0.1)
-                res = self.ser.readline()
-                result += res
+            result = self._read_serial(duration=self.slowness_factor*0.4)
         except serial.SerialException:
             raise BackendError('Exception while reading serial line')
         else:
-            return result
+            # We have to remove the new prompt line at the end.
+            # But in our testing environment, the two last entries had to be removed, namely
+            # 'prompt_line \r\n' and 'prompt_line ' !?
+            # print('\n*** DBG: ', result)
+            result = result[:-2]
+            return b''.join(result)
+
+    def _read_serial(self, duration):
+        result = []
+        t0 = datetime.datetime.now()
+        delta = -1
+        while delta < duration:
+            now = datetime.datetime.now()
+            delta = (now - t0).total_seconds()
+            time.sleep(0.1)
+            res = self.ser.readline()
+            if res == b'':
+                break
+            result.append(res)
+        return result
 
 
 class BackendError(Exception): pass
@@ -815,24 +872,28 @@ class ProbePID_Serial(ProbePID):
     Generic probe that enable you to monitor a process PID through a Serial line.
 
     Attributes:
-        serial_port (str): path to the tty device file
-        baudrate (int): baudrate of the serial line
-        read_duration (str): time duration for retrieving characters from the serial line.
+        serial_port (str): path to the tty device file.
+        baudrate (int): baudrate of the serial line.
         username (str): username to connect with. If None, no authentication step will be attempted.
         password (str): password related to the username.
+        slowness_factor (int): characterize the slowness of the monitored system. The scale goes from
+          1 (fastest) to 10 (slowest). This factor is a base metric to compute the time to wait
+          for the authentication step to terminate (if `username` and `password` parameter are provided)
+          and other operations involving to wait for the monitored system.
     """
 
     serial_port = None
-    baudrate=115200
-    read_duration=2
+    baudrate = 115200
     username = None
     password = None
+    slowness_factor = 5
 
     def __init__(self):
         assert self.serial_port != None
+        assert 10 >= self.slowness_factor >= 1
         ProbePID.__init__(self, Serial_Backend(serial_port=self.serial_port, baudrate=self.baudrate,
-                                               read_duration=self.read_duration,
-                                               username=self.username, password=self.password))
+                                               username=self.username, password=self.password,
+                                               slowness_factor=self.slowness_factor))
 
 def probe(project):
     def internal_func(probe_cls):
