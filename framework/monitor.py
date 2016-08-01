@@ -646,13 +646,21 @@ class SSH_Backend(object):
 
 class Serial_Backend(object):
 
-    def __init__(self, serial_port, baudrate=115200, username=None, password=None,
+    def __init__(self, serial_port, baudrate=115200, bytesize=8, parity='N', stopbits=1,
+                 xonxoff=False, rtscts=False, dsrdtr=False,
+                 username=None, password=None,
                  slowness_factor=5):
         if not serial_module:
             raise eh.UnavailablePythonModule('Python module for Serial is not available!')
 
         self.serial_port = serial_port
         self.baudrate = baudrate
+        self.bytesize = bytesize
+        self.parity = parity
+        self.stopbits= stopbits
+        self.xonxoff = xonxoff
+        self.rtscts = rtscts
+        self.dsrdtr = dsrdtr
         self.slowness_factor = slowness_factor
         if sys.version_info[0] > 2:
             self.username = bytes(username, 'latin_1')
@@ -664,8 +672,10 @@ class Serial_Backend(object):
         self.client = None
 
     def start(self):
-        self.ser = serial.Serial(self.serial_port, self.baudrate, timeout=1,
-                                 dsrdtr=True, rtscts=True)
+        self.ser = serial.Serial(self.serial_port, self.baudrate, bytesize=self.bytesize,
+                                 parity=self.parity, stopbits=self.stopbits,
+                                 xonxoff=self.xonxoff, dsrdtr=self.dsrdtr, rtscts=self.rtscts,
+                                 timeout=1)
         if self.username is not None:
             assert self.password is not None
             self.ser.flushInput()
@@ -721,7 +731,11 @@ class Serial_Backend(object):
             # 'prompt_line \r\n' and 'prompt_line ' !?
             # print('\n*** DBG: ', result)
             result = result[:-2]
-            return b''.join(result)
+            ret = b''.join(result)
+            if ret.find(b'command not found') != -1:
+                raise BackendError('The command does not exist on the host')
+            else:
+                return ret
 
     def _read_serial(self, duration):
         result = []
@@ -730,7 +744,6 @@ class Serial_Backend(object):
         while delta < duration:
             now = datetime.datetime.now()
             delta = (now - t0).total_seconds()
-            time.sleep(0.1)
             res = self.ser.readline()
             if res == b'':
                 break
@@ -828,7 +841,7 @@ class ProbePID(Probe):
         status = ProbeStatus()
 
         if current_pid == -10:
-            status.set_status(10)
+            status.set_status(-10)
             status.set_private_info("ERROR with the ssh command")
         elif current_pid == -1:
             status.set_status(-2)
@@ -839,7 +852,7 @@ class ProbePID(Probe):
             status.set_private_info("'{:s}' PID({:d}) has changed!".format(self.process_name,
                                                                            current_pid))
         else:
-            status.set_status(0)
+            status.set_status(current_pid)
             status.set_private_info(None)
 
         return status
@@ -873,7 +886,13 @@ class ProbePID_Serial(ProbePID):
 
     Attributes:
         serial_port (str): path to the tty device file.
-        baudrate (int): baudrate of the serial line.
+        baudrate (int): baud rate of the serial line.
+        bytesize (int): number of data bits. (5, 6, 7, or 8)
+        parity (str): parity checking. ('N', 'O, 'E', 'M', or 'S')
+        stopbits (int): number of stop bits. (1, 1.5 or 2)
+        xonxoff (bool): enable software flow control.
+        rtscts (bool): enable hardware (RTS/CTS) flow control.
+        dsrdtr (bool): enable hardware (DSR/DTR) flow control.
         username (str): username to connect with. If None, no authentication step will be attempted.
         password (str): password related to the username.
         slowness_factor (int): characterize the slowness of the monitored system. The scale goes from
@@ -884,6 +903,12 @@ class ProbePID_Serial(ProbePID):
 
     serial_port = None
     baudrate = 115200
+    bytesize = 8
+    parity = 'N'
+    stopbits = 1
+    xonxoff = False
+    rtscts = False
+    dsrdtr = False
     username = None
     password = None
     slowness_factor = 5
@@ -892,6 +917,9 @@ class ProbePID_Serial(ProbePID):
         assert self.serial_port != None
         assert 10 >= self.slowness_factor >= 1
         ProbePID.__init__(self, Serial_Backend(serial_port=self.serial_port, baudrate=self.baudrate,
+                                               bytesize=self.bytesize, parity=self.parity,
+                                               stopbits=self.stopbits, xonxoff=self.xonxoff,
+                                               rtscts=self.rtscts, dsrdtr=self.dsrdtr,
                                                username=self.username, password=self.password,
                                                slowness_factor=self.slowness_factor))
 
