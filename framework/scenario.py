@@ -192,8 +192,10 @@ class Step(object):
                 return self._data_desc.outcomes.node
             elif self._data_desc.seed is not None:
                 if isinstance(self._data_desc.seed, str):
+                    seed_name = self._data_desc.seed
                     node = self._dm.get_data(self._data_desc.seed)
                     self._data_desc.seed = Data(node)
+                    self._data_desc.seed.set_initial_dmaker([seed_name.upper(), 'g_'+seed_name, None])
                     return node
                 elif isinstance(self._data_desc.seed, Data):
                     return self._data_desc.seed.node  # if data is raw, .node is None

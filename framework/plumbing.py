@@ -1554,6 +1554,7 @@ class FmkPlumbing(object):
                     return None
                 else:
                     seed = Data(seed)
+                    seed.set_initial_dmaker([data_desc.seed.upper(), 'g_'+data_desc.seed, None])
             else:
                 if not isinstance(data_desc.seed, Data):
                     self.set_error(msg='DataProcess object contains an unrecognized seed type!',
@@ -1580,6 +1581,8 @@ class FmkPlumbing(object):
                 return None
             else:
                 data = Data(node)
+                data.set_initial_dmaker([data_desc.upper(), 'g_'+data_desc,
+                                         UserInputContainer()])
         else:
             self.set_error(
                 msg='Data descriptor type is not recognized {!s}!'.format(type(data_desc)),
