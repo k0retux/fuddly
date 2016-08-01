@@ -24,7 +24,7 @@ class RegexParserTest(unittest.TestCase):
               u"(sal*ut)oo", u"(sal?ut)oo", u"sal{utoo", u"(sal+ut)oo", u"(sal{u)too",
               u"(sal{2}u)too", u"sal{2,1}utoo", u"sal(u[t]o)o",
               u"whatever|toto?ff", u"whate?ver|toto", u"(toto)*ohoho|haha", u"(toto)ohoho|haha",
-              u"salut[abcd]{,15}rr", u"[]whatever", u"t{,15}")
+              u"salut[abcd]{,15}rr", u"[]whatever", u"t{,15}", u"hi|b?whatever", u"hi|b{3}whatever")
     def test_invalid_regexes(self, regex):
         self.assert_regex_is_invalid(regex)
 

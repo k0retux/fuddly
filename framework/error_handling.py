@@ -31,7 +31,49 @@ class UserInterruption(Exception): pass
 class DataModelDefinitionError(Exception): pass
 
 class RegexParserError(DataModelDefinitionError): pass
-class EscapeError(RegexParserError): pass
-class QuantificationError(RegexParserError): pass
-class GroupingError(RegexParserError): pass
-class UnconvertibleRegexError(RegexParserError): pass
+
+class EscapeError(RegexParserError):
+
+    def __init__(self, char=None):
+        if char is None:
+            message = "Nothing to escape."
+        elif char in ('\\','(',')','[',']','{','}','+','?','*','|','-'):
+            message = char + " is a special character: it needs to be escaped in order to be used in this context."
+        else:
+            message = char + " is not a special character: it is useless to escape it."
+        RegexParserError.__init__(self, message)
+
+class QuantificationError(RegexParserError):
+
+    def __init__(self, message=None):
+
+        if message is None:
+            message = u"Quantifier must be specified as followed: {X[,Y]} with X \u2264 Y."
+
+        RegexParserError.__init__(self, message)
+
+
+
+class StructureError(RegexParserError):
+
+    def __init__(self, char):
+        message = ""
+        if char == '}':
+            message = "Unopened bracket, nothing to close."
+        elif char == ')':
+            message = "Unopened parenthesis, nothing to close."
+        elif char == "]":
+            message = "Unopened squared bracket, nothing to close."
+        else:
+            message = "Unclosed element."
+        RegexParserError.__init__(self, message)
+
+
+class InconvertibilityError(RegexParserError):
+
+    def __init__(self):
+        RegexParserError.__init__(self, "Described regular expression is to complex, it can't be " +
+                                        "translated into a non-terminal only composed of terminal ones.")
+
+class EmptyAlphabetError(RegexParserError): pass
+class InvalidRange(RegexParserError): pass
