@@ -77,3 +77,8 @@ class InconvertibilityError(RegexParserError):
 
 class EmptyAlphabetError(RegexParserError): pass
 class InvalidRange(RegexParserError): pass
+
+class InitialStateNotFound(RegexParserError):
+
+    def __init__(self):
+        RegexParserError.__init__(self, "No state was declared as initial.")
