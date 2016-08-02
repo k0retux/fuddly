@@ -90,6 +90,7 @@ class ProbeUser(object):
         self._probe.delay = delay
 
     def get_probe_status(self):
+        self._probe.reset()
         return self._probe.status
 
     def _notify_probe_started(self):
@@ -543,6 +544,7 @@ class Probe(object):
         Called by the framework just before sending a data.
 
         Args:
+            dm: the current data model
             target: the current target
             logger: the current logger
         """
@@ -568,6 +570,19 @@ class Probe(object):
         """
         raise NotImplementedError
 
+    def reset(self):
+        """
+        To be overloaded by user-code (if needed).
+
+        Called each time the probe status is retrieved by the framework
+        (through :meth:`Monitor.get_probe_status`).
+        Useful especially for periodic probe that may need to be reset after each
+        data sending.
+
+        Note: shall be stateless and reentrant.
+        """
+        pass
+
     def configure(self, *args):
         """
         (Optional method) To be overloaded with any signature that fits your needs
@@ -578,6 +593,7 @@ class Probe(object):
             *args: anything that fits your needs
         """
         pass
+
 
 class ProbeStatus(object):
 
@@ -609,31 +625,70 @@ class ProbeStatus(object):
         return self._now
 
 
+class Backend(object):
 
-class SSH_Backend(object):
+    def __init__(self):
+        self._started = False
+        self._sync_lock = threading.Lock()
 
-    def __init__(self, sshd_ip, sshd_port=2, username='', password=''):
+    def start(self):
+        with self._sync_lock:
+            if not self._started:
+                self._started = True
+                self._start()
+
+    def stop(self):
+        with self._sync_lock:
+            if self._started:
+                self._started = False
+                self._stop()
+
+    def exec_command(self, cmd):
+        with self._sync_lock:
+            return self._exec_command(cmd)
+
+    def _exec_command(self, cmd):
+        raise NotImplementedError
+
+    def _start(self):
+        pass
+
+    def _stop(self):
+        pass
+
+
+class SSH_Backend(Backend):
+    """
+    Backend to execute command through a serial line.
+    """
+    def __init__(self, username, password, sshd_ip, sshd_port=22):
+        """
+        Args:
+            sshd_ip (str): IP of the SSH server.
+            sshd_port (int): port of the SSH server.
+            username (str): username to connect with.
+            password (str): password related to the username.
+        """
+        Backend.__init__(self)
         if not ssh_module:
             raise eh.UnavailablePythonModule('Python module for SSH is not available!')
-
         self.sshd_ip = sshd_ip
         self.sshd_port = sshd_port
         self.username = username
         self.password = password
-
         self.client = None
 
-    def start(self):
+    def _start(self):
         self.client = ssh.SSHClient()
         self.client.set_missing_host_key_policy(ssh.AutoAddPolicy())
         self.client.connect(self.sshd_ip, port=self.sshd_port,
                             username=self.username,
                             password=self.password)
 
-    def stop(self):
+    def _stop(self):
         self.client.close()
 
-    def exec_command(self, cmd):
+    def _exec_command(self, cmd):
         ssh_in, ssh_out, ssh_err = \
             self.client.exec_command(cmd)
 
@@ -644,12 +699,32 @@ class SSH_Backend(object):
             return ssh_out.read()
 
 
-class Serial_Backend(object):
-
+class Serial_Backend(Backend):
+    """
+    Backend to execute command through a serial line.
+    """
     def __init__(self, serial_port, baudrate=115200, bytesize=8, parity='N', stopbits=1,
                  xonxoff=False, rtscts=False, dsrdtr=False,
                  username=None, password=None,
                  slowness_factor=5):
+        """
+        Args:
+            serial_port (str): path to the tty device file. (e.g., '/dev/ttyUSB0')
+            baudrate (int): baud rate of the serial line.
+            bytesize (int): number of data bits. (5, 6, 7, or 8)
+            parity (str): parity checking. ('N', 'O, 'E', 'M', or 'S')
+            stopbits (int): number of stop bits. (1, 1.5 or 2)
+            xonxoff (bool): enable software flow control.
+            rtscts (bool): enable hardware (RTS/CTS) flow control.
+            dsrdtr (bool): enable hardware (DSR/DTR) flow control.
+            username (str): username to connect with. If None, no authentication step will be attempted.
+            password (str): password related to the username.
+            slowness_factor (int): characterize the slowness of the monitored system. The scale goes from
+              1 (fastest) to 10 (slowest). This factor is a base metric to compute the time to wait
+              for the authentication step to terminate (if `username` and `password` parameter are provided)
+              and other operations involving to wait for the monitored system.
+        """
+        Backend.__init__(self)
         if not serial_module:
             raise eh.UnavailablePythonModule('Python module for Serial is not available!')
 
@@ -671,7 +746,7 @@ class Serial_Backend(object):
 
         self.client = None
 
-    def start(self):
+    def _start(self):
         self.ser = serial.Serial(self.serial_port, self.baudrate, bytesize=self.bytesize,
                                  parity=self.parity, stopbits=self.stopbits,
                                  xonxoff=self.xonxoff, dsrdtr=self.dsrdtr, rtscts=self.rtscts,
@@ -709,11 +784,11 @@ class Serial_Backend(object):
             self.ser.write(self.password+b'\r\n')
             time.sleep(self.slowness_factor)
 
-    def stop(self):
+    def _stop(self):
         self.ser.write(b'\x04\r\n') # we send an EOT (Ctrl+D)
         self.ser.close()
 
-    def exec_command(self, cmd):
+    def _exec_command(self, cmd):
         if sys.version_info[0] > 2:
             cmd = bytes(cmd, 'latin_1')
         cmd += b'\r\n'
@@ -755,10 +830,13 @@ class BackendError(Exception): pass
 
 class ProbePID(Probe):
     """
-    This is the base class for the generic probes that enable you to monitor a process PID.
-    The monitoring can be done through different backend. The current ones are SSH and Serial.
+    Generic probe that enables you to monitor a process PID.
+
+    The monitoring can be done through different backend (e.g., :class:`SSH_Backend`,
+    :class:`Serial_Backend`).
 
     Attributes:
+        backend (Backend): backend to be used (e.g., :class:`SSH_Backend`).
         process_name (str): name of the process to monitor.
         max_attempts (int): maximum number of attempts for getting
           the process ID.
@@ -768,29 +846,33 @@ class ProbePID(Probe):
         command_pattern (str): format string for the ssh command. '{0:s}' refer
           to the process name.
     """
+    backend = None
     process_name = None
     command_pattern = 'pgrep {0:s}'
     max_attempts = 10
     delay_between_attempts = 0.1
     delay = 0.5
 
-    def __init__(self, backend):
+    def __init__(self):
         assert self.process_name != None
-        self._backend = backend
+        assert self.backend != None
         Probe.__init__(self)
 
     def _get_pid(self, logger):
         try:
-            res = self._backend.exec_command(self.command_pattern.format(self.process_name))
+            res = self.backend.exec_command(self.command_pattern.format(self.process_name))
         except BackendError:
             fallback_cmd = 'ps a -opid,comm'
-            res = self._backend.exec_command(fallback_cmd)
+            res = self.backend.exec_command(fallback_cmd)
             if sys.version_info[0] > 2:
                 res = res.decode('latin_1')
             pid_list = res.split('\n')
             for entry in pid_list:
                 if entry.find(self.process_name) >= 0:
-                    pid = int(entry.split()[0])
+                    try:
+                        pid = int(entry.split()[0])
+                    except ValueError:
+                        pid = -10
                     break
             else:
                 # process not found
@@ -814,7 +896,7 @@ class ProbePID(Probe):
         return pid
 
     def start(self, dm, target, logger):
-        self._backend.start()
+        self.backend.start()
         self._saved_pid = self._get_pid(logger)
         if self._saved_pid < 0:
             msg = "*** INIT ERROR: unable to retrieve process PID ***\n"
@@ -827,7 +909,7 @@ class ProbePID(Probe):
         return ProbeStatus(self._saved_pid, info=msg)
 
     def stop(self, dm, target, logger):
-        self._backend.stop()
+        self.backend.stop()
 
     def main(self, dm, target, logger):
         cpt = self.max_attempts
@@ -842,7 +924,7 @@ class ProbePID(Probe):
 
         if current_pid == -10:
             status.set_status(-10)
-            status.set_private_info("ERROR with the ssh command")
+            status.set_private_info("ERROR with the command")
         elif current_pid == -1:
             status.set_status(-2)
             status.set_private_info("'{:s}' is not running anymore!".format(self.process_name))
@@ -858,70 +940,104 @@ class ProbePID(Probe):
         return status
 
 
-class ProbePID_SSH(ProbePID):
+class ProbeMem(Probe):
     """
-    Generic probe that enable you to monitor a process PID through SSH.
+    Generic probe that enables you to monitor the process memory (RSS...) consumption.
+    It can be done by specifying a ``threshold`` and/or a ``tolerance`` ratio.
+
+    The monitoring can be done through different backend (e.g., :class:`SSH_Backend`,
+    :class:`Serial_Backend`).
 
     Attributes:
-        sshd_ip (str): IP of the SSH server.
-        sshd_port (int): port of the SSH server.
-        username (str): username to connect with.
-        password (str): password related to the username.
+        backend (Backend): backend to be used (e.g., :class:`SSH_Backend`).
+        process_name (str): name of the process to monitor.
+        threshold (int): memory (RSS) threshold in bytes that the monitored process should not exceed.
+        tolerance (int): tolerance expressed in percentage of the memory (RSS) the process was
+          using at the beginning of the monitoring.
+        command_pattern (str): format string for the ssh command. '{0:s}' refer
+          to the process name.
     """
-    sshd_ip = None
-    sshd_port = 22
-    username = None
-    password = None
+    backend = None
+    process_name = None
+    threshold = None
+    tolerance = 2
+    command_pattern = 'ps -e -orss,comm | grep {0:s}'
 
     def __init__(self):
-        assert self.sshd_ip != None
-        assert self.username != None
-        assert self.password != None
-        ProbePID.__init__(self, SSH_Backend(sshd_ip=self.sshd_ip, sshd_port=self.sshd_port,
-                                            username=self.username, password=self.password))
+        assert self.process_name != None
+        assert self.backend != None
+        Probe.__init__(self)
 
-class ProbePID_Serial(ProbePID):
-    """
-    Generic probe that enable you to monitor a process PID through a Serial line.
+    def _get_mem(self):
+        res = self.backend.exec_command(self.command_pattern.format(self.process_name))
 
-    Attributes:
-        serial_port (str): path to the tty device file.
-        baudrate (int): baud rate of the serial line.
-        bytesize (int): number of data bits. (5, 6, 7, or 8)
-        parity (str): parity checking. ('N', 'O, 'E', 'M', or 'S')
-        stopbits (int): number of stop bits. (1, 1.5 or 2)
-        xonxoff (bool): enable software flow control.
-        rtscts (bool): enable hardware (RTS/CTS) flow control.
-        dsrdtr (bool): enable hardware (DSR/DTR) flow control.
-        username (str): username to connect with. If None, no authentication step will be attempted.
-        password (str): password related to the username.
-        slowness_factor (int): characterize the slowness of the monitored system. The scale goes from
-          1 (fastest) to 10 (slowest). This factor is a base metric to compute the time to wait
-          for the authentication step to terminate (if `username` and `password` parameter are provided)
-          and other operations involving to wait for the monitored system.
-    """
+        if sys.version_info[0] > 2:
+            res = res.decode('latin_1')
+        proc_list = res.split('\n')
+        for entry in proc_list:
+            if entry.find(self.process_name) >= 0:
+                try:
+                    rss = int(entry.split()[0])
+                except ValueError:
+                    rss = -10
+                break
+        else:
+            # process not found
+            rss = -1
 
-    serial_port = None
-    baudrate = 115200
-    bytesize = 8
-    parity = 'N'
-    stopbits = 1
-    xonxoff = False
-    rtscts = False
-    dsrdtr = False
-    username = None
-    password = None
-    slowness_factor = 5
+        return rss
 
-    def __init__(self):
-        assert self.serial_port != None
-        assert 10 >= self.slowness_factor >= 1
-        ProbePID.__init__(self, Serial_Backend(serial_port=self.serial_port, baudrate=self.baudrate,
-                                               bytesize=self.bytesize, parity=self.parity,
-                                               stopbits=self.stopbits, xonxoff=self.xonxoff,
-                                               rtscts=self.rtscts, dsrdtr=self.dsrdtr,
-                                               username=self.username, password=self.password,
-                                               slowness_factor=self.slowness_factor))
+    def start(self, dm, target, logger):
+        self.backend.start()
+        self._saved_mem = self._get_mem()
+        self.reset()
+        if self._saved_mem < 0:
+            msg = "*** INIT ERROR: unable to retrieve process RSS ***\n"
+        else:
+            msg = "*** INIT: '{:s}' current RSS: {:d} ***\n".format(self.process_name,
+                                                                    self._saved_mem)
+        return ProbeStatus(self._saved_mem, info=msg)
+
+    def stop(self, dm, target, logger):
+        self.backend.stop()
+
+    def main(self, dm, target, logger):
+        current_mem = self._get_mem()
+
+        status = ProbeStatus()
+
+        if current_mem == -10:
+            status.set_status(-10)
+            status.set_private_info("ERROR with the command")
+        elif current_mem == -1:
+            status.set_status(-2)
+            status.set_private_info("'{:s}' is not found!".format(self.process_name))
+        else:
+            if current_mem > self._max_mem:
+                self._max_mem = current_mem
+
+            ok = True
+            err_msg = ''
+            if self.threshold is not None and self._max_mem > self.threshold:
+                ok = False
+                err_msg += '\nThreshold exceeded'
+            if self.tolerance is not None:
+                delta = abs(self._max_mem - self._saved_mem)
+                if (delta/float(self._saved_mem))*100 > self.tolerance:
+                    ok = False
+                    err_msg += '\nTolerance exceeded'
+            if not ok:
+                status.set_status(-1)
+                status.set_private_info(err_msg)
+            else:
+                status.set_status(self._max_mem)
+                status.set_private_info("*** '{:s}' current RSS: {:d} ***\n"
+                                        .format(self.process_name, self._saved_mem))
+        return status
+
+    def reset(self):
+        self._max_mem = self._saved_mem
+
 
 def probe(project):
     def internal_func(probe_cls):

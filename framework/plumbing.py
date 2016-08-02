@@ -504,9 +504,10 @@ class FmkPlumbing(object):
                                      "will be terminated.")
         return target_recovered
 
-    def monitor_probes(self, force_record=False):
+    def monitor_probes(self, prefix=None, force_record=False):
         probes = self.mon.get_probes_names()
         ok = True
+        prefix_printed = False
         for pname in probes:
             if self.mon.is_probe_launched(pname):
                 pstatus = self.mon.get_probe_status(pname)
@@ -514,17 +515,21 @@ class FmkPlumbing(object):
                 if err < 0 or force_record:
                     if err < 0:
                         ok = False
+                    if prefix and not prefix_printed:
+                        prefix_printed = True
+                        self.lg.print_console('\n*** {:s} ***'.format(prefix), rgb=Color.FEEDBACK)
                     tstamp = pstatus.get_timestamp()
                     priv = pstatus.get_private_info()
                     self.lg.log_probe_feedback(source="Probe '{:s}'".format(pname),
                                                timestamp=tstamp,
                                                content=priv, status_code=err)
 
-        if not ok:
-            return self._recover_target()
-        else:
-            return True
+        ret = self._recover_target() if not ok else True
 
+        if prefix and not ok:
+            self.lg.print_console('*'*(len(prefix)+8)+'\n', rgb=Color.FEEDBACK)
+
+        return ret
 
     @EnforceOrder(initial_func=True, final_state='get_projs')
     def get_data_models(self):
@@ -1521,7 +1526,7 @@ class FmkPlumbing(object):
                 self.set_feedback_timeout(fbk_timeout, do_show=False)
 
             self.tg.cleanup()
-            self.monitor_probes()
+            self.monitor_probes(prefix='Probe Status Before Sending Data')
 
         if blocked_data:
             self._handle_data_callbacks(blocked_data, hook=HOOK.after_fbk)
@@ -1763,7 +1768,7 @@ class FmkPlumbing(object):
         if self._burst_countdown == self._burst:
             cont1 = self.log_target_feedback()
             # We handle probe feedback if any
-            cont2 = self.monitor_probes()
+            cont2 = self.monitor_probes(force_record=True)
             self.tg.cleanup()
 
         self._do_after_feedback_retrieval(data_list)
@@ -1983,8 +1988,8 @@ class FmkPlumbing(object):
     def log_target_residual_feedback(self):
         err_detected1, err_detected2 = False, False
         if self.__send_enabled:
-            p = "\n::[ RESIDUAL TARGET FEEDBACK ]::"
-            e = "::[ ------------------------ ]::\n"
+            p = "\n*** RESIDUAL TARGET FEEDBACK ***"
+            e = "********************************\n"
             try:
                 err_detected1 = self.lg.log_collected_target_feedback(preamble=p, epilogue=e)
             except NotImplementedError:
@@ -3295,7 +3300,7 @@ class FmkShell(cmd.Cmd):
 
         else:
             self.__error = True
-            self.__error_msg = 'You shall first load a project and/or enable all fuzzing components!'
+            self.__error_msg = 'You shall first load a project and/or enable all the framework components!'
             return ''
 
 

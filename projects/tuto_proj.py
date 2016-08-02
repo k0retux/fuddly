@@ -115,19 +115,25 @@ class health_check(Probe):
 
         return ProbeStatus(status)
 
+serial_backend = Serial_Backend('/dev/ttyUSB0', username='test', password='test', slowness_factor=4)
+
 @blocking_probe(project)
-class serial_probe_test(ProbePID_Serial):
+class probe_pid(ProbePID):
+    backend = serial_backend
     process_name = 'bash'
-    serial_port = '/dev/ttyUSB0'
-    slowness_factor = 4
-    username = 'test'
-    password = 'test'
+
+@probe(project)
+class probe_mem(ProbeMem):
+    backend = serial_backend
+    process_name = 'bash'
+    tolerance = 1
+
 
 ### TARGETS ALLOCATION ###
 
 targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
            tuto_tg, net_tg, udpnet_tg, udpnetsrv_tg, rawnetsrv_tg,
-           (EmptyTarget(), serial_probe_test)]
+           (EmptyTarget(), probe_pid, (probe_mem, 0.2))]
 
 ### OPERATOR DEFINITION ###
 

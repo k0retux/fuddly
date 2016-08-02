@@ -2445,7 +2445,7 @@ status has been recorded, coming either from:
 
 
 .. seealso:: Refer to :ref:`probes` for details on the available generic
-             probes that you can use within you project.
+             probes that you can use within your project.
 
 In order to associate one or more probe to a target, you have to add them within the ``targets``
 global variable of the related project file (refer to :ref:`tuto:project`). More precisely, for a target ``A``,
