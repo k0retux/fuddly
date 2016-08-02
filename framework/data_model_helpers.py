@@ -600,7 +600,7 @@ class StateMachine(State):
                 self.state = self.states[state]
                 break
         else:
-            raise InitialStateNotFound()
+            raise InitialStateNotFoundError()
 
         self._run(context)
 
@@ -628,8 +628,6 @@ class RegexParser(StateMachine):
                 raise QuantificationError()
             elif ctx.input in ('}', ')', ']'):
                 raise StructureError(ctx.input)
-            elif ctx.input == '-':
-                raise EscapeError(ctx.input)
 
             elif ctx.input == '[':
                 return self.machine.SquareBrackets
@@ -712,8 +710,6 @@ class RegexParser(StateMachine):
 
             elif ctx.input in ('}',')',']'):
                 raise StructureError(ctx.input)
-            elif ctx.input == '-':
-                raise EscapeError(ctx.input)
             elif ctx.input is None:
                 return self.machine.Final
 
@@ -734,8 +730,6 @@ class RegexParser(StateMachine):
                 raise QuantificationError()
             elif ctx.input in ('}', ')', ']'):
                 raise StructureError(ctx.input)
-            elif ctx.input == '-':
-                raise EscapeError(ctx.input)
             elif ctx.input == '|':
                 return self.machine.Choice
             elif ctx.input is None:
@@ -834,8 +828,6 @@ class RegexParser(StateMachine):
         def advance(self, ctx):
             if ctx.input in (')', '}', ']'):
                 raise StructureError(ctx.input)
-            elif ctx.input == '-':
-                raise EscapeError(ctx.input)
 
             elif ctx.input in ('*', '+', '?'):
                 return self.machine.QtyState
@@ -876,8 +868,6 @@ class RegexParser(StateMachine):
                     raise QuantificationError()
                 elif ctx.input in ('}', ']', None):
                     raise StructureError(ctx.input)
-                elif ctx.input == '-':
-                    raise EscapeError(ctx.input)
                 elif ctx.input in ('(', '['):
                     raise InconvertibilityError()
                 elif ctx.input == '\\':
@@ -954,8 +944,8 @@ class RegexParser(StateMachine):
                     raise StructureError(ctx.input)
                 elif ctx.input in ('(', '['):
                     raise InconvertibilityError()
-                elif ctx.input in ('-', '|'):
-                    raise EscapeError(ctx.input)
+                elif ctx.input == '-':
+                    raise InvalidRangeError()
                 elif ctx.input == ']':
                     raise EmptyAlphabetError()
                 elif ctx.input == '\\':
@@ -994,7 +984,7 @@ class RegexParser(StateMachine):
 
             def advance(self, ctx):
                 if ctx.input in ('?', '*', '+', '{', '}', '(', ')', '[', ']', '|', '-', None):
-                    raise InvalidRange()
+                    raise InvalidRangeError()
                 elif ctx.input == '\\':
                     return self.machine.EscapeAfterRange
                 else:
@@ -1004,12 +994,12 @@ class RegexParser(StateMachine):
         class AfterRange(Initial):
             def _run(self, ctx):
                 if ctx.alphabet[-1] > ctx.input:
-                    raise InvalidRange()
+                    raise InvalidRangeError()
                 elif ctx.input == ctx.alphabet[-1]:
                     pass
                 else:
                     for i in range(ord(ctx.alphabet[-1]) + 1, ord(ctx.input) + 1):
-                        ctx.append_to_alphabet(six.unichr(i))
+                        ctx.append_to_alphabet(ctx.int_to_string(i))
 
             def advance(self, ctx):
                 if ctx.input == ']':
@@ -1045,7 +1035,7 @@ class RegexParser(StateMachine):
 
             def advance(self, ctx):
                 if ctx.input in ctx.META_SEQUENCES:
-                    raise InvalidRange()
+                    raise InvalidRangeError()
                 elif ctx.input in ctx.SPECIAL_CHARS:
                     return self.machine.AfterRange
                 else:
@@ -1160,6 +1150,7 @@ class RegexParser(StateMachine):
     def parse(self, inputs, name, charset=MH.Charset.ASCII_EXT):
         self._name = name
         self.charset = charset
+        self.int_to_string = chr if sys.version_info[0] == 2 and self.charset != MH.Charset.UNICODE else six.unichr
 
         if self.charset == MH.Charset.ASCII:
             max = 0x7F
@@ -1169,7 +1160,7 @@ class RegexParser(StateMachine):
             max = 0xFF
 
         def get_complement(chars):
-            return ''.join([six.unichr(i) for i in range(0, max + 1) if six.unichr(i) not in chars])
+            return ''.join([self.int_to_string(i) for i in range(0, max + 1) if self.int_to_string(i) not in chars])
 
         self.META_SEQUENCES = {'s': string.whitespace,
                                'S': get_complement(string.whitespace),
@@ -1324,7 +1315,7 @@ class ModelHelper(object):
                 ntype = MH.RawNode
             elif hasattr(contents, '__call__') and pre_ntype in [None, MH.Generator]:
                 ntype = MH.Generator
-            elif isinstance(contents, str) and pre_ntype in [None, MH.Regex]:
+            elif isinstance(contents, six.string_types) and pre_ntype in [None, MH.Regex]:
                 ntype = MH.Regex
             else:
                 ntype = MH.Leaf
@@ -1466,7 +1457,6 @@ class ModelHelper(object):
         if isinstance(name, tuple):
             name = name[0]
         regexp =  desc.get('contents')
-        assert isinstance(regexp, str)
 
         parser = RegexParser()
         nodes = parser.parse(regexp, name, desc.get('charset'))

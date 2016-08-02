@@ -76,9 +76,9 @@ class InconvertibilityError(RegexParserError):
                                         "translated into a non-terminal only composed of terminal ones.")
 
 class EmptyAlphabetError(RegexParserError): pass
-class InvalidRange(RegexParserError): pass
+class InvalidRangeError(RegexParserError): pass
 
-class InitialStateNotFound(RegexParserError):
+class InitialStateNotFoundError(RegexParserError):
 
     def __init__(self):
         RegexParserError.__init__(self, "No state was declared as initial.")
