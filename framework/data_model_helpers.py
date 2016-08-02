@@ -91,6 +91,16 @@ class MH(object):
     Copy = 'u'
     ZeroCopy = 's'
 
+
+    ##############################
+    ### Regex Parser Specific ####
+    ##############################
+
+    class Charset:
+        ASCII = 1
+        ASCII_EXT = 2
+        UNICODE = 3
+
     ##########################
     ### Node Customization ###
     ##########################
@@ -540,6 +550,10 @@ class State(object):
         Args:
             context (StateMachine): root state machine (global context)
         """
+        if context.input is not None and \
+           ((context.charset == MH.Charset.ASCII and ord(context.input) > 0x7F) or
+            (context.charset == MH.Charset.ASCII_EXT and ord(context.input) > 0xFF)):
+            raise CharsetError()
         self._run(context)
         context.inputs.pop(0)
 
@@ -639,7 +653,7 @@ class RegexParser(StateMachine):
 
         def _run(self, ctx):
             if not ctx.choice:
-                # if is it still possible to build a NT with multiple shapes
+                # if it is still possible to build a NT with multiple shapes
                 if len(ctx.nodes) == 0 or (len(ctx.nodes) == 1 and ctx.buffer is None):
                     ctx.choice = True
                 else:
@@ -703,7 +717,7 @@ class RegexParser(StateMachine):
             elif ctx.input is None:
                 return self.machine.Final
 
-            return self.__class__
+            return self.machine.Main
 
 
     @register
@@ -763,7 +777,7 @@ class RegexParser(StateMachine):
 
             def advance(self, context):
                 if context.input.isdigit():
-                    return self.__class__
+                    return self.machine.Min
                 elif context.input == ',':
                     return self.machine.Comma
                 elif context.input == '}':
@@ -815,10 +829,7 @@ class RegexParser(StateMachine):
             self.machine.QtyState.advance(self, ctx)
 
 
-    class GroupingState(State):
-        """
-        Represent states that parse portions of regular expression that delimit terminal nodes
-        """
+    class Group(State):
 
         def advance(self, ctx):
             if ctx.input in (')', '}', ']'):
@@ -851,7 +862,7 @@ class RegexParser(StateMachine):
 
 
     @register
-    class Parenthesis(StateMachine, GroupingState):
+    class Parenthesis(StateMachine, Group):
 
         @initial
         class Initial(State):
@@ -902,14 +913,14 @@ class RegexParser(StateMachine):
         @register
         class Choice(Initial):
 
-            def _run(self, context):
-                context.append_to_contents("")
+            def _run(self, ctx):
+                ctx.append_to_contents("")
 
-            def advance(self, context):
-                if context.input in ('?', '*', '+', '{'):
+            def advance(self, ctx):
+                if ctx.input in ('?', '*', '+', '{'):
                     raise QuantificationError()
 
-                return self.machine.Initial.advance(self, context)
+                return self.machine.Initial.advance(self, ctx)
 
         @register
         class Escape(State):
@@ -927,7 +938,7 @@ class RegexParser(StateMachine):
 
 
     @register
-    class SquareBrackets(StateMachine, GroupingState):
+    class SquareBrackets(StateMachine, Group):
 
         @initial
         class Initial(State):
@@ -956,10 +967,10 @@ class RegexParser(StateMachine):
         @register
         class Final(State):
 
-            def _run(self, context):
+            def _run(self, ctx):
                 pass
 
-            def advance(self, context):
+            def advance(self, ctx):
                 return None
 
 
@@ -1057,7 +1068,7 @@ class RegexParser(StateMachine):
 
 
     @register
-    class EscapeMetaSequence(GroupingState):
+    class EscapeMetaSequence(Group):
 
         def _run(self, ctx):
             if ctx.choice and len(ctx.values) > 1 and len(ctx.buffer) > 1:
@@ -1078,6 +1089,8 @@ class RegexParser(StateMachine):
 
     def init_specific(self):
         self._name = None
+        self.charset = None
+
         self.values = None
         self.alphabet = None
 
@@ -1144,18 +1157,26 @@ class RegexParser(StateMachine):
         self.min = None
         self.max = None
 
-    def parse(self, inputs, name):
+    def parse(self, inputs, name, charset=MH.Charset.ASCII_EXT):
         self._name = name
+        self.charset = charset
+
+        if self.charset == MH.Charset.ASCII:
+            max = 0x7F
+        elif self.charset == MH.Charset.UNICODE:
+            max = 0xFFFF
+        else:
+            max = 0xFF
 
         def get_complement(chars):
-            return ''.join([six.unichr(i) for i in range(0, 0xFFFF) if six.unichr(i) not in chars])
+            return ''.join([six.unichr(i) for i in range(0, max + 1) if six.unichr(i) not in chars])
 
         self.META_SEQUENCES = {'s': string.whitespace,
                                'S': get_complement(string.whitespace),
                                'd': string.digits,
                                'D': get_complement(string.digits),
-                               'w': string.ascii_letters + string.digits + '_',}
-                               # 'W': get_complement(string.ascii_letters + string.digits + '_')}
+                               'w': string.ascii_letters + string.digits + '_',
+                               'W': get_complement(string.ascii_letters + string.digits + '_')}
 
         self.SPECIAL_CHARS = list('\\()[]{}*+?|-')
 
@@ -1225,7 +1246,7 @@ class ModelHelper(object):
         'exists_if', 'exists_if_not',
         'exists_if/and', 'exists_if/or',
         'sync_size_with', 'sync_enc_size_with',
-        'post_freeze'
+        'post_freeze', 'charset'
     ]
 
     def __init__(self, dm=None, delayed_jobs=True, add_env=True):
@@ -1448,7 +1469,7 @@ class ModelHelper(object):
         assert isinstance(regexp, str)
 
         parser = RegexParser()
-        nodes = parser.parse(regexp, name)
+        nodes = parser.parse(regexp, name, desc.get('charset'))
 
         if len(nodes) == 2 and len(nodes[1]) == 2 and (nodes[1][1][1] == nodes[1][1][2] == 1 or
                  isinstance(nodes[1][1][0], fvt.String) and nodes[1][1][0].alphabet is not None):

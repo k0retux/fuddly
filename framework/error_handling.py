@@ -82,3 +82,8 @@ class InitialStateNotFound(RegexParserError):
 
     def __init__(self):
         RegexParserError.__init__(self, "No state was declared as initial.")
+
+class CharsetError(RegexParserError):
+
+    def __init__(self):
+        RegexParserError.__init__(self, "Some character(s) into the regex are incoherent with the provided charset.")

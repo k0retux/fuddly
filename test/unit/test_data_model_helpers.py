@@ -20,11 +20,13 @@ class RegexParserTest(unittest.TestCase):
     def tearDown(self):
         pass
 
-    @ddt.data(u"(sa(lu))(les)(louloux)", u"(salut)(les(louloux)", u"(salut))les(louloux)",
-              u"(sal*ut)oo", u"(sal?ut)oo", u"sal{utoo", u"(sal+ut)oo", u"(sal{u)too",
-              u"(sal{2}u)too", u"sal{2,1}utoo", u"sal(u[t]o)o",
-              u"whatever|toto?ff", u"whate?ver|toto", u"(toto)*ohoho|haha", u"(toto)ohoho|haha",
-              u"salut[abcd]{,15}rr", u"[]whatever", u"t{,15}", u"hi|b?whatever", u"hi|b{3}whatever")
+    @ddt.data({'regex': u"(sa(lu))(les)(louloux)"}, {'regex': u"(salut)(les(louloux)"},
+              {'regex': u"(salut))les(louloux)"}, {'regex': u"(sal*ut)oo"}, {'regex': u"(sal?ut)oo"},
+              {'regex': u"sal{utoo"}, {'regex': u"(sal+ut)oo"}, {'regex': u"(sal{u)too"},
+              {'regex': u"(sal{2}u)too"}, {'regex': u"sal{2,1}utoo"}, {'regex': u"sal(u[t]o)o"},
+              {'regex': u"whatever|toto?ff"}, {'regex': u"whate?ver|toto"}, {'regex': u"(toto)*ohoho|haha"},
+              {'regex': u"(toto)ohoho|haha"}, {'regex': u"salut[abcd]{,15}rr"}, {'regex': u"[]whatever"},
+              {'regex': u"t{,15}"}, {'regex': u"hi|b?whatever"}, {'regex': u"hi|b{3}whatever"})
     def test_invalid_regexes(self, regex):
         self.assert_regex_is_invalid(regex)
 
@@ -59,20 +61,23 @@ class RegexParserTest(unittest.TestCase):
         {'regex': u"(abcd)\x53", 'nodes': [{"values": [u"abcd"]}, {"values": [u"\x53"]}]},
         {'regex': u"\x43[abcd]", 'nodes': [{"values": [u"\x43"]}, {"alphabet": u"abcd"}]},
         {'regex': u"\x43(abcd)", 'nodes': [{"values": [u"\x43"]}, {"values": [u"abcd"]}]},
-        {'regex': u"\u0443(abcd)", 'nodes': [{"values": [u"\u0443"]}, {"values": [u"abcd"]}]},
-        {'regex': u"hi(ab\u0443cd)", 'nodes': [{"values": [u"hi"]}, {"values": [u"ab\u0443cd"]}]},
+        {'regex': u"\u0443(abcd)", "charset": MH.Charset.UNICODE,
+         'nodes': [{"values": [u"\u0443"]}, {"values": [u"abcd"]}]},
+        {'regex': u"hi(ab\u0443cd)", "charset": MH.Charset.UNICODE,
+         'nodes': [{"values": [u"hi"]}, {"values": [u"ab\u0443cd"]}]},
     )
     def test_escape(self, test_case):
         self.assert_regex_is_valid(test_case)
 
 
-    @ddt.data(u"?", u"*", u"+", u"{1,2}", u"what{,}ever", u"bj{}er"
-              u"what{1, 2}", u"what{,3}ever", u"ee{l1, 2}ever", u"whddddat{\13, 2}eyyyver",
-              u"wat{3,2d}eyyyver", u"w**r", u"w+*r", u"w*?r")
+    @ddt.data({'regex': u"?"}, {'regex': u"*"}, {'regex': u"+"}, {'regex': u"{1,2}"}, {'regex': u"what{,}ever"},
+              {'regex': u"bj{}er"},{'regex': u"what{1, 2}"}, {'regex': u"what{,3}ever"}, {'regex': u"ee{l1, 2}ever"},
+              {'regex': u"whddddat{\13, 2}eyyyver"}, {'regex': u"wat{3,2d}eyyyver"}, {'regex': u"w**r"},
+              {'regex': u"w+*r"}, {'regex': u"w*?r"})
     def test_quantifier_raise(self, regex):
         self.assert_regex_is_invalid(regex)
 
-    @ddt.data(u"salut(", u"dd[", u"(", u"[", u"{0")
+    @ddt.data({'regex': u"salut("}, {'regex': u"dd["}, {'regex': u"("}, {'regex': u"["}, {'regex': u"{0"})
     def test_wrong_end_raise(self, regex):
         self.assert_regex_is_invalid(regex)
 
@@ -204,17 +209,21 @@ class RegexParserTest(unittest.TestCase):
 
         {'regex': u"[\u0033]", 'nodes': [{"alphabet": u"\u0033"}]},
         {'regex': u"[\u0003-\u0005]", 'nodes': [{"alphabet": u"\u0003\u0004\u0005"}]},
-        {'regex': u"[\u0333-\u0335]", 'nodes': [{"alphabet": u"\u0333\u0334\u0335"}]},
-        {'regex': u"[e\u4133-\u4135a]", 'nodes': [{"alphabet": u"e\u4133\u4134\u4135a"}]}
+        {'regex': u"[\u0333-\u0335]", "charset": MH.Charset.UNICODE,
+         'nodes': [{"alphabet": u"\u0333\u0334\u0335"}]},
+        {'regex': u"[e\u4133-\u4135a]", "charset": MH.Charset.UNICODE,
+         'nodes': [{"alphabet": u"e\u4133\u4134\u4135a"}]}
     )
     def test_basic_square_brackets(self, test_case):
         self.assert_regex_is_valid(test_case)
 
-    @ddt.data(u"[\x33-\x23]", u"[\u7633-\u7323]", u"[3-1]", u"[y-a]")
+    @ddt.data({'regex': u"[\x33-\x23]"}, {'regex': u"[3-1]"}, {'regex': u"[y-a]"},
+              {'regex': u"[\u7633-\u7323]", "charset": MH.Charset.UNICODE})
     def test_wrong_alphabet(self, regex):
         self.assert_regex_is_invalid(regex)
 
-    @ddt.data(u"[]", u"stronger[]baby", u"strongerbaby[]", u"[]strongerbaby", u"stro[]nger[]baby[]")
+    @ddt.data({'regex': u"[]"}, {'regex': u"stronger[]baby"}, {'regex': u"strongerbaby[]"},
+              {'regex': u"[]strongerbaby"}, {'regex': u"stro[]nger[]baby[]"})
     def test_basic_square_brackets_raise(self, regex):
         self.assert_regex_is_invalid(regex)
 
@@ -274,7 +283,8 @@ class RegexParserTest(unittest.TestCase):
 
     def assert_regex_is_valid(self, test_case):
 
-        self._parser.parse(test_case['regex'], "name")
+        charset = test_case['charset'] if 'charset' in test_case else MH.Charset.ASCII_EXT
+        self._parser.parse(test_case['regex'], "name", charset)
         self.assertEquals(self._parser._create_terminal_node.call_count, len(test_case['nodes']))
 
         calls = []
@@ -291,5 +301,6 @@ class RegexParserTest(unittest.TestCase):
         self._parser._create_terminal_node.assert_has_calls(calls)
 
 
-    def assert_regex_is_invalid(self, regex):
-        self.assertRaises(Exception, self._parser.parse, regex, "name")
+    def assert_regex_is_invalid(self, test_case):
+        charset = test_case['charset'] if 'charset' in test_case else MH.Charset.ASCII_EXT
+        self.assertRaises(Exception, self._parser.parse, test_case['regex'], "name", charset)
