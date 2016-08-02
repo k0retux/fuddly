@@ -115,9 +115,9 @@ class ModelWalker(object):
                 self._cpt += 1
 
         if self._cpt <= self._initial_step and self._cpt > 1:
-            self._initial_step = 1
             print("\n*** DEBUG: initial_step idx ({:d}) is after" \
                       " the last idx ({:d})!\n".format(self._initial_step, self._cpt-1))
+            self._initial_step = 1
             self.consumed_node_path = consumed_node.get_path_from(self._root_node)
             if self.consumed_node_path == None:
                 return

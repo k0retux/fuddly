@@ -65,11 +65,14 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi'):
                         continue
                     print(' [ {:s} received! ]'.format(x.upper()))
                     next_step.node.freeze()
-                    next_step.node['.*/mac_dst'] = mac_src
 
                     error_msg = '\n*** The node has no path to: {:s}. Thus, ignore it.\n'\
                                 '    (probable reason: the node has been fuzzed in a way that makes the' \
                                 'path unavailable)'
+                    try:
+                        next_step.node['.*/mac_dst'] = mac_src
+                    except:
+                        print(error_msg.format('mac_dst'))
                     try:
                         next_step.node['.*/tag_sn/value/v101'] = service_name
                     except:
@@ -85,12 +88,11 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi'):
 
                     if host_uniq is not None:
                         new_tag = env.dm.get_data('tag_host_uniq')
+                        new_tag['.*/v103'] = host_uniq
                         try:
-                            new_tag['.*/v103'] = host_uniq
-                        except:
-                            print(error_msg.format('service_name'))
-                        else:
                             next_step.node['.*/host_uniq_stub'].set_contents(new_tag)
+                        except:
+                            print(error_msg.format('host_uniq_stub'))
                     else:
                         print('\n***WARNING: Host-Uniq not provided')
                     next_step.node.unfreeze(recursive=True, reevaluate_constraints=True)

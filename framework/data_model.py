@@ -287,7 +287,7 @@ class Data(object):
         new_data._pending_ops = {}  # we do not copy pending_ops
 
         if self.node is not None:
-            e = Node(self.node.name, base_node=self.node, ignore_frozen_state=False)
+            e = Node(self.node.name, base_node=self.node, ignore_frozen_state=False, new_env=True)
             new_data._dm.set_new_env(e)
             new_data.update_from_node(e)
         return new_data
@@ -4909,10 +4909,10 @@ class Node(object):
             self._delayed_jobs_called = base_node._delayed_jobs_called
 
             if new_env:
-                self.env = copy.copy(base_node.env)
+                self.env = Env() if ignore_frozen_state else copy.copy(base_node.env)
             else:
                 self.env = base_node.env
-        
+
             node_dico = self.set_contents(base_node,
                                           copy_dico=copy_dico, ignore_frozen_state=ignore_frozen_state,
                                           accept_external_entanglement=accept_external_entanglement,
@@ -6486,10 +6486,10 @@ class Env(object):
                 del self.nodes_to_corrupt[old_node]
                 new_nodes_to_corrupt[new_node] = op
 
+        self.nodes_to_corrupt = new_nodes_to_corrupt
+
         if self.is_empty():
             return
-
-        self.nodes_to_corrupt = new_nodes_to_corrupt
 
         if ignore_frozen_state:
             self.exhausted_nodes = []

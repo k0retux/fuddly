@@ -449,43 +449,55 @@ class sd_struct_constraints(StatefulDisruptor):
     def disrupt_data(self, dm, target, data):
 
         stop = False
-        for i in range(self.init):
+        if self.idx == 0:
+            step_idx = self.init-1
+        else:
+            step_idx = self.idx
+
+        while self.idx <= step_idx:
             if self.exist_cst_nodelist:
                 consumed_node = self.exist_cst_nodelist.pop()
-                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_EXIST_COND)
-                op_performed = 'existence condition switched'
+                if self.idx == step_idx:
+                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_EXIST_COND)
+                    op_performed = 'existence condition switched'
             elif self.qty_cst_nodelist_1:
                 consumed_node = self.qty_cst_nodelist_1.pop()
-                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_QTY_SYNC,
-                                                  corrupt_op=lambda x: x+1)
-                op_performed = 'increase quantity constraint by 1'
+                if self.idx == step_idx:
+                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_QTY_SYNC,
+                                                      corrupt_op=lambda x: x+1)
+                    op_performed = 'increase quantity constraint by 1'
             elif self.qty_cst_nodelist_2:
                 consumed_node = self.qty_cst_nodelist_2.pop()
-                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_QTY_SYNC,
-                                                  corrupt_op=lambda x: max(x-1, 0))
-                op_performed = 'decrease quantity constraint by 1'
+                if self.idx == step_idx:
+                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_QTY_SYNC,
+                                                      corrupt_op=lambda x: max(x-1, 0))
+                    op_performed = 'decrease quantity constraint by 1'
             elif self.size_cst_nodelist_1:
                 consumed_node = self.size_cst_nodelist_1.pop()
-                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_SIZE_SYNC,
-                                                  corrupt_op=lambda x: x+1)
-                op_performed = 'increase size constraint by 1'
+                if self.idx == step_idx:
+                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_SIZE_SYNC,
+                                                      corrupt_op=lambda x: x+1)
+                    op_performed = 'increase size constraint by 1'
             elif self.size_cst_nodelist_2:
                 consumed_node = self.size_cst_nodelist_2.pop()
-                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_SIZE_SYNC,
-                                                  corrupt_op=lambda x: max(x-1, 0))
-                op_performed = 'decrease size constraint by 1'
+                if self.idx == step_idx:
+                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_SIZE_SYNC,
+                                                      corrupt_op=lambda x: max(x-1, 0))
+                    op_performed = 'decrease size constraint by 1'
             elif self.deep and self.minmax_cst_nodelist_1:
                 consumed_node, mini, maxi = self.minmax_cst_nodelist_1.pop()
-                new_mini = max(0, mini-1)
-                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
-                                                  corrupt_op=lambda x, y: (new_mini, new_mini))
-                op_performed = "set node amount to its minimum minus one"
+                if self.idx == step_idx:
+                    new_mini = max(0, mini-1)
+                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
+                                                      corrupt_op=lambda x, y: (new_mini, new_mini))
+                    op_performed = "set node amount to its minimum minus one"
             elif self.deep and self.minmax_cst_nodelist_2:
                 consumed_node, mini, maxi = self.minmax_cst_nodelist_2.pop()
-                new_maxi = (maxi+1)
-                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
-                                                  corrupt_op=lambda x, y: (new_maxi, new_maxi))
-                op_performed = "set node amount to its maximum plus one"
+                if self.idx == step_idx:
+                    new_maxi = (maxi+1)
+                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
+                                                      corrupt_op=lambda x, y: (new_maxi, new_maxi))
+                    op_performed = "set node amount to its maximum plus one"
             else:
                 stop = True
                 break

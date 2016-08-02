@@ -705,8 +705,8 @@ class Serial_Backend(Backend):
     """
     def __init__(self, serial_port, baudrate=115200, bytesize=8, parity='N', stopbits=1,
                  xonxoff=False, rtscts=False, dsrdtr=False,
-                 username=None, password=None,
-                 slowness_factor=5):
+                 username=None, password=None, slowness_factor=5,
+                 cmd_notfound=b'command not found'):
         """
         Args:
             serial_port (str): path to the tty device file. (e.g., '/dev/ttyUSB0')
@@ -723,6 +723,8 @@ class Serial_Backend(Backend):
               1 (fastest) to 10 (slowest). This factor is a base metric to compute the time to wait
               for the authentication step to terminate (if `username` and `password` parameter are provided)
               and other operations involving to wait for the monitored system.
+            cmd_notfound (bytes): pattern used to detect if the command does not exist on the
+              monitored system.
         """
         Backend.__init__(self)
         if not serial_module:
@@ -737,6 +739,7 @@ class Serial_Backend(Backend):
         self.rtscts = rtscts
         self.dsrdtr = dsrdtr
         self.slowness_factor = slowness_factor
+        self.cmd_notfound = cmd_notfound
         if sys.version_info[0] > 2:
             self.username = bytes(username, 'latin_1')
             self.password = bytes(password, 'latin_1')
@@ -807,7 +810,7 @@ class Serial_Backend(Backend):
             # print('\n*** DBG: ', result)
             result = result[:-2]
             ret = b''.join(result)
-            if ret.find(b'command not found') != -1:
+            if ret.find(self.cmd_notfound) != -1:
                 raise BackendError('The command does not exist on the host')
             else:
                 return ret
@@ -888,7 +891,10 @@ class ProbePID(Probe):
                                      nl_before=True)
                 pid = -10
             elif len(l) == 1:
-                pid = int(l[0])
+                try:
+                    pid = int(l[0])
+                except ValueError:
+                    pid = -10
             else:
                 # process not found
                 pid = -1
@@ -1017,22 +1023,22 @@ class ProbeMem(Probe):
                 self._max_mem = current_mem
 
             ok = True
+            info = "*** '{:s}' maximum RSS: {:d} ***\n".format(self.process_name, self._max_mem)
             err_msg = ''
             if self.threshold is not None and self._max_mem > self.threshold:
                 ok = False
-                err_msg += '\nThreshold exceeded'
+                err_msg += '\n*** Threshold exceeded ***'
             if self.tolerance is not None:
                 delta = abs(self._max_mem - self._saved_mem)
                 if (delta/float(self._saved_mem))*100 > self.tolerance:
                     ok = False
-                    err_msg += '\nTolerance exceeded'
+                    err_msg += '\n*** Tolerance exceeded ***'
             if not ok:
                 status.set_status(-1)
-                status.set_private_info(err_msg)
+                status.set_private_info(err_msg+'\n'+info)
             else:
                 status.set_status(self._max_mem)
-                status.set_private_info("*** '{:s}' current RSS: {:d} ***\n"
-                                        .format(self.process_name, self._saved_mem))
+                status.set_private_info(info)
         return status
 
     def reset(self):

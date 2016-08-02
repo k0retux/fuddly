@@ -82,7 +82,10 @@ class Encoder(object):
     def to_bytes(val):
         if isinstance(val, (str, bytes)):
             if sys.version_info[0] > 2 and not isinstance(val, bytes):
-                new_val = bytes(val, 'latin_1')
+                try:
+                    new_val = bytes(val, 'latin_1')
+                except UnicodeEncodeError:
+                    new_val = val.encode('utf8')
             else:
                 new_val = val
         elif sys.version_info[0] == 2 and isinstance(val, unicode):

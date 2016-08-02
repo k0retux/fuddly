@@ -348,7 +348,7 @@ class Logger(object):
             record = False
 
         if preamble is not None:
-            self.log_fn(preamble, do_record=record)
+            self.log_fn(preamble, do_record=record, rgb=Color.FMKINFO)
 
         for fbk, idx in zip(fbk_list, range(len(fbk_list))):
             timestamp, m, status = fbk
@@ -368,7 +368,7 @@ class Logger(object):
                 error_detected = True
 
         if epilogue is not None:
-            self.log_fn(epilogue, do_record=record)
+            self.log_fn(epilogue, do_record=record, rgb=Color.FMKINFO)
 
         return error_detected
 
@@ -385,7 +385,7 @@ class Logger(object):
             record = False
 
         if preamble is not None:
-            self.log_fn(preamble, do_record=record)
+            self.log_fn(preamble, do_record=record, rgb=Color.FMKINFO)
 
         if not decoded_feedback and (status_code is None or status_code >= 0):
             msg_hdr = "### No Target Feedback!" if source is None else '### No Target Feedback from "{!s}"!'.format(
@@ -422,7 +422,7 @@ class Logger(object):
                                                status_code=status_code)
 
         if epilogue is not None:
-            self.log_fn(epilogue, do_record=record)
+            self.log_fn(epilogue, do_record=record, rgb=Color.FMKINFO)
 
     def log_operator_feedback(self, feedback, timestamp, op_name, status_code=None):
         if feedback is None:

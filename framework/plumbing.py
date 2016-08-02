@@ -517,7 +517,7 @@ class FmkPlumbing(object):
                         ok = False
                     if prefix and not prefix_printed:
                         prefix_printed = True
-                        self.lg.print_console('\n*** {:s} ***'.format(prefix), rgb=Color.FEEDBACK)
+                        self.lg.print_console('\n*** {:s} ***'.format(prefix), rgb=Color.FMKINFO)
                     tstamp = pstatus.get_timestamp()
                     priv = pstatus.get_private_info()
                     self.lg.log_probe_feedback(source="Probe '{:s}'".format(pname),
@@ -527,7 +527,7 @@ class FmkPlumbing(object):
         ret = self._recover_target() if not ok else True
 
         if prefix and not ok:
-            self.lg.print_console('*'*(len(prefix)+8)+'\n', rgb=Color.FEEDBACK)
+            self.lg.print_console('*'*(len(prefix)+8)+'\n', rgb=Color.FMKINFO)
 
         return ret
 
