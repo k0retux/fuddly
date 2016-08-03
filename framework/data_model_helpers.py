@@ -820,7 +820,7 @@ class RegexParser(StateMachine):
                 return None
 
         def advance(self, ctx):
-            self.machine.QtyState.advance(self, ctx)
+            return self.machine.QtyState.advance(self, ctx)
 
 
     class Group(State):
@@ -1135,7 +1135,7 @@ class RegexParser(StateMachine):
         else:
             type = fvt.String
 
-        name = self._name + str(len(self.nodes) + 1)
+        name = self._name + '_' + str(len(self.nodes) + 1)
         self.nodes.append(self._create_terminal_node(name, type, values=self.values,
                                                      alphabet=self.alphabet, qty=(self.min, self.max)))
         self.reset()

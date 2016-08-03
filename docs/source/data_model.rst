@@ -427,6 +427,9 @@ contents
     will be used as is. Otherwise, the additional keywords will be used to complement the
     description. Note that the *keyword* ``name`` should not be provided as it will be
     picked from the provided node.
+  - a python ``regular expression`` will represent a node that is
+    terminal or non-terminal but only contains terminal ones
+    (refer to :ref:`dm:pattern:regex`).
 
   Note that for defining a *function node* and not a generator node,
   you have to state the type attribute to ``MH.Leaf``.
@@ -927,6 +930,15 @@ specific_fuzzy_vals
   be leveraged by the *disruptor* ``tTYPE`` (:ref:`dis:ttype`) while dealing with the related node.
   These additional values are added to the test cases planned by the *disruptor* (if not already
   planned).
+
+charset
+  Used to specify a charset to be used within the node: it is particularly useful
+  for nodes that contain regular expressions. Accepted attributes are:
+
+  - ``MH.Charset.ASCII``
+  - ``MH.Charset.ASCII_EXT`` (default)
+  - ``MH.Charset.UNICODE``
+
 
 .. _dm:patterns:
 
@@ -1551,3 +1563,106 @@ The following picture displays the result of the previous code (triggered by lin
 .. note:: Line 11 is to make the absorption operation work correctly. Indeed because of the
    encoding, constraints are not rigid enough to make fuddly work out the absorption
    without some help.
+
+
+
+.. _dm:pattern:regex:
+
+How to Describe a Data Format That Contains Complex Strings
+-----------------------------------------------------------
+
+Parts of the data that only contain strings can easily be described using python's regular expressions.
+Here are some rules to respect:
+
+- The characters couple (``[``, ``]``) and meta-sequences, such as ``\s``, ``\S``, ``\w``, ``\W``, ``\d``
+  and ``\D``, are the only ways to define a :class:`framework.value_types.String` terminal node that
+  contains an alphabet.
+
+- Anything else will be translated into a :class:`framework.value_types.String` terminal node that
+  declares a list of values. The characters couple (``(``, ``)``) can be used to delimit a portion of
+  the regular expression that need to be translated into a terminal node on its own.
+
+.. note:: If each item in a list of values are integers an :class:`framework.value_types.INT_Str` will
+   be created instead of a :class:`framework.value_types.String`.
+
+- ``(``, ``)``, ``[``, ``]``, ``?``, ``*``, ``+``, ``{``, ``}``, ``|``, ``\``, ``-`` are the only
+  recognised special chars. They can not be used in an unsuitable context without been escaped
+  (exceptions are made for ``|`` and ``-``).
+
+- Are only allowed regular expressions that can be translated into one terminal node or into one non-terminal
+  node composed of terminal ones. If this rule is not respected an
+  :class:`framework.error_handling.InconvertibilityError` will be raised.
+
+- An inconsistency between the charset and the characters that compose the regular expression will result
+  in an :class:`framework.error_handling.CharsetError`.
+
+.. note:: The default charset used by Fuddly is ``MH.Charset.ASCII_EXT``. To alter this behaviour, it is
+   necessary to use the ``charset`` keyword.
+
+
+To embody these rules, let's take some examples:
+
+Example 1: the basics
+
+.. code-block:: python
+   :linenos:
+
+   regex = {'name': 'HTTP_version',
+            'contents': '(HTTP)/[0-9].(0|1|2|\x33|4|5|6|7|8|9)'
+   # is equivalent to
+   classic = {'name': 'HTTP_version',
+              'contents': [
+                 {'name': 'HTTP_version_1', 'contents': String(val_list=["HTTP"])},
+                 {'name': 'HTTP_version_2', 'contents': String(val_list=["/"])},
+                 {'name': 'HTTP_version_3',
+                  'contents': String(alphabet="0123456789", size=[1])},
+                 {'name': 'HTTP_version_4', 'contents': String(val_list=["."])},
+                 {'name': 'HTTP_version_5', 'contents': INT_Str(mini=0, maxi=9)}]}
+
+
+Example 2: introducing shapes
+
+.. code-block:: python
+   :linenos:
+
+   regex = {'name': 'something',
+            'contents': '(333|444)|foo-bar|\d|[th|is]'
+   # is equivalent to
+   classic = {'name': 'something',
+              'contents': [
+                 {'weight': 1, 'contents': INT_Str(int_list=[333, 444])},
+                 {'weight': 1, 'contents': String(val_list=["foo-bar"])},
+                 {'weight': 1, 'contents': String(alphabet="0123456789", size=[1])},
+                 {'weight': 1, 'contents': String(alphabet="th|is", size=[1])}]}
+
+
+Example 3: using quantifiers and the escape character ``\``
+
+.. code-block:: python
+   :linenos:
+
+   regex = {'name': 'something',
+            'contents': '\(this[is]{3,4}the+end\]'
+   # is equivalent to
+   classic = {'name': 'something',
+              'contents': [
+                 {'name': 'something_1', 'contents': String(val_list=["(this"])},
+                 {'name': 'something_2',
+	              'contents': String(alphabet="is", min_sz=3, max_sz=4)},
+                 {'name': 'something_3', 'contents': String(val_list=["th"])},
+                 {'name': 'something_4', 'qty': (1, -1),
+                  'contents': String(val_list=["e"])},
+                 {'name': 'something_5', 'contents': String(val_list=["end]"])},
+
+Example 4: invalid regular expressions
+
+.. code-block:: python
+   :linenos:
+
+   error_1 = {'name': 'rejected', 'contents': '(HT(T)P)/'}
+   # raise an framework.error_handling.InconvertibilityError
+   # because there are two nested parenthesis.
+
+   error_2 = {'name': 'rejected', 'contents': '(HTTP)foo|bar'}
+   # raise also an framework.error_handling.InconvertibilityError
+   # because | has priority over parenthesis in regular expressions.
