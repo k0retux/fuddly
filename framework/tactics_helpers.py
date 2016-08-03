@@ -443,7 +443,7 @@ def _handle_user_inputs(dmaker, ui):
                 setattr(dmaker, k, ui_val)
 
     if dmaker._gen_args_desc and \
-       (issubclass(dmaker.__class__, Disruptor) or issubclass(dmaker.__class__, StatefulDisruptor)) and \
+       issubclass(dmaker.__class__, (Disruptor, StatefulDisruptor)) and \
        dmaker._gen_args_desc == GENERIC_ARGS:
         modelwalker_inputs_handling_helper(dmaker, generic_ui)
 

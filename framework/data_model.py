@@ -641,10 +641,8 @@ class RawCondition(NodeCondition):
     def __init__(self, val=None, neg_val=None):
         '''
         Args:
-          val (bytes): byte representation (or list of byte representations)
-            that satisfies the condition
-          neg_val (bytes): byte representation (or list of byte representations)
-            that does NOT satisfy the condition
+          val (bytes/:obj:`list` of bytes): value(s) that satisfies the condition
+          neg_val (bytes/:obj:`list` of bytes): value(s) that does NOT satisfy the condition
         '''
         assert((val is not None and neg_val is None) or (val is None and neg_val is not None))
         if val is not None:
@@ -684,8 +682,8 @@ class IntCondition(NodeCondition):
     def __init__(self, val=None, neg_val=None):
         '''
         Args:
-          val (int): integer (or integer list) that satisfies the condition
-          neg_val (int): integer (or integer list) that does NOT satisfy the condition
+          val (int/:obj:`list` of int): integer(s) that satisfies the condition
+          neg_val (int/:obj:`list` of int): integer(s) that does NOT satisfy the condition
         '''
         assert((val is not None and neg_val is None) or (val is None and neg_val is not None))
         if val is not None:
@@ -719,9 +717,11 @@ class BitFieldCondition(NodeCondition):
     def __init__(self, sf, val=None, neg_val=None):
         '''
         Args:
-          sf (int): subfield (or subfield list) of the BitField() on which the condition apply
-          val (int): integer (or integer list or list of integer list) that satisfies the condition
-          neg_val (int): integer (or integer list or list of integer list) that does NOT satisfy the condition
+          sf (int/:obj:`list` of int): subfield(s) of the BitField() on which the condition apply
+          val (int/:obj:`list` of int/:obj:`list` of :obj:`list` of int): integer(s) that
+            satisfies the condition(s)
+          neg_val (int/:obj:`list` of int/:obj:`list` of :obj:`list` of int): integer(s) that
+            does NOT satisfy the condition(s)
         '''
 
         assert(val is not None or neg_val is not None)
@@ -4778,7 +4778,7 @@ class Node(object):
     '''A Node is the basic building-block used within a graph-based data model.
 
     Attributes:
-      internals (dict: str --> :class:`NodeInternals`): Contains all the configuration of a
+      internals (:obj:`dict` of :obj:`str` --> :class:`NodeInternals`): Contains all the configuration of a
         node. A configuration is associated to the internals/contents
         of a node, which can live independently of the other
         configuration.
@@ -5150,10 +5150,7 @@ class Node(object):
     '''Property giving all node's configurations (read only)'''
 
     def _set_subtrees_current_conf(self, node, conf, reverse, ignore_entanglement=False):
-        if node.is_conf_existing(conf):
-            conf2 = conf
-        else:
-            conf2 = node.current_conf
+        conf2 = conf if node.is_conf_existing(conf) else node.current_conf
 
         if not reverse:
             node.current_conf = conf2
@@ -5491,15 +5488,8 @@ class Node(object):
         self.clear_attr(NodeInternals.Finite, conf, all_conf=all_conf, recursive=recursive)
 
     def _compute_confs(self, conf, recursive):
-        if recursive:
-            next_conf = conf
-        else:
-            next_conf = None
-
-        if not self.is_conf_existing(conf):
-            current_conf = self.current_conf
-        else:
-            current_conf = conf
+        next_conf = conf if recursive else None
+        current_conf = conf if self.is_conf_existing(conf) else self.current_conf
 
         if self.is_genfunc(current_conf):
             next_conf = conf
@@ -5720,19 +5710,13 @@ class Node(object):
 
     def _get_all_paths_rec(self, pname, htable, conf, recursive, first=True, clone_idx=0):
 
-        if recursive:
-            next_conf = conf
-        else:
-            next_conf = None
+        next_conf = conf if recursive else None
 
         if not self.is_conf_existing(conf):
             conf = self.current_conf
         internal = self.internals[conf]
 
-        if first:
-            name = self.name
-        else:
-            name = pname + '/' + self.name
+        name = self.name if first else pname + '/' + self.name
 
         if name in htable:
             htable[(name, clone_idx)] = self
@@ -5823,15 +5807,8 @@ class Node(object):
 
     def _get_value(self, conf=None, recursive=True, return_node_internals=False):
 
-        if recursive:
-            next_conf = conf
-        else:
-            next_conf = None
-
-        if not self.is_conf_existing(conf):
-            conf2 = self.current_conf
-        else:
-            conf2 = conf
+        next_conf = conf if recursive else None
+        conf2 = conf if self.is_conf_existing(conf) else self.current_conf
 
         if self.is_genfunc(conf2):
             next_conf = conf
@@ -5962,10 +5939,7 @@ class Node(object):
                  reevaluate_constraints=False):
         self._delayed_jobs_called = False
 
-        if conf is not None:
-            next_conf = conf
-        else:
-            next_conf = None
+        next_conf = conf
 
         if not self.is_conf_existing(conf):
             conf = self.current_conf
@@ -6161,10 +6135,7 @@ class Node(object):
                     for item in l:
                         if re.search(name+'$', item[0]):
                             node_list.append(item[1])
-                    if len(node_list) != len(set(node_list)):
-                        return True
-                    else:
-                        return False
+                    return len(node_list) != len(set(node_list))
 
                 if is_node_used_more_than_once(node.name):
                     graph_deco = ' --> M'
@@ -6424,7 +6395,7 @@ class Env(object):
                 del self.nodes_to_corrupt[node]
 
     def exhausted_node_exists(self):
-        return False if len(self.exhausted_nodes) == 0 else True
+        return len(self.exhausted_nodes) > 0
 
     def get_exhausted_nodes(self):
         return copy.copy(self.exhausted_nodes)
@@ -6433,10 +6404,7 @@ class Env(object):
         self.exhausted_nodes.append(node)
 
     def is_node_exhausted(self, node):
-        if node in self.exhausted_nodes:
-            return True
-        else:
-            return False
+        return node in self.exhausted_nodes
 
     def clear_exhausted_node(self, node):
         try:
