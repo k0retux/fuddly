@@ -6603,9 +6603,25 @@ class Env(object):
         new_env.nodes_to_corrupt = copy.copy(self.nodes_to_corrupt)
         new_env.env4NT = copy.copy(self.env4NT)
         new_env._dm = copy.copy(self._dm)
-        new_env._sorted_jobs = copy.copy(self._sorted_jobs)
-        new_env._djob_keys = copy.copy(self._djob_keys)
-        new_env._djob_groups = copy.copy(self._djob_groups)
+
+        # DJobs are ignored in the Env copy, because they only matters
+        # in the context of one node graph (Nodes + 1 unique Env) for performing delayed jobs
+        # in that graph. Indeed, all delayed jobs are registered dynamically
+        # (especially in the process of freezing a graph) and does not
+        # provide information even in the case of a frozen graph cloning.
+        # All DJobs information are ephemeral, they should only exist in the time frame of
+        # a node graph operation (e.g., freezing, absorption). If DJobs exists while an Env()
+        # is in the process of being copied, it is most probably a bug.
+        #
+        # WARNING: If DJobs need to evolve in the future to support copy, DJobGroup should be updated
+        # during this copy for updating the nodes in its node_list attribute.
+        assert not self._sorted_jobs and not self._djob_keys and not self._djob_groups
+        new_env._sorted_jobs = None
+        new_env._djob_keys = None
+        new_env._djob_groups = None
+        # new_env._sorted_jobs = copy.copy(self._sorted_jobs)
+        # new_env._djob_keys = copy.copy(self._djob_keys)
+        # new_env._djob_groups = copy.copy(self._djob_groups)
         new_env.id_list = copy.copy(self.id_list)
         # new_env.cpt = 0
         return new_env
