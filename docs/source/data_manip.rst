@@ -66,19 +66,19 @@ To guide you over what is possible to perform, let's consider the following data
 
 This is what we call a data descriptor. It cannot be used directly, it should first be
 transformed to ``fuddly`` internal representation based on :class:`framework.data_model.Node`.
-The code below show how to perform that:
+The code below shows how to perform that:
 
 .. code-block:: python
    :linenos:
 
     mh = ModelHelper()
-    rnode = mh.create_graph_from_desc(enc_desc)
+    rnode = mh.create_graph_from_desc(example_desc)
     rnode.set_env(Env())
 
 
 ``fuddly`` models data as directed acyclic graphs whose terminal
 nodes describe the different parts of a data format (refer to :ref:`data-model`). In order to
-enable elaborated manipulations it also create a specific object to share between all the nodes
+enable elaborated manipulations it also creates a specific object to share between all the nodes
 some common information related to the graph: the :class:`framework.data_model.Env` object. You should
 note that we create this *environment* object and setup the root node with it. Actually it
 provides all the nodes of the graph with this environment. From now on it is possible to access
@@ -107,7 +107,7 @@ Generate Data a.k.a. Freeze a Graph
 If you want to get a data from the graph you have to freeze it first as it represents many
 different potential data at once (actually it acts like a template). To do so, just call the method
 :meth:`framework.data_model.Node.freeze` on the root node. It will provide you with a nested set of
-list containing the frozen value for each node selected within the graph to provide you with a data.
+lists containing the frozen value for each node selected within the graph to provide you with a data.
 
 What is way more interesting in the general case is obtaining a byte string of the data. For
 this you just have to call :meth:`framework.data_model.Node.to_bytes` on the root node which will
@@ -590,7 +590,7 @@ This infrastructure is based on the following primitives:
 - :meth:`framework.data_model.Env.remove_node_to_corrupt`
 
 The typical way to perform a corruption with this infrastructure is illustrated in what follows.
-The example perform a corruption that change from the model the allowed amount for a specific
+This example performs a corruption that changes from the model the allowed amount for a specific
 node (``targeted_node``) of a graph (referenced by ``rnode``) that can be created during the data
 generation from the graph.
 
@@ -607,8 +607,8 @@ generation from the graph.
     rnode.env.remove_node_to_corrupt(targeted_node)
 
 From now on, you have still a clean graph referenced by ``rnode``, and a corrupted one referenced
-by ``corrupt_rnode``. You can now instanciate some data from ``corrupt_rnode`` that complies to an
-altered data model (because we change the grammar that constrain the data generation).
+by ``corrupt_rnode``. You can now instantiate some data from ``corrupt_rnode`` that complies to an
+altered data model (because we change the grammar that constrains the data generation).
 
 The corruption operations currently defined are:
 

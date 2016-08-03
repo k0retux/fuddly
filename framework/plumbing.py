@@ -374,8 +374,7 @@ class FmkPlumbing(object):
                 self.reload_dm()
 
             # reloading is based on name because DM objects have changed
-            ok = self.load_multiple_data_model(name_list=name_list, reload_dm=True)
-            if not ok:
+            if not self.load_multiple_data_model(name_list=name_list, reload_dm=True):
                 self.set_error("Error encountered while reloading the composed Data Model")
 
         else:
@@ -392,8 +391,8 @@ class FmkPlumbing(object):
                 return False
 
             self._cleanup_dm_attrs_from_fmk()
-            ok = self._load_data_model()
-            if not ok:
+
+            if not self._load_data_model():
                 return False
 
             self.prj.set_data_model(self.dm)

@@ -197,7 +197,7 @@ class BlockingProbeUser(ProbeUser):
             self._wait_for_probe(self._probe_status_event, timeout)
         except ProbeTimeoutError as e:
             e.blocking_methods = ["main()"]
-            raise e
+            raise
 
     def notify_blocking(self):
         self._blocking_event.set()

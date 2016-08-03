@@ -281,15 +281,11 @@ class Logger(object):
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO,
                      data_id=None, do_record=True):
         now = datetime.datetime.now()
-        if nl_before:
-            p = '\n'
-        else:
-            p = ''
-        if nl_after:
-            s = '\n'
-        else:
-            s = ''
-        msg = p + "*** [ %s ] ***" % info + s
+
+        p = '\n' if nl_before else ''
+        s = '\n' if nl_after else ''
+
+        msg = "{prefix:s}*** [ {message:s} ] ***{suffix:s}".format(prefix=p, suffix=s, message=info)
         self.log_fn(msg, rgb=rgb)
         data_id = self.last_data_id if data_id is None else data_id
         if do_record:
@@ -722,12 +718,8 @@ class Logger(object):
 
         prefix = p + self.p
 
-        if sys.version_info[0] > 2:
-            if issubclass(msg.__class__, Data) or isinstance(msg, bytes):
-                msg = repr(msg)
-        else:
-            if issubclass(msg.__class__, Data):
-                msg = repr(msg)
+        if (sys.version_info[0] > 2 and isinstance(msg, bytes)) or issubclass(msg.__class__, Data):
+            msg = repr(msg)
 
         suffix = ''
         if limit_output and len(msg) > raw_limit:
