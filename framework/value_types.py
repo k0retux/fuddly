@@ -44,6 +44,7 @@ import framework.basic_primitives as bp
 from framework.data_model import AbsorbStatus, AbsCsts, convert_to_internal_repr, unconvert_from_internal_repr
 from framework.encoders import *
 from framework.error_handling import *
+from framework.global_resources import *
 
 DEBUG = False
 
@@ -99,26 +100,8 @@ class VT(object):
 
     @staticmethod
     def _str2internal(arg):
-        if isinstance(arg, (tuple, list)):
-            new_arg = []
-            for v in arg:
-                if sys.version_info[0] > 2 and not isinstance(v, bytes):
-                    new_v = bytes(v, 'latin_1')
-                else:
-                    new_v = v
-                new_arg.append(new_v)
-        elif isinstance(arg, (str, bytes)):
-            if sys.version_info[0] > 2 and not isinstance(arg, bytes):
-                new_arg = bytes(arg, 'latin_1')
-            else:
-                new_arg = arg
-        elif sys.version_info[0] == 2 and isinstance(arg, unicode):
-            new_arg = arg.encode('latin_1')
-        else:
-            raise ValueError
+        return convert_to_internal_repr(arg)
 
-        return new_arg
-                
 
 class VT_Alt(VT):
 

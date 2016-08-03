@@ -26,6 +26,8 @@ import random
 import string
 import array
 
+from framework.global_resources import convert_to_internal_repr
+
 def rand_string(size=None, mini=1, maxi=10, str_set=string.printable):
 
     out = ""
@@ -35,12 +37,7 @@ def rand_string(size=None, mini=1, maxi=10, str_set=string.printable):
         val = random.choice(str_set)
         out += val
 
-    if sys.version_info[0] > 2:
-        out = bytes(out, 'latin_1')
-    else:
-        out = bytes(out)
-
-    return out
+    return convert_to_internal_repr(out)
 
 
 def corrupt_bytes(s, p=0.01, n=None, ctrl_char=False):

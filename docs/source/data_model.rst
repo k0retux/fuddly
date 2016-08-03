@@ -163,11 +163,14 @@ that enables to handle transparently any encoding scheme:
 
 Below the different currently defined string types:
 
-- :class:`framework.value_types.String`: General purpose character string.
+- :class:`framework.value_types.String`: General purpose character string (with ``utf8`` encoding).
 - :class:`framework.value_types.Filename`: Filename. Similar to the type
   ``String``, but some disruptors like ``tTYPE`` will generate more specific
   test cases.
 - :class:`framework.value_types.UTF8`: ``String`` encoded in ``UTF8``.
+  It provides the same encoding as a ``String``, but using it in a data model for describing UTF8
+  fields is preferable because: a disruptor may use that information for playing around UTF8, and you
+  are agnostic from String encoding choice.
 - :class:`framework.value_types.UTF16_LE`: ``String`` encoded in ``UTF16`` little-endian.
   Note that some test cases on the encoding scheme are defined.
 - :class:`framework.value_types.UTF16_BE`: ``String`` encoded in ``UTF16`` big-endian.
@@ -175,7 +178,7 @@ Below the different currently defined string types:
 - :class:`framework.value_types.Codec`: ``String`` encoded in any standard encoding
   supported by Python. You have to provide the parameter ``encoding_arg`` with the
   codec you want to use. If no codec is provided, this class will behave the same as the class
-  :class:`framework.value_types.String`, that is, the ``latin_1`` codec will be used.
+  :class:`framework.value_types.String`, that is, the ``utf8`` codec will be used.
 - :class:`framework.value_types.GZIP`: ``String`` compressed with ``zlib``. The parameter
   ``encoding_arg`` is used to specify the level of compression (0-9).
 - :class:`framework.value_types.GSM7bitPacking`: ``String`` encoded in conformity

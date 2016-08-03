@@ -66,6 +66,37 @@ ensure_file(user_data_models_folder + os.sep + '__init__.py')
 
 fmk_folder = app_folder + os.sep + 'framework' + os.sep
 
+internal_repr_codec = 'utf8'
+def convert_to_internal_repr(val):
+    if val is None:
+        val = b''
+    elif isinstance(val, int):
+        val = bytes(val)
+    # elif not isinstance(val, (str, bytes)):
+    #     val = repr(val)
+    elif isinstance(val, (tuple, list)):
+        new_val = []
+        for v in val:
+            new_v = convert_to_internal_repr(v)
+            new_val.append(new_v)
+        val = new_val
+    elif sys.version_info[0] > 2:
+        if not isinstance(val, bytes):
+            val = val.encode(internal_repr_codec)
+    elif isinstance(val, unicode):  # only for python2
+        val = val.encode(internal_repr_codec)
+    elif isinstance(val, str):  # only for python2 (and str ~ ascii)
+        pass
+    else:
+        print(val, repr(val))
+        raise ValueError
+    return val
+
+def unconvert_from_internal_repr(val):
+    assert(isinstance(val, bytes))
+    return val.decode(internal_repr_codec, 'replace')
+
+
 class Error(object):
 
     Reserved = -1

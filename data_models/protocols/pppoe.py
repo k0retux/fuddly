@@ -1,5 +1,3 @@
-# -*- coding: latin-1 -*-
-
 ################################################################################
 #
 #  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
@@ -58,7 +56,7 @@ class PPPOE_DataModel(DataModel):
                   {'name': 'v101', # Service Name
                    'exists_if': (IntCondition(0x0101), 'type'),
                    'sync_enc_size_with': 'len',
-                   'contents': UTF8(val_list=['my \xfcber service']), # \xfc=ü encoded in latin1
+                   'contents': UTF8(val_list=[u'my \u00fcber service']),
                    },
                   {'name': 'v102', # AC name
                    'exists_if': (IntCondition(0x0102), 'type'),

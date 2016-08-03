@@ -60,7 +60,7 @@ class Example_DataModel(DataModel):
         kv.add_conf('ALT')
         kv.set_values(tux_subparts_3, conf='ALT')
 
-        tux_subparts_4 = ['[\xc2]PLIP', '[\xc2]GLOUP']
+        tux_subparts_4 = [u'[\u00c2]PLIP', u'[\u00c2]GLOUP']
         ku.add_conf('ALT')
         ku.set_values(tux_subparts_4, conf='ALT')
         
@@ -132,9 +132,9 @@ class Example_DataModel(DataModel):
         concat.set_func(fct, tux)
         
         if sys.version_info[0] > 2:
-            fct = lambda x: b'___' + bytes(chr(x[1]), 'latin_1') + b'___'
+            fct = lambda x: b'___' + bytes(chr(x[1]), internal_repr_codec) + b'___'
         else:
-            fct = lambda x: b'___' + bytes(x[1]) + b'___'
+            fct = lambda x: b'___' + x[1] + b'___'
 
         concat.add_conf('ALT')
         concat.set_func(fct, tux, conf='ALT')

@@ -627,8 +627,13 @@ class ProbeStatus(object):
 
 class Backend(object):
 
-    def __init__(self):
+    def __init__(self, codec='latin_1'):
+        """
+        Args:
+            codec (str): codec used by the monitored system to answer.
+        """
         self._started = False
+        self.codec = codec
         self._sync_lock = threading.Lock()
 
     def start(self):
@@ -661,15 +666,16 @@ class SSH_Backend(Backend):
     """
     Backend to execute command through a serial line.
     """
-    def __init__(self, username, password, sshd_ip, sshd_port=22):
+    def __init__(self, username, password, sshd_ip, sshd_port=22, codec='latin_1'):
         """
         Args:
             sshd_ip (str): IP of the SSH server.
             sshd_port (int): port of the SSH server.
             username (str): username to connect with.
             password (str): password related to the username.
+            codec (str): codec used by the monitored system to answer.
         """
-        Backend.__init__(self)
+        Backend.__init__(self, codec=codec)
         if not ssh_module:
             raise eh.UnavailablePythonModule('Python module for SSH is not available!')
         self.sshd_ip = sshd_ip
@@ -706,7 +712,7 @@ class Serial_Backend(Backend):
     def __init__(self, serial_port, baudrate=115200, bytesize=8, parity='N', stopbits=1,
                  xonxoff=False, rtscts=False, dsrdtr=False,
                  username=None, password=None, slowness_factor=5,
-                 cmd_notfound=b'command not found'):
+                 cmd_notfound=b'command not found', codec='latin_1'):
         """
         Args:
             serial_port (str): path to the tty device file. (e.g., '/dev/ttyUSB0')
@@ -725,8 +731,9 @@ class Serial_Backend(Backend):
               and other operations involving to wait for the monitored system.
             cmd_notfound (bytes): pattern used to detect if the command does not exist on the
               monitored system.
+            codec (str): codec used to send/receive information through the serial line
         """
-        Backend.__init__(self)
+        Backend.__init__(self, codec=codec)
         if not serial_module:
             raise eh.UnavailablePythonModule('Python module for Serial is not available!')
 
@@ -741,8 +748,8 @@ class Serial_Backend(Backend):
         self.slowness_factor = slowness_factor
         self.cmd_notfound = cmd_notfound
         if sys.version_info[0] > 2:
-            self.username = bytes(username, 'latin_1')
-            self.password = bytes(password, 'latin_1')
+            self.username = bytes(username, self.codec)
+            self.password = bytes(password, self.codec)
         else:
             self.username = username
             self.password = password
@@ -793,7 +800,7 @@ class Serial_Backend(Backend):
 
     def _exec_command(self, cmd):
         if sys.version_info[0] > 2:
-            cmd = bytes(cmd, 'latin_1')
+            cmd = bytes(cmd, self.codec)
         cmd += b'\r\n'
         self.ser.flushInput()
         self.ser.write(cmd)
@@ -868,7 +875,7 @@ class ProbePID(Probe):
             fallback_cmd = 'ps a -opid,comm'
             res = self.backend.exec_command(fallback_cmd)
             if sys.version_info[0] > 2:
-                res = res.decode('latin_1')
+                res = res.decode(self.backend.codec)
             pid_list = res.split('\n')
             for entry in pid_list:
                 if entry.find(self.process_name) >= 0:
@@ -882,7 +889,7 @@ class ProbePID(Probe):
                 pid = -1
         else:
             if sys.version_info[0] > 2:
-                res = res.decode('latin_1')
+                res = res.decode(self.backend.codec)
             l = res.split()
             if len(l) > 1:
                 logger.print_console("*** ERROR: more than one PID detected for process name '{:s}'"
@@ -978,7 +985,7 @@ class ProbeMem(Probe):
         res = self.backend.exec_command(self.command_pattern.format(self.process_name))
 
         if sys.version_info[0] > 2:
-            res = res.decode('latin_1')
+            res = res.decode(self.backend.codec)
         proc_list = res.split('\n')
         for entry in proc_list:
             if entry.find(self.process_name) >= 0:

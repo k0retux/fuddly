@@ -96,8 +96,9 @@ class Data(object):
         return self._type
 
     def update_from_str_or_bytes(self, data_str):
-        if sys.version_info[0] > 2 and not isinstance(data_str, bytes):
-            data_str = bytes(data_str, 'latin_1')
+        if sys.version_info[0] > 2:
+            if not isinstance(data_str, bytes):
+                data_str = data_str.encode('utf8')
 
         self.raw = data_str
         self.node = None
@@ -123,10 +124,7 @@ class Data(object):
             val = self.node.to_str()
             return val
         else:
-            if sys.version_info[0] > 2:
-                return self.raw.decode('latin_1')
-            else:
-                return self.raw
+            return unconvert_from_internal_repr(self.raw)
 
     def make_blocked(self):
         self._blocked = True
@@ -407,24 +405,7 @@ def flatten(nested):
             yield x
 
 
-def convert_to_internal_repr(val):
-    if isinstance(val, int):
-        val = bytes(val)
-    elif not isinstance(val, (str, bytes)):
-        val = repr(val)
-    elif sys.version_info[0] > 2 and not isinstance(val, bytes):
-        val = bytes(val, 'latin_1')
-    return val
-
-def unconvert_from_internal_repr(val):
-    assert(isinstance(val, bytes))
-    if sys.version_info[0] > 2:
-        val = val.decode('latin_1')
-    return val
-
-
 nodes_weight_re = re.compile('(.*?)\((.*)\)')
-
 
 class AbsorbStatus(Enum):
 
@@ -1880,12 +1861,7 @@ class NodeInternals_Term(NodeInternals):
 
     @staticmethod
     def _convert_to_internal_repr(val):
-        if not isinstance(val, (str, bytes)):
-            val = repr(val)
-        if sys.version_info[0] > 2 and not isinstance(val, bytes):
-            val = bytes(val, 'latin_1')
-        return val
-
+        return convert_to_internal_repr(val)
 
     def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement):
         if ignore_frozen_state:
@@ -5937,6 +5913,17 @@ class Node(object):
         val = self.to_bytes(conf=conf, recursive=recursive)
         return unconvert_from_internal_repr(val)
 
+    def to_ascii(self, conf=None, recursive=True):
+        val = self.to_str(conf=conf, recursive=recursive)
+        try:
+            if sys.version_info[0] > 2:
+                val = eval('{!a}'.format(val))
+            else:
+                val = str(val)
+        except:
+            val = repr(val)
+        finally:
+            return val
 
     def _tobytes(self, conf=None, recursive=True):
 

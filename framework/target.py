@@ -1588,13 +1588,14 @@ class LocalTarget(Target):
 class SIMTarget(Target):
     delay_between_write = 0.1  # without, it seems some commands can be lost
 
-    def __init__(self, serial_port, baudrate, pin_code, targeted_tel_num):
+    def __init__(self, serial_port, baudrate, pin_code, targeted_tel_num, codec='latin_1'):
         self.serial_port = serial_port
         self.baudrate = baudrate
         self.tel_num = targeted_tel_num
         self.pin_code = pin_code
+        self.codec = codec
         if sys.version_info[0]>2:
-            self.pin_code = bytes(self.pin_code, 'latin_1')
+            self.pin_code = bytes(self.pin_code, self.codec)
         self.set_feedback_timeout(2)
 
     def start(self):

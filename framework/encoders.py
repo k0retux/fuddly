@@ -27,6 +27,8 @@ import zlib
 import copy
 import binascii
 
+from framework.global_resources import *
+
 class Encoder(object):
     def __init__(self, encoding_arg):
         self._encoding_arg = encoding_arg
@@ -80,33 +82,7 @@ class Encoder(object):
 
     @staticmethod
     def to_bytes(val):
-        if isinstance(val, (str, bytes)):
-            if sys.version_info[0] > 2 and not isinstance(val, bytes):
-                try:
-                    new_val = bytes(val, 'latin_1')
-                except UnicodeEncodeError:
-                    new_val = val.encode('utf8')
-            else:
-                new_val = val
-        elif sys.version_info[0] == 2 and isinstance(val, unicode):
-            try:
-                new_val = val.encode('latin_1')
-            except UnicodeEncodeError:
-                new_val = val.encode('utf8')
-        elif isinstance(val, (tuple, list)):
-            new_val = []
-            for v in val:
-                if sys.version_info[0] > 2 and not isinstance(v, bytes):
-                    new_v = bytes(v, 'latin_1')
-                else:
-                    new_v = v
-                new_val.append(new_v)
-        elif val is None:
-            new_val = b''
-        else:
-            raise ValueError
-
-        return new_val
+        return convert_to_internal_repr(val)
 
 
 class PythonCodec_Enc(Encoder):
@@ -115,17 +91,17 @@ class PythonCodec_Enc(Encoder):
     """
     def init_encoding_scheme(self, arg=None):
         if arg is None:
-            self._codec = 'latin_1'
+            self._codec = internal_repr_codec
         else:
             self._codec = arg
 
     def encode(self, val):
-        enc = val.decode('latin_1').encode(self._codec)
+        enc = val.decode(internal_repr_codec, 'replace').encode(self._codec)
         return enc
 
     def decode(self, val):
         try:
-            dec = val.decode(self._codec)
+            dec = val.decode(self._codec, 'strict')
         except:
             dec = b''
         return Encoder.to_bytes(dec)
