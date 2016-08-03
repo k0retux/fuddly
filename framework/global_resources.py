@@ -71,9 +71,7 @@ def convert_to_internal_repr(val):
     if val is None:
         val = b''
     elif isinstance(val, int):
-        val = bytes(val)
-    # elif not isinstance(val, (str, bytes)):
-    #     val = repr(val)
+        val = str(val).encode(internal_repr_codec)
     elif isinstance(val, (tuple, list)):
         new_val = []
         for v in val:

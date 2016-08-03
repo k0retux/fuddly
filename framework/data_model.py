@@ -96,11 +96,7 @@ class Data(object):
         return self._type
 
     def update_from_str_or_bytes(self, data_str):
-        if sys.version_info[0] > 2:
-            if not isinstance(data_str, bytes):
-                data_str = data_str.encode('utf8')
-
-        self.raw = data_str
+        self.raw = convert_to_internal_repr(data_str)
         self.node = None
 
     def update_from_node(self, node):
