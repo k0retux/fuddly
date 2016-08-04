@@ -82,7 +82,9 @@ group.add_argument('--export-data', nargs=2, metavar=('FIRST_DATA_ID','LAST_DATA
                    help='Extract data from provided data ID range')
 group.add_argument('-e', '--export-one-data', type=int, metavar='DATA_ID',
                    help='Extract data from the provided data ID')
-group.add_argument('--remove-data', type=int, metavar='DATA_ID',
+group.add_argument('--remove-data', nargs=2, metavar=('FIRST_DATA_ID','LAST_DATA_ID'), type=int,
+                   help='Remove data from provided data ID range and all related information from fmkDB')
+group.add_argument('-r', '--remove-one-data', type=int, metavar='DATA_ID',
                    help='Remove data ID and all related information from fmkDB')
 
 group = parser.add_argument_group('Fuddly Database Analysis')
@@ -157,6 +159,7 @@ if __name__ == "__main__":
     export_data = args.export_data
     export_one_data = args.export_one_data
     remove_data = args.remove_data
+    remove_one_data = args.remove_one_data
 
     impact_analysis = args.data_with_impact
     data_without_fbk = args.data_without_fbk
@@ -210,9 +213,13 @@ if __name__ == "__main__":
         else:
             fmkdb.export_data(first=export_one_data, colorized=colorized)
 
-    elif remove_data is not None:
+    elif remove_data is not None or remove_one_data is not None:
         handle_confirmation()
-        fmkdb.remove_data(remove_data, colorized=colorized)
+        if remove_data is not None:
+            for i in range(remove_data[0], remove_data[1]+1):
+                fmkdb.remove_data(i, colorized=colorized)
+        else:
+            fmkdb.remove_data(remove_one_data, colorized=colorized)
 
     elif impact_analysis:
         fmkdb.get_data_with_impact(prj_name=prj_name, fbk_src=fbk_src, verbose=verbose,
