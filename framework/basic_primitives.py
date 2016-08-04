@@ -64,8 +64,6 @@ def corrupt_bits(s, p=0.01, n=None, ascii=False):
         s[i//8] ^= 1 << (i%8)
         if ascii:
             s[i//8] &= 0x7f
-        else:
-            s[i//8] |= 0x80
 
     return bytes(s)
 

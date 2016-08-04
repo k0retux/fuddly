@@ -163,10 +163,14 @@ that enables to handle transparently any encoding scheme:
 
 Below the different currently defined string types:
 
-- :class:`framework.value_types.String`: General purpose character string (with ``utf8`` encoding).
+- :class:`framework.value_types.String`: General purpose character string (with ``UTF8`` encoding).
 - :class:`framework.value_types.Filename`: Filename. Similar to the type
   ``String``, but some disruptors like ``tTYPE`` will generate more specific
   test cases.
+- :class:`framework.value_types.ASCII`: ``String`` encoded in ``ASCII``.
+  Note that additional test cases on the encoding scheme are defined (e.g., set the most
+  significant bit of a character to 1).
+- :class:`framework.value_types.LATIN_1`: ``String`` encoded in ``LATIN_1``.
 - :class:`framework.value_types.UTF8`: ``String`` encoded in ``UTF8``.
   It provides the same encoding as a ``String``, but using it in a data model for describing UTF8
   fields is preferable because: a disruptor may use that information for playing around UTF8, and you

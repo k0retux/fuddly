@@ -776,7 +776,11 @@ class String(VT_Alt):
 
     def _check_compliance(self, value, force_max_enc_sz, force_min_enc_sz, update_list=True):
         if self.encoded_string:
-            val_sz = len(self.encode(value))
+            try:
+                enc_val = self.encode(value)
+            except:
+                return False
+            val_sz = len(enc_val)
             if not force_max_enc_sz and not force_min_enc_sz:
                 if self.max_encoded_sz is None or val_sz > self.max_encoded_sz:
                     self.max_encoded_sz = val_sz
@@ -892,6 +896,15 @@ class String(VT_Alt):
         enc_cases = self.encoding_test_cases(orig_val, self.max_sz, self.min_sz,
                                              self.min_encoded_sz, self.max_encoded_sz)
         if enc_cases:
+            if self.ascii_mode:
+                new_enc_cases = []
+                for v in enc_cases:
+                    s = ''
+                    for i in bytearray(v):
+                        s += chr(i & 0x7f)
+                    new_enc_cases.append(bytes(s))
+                enc_cases = new_enc_cases
+
             self.val_list_fuzzy += enc_cases
 
         self.val_list_save = self.val_list
@@ -1324,6 +1337,20 @@ def from_encoder(encoder_cls, encoding_arg=None):
 
 @from_encoder(PythonCodec_Enc)
 class Codec(String): pass
+
+@from_encoder(PythonCodec_Enc, 'ascii')
+class ASCII(String):
+    def encoding_test_cases(self, current_val, max_sz, min_sz, min_encoded_sz, max_encoded_sz):
+        enc_val = bytearray(self.encode(current_val))
+        if len(enc_val) > 0:
+            enc_val[0] |= 0x80
+            enc_val = bytes(enc_val)
+        else:
+            enc_val = b'\xe9'
+        return [enc_val]
+
+@from_encoder(PythonCodec_Enc, 'latin_1')
+class LATIN_1(String): pass
 
 @from_encoder(PythonCodec_Enc, 'utf_16_le')
 class UTF16_LE(String):
