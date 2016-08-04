@@ -460,7 +460,7 @@ class Logger(object):
             for f in feedback:
                 new_f = f.strip()
                 if sys.version_info[0] > 2 and new_f and isinstance(new_f, bytes):
-                    new_f = new_f.decode(internal_repr_codec)
+                    new_f = new_f.decode(internal_repr_codec, 'replace')
                     new_f = eval('{!a}'.format(new_f))
                 new_fbk.append(new_f)
             if not list(filter(lambda x: x != b'', new_fbk)):
@@ -468,7 +468,7 @@ class Logger(object):
         else:
             new_fbk = feedback.strip()
             if sys.version_info[0] > 2 and new_fbk and isinstance(new_fbk, bytes):
-                new_fbk = new_fbk.decode(internal_repr_codec)
+                new_fbk = new_fbk.decode(internal_repr_codec, 'replace')
                 new_fbk = eval('{!a}'.format(new_fbk))
 
         return new_fbk

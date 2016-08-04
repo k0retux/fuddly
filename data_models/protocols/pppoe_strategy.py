@@ -27,7 +27,7 @@ from framework.data_model import AbsorbStatus, AbsNoCsts
 
 tactics = Tactics()
 
-def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi'):
+def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', update=False):
     if not feedback:
         print('\n\n*** No Feedback!')
         return False
@@ -54,6 +54,9 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi'):
                         raise ValueError
                 else:
                     raise ValueError
+
+                if data is None:
+                    return False
                 off = data.find(mac_dst)
                 data = data[off:]
                 result = msg_x.absorb(data, constraints=AbsNoCsts(size=True, struct=True))
@@ -64,38 +67,45 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi'):
                     except:
                         continue
                     print(' [ {:s} received! ]'.format(x.upper()))
-                    next_step.node.freeze()
 
-                    error_msg = '\n*** The node has no path to: {:s}. Thus, ignore it.\n'\
-                                '    (probable reason: the node has been fuzzed in a way that makes the' \
-                                'path unavailable)'
-                    try:
-                        next_step.node['.*/mac_dst'] = mac_src
-                    except:
-                        print(error_msg.format('mac_dst'))
-                    try:
-                        next_step.node['.*/tag_sn/value/v101'] = service_name
-                    except:
-                        print(error_msg.format('service_name'))
+                    t_fix_pppoe_msg_fields.mac_src = mac_src
+                    t_fix_pppoe_msg_fields.service_name = service_name
+
                     host_uniq = msg_x['.*/value/v103']
                     if host_uniq is not None:
                         host_uniq = host_uniq.to_bytes()
                         env.host_uniq = host_uniq
-                    elif hasattr(env, 'host_uniq'):
+                        t_fix_pppoe_msg_fields.host_uniq = host_uniq
+                    elif update and hasattr(env, 'host_uniq'):
                         host_uniq = env.host_uniq
                     else:
                         pass
 
-                    if host_uniq is not None:
-                        new_tag = env.dm.get_data('tag_host_uniq')
-                        new_tag['.*/v103'] = host_uniq
+                    if update:
+                        next_step.node.freeze()
+                        error_msg = '\n*** The node has no path to: {:s}. Thus, ignore it.\n'\
+                                    '    (probable reason: the node has been fuzzed in a way that makes the' \
+                                    'path unavailable)'
                         try:
-                            next_step.node['.*/host_uniq_stub'].set_contents(new_tag)
+                            next_step.node['.*/mac_dst'] = mac_src
                         except:
-                            print(error_msg.format('host_uniq_stub'))
-                    else:
-                        print('\n***WARNING: Host-Uniq not provided')
-                    next_step.node.unfreeze(recursive=True, reevaluate_constraints=True)
+                            print(error_msg.format('mac_dst'))
+                        try:
+                            next_step.node['.*/tag_sn/value/v101'] = service_name
+                        except:
+                            print(error_msg.format('service_name'))
+
+                        if host_uniq is not None:
+                            new_tag = env.dm.get_data('tag_host_uniq')
+                            new_tag['.*/v103'] = host_uniq
+                            try:
+                                next_step.node['.*/host_uniq_stub'].set_contents(new_tag)
+                            except:
+                                print(error_msg.format('host_uniq_stub'))
+                        else:
+                            print('\n***WARNING: Host-Uniq not provided')
+                        next_step.node.unfreeze(recursive=True, reevaluate_constraints=True)
+
                     return True
 
         print(' [ {:s} not found! ]'.format(x.upper()))
@@ -109,12 +119,62 @@ def retrieve_padr_from_feedback(env, current_step, next_step, feedback):
 def retrieve_padi_from_feedback(env, current_step, next_step, feedback):
     return retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi')
 
+def retrieve_padi_from_feedback_and_update(env, current_step, next_step, feedback):
+    return retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', update=True)
+
+
+@disruptor(tactics, dtype="FIX_FIELDS", weight=1)
+class t_fix_pppoe_msg_fields(Disruptor):
+
+    mac_src = None
+    service_name = None
+    host_uniq = None
+
+    def disrupt_data(self, dm, target, prev_data):
+        n = prev_data.node
+        error_msg = '\n*** The node has no path to: {:s}. Thus, ignore it.\n'\
+                    '    (probable reason: the node has been fuzzed in a way that makes the' \
+                    'path unavailable)'
+        if self.mac_src:
+            try:
+                n['.*/mac_dst'] = self.mac_src
+                prev_data.add_info("update 'mac_src'")
+            except:
+                print(error_msg.format('mac_dst'))
+        else:
+            print("\n*** 'mac_src' not found in the environment! ***")
+
+        if self.service_name:
+            try:
+                n['.*/tag_sn/value/v101'] = self.service_name
+                prev_data.add_info("update 'service_name'")
+            except:
+                print(error_msg.format('service_name'))
+        else:
+            print("\n*** 'service_name' not found in the environment! ***")
+
+        if self.host_uniq:
+            new_tag = dm.get_data('tag_host_uniq')
+            new_tag['.*/v103'] = self.host_uniq
+            try:
+                n['.*/host_uniq_stub'].set_contents(new_tag)
+                prev_data.add_info("update 'host_uniq'")
+            except:
+                print(error_msg.format('host_uniq_stub'))
+        else:
+            print("\n*** 'host_uniq_stub' not found in the environment! ***")
+
+        n.unfreeze(recursive=True, reevaluate_constraints=True)
+        n.freeze()
+
+        return prev_data
+
 
 ### PADI fuzz scenario ###
 step_wait_padi = NoDataStep(fbk_timeout=1)
 
-dp_pado = DataProcess(process=[('tTYPE', UI(init=1), UI(order=True))], seed='pado')
-dp_pado.append_new_process([('tSTRUCT', UI(init=1), UI(deep=True))])
+dp_pado = DataProcess(process=[('tTYPE', UI(init=1), UI(order=True)), 'FIX_FIELDS'], seed='pado')
+dp_pado.append_new_process([('tSTRUCT', UI(init=1), UI(deep=True)), 'FIX_FIELDS'])
 step_send_pado = Step(dp_pado)
 # step_send_pado = Step('pado')
 step_end = Step('padt')
@@ -130,18 +190,19 @@ sc1.set_anchor(step_wait_padi)
 step_wait_padi = NoDataStep(fbk_timeout=1)
 step_send_valid_pado = Step('pado')
 
-dp_pads = DataProcess(process=[('tTYPE#2', UI(init=1), UI(order=True))], seed='pads')
-dp_pads.append_new_process([('tSTRUCT#2', UI(init=1), UI(deep=True))])
+dp_pads = DataProcess(process=[('tTYPE#2', UI(init=1), UI(order=True)), 'FIX_FIELDS'], seed='pads')
+dp_pads.append_new_process([('tSTRUCT#2', UI(init=1), UI(deep=True)), 'FIX_FIELDS'])
 step_send_fuzzed_pads = Step(dp_pads)
 step_wait_padr = NoDataStep(fbk_timeout=1)
 
-step_wait_padi.connect_to(step_send_valid_pado, cbk_after_fbk=retrieve_padi_from_feedback)
+step_wait_padi.connect_to(step_send_valid_pado, cbk_after_fbk=retrieve_padi_from_feedback_and_update)
 step_send_valid_pado.connect_to(step_send_fuzzed_pads, cbk_after_fbk=retrieve_padr_from_feedback)
+step_send_valid_pado.connect_to(step_wait_padr)
 
 step_send_fuzzed_pads.connect_to(step_wait_padr)
 
 step_wait_padr.connect_to(step_send_fuzzed_pads, cbk_after_fbk=retrieve_padr_from_feedback)
-step_wait_padr.connect_to(step_send_valid_pado, cbk_after_fbk=retrieve_padi_from_feedback)
+step_wait_padr.connect_to(step_send_valid_pado, cbk_after_fbk=retrieve_padi_from_feedback_and_update)
 
 sc2 = Scenario('PADS')
 sc2.set_anchor(step_wait_padi)

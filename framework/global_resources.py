@@ -79,21 +79,23 @@ def convert_to_internal_repr(val):
             new_val.append(new_v)
         val = new_val
     elif sys.version_info[0] > 2:
-        if not isinstance(val, bytes):
+        if isinstance(val, str):
             val = val.encode(internal_repr_codec)
     elif isinstance(val, unicode):  # only for python2
         val = val.encode(internal_repr_codec)
-    elif isinstance(val, str):  # only for python2 (and str ~ ascii)
+    elif isinstance(val, str):  # only for python2
         pass
     else:
-        print(val, repr(val))
         raise ValueError
     return val
 
 def unconvert_from_internal_repr(val):
     assert(isinstance(val, bytes))
-    return val.decode(internal_repr_codec, 'replace')
-
+    try:
+        dec_val = val.decode(internal_repr_codec, 'strict')
+    except:
+        dec_val = val.decode('latin_1')
+    return dec_val
 
 class Error(object):
 

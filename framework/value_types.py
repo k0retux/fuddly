@@ -656,7 +656,7 @@ class String(VT_Alt):
     def _check_sizes(self):
         if self.val_list is not None:
             for v in self.val_list:
-                sz = len(v)
+                sz = len(unconvert_from_internal_repr(v))
                 if self.max_sz is not None:
                     assert(self.max_sz >= sz >= self.min_sz)
                 else:
@@ -1351,6 +1351,8 @@ class ASCII(String):
 
 @from_encoder(PythonCodec_Enc, 'latin_1')
 class LATIN_1(String): pass
+
+BYTES = LATIN_1
 
 @from_encoder(PythonCodec_Enc, 'utf_16_le')
 class UTF16_LE(String):

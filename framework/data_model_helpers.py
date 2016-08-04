@@ -180,7 +180,7 @@ class MH(object):
     def TIMESTAMP(time_format="%H%M%S", utc=False,
                   set_attrs=[], clear_attrs=[]):
         '''
-        Return a *generator* that returns the current time (in a String node).
+        Return a *generator* that returns the current time (in a BYTES node).
 
         Args:
           time_format (str): time format to be used by the generator.
@@ -193,7 +193,7 @@ class MH(object):
             else:
                 now = datetime.datetime.now()
             ts = now.strftime(time_format)
-            n = Node('cts', value_type=fvt.String(val_list=[ts], size=len(ts)))
+            n = Node('cts', value_type=fvt.BYTES(val_list=[ts], size=len(ts)))
             n.set_semantics(NodeSemantics(['timestamp']))
             MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
@@ -283,7 +283,7 @@ class MH(object):
         return functools.partial(map_func, vt, func, set_attrs, clear_attrs)
 
     @staticmethod
-    def CYCLE(vals, depth=1, vt=fvt.String,
+    def CYCLE(vals, depth=1, vt=fvt.BYTES,
               set_attrs=[], clear_attrs=[]):
         '''Return a *generator* that iterates other the provided value list
         and returns at each step a `vt` node corresponding to the

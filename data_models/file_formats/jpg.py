@@ -75,7 +75,7 @@ class JPG_DataModel(DataModel):
         {'name': 'jpg',
          'contents': [
              {'name': 'before_SOF',
-              'contents': String(size=0),
+              'contents': BYTES(size=0),
               'absorb_csts': AbsNoCsts(),
               'set_attrs': MH.Attr.Abs_Postpone,
               'mutable': False},
@@ -119,7 +119,7 @@ class JPG_DataModel(DataModel):
               ]},
 
              {'name': 'between_SOF_SOS',
-              'contents': String(),
+              'contents': BYTES(),
               'random': True,
               'absorb_csts': AbsNoCsts(),
               'set_attrs': MH.Attr.Abs_Postpone,
@@ -164,7 +164,7 @@ class JPG_DataModel(DataModel):
 
              {'name': 'afterSOS',
               'mutable': False,
-              'contents': String(min_sz=0),
+              'contents': BYTES(min_sz=0),
               'absorb_csts': AbsNoCsts()}
          ]}
 

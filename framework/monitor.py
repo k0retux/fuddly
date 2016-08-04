@@ -760,7 +760,7 @@ class Serial_Backend(Backend):
         self.ser = serial.Serial(self.serial_port, self.baudrate, bytesize=self.bytesize,
                                  parity=self.parity, stopbits=self.stopbits,
                                  xonxoff=self.xonxoff, dsrdtr=self.dsrdtr, rtscts=self.rtscts,
-                                 timeout=1)
+                                 timeout=self.slowness_factor*0.1)
         if self.username is not None:
             assert self.password is not None
             self.ser.flushInput()
@@ -780,7 +780,7 @@ class Serial_Backend(Backend):
                     # (already logged, or with the password prompt, ...) when we first write on
                     # the serial line.
                     self.ser.write(b'\x04\r\n')
-                    time.sleep(self.slowness_factor*0.6)
+                    time.sleep(self.slowness_factor*0.8)
                     self.ser.flushInput()
                     self.ser.write(self.username+b'\r\n')
                     time.sleep(0.1)
@@ -789,10 +789,11 @@ class Serial_Backend(Backend):
                     retry = 0
                     eot_sent = True
                 else:
-                    pass_prompt = b''.join(self._read_serial(duration=self.slowness_factor*0.2))
+                    chunks = self._read_serial(duration=self.slowness_factor*0.2)
+                    pass_prompt = b''.join(chunks)
             time.sleep(0.1)
             self.ser.write(self.password+b'\r\n')
-            time.sleep(self.slowness_factor)
+            time.sleep(self.slowness_factor*0.6)
 
     def _stop(self):
         self.ser.write(b'\x04\r\n') # we send an EOT (Ctrl+D)
@@ -807,7 +808,7 @@ class Serial_Backend(Backend):
         time.sleep(0.1)
         self.ser.readline() # we consume the 'writing echo' from the input
         try:
-            result = self._read_serial(duration=self.slowness_factor*0.4)
+            result = self._read_serial(duration=self.slowness_factor*0.8)
         except serial.SerialException:
             raise BackendError('Exception while reading serial line')
         else:
@@ -872,7 +873,7 @@ class ProbePID(Probe):
         try:
             res = self.backend.exec_command(self.command_pattern.format(self.process_name))
         except BackendError:
-            fallback_cmd = 'ps a -opid,comm'
+            fallback_cmd = 'ps a -opid,comm | grep {0:s}'.format(self.process_name)
             res = self.backend.exec_command(fallback_cmd)
             if sys.version_info[0] > 2:
                 res = res.decode(self.backend.codec)

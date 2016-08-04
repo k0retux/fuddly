@@ -163,7 +163,9 @@ that enables to handle transparently any encoding scheme:
 
 Below the different currently defined string types:
 
-- :class:`framework.value_types.String`: General purpose character string (with ``UTF8`` encoding).
+- :class:`framework.value_types.String`: General purpose ``UTF8`` character string.
+- :class:`framework.value_types.BYTES`: General purpose byte string (alias to
+  :class:`framework.value_types.LATIN_1`).
 - :class:`framework.value_types.Filename`: Filename. Similar to the type
   ``String``, but some disruptors like ``tTYPE`` will generate more specific
   test cases.
