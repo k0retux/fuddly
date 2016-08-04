@@ -1574,8 +1574,8 @@ How to Describe a Data Format That Contains Complex Strings
 Parts of the data that only contain strings can easily be described using python's regular expressions.
 Here are some rules to respect:
 
-- The characters couple (``[``, ``]``) and meta-sequences, such as ``\s``, ``\S``, ``\w``, ``\W``, ``\d``
-  and ``\D``, are the only ways to define a :class:`framework.value_types.String` terminal node that
+- The characters couple (``[``, ``]``), ``.`` and meta-sequences, such as ``\s``, ``\S``, ``\w``, ``\W``,
+  ``\d`` and ``\D``, are the only ways to define a :class:`framework.value_types.String` terminal node that
   contains an alphabet.
 
 - Anything else will be translated into a :class:`framework.value_types.String` terminal node that
@@ -1585,9 +1585,9 @@ Here are some rules to respect:
 .. note:: If each item in a list of values are integers an :class:`framework.value_types.INT_Str` will
    be created instead of a :class:`framework.value_types.String`.
 
-- ``(``, ``)``, ``[``, ``]``, ``?``, ``*``, ``+``, ``{``, ``}``, ``|``, ``\``, ``-`` are the only
+- ``(``, ``)``, ``[``, ``]``, ``?``, ``*``, ``+``, ``{``, ``}``, ``|``, ``\``, ``-``, ``.`` are the only
   recognised special chars. They can not be used in an unsuitable context without been escaped
-  (exceptions are made for ``|`` and ``-``).
+  (exceptions are made for ``|``, ``.`` and ``-``).
 
 - Are only allowed regular expressions that can be translated into one terminal node or into one non-terminal
   node composed of terminal ones. If this rule is not respected an
@@ -1608,7 +1608,7 @@ Example 1: the basics
    :linenos:
 
    regex = {'name': 'HTTP_version',
-            'contents': '(HTTP)/[0-9].(0|1|2|\x33|4|5|6|7|8|9)'
+            'contents': '(HTTP)/[0-9]\.(0|1|2|\x33|4|5|6|7|8|9)'
    # is equivalent to
    classic = {'name': 'HTTP_version',
               'contents': [

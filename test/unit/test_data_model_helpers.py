@@ -4,6 +4,8 @@ import unittest
 import ddt
 from test import mock
 
+ASCII_EXT = ''.join([(chr if sys.version_info[0] == 2 else six.unichr)(i) for i in range(0, 0xFF + 1)])
+
 
 @ddt.ddt
 class RegexParserTest(unittest.TestCase):
@@ -26,9 +28,29 @@ class RegexParserTest(unittest.TestCase):
               {'regex': "(sal{2}u)too"}, {'regex': "sal{2,1}utoo"}, {'regex': "sal(u[t]o)o"},
               {'regex': "whatever|toto?ff"}, {'regex': "whate?ver|toto"}, {'regex': "(toto)*ohoho|haha"},
               {'regex': "(toto)ohoho|haha"}, {'regex': "salut[abcd]{,15}rr"}, {'regex': "[]whatever"},
-              {'regex': "t{,15}"}, {'regex': "hi|b?whatever"}, {'regex': "hi|b{3}whatever"})
+              {'regex': "t{,15}"}, {'regex': "hi|b?whatever"}, {'regex': "hi|b{3}whatever"},
+              {'regex': "whatever(bar.foo)"})
     def test_invalid_regexes(self, regex):
         self.assert_regex_is_invalid(regex)
+
+    @ddt.data(
+        {'regex': ".", 'nodes': [{"alphabet": ASCII_EXT}]},
+        {'regex': "this.is",
+         'nodes': [
+             {"values": ["this"]},
+             {"alphabet": ASCII_EXT},
+             {"values": ["is"]}]},
+        {'regex': "[fo.bar]hello", 'nodes': [{"alphabet": "fo.bar"}, {"values": ["hello"]}]},
+        {'regex': "[bar].(hel).+lo",
+         'nodes': [
+             {"alphabet": "bar"},
+             {"alphabet": ASCII_EXT},
+             {"values": ["hel"]},
+             {"alphabet": ASCII_EXT, 'qty': (1, None)},
+             {"values": ["lo"]}]},
+    )
+    def test_dot(self, test_case):
+        self.assert_regex_is_valid(test_case)
 
     @ddt.data(
         {'regex': "[abcd]?", 'nodes': [{"alphabet": "abcd", "qty": (0, 1)}]},

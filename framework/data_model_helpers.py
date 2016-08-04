@@ -1313,6 +1313,8 @@ class RegexParser(StateMachine):
                 return self.machine.SquareBrackets
             elif ctx.input == '(':
                 return self.machine.Parenthesis
+            elif ctx.input == '.':
+                return self.machine.Dot
             elif ctx.input == '\\':
                 return self.machine.Escape
             else:
@@ -1358,6 +1360,8 @@ class RegexParser(StateMachine):
                 return self.machine.Parenthesis
             elif ctx.input == '[':
                 return self.machine.SquareBrackets
+            elif ctx.input == '.':
+                return self.machine.Dot
             elif ctx.input == '\\':
                 return self.machine.Escape
             elif ctx.input == '|':
@@ -1418,6 +1422,8 @@ class RegexParser(StateMachine):
                 return self.machine.Parenthesis
             elif ctx.input == '[':
                 return self.machine.SquareBrackets
+            elif ctx.input == '.':
+                return self.machine.Dot
             elif ctx.input == '\\':
                 return self.machine.Escape
             else:
@@ -1521,6 +1527,8 @@ class RegexParser(StateMachine):
                 return self.machine.Parenthesis
             elif ctx.input == '[':
                 return self.machine.SquareBrackets
+            elif ctx.input == '.':
+                return self.machine.Dot
             elif ctx.input == '\\':
                 return self.machine.Escape
             else:
@@ -1541,7 +1549,7 @@ class RegexParser(StateMachine):
                     raise QuantificationError()
                 elif ctx.input in ('}', ']', None):
                     raise StructureError(ctx.input)
-                elif ctx.input in ('(', '['):
+                elif ctx.input in ('(', '[', '.'):
                     raise InconvertibilityError()
                 elif ctx.input == '\\':
                     return self.machine.Escape
@@ -1743,6 +1751,14 @@ class RegexParser(StateMachine):
 
             ctx.append_to_alphabet(ctx.META_SEQUENCES[ctx.input])
 
+    @register
+    class Dot(Group):
+
+        def _run(self, ctx):
+            ctx.flush()
+            ctx.append_to_alphabet(ctx.get_complement(""))
+
+
     def init_specific(self):
         self._name = None
         self.charset = None
@@ -1825,6 +1841,7 @@ class RegexParser(StateMachine):
 
         def get_complement(chars):
             return ''.join([self.int_to_string(i) for i in range(0, max + 1) if self.int_to_string(i) not in chars])
+        self.get_complement = get_complement
 
         self.META_SEQUENCES = {'s': string.whitespace,
                                'S': get_complement(string.whitespace),
@@ -1833,7 +1850,7 @@ class RegexParser(StateMachine):
                                'w': string.ascii_letters + string.digits + '_',
                                'W': get_complement(string.ascii_letters + string.digits + '_')}
 
-        self.SPECIAL_CHARS = list('\\()[]{}*+?|-')
+        self.SPECIAL_CHARS = list('\\()[]{}*+?|-.')
 
         # None indicates the beginning and the end of the regex
         self.inputs = [None] + list(inputs) + [None]

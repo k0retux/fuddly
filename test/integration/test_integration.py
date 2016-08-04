@@ -1,3 +1,5 @@
+# -*- coding: utf8 -*-
+
 ################################################################################
 #
 #  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
@@ -88,7 +90,7 @@ class TestBasics(unittest.TestCase):
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
         l = node_ex1.get_value()
-        hk = set(node_ex1.get_all_paths().keys())
+        hk = list(node_ex1.iter_paths(only_paths=True))
         # print(l)
         #
         # print('\n\n ####### \n\n')
@@ -110,7 +112,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n### TEST 1: cross check self.node.get_all_paths().keys() and get_nodes_names() ###')
 
-        print('*** Hkeys from self.node.get_all_paths().keys():')
+        print('*** Hkeys from self.node.iter_paths(only_paths=True):')
         hk = sorted(hk)
         for k in hk:
             print(k)
@@ -455,14 +457,16 @@ class TestBasics(unittest.TestCase):
 
         node_ex1.set_current_conf('ALT', root_regexp=None)
 
+        nonascii_test_str = u'\u00c2'.encode(internal_repr_codec)
+
         node_ex1.unfreeze_all()
         msg = node_ex1.to_bytes()
-        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or b'[\xc2]' not in msg:
+        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or nonascii_test_str not in msg:
             res2 = False
         print(msg)
         node_ex1.unfreeze_all()
         msg = node_ex1.to_bytes()
-        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or b'[\xc2]' not in msg:
+        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or nonascii_test_str not in msg:
             res2 = False
         print(msg)
 
@@ -470,7 +474,7 @@ class TestBasics(unittest.TestCase):
 
         node_ex1.unfreeze_all()
         msg = node_ex1.to_bytes()
-        if b' ~(..)~ ' in msg or b' ~(X)~ ' in msg or b'[<]' in msg or b'[\xc2]' in msg:
+        if b' ~(..)~ ' in msg or b' ~(X)~ ' in msg or b'[<]' in msg or nonascii_test_str in msg:
             res2 = False
         print(msg)
 
@@ -481,7 +485,7 @@ class TestBasics(unittest.TestCase):
 
         node_ex1.unfreeze_all()
         msg = node_ex1.to_bytes()
-        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or b'[\xc2]' not in msg:
+        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or nonascii_test_str not in msg:
             res2 = False
         print(msg)
 
@@ -598,19 +602,19 @@ class TestBasics(unittest.TestCase):
 
         res1 = True
         msg = node_ex1.to_bytes(conf='ALT')
-        if b'[<]' not in msg or b'[\xc2]' not in msg:
+        if b'[<]' not in msg or nonascii_test_str not in msg:
             res1 = False
         print(msg)
 
         node_ex1.unfreeze_all()
         msg = node_ex1.to_bytes(conf='ALT')
-        if b'[<]' not in msg or b'[\xc2]' not in msg:
+        if b'[<]' not in msg or nonascii_test_str not in msg:
             res1 = False
         print(msg)
 
         node_ex1.unfreeze_all()
         msg = node_ex1.get_node_by_path('TUX$').to_bytes(conf='ALT', recursive=False)
-        if b'[<]' in msg or b'[\xc2]' in msg or b' ~(..)~ TUX ~(..)~ ' not in msg:
+        if b'[<]' in msg or nonascii_test_str in msg or b' ~(..)~ TUX ~(..)~ ' not in msg:
             res1 = False
         print(msg)
 
@@ -664,26 +668,20 @@ class TestBasics(unittest.TestCase):
         print('\n*** test 12.1:')
 
         node_ex1 = dm.get_data('EX1')
-        htbl = node_ex1.get_all_paths()
-        l = sorted(list(htbl.keys()))
-        for i in l:
+        for i in node_ex1.iter_paths(only_paths=True):
             print(i)
 
         print('\n******\n')
 
         node_ex1.get_value()
-        htbl = node_ex1.get_all_paths()
-        l = sorted(list(htbl.keys()))
-        for i in l:
+        for i in node_ex1.iter_paths(only_paths=True):
             print(i)
 
         print('\n******\n')
 
         node_ex1.unfreeze_all()
         node_ex1.get_value()
-        htbl = node_ex1.get_all_paths()
-        l = sorted(list(htbl.keys()))
-        for i in l:
+        for i in node_ex1.iter_paths(only_paths=True):
             print(i)
 
         print('\n*** test 13: test typed_value Node')
@@ -886,9 +884,7 @@ class TestMisc(unittest.TestCase):
 
         print('=======[ PATHS ]========')
 
-        htbl = evt.get_all_paths()
-        l = sorted(list(htbl.keys()))
-        for i in l:
+        for i in evt.iter_paths(only_paths=True):
             print(i)
 
         print('\n=======[ Typed Nodes ]========')
@@ -1516,7 +1512,7 @@ class TestModelWalker(unittest.TestCase):
         nonterm_consumer = NonTermVisitor(respect_order=True)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True,
                                                                     max_steps=10):
-            print(colorize('[%d] ' % idx + rnode.to_str(), rgb=Color.INFO))
+            print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
         self.assertEqual(idx, 3)
 
         print('***')
@@ -1525,7 +1521,7 @@ class TestModelWalker(unittest.TestCase):
         nonterm_consumer = NonTermVisitor(respect_order=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True,
                                                                     max_steps=10):
-            print(colorize('[%d] ' % idx + rnode.to_str(), rgb=Color.INFO))
+            print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
         self.assertEqual(idx, 3)
 
         print('***')
@@ -1577,41 +1573,41 @@ class TestModelWalker(unittest.TestCase):
         data = mh.create_graph_from_desc(shape_desc)
 
         raw_vals = [
-            ' [!] ++++++++++ [!] ::=:: [!] ',
-            ' [!] ++++++++++ [!] ::?:: [!] ',
-            ' [!] ++++++++++ [!] ::\xff:: [!] ',
-            ' [!] ++++++++++ [!] ::\x00:: [!] ',
-            ' [!] ++++++++++ [!] ::\x01:: [!] ',
-            ' [!] ++++++++++ [!] ::\x80:: [!] ',
-            ' [!] ++++++++++ [!] ::\x7f:: [!] ',
-            ' [!] ++++++++++ [!] ::AA\xc3::AA\xc3::>:: [!] ',  # [8] could change has it is a random corrupt_bit
-            ' [!] ++++++++++ [!] ::AAAA::AAA::>:: [!] ',
-            ' [!] ++++++++++ [!] ::::AAA::>:: [!] ',
-            ' [!] ++++++++++ [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
-            ' [!] ++++++++++ [!] ::../../../../../../etc/password::AAA::>:: [!] ',
-            ' [!] ++++++++++ [!] ::../../../../../../Windows/system.ini::AAA::>:: [!] ',
-            ' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
-            ' [!] ++++++++++ [!] ::AAA::AAA::=:: [!] ',
-            ' [!] ++++++++++ [!] ::AAA::AAA::?:: [!] ',
-            ' [!] ++++++++++ [!] ::AAA::AAA::\xff:: [!] ',
-            ' [!] ++++++++++ [!] ::AAA::AAA::\x00:: [!] ',
-            ' [!] ++++++++++ [!] ::AAA::AAA::\x01:: [!] ',
-            ' [!] ++++++++++ [!] ::AAA::AAA::\x80:: [!] ',
-            ' [!] ++++++++++ [!] ::AAA::AAA::\x7f:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::\xc9AA::\xc9AA::>:: [!] ',  # [22] could change has it is a random corrupt_bit
-            ' [!] >>>>>>>>>> [!] ::AAAA::AAA::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::::AAA::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::AAA::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::../../../../../../Windows/system.ini::AAA::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAA::AAA::=:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAA::AAA::?:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAA::AAA::\xff:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAA::AAA::\x00:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAA::AAA::\x01:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAA::AAA::\x80:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAA::AAA::\x7f:: [!] '
+            b' [!] ++++++++++ [!] ::=:: [!] ',
+            b' [!] ++++++++++ [!] ::?:: [!] ',
+            b' [!] ++++++++++ [!] ::\xff:: [!] ',
+            b' [!] ++++++++++ [!] ::\x00:: [!] ',
+            b' [!] ++++++++++ [!] ::\x01:: [!] ',
+            b' [!] ++++++++++ [!] ::\x80:: [!] ',
+            b' [!] ++++++++++ [!] ::\x7f:: [!] ',
+            b' [!] ++++++++++ [!] ::AA\xc3::AA\xc3::>:: [!] ',  # [8] could change has it is a random corrupt_bit
+            b' [!] ++++++++++ [!] ::AAAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::../../../../../../etc/password::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::../../../../../../Windows/system.ini::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::=:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::?:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::\xff:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::\x00:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::\x01:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::\x80:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::\x7f:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\xc9AA::\xc9AA::>:: [!] ',  # [22] could change has it is a random corrupt_bit
+            b' [!] >>>>>>>>>> [!] ::AAAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::../../../../../../Windows/system.ini::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::=:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::?:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\xff:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x00:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x01:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x80:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x7f:: [!] '
         ]
 
         tn_consumer = TypedNodeDisruption()
@@ -1622,7 +1618,7 @@ class TestModelWalker(unittest.TestCase):
         tn_consumer.set_node_interest(internals_criteria=ic)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, tn_consumer, make_determinist=True,
                                                                     max_steps=100):
-            val = rnode.to_str()
+            val = rnode.to_bytes()
             print(colorize('[%d] ' % idx + repr(val), rgb=Color.INFO))
             if idx not in [8, 22]:
                 self.assertEqual(val, raw_vals[idx - 1])
@@ -1784,7 +1780,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of imgs: %d' % idx, rgb=Color.INFO))
 
-        self.assertEqual(idx, 115)
+        self.assertEqual(idx, 116)
 
     def test_USB(self):
         dm_usb = fmk.get_data_model_by_name('usb')
@@ -1867,7 +1863,7 @@ class TestNodeFeatures(unittest.TestCase):
         top.set_env(Env())
 
         # 2*nint_3 + nstr_1 + nstr_2 + 2*nint_2 + nint_1
-        msg = '\xef\xfe\xef\xfeSTR1str222\xcf\xab\xcd'
+        msg = b'\xef\xfe\xef\xfeSTR1str222\xcf\xab\xcd'
         status, off, size, name = top.absorb(msg)
 
         print('\n ---[message to absorb]---')
@@ -2025,10 +2021,10 @@ class TestNodeFeatures(unittest.TestCase):
         top.set_env(Env())
         top2.set_env(Env())
 
-        msg = '\xe1\xe2\xe1\xe2\xff\xeeCOOL!\xc1\xc2\x88\x9912345678YEAH!\xef\xdf\xbf\xd2\xd3,2\xbbTHE_END'
+        msg = b'\xe1\xe2\xe1\xe2\xff\xeeCOOL!\xc1\xc2\x88\x9912345678YEAH!\xef\xdf\xbf\xd2\xd3,2\xbbTHE_END'
 
         # middle1: nint_1_alt + nint_3 + 2*nint_1 + nstr_1('ABCD') + nint_51 + 2*nstr_50 + nint_50
-        msg2 = '\xff\xe2\x88\x99\xe1\xe2\xcd\xabABCD\xef\xfeIAMHERE\xbfYEAH!\xef\xdf\xbf\xd2\xd3,2\xbbTHE_END'
+        msg2 = b'\xff\xe2\x88\x99\xe1\xe2\xcd\xabABCD\xef\xfeIAMHERE\xbfYEAH!\xef\xdf\xbf\xd2\xd3,2\xbbTHE_END'
 
         print('\n****** top ******\n')
         status, off, size, name = top.absorb(msg)
@@ -2658,7 +2654,7 @@ class TestNode_TypedValue(unittest.TestCase):
         self.assertEqual(status, AbsorbStatus.Reject)
         self.assertEqual(raw_data[size:], b'FEND')
 
-    def test_encoded_str(self):
+    def test_encoded_str_1(self):
 
         class EncodedStr(String):
             def encode(self, val):
@@ -2723,31 +2719,31 @@ class TestNode_TypedValue(unittest.TestCase):
         gsm_dec = gsm_t.decode(gsm_enc)
         self.assertEqual(msg, gsm_dec)
 
-        msg = b'o\xf9 \xe7a'
+        msg = u'où ça'.encode(internal_repr_codec) #' b'o\xf9 \xe7a'
         vtype = UTF16_LE(max_sz=20)
         enc = vtype.encode(msg)
         dec = vtype.decode(enc)
         self.assertEqual(msg, dec)
 
-        msg = b'o\xf9 \xe7a'
+        msg = u'où ça'.encode(internal_repr_codec)
         vtype = UTF16_BE(max_sz=20)
         enc = vtype.encode(msg)
         dec = vtype.decode(enc)
         self.assertEqual(msg, dec)
 
-        msg = b'o\xf9 \xe7a'
+        msg = u'où ça'.encode(internal_repr_codec)
         vtype = UTF8(max_sz=20)
         enc = vtype.encode(msg)
         dec = vtype.decode(enc)
         self.assertEqual(msg, dec)
 
-        msg = b'o\xf9 \xe7a'
+        msg = u'où ça'.encode(internal_repr_codec)
         vtype = Codec(max_sz=20, encoding_arg=None)
         enc = vtype.encode(msg)
         dec = vtype.decode(enc)
         self.assertEqual(msg, dec)
 
-        msg = b'o\xf9 \xe7a'
+        msg = u'où ça'.encode(internal_repr_codec)
         vtype = Codec(max_sz=20, encoding_arg='utf_32')
         enc = vtype.encode(msg)
         dec = vtype.decode(enc)
@@ -2777,6 +2773,49 @@ class TestNode_TypedValue(unittest.TestCase):
         enc = vtype.encode(msg)
         dec = vtype.decode(enc)
         self.assertEqual(msg, dec)
+
+    def test_encoded_str_2(self):
+
+        enc_desc = \
+            {'name': 'enc',
+             'contents': [
+                 {'name': 'len',
+                  'contents': UINT8()},
+                 {'name': 'user_data',
+                  'sync_enc_size_with': 'len',
+                  'contents': UTF8(val_list=['TEST'])},
+                 {'name': 'padding',
+                  'contents': String(max_sz=0),
+                  'absorb_csts': AbsNoCsts()},
+             ]}
+
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(enc_desc)
+        node.set_env(Env())
+
+        node_abs = Node('enc_abs', base_node=node, new_env=True)
+        node_abs.set_env(Env())
+        node_abs2 = node_abs.get_clone()
+
+        node_abs.show()
+
+        raw_data = b'\x0C' + b'\xC6\x67' + b'garbage'  # \xC6\x67 --> invalid UTF8
+        status, off, size, name = node_abs.absorb(raw_data, constraints=AbsNoCsts(size=True, struct=True))
+
+        self.assertEqual(status, AbsorbStatus.Reject)
+
+        raw_data = b'\x05' + b'\xC3\xBCber' + b'padding'  # \xC3\xBC = ü in UTF8
+
+        status, off, size, name = node_abs2.absorb(raw_data, constraints=AbsNoCsts(size=True, struct=True))
+
+        print('Absorb Status:', status, off, size, name)
+        print(' \_ length of original data:', len(raw_data))
+        print(' \_ remaining:', raw_data[size:])
+        raw_data_abs = node_abs2.to_bytes()
+        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        node_abs2.show()
+
+        self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
 
 
 class TestHLAPI(unittest.TestCase):
@@ -3145,7 +3184,7 @@ class TestDataModelHelpers(unittest.TestCase):
              ]}
 
         HTTP_version_regex = \
-            {'name': regex_node_name, 'contents': "(HTTP)(/)(0|1|2|3|4|5|6|7|8|9)(.)(0|1|2|3|4|5|6|7|8|9)"}
+            {'name': regex_node_name, 'contents': "(HTTP)(/)(0|1|2|3|4|5|6|7|8|9)(\.)(0|1|2|3|4|5|6|7|8|9)"}
 
         mh = ModelHelper()
         node_classic = mh.create_graph_from_desc(HTTP_version_classic)
@@ -3164,10 +3203,10 @@ class TestDataModelHelpers(unittest.TestCase):
 class TestFMK(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        fmk.run_project(name='tuto', dm_name='mydf')
+        fmk.run_project(name='tuto', dm_name='mydf', tg=0)
 
     def setUp(self):
-        pass
+        fmk.reload_all(tg_num=0)
 
     def test_generic_disruptors_01(self):
         dmaker_type = 'TESTNODE'
@@ -3273,3 +3312,64 @@ class TestFMK(unittest.TestCase):
             idx += 1
 
         self.assertEqual(idx, expected_idx)
+
+    def test_operator_1(self):
+
+        fmk.launch_operator('MyOp', user_input=UserInputContainer(specific=UI(max_steps=100, mode=1)))
+        print('\n*** Last data ID: {:d}'.format(fmk.lg.last_data_id))
+        fmkinfo = fmk.fmkDB.execute_sql_statement(
+            "SELECT CONTENT FROM FMKINFO "
+            "WHERE DATA_ID == {data_id:d} "
+            "ORDER BY ERROR DESC;".format(data_id=fmk.lg.last_data_id)
+        )
+        self.assertTrue(fmkinfo)
+        for info in fmkinfo:
+            if 'Exhausted data maker' in info[0]:
+                break
+        else:
+            raise ValueError('the data maker should be exhausted and trigger the end of the operator')
+
+    @unittest.skipIf(not run_long_tests, "Long test case")
+    def test_operator_2(self):
+
+        fmk.launch_operator('MyOp')
+        fbk = fmk.fmkDB.last_feedback["Operator 'MyOp'"][0]['content']
+        print(fbk)
+        self.assertIn(b'You win!', fbk)
+
+        fmk.launch_operator('MyOp')
+        fbk = fmk.fmkDB.last_feedback["Operator 'MyOp'"][0]['content']
+        print(fbk)
+        self.assertIn(b'You loose!', fbk)
+
+    def test_scenario_infra(self):
+
+        print('\n*** test scenario SC_NO_REGEN')
+
+        base_qty = 0
+        for i in range(100):
+            data = fmk.get_data(['SC_NO_REGEN'])
+            data_list = fmk.send_data([data])  # needed to make the scenario progress
+            # send_data_and_log() should be used for more complex scenarios
+            # hooking the framework in more places.
+            if not data_list:
+                base_qty = i
+                break
+        else:
+            raise ValueError
+
+        err_list = fmk.get_error()
+        code_vector = [str(e) for e in err_list]
+        print('\n*** Retrieved error code vector: {!r}'.format(code_vector))
+
+        self.assertEqual(code_vector, ['DataUnusable', 'HandOver', 'DataUnusable', 'HandOver',
+                                       'DPHandOver', 'NoMoreData'])
+        self.assertEqual(base_qty, 37)
+
+        print('\n*** test scenario SC_AUTO_REGEN')
+
+        for i in range(base_qty * 3):
+            data = fmk.get_data(['SC_AUTO_REGEN'])
+            data_list = fmk.send_data([data])
+            if not data_list:
+                raise ValueError
