@@ -209,9 +209,9 @@ class Data(object):
 
         return contents
 
-    def show(self, log_func=lambda x: x):
+    def show(self, raw_limit=200, log_func=lambda x: x):
         if self.node is not None:
-            self.node.show(raw_limit=200, log_func=log_func)
+            self.node.show(raw_limit=raw_limit, log_func=log_func)
         else:
             print(self.raw)
 
@@ -1236,7 +1236,7 @@ class NodeInternals(object):
     def is_frozen(self):
         raise NotImplementedError
 
-    def pretty_print(self):
+    def pretty_print(self, max_size=None):
         return None
 
     def _get_value(self, conf=None, recursive=True, return_node_internals=False):
@@ -2085,8 +2085,8 @@ class NodeInternals_TypedValue(NodeInternals_Term):
         else:
             return False
 
-    def pretty_print(self):
-        return self.value_type.pretty_print()
+    def pretty_print(self, max_size=None):
+        return self.value_type.pretty_print(max_size=max_size)
 
     def __getattr__(self, name):
         vt = self.__getattribute__('value_type')
@@ -5965,9 +5965,9 @@ class Node(object):
 
 
 
-    def pretty_print(self, conf=None):
+    def pretty_print(self, max_size=None, conf=None):
         conf = self.__check_conf(conf)
-        return self.internals[conf].pretty_print()
+        return self.internals[conf].pretty_print(max_size=max_size)
 
     def get_nodes_names(self, conf=None, verbose=False, terminal_only=False):
         l = []
@@ -6172,7 +6172,7 @@ class Node(object):
                 if node.is_term(conf_tmp):
                     raw = node._tobytes()
                     raw_len = len(raw)
-                    val = node.pretty_print()
+                    val = node.pretty_print(max_size=raw_limit)
 
                     prefix = "{:s}".format(indent_term)
                     name = "{:s} ".format(name)
@@ -6194,7 +6194,7 @@ class Node(object):
                         print_nonterm_func("{:s}  ".format(indent_spc) , nl=False, log_func=log_func)
                         print_contents_func("\_ {:s}".format(val), log_func=log_func)
                     print_nonterm_func("{:s}  ".format(indent_spc) , nl=False, log_func=log_func)
-                    if raw_limit and raw_len > raw_limit:
+                    if raw_limit is not None and raw_len > raw_limit:
                         print_raw_func("\_raw: {:s}".format(repr(raw[:raw_limit])), nl=False,
                                        log_func=log_func)
                         print_raw_func(" ...", hlight=True, log_func=log_func)

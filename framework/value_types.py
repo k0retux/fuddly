@@ -95,7 +95,7 @@ class VT(object):
     def set_size_from_constraints(self, size=None, encoded_size=None):
         raise NotImplementedError
 
-    def pretty_print(self):
+    def pretty_print(self, max_size=None):
         return None
 
     @staticmethod
@@ -951,12 +951,15 @@ class String(VT_Alt):
         else:
             raise ValueError
 
-    def pretty_print(self):
+    def pretty_print(self, max_size=None):
         if self.drawn_val is None:
             self.get_value()
 
-        if self.encoded_string:
+        if self.encoded_string and not isinstance(self, BYTES):
             dec = self.drawn_val
+            sz = len(dec)
+            if max_size is not None and sz > max_size:
+                dec = dec[:max_size]
             return repr(dec) + ' [decoded, sz=' + str(len(dec)) + ']'
         else:
             return None
@@ -1242,7 +1245,7 @@ class INT(VT):
     def set_size_from_constraints(self, size=None, encoded_size=None):
         raise DataModelDefinitionError
 
-    def pretty_print(self):
+    def pretty_print(self, max_size=None):
         if self.drawn_val is None:
             self.get_value()
 
@@ -1352,7 +1355,8 @@ class ASCII(String):
 @from_encoder(PythonCodec_Enc, 'latin_1')
 class LATIN_1(String): pass
 
-BYTES = LATIN_1
+@from_encoder(PythonCodec_Enc, 'latin_1')
+class BYTES(String): pass
 
 @from_encoder(PythonCodec_Enc, 'utf_16_le')
 class UTF16_LE(String):
@@ -1441,7 +1445,7 @@ class INT_str(with_metaclass(meta_int_str, INT)):
         return VT._str2internal(str(val))
         # return str(val)
 
-    def pretty_print(self):
+    def pretty_print(self, max_size=None):
         if self.drawn_val is None:
             self.get_value()
 
@@ -1749,7 +1753,7 @@ class BitField(VT_Alt):
         raise DataModelDefinitionError
 
 
-    def pretty_print(self):
+    def pretty_print(self, max_size=None):
 
         first_pass = True
         for lim, sz, val_list, extrems, i in zip(self.subfield_limits[::-1],
