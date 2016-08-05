@@ -1,3 +1,4 @@
+
 ################################################################################
 #
 #  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
@@ -30,6 +31,7 @@ from libs.external_modules import *
 
 import traceback
 import datetime
+import six
 
 ################################
 # ModelWalker Helper Functions #
@@ -71,6 +73,7 @@ class MH(object):
     NonTerminal = 1
     Generator = 2
     Leaf = 3
+    Regex = 5
 
     RawNode = 4  # if a Node() is provided
 
@@ -87,6 +90,16 @@ class MH(object):
     # duplicate_mode attribute
     Copy = 'u'
     ZeroCopy = 's'
+
+
+    ##############################
+    ### Regex Parser Specific ####
+    ##############################
+
+    class Charset:
+        ASCII = 1
+        ASCII_EXT = 2
+        UNICODE = 3
 
     ##########################
     ### Node Customization ###
@@ -540,7 +553,7 @@ class ModelHelper(object):
         'exists_if', 'exists_if_not',
         'exists_if/and', 'exists_if/or',
         'sync_size_with', 'sync_enc_size_with',
-        'post_freeze'
+        'post_freeze', 'charset'
     ]
 
     def __init__(self, dm=None, delayed_jobs=True, add_env=True):
@@ -618,6 +631,8 @@ class ModelHelper(object):
                 ntype = MH.RawNode
             elif hasattr(contents, '__call__') and pre_ntype in [None, MH.Generator]:
                 ntype = MH.Generator
+            elif isinstance(contents, six.string_types) and pre_ntype in [None, MH.Regex]:
+                ntype = MH.Regex
             else:
                 ntype = MH.Leaf
             return ntype
@@ -626,6 +641,7 @@ class ModelHelper(object):
 
         contents = desc.get('contents', None)
         dispatcher = {MH.NonTerminal: self._create_non_terminal_node,
+                      MH.Regex: self._create_non_terminal_node_from_regex,
                       MH.Generator:  self._create_generator_node,
                       MH.Leaf: self._create_leaf_node,
                       MH.RawNode: self._update_provided_node}
@@ -744,6 +760,48 @@ class ModelHelper(object):
             raise ValueError("*** ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
         self._handle_custo(n, desc, conf)
+        self._handle_common_attr(n, desc, conf)
+
+        return n
+
+
+    def _create_non_terminal_node_from_regex(self, desc, node=None):
+
+        n, conf = self.__pre_handling(desc, node)
+
+        name =  desc.get('name') if desc.get('name') is not None else node.name
+        if isinstance(name, tuple):
+            name = name[0]
+        regexp =  desc.get('contents')
+
+        parser = RegexParser()
+        nodes = parser.parse(regexp, name, desc.get('charset'))
+
+        if len(nodes) == 2 and len(nodes[1]) == 2 and (nodes[1][1][1] == nodes[1][1][2] == 1 or
+                 isinstance(nodes[1][1][0], fvt.String) and nodes[1][1][0].alphabet is not None):
+            n.set_values(value_type=nodes[1][1][0].internals[nodes[1][1][0].current_conf].value_type, conf=conf)
+        else:
+            n.set_subnodes_with_csts(nodes, conf=conf)
+
+
+        custo_set = desc.get('custo_set', None)
+        custo_clear = desc.get('custo_clear', None)
+
+        if custo_set or custo_clear:
+            custo = NonTermCusto(items_to_set=custo_set, items_to_clear=custo_clear)
+            internals = n.cc if conf is None else n.c[conf]
+            internals.customize(custo)
+
+        sep_desc = desc.get('separator', None)
+        if sep_desc is not None:
+            sep_node_desc = sep_desc.get('contents', None)
+            assert (sep_node_desc is not None)
+            sep_node = self._create_graph_from_desc(sep_node_desc, n)
+            prefix = sep_desc.get('prefix', True)
+            suffix = sep_desc.get('suffix', True)
+            unique = sep_desc.get('unique', False)
+            n.set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique)
+
         self._handle_common_attr(n, desc, conf)
 
         return n
@@ -1145,6 +1203,687 @@ class ModelHelper(object):
                
         return node
 
+
+
+
+class State(object):
+    """
+    Represent states at the lower level
+    """
+
+    def __init__(self, machine):
+        """
+        Args:
+            machine (StateMachine): state machine where it lives (local context)
+        """
+        self.machine = machine
+        self.init_specific()
+
+    def init_specific(self):
+        """
+        Can be overridden to express additional initializations
+        """
+        pass
+
+    def _run(self, context):
+        raise NotImplementedError
+
+    def run(self, context):
+        """
+        Do some actions on the current character.
+        Args:
+            context (StateMachine): root state machine (global context)
+        """
+        if context.input is not None and \
+                ((context.charset == MH.Charset.ASCII and ord(context.input) > 0x7F) or
+                     (context.charset == MH.Charset.ASCII_EXT and ord(context.input) > 0xFF)):
+            raise CharsetError()
+        self._run(context)
+        context.inputs.pop(0)
+
+    def advance(self, context):
+        """
+        Check transitions using the first non-run character.
+        Args:
+            context (StateMachine): root state machine (global context)
+
+        Returns:
+            Class of the next state de run (None if we are in a final state)
+        """
+        raise NotImplementedError
+
+class StateMachine(State):
+    """
+    Represent states that contain other states.
+    """
+
+    def __init__(self, machine=None):
+        self.states = {}
+        self.inputs = None
+
+        for name, cls in inspect.getmembers(self.__class__):
+            if inspect.isclass(cls) and issubclass(cls, State) and hasattr(cls, 'INITIAL'):
+                self.states[cls] = cls(self)
+
+        State.__init__(self, self if machine is None else machine)
+
+    @property
+    def input(self):
+        return None if self.inputs is None or len(self.inputs) == 0 else self.inputs[0]
+
+    def _run(self, context):
+        while self.state is not None:
+            self.state.run(context)
+            next_state = self.state.advance(context)
+            self.state = self.states[next_state] if next_state is not None else None
+
+    def run(self, context):
+        for state in self.states:
+            if state.INITIAL:
+                self.state = self.states[state]
+                break
+        else:
+            raise InitialStateNotFoundError()
+
+        self._run(context)
+
+def register(cls):
+    cls.INITIAL = False
+    return cls
+
+def initial(cls):
+    cls.INITIAL = True
+    return cls
+
+class RegexParser(StateMachine):
+
+    @initial
+    class Initial(State):
+
+        def _run(self, ctx):
+            pass
+
+        def advance(self, ctx):
+            if ctx.input in ('?', '*', '+', '{'):
+                raise QuantificationError()
+            elif ctx.input in ('}', ')', ']'):
+                raise StructureError(ctx.input)
+
+            elif ctx.input == '[':
+                return self.machine.SquareBrackets
+            elif ctx.input == '(':
+                return self.machine.Parenthesis
+            elif ctx.input == '.':
+                return self.machine.Dot
+            elif ctx.input == '\\':
+                return self.machine.Escape
+            else:
+                ctx.append_to_contents("")
+
+                if ctx.input == '|':
+                    return self.machine.Choice
+                elif ctx.input is None:
+                    return self.machine.Final
+                else:
+                    return self.machine.Main
+
+    @register
+    class Choice(Initial):
+
+        def _run(self, ctx):
+            if not ctx.choice:
+                # if it is still possible to build a NT with multiple shapes
+                if len(ctx.nodes) == 0 or (len(ctx.nodes) == 1 and ctx.buffer is None):
+                    ctx.choice = True
+                else:
+                    raise InconvertibilityError()
+            else:
+                pass
+
+    @register
+    class Final(State):
+
+        def _run(self, ctx):
+            ctx.flush()
+
+        def advance(self, ctx):
+            return None
+
+    @register
+    class Main(State):
+
+        def _run(self, ctx):
+            ctx.append_to_buffer(ctx.input)
+
+        def advance(self, ctx):
+            if ctx.input == '(':
+                return self.machine.Parenthesis
+            elif ctx.input == '[':
+                return self.machine.SquareBrackets
+            elif ctx.input == '.':
+                return self.machine.Dot
+            elif ctx.input == '\\':
+                return self.machine.Escape
+            elif ctx.input == '|':
+                return self.machine.Choice
+            elif ctx.input in ('?', '*', '+', '{'):
+
+                if ctx.choice and len(ctx.values) > 1 and len(ctx.buffer) > 1:
+                    raise InconvertibilityError()
+
+                if len(ctx.buffer) == 1:
+                    if len(ctx.values) > 1:
+                        content = ctx.buffer
+                        ctx.values = ctx.values[:-1]
+                        ctx.flush()
+                        ctx.append_to_buffer(content)
+
+                else:
+                    content = ctx.buffer[-1]
+                    ctx.buffer = ctx.buffer[:-1]
+                    ctx.flush()
+                    ctx.append_to_buffer(content)
+
+                if ctx.input == '{':
+                    return self.machine.Brackets
+                else:
+                    return self.machine.QtyState
+
+            elif ctx.input in ('}', ')', ']'):
+                raise StructureError(ctx.input)
+            elif ctx.input is None:
+                return self.machine.Final
+
+            return self.machine.Main
+
+    @register
+    class QtyState(State):
+
+        def _run(self, ctx):
+            ctx.min = 1 if ctx.input == '+' else 0
+            ctx.max = 1 if ctx.input == '?' else None
+
+            ctx.flush()
+
+        def advance(self, ctx):
+            if ctx.input in ('?', '*', '+', '{'):
+                raise QuantificationError()
+            elif ctx.input in ('}', ')', ']'):
+                raise StructureError(ctx.input)
+            elif ctx.input == '|':
+                return self.machine.Choice
+            elif ctx.input is None:
+                return self.machine.Final
+
+            if ctx.choice:
+                raise InconvertibilityError()
+
+            if ctx.input == '(':
+                return self.machine.Parenthesis
+            elif ctx.input == '[':
+                return self.machine.SquareBrackets
+            elif ctx.input == '.':
+                return self.machine.Dot
+            elif ctx.input == '\\':
+                return self.machine.Escape
+            else:
+                return self.machine.Main
+
+    @register
+    class Brackets(StateMachine, QtyState):
+
+        @initial
+        class Initial(State):
+
+            def _run(self, ctx):
+                ctx.min = ""
+
+            def advance(self, ctx):
+                if ctx.input.isdigit():
+                    return self.machine.Min
+                else:
+                    raise QuantificationError()
+
+        @register
+        class Min(State):
+
+            def _run(self, ctx):
+                ctx.min += ctx.input
+
+            def advance(self, context):
+                if context.input.isdigit():
+                    return self.machine.Min
+                elif context.input == ',':
+                    return self.machine.Comma
+                elif context.input == '}':
+                    return self.machine.Final
+                else:
+                    raise QuantificationError()
+
+        @register
+        class Max(State):
+
+            def _run(self, ctx):
+                ctx.max += ctx.input
+
+            def advance(self, context):
+                if context.input.isdigit():
+                    return self.machine.Max
+                elif context.input == '}':
+                    return self.machine.Final
+                else:
+                    raise QuantificationError()
+
+        @register
+        class Comma(Max):
+
+            def _run(self, ctx):
+                ctx.max = ""
+
+        @register
+        class Final(State):
+            def _run(self, ctx):
+                ctx.min = int(ctx.min)
+
+                if ctx.max is None:
+                    ctx.max = ctx.min
+                elif len(ctx.max) == 0:
+                    ctx.max = None
+                else:
+                    ctx.max = int(ctx.max)
+
+                if ctx.max is not None and ctx.min > ctx.max:
+                    raise QuantificationError(u"{X,Y}: X \u2264 Y constraint not respected.")
+
+                ctx.flush()
+
+            def advance(self, context):
+                return None
+
+        def advance(self, ctx):
+            return self.machine.QtyState.advance(self, ctx)
+
+    class Group(State):
+
+        def advance(self, ctx):
+            if ctx.input in (')', '}', ']'):
+                raise StructureError(ctx.input)
+
+            elif ctx.input in ('*', '+', '?'):
+                return self.machine.QtyState
+            elif ctx.input == '{':
+                return self.machine.Brackets
+            else:
+                ctx.flush()
+
+            if ctx.input == '|':
+                return self.machine.Choice
+            elif ctx.input is None:
+                return self.machine.Final
+            elif ctx.choice:
+                raise InconvertibilityError()
+
+            if ctx.input == '(':
+                return self.machine.Parenthesis
+            elif ctx.input == '[':
+                return self.machine.SquareBrackets
+            elif ctx.input == '.':
+                return self.machine.Dot
+            elif ctx.input == '\\':
+                return self.machine.Escape
+            else:
+                return self.machine.Main
+
+    @register
+    class Parenthesis(StateMachine, Group):
+
+        @initial
+        class Initial(State):
+
+            def _run(self, ctx):
+                ctx.flush()
+                ctx.append_to_buffer("")
+
+            def advance(self, ctx):
+                if ctx.input in ('?', '*', '+', '{'):
+                    raise QuantificationError()
+                elif ctx.input in ('}', ']', None):
+                    raise StructureError(ctx.input)
+                elif ctx.input in ('(', '[', '.'):
+                    raise InconvertibilityError()
+                elif ctx.input == '\\':
+                    return self.machine.Escape
+                elif ctx.input == ')':
+                    return self.machine.Final
+                elif ctx.input == '|':
+                    return self.machine.Choice
+                else:
+                    return self.machine.Main
+
+        @register
+        class Final(State):
+
+            def _run(self, context):
+                pass
+
+            def advance(self, context):
+                return None
+
+        @register
+        class Main(Initial):
+            def _run(self, ctx):
+                ctx.append_to_buffer(ctx.input)
+
+            def advance(self, ctx):
+                if ctx.input in ('?', '*', '+', '{'):
+                    raise InconvertibilityError()
+
+                return self.machine.Initial.advance(self, ctx)
+
+        @register
+        class Choice(Initial):
+
+            def _run(self, ctx):
+                ctx.append_to_contents("")
+
+            def advance(self, ctx):
+                if ctx.input in ('?', '*', '+', '{'):
+                    raise QuantificationError()
+
+                return self.machine.Initial.advance(self, ctx)
+
+        @register
+        class Escape(State):
+
+            def _run(self, ctx):
+                pass
+
+            def advance(self, ctx):
+                if ctx.input in ctx.META_SEQUENCES:
+                    raise InconvertibilityError()
+                elif ctx.input in ctx.SPECIAL_CHARS:
+                    return self.machine.Main
+                else:
+                    raise EscapeError(ctx.input)
+
+    @register
+    class SquareBrackets(StateMachine, Group):
+
+        @initial
+        class Initial(State):
+
+            def _run(self, ctx):
+                ctx.flush()
+                ctx.append_to_alphabet("")
+
+            def advance(self, ctx):
+                if ctx.input in ('?', '*', '+', '{'):
+                    raise QuantificationError()
+                elif ctx.input in ('}', ')', None):
+                    raise StructureError(ctx.input)
+                elif ctx.input in ('(', '['):
+                    raise InconvertibilityError()
+                elif ctx.input == '-':
+                    raise InvalidRangeError()
+                elif ctx.input == ']':
+                    raise EmptyAlphabetError()
+                elif ctx.input == '\\':
+                    return self.machine.EscapeBeforeRange
+                else:
+                    return self.machine.BeforeRange
+
+        @register
+        class Final(State):
+
+            def _run(self, ctx):
+                pass
+
+            def advance(self, ctx):
+                return None
+
+        @register
+        class BeforeRange(Initial):
+            def _run(self, ctx):
+                ctx.append_to_alphabet(ctx.input)
+
+            def advance(self, ctx):
+                if ctx.input == ']':
+                    return self.machine.Final
+                elif ctx.input == '-':
+                    return self.machine.Range
+                else:
+                    return self.machine.Initial.advance(self, ctx)
+
+        @register
+        class Range(State):
+            def _run(self, ctx):
+                pass
+
+            def advance(self, ctx):
+                if ctx.input in ('?', '*', '+', '{', '}', '(', ')', '[', ']', '|', '-', None):
+                    raise InvalidRangeError()
+                elif ctx.input == '\\':
+                    return self.machine.EscapeAfterRange
+                else:
+                    return self.machine.AfterRange
+
+        @register
+        class AfterRange(Initial):
+            def _run(self, ctx):
+                if ctx.alphabet[-1] > ctx.input:
+                    raise InvalidRangeError()
+                elif ctx.input == ctx.alphabet[-1]:
+                    pass
+                else:
+                    for i in range(ord(ctx.alphabet[-1]) + 1, ord(ctx.input) + 1):
+                        ctx.append_to_alphabet(ctx.int_to_string(i))
+
+            def advance(self, ctx):
+                if ctx.input == ']':
+                    return self.machine.Final
+                else:
+                    return self.machine.Initial.advance(self, ctx)
+
+        @register
+        class EscapeBeforeRange(State):
+
+            def _run(self, ctx):
+                pass
+
+            def advance(self, ctx):
+                if ctx.input in ctx.META_SEQUENCES:
+                    return self.machine.EscapeMetaSequence
+                elif ctx.input in ctx.SPECIAL_CHARS:
+                    return self.machine.BeforeRange
+                else:
+                    raise EscapeError(ctx.input)
+
+        @register
+        class EscapeMetaSequence(BeforeRange):
+
+            def _run(self, ctx):
+                ctx.append_to_alphabet(ctx.META_SEQUENCES[ctx.input])
+
+        @register
+        class EscapeAfterRange(State):
+
+            def _run(self, ctx):
+                pass
+
+            def advance(self, ctx):
+                if ctx.input in ctx.META_SEQUENCES:
+                    raise InvalidRangeError()
+                elif ctx.input in ctx.SPECIAL_CHARS:
+                    return self.machine.AfterRange
+                else:
+                    raise EscapeError(ctx.input)
+
+    @register
+    class Escape(State):
+
+        def _run(self, ctx):
+            pass
+
+        def advance(self, ctx):
+            if ctx.input in ctx.META_SEQUENCES:
+                return self.machine.EscapeMetaSequence
+            elif ctx.input in ctx.SPECIAL_CHARS:
+                return self.machine.Main
+            else:
+                raise EscapeError(ctx.input)
+
+    @register
+    class EscapeMetaSequence(Group):
+
+        def _run(self, ctx):
+            if ctx.choice and len(ctx.values) > 1 and len(ctx.buffer) > 1:
+                raise InconvertibilityError()
+
+            if ctx.buffer is not None:
+
+                if len(ctx.buffer) == 0:
+
+                    if len(ctx.values[:-1]) > 0:
+                        ctx.values = ctx.values[:-1]
+                        ctx.flush()
+                else:
+                    ctx.flush()
+
+            ctx.append_to_alphabet(ctx.META_SEQUENCES[ctx.input])
+
+    @register
+    class Dot(Group):
+
+        def _run(self, ctx):
+            ctx.flush()
+            ctx.append_to_alphabet(ctx.get_complement(""))
+
+
+    def init_specific(self):
+        self._name = None
+        self.charset = None
+
+        self.values = None
+        self.alphabet = None
+
+        self.choice = False
+
+        self.min = None
+        self.max = None
+
+        self.nodes = []
+
+    def append_to_contents(self, content):
+        if self.values is None:
+            self.values = []
+        self.values.append(content)
+
+    def append_to_buffer(self, str):
+        if self.values is None:
+            self.values = [""]
+        if self.values[-1] is None:
+            self.values[-1] = ""
+        self.values[-1] += str
+
+    def append_to_alphabet(self, alphabet):
+        if self.alphabet is None:
+            self.alphabet = ""
+        self.alphabet += alphabet
+
+    @property
+    def buffer(self):
+        return None if self.values is None else self.values[-1]
+
+    @buffer.setter
+    def buffer(self, buffer):
+        if self.values is None:
+            self.values = [""]
+        self.values[-1] = buffer
+
+    def flush(self):
+
+        if self.values is None and self.alphabet is None:
+            return
+
+        # set default values for min & max if none was provided
+        if self.min is None and self.max is None:
+            self.min = self.max = 1
+
+        # guess the type of the terminal node to create
+        if self.values is not None and all(val.isdigit() for val in self.values):
+            self.values = [int(i) for i in self.values]
+            type = fvt.INT_str
+        else:
+            type = fvt.String
+
+        name = self._name + '_' + str(len(self.nodes) + 1)
+        self.nodes.append(self._create_terminal_node(name, type, values=self.values,
+                                                     alphabet=self.alphabet, qty=(self.min, self.max)))
+        self.reset()
+
+    def reset(self):
+        self.values = None
+        self.alphabet = None
+        self.min = None
+        self.max = None
+
+    def parse(self, inputs, name, charset=MH.Charset.ASCII_EXT):
+        self._name = name
+        self.charset = charset
+        self.int_to_string = chr if sys.version_info[0] == 2 and self.charset != MH.Charset.UNICODE else six.unichr
+
+        if self.charset == MH.Charset.ASCII:
+            max = 0x7F
+        elif self.charset == MH.Charset.UNICODE:
+            max = 0xFFFF
+        else:
+            max = 0xFF
+
+        def get_complement(chars):
+            return ''.join([self.int_to_string(i) for i in range(0, max + 1) if self.int_to_string(i) not in chars])
+        self.get_complement = get_complement
+
+        self.META_SEQUENCES = {'s': string.whitespace,
+                               'S': get_complement(string.whitespace),
+                               'd': string.digits,
+                               'D': get_complement(string.digits),
+                               'w': string.ascii_letters + string.digits + '_',
+                               'W': get_complement(string.ascii_letters + string.digits + '_')}
+
+        self.SPECIAL_CHARS = list('\\()[]{}*+?|-.')
+
+        # None indicates the beginning and the end of the regex
+        self.inputs = [None] + list(inputs) + [None]
+        self.run(self)
+
+        return self._create_non_terminal_node()
+
+    def _create_terminal_node(self, name, type, values=None, alphabet=None, qty=None):
+
+        assert (values is not None or alphabet is not None)
+
+        if alphabet is not None:
+            return [Node(name=name, vt=fvt.String(alphabet=alphabet, min_sz=qty[0], max_sz=qty[1])), 1, 1]
+        else:
+            if type == fvt.String:
+                node = Node(name=name, vt=fvt.String(val_list=values))
+            else:
+                node = Node(name=name, vt=fvt.INT_str(int_list=values))
+
+            return [node, qty[0], -1 if qty[1] is None else qty[1]]
+
+    def _create_non_terminal_node(self):
+        non_terminal = [1, [MH.Copy + MH.Ordered]]
+        formatted_terminal = non_terminal[1]
+
+        for terminal in self.nodes:
+            formatted_terminal.append(terminal)
+            if self.choice and len(self.nodes) > 1:
+                non_terminal.append(1)
+                formatted_terminal = [MH.Copy + MH.Ordered]
+                non_terminal.append(formatted_terminal)
+
+        return non_terminal
 
 
 #### Data Model Abstraction
