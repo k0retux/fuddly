@@ -90,7 +90,7 @@ def convert_to_internal_repr(val):
     return val
 
 def unconvert_from_internal_repr(val):
-    assert(isinstance(val, bytes))
+    # assert isinstance(val, bytes)
     try:
         dec_val = val.decode(internal_repr_codec, 'strict')
     except:

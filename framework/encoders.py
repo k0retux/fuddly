@@ -96,11 +96,7 @@ class PythonCodec_Enc(Encoder):
             self._codec = arg
 
     def encode(self, val):
-        try:
-            enc = val.decode(internal_repr_codec, 'strict')
-        except:
-            enc = val.decode('latin_1')
-        return enc.encode(self._codec)
+        return unconvert_from_internal_repr(val).encode(self._codec)
 
     def decode(self, val):
         try:
