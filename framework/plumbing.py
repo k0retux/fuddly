@@ -2930,8 +2930,12 @@ class FmkPlumbing(object):
         self.lg.print_console('-=[ Probes ]=-', rgb=Color.INFO, style=FontStyle.BOLD)
         self.lg.print_console('')
         for p in probes:
+            try:
+                status = self.mon.get_probe_status(p).get_status()
+            except:
+                status = None
             msg = "name: %s (status: %s, delay: %f) --> " % \
-                (p, repr(self.mon.get_probe_status(p).get_status()),
+                (p, repr(status),
                  self.mon.get_probe_delay(p))
 
             if self.mon.is_probe_stuck(p):

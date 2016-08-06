@@ -955,7 +955,7 @@ class String(VT_Alt):
         if self.drawn_val is None:
             self.get_value()
 
-        if self.encoded_string and not isinstance(self, BYTES):
+        if self.encoded_string and not isinstance(self, (BYTES,UTF8)):
             dec = self.drawn_val
             sz = len(dec)
             if max_size is not None and sz > max_size:

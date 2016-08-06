@@ -37,11 +37,10 @@ import struct
 import time
 import collections
 import binascii
+import uuid
 
 import errno
 from socket import error as socket_error
-
-from uuid import getnode
 
 from libs.external_modules import *
 from framework.data_model import Data, NodeSemanticsCriteria
@@ -330,9 +329,10 @@ class NetworkTarget(Target):
         Args:
           host (str): the IP address of the target to connect to, or
             the IP address on which we will wait for target connecting
-            to us (if `server_mode` is True).
+            to us (if `server_mode` is True). For raw socket type, it should contain the name of
+            the interface.
           port (int): the port for communicating with the target, or
-            the port to listen to.
+            the port to listen to. For raw socket type, it should contain the protocol ID.
           socket_type (tuple): tuple composed of the socket address family
             and socket type
           data_semantics (str): string of characters that will be used for
@@ -347,15 +347,44 @@ class NetworkTarget(Target):
           hold_connection (bool): If `True`, we will maintain the connection while
             sending data to the real target. Otherwise, after each data emission,
             we close the related socket.
+          mac_src (bytes): Only in conjunction with raw socket. For each data sent through
+            this interface, and if this data contain nodes with the semantic ``'mac_src'``,
+            these nodes will be overwritten (through absorption) with this parameter. If nothing
+            is provided, the MAC address will be retrieved from the interface specified in 'host'.
+            (works accurately for Linux system).
+          mac_dst (bytes): Only in conjunction with raw socket. For each data sent through
+            this interface, and if this data contain nodes with the semantic ``'mac_dst'``,
+            these nodes will be overwritten (through absorption) with this parameter.
         '''
 
         if not self._is_valid_socket_type(socket_type):
             raise ValueError("Unrecognized socket type")
 
-        self._mac_src = struct.pack('>Q', getnode())[2:] if mac_src is None else mac_src
-        self._mac_dst = mac_dst
+        if sys.platform == 'linux':
+            def get_mac_addr(ifname):
+                if sys.version_info[0] > 2:
+                    ifname = bytes(ifname, 'latin_1')
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                try:
+                    info = fcntl.ioctl(s.fileno(), 0x8927, struct.pack('256s', ifname[:15]))
+                except OSError:
+                    return b''
+                info = bytearray(info)
+                return bytes(info[18:24])
+        else:
+            def get_mac_addr(ifname):
+                return struct.pack('>Q', uuid.getnode())[2:]
+
+        self.get_mac_addr = get_mac_addr
+
         self._mac_src_semantic = NodeSemanticsCriteria(mandatory_criteria=['mac_src'])
         self._mac_dst_semantic = NodeSemanticsCriteria(mandatory_criteria=['mac_dst'])
+
+        self._mac_src = {(host, port): None}
+        self._mac_dst = {(host, port): None}
+        if socket_type[1] == socket.SOCK_RAW:
+            self._mac_src[(host, port)] = self.get_mac_addr(host) if mac_src is None else mac_src
+            self._mac_dst[(host, port)] = mac_dst
 
         self._host = {}
         self._port = {}
@@ -406,7 +435,7 @@ class NetworkTarget(Target):
         return True
 
     def register_new_interface(self, host, port, socket_type, data_semantics, server_mode=False,
-                               hold_connection=False):
+                               hold_connection=False, mac_src=None, mac_dst=None):
 
         if not self._is_valid_socket_type(socket_type):
             raise ValueError("Unrecognized socket type")
@@ -419,6 +448,9 @@ class NetworkTarget(Target):
         self.server_mode[(host,port)] = server_mode
         self._default_fbk_id[(host, port)] = self._default_fbk_socket_id + ' - {:s}:{:d}'.format(host, port)
         self.hold_connection[(host, port)] = hold_connection
+        self._mac_src[(host, port)] = self.get_mac_addr(host) if mac_src is None else mac_src
+        self._mac_dst[(host, port)] = mac_dst
+
 
     def set_timeout(self, fbk_timeout, sending_delay):
         '''
@@ -653,6 +685,16 @@ class NetworkTarget(Target):
                                     # self.send_multiple_data() is
                                     # used.
         self._connect_to_additional_feedback_sockets()
+
+        for k, mac_src in self._mac_src.items():
+            if mac_src is not None:
+                if mac_src:
+                    self.record_info('*** Detected HW address for {!s}: {!s} ***'
+                                     .format(k[0], mac_src))
+                else:
+                    self.record_info('*** WARNING: HW Address not detected for {!s}! ***'
+                                     .format(k[0]))
+
         return self.initialize()
 
     def stop(self):
@@ -1281,16 +1323,19 @@ class NetworkTarget(Target):
         for data in data_list:
             if data.node is None:
                 continue
-            _, _, socket_type, _ = self._get_net_info_from(data)
+            host, port, socket_type, _ = self._get_net_info_from(data)
             if socket_type[1] == socket.SOCK_RAW:
                 data.node.freeze()
-                try:
-                    data.node[self._mac_src_semantic] = self._mac_src
-                except ValueError:
-                    self._logger.log_comment('WARNING: Unable to set the MAC SOURCE on the packet')
-                if self._mac_dst is not None:
+                mac_src = self._mac_src[(host,port)]
+                mac_dst = self._mac_dst[(host,port)]
+                if mac_src is not None:
                     try:
-                        data.node[self._mac_dst_semantic] = self._mac_dst
+                        data.node[self._mac_src_semantic] = mac_src
+                    except ValueError:
+                        self._logger.log_comment('WARNING: Unable to set the MAC SOURCE on the packet')
+                if mac_dst is not None:
+                    try:
+                        data.node[self._mac_dst_semantic] = mac_dst
                     except ValueError:
                         self._logger.log_comment('WARNING: Unable to set the MAC DESTINATION on the packet')
 

@@ -6566,7 +6566,7 @@ class Env(object):
         #
         # WARNING: If DJobs need to evolve in the future to support copy, DJobGroup should be updated
         # during this copy for updating the nodes in its node_list attribute.
-        assert not self._sorted_jobs and not self._djob_keys and not self._djob_groups
+        # assert not self._sorted_jobs and not self._djob_keys and not self._djob_groups
         new_env._sorted_jobs = None
         new_env._djob_keys = None
         new_env._djob_groups = None

@@ -81,30 +81,14 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', u
                     else:
                         pass
 
-                    if update:
+                    if update:  # we update the seed of the data process
                         next_step.node.freeze()
-                        error_msg = '\n*** The node has no path to: {:s}. Thus, ignore it.\n'\
-                                    '    (probable reason: the node has been fuzzed in a way that makes the' \
-                                    'path unavailable)'
-                        try:
-                            next_step.node['.*/mac_dst'] = mac_src
-                        except:
-                            print(error_msg.format('mac_dst'))
                         try:
                             next_step.node['.*/tag_sn/value/v101'] = service_name
+                            next_step.node['.*/tag_sn$'].unfreeze(recursive=True, reevaluate_constraints=True)
+                            next_step.node.freeze()
                         except:
-                            print(error_msg.format('service_name'))
-
-                        if host_uniq is not None:
-                            new_tag = env.dm.get_data('tag_host_uniq')
-                            new_tag['.*/v103'] = host_uniq
-                            try:
-                                next_step.node['.*/host_uniq_stub'].set_contents(new_tag)
-                            except:
-                                print(error_msg.format('host_uniq_stub'))
-                        else:
-                            print('\n***WARNING: Host-Uniq not provided')
-                        next_step.node.unfreeze(recursive=True, reevaluate_constraints=True)
+                            pass
 
                     return True
 
@@ -119,13 +103,17 @@ def retrieve_padr_from_feedback(env, current_step, next_step, feedback):
 def retrieve_padi_from_feedback(env, current_step, next_step, feedback):
     return retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi')
 
+def retrieve_padr_from_feedback_and_update(env, current_step, next_step, feedback):
+    return retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padr', update=True)
+
 def retrieve_padi_from_feedback_and_update(env, current_step, next_step, feedback):
     return retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', update=True)
 
 
-@disruptor(tactics, dtype="FIX_FIELDS", weight=1)
+@disruptor(tactics, dtype="FIX_FIELDS", weight=1,
+           args={'reevaluate_csts': ('reevaluate constraints on the whole message to preserve consistency',
+                                     False, bool)})
 class t_fix_pppoe_msg_fields(Disruptor):
-
     mac_src = None
     service_name = None
     host_uniq = None
@@ -139,23 +127,28 @@ class t_fix_pppoe_msg_fields(Disruptor):
             try:
                 n['.*/mac_dst'] = self.mac_src
                 prev_data.add_info("update 'mac_src'")
+                if not self.reevaluate_csts:
+                    n['.*/mac_dst'].unfreeze(dont_change_state=True)
             except:
                 print(error_msg.format('mac_dst'))
         else:
             print("\n*** 'mac_src' not found in the environment! ***")
 
-        if self.service_name:
-            try:
-                n['.*/tag_sn/value/v101'] = self.service_name
-                prev_data.add_info("update 'service_name'")
-            except:
-                print(error_msg.format('service_name'))
-        else:
-            print("\n*** 'service_name' not found in the environment! ***")
+        if self.reevaluate_csts:
+            if self.service_name:
+                try:
+                    n['.*/tag_sn/value/v101'] = self.service_name
+                    prev_data.add_info("update 'service_name'")
+                except:
+                    print(error_msg.format('service_name'))
+            else:
+                print("\n*** 'service_name' not found in the environment! ***")
 
         if self.host_uniq:
             new_tag = dm.get_data('tag_host_uniq')
             new_tag['.*/v103'] = self.host_uniq
+            new_tag.unfreeze(recursive=True, reevaluate_constraints=True)
+            new_tag.freeze()
             try:
                 n['.*/host_uniq_stub'].set_contents(new_tag)
                 prev_data.add_info("update 'host_uniq'")
@@ -164,11 +157,17 @@ class t_fix_pppoe_msg_fields(Disruptor):
         else:
             print("\n*** 'host_uniq_stub' not found in the environment! ***")
 
-        n.unfreeze(recursive=True, reevaluate_constraints=True)
+        if self.reevaluate_csts:
+            n.unfreeze(recursive=True, reevaluate_constraints=True)
+        else:
+            try:
+                n['.*/length$'].unfreeze()
+            except:
+                print(error_msg.format('length'))
         n.freeze()
+        n.show()
 
         return prev_data
-
 
 ### PADI fuzz scenario ###
 step_wait_padi = NoDataStep(fbk_timeout=1)
@@ -179,7 +178,7 @@ step_send_pado = Step(dp_pado)
 # step_send_pado = Step('pado')
 step_end = Step('padt')
 
-step_wait_padi.connect_to(step_send_pado, cbk_after_fbk=retrieve_padi_from_feedback)
+step_wait_padi.connect_to(step_send_pado, cbk_after_fbk=retrieve_padi_from_feedback_and_update)
 step_send_pado.connect_to(step_end)
 step_end.connect_to(step_wait_padi)
 
@@ -188,21 +187,22 @@ sc1.set_anchor(step_wait_padi)
 
 ### PADS fuzz scenario ###
 step_wait_padi = NoDataStep(fbk_timeout=1)
-step_send_valid_pado = Step('pado')
+step_send_valid_pado = Step(DataProcess(process=[('FIX_FIELDS#2', None, UI(reevaluate_csts=True))],
+                                        seed='pado'))
 
 dp_pads = DataProcess(process=[('tTYPE#2', UI(init=1), UI(order=True)), 'FIX_FIELDS'], seed='pads')
 dp_pads.append_new_process([('tSTRUCT#2', UI(init=1), UI(deep=True)), 'FIX_FIELDS'])
 step_send_fuzzed_pads = Step(dp_pads)
 step_wait_padr = NoDataStep(fbk_timeout=1)
 
-step_wait_padi.connect_to(step_send_valid_pado, cbk_after_fbk=retrieve_padi_from_feedback_and_update)
-step_send_valid_pado.connect_to(step_send_fuzzed_pads, cbk_after_fbk=retrieve_padr_from_feedback)
+step_wait_padi.connect_to(step_send_valid_pado, cbk_after_fbk=retrieve_padi_from_feedback)
+step_send_valid_pado.connect_to(step_send_fuzzed_pads, cbk_after_fbk=retrieve_padr_from_feedback_and_update)
 step_send_valid_pado.connect_to(step_wait_padr)
 
 step_send_fuzzed_pads.connect_to(step_wait_padr)
 
 step_wait_padr.connect_to(step_send_fuzzed_pads, cbk_after_fbk=retrieve_padr_from_feedback)
-step_wait_padr.connect_to(step_send_valid_pado, cbk_after_fbk=retrieve_padi_from_feedback_and_update)
+step_wait_padr.connect_to(step_send_valid_pado, cbk_after_fbk=retrieve_padi_from_feedback)
 
 sc2 = Scenario('PADS')
 sc2.set_anchor(step_wait_padi)

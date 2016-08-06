@@ -68,7 +68,9 @@ ETH_P_ALL = 3
 rawnetsrv_tg = NetworkTarget(host='eth0', port=ETH_P_ALL,
                              socket_type=(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL)),
                              hold_connection=True, server_mode=False)
-
+rawnetsrv_tg.register_new_interface(host='eth2', port=ETH_P_ALL,
+                                    socket_type=(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL)),
+                                    data_semantics='TG2')
 
 ### PROBE DEFINITION ###
 

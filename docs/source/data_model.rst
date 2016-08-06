@@ -164,8 +164,7 @@ that enables to handle transparently any encoding scheme:
 Below the different currently defined string types:
 
 - :class:`framework.value_types.String`: General purpose ``UTF8`` character string.
-- :class:`framework.value_types.BYTES`: General purpose byte string (alias to
-  :class:`framework.value_types.LATIN_1`).
+- :class:`framework.value_types.BYTES`: General purpose byte string.
 - :class:`framework.value_types.Filename`: Filename. Similar to the type
   ``String``, but some disruptors like ``tTYPE`` will generate more specific
   test cases.
@@ -932,8 +931,9 @@ specific_fuzzy_vals
   planned).
 
 charset
-  Used to specify a charset to be used within the node: it is particularly useful
-  for nodes that contain regular expressions. Accepted attributes are:
+  Used in the context of a `regular expression` ``contents``. It enables to specify the charset
+  that will be considered for interpreting the regular expression and for creating the related
+  nodes. Accepted attributes are:
 
   - ``MH.Charset.ASCII``
   - ``MH.Charset.ASCII_EXT`` (default)
