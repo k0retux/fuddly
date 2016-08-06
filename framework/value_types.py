@@ -442,21 +442,23 @@ class String(VT_Alt):
 
         elif constraints[AbsCsts.Contents] and self.alphabet is not None:
             size = None
-            blob = unconvert_from_internal_repr(blob)
             if self.encoded_string:
-                blob_dec = unconvert_from_internal_repr(blob_dec)
+                blob_str = unconvert_from_internal_repr(blob_dec)
             else:
+                blob_str = unconvert_from_internal_repr(blob)
                 blob_dec = blob
             alp = unconvert_from_internal_repr(self.alphabet)
             for l in alp:
-                if blob_dec.startswith(l):
+                if blob_str.startswith(l):
                     break
             else:
                 sup_sz = len(blob)+1
                 off = sup_sz
                 for l in alp:
                     if self.encoded_string:
-                        l = self.encode(l)
+                        l = self.encode(convert_to_internal_repr(l))
+                    else:
+                        l = convert_to_internal_repr(l)
                     new_off = blob.find(l)
                     if new_off < off and new_off > -1:
                         off = new_off
@@ -464,15 +466,16 @@ class String(VT_Alt):
                     off = -1
 
         elif constraints[AbsCsts.Regexp] and self.regexp is not None:
-            g = re.search(self.regexp, blob_dec, re.S)
+            g = re.search(self.regexp, unconvert_from_internal_repr(blob_dec), re.S)
             if g is not None:
                 if self.encoded_string:
                     pattern_enc = self.encode(g.group(0))
                     off = blob.find(pattern_enc)
                     size = len(pattern_enc)
                 else:
-                    off = g.start()
-                    size = g.end() - off
+                    pattern_enc = convert_to_internal_repr(g.group(0))
+                    off = blob.find(pattern_enc)
+                    size = len(pattern_enc)
             else:
                 off = -1
 
@@ -505,10 +508,7 @@ class String(VT_Alt):
         self.orig_drawn_val = self.drawn_val
 
         if constraints[AbsCsts.Size]:
-            if self.encoded_string:
-                sz = size if size is not None and size < self.max_encoded_sz else self.max_encoded_sz
-            else:
-                sz = size if size is not None and size < self.max_sz else self.max_sz
+            sz = size if size is not None and size < self.max_encoded_sz else self.max_encoded_sz
 
             # if encoded string, val is returned decoded
             val = self._read_value_from(blob[off:sz+off], constraints)
@@ -519,8 +519,8 @@ class String(VT_Alt):
                     raise ValueError('min_encoded_sz constraint not respected!')
             else:
                 val_sz = len(val) # maybe different from sz if blob is smaller
-                if val_sz < self.min_sz:
-                    raise ValueError('min_sz constraint not respected!')
+                if val_sz < self.min_encoded_sz:
+                    raise ValueError('min_sz/min_encoded_sz constraint not respected!')
         else:
             blob = blob[off:] #blob[off:size+off] if size is not None else blob[off:]
             val = self._read_value_from(blob, constraints)
@@ -653,10 +653,10 @@ class String(VT_Alt):
 
         self.drawn_val = None
 
-    def _check_sizes(self):
-        if self.val_list is not None:
-            for v in self.val_list:
-                sz = len(unconvert_from_internal_repr(v))
+    def _check_sizes(self, val_list):
+        if val_list is not None:
+            for v in val_list:
+                sz = len(v)
                 if self.max_sz is not None:
                     assert(self.max_sz >= sz >= self.min_sz)
                 else:
@@ -682,9 +682,9 @@ class String(VT_Alt):
 
         if absorb_regexp is None:
             if self.ascii_mode:
-                self.regexp = b'[\x00-\x7f]*'
+                self.regexp = '[\x00-\x7f]*'
             else:
-                self.regexp = b'.*'
+                self.regexp = '.*'
         else:
             self.regexp = convert_to_internal_repr(absorb_regexp)
 
@@ -696,7 +696,7 @@ class String(VT_Alt):
             self.extra_fuzzy_list = None
 
         if val_list is not None:
-            assert(isinstance(val_list, list))
+            assert isinstance(val_list, list)
             self.val_list = VT._str2internal(val_list)
             for val in self.val_list:
                 if not self._check_compliance(val, force_max_enc_sz=max_encoded_sz is not None,
@@ -708,6 +708,18 @@ class String(VT_Alt):
                     for l in val:
                         if l not in self.alphabet:
                             raise ValueError("The value '%s' does not conform to the alphabet!" % val)
+
+            if isinstance(self, String):
+                max_enc_sz = 0
+                min_enc_sz = len(self.val_list[0])
+                for val in self.val_list:
+                    length = len(val)
+                    if length > max_enc_sz:
+                        max_enc_sz = length
+                    if length < min_enc_sz:
+                        min_enc_sz = length
+                self.max_encoded_sz = max_enc_sz
+                self.min_encoded_sz = min_enc_sz
 
             self.val_list_copy = copy.copy(self.val_list)
             self.is_val_list_provided = True  # distinguish cases where
@@ -721,45 +733,37 @@ class String(VT_Alt):
         if size is not None:
             self.min_sz = size
             self.max_sz = size
-
         elif min_sz is not None and max_sz is not None:
             assert(max_sz >= 0 and min_sz >= 0 and max_sz - min_sz >= 0)
             self.min_sz = min_sz
             self.max_sz = max_sz
-
         elif min_sz is not None:
             self.min_sz = min_sz
             # for string with no size limit, we set a threshold to
             # DEFAULT_MAX_SZ chars
             self.max_sz = self.DEFAULT_MAX_SZ
-            
         elif max_sz is not None:
             self.max_sz = max_sz
             self.min_sz = 0
-
         elif val_list is not None:
             sz = 0
-            for v in self.val_list:
+            for v in val_list:
                 length = len(v)
                 if length > sz:
                     sz = length
-
             self.max_sz = sz
             self.min_sz = 0
-
         elif max_encoded_sz is not None:
             # If we reach this condition, that means no size has been provided, we thus decide
             # an arbitrary default value for max_sz. Regarding absorption, this arbitrary choice will
             # have no influence, as only max_encoded_sz will be used.
             self.min_sz = 0
             self.max_sz = max_encoded_sz
-
         else:
             self.min_sz = 0
             self.max_sz = self.DEFAULT_MAX_SZ
 
-
-        self._check_sizes()
+        self._check_sizes(val_list)
 
         if val_list is None:
             self._populate_val_list(force_max_enc_sz=max_encoded_sz is not None,

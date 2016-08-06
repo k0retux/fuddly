@@ -357,7 +357,7 @@ class Example_DataModel(DataModel):
                     'custo_set': MH.Custo.NTerm.FrozenCopy,
                     'custo_clear': MH.Custo.NTerm.MutableClone,
                     'separator': {'contents': {'name': 'sep',
-                                               'contents': String(val_list=['\n'], absorb_regexp=b'\n+'),
+                                               'contents': String(val_list=['\n'], absorb_regexp='\n+'),
                                                'absorb_csts': AbsNoCsts(regexp=True)}},
                     'contents': [{
                         'section_type': MH.Random,

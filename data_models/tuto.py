@@ -41,7 +41,7 @@ class MyDF_DataModel(DataModel):
                    'custo_set': MH.Custo.NTerm.FrozenCopy,
                    'custo_clear': MH.Custo.NTerm.MutableClone,
                    'separator': {'contents': {'name': 'sep',
-                                              'contents': String(val_list=['\n'], absorb_regexp=b'\n+'),
+                                              'contents': String(val_list=['\n'], absorb_regexp='\n+'),
                                               'absorb_csts': AbsNoCsts(regexp=True)}},
                    'contents': [{
                        'section_type': MH.Random,
@@ -150,7 +150,7 @@ class MyDF_DataModel(DataModel):
         separator_desc = \
         {'name': 'separator',
          'separator': {'contents': {'name': 'sep_nl',
-                                    'contents': String(val_list=['\n'], absorb_regexp=b'[\r\n|\n]+'),
+                                    'contents': String(val_list=['\n'], absorb_regexp='[\r\n|\n]+'),
                                     'absorb_csts': AbsNoCsts(regexp=True)},
                        'prefix': False,
                        'suffix': False,
@@ -160,7 +160,7 @@ class MyDF_DataModel(DataModel):
               'contents': [
                   {'name': 'parameters',
                    'separator': {'contents': {'name': ('sep',2),
-                                              'contents': String(val_list=[' '], absorb_regexp=b' +'),
+                                              'contents': String(val_list=[' '], absorb_regexp=' +'),
                                               'absorb_csts': AbsNoCsts(regexp=True)}},
                    'qty': 3,
                    'contents': [

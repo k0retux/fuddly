@@ -2195,7 +2195,7 @@ class TestNodeFeatures(unittest.TestCase):
         gen_exist_desc = \
             {'name': 'gen_exist_cond',
              'separator': {'contents': {'name': 'sep_nl',
-                                        'contents': String(val_list=['\n'], max_sz=100, absorb_regexp=b'[\r\n|\n]+'),
+                                        'contents': String(val_list=['\n'], max_sz=100, absorb_regexp='[\r\n|\n]+'),
                                         'absorb_csts': AbsNoCsts(regexp=True)},
                            'prefix': False, 'suffix': False, 'unique': True},
              'contents': [
@@ -2465,7 +2465,7 @@ class TestNode_NonTerm(unittest.TestCase):
              'determinist': True,
              'separator': {'contents': {'name': 'SEP',
                                         'contents': String(val_list=[' ', '  ', '     '],
-                                                           absorb_regexp=b'\s+', determinist=False),
+                                                           absorb_regexp='\s+', determinist=False),
                                         'absorb_csts': AbsNoCsts(regexp=True)},
                            'prefix': True,
                            'suffix': True,

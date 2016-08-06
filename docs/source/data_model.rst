@@ -1053,7 +1053,7 @@ parameters with space characters (line 12-14).
 
     {'name': 'separator_test',
      'separator': {'contents': {'name': 'sep',
-				'contents': String(val_list=['\n'], absorb_regexp=b'[\r\n|\n]+'),
+				'contents': String(val_list=['\n'], absorb_regexp='[\r\n|\n]+'),
 				'absorb_csts': AbsNoCsts(regexp=True)},
 		   'prefix': False,
 		   'suffix': False,
@@ -1063,7 +1063,7 @@ parameters with space characters (line 12-14).
 	  'contents': [
 	      {'name': 'parameters',
 	       'separator': {'contents': {'name': ('sep',2),
-					  'contents': String(val_list=[' '], absorb_regexp=b' +'),
+					  'contents': String(val_list=[' '], absorb_regexp=' +'),
 					  'absorb_csts': AbsNoCsts(regexp=True)}},
 	       'qty': 3,
 	       'contents': [
