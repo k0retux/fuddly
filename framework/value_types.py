@@ -693,13 +693,7 @@ class String(VT_Alt):
         elif hasattr(self, 'specific_fuzzing_list'):
             self.extra_fuzzy_list = self.specific_fuzzing_list
         else:
-            self.extra_fuzzy_list = [
-                b'',
-                b'\x00',
-                b'%s%s%s',
-                b'%n%n%n',
-                b'\r\n'
-            ]
+            self.extra_fuzzy_list = None
 
         if val_list is not None:
             assert(isinstance(val_list, list))
@@ -869,29 +863,50 @@ class String(VT_Alt):
             else:
                 orig_val = random.choice(self.val_list_copy)
 
+        sz = len(orig_val)
+        sz_delta_with_max = self.max_sz - sz
+
         try:
             val = bp.corrupt_bits(orig_val, n=1, ascii=self.ascii_mode)
             self.val_list_fuzzy.append(val)
         except:
             print("\n*** Value is empty! --> skipping bitflip test case ***")
 
-        sz = len(orig_val)
-        sz_delta = self.max_sz - sz
-
-        val = orig_val + b"A"*(sz_delta + 1)
+        val = orig_val + b"A"*(sz_delta_with_max + 1)
         self.val_list_fuzzy.append(val)
 
+        self.val_list_fuzzy.append(b'')
         if sz > 0:
-            sz_delta = sz - self.min_sz
-            val = orig_val[:-sz_delta-1]
-            self.val_list_fuzzy.append(val)
+            sz_delta_with_min = sz - self.min_sz
+            val = orig_val[:-sz_delta_with_min-1]
+            if val != b'':
+                self.val_list_fuzzy.append(val)
 
         val = orig_val + b"X"*(self.max_sz*8)
         self.val_list_fuzzy.append(val)
 
-        for v in self.extra_fuzzy_list:
-            if v not in self.val_list_fuzzy:
-                self.val_list_fuzzy.append(v)
+        self.val_list_fuzzy.append(b'\x00'*sz if sz>0 else b'\x00')
+
+        if sz > 1:
+            is_even = sz % 2 == 0
+            cpt = sz // 2
+            if is_even:
+                self.val_list_fuzzy.append(b'%n' * cpt)
+                self.val_list_fuzzy.append(b'%s' * cpt)
+                self.val_list_fuzzy.append(b'\r\n' * cpt)
+            else:
+                self.val_list_fuzzy.append(orig_val[:1] + b'%n' * cpt)
+                self.val_list_fuzzy.append(orig_val[:1] + b'%s' * cpt)
+                self.val_list_fuzzy.append(orig_val[:1] + b'\r\n' * cpt)
+        else:
+            self.val_list_fuzzy.append(b'%n%n%n')
+            self.val_list_fuzzy.append(b'%s%s%s')
+            self.val_list_fuzzy.append(b'\r\n')
+
+        if self.extra_fuzzy_list:
+            for v in self.extra_fuzzy_list:
+                if v not in self.val_list_fuzzy:
+                    self.val_list_fuzzy.append(v)
 
         enc_cases = self.encoding_test_cases(orig_val, self.max_sz, self.min_sz,
                                              self.min_encoded_sz, self.max_encoded_sz)

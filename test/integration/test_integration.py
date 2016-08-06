@@ -1584,6 +1584,10 @@ class TestModelWalker(unittest.TestCase):
             b' [!] ++++++++++ [!] ::AAAA::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::\x00\x00\x00::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::A%n::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::A%s::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::A\r\n::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::../../../../../../etc/password::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::../../../../../../Windows/system.ini::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
@@ -1594,10 +1598,14 @@ class TestModelWalker(unittest.TestCase):
             b' [!] ++++++++++ [!] ::AAA::AAA::\x01:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::\x80:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::\x7f:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::\xc9AA::\xc9AA::>:: [!] ',  # [22] could change has it is a random corrupt_bit
+            b' [!] >>>>>>>>>> [!] ::\xc9AA::\xc9AA::>:: [!] ',  # [26] could change has it is a random corrupt_bit
             b' [!] >>>>>>>>>> [!] ::AAAA::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\x00\x00\x00::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::A%n::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::A%s::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::A\r\n::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::../../../../../../Windows/system.ini::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
@@ -1620,10 +1628,10 @@ class TestModelWalker(unittest.TestCase):
                                                                     max_steps=100):
             val = rnode.to_bytes()
             print(colorize('[%d] ' % idx + repr(val), rgb=Color.INFO))
-            if idx not in [8, 22]:
+            if idx not in [8, 26]:
                 self.assertEqual(val, raw_vals[idx - 1])
 
-        self.assertEqual(idx, 35)
+        self.assertEqual(idx, 43)
 
     def test_TypedNodeDisruption_1(self):
         nt = self.dm.get_data('Simple')
