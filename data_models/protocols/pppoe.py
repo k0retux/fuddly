@@ -52,26 +52,26 @@ class PPPOE_DataModel(DataModel):
                   {'name': 'v000', # Final Tag (optional)
                    'exists_if': (IntCondition(0), 'type'),
                    'sync_enc_size_with': 'len',
-                   'contents': BYTES(size=0)},
+                   'contents': String(size=0)},
                   {'name': 'v101', # Service Name
                    'exists_if': (IntCondition(0x0101), 'type'),
                    'sync_enc_size_with': 'len',
-                   'contents': UTF8(val_list=[u'my \u00fcber service']),
+                   'contents': String(val_list=[u'my \u00fcber service'], codec='utf8'),
                    },
                   {'name': 'v102', # AC name
                    'exists_if': (IntCondition(0x0102), 'type'),
                    'sync_enc_size_with': 'len',
-                   'contents': UTF8(val_list=['AC name']),
+                   'contents': String(val_list=['AC name'], codec='utf8'),
                    },
                   {'name': 'v103', # Host Identifier
                    'exists_if': (IntCondition(0x0103), 'type'),
                    'sync_enc_size_with': 'len',
-                   'contents': BYTES(val_list=['Host Identifier']),
+                   'contents': String(val_list=['Host Identifier']),
                    },
                   {'name': 'v104', # Cookie
                    'exists_if': (IntCondition(0x0104), 'type'),
                    'sync_enc_size_with': 'len',
-                   'contents': BYTES(val_list=['Cookie'], min_sz=0, max_sz=1000),
+                   'contents': String(val_list=['Cookie'], min_sz=0, max_sz=1000),
                    },
                   {'name': 'v105', # Vendor Specific
                    'exists_if': (IntCondition(0x0105), 'type'),
@@ -82,29 +82,29 @@ class PPPOE_DataModel(DataModel):
                                              subfield_descs=['type','version']) },
                        {'name': 'remainder',
                         'sync_enc_size_with': ('len', 4),
-                        'contents': BYTES(val_list=['unspecified...'], min_sz=0, max_sz=1000),
+                        'contents': String(val_list=['unspecified...'], min_sz=0, max_sz=1000),
                         },
                    ]},
                   {'name': 'v110', # Relay session ID
                    'exists_if': (IntCondition(0x0110), 'type'),
                    'sync_enc_size_with': 'len',
-                   'contents': BYTES(size=12)},
+                   'contents': String(size=12)},
                   {'name': 'v201',
                    'exists_if': (IntCondition([0x201, 0x202]), 'type'),
                    'sync_enc_size_with': 'len',
-                   'contents': UTF8(val_list=['Service Name Error or AC System Error!']),
+                   'contents': String(val_list=['Service Name Error or AC System Error!'], codec='utf8'),
                    },
                   {'name': 'v203', # Generic Error
                    'exists_if': (IntCondition(0x0203), 'type'),
                    'sync_enc_size_with': 'len',
-                   'contents': UTF8(val_list=['Generic Error!']),
+                   'contents': String(val_list=['Generic Error!'], codec='utf8'),
                    'alt': [
                        {'conf': 'null-terminated',  # RFC2516 says it MUST NOT be null terminated
                         'exists_if': (IntCondition(0x0203), 'type'),
                         'contents': [
                             {'name': 'data',
                              'sync_enc_size_with': ('len', -1),
-                             'contents': UTF8(val_list=['Generic Error!'])},
+                             'contents': String(val_list=['Generic Error!'], codec='utf8')},
                             {'name': 'null',
                              'mutable': False,
                              'contents': UINT8(int_list=[0])}
@@ -135,11 +135,11 @@ class PPPOE_DataModel(DataModel):
              {'name': 'mac_dst',
               'semantics': 'mac_dst',
               'mutable': False,
-              'contents': BYTES(size=6)},
+              'contents': String(size=6)},
              {'name': 'mac_src',
               'semantics': 'mac_src',
               'mutable': False,
-              'contents': BYTES(size=6)},
+              'contents': String(size=6)},
              {'name': 'proto',
               'mutable': False,
               'contents': UINT16_be(int_list=[0x8863])},
@@ -178,7 +178,7 @@ class PPPOE_DataModel(DataModel):
                        (tag_ac_name, 1),
                        (tag_service_name.get_clone(), 1),
                        {'name': 'host_uniq_stub',
-                        'contents': BYTES(val_list=[''])},
+                        'contents': String(val_list=[''])},
                        (tag_node.get_clone(), 0, 4)
                    ]},
                   {'name': '4padr',
@@ -199,7 +199,7 @@ class PPPOE_DataModel(DataModel):
                         'contents': [
                             (tag_service_name.get_clone(), 1),
                             {'name': ('host_uniq_stub', 2),
-                             'contents': BYTES(val_list=[''])},
+                             'contents': String(val_list=[''])},
                             (tag_node_4pads, 0, 4)
                         ]},
                        # Reject PPPoE session Case
@@ -219,7 +219,7 @@ class PPPOE_DataModel(DataModel):
                    ]}
               ]},
              {'name': 'padding',
-              'contents': BYTES(max_sz=0),
+              'contents': String(max_sz=0),
               'absorb_csts': AbsNoCsts(),
               'mutable': False},
          ]}
@@ -229,7 +229,7 @@ class PPPOE_DataModel(DataModel):
         pppoe_msg.make_random(recursive=True)
 
         padi = pppoe_msg.get_clone('padi')
-        padi['.*/mac_dst'].set_values(value_type=BYTES(val_list=['\xff\xff\xff\xff\xff\xff']))
+        padi['.*/mac_dst'].set_values(value_type=String(val_list=[u'\xff\xff\xff\xff\xff\xff']))
         padi['.*/code'].set_values(value_type=UINT8(int_list=[0x9]))
 
         pado = pppoe_msg.get_clone('pado')

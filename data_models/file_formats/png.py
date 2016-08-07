@@ -58,16 +58,16 @@ class PNG_DataModel(DataModel):
         {'name': 'PNG_model',
          'contents': [
              {'name': 'sig',
-              'contents': BYTES(val_list=[b'\x89PNG\r\n\x1a\n'], size=8)},
+              'contents': String(val_list=[u'\x89PNG\r\n\x1a\n'], size=8)},
              {'name': 'chunks',
               'qty': (2,200),
               'contents': [
                    {'name': 'len',
                     'contents': UINT32_be()},
                    {'name': 'type',
-                    'contents': BYTES(val_list=['IHDR', 'IEND', 'IDAT', 'PLTE'], size=4)},
+                    'contents': String(val_list=['IHDR', 'IEND', 'IDAT', 'PLTE'], size=4)},
                    {'name': 'data_gen',
-                    'contents': lambda x: Node('data', value_type=BYTES(size=x[0].cc.get_raw_value())),
+                    'contents': lambda x: Node('data', value_type=String(size=x[0].cc.get_raw_value())),
                     'node_args': ['len']},
                    {'name': 'crc32_gen',
                     'contents': MH.CRC(vt=UINT32_be, clear_attrs=[MH.Attr.Mutable]),
@@ -80,7 +80,7 @@ class PNG_DataModel(DataModel):
         {'name': 'PNG_model',
          'contents': [
              {'name': 'sig',
-              'contents': BYTES(val_list=[b'\x89PNG\r\n\x1a\n'], size=8)},
+              'contents': String(val_list=[u'\x89PNG\r\n\x1a\n'], size=8)},
              {'name': 'chunks',
               'qty': (2,200),
               'contents': [
@@ -91,7 +91,7 @@ class PNG_DataModel(DataModel):
                        {'weight': 10,
                         'contents': [
                             {'name': 'type1',
-                             'contents': BYTES(val_list=['IHDR'], size=4),
+                             'contents': String(val_list=['IHDR'], size=4),
                              'absorb_csts': AbsFullCsts()},
                             {'name': 'width',
                              'contents': UINT32_be()},
@@ -111,9 +111,9 @@ class PNG_DataModel(DataModel):
                        {'weight': 5,
                         'contents': [
                             {'name': 'type2',
-                             'contents': BYTES(val_list=['IEND', 'IDAT', 'PLTE'], size=4)},
+                             'contents': String(val_list=['IEND', 'IDAT', 'PLTE'], size=4)},
                             {'name': 'data_gen',
-                             'contents': lambda x: Node('data', value_type=BYTES(size=x.get_raw_value())),
+                             'contents': lambda x: Node('data', value_type=String(size=x.get_raw_value())),
                              'node_args': 'len'}
                         ]}
                    ]},

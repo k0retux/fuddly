@@ -34,6 +34,7 @@ import collections
 import string
 import re
 import zlib
+import codecs
 
 import six
 from six import with_metaclass
@@ -41,7 +42,7 @@ from six import with_metaclass
 sys.path.append('.')
 
 import framework.basic_primitives as bp
-from framework.data_model import AbsorbStatus, AbsCsts, convert_to_internal_repr, unconvert_from_internal_repr
+from framework.data_model import AbsorbStatus, AbsCsts
 from framework.encoders import *
 from framework.error_handling import *
 from framework.global_resources import *
@@ -97,10 +98,6 @@ class VT(object):
 
     def pretty_print(self, max_size=None):
         return None
-
-    @staticmethod
-    def _str2internal(arg):
-        return convert_to_internal_repr(arg)
 
 
 class VT_Alt(VT):
@@ -322,15 +319,46 @@ class String(VT_Alt):
         """
         return None
 
-
     def __repr__(self):
         if DEBUG:
             return VT_Alt.__repr__(self)[:-1] + ' contents:' + str(self.val_list) + '>'
         else:
             return VT_Alt.__repr__(self)
 
+    def _str2bytes(self, val):
+        if val is None:
+            return b''
+        elif isinstance(val, (list, tuple)):
+            b = []
+            for v in val:
+                b.append(self._str2bytes(v))
+        else:
+            if sys.version_info[0] > 2:
+                b = val if isinstance(val, bytes) else val.encode(self.codec)
+            else:
+                try:
+                    b = val.encode(self.codec)
+                except:
+                    err_msg = "\n*** WARNING: Encoding issue. With python2 'str' or 'bytes' means " \
+                              "ASCII, prefix the string {:s} with 'u'".format(repr(val[:30]))
+                    print(err_msg)
+                    b = val
+        return b
+
+    def _bytes2str(self, val):
+        if isinstance(val, (list, tuple)):
+            b = [v.decode(self.codec) for v in val]
+        else:
+            b = val.decode(self.codec)
+        return b
+
+    UTF16LE = codecs.lookup('utf-16-le').name
+    UTF16BE = codecs.lookup('utf-16-be').name
+    ASCII = codecs.lookup('ascii').name
+    LATIN_1 = codecs.lookup('latin-1').name
+
     def init_specific(self, val_list=None, size=None, min_sz=None,
-                      max_sz=None, determinist=True, ascii_mode=False,
+                      max_sz=None, determinist=True, codec='latin-1', ascii_mode=False,
                       extra_fuzzy_list=None, absorb_regexp=None,
                       alphabet=None, min_encoded_sz=None, max_encoded_sz=None, encoding_arg=None):
 
@@ -351,6 +379,7 @@ class String(VT_Alt):
               whether this latter is provided.
             determinist: If set to ``True`` generated values will be in a deterministic
               order, otherwise in a random order.
+            codec: codec to use for encoding the string (e.g., 'latin-1', 'utf8')
             ascii_mode: If set to ``True``, it will enforce the string to comply with ASCII
               7 bits.
             extra_fuzzy_list: During data generation, if this parameter is specified with some
@@ -390,7 +419,7 @@ class String(VT_Alt):
             self.init_encoding_scheme(self.encoding_arg)
 
         self.set_description(val_list=val_list, size=size, min_sz=min_sz,
-                             max_sz=max_sz, determinist=determinist,
+                             max_sz=max_sz, determinist=determinist, codec=codec,
                              ascii_mode=ascii_mode, extra_fuzzy_list=extra_fuzzy_list,
                              absorb_regexp=absorb_regexp, alphabet=alphabet,
                              min_encoded_sz=min_encoded_sz, max_encoded_sz=max_encoded_sz)
@@ -441,12 +470,8 @@ class String(VT_Alt):
 
         elif constraints[AbsCsts.Contents] and self.alphabet is not None:
             size = None
-            if self.encoded_string:
-                blob_str = unconvert_from_internal_repr(blob_dec)
-            else:
-                blob_str = unconvert_from_internal_repr(blob)
-                blob_dec = blob
-            alp = unconvert_from_internal_repr(self.alphabet)
+            blob_str = self._bytes2str(blob_dec)
+            alp = self._bytes2str(self.alphabet)
             for l in alp:
                 if blob_str.startswith(l):
                     break
@@ -454,10 +479,7 @@ class String(VT_Alt):
                 sup_sz = len(blob)+1
                 off = sup_sz
                 for l in alp:
-                    if self.encoded_string:
-                        l = self.encode(convert_to_internal_repr(l))
-                    else:
-                        l = convert_to_internal_repr(l)
+                    l = self.encode(self._str2bytes(l))
                     new_off = blob.find(l)
                     if new_off < off and new_off > -1:
                         off = new_off
@@ -465,16 +487,11 @@ class String(VT_Alt):
                     off = -1
 
         elif constraints[AbsCsts.Regexp] and self.regexp is not None:
-            g = re.search(self.regexp, unconvert_from_internal_repr(blob_dec), re.S)
+            g = re.search(self.regexp, self._bytes2str(blob_dec), re.S)
             if g is not None:
-                if self.encoded_string:
-                    pattern_enc = self.encode(convert_to_internal_repr(g.group(0)))
-                    off = blob.find(pattern_enc)
-                    size = len(pattern_enc)
-                else:
-                    pattern_enc = convert_to_internal_repr(g.group(0))
-                    off = blob.find(pattern_enc)
-                    size = len(pattern_enc)
+                pattern_enc = self.encode(self._str2bytes(g.group(0)))
+                off = blob.find(pattern_enc)
+                size = len(pattern_enc)
             else:
                 off = -1
 
@@ -511,14 +528,11 @@ class String(VT_Alt):
             # if encoded string, val is returned decoded
             val = self._read_value_from(blob[off:sz+off], constraints)
 
-            if self.encoded_string:
-                val_enc_sz = len(self.encode(val)) # maybe different from sz if blob is smaller
-                if val_enc_sz < self.min_encoded_sz:
-                    raise ValueError('min_encoded_sz constraint not respected!')
-            else:
-                val_sz = len(val) # maybe different from sz if blob is smaller
-                if val_sz < self.min_encoded_sz:
-                    raise ValueError('min_sz/min_encoded_sz constraint not respected!')
+            val_enc_sz = len(self.encode(val)) # maybe different from sz if blob is smaller
+            if val_enc_sz < self.min_encoded_sz:
+                raise ValueError('min_encoded_sz constraint not respected!')
+            if not self.encoded_string:
+                val_sz = val_enc_sz
         else:
             blob = blob[off:] #blob[off:size+off] if size is not None else blob[off:]
             val = self._read_value_from(blob, constraints)
@@ -626,11 +640,11 @@ class String(VT_Alt):
         if self.encoded_string:
             blob = self.decode(blob)
         if constraints[AbsCsts.Regexp]:
-            g = re.match(self.regexp, unconvert_from_internal_repr(blob), re.S)
+            g = re.match(self.regexp, self._bytes2str(blob), re.S)
             if g is None:
                 raise ValueError('regexp not valid!')
             else:
-                return convert_to_internal_repr(g.group(0))
+                return self._str2bytes(g.group(0))
         else:
             return blob
 
@@ -662,18 +676,19 @@ class String(VT_Alt):
 
 
     def set_description(self, val_list=None, size=None, min_sz=None,
-                        max_sz=None, determinist=True,
+                        max_sz=None, determinist=True, codec='latin-1',
                         ascii_mode=False, extra_fuzzy_list=None,
                         absorb_regexp=None, alphabet=None,
                         min_encoded_sz=None, max_encoded_sz=None):
         '''
         @size take precedence over @min_sz and @max_sz
         '''
+        self.codec = codecs.lookup(codec).name # normalize
         self.max_encoded_sz = max_encoded_sz
         self.min_encoded_sz = min_encoded_sz
 
         if alphabet is not None:
-            self.alphabet = convert_to_internal_repr(alphabet)
+            self.alphabet = self._str2bytes(alphabet)
         else:
             self.alphabet = None
         self.ascii_mode = ascii_mode
@@ -687,7 +702,7 @@ class String(VT_Alt):
             self.regexp = absorb_regexp
 
         if extra_fuzzy_list is not None:
-            self.extra_fuzzy_list = VT._str2internal(extra_fuzzy_list)
+            self.extra_fuzzy_list = self._str2bytes(extra_fuzzy_list)
         elif hasattr(self, 'specific_fuzzing_list'):
             self.extra_fuzzy_list = self.specific_fuzzing_list
         else:
@@ -695,7 +710,7 @@ class String(VT_Alt):
 
         if val_list is not None:
             assert isinstance(val_list, list)
-            self.val_list = VT._str2internal(val_list)
+            self.val_list = self._str2bytes(val_list)
             for val in self.val_list:
                 if not self._check_compliance(val, force_max_enc_sz=max_encoded_sz is not None,
                                               force_min_enc_sz=min_encoded_sz is not None,
@@ -749,14 +764,6 @@ class String(VT_Alt):
             self.min_sz = 0
             self.max_sz = self.DEFAULT_MAX_SZ
 
-        if not self.encoded_string:
-            # In the case of String (or every non-Encoding type), the internal represenation
-            # is UTF8 encoding. Hence the byte string size is still >= to the string size.
-            if self.max_encoded_sz is None or self.max_encoded_sz < self.max_sz:
-                self.max_encoded_sz = self.max_sz
-            if self.min_encoded_sz is None or self.min_encoded_sz < self.min_sz:
-                self.min_encoded_sz = self.min_sz
-
         self._check_sizes(val_list)
 
         if val_list is None:
@@ -765,6 +772,13 @@ class String(VT_Alt):
 
         self.determinist = determinist
 
+        if not self.encoded_string:
+            # For a non-Encoding type, the size of the string is always lesser or equal than the size
+            # of the encoded string. Hence the byte string size is still >= to the string size.
+            if self.max_encoded_sz is None or self.max_encoded_sz < self.max_sz:
+                self.max_encoded_sz = self.max_sz
+            if self.min_encoded_sz is None or self.min_encoded_sz < self.min_sz:
+                self.min_encoded_sz = self.min_sz
 
     def _check_compliance(self, value, force_max_enc_sz, force_min_enc_sz, update_list=True):
         if self.encoded_string:
@@ -818,14 +832,14 @@ class String(VT_Alt):
 
     def _populate_val_list(self, force_max_enc_sz=False, force_min_enc_sz=False):
         self.val_list = []
-        alpbt = string.printable if self.alphabet is None else unconvert_from_internal_repr(self.alphabet)
+        alpbt = string.printable if self.alphabet is None else self._bytes2str(self.alphabet)
         if self.min_sz < self.max_sz:
-            self._check_compliance(bp.rand_string(size=self.max_sz, str_set=alpbt),
+            self._check_compliance(self._str2bytes(bp.rand_string(size=self.max_sz, str_set=alpbt)),
                                    force_max_enc_sz=force_max_enc_sz, force_min_enc_sz=force_min_enc_sz)
-            self._check_compliance(bp.rand_string(size=self.min_sz, str_set=alpbt),
+            self._check_compliance(self._str2bytes(bp.rand_string(size=self.min_sz, str_set=alpbt)),
                                    force_max_enc_sz=force_max_enc_sz, force_min_enc_sz=force_min_enc_sz)
         else:
-            self._check_compliance(bp.rand_string(size=self.max_sz, str_set=alpbt),
+            self._check_compliance(self._str2bytes(bp.rand_string(size=self.max_sz, str_set=alpbt)),
                                    force_max_enc_sz=force_max_enc_sz, force_min_enc_sz=force_min_enc_sz)
         if self.min_sz+1 < self.max_sz:
             NB_VALS_MAX = 3
@@ -834,7 +848,7 @@ class String(VT_Alt):
                 retry_cpt = 0
                 while nb_vals < NB_VALS_MAX and retry_cpt < 5:
                     val = bp.rand_string(mini=self.min_sz+1, maxi=self.max_sz-1, str_set=alpbt)
-                    if self._check_compliance(val, force_max_enc_sz=force_max_enc_sz,
+                    if self._check_compliance(self._str2bytes(val), force_max_enc_sz=force_max_enc_sz,
                                               force_min_enc_sz=force_min_enc_sz):
                         nb_vals += 1
                     else:
@@ -911,6 +925,24 @@ class String(VT_Alt):
                 if v not in self.val_list_fuzzy:
                     self.val_list_fuzzy.append(v)
 
+        if self.codec == self.ASCII:
+            val = bytearray(orig_val)
+            if len(val) > 0:
+                val[0] |= 0x80
+                val = bytes(val)
+            else:
+                val = b'\xe9'
+            if val not in self.val_list_fuzzy:
+                self.val_list_fuzzy.append(val)
+        elif self.codec == self.UTF16BE or self.codec == self.UTF16LE:
+            if self.max_sz > 0:
+                if self.max_encoded_sz % 2 == 1:
+                    nb = self.max_sz // 2
+                    # euro character at the end that 'fully' use the 2 bytes of utf-16
+                    val = ('A' * nb).encode(self.codec) + b'\xac\x20'
+                    if val not in self.val_list_fuzzy:
+                        self.val_list_fuzzy.append(val)
+
         enc_cases = self.encoding_test_cases(orig_val, self.max_sz, self.min_sz,
                                              self.min_encoded_sz, self.max_encoded_sz)
         if enc_cases:
@@ -957,7 +989,7 @@ class String(VT_Alt):
         # has to be used for an another purpose.
 
         assert size is not None or encoded_size is not None
-        if self.encoded_string and encoded_size is not None:
+        if encoded_size is not None:
             if encoded_size == self.max_encoded_sz:
                 return
             self.max_encoded_sz = encoded_size
@@ -973,14 +1005,17 @@ class String(VT_Alt):
         if self.drawn_val is None:
             self.get_value()
 
-        if self.encoded_string and not isinstance(self, (BYTES,UTF8)):
+        if self.encoded_string or self.codec not in [self.ASCII, self.LATIN_1]:
             dec = self.drawn_val
             sz = len(dec)
             if max_size is not None and sz > max_size:
                 dec = dec[:max_size]
-            return repr(dec) + ' [decoded, sz=' + str(len(dec)) + ']'
+            dec = dec.decode(self.codec, 'replace')
+            if sys.version_info[0] == 2:
+                dec = dec.encode('ascii', 'replace')
+            return dec + ' [decoded, sz={!s}, codec={!s}]'.format(len(dec), self.codec)
         else:
-            return None
+            return 'codec={!s}'.format(self.codec)
 
 
 class INT(VT):
@@ -1349,49 +1384,11 @@ def from_encoder(encoder_cls, encoding_arg=None):
         string_subclass.encode = new_meth(encoder_cls.encode)
         string_subclass.decode = new_meth(encoder_cls.decode)
         string_subclass.init_encoding_scheme = new_meth(encoder_cls.init_encoding_scheme)
-        string_subclass.to_bytes = encoder_cls.to_bytes  # static method
         if encoding_arg is not None:
             string_subclass.encoding_arg = encoding_arg
         return string_subclass
     return internal_func
 
-
-@from_encoder(PythonCodec_Enc)
-class Codec(String): pass
-
-@from_encoder(PythonCodec_Enc, 'ascii')
-class ASCII(String):
-    def encoding_test_cases(self, current_val, max_sz, min_sz, min_encoded_sz, max_encoded_sz):
-        enc_val = bytearray(self.encode(current_val))
-        if len(enc_val) > 0:
-            enc_val[0] |= 0x80
-            enc_val = bytes(enc_val)
-        else:
-            enc_val = b'\xe9'
-        return [enc_val]
-
-@from_encoder(PythonCodec_Enc, 'latin_1')
-class LATIN_1(String): pass
-
-@from_encoder(PythonCodec_Enc, 'latin_1')
-class BYTES(String): pass
-
-@from_encoder(PythonCodec_Enc, 'utf_16_le')
-class UTF16_LE(String):
-    def encoding_test_cases(self, current_val, max_sz, min_sz, min_encoded_sz, max_encoded_sz):
-        l = None
-        if max_sz > 0:
-            if max_encoded_sz % 2 == 1:
-                nb = max_sz // 2
-                # euro character at the end that 'fully' use the 2 bytes of utf-16
-                l = [self.encode(b'A'*nb)+b'\xac\x20']
-        return l
-
-@from_encoder(PythonCodec_Enc, 'utf_16_be')
-class UTF16_BE(UTF16_LE): pass
-
-@from_encoder(PythonCodec_Enc, 'utf_8')
-class UTF8(String): pass
 
 @from_encoder(GZIP_Enc)
 class GZIP(String): pass
@@ -1460,8 +1457,7 @@ class INT_str(with_metaclass(meta_int_str, INT)):
         return int(val)
 
     def _convert_value(self, val):
-        return VT._str2internal(str(val))
-        # return str(val)
+        return self._str2bytes(str(val))
 
     def pretty_print(self, max_size=None):
         if self.drawn_val is None:
@@ -1469,6 +1465,12 @@ class INT_str(with_metaclass(meta_int_str, INT)):
 
         return str(self.drawn_val)
 
+    def _str2bytes(self, val):
+        if isinstance(val, (list, tuple)):
+            b = [v.encode('utf8') for v in val]
+        else:
+            b = val.encode('utf8')
+        return b
 
 
 #class Fuzzy_INT_str(Fuzzy_INT, metaclass=meta_int_str):

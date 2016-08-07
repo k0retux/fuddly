@@ -378,7 +378,7 @@ class MyDF_DataModel(DataModel):
                   'node_args': 'data1',
                   'absorb_csts': AbsFullCsts(contents=False)},
                  {'name': 'data1',
-                  'contents': UTF16_LE(val_list=['Test!', 'Hello World!']) },
+                  'contents': String(val_list=['Test!', 'Hello World!'], codec='utf-16-le') },
               ]},
              {'name': 'data2',
               'contents': String(val_list=['Red', 'Green', 'Blue']) },

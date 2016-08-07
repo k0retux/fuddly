@@ -264,7 +264,7 @@ class SMS_DataModel(DataModel):
                              'node_args': ['SPI_p1','SPI_p2','KIc','KID_RC','TAR','CNTR','PCNTR','SecData']},
 
                             {'name': 'SecData',
-                             'contents': BYTES(min_sz=1, max_sz=100, determinist=False)}
+                             'contents': String(min_sz=1, max_sz=100, determinist=False)}
                         ]},
 
                    ]},

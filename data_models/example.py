@@ -62,7 +62,7 @@ class Example_DataModel(DataModel):
 
         tux_subparts_4 = [u'[\u00c2]PLIP', u'[\u00c2]GLOUP']
         ku.add_conf('ALT')
-        ku.set_values(tux_subparts_4, conf='ALT')
+        ku.set_values(value_type=String(val_list=tux_subparts_4, codec='utf8'), conf='ALT')
         
         idx = Node('IDX')
         idx.set_values(value_type=SINT16_be(mini=4,maxi=40))

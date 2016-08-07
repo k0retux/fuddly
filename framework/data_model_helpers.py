@@ -193,7 +193,7 @@ class MH(object):
     def TIMESTAMP(time_format="%H%M%S", utc=False,
                   set_attrs=[], clear_attrs=[]):
         '''
-        Return a *generator* that returns the current time (in a BYTES node).
+        Return a *generator* that returns the current time (in a String node).
 
         Args:
           time_format (str): time format to be used by the generator.
@@ -206,7 +206,7 @@ class MH(object):
             else:
                 now = datetime.datetime.now()
             ts = now.strftime(time_format)
-            n = Node('cts', value_type=fvt.BYTES(val_list=[ts], size=len(ts)))
+            n = Node('cts', value_type=fvt.String(val_list=[ts], size=len(ts)))
             n.set_semantics(NodeSemantics(['timestamp']))
             MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
@@ -296,7 +296,7 @@ class MH(object):
         return functools.partial(map_func, vt, func, set_attrs, clear_attrs)
 
     @staticmethod
-    def CYCLE(vals, depth=1, vt=fvt.BYTES,
+    def CYCLE(vals, depth=1, vt=fvt.String,
               set_attrs=[], clear_attrs=[]):
         '''Return a *generator* that iterates other the provided value list
         and returns at each step a `vt` node corresponding to the
@@ -1834,10 +1834,13 @@ class RegexParser(StateMachine):
 
         if self.charset == MH.Charset.ASCII:
             max = 0x7F
+            self.codec = 'ascii'
         elif self.charset == MH.Charset.UNICODE:
             max = 0xFFFF
+            self.codec = 'utf8'
         else:
             max = 0xFF
+            self.codec = 'latin-1'
 
         def get_complement(chars):
             return ''.join([self.int_to_string(i) for i in range(0, max + 1) if self.int_to_string(i) not in chars])
@@ -1863,10 +1866,12 @@ class RegexParser(StateMachine):
         assert (values is not None or alphabet is not None)
 
         if alphabet is not None:
-            return [Node(name=name, vt=fvt.String(alphabet=alphabet, min_sz=qty[0], max_sz=qty[1])), 1, 1]
+            return [Node(name=name,
+                         vt=fvt.String(alphabet=alphabet, min_sz=qty[0], max_sz=qty[1],
+                                       codec=self.codec)), 1, 1]
         else:
             if type == fvt.String:
-                node = Node(name=name, vt=fvt.String(val_list=values))
+                node = Node(name=name, vt=fvt.String(val_list=values, codec=self.codec))
             else:
                 node = Node(name=name, vt=fvt.INT_str(int_list=values))
 

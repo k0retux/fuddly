@@ -64,12 +64,12 @@ class ZIP_DataModel(DataModel):
         {'name': 'ZIP',
          'contents': [
              {'name': 'start_padding',
-              'contents': BYTES(size=0),
+              'contents': String(size=0),
               'qty': (0, 1),
               'clear_attrs': MH.Attr.Mutable,
               'alt': [
                   {'conf': 'ABS',
-                   'contents': BYTES(size=0),
+                   'contents': String(size=0),
                    'set_attrs': MH.Attr.Abs_Postpone,
                    'clear_attrs': MH.Attr.Mutable,
                    'absorb_csts': AbsNoCsts()}
@@ -132,20 +132,20 @@ class ZIP_DataModel(DataModel):
                             {'name': 'extra_field',
                              'type': MH.Generator,
                              'contents': lambda x: Node('cts', value_type=\
-                                                        BYTES(size=x.get_raw_value())),
+                                                        String(size=x.get_raw_value())),
                              'node_args': 'extra_field_length'}
                         ]},
                        {'name': 'data',
                         'type': MH.Generator,
                         'contents': lambda x: Node('cts', value_type=\
-                                                   BYTES(val_list=[zlib.compress(b'a'*x.get_raw_value())])),
+                                                   String(val_list=[zlib.compress(b'a'*x.get_raw_value())])),
                         'node_args': 'uncompressed_size',
                         'alt': [
                             {'conf': 'ABS',
                              'type': MH.Generator,
                              'custo_clear': MH.Custo.Gen.ResetOnUnfreeze,
                              'contents': lambda x: Node('cts', value_type=\
-                                                        BYTES(size=x.get_raw_value())),
+                                                        String(size=x.get_raw_value())),
                              'node_args': 'compressed_size'}
                         ]},
                        {'name': 'data_desc',
@@ -160,12 +160,12 @@ class ZIP_DataModel(DataModel):
                         ]},
                        {'name': 'no_data_desc',
                         'exists_if': (BitFieldCondition(sf=1, val=0), 'gp_bit_flag'),
-                        'contents': BYTES(size=0)}
+                        'contents': String(size=0)}
                    ]}
               ]},
              {'name': 'archive_desc_header',
               'qty': (0,1),
-              'contents': BYTES(size=0),
+              'contents': String(size=0),
               'alt': [
                   {'conf': 'ABS',
                    'contents': [
@@ -178,7 +178,7 @@ class ZIP_DataModel(DataModel):
                        {'name': 'extra_enc_field',
                         'type': MH.Generator,
                         'contents': lambda x: Node('cts', value_type=\
-                                                  BYTES(size=x.get_raw_value())),
+                                                  String(size=x.get_raw_value())),
                         'node_args': 'extra_enc_field_len'}
                    ]}
               ]},
@@ -189,10 +189,10 @@ class ZIP_DataModel(DataModel):
                    'sync_qty_with': 'file',
                    'contents': [
                        {'name': 'unsupported_fields',
-                        'contents': BYTES(size=0),
+                        'contents': String(size=0),
                         'alt': [
                             {'conf': 'ABS',
-                             'contents': BYTES(size=10),
+                             'contents': String(size=10),
                              'set_attrs': [MH.Attr.Abs_Postpone],
                              'absorb_csts': AbsNoCsts()}
                         ]},
@@ -231,7 +231,7 @@ class ZIP_DataModel(DataModel):
                         'alt': [
                             {'conf': 'ABS',
                              'contents': lambda x: Node('cts', value_type=\
-                                                        BYTES(size=x.cc.generated_node.get_raw_value())),
+                                                        String(size=x.cc.generated_node.get_raw_value())),
                              'node_args': ('file_name_length', 2)} ]},
                        {'name': ('extra_field', 2),
                         'contents': MH.COPY_VALUE(path='header/extra_field/cts$', depth=1),
@@ -239,12 +239,12 @@ class ZIP_DataModel(DataModel):
                         'alt': [
                             {'conf': 'ABS',
                              'contents': lambda x: Node('cts', value_type=\
-                                                        BYTES(size=x.cc.generated_node.get_raw_value())),
+                                                        String(size=x.cc.generated_node.get_raw_value())),
                              'node_args': ('extra_field_length', 2)} ]},
                        {'name': 'file_comment',
                         'type': MH.Generator,
                         'contents': lambda x: Node('cts', value_type=\
-                                                  BYTES(size=x.get_raw_value())),
+                                                  String(size=x.get_raw_value())),
                         'node_args': 'file_comment_length'}
                   ]}
               ]},
@@ -253,12 +253,12 @@ class ZIP_DataModel(DataModel):
                   {'weight': 5,
                    'contents': [
                        {'name': 'empty',
-                        'contents': BYTES(size=0)},
+                        'contents': String(size=0)},
                    ]},
                   {'weight': 1,
                    'contents': [
                        {'name': 'full',
-                        'contents': BYTES(val_list=['PK\x06\x06'+'A'*20+'PK\x06\x07'+'B'*16])},
+                        'contents': String(val_list=['PK\x06\x06'+'A'*20+'PK\x06\x07'+'B'*16])},
                    ]},
               ],
               'alt': [
@@ -274,7 +274,7 @@ class ZIP_DataModel(DataModel):
                                   'absorb_csts': AbsFullCsts(),
                                   'clear_attrs': [MH.Attr.Mutable]},
                                  {'name': 'record_meta_data',
-                                  'contents': BYTES(size=0),
+                                  'contents': String(size=0),
                                   'set_attrs': [MH.Attr.Abs_Postpone],
                                   'absorb_csts': AbsNoCsts()},
                                  {'name': 'zip64_sig_locator',
@@ -282,10 +282,10 @@ class ZIP_DataModel(DataModel):
                                   'absorb_csts': AbsFullCsts(),
                                   'clear_attrs': [MH.Attr.Mutable]},
                                  {'name': 'locator_meta_data',
-                                  'contents': BYTES(size=16)}
+                                  'contents': String(size=16)}
                              ]},
                             {'name': 'empty_end_of_cdir',
-                             'contents': BYTES(size=0)}
+                             'contents': String(size=0)}
                         ]}
                    ]}
               ]},
@@ -322,16 +322,16 @@ class ZIP_DataModel(DataModel):
                         'contents': UINT32_le(maxi=2**10)},
                        {'name': 'ZIP_comment',
                         'contents': lambda x: Node('cts', value_type=\
-                                                   BYTES(size=x.get_raw_value())),
+                                                   String(size=x.get_raw_value())),
                         'node_args': 'ZIP_comment_len'}
                    ]}
               ]},
              {'name': 'end_padding',
-              'contents': BYTES(size=0),
+              'contents': String(size=0),
               'qty': (0,1),
               'alt': [
                   {'conf': 'ABS',
-                   'contents': BYTES(size=0),
+                   'contents': String(size=0),
                    'absorb_csts': AbsNoCsts()}
               ]}
         ]}

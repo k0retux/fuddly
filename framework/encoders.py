@@ -80,32 +80,6 @@ class Encoder(object):
         """
         pass
 
-    @staticmethod
-    def to_bytes(val):
-        return convert_to_internal_repr(val)
-
-
-class PythonCodec_Enc(Encoder):
-    """
-    Encoder enabling the usage of every standard encodings supported by Python.
-    """
-    def init_encoding_scheme(self, arg=None):
-        if arg is None:
-            self._codec = internal_repr_codec
-        else:
-            self._codec = arg
-
-    def encode(self, val):
-        return unconvert_from_internal_repr(val).encode(self._codec)
-
-    def decode(self, val):
-        try:
-            dec = val.decode(self._codec, 'strict')
-        except:
-            dec = b''
-        return Encoder.to_bytes(dec)
-
-
 class GZIP_Enc(Encoder):
 
     def init_encoding_scheme(self, arg=None):
@@ -138,9 +112,12 @@ class Wrap_Enc(Encoder):
             arg (list): Prefix and suffix character strings.
               Can be individually set to None
         """
-        assert(isinstance(arg, (tuple, list)))
-        self.prefix = Encoder.to_bytes(arg[0])
-        self.suffix = Encoder.to_bytes(arg[1])
+        assert isinstance(arg, (tuple, list))
+        if sys.version_info[0] > 2:
+            assert arg[0] is None or isinstance(arg[0], bytes)
+            assert arg[1] is None or isinstance(arg[1], bytes)
+        self.prefix = b'' if arg[0] is None else arg[0]
+        self.suffix = b'' if arg[1] is None else arg[1]
         self.prefix_sz = 0 if self.prefix is None else len(self.prefix)
         self.suffix_sz = 0 if self.suffix is None else len(self.suffix)
 

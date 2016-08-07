@@ -333,8 +333,8 @@ class USB_DataModel(DataModel):
               'contents': UINT8(int_list=[USB_DEFS.DT_STRING])},
              {'name': 'contents',
               'sync_enc_size_with': ('bLength', 2),
-              'contents': UTF16_LE(val_list=['\xfcber string', 'what an interesting string!'],
-                                   max_sz=126, max_encoded_sz=253)},
+              'contents': String(val_list=[u'\u00fcber string', u'what an interesting string!'],
+                                 max_sz=126, max_encoded_sz=253, codec='utf-16-le')},
          ]}
 
 

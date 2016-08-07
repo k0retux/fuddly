@@ -81,7 +81,7 @@ class t_fuzz_tve_01(Disruptor):
 
     def disrupt_data(self, dm, target, prev_data):
 
-        val = b"NEW_" + rand_string(mini=5, maxi=10, str_set='XYZRVW')
+        val = b"NEW_" + rand_string(mini=5, maxi=10, str_set='XYZRVW').encode('latin-1')
 
         if prev_data.node:
             prev_data.node.get_node_by_path('TVE.*EVT1$').set_frozen_value(val)

@@ -90,12 +90,7 @@ def convert_to_internal_repr(val):
     return val
 
 def unconvert_from_internal_repr(val):
-    # assert isinstance(val, bytes)
-    try:
-        dec_val = val.decode(internal_repr_codec, 'strict')
-    except:
-        dec_val = val.decode('latin_1')
-    return dec_val
+    return val.decode(internal_repr_codec, 'replace')
 
 class Error(object):
 

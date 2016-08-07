@@ -37,7 +37,7 @@ def rand_string(size=None, mini=1, maxi=10, str_set=string.printable):
         val = random.choice(str_set)
         out += val
 
-    return convert_to_internal_repr(out)
+    return out
 
 
 def corrupt_bytes(s, p=0.01, n=None, ctrl_char=False):
