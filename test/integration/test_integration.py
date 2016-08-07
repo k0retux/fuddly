@@ -1847,7 +1847,7 @@ class TestNodeFeatures(unittest.TestCase):
 
         print('\n ---[message to absorb]---')
         print(repr(msg))
-        print('\n ---[absobed message]---')
+        print('\n ---[absorbed message]---')
         print(top.get_value())
 
         top.show()
@@ -2669,6 +2669,7 @@ class TestNode_TypedValue(unittest.TestCase):
                 return val + b'***'
 
             def decode(self, val):
+                print('\nDBg: ', val)
                 return val[:-3]
 
         data = ['Test!', 'Hello World!']
