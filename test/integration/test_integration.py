@@ -1977,9 +1977,9 @@ class TestNodeFeatures(unittest.TestCase):
         nint_2 = Node('nint2', value_type=UINT8(int_list=[0xf, 0xff, 0xee]))
         nint_3 = Node('nint3', value_type=UINT16_be(int_list=[0xeffe, 0xc1c2, 0x8899]))
 
-        nstr_1 = Node('cool', value_type=String(val_list=['TBD1'], size=4, ascii_mode=True))
+        nstr_1 = Node('cool', value_type=String(val_list=['TBD1'], size=4, codec='ascii'))
         nstr_1.enforce_absorb_constraints(AbsNoCsts(regexp=True))
-        nstr_2 = Node('str2', value_type=String(val_list=['TBD2TBD2', '12345678'], size=8, ascii_mode=True))
+        nstr_2 = Node('str2', value_type=String(val_list=['TBD2TBD2', '12345678'], size=8, codec='ascii'))
 
         nint_50 = Node('nint50', value_type=UINT8(int_list=[0xaf, 0xbf, 0xcf]))
         nint_51 = Node('nint51', value_type=UINT16_be(int_list=[0xcfab, 0xeffe]))
@@ -1993,7 +1993,7 @@ class TestNodeFeatures(unittest.TestCase):
                 'u=.', [nint_50, 1], [nint_51, 1], [nstr_50, 2, 3]]
         ])
 
-        yeah = Node('yeah', value_type=String(val_list=['TBD', 'YEAH!'], max_sz=10, ascii_mode=True))
+        yeah = Node('yeah', value_type=String(val_list=['TBD', 'YEAH!'], max_sz=10, codec='ascii'))
 
         splitter = Node('splitter', value_type=String(val_list=['TBD'], max_sz=10))
         splitter.set_attr(NodeInternals.Abs_Postpone)

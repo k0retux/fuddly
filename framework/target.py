@@ -368,9 +368,12 @@ class NetworkTarget(Target):
                 try:
                     info = fcntl.ioctl(s.fileno(), 0x8927, struct.pack('256s', ifname[:15]))
                 except OSError:
-                    return b''
-                info = bytearray(info)
-                return bytes(info[18:24])
+                    ret = b''
+                else:
+                    info = bytearray(info)
+                    ret = bytes(info[18:24])
+                s.close()
+                return ret
         else:
             def get_mac_addr(ifname):
                 return struct.pack('>Q', uuid.getnode())[2:]

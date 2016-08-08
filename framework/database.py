@@ -72,7 +72,8 @@ class Database(object):
         valid = False
         with connection:
             tmp_con = sqlite3.connect(':memory:', detect_types=sqlite3.PARSE_DECLTYPES)
-            fmk_db_sql = open(gr.fmk_folder + self.DDL_fname).read()
+            with open(gr.fmk_folder + self.DDL_fname) as fd:
+                fmk_db_sql = fd.read()
             with tmp_con:
                 cur = tmp_con.cursor()
                 cur.executescript(fmk_db_sql)
