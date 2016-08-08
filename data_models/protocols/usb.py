@@ -22,20 +22,10 @@
 ################################################################################
 
 import sys
-import os
-import copy
-import re
-import functools
-import struct
-import random
-import zlib
 
-from framework.plumbing import *
 from framework.data_model import *
 from framework.data_model_helpers import *
 from framework.value_types import *
-from framework.fuzzing_primitives import *
-from framework.basic_primitives import *
 
 
 class USB_DEFS:

@@ -42,7 +42,6 @@ from six import with_metaclass
 sys.path.append('.')
 
 import framework.basic_primitives as bp
-from framework.data_model import AbsorbStatus, AbsCsts
 from framework.encoders import *
 from framework.error_handling import *
 from framework.global_resources import *
@@ -775,10 +774,10 @@ class String(VT_Alt):
         if not self.encoded_string:
             # For a non-Encoding type, the size of the string is always lesser or equal than the size
             # of the encoded string. Hence the byte string size is still >= to the string size.
-            if self.max_encoded_sz is None or self.max_encoded_sz < self.max_sz:
+            # self.max_encoded_sz is used for absorption
+            if max_encoded_sz is None and (max_sz is not None or size is not None) and \
+                            self.max_encoded_sz < self.max_sz:
                 self.max_encoded_sz = self.max_sz
-            if self.min_encoded_sz is None or self.min_encoded_sz < self.min_sz:
-                self.min_encoded_sz = self.min_sz
 
     def _check_compliance(self, value, force_max_enc_sz, force_min_enc_sz, update_list=True):
         if self.encoded_string:
@@ -857,11 +856,12 @@ class String(VT_Alt):
         if len(self.val_list) == 0:
             raise DataModelDefinitionError
 
-    def get_current_raw_val(self):
+    def get_current_raw_val(self, str_form=False):
         if self.drawn_val is None:
             self.get_value()
-        return self.drawn_val
-    
+        val = self._bytes2str(self.drawn_val) if str_form else self.drawn_val
+        return val
+
     def enable_normal_mode(self):
         self.val_list = self.val_list_save
         self.val_list_copy = copy.copy(self.val_list)
@@ -1012,7 +1012,7 @@ class String(VT_Alt):
                 dec = dec[:max_size]
             dec = dec.decode(self.codec, 'replace')
             if sys.version_info[0] == 2:
-                dec = dec.encode('ascii', 'replace')
+                dec = dec.encode('latin-1')
             return dec + ' [decoded, sz={!s}, codec={!s}]'.format(len(dec), self.codec)
         else:
             return 'codec={!s}'.format(self.codec)

@@ -852,12 +852,18 @@ sync_size_with, sync_enc_size_with
   with the *value* of the node specified by reference (which should be an
   :class:`framework.value_types.INT`-based typed-node). These keywords are useful for size-variable
   node types. They are currently supported for typed-nodes which are
-  :class:`framework.value_types.String`-based with or without an encoding (e.g.,
-  :class:`framework.value_types.UTF8`, ...). Non-terminal nodes are not supported (for absorption).
+  :class:`framework.value_types.String`-based with or without an encoding.
+  Non-terminal nodes are not supported (for absorption).
   The distinction between ``sync_size_with`` and ``sync_enc_size_with`` is that the synchronization
-  will be performed either with respect to the length of the data retrieved from the node
-  (or the decoded data for encoded node), or with respect to the length of the encoded data
-  (only usable in the case of an encoded node).
+  will be performed:
+
+  - either with respect to the length of the data retrieved from the node in a
+    *decoded* form. *Decoded* means that it is agnostic to the *codec* specified
+    (e.g., ``utf-8``, ``latin-1``, ...) in the ``String``, and also, for ``Encoded-String``
+    (e.g., :class:`framework.value_types.GZIP`, ...) , that it is agnostic to any
+    :class:`framework.encoders.Encoder` the ``String`` is wrapped with;
+
+  - or with respect to the length of the encoded form of the data.
 
   Generation and absorption deal with these keywords differently, in order to achieve the expected
   behavior. For generation, the synchronization goes from the described node to the referenced node

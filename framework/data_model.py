@@ -42,6 +42,7 @@ from framework.basic_primitives import *
 from libs.external_modules import *
 from framework.global_resources import *
 from framework.error_handling import *
+import framework.value_types as fvt
 
 import libs.debug_facility as dbg
 
@@ -403,77 +404,6 @@ def flatten(nested):
 
 nodes_weight_re = re.compile('(.*?)\((.*)\)')
 
-class AbsorbStatus(Enum):
-
-    Accept = 1
-    Reject = 2
-    Absorbed = 3
-    FullyAbsorbed = 4
-
-# List of constraints that rules blob absorption
-class AbsCsts(object):
-
-    Size = 1
-    Contents = 2
-    Regexp = 3
-    Structure = 4
-
-    def __init__(self, size=True, contents=True, regexp=True, struct=True):
-        self.constraints = {
-            AbsCsts.Size: size,
-            AbsCsts.Contents: contents,
-            AbsCsts.Regexp: regexp,
-            AbsCsts.Structure: struct
-        }
-
-    def __bool__(self):
-        return True in self.constraints.values()
-
-    def __nonzero__(self):
-        return True in self.constraints.values()
-
-    def set(self, cst):
-        if cst in self.constraints:
-            self.constraints[cst] = True
-        else:
-            raise ValueError
-
-    def clear(self, cst):
-        if cst in self.constraints:
-            self.constraints[cst] = False
-        else:
-            raise ValueError
-
-    def __copy__(self):
-        new_csts = type(self)()
-        new_csts.__dict__.update(self.__dict__)
-        new_csts.constraints = copy.copy(self.constraints)
-
-        return new_csts
-
-    def __getitem__(self, key):
-        return self.constraints[key]
-
-    def __repr__(self):
-        return 'AbsCsts()'
-
-
-class AbsNoCsts(AbsCsts):
-
-    def __init__(self, size=False, contents=False, regexp=False, struct=False):
-        AbsCsts.__init__(self, size=size, contents=contents, regexp=regexp, struct=struct)
-
-    def __repr__(self):
-        return 'AbsNoCsts()'
-
-
-class AbsFullCsts(AbsCsts):
-
-    def __init__(self, size=True, contents=True, regexp=True, struct=True):
-        AbsCsts.__init__(self, size=size, contents=contents, regexp=regexp, struct=struct)
-
-    def __repr__(self):
-        return 'AbsFullCsts()'
 
 ### Materials for Node Synchronization ###
 
@@ -690,8 +620,7 @@ class IntCondition(NodeCondition):
             self.val = neg_val
 
     def check(self, node):
-        from framework.value_types import INT
-        assert(node.is_typed_value(subkind=INT))
+        assert(node.is_typed_value(subkind=fvt.INT))
 
         if isinstance(self.val, (tuple, list)):
             if self.positive_mode:
@@ -751,8 +680,7 @@ class BitFieldCondition(NodeCondition):
 
 
     def check(self, node):
-        from framework.value_types import BitField
-        assert(node.is_typed_value(subkind=BitField))
+        assert(node.is_typed_value(subkind=fvt.BitField))
 
         for sf, val, neg_val in zip(self.sf, self.val, self.neg_val):
             if val is not None:
@@ -935,6 +863,12 @@ class NodeInternals(object):
 
     def _init_specific(self, arg):
         pass
+
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
+        raise NotImplementedError
+
+    def get_raw_value(self, **kwargs):
+        raise NotImplementedError
 
     def customize(self, custo):
         self.custo = copy.copy(custo)
@@ -1460,6 +1394,9 @@ class NodeInternals_Empty(NodeInternals):
         else:
             return (b'<EMPTY>', True)
 
+    def get_raw_value(self, **kwargs):
+        return b'<EMPTY>'
+
     def set_child_env(self, env):
         print('Empty:', hex(id(self)))
         raise AttributeError
@@ -1705,6 +1642,9 @@ class NodeInternals_GenFunc(NodeInternals):
         ret = self.generated_node._get_value(conf=conf, recursive=recursive)
         return (ret, False)
 
+    def get_raw_value(self, **kwargs):
+        return self.generated_node.get_raw_value(**kwargs)
+
     def absorb(self, blob, constraints, conf, pending_postpone_desc=None):
         # We make the generator freezable to be sure that _get_value()
         # won't reset it after absorption
@@ -1888,6 +1828,8 @@ class NodeInternals_Term(NodeInternals):
     def _get_value_specific(self, conf, recursive):
         raise NotImplementedError
 
+    def get_raw_value(self, **kwargs):
+        return self._get_value()
 
     def absorb(self, blob, constraints, conf, pending_postpone_desc=None):
         status = None
@@ -2053,10 +1995,10 @@ class NodeInternals_TypedValue(NodeInternals_Term):
         ret = self.value_type.get_value()
         return NodeInternals_Term._convert_to_internal_repr(ret)
 
-    def get_raw_value(self):
+    def get_raw_value(self, **kwargs):
         if not self.is_frozen():
             self._get_value()
-        return self.value_type.get_current_raw_val()
+        return self.value_type.get_current_raw_val(**kwargs)
         
     def absorb_auto_helper(self, blob, constraints):
         return self.value_type.absorb_auto_helper(blob, constraints)
@@ -2993,13 +2935,17 @@ class NodeInternals_NonTerm(NodeInternals):
                 if obj.apply_to_enc_size:
                     sz = len(node.to_bytes())
                 else:
-                    decoded_val = node.get_raw_value()
-                    if isinstance(decoded_val, bytes):
-                        sz = len(decoded_val)
+                    if node.is_typed_value(subkind=fvt.String):
+                        # We need to get the str form to be agnostic to any low-level encoding
+                        # that may change the size ('utf8', ...).
+                        decoded_val = node.get_raw_value(str_form=True)
                     else:
-                        # In this case, this is a BitField or an INT-based object, which are
-                        # fixed size object
-                        raise DataModelDefinitionError('size sync should not be used for fixed sized object!')
+                        decoded_val = node.get_raw_value()
+                        if not isinstance(decoded_val, bytes):
+                            # In this case, this is a BitField or an INT-based object, which are
+                            # fixed size object
+                            raise DataModelDefinitionError('size sync should not be used for fixed sized object!')
+                    sz = len(decoded_val)
                 sz += obj.base_size
                 obj.set_size_on_source_node(NodeInternals_NonTerm.sizesync_corrupt_hook(node, sz))
 
@@ -3302,7 +3248,6 @@ class NodeInternals_NonTerm(NodeInternals):
         def handle_encoding(list_to_enc):
 
             if self.custo.collapse_padding_mode:
-                from framework.value_types import BitField
                 list_to_enc = list(flatten(list_to_enc))
                 if list_to_enc and isinstance(list_to_enc[0], bytes):
                     return list_to_enc
@@ -3314,10 +3259,10 @@ class NodeInternals_NonTerm(NodeInternals):
                             item1 = list_to_enc[i]
                             item2 = list_to_enc[i+1]
                             c1 = isinstance(item1, NodeInternals_TypedValue) and \
-                                 item1.get_current_subkind() == BitField and \
+                                 item1.get_current_subkind() == fvt.BitField and \
                                  item1.get_value_type().padding_size != 0
                             c2 = isinstance(item2, NodeInternals_TypedValue) and \
-                                 item2.get_current_subkind() == BitField
+                                 item2.get_current_subkind() == fvt.BitField
                             if c1 and c2:
                                 new_item = NodeInternals_TypedValue()
                                 new_item1vt = copy.copy(item1.get_value_type())
@@ -3424,7 +3369,7 @@ class NodeInternals_NonTerm(NodeInternals):
         return (handle_encoding(l), was_not_frozen)
 
 
-    def get_raw_value(self):
+    def get_raw_value(self, **kwargs):
         raw_list = self._get_value(after_encoding=False)[0]
         raw_list = list(flatten(raw_list))
 
@@ -5383,10 +5328,8 @@ class Node(object):
         conf = self.__check_conf(conf)
 
         if val_list is not None:
-            from framework.value_types import String
-
             self.internals[conf] = NodeInternals_TypedValue()
-            self.internals[conf].import_value_type(value_type=String(val_list=val_list))
+            self.internals[conf].import_value_type(value_type=fvt.String(val_list=val_list))
 
         elif value_type is not None:
             self.internals[conf] = NodeInternals_TypedValue()

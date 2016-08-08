@@ -26,9 +26,7 @@ import sys
 from framework.data_model import *
 from framework.value_types import *
 from framework.data_model_helpers import *
-
-import zlib
-import struct
+from framework.global_resources import *
 
 
 class PNG_DataModel(DataModel):

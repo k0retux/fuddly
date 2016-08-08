@@ -22,11 +22,14 @@
 ################################################################################
 
 import os
-import framework
 import sys
+import copy
 import inspect
 from enum import Enum
+
+import framework
 from libs.utils import ensure_dir, ensure_file
+
 
 fuddly_version = '0.24.2'
 
@@ -91,6 +94,80 @@ def convert_to_internal_repr(val):
 
 def unconvert_from_internal_repr(val):
     return val.decode(internal_repr_codec, 'replace')
+
+### Exports for Node Absorption ###
+
+class AbsorbStatus(Enum):
+    Accept = 1
+    Reject = 2
+    Absorbed = 3
+    FullyAbsorbed = 4
+
+# List of constraints that rules blob absorption
+class AbsCsts(object):
+    Size = 1
+    Contents = 2
+    Regexp = 3
+    Structure = 4
+
+    def __init__(self, size=True, contents=True, regexp=True, struct=True):
+        self.constraints = {
+            AbsCsts.Size: size,
+            AbsCsts.Contents: contents,
+            AbsCsts.Regexp: regexp,
+            AbsCsts.Structure: struct
+        }
+
+    def __bool__(self):
+        return True in self.constraints.values()
+
+    def __nonzero__(self):
+        return True in self.constraints.values()
+
+    def set(self, cst):
+        if cst in self.constraints:
+            self.constraints[cst] = True
+        else:
+            raise ValueError
+
+    def clear(self, cst):
+        if cst in self.constraints:
+            self.constraints[cst] = False
+        else:
+            raise ValueError
+
+    def __copy__(self):
+        new_csts = type(self)()
+        new_csts.__dict__.update(self.__dict__)
+        new_csts.constraints = copy.copy(self.constraints)
+
+        return new_csts
+
+    def __getitem__(self, key):
+        return self.constraints[key]
+
+    def __repr__(self):
+        return 'AbsCsts()'
+
+
+class AbsNoCsts(AbsCsts):
+
+    def __init__(self, size=False, contents=False, regexp=False, struct=False):
+        AbsCsts.__init__(self, size=size, contents=contents, regexp=regexp, struct=struct)
+
+    def __repr__(self):
+        return 'AbsNoCsts()'
+
+
+class AbsFullCsts(AbsCsts):
+
+    def __init__(self, size=True, contents=True, regexp=True, struct=True):
+        AbsCsts.__init__(self, size=size, contents=contents, regexp=regexp, struct=struct)
+
+    def __repr__(self):
+        return 'AbsFullCsts()'
+
+### Error related resources ###
 
 class Error(object):
 
@@ -174,6 +251,8 @@ class Error(object):
 
     def __str__(self):
         return self._code_info[self.code]['name']
+
+### Hook related resources for Data ###
 
 class HOOK(Enum):
     after_dmaker_production = 1

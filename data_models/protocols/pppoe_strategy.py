@@ -23,7 +23,7 @@
 
 from framework.tactics_helpers import *
 from framework.scenario import *
-from framework.data_model import AbsorbStatus, AbsNoCsts
+from framework.global_resources import *
 
 tactics = Tactics()
 

@@ -24,6 +24,7 @@
 from framework.data_model import *
 from framework.data_model_helpers import *
 from framework.value_types import *
+from framework.global_resources import *
 
 markers = {
     'SOF': {0: 0xFFC0,

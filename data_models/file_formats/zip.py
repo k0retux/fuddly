@@ -26,6 +26,7 @@ import sys
 from framework.data_model import *
 from framework.value_types import *
 from framework.data_model_helpers import *
+from framework.global_resources import *
 
 import zlib
 import crcmod

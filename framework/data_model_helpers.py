@@ -1205,6 +1205,7 @@ class ModelHelper(object):
 
 
 
+### Helpers for RegExp-based Node ###
 
 class State(object):
     """
