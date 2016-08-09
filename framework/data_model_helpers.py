@@ -138,6 +138,8 @@ class MH(object):
 
         Separator = NodeInternals.Separator
 
+        DEBUG = NodeInternals.DEBUG
+
     ###########################
     ### Generator Templates ###
     ###########################
@@ -553,7 +555,9 @@ class ModelHelper(object):
         'exists_if', 'exists_if_not',
         'exists_if/and', 'exists_if/or',
         'sync_size_with', 'sync_enc_size_with',
-        'post_freeze', 'charset'
+        'post_freeze', 'charset',
+        # used for debugging purpose
+        'debug'
     ]
 
     def __init__(self, dm=None, delayed_jobs=True, add_env=True):
@@ -783,14 +787,7 @@ class ModelHelper(object):
         else:
             n.set_subnodes_with_csts(nodes, conf=conf)
 
-
-        custo_set = desc.get('custo_set', None)
-        custo_clear = desc.get('custo_clear', None)
-
-        if custo_set or custo_clear:
-            custo = NonTermCusto(items_to_set=custo_set, items_to_clear=custo_clear)
-            internals = n.cc if conf is None else n.c[conf]
-            internals.customize(custo)
+        self._handle_custo(n, desc, conf)
 
         sep_desc = desc.get('separator', None)
         if sep_desc is not None:
@@ -1002,6 +999,12 @@ class ModelHelper(object):
                 node.set_attr(MH.Attr.Mutable, conf=conf)
             else:
                 node.clear_attr(MH.Attr.Mutable, conf=conf)
+        param = desc.get('debug', None)
+        if param is not None:
+            if param:
+                node.set_attr(MH.Attr.DEBUG, conf=conf)
+            else:
+                node.clear_attr(MH.Attr.DEBUG, conf=conf)
         param = desc.get('determinist', None)
         if param is not None:
             node.make_determinist(conf=conf)

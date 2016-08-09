@@ -831,6 +831,8 @@ class NodeInternals(object):
     Abs_Postpone = 6
     Separator = 15
 
+    DEBUG = 30
+
     DISABLED = 100
 
 
@@ -852,7 +854,8 @@ class NodeInternals(object):
             NodeInternals.Abs_Postpone: False,
             # Used to distinguish separator
             NodeInternals.Separator: False,
-
+            # Used for debugging purpose
+            NodeInternals.DEBUG: False,
             ### INTERNAL USAGE ###
             NodeInternals.DISABLED: False
             }
