@@ -896,7 +896,7 @@ class String(VT_Alt):
             if val != b'':
                 self.val_list_fuzzy.append(val)
 
-        val = orig_val + b"X"*(self.max_sz*8)
+        val = orig_val + b"X"*(self.max_sz*42)
         self.val_list_fuzzy.append(val)
 
         self.val_list_fuzzy.append(b'\x00'*sz if sz>0 else b'\x00')

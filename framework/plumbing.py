@@ -2456,7 +2456,7 @@ class FmkPlumbing(object):
                 # Target fbk is logged only at the end of a burst
                 if self._burst_countdown == self._burst:
                     cont1 = self.log_target_feedback()
-                    cont2 = self.monitor_probes()
+                    cont2 = self.monitor_probes(force_record=True)
                     if not cont1 or not cont2:
                         exit_operator = True
                         self.lg.log_fmk_info("Operator will shutdown because something is going wrong with "

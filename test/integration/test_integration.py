@@ -1583,7 +1583,10 @@ class TestModelWalker(unittest.TestCase):
             b' [!] ++++++++++ [!] ::AA\xc3::AA\xc3::>:: [!] ',  # [8] could change has it is a random corrupt_bit
             b' [!] ++++++++++ [!] ::AAAA::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
+
+            b' [!] ++++++++++ [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' \
+            b'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
+
             b' [!] ++++++++++ [!] ::\x00\x00\x00::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::A%n::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::A%s::AAA::>:: [!] ',
@@ -1601,7 +1604,10 @@ class TestModelWalker(unittest.TestCase):
             b' [!] >>>>>>>>>> [!] ::\xc9AA::\xc9AA::>:: [!] ',  # [26] could change has it is a random corrupt_bit
             b' [!] >>>>>>>>>> [!] ::AAAA::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
+
+            b' [!] >>>>>>>>>> [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' \
+            b'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
+
             b' [!] >>>>>>>>>> [!] ::\x00\x00\x00::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::A%n::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::A%s::AAA::>:: [!] ',

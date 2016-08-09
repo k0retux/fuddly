@@ -26,6 +26,7 @@ import threading
 import datetime
 import time
 import traceback
+import re
 
 from libs.external_modules import *
 from framework.global_resources import *
@@ -90,7 +91,10 @@ class ProbeUser(object):
         self._probe.delay = delay
 
     def get_probe_status(self):
-        self._probe.reset()
+        try:
+            self._probe.reset()
+        except:
+            self._handle_exception('during reset()')
         return self._probe.status
 
     def _notify_probe_started(self):
@@ -980,6 +984,7 @@ class ProbeMem(Probe):
     def __init__(self):
         assert self.process_name != None
         assert self.backend != None
+        self._saved_mem = None
         Probe.__init__(self)
 
     def _get_mem(self):
@@ -991,7 +996,7 @@ class ProbeMem(Probe):
         for entry in proc_list:
             if entry.find(self.process_name) >= 0:
                 try:
-                    rss = int(entry.split()[0])
+                    rss = int(re.search('\d+', entry.split()[0]).group(0))
                 except ValueError:
                     rss = -10
                 break

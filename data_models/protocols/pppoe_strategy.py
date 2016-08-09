@@ -201,7 +201,7 @@ step_send_valid_pado.connect_to(step_wait_padr)
 
 step_send_fuzzed_pads.connect_to(step_wait_padr)
 
-step_wait_padr.connect_to(step_send_fuzzed_pads, cbk_after_fbk=retrieve_padr_from_feedback)
+step_wait_padr.connect_to(step_send_fuzzed_pads, cbk_after_fbk=retrieve_padr_from_feedback_and_update)
 step_wait_padr.connect_to(step_send_valid_pado, cbk_after_fbk=retrieve_padi_from_feedback)
 
 sc2 = Scenario('PADS')
