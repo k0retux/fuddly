@@ -2892,13 +2892,16 @@ class NodeInternals_NonTerm(NodeInternals):
             if delim[1] == '>' or delim[1:3] == '=.':
                 for i, node_desc in enumerate(sublist):
                     node, mini, maxi = self._handle_node_desc(node_desc)
-                    if mini == 0 and maxi > 0:
+                    if mini < maxi:
                         new_nlist = self._copy_nodelist(node_list)
-                        new_nlist[idx][1][i] = [node, 0]
+                        new_nlist[idx][1][i] = [node, mini]
                         expanded_node_list.insert(0, new_nlist)
                         new_nlist = self._copy_nodelist(node_list)
-                        new_nlist[idx][1][i] = [node, 1, maxi]
-                        # new_nlist[idx][1][i] = [node, _pick_qty(1, maxi)]
+                        new_nlist[idx][1][i] = [node, maxi]
+                        expanded_node_list.insert(0, new_nlist)
+                    if mini+1 < maxi:
+                        new_nlist = self._copy_nodelist(node_list)
+                        new_nlist[idx][1][i] = [node, mini+1, maxi-1]
                         expanded_node_list.insert(0, new_nlist)
             elif delim[1:3] == '=+':
                 new_delim = delim[0] + '>'

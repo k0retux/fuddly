@@ -335,14 +335,17 @@ class MyDF_DataModel(DataModel):
                                                    'contents': String(val_list=['::'])}},
                         'shape_type': MH.Random, # ignored in determnist mode
                         'contents': [
-                            {'contents': String(val_list=['AAA']),
+                            {'contents': String(val_list=['AAA', 'BBB']),
                              'qty': (0, 4),
                              'name': 'str'},
                             {'contents': UINT8(int_list=[0x3E]), # chr(0x3E) == '>'
                              'name': 'int'}
-                        ]}
-                   ]}
+                        ]},
 
+                   ]},
+
+                   {'contents': String(val_list=['?','!']),
+                    'name': 'int3'}
               ]},
 
              {'weight': 20,

@@ -73,7 +73,7 @@ class sd_iter_over_data(StatefulDisruptor):
         if self.nt_only:
             consumer = NonTermVisitor()
         else:
-            consumer = BasicVisitor(specific_args=self.singleton)
+            consumer = BasicVisitor(consume_also_singleton=self.singleton)
         consumer.set_node_interest(path_regexp=self.path)
         self.modelwalker = ModelWalker(prev_data.node, consumer, max_steps=self.max_steps, initial_step=self.init)
         self.walker = iter(self.modelwalker)
@@ -305,7 +305,7 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
         self.consumer = SeparatorDisruption(max_runs_per_node=self.max_runs_per_node,
                                             min_runs_per_node=self.min_runs_per_node,
                                             respect_order=self.order,
-                                            specific_args=sep_list)
+                                            separators=sep_list)
         self.consumer.need_reset_when_structure_change = self.deep
         self.consumer.set_node_interest(path_regexp=self.path)
         self.modelwalker = ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init)
@@ -1066,7 +1066,7 @@ class sd_fuzz_terminal_nodes(StatefulDisruptor):
         self.consumer = TermNodeDisruption(max_runs_per_node=self.max_runs_per_node,
                                            min_runs_per_node=self.min_runs_per_node,
                                            respect_order=False,
-                                           specific_args=self.alt_values)
+                                           base_list=self.alt_values)
         self.consumer.determinist = self.determinist
         if self.ascii:
             self.consumer.ascii = True

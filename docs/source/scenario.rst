@@ -226,12 +226,12 @@ service for instance. This is illustrated in the following example in the lines 
     periodic2 = Periodic(Data('2nd Periodic (3s)\n'), period=3)
 
     step1 = Step('exist_cond', fbk_timeout=2, set_periodic=[periodic1, periodic2])
-    step2 = Step('separator', fbk_timeout=5, cbk_after_fbk=feedback_handler)
+    step2 = Step('separator', fbk_timeout=5)
     step3 = NoDataStep()
     step4 = Step(DataProcess(process=[('C',None,UI(nb=1)),'tTYPE'], seed='enc'))
 
     step1.connect_to(step2)
-    step2.connect_to(step3, cbk_after_fbk=cbk_transition2)
+    step2.connect_to(step3, cbk_after_fbk=feedback_handler)
     step3.connect_to(step4)
     step4.connect_to(FinalStep())
 

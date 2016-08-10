@@ -991,7 +991,7 @@ class TestMisc(unittest.TestCase):
         nt.make_determinist(all_conf=True, recursive=True)
         nb = self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
-        self.assertEqual(nb, 6)
+        self.assertEqual(nb, 18)
 
         print('\n -=[ determinist & infinite (loop count: %d) ]=- \n' % loop_count)
 
@@ -1004,15 +1004,17 @@ class TestMisc(unittest.TestCase):
 
         nt = dm.get_data('NonTerm')
         # nt.make_infinite(all_conf=True, recursive=True)
+        nt.make_random(all_conf=True, recursive=True)
         self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
         print('\n -=[ random & finite (loop count: %d) ]=- \n' % loop_count)
 
         nt = dm.get_data('NonTerm')
         nt.make_finite(all_conf=True, recursive=True)
+        nt.make_random(all_conf=True, recursive=True)
         nb = self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
-        self.assertEqual(nb, 6)
+        self.assertEqual(nb, 18)
 
     def test_BitField_Attr_01(self):
         '''
@@ -1468,7 +1470,7 @@ class TestModelWalker(unittest.TestCase):
         nt = self.dm.get_data('Simple')
         default_consumer = NodeConsumerStub()
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
-                                                                    max_steps=70):
+                                                                    max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 49)
 
@@ -1476,20 +1478,29 @@ class TestModelWalker(unittest.TestCase):
         nt = self.dm.get_data('Simple')
         default_consumer = NodeConsumerStub(max_runs_per_node=-1, min_runs_per_node=2)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
-                                                                    max_steps=70):
+                                                                    max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 35)
 
     def test_BasicVisitor(self):
         nt = self.dm.get_data('Simple')
-        default_consumer = BasicVisitor()
+        default_consumer = BasicVisitor(respect_order=True, consume_also_singleton=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
-                                                                    max_steps=70):
+                                                                    max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 37)
+        self.assertEqual(idx, 49)
+
+        print('***')
+        nt = self.dm.get_data('Simple')
+        default_consumer = BasicVisitor(respect_order=False, consume_also_singleton=False)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
+                                                                    max_steps=200):
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
+        self.assertEqual(idx, 49)
 
     def test_NonTermVisitor(self):
         print('***')
+        idx = 0
         simple = self.dm.get_data('Simple')
         nonterm_consumer = NonTermVisitor(respect_order=True)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True,
@@ -1498,7 +1509,7 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 4)
 
         print('***')
-
+        idx = 0
         simple = self.dm.get_data('Simple')
         nonterm_consumer = NonTermVisitor(respect_order=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True,
@@ -1507,22 +1518,22 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 4)
 
         print('***')
-
-        data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')  # idx == 3
+        idx = 0
+        data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')
         nonterm_consumer = NonTermVisitor(respect_order=True)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True,
-                                                                    max_steps=10):
+                                                                    max_steps=50):
             print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
-        self.assertEqual(idx, 3)
+        self.assertEqual(idx, 6)
 
         print('***')
-
-        data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')  # idx == 3
+        idx = 0
+        data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')
         nonterm_consumer = NonTermVisitor(respect_order=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True,
-                                                                    max_steps=10):
+                                                                    max_steps=50):
             print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
-        self.assertEqual(idx, 3)
+        self.assertEqual(idx, 6)
 
         print('***')
 
@@ -1580,13 +1591,30 @@ class TestModelWalker(unittest.TestCase):
             b' [!] ++++++++++ [!] ::\x01:: [!] ',
             b' [!] ++++++++++ [!] ::\x80:: [!] ',
             b' [!] ++++++++++ [!] ::\x7f:: [!] ',
-            b' [!] ++++++++++ [!] ::AA\xc3::AA\xc3::>:: [!] ',  # [8] could change has it is a random corrupt_bit
+            b' [!] ++++++++++ [!] ::IAA::AAA::AAA::AAA::>:: [!] ', # [8] could change has it is a random corrupt_bit
+            b' [!] ++++++++++ [!] ::AAAA::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+            b'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::\x00\x00\x00::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::A%n::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::A%s::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::A\r\n::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::../../../../../../etc/password::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::../../../../../../Windows/system.ini::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::=:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::?:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\xff:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x00:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x01:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x80:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x7f:: [!] ',
+            b' [!] ++++++++++ [!] ::AAQ::AAA::>:: [!] ',  # [26] could change has it is a random corrupt_bit
             b' [!] ++++++++++ [!] ::AAAA::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::::AAA::>:: [!] ',
-
-            b' [!] ++++++++++ [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' \
-            b'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
-
+            b' [!] ++++++++++ [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+            b'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::\x00\x00\x00::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::A%n::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::A%s::AAA::>:: [!] ',
@@ -1601,13 +1629,38 @@ class TestModelWalker(unittest.TestCase):
             b' [!] ++++++++++ [!] ::AAA::AAA::\x01:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::\x80:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::\x7f:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::\xc9AA::\xc9AA::>:: [!] ',  # [26] could change has it is a random corrupt_bit
+
+            b' [!] >>>>>>>>>> [!] ::=:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::?:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\xff:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\x00:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\x01:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\x80:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\x7f:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::QAA::AAA::AAA::AAA::>:: [!] ', # [51] could change has it is a random corrupt_bit
+            b' [!] >>>>>>>>>> [!] ::AAAA::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+            b'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\x00\x00\x00::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::A%n::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::A%s::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::A\r\n::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::../../../../../../Windows/system.ini::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::=:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::?:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\xff:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x00:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x01:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x80:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x7f:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAC::AAA::>:: [!] ', # [69] could change has it is a random corrupt_bit
             b' [!] >>>>>>>>>> [!] ::AAAA::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::::AAA::>:: [!] ',
-
-            b' [!] >>>>>>>>>> [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' \
-            b'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
-
+            b' [!] >>>>>>>>>> [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+            b'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::\x00\x00\x00::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::A%n::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::A%s::AAA::>:: [!] ',
@@ -1621,23 +1674,23 @@ class TestModelWalker(unittest.TestCase):
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x00:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x01:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x80:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x7f:: [!] '
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x7f:: [!] ',
         ]
 
-        tn_consumer = TypedNodeDisruption()
+        tn_consumer = TypedNodeDisruption(respect_order=True)
         ic = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
                                    negative_attrs=[NodeInternals.Separator],
                                    node_kinds=[NodeInternals_TypedValue],
                                    negative_node_subkinds=[String])
         tn_consumer.set_node_interest(internals_criteria=ic)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, tn_consumer, make_determinist=True,
-                                                                    max_steps=100):
+                                                                    max_steps=200):
             val = rnode.to_bytes()
             print(colorize('[%d] ' % idx + repr(val), rgb=Color.INFO))
-            if idx not in [8, 26]:
+            if idx not in [8, 26, 51, 69]:
                 self.assertEqual(val, raw_vals[idx - 1])
 
-        self.assertEqual(idx, 43)
+        self.assertEqual(idx, 86)  # should be even
 
     def test_TypedNodeDisruption_1(self):
         nt = self.dm.get_data('Simple')
@@ -1734,7 +1787,7 @@ class TestModelWalker(unittest.TestCase):
 
     def test_TermNodeDisruption_3(self):
         simple = self.dm.get_data('Simple')
-        consumer = TermNodeDisruption(specific_args=['1_BANG_1', '2_PLOUF_2'])
+        consumer = TermNodeDisruption(base_list=['1_BANG_1', '2_PLOUF_2'])
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True,
                                                                     max_steps=-1):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
@@ -1810,7 +1863,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of confs: %d' % idx, rgb=Color.INFO))
 
-        self.assertIn(idx, [159])
+        self.assertIn(idx, [523])
 
 
 
