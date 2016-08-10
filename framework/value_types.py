@@ -426,7 +426,9 @@ class String(VT_Alt):
             if self.is_val_list_provided:
                 self.val_list = copy.copy(self.val_list)
             else:
-                self._populate_val_list()
+                self._populate_val_list(force_max_enc_sz=self.max_enc_sz_provided,
+                                        force_min_enc_sz=self.min_enc_sz_provided)
+                self._ensure_enc_sizes_consistency()
             self.reset_state()
         else:
             self.val_list = copy.copy(self.val_list)
@@ -452,7 +454,7 @@ class String(VT_Alt):
         # and let do_absorb() decide if it's OK (via size constraints
         # for instance).
         blob_dec = self.decode(blob)
-        if constraints[AbsCsts.Contents] and self.val_list is not None and self.alphabet is None:
+        if constraints[AbsCsts.Contents] and self.is_val_list_provided and self.alphabet is None:
             for v in self.val_list:
                 if blob_dec.startswith(v):
                     break
@@ -683,6 +685,8 @@ class String(VT_Alt):
         self.codec = codecs.lookup(codec).name # normalize
         self.max_encoded_sz = max_encoded_sz
         self.min_encoded_sz = min_encoded_sz
+        self.max_enc_sz_provided = max_encoded_sz is not None
+        self.min_enc_sz_provided = min_encoded_sz is not None
 
         if alphabet is not None:
             self.alphabet = self._str2bytes(alphabet)
@@ -708,8 +712,8 @@ class String(VT_Alt):
             assert isinstance(val_list, list)
             self.val_list = self._str2bytes(val_list)
             for val in self.val_list:
-                if not self._check_compliance(val, force_max_enc_sz=max_encoded_sz is not None,
-                                              force_min_enc_sz=min_encoded_sz is not None,
+                if not self._check_compliance(val, force_max_enc_sz=self.max_enc_sz_provided,
+                                              force_min_enc_sz=self.min_enc_sz_provided,
                                               update_list=False):
                     raise DataModelDefinitionError
 
@@ -720,8 +724,8 @@ class String(VT_Alt):
 
             self.val_list_copy = copy.copy(self.val_list)
             self.is_val_list_provided = True  # distinguish cases where
-                                           # val_list is provided or
-                                           # created based on size
+                                              # val_list is provided or
+                                              # created based on size
             self.user_provided_list = copy.copy(self.val_list)
         else:
             self.is_val_list_provided = False
@@ -762,19 +766,22 @@ class String(VT_Alt):
 
         self._check_sizes(val_list)
 
-        if val_list is None:
-            self._populate_val_list(force_max_enc_sz=max_encoded_sz is not None,
-                                    force_min_enc_sz=min_encoded_sz is not None)
-
         self.determinist = determinist
 
+        self._ensure_enc_sizes_consistency()
+
+    def _ensure_enc_sizes_consistency(self):
         if not self.encoded_string:
             # For a non-Encoding type, the size of the string is always lesser or equal than the size
-            # of the encoded string. Hence the byte string size is still >= to the string size.
-            # self.max_encoded_sz is used for absorption
-            if max_encoded_sz is None and (max_sz is not None or size is not None) and \
-                            self.max_encoded_sz < self.max_sz:
+            # of the encoded string (utf8, ...). Hence the byte string size is still >= to the string size.
+            # As self.max_encoded_sz is needed for absorption, we do the following heuristic (when
+            # information is missing).
+            if self.max_encoded_sz is None or \
+                    (not self.max_enc_sz_provided and self.max_encoded_sz < self.max_sz):
                 self.max_encoded_sz = self.max_sz
+            if self.min_encoded_sz is None or \
+                    (not self.min_enc_sz_provided and self.min_encoded_sz > self.min_sz):
+                self.min_encoded_sz = self.min_sz
 
     def _check_compliance(self, value, force_max_enc_sz, force_min_enc_sz, update_list=True):
         if self.encoded_string:
@@ -952,6 +959,10 @@ class String(VT_Alt):
         self.drawn_val = None
 
     def get_value(self):
+        if not self.val_list:
+            self._populate_val_list(force_max_enc_sz=self.max_enc_sz_provided,
+                                    force_min_enc_sz=self.min_enc_sz_provided)
+            self._ensure_enc_sizes_consistency()
         if not self.val_list_copy:
             self.val_list_copy = copy.copy(self.val_list)
         if self.determinist:

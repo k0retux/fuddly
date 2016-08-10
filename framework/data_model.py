@@ -3767,8 +3767,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 if st == AbsorbStatus.Reject:
                     nb_absorbed = node_no-1
                     if DEBUG:
-                        print('REJECT: %s, blob: %r ...' % (node.name, blob[:4]))
-                        print(blob.find(b'\xFF\xDA'))
+                        print('REJECT: %s, size: %d, blob: %r ...' % (node.name, len(blob), blob[:4]))
                     if min_node == 0:
                         # abort = False
                         break
