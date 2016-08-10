@@ -514,14 +514,22 @@ class NodeConsumerStub(object):
 class BasicVisitor(NodeConsumerStub):
 
     def init_specific(self, consume_also_singleton=False):
-        self._internals_criteria = None
+        self._internals_criteria = dm.NodeInternalsCriteria(negative_node_kinds=[dm.NodeInternals_NonTerm])
         self.consume_also_singleton = consume_also_singleton
+        self.firstcall = True
 
     def consume_node(self, node):
-        if (node.is_exhausted() and not self.consume_also_singleton) or node.is_nonterm():
+        if (node.is_exhausted() and not self.consume_also_singleton):
             # in this case we ignore the node
             return False
         else:
+            if self.firstcall:
+                self.firstcall = False
+                return True
+            if not node.is_exhausted():
+                node.freeze()
+                node.unfreeze(recursive=False)
+                node.freeze()
             return True
 
     def save_node(self, node):
@@ -533,15 +541,14 @@ class BasicVisitor(NodeConsumerStub):
 
     def need_reset(self, node):
         if node.is_nonterm():
+            if not node.is_exhausted():
+                self.firstcall = True
             return True
         else:
             return False
 
     def wait_for_exhaustion(self, node):
-        if not node.is_nonterm():
-            return -1 # wait until exhaustion
-        else:
-            return 0
+        return -1
 
 
 class NonTermVisitor(BasicVisitor):
