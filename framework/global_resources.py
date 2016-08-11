@@ -93,7 +93,15 @@ def convert_to_internal_repr(val):
     return val
 
 def unconvert_from_internal_repr(val):
-    return val.decode(internal_repr_codec, 'replace')
+    if sys.version_info[0] == 2 and isinstance(val, buffer):
+        # This case occurs when reading from the FmkDB
+        val = str(val)
+    else:
+        try:
+            val = val.decode(internal_repr_codec, 'strict')
+        except:
+            val = val.decode('latin-1')
+    return val
 
 ### Exports for Node Absorption ###
 
