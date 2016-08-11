@@ -1559,12 +1559,12 @@ class FmkPlumbing(object):
                 else:
                     seed = Data(seed)
                     seed.set_initial_dmaker([data_desc.seed.upper(), 'g_'+data_desc.seed, None])
-            else:
-                if not isinstance(data_desc.seed, Data):
-                    self.set_error(msg='DataProcess object contains an unrecognized seed type!',
-                                   code=Error.UserCodeError)
-                    return None
 
+            elif data_desc.seed is not None and not isinstance(data_desc.seed, Data):
+                self.set_error(msg='DataProcess object contains an unrecognized seed type!',
+                                   code=Error.UserCodeError)
+                return None
+            else:
                 seed = data_desc.seed
 
             data = self.get_data(data_desc.process, data_orig=seed)

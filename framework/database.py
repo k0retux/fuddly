@@ -799,7 +799,8 @@ class Database(object):
             "WHERE ID == {data_id:d};".format(data_id=data_id)
         )
 
-        print(colorize("*** Data and all related records have been removed ***", rgb=Color.FMKINFO))
+        print(colorize("*** Data {:d} and all related records have been removed ***".format(data_id),
+                       rgb=Color.FMKINFO))
 
 
     def get_project_record(self, prj_name=None):
