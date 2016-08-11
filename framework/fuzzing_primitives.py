@@ -33,10 +33,12 @@ import framework.value_types as vtype
 import framework.data_model as dm
 
 from framework.basic_primitives import *
-
 from libs.external_modules import *
-from libs.debug_facility import *
 
+import libs.debug_facility as dbg
+
+DEBUG = dbg.MW_DEBUG
+DEBUG_PRINT = dbg.DEBUG_PRINT
 
 class ModelWalker(object):
     '''

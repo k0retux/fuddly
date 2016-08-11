@@ -22,11 +22,17 @@
 ################################################################################
 
 DEBUG = False
-LEVEL = 0
+LEVEL = 2
 
 # related to data_model.py
 DM_DEBUG = False
 ABS_DEBUG = False
+
+# related to value_types.py
+VT_DEBUG = False
+
+# related to fuzzing_primitives.py
+MW_DEBUG = True
 
 try:
     from xtermcolor import colorize

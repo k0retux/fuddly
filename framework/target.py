@@ -1702,11 +1702,12 @@ class SIMTarget(Target):
         return feedback
 
     def send_data(self, data, from_fmk=False):
-        node_list = data.node[NodeSemanticsCriteria(mandatory_criteria=['tel num'])]
-        if node_list and len(node_list)==1:
-            node_list[0].set_values(value_type=GSMPhoneNum(val_list=[self.tel_num]))
-        else:
-            print('\nWARNING: Data does not contain a mobile number.')
+        if data.node:
+            node_list = data.node[NodeSemanticsCriteria(mandatory_criteria=['tel num'])]
+            if node_list and len(node_list)==1:
+                node_list[0].set_values(value_type=GSMPhoneNum(val_list=[self.tel_num]))
+            else:
+                print('\nWARNING: Data does not contain a mobile number.')
         pdu = b''
         raw_data = data.to_bytes()
         for c in raw_data:

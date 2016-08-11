@@ -46,7 +46,9 @@ from framework.encoders import *
 from framework.error_handling import *
 from framework.global_resources import *
 
-DEBUG = False
+import libs.debug_facility as dbg
+
+DEBUG = dbg.VT_DEBUG
 
 class VT(object):
     '''
@@ -338,8 +340,10 @@ class String(VT_Alt):
                 try:
                     b = val.encode(self.codec)
                 except:
+                    if len(val) > 30:
+                        val = val[:30] + ' ...'
                     err_msg = "\n*** WARNING: Encoding issue. With python2 'str' or 'bytes' means " \
-                              "ASCII, prefix the string {:s} with 'u'".format(repr(val[:30]))
+                              "ASCII, prefix the string {:s} with 'u'".format(repr(val))
                     print(err_msg)
                     b = val
         return b

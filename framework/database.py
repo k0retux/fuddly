@@ -461,7 +461,8 @@ class Database(object):
         msg += colorize("{:s}".format(prj), rgb=Color.FMKSUBINFO)
         msg += colorize(" | Target: ", rgb=Color.FMKINFO)
         msg += colorize("{:s}".format(tg), rgb=Color.FMKSUBINFO)
-        msg += colorize("\n    Status: ", rgb=Color.FMKINFO)
+        status_prefix = "    Status: "
+        msg += colorize('\n' + status_prefix, rgb=Color.FMKINFO)
         src_max_sz = 0
         for idx, fbk in enumerate(feedback):
             src, tstamp, status, _ = fbk
@@ -473,7 +474,7 @@ class Database(object):
                    colorize(" by ", rgb=Color.FMKINFO) + \
                    colorize("{!s}".format(src), rgb=Color.FMKSUBINFO)
             if idx < len(feedback) - 1:
-                msg += colorize(", ".format(src), rgb=Color.FMKINFO)
+                msg += colorize(",\n".format(src) + ' '*len(status_prefix), rgb=Color.FMKINFO)
 
         msg += '\n'
         sentd = sent_date.strftime("%d/%m/%Y - %H:%M:%S") if sent_date else 'None'
