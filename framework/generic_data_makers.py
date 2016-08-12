@@ -46,7 +46,10 @@ tactics = Tactics()
 # STATEFUL DISRUPTORS #
 #######################
 
-MAX_INFO_SIZE = 200
+def truncate_info(info, max_size=60):
+    if len(info) > max_size:
+        info = info[:max_size] + b' ...'
+    return repr(info)
 
 @disruptor(tactics, dtype="tWALK", weight=1,
            gen_args = GENERIC_ARGS,
@@ -89,7 +92,7 @@ class sd_iter_over_data(StatefulDisruptor):
             return data
 
         data.add_info('model walking index: {:d}'.format(idx))
-        data.add_info('current node:     %s' % self.modelwalker.consumed_node_path)
+        data.add_info('current node:     {!s}'.format(self.modelwalker.consumed_node_path))
 
         if self.clone_node:
             exported_node = Node(rnode.name, base_node=rnode, new_env=True)
@@ -161,21 +164,15 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
             self.run_num +=1
 
         corrupt_node_bytes = consumed_node.to_bytes()
-        corrupt_node_bytes_hex = binascii.b2a_hex(corrupt_node_bytes)
-        if len(corrupt_node_bytes) > MAX_INFO_SIZE:
-            corrupt_node_bytes = corrupt_node_bytes[:MAX_INFO_SIZE] + b' ...'
-        if len(corrupt_node_bytes_hex) > MAX_INFO_SIZE:
-            corrupt_node_bytes_hex = corrupt_node_bytes_hex[:MAX_INFO_SIZE] + b' ...'
 
         data.add_info('model walking index: {:d}'.format(idx))        
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
-        data.add_info('current fuzzed node:     %s' % self.modelwalker.consumed_node_path)
-        data.add_info(' |_ value type:         %s' % consumed_node.cc.get_value_type())
-        data.add_info(' |_ original node value: %s (ascii: %s)' % \
-                      (binascii.b2a_hex(orig_node_val), orig_node_val))
-        data.add_info(' |_ corrupt node value:  %s (ascii: %s)' % \
-                      (corrupt_node_bytes_hex,
-                      corrupt_node_bytes))
+        data.add_info('current fuzzed node:     {!s}'.format(self.modelwalker.consumed_node_path))
+        data.add_info(' |_ value type:          {!s}'.format(consumed_node.cc.get_value_type()))
+        data.add_info(' |_ original node value (hex): {!s}'.format(truncate_info(binascii.b2a_hex(orig_node_val))))
+        data.add_info(' |                    (ascii): {!s}'.format(truncate_info(orig_node_val)))
+        data.add_info(' |_ corrupt node value  (hex): {!s}'.format(truncate_info(binascii.b2a_hex(corrupt_node_bytes))))
+        data.add_info('                      (ascii): {!s}'.format(truncate_info(corrupt_node_bytes)))
 
         if self.clone_node:
             exported_node = Node(rnode.name, base_node=rnode, new_env=True)
@@ -264,9 +261,9 @@ class sd_switch_to_alternate_conf(StatefulDisruptor):
 
         data.add_info('model walking index: {:d}'.format(idx))        
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
-        data.add_info('current node with alternate conf: %s' % self.modelwalker.consumed_node_path)
-        data.add_info(' |_ associated value: %s' % repr(consumed_node.to_bytes()))
-        data.add_info(' |_ original node value: %s' % orig_node_val)
+        data.add_info('current node with alternate conf: {!s}'.format(self.modelwalker.consumed_node_path))
+        data.add_info(' |_ associated value: {!s}'.format(truncate_info(consumed_node.to_bytes())))
+        data.add_info(' |_ original node value: {!s}'.format(truncate_info(orig_node_val)))
 
         if self.clone_node:
             exported_node = Node(rnode.name, base_node=rnode, new_env=True)
@@ -339,15 +336,16 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
         else:
             self.run_num +=1
 
+        corrupt_node_bytes = consumed_node.to_bytes()
+
         data.add_info('model walking index: {:d}'.format(idx))        
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
-        data.add_info('current fuzzed separator:     %s' % self.modelwalker.consumed_node_path)
-        data.add_info(' |_ value type:         %s' % consumed_node.cc.get_value_type())
-        data.add_info(' |_ original separator: %s (ascii: %s)' % \
-                      (binascii.b2a_hex(orig_node_val), orig_node_val))
-        data.add_info(' |_ replaced by:        %s (ascii: %s)' % \
-                      (binascii.b2a_hex(consumed_node.to_bytes()),
-                      consumed_node.to_bytes()))
+        data.add_info('current fuzzed separator:     {!s}'.format(self.modelwalker.consumed_node_path))
+        data.add_info(' |_ value type:         {!s}'.format(consumed_node.cc.get_value_type()))
+        data.add_info(' |_ original separator (hex): {!s}'.format(truncate_info(binascii.b2a_hex(orig_node_val))))
+        data.add_info(' |                   (ascii): {!s}'.format(truncate_info(orig_node_val)))
+        data.add_info(' |_ replaced by        (hex): {!s}'.format(truncate_info(binascii.b2a_hex(corrupt_node_bytes))))
+        data.add_info('                     (ascii): {!s}'.format(truncate_info(corrupt_node_bytes)))
 
         if self.clone_node:
             exported_node = Node(rnode.name, base_node=rnode, new_env=True)
@@ -691,14 +689,14 @@ class d_switch_to_alternate_conf(Disruptor):
                     self.existing_conf = True
 
             if self.provided_alt and not self.existing_conf:
-                prev_data.add_info("NO ALTERNATE CONF '%s' AVAILABLE" % str(self.conf))
+                prev_data.add_info("NO ALTERNATE CONF '{!s}' AVAILABLE".format(self.conf))
                 return prev_data
 
             if self.conf_fallback is None:
                 prev_data.add_info("NO ALTERNATE CONF AVAILABLE")
                 return prev_data
 
-            prev_data.add_info("ALTERNATE CONF '%s' USED" % str(self.conf))
+            prev_data.add_info("ALTERNATE CONF '{!s}' USED".format(self.conf))
 
             prev_data.node.unfreeze_all()
             prev_data.node.set_current_conf(self.conf, recursive=self.recursive, root_regexp=self.path)
@@ -736,7 +734,7 @@ class d_max_size(Disruptor):
 
             val = node.to_bytes()
             orig_len = len(val)
-            prev_data.add_info('orig node length: %d' % orig_len)
+            prev_data.add_info('orig node length: {:d}'.format(orig_len))
             
             if self.sz >= 0:
                 node.set_values([val[:min(self.sz, orig_len)]])
@@ -746,14 +744,14 @@ class d_max_size(Disruptor):
                 node.set_values([val[orig_len - min(self.sz, orig_len):]])
                 prev_data.add_info('left truncation')
 
-            prev_data.add_info('new node length: %d' % min(self.sz, orig_len))
+            prev_data.add_info('new node length: {:d}'.format(min(self.sz, orig_len)))
 
             ret = prev_data
 
         else:
             val = prev_data.to_bytes()
             orig_len = len(val)
-            prev_data.add_info('orig data length: %d' % orig_len)
+            prev_data.add_info('orig data length: {:d}'.format(orig_len))
 
             if self.sz >= 0:
                 new_val = val[:min(self.sz, orig_len)]
@@ -763,7 +761,7 @@ class d_max_size(Disruptor):
                 new_val = val[orig_len - min(self.sz, orig_len):]
                 prev_data.add_info('left truncation')
 
-            prev_data.add_info('new data length: %d' % len(new_val))
+            prev_data.add_info('new data length: {:d}'.format(len(new_val)))
 
             prev_data.update_from_str_or_bytes(new_val)
             ret = prev_data
@@ -807,18 +805,18 @@ class d_corrupt_node_bits(Disruptor):
 
             for i in l:
                 val = i.to_bytes()
-                prev_data.add_info('current fuzzed node: %s' % i.get_path_from(prev_data.node))
-                prev_data.add_info('orig data: %s' % repr(val))
+                prev_data.add_info('current fuzzed node: {!s}'.format(i.get_path_from(prev_data.node)))
+                prev_data.add_info('orig data: {!s}'.format(truncate_info(val)))
 
                 if self.new_val is None:
                     if val != b'':
                         val = corrupt_bits(val, n=1, ascii=self.ascii)
-                        prev_data.add_info('corrupted data: %s' % repr(val))
+                        prev_data.add_info('corrupt data: {!s}'.format(truncate_info(val)))
                     else:
                         prev_data.add_info('Nothing to corrupt!')
                 else:
                     val = self.new_val
-                    prev_data.add_info('corrupted data: %s' % repr(val))
+                    prev_data.add_info('corrupt data: {!s}'.format(truncate_info(val)))
 
                 i.set_values(val_list=[val])
                 i.get_value()
@@ -852,7 +850,7 @@ class d_corrupt_bits_by_position(Disruptor):
         else:
             val = prev_data.to_bytes()
 
-        prev_data.add_info('corrupted bit index: %d' % self.idx)
+        prev_data.add_info('corrupted bit index: {:d}'.format(self.idx))
 
         new_value = self.new_val if self.new_val is not None \
                     else corrupt_bits(val[self.idx-1:self.idx], n=1, ascii=self.ascii)
@@ -945,8 +943,8 @@ class d_next_node_content(Disruptor):
             for n in l:
                 n.unfreeze(recursive=self.recursive)
                 n.freeze()
-                prev_data.add_info("unfreeze the node '{:s}'".format(n.get_path_from(prev_data.node)))
-                prev_data.add_info("new value:        '{:s}'".format(n.to_bytes()))
+                prev_data.add_info("unfreeze the node '{!s}'".format(n.get_path_from(prev_data.node)))
+                prev_data.add_info("new value:        '{!s}'".format(n.to_bytes()))
 
         else:
             prev_data.node.unfreeze(recursive=self.recursive)
@@ -1009,9 +1007,9 @@ class d_modify_nodes(Disruptor):
 
     def _add_info(self, prev_data, n, status, size):
         val_len = len(self.value)
-        prev_data.add_info("changed node:     '{:s}'".format(n.name))
-        prev_data.add_info("absorption status: {:s}".format(status))
-        prev_data.add_info("value provided:   '{:s}'".format(self.value))
+        prev_data.add_info("changed node:     '{!s}'".format(n.name))
+        prev_data.add_info("absorption status: {!s}".format(status))
+        prev_data.add_info("value provided:   '{!s}'".format(truncate_info(self.value)))
         prev_data.add_info("__ length:         {:d}".format(val_len))
         if status != AbsorbStatus.FullyAbsorbed:
             prev_data.add_info("absorbed size:     {:d}".format(size))
@@ -1019,7 +1017,7 @@ class d_modify_nodes(Disruptor):
                 remaining = self.value[size:size+100] + ' ...'
             else:
                 remaining = self.value[size:]
-            prev_data.add_info("remaining:      '{:s}'".format(remaining))
+            prev_data.add_info("remaining:      '{!s}'".format(remaining))
 
 
 @disruptor(tactics, dtype="COPY", weight=4,
@@ -1102,14 +1100,12 @@ class sd_fuzz_terminal_nodes(StatefulDisruptor):
             self.run_num +=1
 
         corrupt_node_bytes = consumed_node.to_bytes()
-        if len(corrupt_node_bytes) > MAX_INFO_SIZE:
-            corrupt_node_bytes = corrupt_node_bytes[:MAX_INFO_SIZE] + b' ...'
 
         data.add_info('model walking index: {:d}'.format(idx))
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
-        data.add_info('current fuzzed node: %s' % consumed_node.get_path_from(rnode))
-        data.add_info('original val: %s' % repr(orig_node_val))
-        data.add_info('corrupted val: %s' % repr(corrupt_node_bytes))
+        data.add_info('current fuzzed node: {!s}'.format(consumed_node.get_path_from(rnode)))
+        data.add_info('original val:  {!s}'.format(truncate_info(orig_node_val)))
+        data.add_info('corrupted val: {!s}'.format(truncate_info(corrupt_node_bytes)))
 
         if self.clone_node:
             exported_node = Node(rnode.name, base_node=rnode, new_env=True)

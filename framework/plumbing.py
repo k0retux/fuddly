@@ -926,7 +926,7 @@ class FmkPlumbing(object):
                         if delay is not None:
                             self.mon.set_probe_delay(pname, delay)
                         self.mon.start_probe(pname)
-                    self.mon.do_after_probes_init()
+                    self.mon.wait_for_probe_initialization()
                     self.prj.start()
                     if self.tg.probes:
                         time.sleep(0.5)
@@ -943,8 +943,6 @@ class FmkPlumbing(object):
 
     def __stop_fmk_plumbing(self):
         if self.__is_started():
-            signal.signal(signal.SIGINT, sig_int_handler)
-
             if self.is_target_enabled():
                 self.log_target_residual_feedback()
 
@@ -964,6 +962,8 @@ class FmkPlumbing(object):
             self.prj.stop()
 
             self.__stop()
+
+            signal.signal(signal.SIGINT, sig_int_handler)
 
 
     @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
@@ -1473,13 +1473,12 @@ class FmkPlumbing(object):
         else:
             self._burst_countdown -= 1
 
-        self.mon.do_after_timeout()
         return ret
 
 
     def _do_before_sending_data(self, data_list):
         # Monitor hook function before sending
-        self.mon.do_before_sending_data()
+        self.mon.notify_imminent_data_sending()
         data_list = self._handle_data_callbacks(data_list, hook=HOOK.before_sending)
         return data_list
 
@@ -1756,16 +1755,17 @@ class FmkPlumbing(object):
 
         if cont0:
             cont0 = self.__delay_fuzzing()
-        else:
-            self.mon.do_on_error()
-
-        self.mon.do_before_feedback_retrieval()
 
         cont1 = True
         cont2 = True
         # That means this is the end of a burst
         if self._burst_countdown == self._burst:
             cont1 = self.log_target_feedback()
+
+        self.mon.notify_target_feedback_retrieval()
+        self.mon.wait_for_probe_status_retrieval()
+
+        if self._burst_countdown == self._burst:
             # We handle probe feedback if any
             cont2 = self.monitor_probes(force_record=True)
             self.tg.cleanup()
@@ -1812,12 +1812,12 @@ class FmkPlumbing(object):
                     raise ValueError
             except TargetStuck as e:
                 self.lg.log_comment("*** WARNING: Unable to send data to the target! [reason: %s]" % str(e))
-                self.mon.do_on_error()
+                self.mon.notify_error()
             except:
                 self._handle_user_code_exception()
-                self.mon.do_on_error()
+                self.mon.notify_error()
             else:
-                self.mon.do_after_sending_data()
+                self.mon.notify_data_sending_event()
 
             self._do_after_sending_data(data_list)
 
@@ -2326,7 +2326,7 @@ class FmkPlumbing(object):
             self._handle_user_code_exception('Operator has crashed during its start() method')
             return False
         finally:
-            self.mon.do_after_probes_init() # operator.start() can start probes.
+            self.mon.wait_for_probe_initialization() # operator.start() can start probes.
 
         if not ok:
             self.set_error("The _start() method of Operator '%s' has returned an error!" % name,
@@ -2451,11 +2451,15 @@ class FmkPlumbing(object):
                     exit_operator = True
                     self.lg.log_fmk_info("Operator will shutdown because waiting has been cancelled by the user")
 
-                self.mon.do_before_feedback_retrieval()
 
                 # Target fbk is logged only at the end of a burst
                 if self._burst_countdown == self._burst:
                     cont1 = self.log_target_feedback()
+
+                self.mon.notify_target_feedback_retrieval()
+                self.mon.wait_for_probe_status_retrieval()
+
+                if self._burst_countdown == self._burst:
                     cont2 = self.monitor_probes(force_record=True)
                     if not cont1 or not cont2:
                         exit_operator = True
@@ -2955,7 +2959,7 @@ class FmkPlumbing(object):
         if not ok:
             self.set_error('Probe does not exist (or already launched)',
                            code=Error.CommandError)
-        self.mon.do_after_probes_init()
+        self.mon.wait_for_probe_initialization()
 
         return ok
 

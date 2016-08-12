@@ -312,6 +312,37 @@ class EmptyTarget(Target):
         pass
 
 
+class TestTarget(Target):
+
+    def __init__(self, recover_ratio=100):
+        self._cpt = None
+        self._recover_ratio = recover_ratio
+
+    def start(self):
+        self._cpt = 0
+        return True
+
+    def send_data(self, data, from_fmk=False):
+        pass
+
+    def send_multiple_data(self, data_list, from_fmk=False):
+        pass
+
+    def is_target_ready_for_new_data(self):
+        self._cpt += 1
+        if self._cpt > 5 and random.choice([True, False]):
+            self._cpt = 0
+            return True
+        else:
+            return False
+
+    def recover_target(self):
+        if random.randint(1, 100) > (100 - self._recover_ratio):
+            return True
+        else:
+            return False
+
+
 class NetworkTarget(Target):
     '''Generic target class for interacting with a network resource. Can
     be used directly, but some methods may require to be overloaded to

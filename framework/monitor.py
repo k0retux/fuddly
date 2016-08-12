@@ -162,10 +162,10 @@ class ProbeUser(object):
 
 class BlockingProbeUser(ProbeUser):
 
-    def __init__(self, probe, after_feedback_retrieval):
+    def __init__(self, probe, after_target_feedback_retrieval):
         ProbeUser.__init__(self, probe)
 
-        self._after_feedback_retrieval = after_feedback_retrieval
+        self._after_target_feedback_retrieval = after_target_feedback_retrieval
 
         self._continue_event = threading.Event()
 
@@ -175,8 +175,8 @@ class BlockingProbeUser(ProbeUser):
         self._probe_status_event = threading.Event()
 
     @property
-    def after_feedback_retrieval(self):
-        return self._after_feedback_retrieval
+    def after_target_feedback_retrieval(self):
+        return self._after_target_feedback_retrieval
 
     def stop(self):
         ProbeUser.stop(self)
@@ -194,6 +194,7 @@ class BlockingProbeUser(ProbeUser):
             raise
         finally:
             self._armed_event.clear()
+            # if error before wait_until_ready, we need to clear its event
             self._probe_status_event.clear()
 
     def wait_until_ready(self, timeout=None):
@@ -202,6 +203,8 @@ class BlockingProbeUser(ProbeUser):
         except ProbeTimeoutError as e:
             e.blocking_methods = ["main()"]
             raise
+        finally:
+            self._probe_status_event.clear()
 
     def notify_blocking(self):
         self._blocking_event.set()
@@ -232,6 +235,7 @@ class BlockingProbeUser(ProbeUser):
             self._arm_event.wait(1)
 
         self._arm_event.clear()
+        self._continue_event.clear()
         return True
 
     def _notify_armed(self):
@@ -248,7 +252,6 @@ class BlockingProbeUser(ProbeUser):
         timeout_appended = True
         while not self._blocking_event.is_set():
             if self._continue_event.is_set() or not self._go_on():
-                self._continue_event.clear()
                 self._notify_status_retrieved()
                 timeout_appended = False
                 break
@@ -325,12 +328,12 @@ class Monitor(object):
     def set_data_model(self, dm):
         self._dm = dm
 
-    def add_probe(self, probe, blocking=False, after_feedback_retrieval=False):
+    def add_probe(self, probe, blocking=False, after_target_feedback_retrieval=False):
         if probe.__class__.__name__ in self.probe_users:
             raise AddExistingProbeToMonitorError(probe.__class__.__name__)
 
         if blocking:
-            self.probe_users[probe.__class__.__name__] = BlockingProbeUser(probe, after_feedback_retrieval)
+            self.probe_users[probe.__class__.__name__] = BlockingProbeUser(probe, after_target_feedback_retrieval)
         else:
             self.probe_users[probe.__class__.__name__] = ProbeUser(probe)
 
@@ -433,10 +436,10 @@ class Monitor(object):
                                            .format(e.probe_name, e.blocking_methods),
                                            code=Error.OperationCancelled)
 
-    def do_after_probes_init(self):
+    def wait_for_probe_initialization(self):
         self._wait_for_specific_probes(ProbeUser, ProbeUser.wait_for_probe_init)
 
-    def do_before_sending_data(self):
+    def notify_imminent_data_sending(self):
         if not self.__enable:
             return
         self._target_status = None
@@ -448,31 +451,33 @@ class Monitor(object):
         self._wait_for_specific_probes(BlockingProbeUser, BlockingProbeUser.wait_until_armed)
 
 
-    def do_after_sending_data(self):
+    def notify_data_sending_event(self):
         if not self.__enable:
             return
 
         for _, probe_user in self.probe_users.items():
-            if isinstance(probe_user, BlockingProbeUser) and not probe_user.after_feedback_retrieval:
+            if isinstance(probe_user, BlockingProbeUser) and not probe_user.after_target_feedback_retrieval:
                 probe_user.notify_blocking()
 
 
-    def do_after_timeout(self):
+    def notify_target_feedback_retrieval(self):
         if not self.__enable:
             return
         for _, probe_user in self.probe_users.items():
-            if isinstance(probe_user, BlockingProbeUser) and probe_user.after_feedback_retrieval:
+            if isinstance(probe_user, BlockingProbeUser) and probe_user.after_target_feedback_retrieval:
                 probe_user.notify_blocking()
 
 
-    def do_before_feedback_retrieval(self):
+    def wait_for_probe_status_retrieval(self):
         if not self.__enable:
             return
 
         self._wait_for_specific_probes(BlockingProbeUser, BlockingProbeUser.wait_until_ready)
 
 
-    def do_on_error(self):
+    def notify_error(self):
+        # WARNING: do not use between BlockingProbeUser.notify_data_ready and
+        # BlockingProbeUser.wait_until_armed
         if not self.__enable:
             return
 
@@ -797,13 +802,16 @@ class Serial_Backend(Backend):
                     pass_prompt = b''.join(chunks)
             time.sleep(0.1)
             self.ser.write(self.password+b'\r\n')
-            time.sleep(self.slowness_factor*0.6)
+            time.sleep(self.slowness_factor*0.7)
 
     def _stop(self):
         self.ser.write(b'\x04\r\n') # we send an EOT (Ctrl+D)
         self.ser.close()
 
     def _exec_command(self, cmd):
+        if not self.ser.is_open:
+            raise BackendError('Serial port not open')
+
         if sys.version_info[0] > 2:
             cmd = bytes(cmd, self.codec)
         cmd += b'\r\n'
@@ -997,7 +1005,7 @@ class ProbeMem(Probe):
             if entry.find(self.process_name) >= 0:
                 try:
                     rss = int(re.search('\d+', entry.split()[0]).group(0))
-                except ValueError:
+                except:
                     rss = -10
                 break
         else:
@@ -1066,9 +1074,10 @@ def probe(project):
     return internal_func
 
 
-def blocking_probe(project, after_feedback_retrieval=False):
+def blocking_probe(project, after_target_feedback_retrieval=False):
     def internal_func(probe_cls):
-        project.monitor.add_probe(probe_cls(), blocking=True, after_feedback_retrieval=after_feedback_retrieval)
+        project.monitor.add_probe(probe_cls(), blocking=True,
+                                  after_target_feedback_retrieval=after_target_feedback_retrieval)
         return probe_cls
 
     return internal_func

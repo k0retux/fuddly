@@ -2363,8 +2363,8 @@ between two decorators:
   call to :meth:`framework.monitor.Probe.main()` which is configurable.
 
 - ``@blocking_probe`` for probe which will be run just once after each
-  data emission (default) or after each feedback retrieval. The default behaviour can be
-  changed by giving a ``after_feedback_retrieval`` parameter set to ``True``.
+  data emission (default) or after each target feedback retrieval. The default behaviour can be
+  changed by giving a ``after_target_feedback_retrieval`` parameter set to ``True``.
 
 These *decorators* have to take the reference of the project as
 parameter, in order to register them within. A really basic
@@ -2390,7 +2390,7 @@ information from the target is given here under:
 .. code-block:: python
    :linenos:
 
-   @blocking_probe(project, after_feedback_retrieval=False)
+   @blocking_probe(project, after_target_feedback_retrieval=False)
    class health_check(Probe):
 
        def start(self, dm, target, logger):

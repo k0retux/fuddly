@@ -117,7 +117,7 @@ class health_check(Probe):
 
         return ProbeStatus(status)
 
-serial_backend = Serial_Backend('/dev/ttyUSB0', username='test', password='test', slowness_factor=4)
+serial_backend = Serial_Backend('/dev/ttyUSB0', username='test', password='test', slowness_factor=8)
 
 @blocking_probe(project)
 class probe_pid(ProbePID):
@@ -135,7 +135,7 @@ class probe_mem(ProbeMem):
 
 targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
            tuto_tg, net_tg, udpnet_tg, udpnetsrv_tg, rawnetsrv_tg,
-           (EmptyTarget(), probe_pid, (probe_mem, 0.2))]
+           (TestTarget(), probe_pid, (probe_mem, 0.2))]
 
 ### OPERATOR DEFINITION ###
 
