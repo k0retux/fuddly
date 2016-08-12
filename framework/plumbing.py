@@ -212,6 +212,7 @@ class FmkPlumbing(object):
 
         self.error = False
         self.fmk_error = []
+        self._sending_error = None
 
         self.__tg_enabled = False
         self.__prj_to_be_reloaded = False
@@ -1721,7 +1722,7 @@ class FmkPlumbing(object):
             return True
 
         data_list = self.send_data(data_list, add_preamble=True)
-        if data_list is None:
+        if data_list is None or self._sending_error:
             return False
 
         if self._wkspace_enabled:
@@ -1800,9 +1801,7 @@ class FmkPlumbing(object):
                                code=Error.DataInvalid)
                 return None
 
-            if add_preamble:
-                self.new_transfer_preamble()
-
+            self._sending_error = False
             try:
                 if len(data_list) == 1:
                     self.tg.send_data_sync(data_list[0], from_fmk=True)
@@ -1813,10 +1812,14 @@ class FmkPlumbing(object):
             except TargetStuck as e:
                 self.lg.log_comment("*** WARNING: Unable to send data to the target! [reason: %s]" % str(e))
                 self.mon.notify_error()
+                self._sending_error = True
             except:
                 self._handle_user_code_exception()
                 self.mon.notify_error()
+                self._sending_error = True
             else:
+                if add_preamble:
+                    self.new_transfer_preamble()
                 self.mon.notify_data_sending_event()
 
             self._do_after_sending_data(data_list)
@@ -2414,7 +2417,10 @@ class FmkPlumbing(object):
                     continue
 
                 data_list = self.send_data(data_list, add_preamble=True)
-                if data_list is None:
+                if self._sending_error:
+                    self.lg.log_fmk_info("Operator will shutdown because of a sending error")
+                    break
+                elif data_list is None:
                     self.lg.log_fmk_info("Operator will shutdown because there is no data to send")
                     break
 

@@ -482,9 +482,12 @@ class NetworkTarget(Target):
         self.server_mode[(host,port)] = server_mode
         self._default_fbk_id[(host, port)] = self._default_fbk_socket_id + ' - {:s}:{:d}'.format(host, port)
         self.hold_connection[(host, port)] = hold_connection
-        self._mac_src[(host, port)] = self.get_mac_addr(host) if mac_src is None else mac_src
-        self._mac_dst[(host, port)] = mac_dst
-
+        if socket_type[1] == socket.SOCK_RAW:
+            self._mac_src[(host, port)] = self.get_mac_addr(host) if mac_src is None else mac_src
+            self._mac_dst[(host, port)] = mac_dst
+        else:
+            self._mac_src = {(host, port): None}
+            self._mac_dst = {(host, port): None}
 
     def set_timeout(self, fbk_timeout, sending_delay):
         '''
