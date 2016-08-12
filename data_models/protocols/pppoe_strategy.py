@@ -189,6 +189,8 @@ sc1.set_anchor(step_wait_padi)
 step_wait_padi = NoDataStep(fbk_timeout=1)
 step_send_valid_pado = Step(DataProcess(process=[('FIX_FIELDS#2', None, UI(reevaluate_csts=True))],
                                         seed='pado'))
+step_send_padt = Step(DataProcess(process=[('FIX_FIELDS#3', None, UI(reevaluate_csts=True))],
+                                  seed='padt'), fbk_timeout=0.1)
 
 dp_pads = DataProcess(process=[('tTYPE#2', UI(init=1), UI(order=True)), 'FIX_FIELDS'], seed='pads')
 dp_pads.append_new_process([('tSTRUCT#2', UI(init=1), UI(deep=True)), 'FIX_FIELDS'])
@@ -199,7 +201,9 @@ step_wait_padi.connect_to(step_send_valid_pado, cbk_after_fbk=retrieve_padi_from
 step_send_valid_pado.connect_to(step_send_fuzzed_pads, cbk_after_fbk=retrieve_padr_from_feedback_and_update)
 step_send_valid_pado.connect_to(step_wait_padr)
 
-step_send_fuzzed_pads.connect_to(step_wait_padr)
+# step_send_fuzzed_pads.connect_to(step_wait_padr)
+step_send_fuzzed_pads.connect_to(step_send_padt)
+step_send_padt.connect_to(step_wait_padr)
 
 step_wait_padr.connect_to(step_send_fuzzed_pads, cbk_after_fbk=retrieve_padr_from_feedback_and_update)
 step_wait_padr.connect_to(step_send_valid_pado, cbk_after_fbk=retrieve_padi_from_feedback)

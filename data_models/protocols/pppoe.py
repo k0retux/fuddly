@@ -215,6 +215,8 @@ class PPPOE_DataModel(DataModel):
                    'custo_clear': MH.Custo.NTerm.FrozenCopy,
                    'exists_if': (IntCondition(0xa7), 'code'),
                    'contents': [
+                       {'name': ('host_uniq_stub', 3),
+                        'contents': String(val_list=[''])},
                        (tag_node.get_clone(), 0, 4)
                    ]}
               ]},
