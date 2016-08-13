@@ -543,6 +543,8 @@ custo_set, custo_clear
     Refer to the description of the corresponding *generator node* mode.
 
 
+.. _dm:nt-keywords:
+
 Keywords to Describe Non Terminal Node
 --------------------------------------
 
@@ -1562,19 +1564,20 @@ How to Describe a Data Format That Contains Complex Strings
 Parts of the data that only contain strings can easily be described using python's regular expressions.
 Here are some rules to respect:
 
-- The characters couple (``[``, ``]``), ``.`` and meta-sequences, such as ``\s``, ``\S``, ``\w``, ``\W``,
-  ``\d`` and ``\D``, are the only ways to define a :class:`framework.value_types.String` terminal node that
-  contains an alphabet.
+- Using square brackets ``[ ]`` to indicate a set of characters will result in the creation of a
+  :class:`framework.value_types.String` terminal node that contains an *alphabet*. Likewise, the usage of
+  ``.`` or meta-sequences such as ``\s``, ``\S``, ``\w``, ``\W``, ``\d`` or ``\D`` will lead to the
+  creation of such type of nodes.
 
 - Anything else will be translated into a :class:`framework.value_types.String` terminal node that
-  declares a list of values. The characters couple (``(``, ``)``) can be used to delimit a portion of
+  declares a list of values. ``( )`` can be used to delimit a portion of
   the regular expression that need to be translated into a terminal node on its own.
 
 .. note:: If each item in a list of values are integers an :class:`framework.value_types.INT_Str` will
    be created instead of a :class:`framework.value_types.String`.
 
 - ``(``, ``)``, ``[``, ``]``, ``?``, ``*``, ``+``, ``{``, ``}``, ``|``, ``\``, ``-``, ``.`` are the only
-  recognised special chars. They can not be used in an unsuitable context without been escaped
+  recognised special characters. They cannot be used in an unsuitable context without being escaped
   (exceptions are made for ``|``, ``.`` and ``-``).
 
 - Are only allowed regular expressions that can be translated into one terminal node or into one non-terminal
@@ -1584,13 +1587,13 @@ Here are some rules to respect:
 - An inconsistency between the charset and the characters that compose the regular expression will result
   in an :class:`framework.error_handling.CharsetError`.
 
-.. note:: The default charset used by Fuddly is ``MH.Charset.ASCII_EXT``. To alter this behaviour, it is
-   necessary to use the ``charset`` keyword.
+.. note:: The default charset used by Fuddly is ``MH.Charset.ASCII_EXT``. To change this behaviour,
+   use the keyword ``charset`` (refer to :ref:`dm:node_prop_keywords`).
 
 
 To embody these rules, let's take some examples:
 
-Example 1: the basics
+Example 1: The basics.
 
 .. code-block:: python
    :linenos:
@@ -1603,12 +1606,12 @@ Example 1: the basics
                  {'name': 'HTTP_version_1', 'contents': String(val_list=["HTTP"])},
                  {'name': 'HTTP_version_2', 'contents': String(val_list=["/"])},
                  {'name': 'HTTP_version_3',
-                  'contents': String(alphabet="0123456789", size=[1])},
+                  'contents': String(alphabet="0123456789", size=1)},
                  {'name': 'HTTP_version_4', 'contents': String(val_list=["."])},
-                 {'name': 'HTTP_version_5', 'contents': INT_Str(mini=0, maxi=9)}]}
+                 {'name': 'HTTP_version_5', 'contents': INT_Str(mini=0, maxi=9)} ]}
 
 
-Example 2: introducing shapes
+Example 2: Introducing shapes. (Refer to :ref:`dm:nt-keywords`)
 
 .. code-block:: python
    :linenos:
@@ -1618,13 +1621,22 @@ Example 2: introducing shapes
    # is equivalent to
    classic = {'name': 'something',
               'contents': [
-                 {'weight': 1, 'contents': INT_Str(int_list=[333, 444])},
-                 {'weight': 1, 'contents': String(val_list=["foo-bar"])},
-                 {'weight': 1, 'contents': String(alphabet="0123456789", size=[1])},
-                 {'weight': 1, 'contents': String(alphabet="th|is", size=[1])}]}
+                 {'weight': 1,
+                  'contents': [{'name': 'something_1',
+                                'contents': INT_Str(int_list=[333, 444])}]},
+                 {'weight': 1,
+                  'contents': [{'name': 'something_1',
+                                'contents': String(val_list=["foo-bar"])}]},
+                 {'weight': 1,
+                  'contents': [{'name': 'something_1',
+                                'contents': String(alphabet="0123456789", size=1)}]},
+                 {'weight': 1,
+                  'contents': [{'name': 'something_1',
+                                'contents': String(alphabet="th|is", size=1)}]}
+              ]}
 
 
-Example 3: using quantifiers and the escape character ``\``
+Example 3: Using quantifiers and the escape character ``\``.
 
 .. code-block:: python
    :linenos:
@@ -1640,9 +1652,9 @@ Example 3: using quantifiers and the escape character ``\``
                  {'name': 'something_3', 'contents': String(val_list=["th"])},
                  {'name': 'something_4', 'qty': (1, -1),
                   'contents': String(val_list=["e"])},
-                 {'name': 'something_5', 'contents': String(val_list=["end]"])},
+                 {'name': 'something_5', 'contents': String(val_list=["end]"])} ]}
 
-Example 4: invalid regular expressions
+Example 4: Invalid regular expressions.
 
 .. code-block:: python
    :linenos:
