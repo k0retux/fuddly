@@ -100,7 +100,7 @@ class sd_iter_over_data(StatefulDisruptor):
             exported_node = rnode
 
         if self.fix:
-            exported_node.unfreeze(recursive=True, reevaluate_constraints=True, dont_change_state=True)
+            exported_node.unfreeze(recursive=True, reevaluate_constraints=True)
             exported_node.freeze()
             data.add_info('fix constraints (if any)')
 
@@ -118,7 +118,8 @@ class sd_iter_over_data(StatefulDisruptor):
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
                            'in the data model) is used for ordering', False, bool),
                  'deep': ('when set to True, if a node structure has changed, the modelwalker ' \
-                          'will reset its walk through the children nodes', True, bool)})
+                          'will reset its walk through the children nodes', True, bool),
+                 'fix': ('fix constraints while walking', True, bool)})
 class sd_fuzz_typed_nodes(StatefulDisruptor):
     '''
     Perform alterations on typed nodes (one at a time) according to
@@ -176,9 +177,15 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
 
         if self.clone_node:
             exported_node = Node(rnode.name, base_node=rnode, new_env=True)
-            data.update_from_node(exported_node)
         else:
-            data.update_from_node(rnode)
+            exported_node = rnode
+
+        if self.fix:
+            exported_node.unfreeze(recursive=True, reevaluate_constraints=True)
+            exported_node.freeze()
+            data.add_info('fix constraints (if any)')
+
+        data.update_from_node(exported_node)
 
         return data
 
@@ -518,7 +525,7 @@ class sd_struct_constraints(StatefulDisruptor):
         corrupted_seed = Node(self.seed.name, base_node=self.seed, ignore_frozen_state=False, new_env=True)
         self.seed.env.remove_node_to_corrupt(consumed_node)
 
-        corrupted_seed.unfreeze(recursive=True, reevaluate_constraints=True, dont_change_state=True)
+        corrupted_seed.unfreeze(recursive=True, reevaluate_constraints=True)
         corrupted_seed.freeze()
 
         data.add_info('sample index: {:d}'.format(self.idx))
@@ -894,14 +901,16 @@ class d_fix_constraints(Disruptor):
                 return prev_data
 
             for n in l:
-                n.unfreeze(recursive=True, reevaluate_constraints=True, dont_change_state=True)
+                n.unfreeze(recursive=True, reevaluate_constraints=True)
                 prev_data.add_info("release constraints from the node '{!s}'".format(n.name))
+                n.freeze()
 
         else:
-            prev_data.node.unfreeze(recursive=True, reevaluate_constraints=True, dont_change_state=True)
+            prev_data.node.unfreeze(recursive=True, reevaluate_constraints=True)
             prev_data.add_info('release constraints from the root')
 
         prev_data.node.freeze()
+        prev_data.node.show()
 
         if self.clone_node:
             exported_node = Node(prev_data.node.name, base_node=prev_data.node, new_env=True)
@@ -1041,77 +1050,4 @@ class d_shallow_copy(Disruptor):
         prev_data.update_from_node(exported_node)
 
         return prev_data
-
-
-#######################
-# OBSOLETE DISRUPTORS #
-#######################
-
-
-@disruptor(tactics, dtype="tTERM", weight=1,
-           gen_args = GENERIC_ARGS,
-           args={'ascii': ('enforce all outputs to be ascii 7bits', False, bool),
-                 'determinist': ('make the disruptor determinist', True, bool),
-                 'alt_values': ('list of alternative values to be tested ' \
-                                '(replace the current base list used by the disruptor)', None, list)})
-class sd_fuzz_terminal_nodes(StatefulDisruptor):
-    '''
-    [OBSOLETE] Perform alterations on terminal nodes (one at a time),
-    without considering its type.
-    '''
-    def setup(self, dm, user_input):
-        return True
-
-    def set_seed(self, prev_data):
-        if prev_data.node is None:
-            prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
-            return prev_data
-
-        prev_data.node.make_finite(all_conf=True, recursive=True)
-
-        self.consumer = TermNodeDisruption(max_runs_per_node=self.max_runs_per_node,
-                                           min_runs_per_node=self.min_runs_per_node,
-                                           respect_order=False,
-                                           base_list=self.alt_values)
-        self.consumer.determinist = self.determinist
-        if self.ascii:
-            self.consumer.ascii = True
-        
-        self.walker = iter(ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init))
-        
-        self.max_runs = None
-        self.current_node = None
-        self.run_num = None
-
-    def disrupt_data(self, dm, target, data):
-        try:
-            rnode, consumed_node, orig_node_val, idx = next(self.walker)
-        except StopIteration:
-            data.make_unusable()
-            self.handover()
-            return data
-
-        new_max_runs = self.consumer.max_nb_runs_for(consumed_node)
-        if self.max_runs != new_max_runs or self.current_node != consumed_node:
-            self.current_node = consumed_node
-            self.max_runs = new_max_runs
-            self.run_num = 1
-        else:
-            self.run_num +=1
-
-        corrupt_node_bytes = consumed_node.to_bytes()
-
-        data.add_info('model walking index: {:d}'.format(idx))
-        data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
-        data.add_info('current fuzzed node: {!s}'.format(consumed_node.get_path_from(rnode)))
-        data.add_info('original val:  {!s}'.format(truncate_info(orig_node_val)))
-        data.add_info('corrupted val: {!s}'.format(truncate_info(corrupt_node_bytes)))
-
-        if self.clone_node:
-            exported_node = Node(rnode.name, base_node=rnode, new_env=True)
-            data.update_from_node(exported_node)
-        else:
-            data.update_from_node(rnode)
-
-        return data
 

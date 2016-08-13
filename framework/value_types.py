@@ -907,7 +907,7 @@ class String(VT_Alt):
             if val != b'':
                 self.val_list_fuzzy.append(val)
 
-        val = orig_val + b"X"*(self.max_sz*42)
+        val = orig_val + b"X"*(self.max_sz*100)
         self.val_list_fuzzy.append(val)
 
         self.val_list_fuzzy.append(b'\x00'*sz if sz>0 else b'\x00')
@@ -918,15 +918,15 @@ class String(VT_Alt):
             if is_even:
                 self.val_list_fuzzy.append(b'%n' * cpt)
                 self.val_list_fuzzy.append(b'%s' * cpt)
-                self.val_list_fuzzy.append(b'\r\n' * cpt)
             else:
                 self.val_list_fuzzy.append(orig_val[:1] + b'%n' * cpt)
                 self.val_list_fuzzy.append(orig_val[:1] + b'%s' * cpt)
-                self.val_list_fuzzy.append(orig_val[:1] + b'\r\n' * cpt)
-        else:
-            self.val_list_fuzzy.append(b'%n%n%n')
-            self.val_list_fuzzy.append(b'%s%s%s')
-            self.val_list_fuzzy.append(b'\r\n')
+
+        self.val_list_fuzzy.append(orig_val + b'%n'*400)
+        self.val_list_fuzzy.append(orig_val + b'%s'*400)
+        self.val_list_fuzzy.append(orig_val + b'\"%n\"'*400)
+        self.val_list_fuzzy.append(orig_val + b'\"%s\"'*400)
+        self.val_list_fuzzy.append(orig_val + b'\r\n'*100)
 
         if self.extra_fuzzy_list:
             for v in self.extra_fuzzy_list:

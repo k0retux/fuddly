@@ -22,7 +22,7 @@
 ################################################################################
 
 DEBUG = False
-LEVEL = 2
+LEVEL = 0
 
 # related to data_model.py
 DM_DEBUG = False

@@ -363,49 +363,6 @@ Parameters:
 	 |      | default: None [type: str, list, tuple]
 
 
-tTERM (OBSOLETE) - Basic Alteration of Terminal Node
-----------------------------------------------------
-
-Description:
-  Perform alterations on terminal nodes (one at a time), without
-  considering its type.
-
-Reference:
-  :class:`framework.generic_data_makers.sd_fuzz_terminal_nodes`
-
-Parameters:
-  .. code-block:: none
-
-       generic args: 
-	 |_ clone_node
-	 |      | desc: if True the dmaker will always return a copy of the node. (for 
-	 |      |       stateless diruptors dealing with big data it can be usefull 
-	 |      |       to it to False)
-	 |      | default: True [type: bool]
-	 |_ init
-	 |      | desc: make the model walker ignore all the steps until the provided 
-	 |      |       one
-	 |      | default: 1 [type: int]
-	 |_ max_steps
-	 |      | desc: maximum number of steps (-1 means until the end)
-	 |      | default: -1 [type: int]
-	 |_ runs_per_node
-	 |      | desc: maximum number of test cases for a single node (-1 means until 
-	 |      |       the end)
-	 |      | default: -1 [type: int]
-       specific args: 
-	 |_ determinist
-	 |      | desc: make the disruptor determinist
-	 |      | default: True [type: bool]
-	 |_ alt_values
-	 |      | desc: list of alternative values to be tested (replace the current 
-	 |      |       base list used by the disruptor)
-	 |      | default: None [type: list]
-	 |_ ascii
-	 |      | desc: enforce all outputs to be ascii 7bits
-	 |      | default: False [type: bool]
-
-
 .. _dis:ttype:
 
 tTYPE - Advanced Alteration of Terminal Typed Node
@@ -449,6 +406,9 @@ Parameters:
 	 |      |       data structure. Otherwise, fuzz weight (if specified in the 
 	 |      |       data model) is used for ordering
 	 |      | default: False [type: bool]
+     |_ fix
+     |      | desc: fix constraints while walking
+     |      | default: True [type: bool]
 	 |_ deep
 	 |      | desc: when set to True, if a node structure has changed, the modelwalker 
 	 |      |       will reset its walk through the children nodes
