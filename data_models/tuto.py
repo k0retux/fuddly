@@ -430,11 +430,14 @@ class MyDF_DataModel(DataModel):
               'contents': String(val_list=['Red', 'Green', 'Blue']) }
          ]}
 
+        regex_desc = {'name': 'regex',
+                      'contents': '(333|444)|(foo|bar)|[\d]|[th|is]'}
 
 
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
-                      shape_desc, for_network_tg1, for_network_tg2, enc_desc, example_desc)
+                      shape_desc, for_network_tg1, for_network_tg2, enc_desc, example_desc,
+                      regex_desc)
 
 
 data_model = MyDF_DataModel()

@@ -56,7 +56,7 @@ def truncate_info(info, max_size=60):
            args={'path': ('graph path regexp to select nodes on which' \
                           ' the disruptor should apply', None, str),
                  'nt_only': ('walk through non-terminal nodes only', False, bool),
-                 'singleton': ('consume also terminal nodes with only one possible value', False, bool),
+                 'singleton': ('consume also terminal nodes with only one possible value', True, bool),
                  'fix': ('fix constraints while walking', True, bool)})
 class sd_iter_over_data(StatefulDisruptor):
     '''
@@ -100,7 +100,7 @@ class sd_iter_over_data(StatefulDisruptor):
             exported_node = rnode
 
         if self.fix:
-            exported_node.unfreeze(recursive=True, reevaluate_constraints=True)
+            exported_node.unfreeze(recursive=True, reevaluate_constraints=True, dont_change_state=True)
             exported_node.freeze()
             data.add_info('fix constraints (if any)')
 
@@ -518,7 +518,7 @@ class sd_struct_constraints(StatefulDisruptor):
         corrupted_seed = Node(self.seed.name, base_node=self.seed, ignore_frozen_state=False, new_env=True)
         self.seed.env.remove_node_to_corrupt(consumed_node)
 
-        corrupted_seed.unfreeze(recursive=True, reevaluate_constraints=True)
+        corrupted_seed.unfreeze(recursive=True, reevaluate_constraints=True, dont_change_state=True)
         corrupted_seed.freeze()
 
         data.add_info('sample index: {:d}'.format(self.idx))
@@ -894,11 +894,11 @@ class d_fix_constraints(Disruptor):
                 return prev_data
 
             for n in l:
-                n.unfreeze(recursive=True, reevaluate_constraints=True)
-                prev_data.add_info("release constraints from the node '%s'" % n.name)
+                n.unfreeze(recursive=True, reevaluate_constraints=True, dont_change_state=True)
+                prev_data.add_info("release constraints from the node '{!s}'".format(n.name))
 
         else:
-            prev_data.node.unfreeze(recursive=True, reevaluate_constraints=True)
+            prev_data.node.unfreeze(recursive=True, reevaluate_constraints=True, dont_change_state=True)
             prev_data.add_info('release constraints from the root')
 
         prev_data.node.freeze()

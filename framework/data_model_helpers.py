@@ -1882,15 +1882,14 @@ class RegexParser(StateMachine):
             return [node, qty[0], -1 if qty[1] is None else qty[1]]
 
     def _create_non_terminal_node(self):
-        non_terminal = [1, [MH.Copy + MH.Ordered]]
+        if self.choice:
+            non_terminal = [1, [MH.Copy + MH.Pick]]
+        else:
+            non_terminal = [1, [MH.Copy + MH.Ordered]]
         formatted_terminal = non_terminal[1]
 
         for terminal in self.nodes:
             formatted_terminal.append(terminal)
-            if self.choice and len(self.nodes) > 1:
-                non_terminal.append(1)
-                formatted_terminal = [MH.Copy + MH.Ordered]
-                non_terminal.append(formatted_terminal)
 
         return non_terminal
 

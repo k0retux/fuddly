@@ -3102,7 +3102,8 @@ class TestDataModel(unittest.TestCase):
         dm = fmk.get_data_model_by_name('mydf')
         dm.load_data_model(fmk._name2dm)
 
-        data_id_list = ['misc_gen', 'len_gen', 'exist_cond', 'separator', 'AbsTest', 'AbsTest2']
+        data_id_list = ['misc_gen', 'len_gen', 'exist_cond', 'separator', 'AbsTest', 'AbsTest2',
+                        'regex']
         loop_cpt = 5
 
         for data_id in data_id_list:

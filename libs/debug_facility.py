@@ -32,7 +32,7 @@ ABS_DEBUG = False
 VT_DEBUG = False
 
 # related to fuzzing_primitives.py
-MW_DEBUG = True
+MW_DEBUG = False
 
 try:
     from xtermcolor import colorize

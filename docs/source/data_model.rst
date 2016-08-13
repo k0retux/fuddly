@@ -1599,7 +1599,7 @@ Example 1: The basics.
    :linenos:
 
    regex = {'name': 'HTTP_version',
-            'contents': '(HTTP)/[0-9]\.(0|1|2|\x33|4|5|6|7|8|9)'
+            'contents': '(HTTP)/[0-9]\.(0|1|2|\x33|4|5|6|7|8|9)'}
    # is equivalent to
    classic = {'name': 'HTTP_version',
               'contents': [
@@ -1611,28 +1611,21 @@ Example 1: The basics.
                  {'name': 'HTTP_version_5', 'contents': INT_Str(mini=0, maxi=9)} ]}
 
 
-Example 2: Introducing shapes. (Refer to :ref:`dm:nt-keywords`)
+Example 2: Introducing choice. (Refer to :ref:`dm:nt-keywords`)
 
 .. code-block:: python
    :linenos:
 
    regex = {'name': 'something',
-            'contents': '(333|444)|foo-bar|\d|[th|is]'
+            'contents': '(333|444)|(foo|bar)|[\d]|[th|is]'}
    # is equivalent to
    classic = {'name': 'something',
+              'shape_type': MH.Pick,
               'contents': [
-                 {'weight': 1,
-                  'contents': [{'name': 'something_1',
-                                'contents': INT_Str(int_list=[333, 444])}]},
-                 {'weight': 1,
-                  'contents': [{'name': 'something_1',
-                                'contents': String(val_list=["foo-bar"])}]},
-                 {'weight': 1,
-                  'contents': [{'name': 'something_1',
-                                'contents': String(alphabet="0123456789", size=1)}]},
-                 {'weight': 1,
-                  'contents': [{'name': 'something_1',
-                                'contents': String(alphabet="th|is", size=1)}]}
+                 {'name':'something_1', 'contents':INT_Str(int_list=[333, 444])},
+                 {'name':'something_1', 'contents':String(val_list=["foo", "bar"])},
+                 {'name':'something_1', 'contents':String(alphabet="0123456789",size=1)},
+                 {'name':'something_1', 'contents':String(alphabet="th|is", size=1)}
               ]}
 
 
@@ -1642,7 +1635,7 @@ Example 3: Using quantifiers and the escape character ``\``.
    :linenos:
 
    regex = {'name': 'something',
-            'contents': '\(this[is]{3,4}the+end\]'
+            'contents': '\(this[is]{3,4}the+end\]'}
    # is equivalent to
    classic = {'name': 'something',
               'contents': [

@@ -521,7 +521,7 @@ class BasicVisitor(NodeConsumerStub):
         self.firstcall = True
 
     def consume_node(self, node):
-        if (node.is_exhausted() and not self.consume_also_singleton):
+        if node.is_exhausted() and not self.consume_also_singleton:
             # in this case we ignore the node
             return False
         else:

@@ -2502,8 +2502,6 @@ class NodeInternals_NonTerm(NodeInternals):
     def import_subnodes_full_format(self, subnodes_csts=None, frozen_node_list=None, internals=None,
                                     nodes_drawn_qty=None, custo=None, exhaust_info=None,
                                     separator=None):
-        self.reset(nodes_drawn_qty=nodes_drawn_qty, custo=custo, exhaust_info=exhaust_info)
-
         if internals is not None:
             # This case is only for Node.set_contents() usage
 
@@ -2515,6 +2513,10 @@ class NodeInternals_NonTerm(NodeInternals):
 
         elif subnodes_csts is not None:
             # This case is used by self.make_private_subnodes()
+
+            # In this case, we can call reset() as self.make_private_subnodes() provide us with
+            # the parameters we need.
+            self.reset(nodes_drawn_qty=nodes_drawn_qty, custo=custo, exhaust_info=exhaust_info)
 
             self.subnodes_csts = subnodes_csts
             self.frozen_node_list = frozen_node_list
@@ -3119,8 +3121,10 @@ class NodeInternals_NonTerm(NodeInternals):
                 self.expanded_nodelist = self._generate_expanded_nodelist(node_list)
             
                 self.expanded_nodelist_origsz = len(self.expanded_nodelist)
-                self.expanded_nodelist = self.expanded_nodelist[:self.expanded_nodelist_sz]
-
+                if self.expanded_nodelist_sz > 0:
+                    self.expanded_nodelist = self.expanded_nodelist[:self.expanded_nodelist_sz]
+                else:
+                    self.expanded_nodelist = self.expanded_nodelist[:1]
             elif not self.expanded_nodelist: # that is == []
                 self.expanded_nodelist = self._generate_expanded_nodelist(node_list)
                 self.expanded_nodelist_origsz = len(self.expanded_nodelist)
@@ -4249,19 +4253,21 @@ class NodeInternals_NonTerm(NodeInternals):
                         node_list, idx, self.component_seed = self._get_next_random_component(self.subnodes_csts,
                                                                                         excluded_idx=self.excluded_components,
                                                                                         seed=self.component_seed)
+
+                    fresh_expanded_nodelist = self._generate_expanded_nodelist(node_list)
                     if self.expanded_nodelist is None:
-                        self.expanded_nodelist = self._generate_expanded_nodelist(node_list)
-                        self.expanded_nodelist_origsz = len(self.expanded_nodelist)
+                        self.expanded_nodelist_origsz = len(fresh_expanded_nodelist)
                         if self.expanded_nodelist_sz is not None:
                             # In this case we need to go back to the previous state, thus +1
                             self.expanded_nodelist_sz += 1
-                            self.expanded_nodelist = self.expanded_nodelist[:self.expanded_nodelist_sz]
+                            self.expanded_nodelist = fresh_expanded_nodelist[:self.expanded_nodelist_sz]
                         else:
                             # This case should not exist, a priori
-                            self.expanded_nodelist_sz = len(self.expanded_nodelist)
+                            self.expanded_nodelist_sz = len(fresh_expanded_nodelist)
+                            self.expanded_nodelist = fresh_expanded_nodelist
                     else:
-                        assert(node_list is not None)
-                        self.expanded_nodelist.append(node_list)
+                        # assert self.expanded_nodelist_origsz > self.expanded_nodelist_sz
+                        self.expanded_nodelist.append(fresh_expanded_nodelist[self.expanded_nodelist_sz])
                         self.expanded_nodelist_sz += 1
                 else:
                     # In this case the states are random, thus we
@@ -4804,7 +4810,8 @@ class Node(object):
           copy_dico (dict): [If `base_node` provided] It is used internally during the cloning process,
            and should not be used for any functional purpose.
           new_env (bool): [If `base_node` provided] If True, the `base_node` attached :class:`Env()`
-           will be copied. Otherwise, the same will be used.
+           will be copied. Otherwise, the same will be used. If `ignore_frozen_state` is True, a
+           new :class:`Env()` will be used.
         '''
 
         assert '/' not in name  # '/' is a reserved character
