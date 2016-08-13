@@ -34,7 +34,8 @@ import framework.error_handling as eh
 
 
 class ProbeUser(object):
-    timeout = 20.0
+    timeout = 10.0
+    probe_init_timeout = 20.0
 
     def __init__(self, probe):
         self._probe = probe
@@ -412,18 +413,22 @@ class Monitor(object):
             probes_names.append(probe_name)
         return probes_names
 
-    def _wait_for_specific_probes(self, probe_user_class, probe_user_wait_method, probes=None):
+    def _wait_for_specific_probes(self, probe_user_class, probe_user_wait_method, probes=None,
+                                  timeout=None):
         """
         Wait for probes to trigger a specific event
 
         Args:
-            probe_user_class (ProbeUser): probe_user class that defines the method
-            probe_user_wait_method (method): name of the probe_user's method that will be used to wait
-            probes (list of :class:`ProbeUser`): probes to wait for. If None all probes will be concerned
+            probe_user_class (ProbeUser): probe_user class that defines the method.
+            probe_user_wait_method (method): name of the probe_user's method that will be used to wait.
+            probes (list of :class:`ProbeUser`): probes to wait for. If None all probes will be concerned.
+            timeout (float): maximum time to wait for in seconds.
         """
         probes = self.probe_users.items() if probes is None else probes
 
-        timeout = datetime.timedelta(seconds=ProbeUser.timeout)
+        if timeout is None:
+            timeout = ProbeUser.timeout
+        timeout = datetime.timedelta(seconds=timeout)
         start = datetime.datetime.now()
 
         for _, probe_user in probes:
@@ -437,7 +442,8 @@ class Monitor(object):
                                            code=Error.OperationCancelled)
 
     def wait_for_probe_initialization(self):
-        self._wait_for_specific_probes(ProbeUser, ProbeUser.wait_for_probe_init)
+        self._wait_for_specific_probes(ProbeUser, ProbeUser.wait_for_probe_init,
+                                       timeout=ProbeUser.probe_init_timeout)
 
     def notify_imminent_data_sending(self):
         if not self.__enable:
