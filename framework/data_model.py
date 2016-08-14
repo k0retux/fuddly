@@ -407,6 +407,9 @@ nodes_weight_re = re.compile('(.*?)\((.*)\)')
 
 ### Materials for Node Synchronization ###
 
+# WARNING: If new SyncObj are created or evolve, don't forget to update
+# NodeInternals.set_contents_from() accordingly.
+
 class SyncScope(Enum):
     Qty = 1
     QtyFrom = 2
@@ -910,6 +913,24 @@ class NodeInternals(object):
 
         self._make_private_specific(ignore_frozen_state, accept_external_entanglement)
         self.custo = copy.copy(self.custo)
+
+    def set_contents_from(self, node_internals):
+        if node_internals is None or node_internals.__class__ == NodeInternals_Empty:
+            return
+
+        self.private = node_internals.private
+        self.__attrs = node_internals.__attrs
+        self._sync_with = node_internals._sync_with
+
+        if self.__class__ == node_internals.__class__:
+            self.custo = node_internals.custo
+            self.absorb_constraints = node_internals.absorb_constraints
+            self.absorb_helper = node_internals.absorb_helper
+        else:
+            if self._sync_with is not None and SyncScope.Size in self._sync_with:
+                # This SyncScope is currently only supported by String-based
+                # NodeInternals_TypedValue
+                del self._sync_with[SyncScope.Size]
 
     # Called near the end of Node copy (Node.set_contents) to update
     # node references inside the NodeInternals
@@ -2372,7 +2393,7 @@ class NodeInternals_NonTerm(NodeInternals):
         self.encoder = None
         self.reset()
 
-    def reset(self, nodes_drawn_qty=None, custo=None, exhaust_info=None):
+    def reset(self, nodes_drawn_qty=None, custo=None, exhaust_info=None, preserve_node=False):
         self.frozen_node_list = None
         self.subnodes_set = set()
         self.subnodes_csts = []
@@ -2402,7 +2423,9 @@ class NodeInternals_NonTerm(NodeInternals):
             self.component_seed = exhaust_info[5]
             self._perform_first_step = exhaust_info[6]
 
-        if custo is None:
+        if preserve_node:
+            pass
+        elif custo is None:
             self.customize(self.default_custo)
         else:
             self.customize(custo)
@@ -2425,8 +2448,8 @@ class NodeInternals_NonTerm(NodeInternals):
             yield idx, delim, sublist
             idx += 1
 
-    def import_subnodes_basic(self, node_list, separator=None):
-        self.reset()
+    def import_subnodes_basic(self, node_list, separator=None, preserve_node=False):
+        self.reset(preserve_node=preserve_node)
 
         self.separator = separator
 
@@ -2445,8 +2468,8 @@ class NodeInternals_NonTerm(NodeInternals):
             self.subnodes_set.add(e)
 
 
-    def import_subnodes_with_csts(self, wlnode_list, separator=None):
-        self.reset()
+    def import_subnodes_with_csts(self, wlnode_list, separator=None, preserve_node=False):
+        self.reset(preserve_node=preserve_node)
 
         self.separator = separator
 
@@ -5303,11 +5326,15 @@ class Node(object):
                       "of this non-terminal node: %s in conf : '%s'." % (self.name, conf))
                 raise ValueError
 
-    def set_subnodes_basic(self, node_list, conf=None, ignore_entanglement=False, separator=None):
+    def set_subnodes_basic(self, node_list, conf=None, ignore_entanglement=False, separator=None,
+                           preserve_node=True):
         conf = self.__check_conf(conf)
 
-        self.internals[conf] = NodeInternals_NonTerm()
-        self.internals[conf].import_subnodes_basic(node_list, separator=separator)
+        new_internals = NodeInternals_NonTerm()
+        if preserve_node:
+            new_internals.set_contents_from(self.internals[conf])
+        self.internals[conf] = new_internals
+        self.internals[conf].import_subnodes_basic(node_list, separator=separator, preserve_node=preserve_node)
         self._finalize_nonterm_node(conf)
    
         if not ignore_entanglement and self.entangled_nodes is not None:
@@ -5316,11 +5343,15 @@ class Node(object):
 
 
 
-    def set_subnodes_with_csts(self, wlnode_list, conf=None, ignore_entanglement=False, separator=None):
+    def set_subnodes_with_csts(self, wlnode_list, conf=None, ignore_entanglement=False, separator=None,
+                               preserve_node=True):
         conf = self.__check_conf(conf)
 
-        self.internals[conf] = NodeInternals_NonTerm()
-        self.internals[conf].import_subnodes_with_csts(wlnode_list, separator=separator)
+        new_internals = NodeInternals_NonTerm()
+        if preserve_node:
+            new_internals.set_contents_from(self.internals[conf])
+        self.internals[conf] = new_internals
+        self.internals[conf].import_subnodes_with_csts(wlnode_list, separator=separator, preserve_node=preserve_node)
         self._finalize_nonterm_node(conf)
 
         if not ignore_entanglement and self.entangled_nodes is not None:
@@ -5328,23 +5359,30 @@ class Node(object):
                 e.set_subnodes_basic(wlnode_list=wlnode_list, conf=conf, ignore_entanglement=True, separator=separator)
 
 
-    def set_subnodes_full_format(self, full_list, conf=None, separator=None):
+    def set_subnodes_full_format(self, full_list, conf=None, separator=None, preserve_node=True):
         conf = self.__check_conf(conf)
 
-        self.internals[conf] = NodeInternals_NonTerm()
+        new_internals = NodeInternals_NonTerm()
+        if preserve_node:
+            new_internals.set_contents_from(self.internals[conf])
+        self.internals[conf] = new_internals
         self.internals[conf].import_subnodes_full_format(subnodes_csts=full_list, separator=separator)
         self._finalize_nonterm_node(conf)
 
 
-    def set_values(self, val_list=None, value_type=None, conf=None, ignore_entanglement=False):
+    def set_values(self, val_list=None, value_type=None, conf=None, ignore_entanglement=False,
+                   preserve_node=True):
         conf = self.__check_conf(conf)
 
+        new_internals = NodeInternals_TypedValue()
+        if preserve_node:
+            new_internals.set_contents_from(self.internals[conf])
+        self.internals[conf] = new_internals
+
         if val_list is not None:
-            self.internals[conf] = NodeInternals_TypedValue()
             self.internals[conf].import_value_type(value_type=fvt.String(val_list=val_list))
 
         elif value_type is not None:
-            self.internals[conf] = NodeInternals_TypedValue()
             self.internals[conf].import_value_type(value_type)
 
         else:
@@ -5359,10 +5397,14 @@ class Node(object):
 
 
     def set_func(self, func, func_node_arg=None, func_arg=None,
-                 conf=None, ignore_entanglement=False, provide_helpers=False):
+                 conf=None, ignore_entanglement=False, provide_helpers=False,
+                 preserve_node=True):
         conf = self.__check_conf(conf)
 
-        self.internals[conf] = NodeInternals_Func()
+        new_internals = NodeInternals_Func()
+        if preserve_node:
+            new_internals.set_contents_from(self.internals[conf])
+        self.internals[conf] = new_internals
         self.internals[conf].import_func(func,
                                          fct_node_arg=func_node_arg, fct_arg=func_arg,
                                          provide_helpers=provide_helpers)
@@ -5376,10 +5418,13 @@ class Node(object):
 
     def set_generator_func(self, gen_func, func_node_arg=None,
                            func_arg=None, conf=None, ignore_entanglement=False,
-                           provide_helpers=False):
+                           provide_helpers=False, preserve_node=True):
         conf = self.__check_conf(conf)
 
-        self.internals[conf] = NodeInternals_GenFunc()
+        new_internals = NodeInternals_GenFunc()
+        if preserve_node:
+            new_internals.set_contents_from(self.internals[conf])
+        self.internals[conf] = new_internals
         self.internals[conf].import_generator_func(gen_func,
                                                    generator_node_arg=func_node_arg, generator_arg=func_arg,
                                                    provide_helpers=provide_helpers)

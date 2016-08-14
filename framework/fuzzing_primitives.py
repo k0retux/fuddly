@@ -690,71 +690,6 @@ class AltConfConsumer(NodeConsumerStub):
             return 0
 
 
-class TermNodeDisruption(NodeConsumerStub):
-
-    def init_specific(self, base_list=None):
-        self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable],
-                                                            negative_attrs=[dm.NodeInternals.Separator],
-                                                            node_kinds=[dm.NodeInternals_Term])
-        self.enforce_ascii = False
-        self.determinist = True
-
-        if base_list is None:
-            self.val_list = [
-                b'',
-                b'\x00',
-                b'AhAh%s%s%s',
-                b'BBB%n%n%n%n%n',
-                b'\r\n'
-                ]
-        else:
-            self.val_list = list(base_list)
-
-        self.orig_internals = None
-        self.need_reset_when_structure_change = True
-
-
-    def consume_node(self, node):
-        self.orig_internal = node.cc
-        orig_val = node.to_bytes()
-        new_val_list = copy.copy(self.val_list)
-
-        try:
-            val = corrupt_bits(orig_val, n=1, ascii=self.enforce_ascii)
-            new_val_list.insert(0, val)
-        except:
-            print("Problematic (empty) node '%s'" % node.name)
-
-        val = orig_val + b"A"*30
-        new_val_list.insert(0, val)
-
-        node.set_values(val_list=new_val_list)
-        node.make_finite()
-        if self.determinist:
-            node.make_determinist()
-        else:
-            node.make_random()
-
-        return True
-    
-    def save_node(self, node):
-        pass
-
-    def recover_node(self, node):
-        node.cc = self.orig_internal
-        if node.entangled_nodes is None:
-            return
-
-        for n in node.entangled_nodes:
-            if n is node:
-                continue
-            if isinstance(n.cc, dm.NodeInternals_TypedValue):
-                n.cc.import_value_type(self.orig_internal.value_type)
-            else:
-                raise ValueError
-        node.unfreeze(recursive=False)
-
-
 class TypedNodeDisruption(NodeConsumerStub):
 
     def init_specific(self, **kwargs):
@@ -774,7 +709,7 @@ class TypedNodeDisruption(NodeConsumerStub):
             self.current_fuzz_vt_list = None
 
         if not self.current_fuzz_vt_list:
-            self.orig_internal_vt = node.cc.value_type
+            self.orig_internal = node.cc
             self.orig_value = node.to_bytes()
 
             self.current_fuzz_vt_list = self._create_fuzzy_vt_list(node)
@@ -785,8 +720,7 @@ class TypedNodeDisruption(NodeConsumerStub):
         if self.current_fuzz_vt_list:
             vt_obj = self.current_fuzz_vt_list.pop(0)
 
-            # node.set_values(value_type=vt_obj, ignore_entanglement=True)
-            node.cc.value_type=vt_obj
+            node.set_values(value_type=vt_obj, ignore_entanglement=True, preserve_node=True)
             node.make_finite()
             node.make_determinist()
             node.unfreeze(ignore_entanglement=True)
@@ -801,11 +735,7 @@ class TypedNodeDisruption(NodeConsumerStub):
         pass
 
     def recover_node(self, node):
-        # We avoid changing the node internals because of specific attributes (that may exist)
-        # regarding node synchronization, and so on. Thus, we only modify what we need,
-        # namely the value_type.
-        node.cc.value_type = self.orig_internal_vt
-        node.set_frozen_value(self.orig_value)
+        node.cc = self.orig_internal
 
     def need_reset(self, node):
         if node.is_nonterm():
