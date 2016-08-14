@@ -78,7 +78,7 @@ class PPPOE_DataModel(DataModel):
                    'contents': [
                        {'name': 'vendorID',
                         'contents': BitField(subfield_sizes=[24,8], endian=VT.BigEndian,
-                                             subfield_val_lists=[None,[0]],
+                                             subfield_values=[None,[0]],
                                              subfield_descs=['type','version']) },
                        {'name': 'remainder',
                         'sync_enc_size_with': ('len', 4),
@@ -145,7 +145,7 @@ class PPPOE_DataModel(DataModel):
               'contents': UINT16_be(values=[0x8863])},
              {'name': 'version-type',
               'contents': BitField(subfield_sizes=[4,4], endian=VT.BigEndian,
-                                   subfield_val_lists=[[1],[1]],
+                                   subfield_values=[[1],[1]],
                                    subfield_descs=['type','version'])},
              {'name': 'code',
               'mutable': False,

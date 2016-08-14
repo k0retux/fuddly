@@ -1027,7 +1027,7 @@ class TestMisc(unittest.TestCase):
         print('\n -=[ random & infinite (loop count: %d) ]=- \n' % loop_count)
 
         t = BitField(subfield_limits=[2, 6, 10, 12],
-                     subfield_val_lists=[[4, 2, 1], [2, 15, 16, 3], None, [1]],
+                     subfield_values=[[4, 2, 1], [2, 15, 16, 3], None, [1]],
                      subfield_val_extremums=[None, None, [3, 11], None],
                      padding=0, lsb_padding=True, endian=VT.LittleEndian)
         node = Node('BF', value_type=t)
@@ -1063,7 +1063,7 @@ class TestMisc(unittest.TestCase):
         loop_count = 20
         e_bf = Node('BF')
         vt = BitField(subfield_sizes=[4, 4, 4],
-                      subfield_val_lists=[[4, 2, 1], None, [10, 13]],
+                      subfield_values=[[4, 2, 1], None, [10, 13]],
                       subfield_val_extremums=[None, [14, 15], None],
                       padding=0, lsb_padding=False, endian=VT.BigEndian)
         e_bf.set_values(value_type=vt)
@@ -1095,7 +1095,7 @@ class TestMisc(unittest.TestCase):
         print('\n***')
         print('Random & finite: (should result in only 1 possible values)')
 
-        vt = BitField(subfield_sizes=[4, 4], subfield_val_lists=[[0x3], [0xF]])
+        vt = BitField(subfield_sizes=[4, 4], subfield_values=[[0x3], [0xF]])
         e = Node('bf_test', value_type=vt)
         e.set_env(Env())
         e.make_finite()
@@ -1110,7 +1110,7 @@ class TestMisc(unittest.TestCase):
 
         i = 0
         ok = True
-        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_val_lists=[[1], [1], [1], [1]],
+        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_values=[[1], [1], [1], [1]],
                      padding=0, lsb_padding=False, endian=VT.LittleEndian)
         val = binascii.b2a_hex(t.get_value())
         print(t.pretty_print(), t.drawn_val)
@@ -1118,46 +1118,46 @@ class TestMisc(unittest.TestCase):
         i += 1
         self.assertEqual(val, b'4501')
 
-        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_val_lists=[[1], [1], [1], [1]],
+        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_values=[[1], [1], [1], [1]],
                      padding=0, lsb_padding=True, endian=VT.BigEndian)
         val = binascii.b2a_hex(t.get_value())
         print('*** [%d] ' % i, val)
         i += 1
         self.assertEqual(val, b'5140')
 
-        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_val_lists=[[1], [1], [1], [1]],
+        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_values=[[1], [1], [1], [1]],
                      padding=1, lsb_padding=True, endian=VT.BigEndian)
         val = binascii.b2a_hex(t.get_value())
         print('*** [%d] ' % i, val)
         i += 1
         self.assertEqual(val, b'517f')
 
-        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_val_lists=[[1], [1], [1], [1]],
+        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_values=[[1], [1], [1], [1]],
                      padding=0, lsb_padding=False, endian=VT.BigEndian)
         val = binascii.b2a_hex(t.get_value())
         print('*** [%d] ' % i, val)
         i += 1
         self.assertEqual(val, b'0145')
 
-        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_val_lists=[[1], [1], [1], [1]],
+        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_values=[[1], [1], [1], [1]],
                      padding=1, lsb_padding=False, endian=VT.BigEndian)
         val = binascii.b2a_hex(t.get_value())
         print('*** [%d] ' % i, val)
         i += 1
         self.assertEqual(val, b'fd45')
 
-        t = BitField(subfield_sizes=[2, 4, 2, 2], subfield_val_lists=[[1], [1], [1], [1]],
+        t = BitField(subfield_sizes=[2, 4, 2, 2], subfield_values=[[1], [1], [1], [1]],
                      padding=1, lsb_padding=False, endian=VT.BigEndian)
         val = binascii.b2a_hex(t.get_value())
         print('*** [%d] ' % i, val)
         i += 1
         self.assertEqual(val, b'fd45')
 
-        print('\n******** subfield_val_list\n')
+        print('\n******** subfield_values\n')
 
         # Note that 4 in subfield 1 and 16 in subfield 2 are ignored
         # --> 6 different values are output before looping
-        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_val_lists=[[4, 2, 1], [2, 15, 16, 3], [2, 3, 0], [1]],
+        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_values=[[4, 2, 1], [2, 15, 16, 3], [2, 3, 0], [1]],
                      padding=0, lsb_padding=True, endian=VT.LittleEndian, determinist=True)
         for i in range(30):
             val = binascii.b2a_hex(t.get_value())
@@ -1211,7 +1211,7 @@ class TestMisc(unittest.TestCase):
 
         t = BitField(subfield_limits=[2, 6, 8, 10],
                      subfield_val_extremums=[[1, 2], [4, 12], [0, 3], None],
-                     subfield_val_lists=[None, None, None, [3]],
+                     subfield_values=[None, None, None, [3]],
                      padding=0, lsb_padding=False, endian=VT.BigEndian, determinist=True)
 
         val = {}
@@ -1295,7 +1295,7 @@ class TestMisc(unittest.TestCase):
 
         bf = Node('BF')
         vt1 = BitField(subfield_sizes=[3, 5, 7],
-                       subfield_val_lists=[[2, 1], None, [10, 120]],
+                       subfield_values=[[2, 1], None, [10, 120]],
                        subfield_val_extremums=[None, [6, 15], None],
                        padding=0, lsb_padding=True, endian=VT.BigEndian)
         bf.set_values(value_type=vt1)
@@ -1311,7 +1311,7 @@ class TestMisc(unittest.TestCase):
         # bf.show()
 
         vt2 = BitField(subfield_sizes=[4, 3, 4, 4, 2],
-                       subfield_val_lists=[None, [3, 5], [15], [14], [2]],
+                       subfield_values=[None, [3, 5], [15], [14], [2]],
                        subfield_val_extremums=[[8, 12], None, None, None, None],
                        padding=0, lsb_padding=False, endian=VT.BigEndian)
 
@@ -1340,26 +1340,26 @@ class TestMisc(unittest.TestCase):
     def test_BitField_absorb(self):
 
         vt = BitField(subfield_sizes=[4, 4, 4],
-                      subfield_val_lists=[[3, 2, 0xe, 1], None, [10, 13, 3]],
+                      subfield_values=[[3, 2, 0xe, 1], None, [10, 13, 3]],
                       subfield_val_extremums=[None, [14, 15], None],
                       padding=1, endian=VT.BigEndian, lsb_padding=True)
         bfield_1 = Node('bfield_1', value_type=vt)
         # bfield.set_env(Env())
 
         vt = BitField(subfield_sizes=[4, 4, 4],
-                      subfield_val_lists=[[3, 2, 0xe, 1], None, [10, 13, 3]],
+                      subfield_values=[[3, 2, 0xe, 1], None, [10, 13, 3]],
                       subfield_val_extremums=[None, [14, 15], None],
                       padding=0, endian=VT.BigEndian, lsb_padding=True)
         bfield_2 = Node('bfield_2', value_type=vt)
 
         vt = BitField(subfield_sizes=[4, 4, 4],
-                      subfield_val_lists=[[3, 2, 0xe, 1], None, [10, 13, 3]],
+                      subfield_values=[[3, 2, 0xe, 1], None, [10, 13, 3]],
                       subfield_val_extremums=[None, [14, 15], None],
                       padding=1, endian=VT.BigEndian, lsb_padding=False)
         bfield_3 = Node('bfield_3', value_type=vt)
 
         vt = BitField(subfield_sizes=[4, 4, 4],
-                      subfield_val_lists=[[3, 2, 0xe, 1], None, [10, 13, 3]],
+                      subfield_values=[[3, 2, 0xe, 1], None, [10, 13, 3]],
                       subfield_val_extremums=[None, [14, 15], None],
                       padding=0, endian=VT.BigEndian, lsb_padding=False)
         bfield_4 = Node('bfield_4', value_type=vt)
@@ -1870,7 +1870,7 @@ class TestNodeFeatures(unittest.TestCase):
         nstr_2 = Node('str2', value_type=String(values=['TBD2'], max_sz=8))
 
         vt = BitField(subfield_sizes=[4, 4, 4],
-                      subfield_val_lists=[[3, 2, 0xe, 1], None, [10, 13, 3]],
+                      subfield_values=[[3, 2, 0xe, 1], None, [10, 13, 3]],
                       subfield_val_extremums=[None, [14, 15], None],
                       padding=1, endian=VT.BigEndian, lsb_padding=True)
 
@@ -2190,7 +2190,7 @@ class TestNodeFeatures(unittest.TestCase):
                   'contents': [
                       {'name': 'A3_subopcode',
                        'contents': BitField(subfield_sizes=[15, 2, 4], endian=VT.BigEndian,
-                                            subfield_val_lists=[None, [1, 2], [5, 6, 12]],
+                                            subfield_values=[None, [1, 2], [5, 6, 12]],
                                             subfield_val_extremums=[[500, 600], None, None],
                                             determinist=False)},
 
@@ -2367,7 +2367,7 @@ class TestNodeFeatures(unittest.TestCase):
                  {'name': 'part1',
                   'determinist': True,
                   'contents': BitField(subfield_sizes=[3, 1], padding=0, endian=VT.BigEndian,
-                                       subfield_val_lists=[None, [1]],
+                                       subfield_values=[None, [1]],
                                        subfield_val_extremums=[[1, 3], None])
                   },
                  {'name': 'sublevel',
@@ -2375,17 +2375,17 @@ class TestNodeFeatures(unittest.TestCase):
                       {'name': 'part2_o1',
                        'exists_if': (BitFieldCondition(sf=0, val=[1]), 'part1'),
                        'contents': BitField(subfield_sizes=[2, 2, 1], endian=VT.BigEndian,
-                                            subfield_val_lists=[[1, 2], [3], [0]])
+                                            subfield_values=[[1, 2], [3], [0]])
                        },
                       {'name': 'part2_o2',
                        'exists_if': (BitFieldCondition(sf=0, val=[1]), 'part1'),
                        'contents': BitField(subfield_sizes=[2, 2], endian=VT.BigEndian,
-                                            subfield_val_lists=[[3], [3]])
+                                            subfield_values=[[3], [3]])
                        },
                       {'name': 'part2_KO',
                        'exists_if': (BitFieldCondition(sf=0, val=[2]), 'part1'),
                        'contents': BitField(subfield_sizes=[2, 2], endian=VT.BigEndian,
-                                            subfield_val_lists=[[1], [1]])
+                                            subfield_values=[[1], [1]])
                        }
                   ]}
              ]}

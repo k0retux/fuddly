@@ -195,7 +195,7 @@ parameters:
   ``subfield_limits``), beginning from the least significant sub-field
   to the more significant sub-field.
 
-``subfield_val_lists`` [optional, default value: **None**]
+``subfield_values`` [optional, default value: **None**]
   List of valid values for each sub-fields. Look at the following
   examples for usage. For each sub-field value list, the first value is the
   default.
@@ -241,7 +241,7 @@ parameters:
 
 ``defaults`` [optional, default value: **None**]
   List of default value for each sub-field. Used only when the related sub-field is
-  not described through ``subfield_val_lists``. If ``subfield_val_lists`` describes the related
+  not described through ``subfield_values``. If ``subfield_values`` describes the related
   sub-field, then a ``None`` item should be inserted at the corresponding position in the list.
 
 ``subfield_descs`` [optional, default value: **None**]
@@ -264,7 +264,7 @@ going through the definition of a data model (for this topic refer to
    :emphasize-lines: 8-10
 
     t = BitField(subfield_limits=[2,6,10,12],
-	         subfield_val_lists=[[4,2,1], [2,15,16,3], None, [1]],
+	         subfield_values=[[4,2,1], [2,15,16,3], None, [1]],
 		 subfield_val_extremums=[None, None, [3,11], None],
 		 padding=0, lsb_padding=True, endian=VT.LittleEndian)
 
@@ -292,7 +292,7 @@ the first example. We additionally specify the parameter
    :emphasize-lines: 9-11
 
     t = BitField(subfield_sizes=[4,4,4],
-		 subfield_val_lists=[[4,2,1], None, [10,13]],
+		 subfield_values=[[4,2,1], None, [10,13]],
 		 subfield_val_extremums=[None, [14, 15], None],
 		 padding=0, lsb_padding=False, endian=VT.BigEndian,
 		 subfield_descs=['first', None, 'last'])
@@ -898,7 +898,7 @@ exists_if/and, exists_if/or
              'contents': String(values=['A3', 'A2'])},
             {'name': 'subopcode',
              'contents': BitField(subfield_sizes=[15,2,4],
-                                  subfield_val_lists=[[500], [1,2], [5,6,12]])},
+                                  subfield_values=[[500], [1,2], [5,6,12]])},
             {'name': 'and_condition',
              'exists_if/and': [(RawCondition('A2'), 'opcode'),
                                (BitFieldCondition(sf=2, val=[5]), 'subopcode')],
@@ -1145,7 +1145,7 @@ that purpose the keyword ``exists_if`` with some subclasses of
 	  'contents': [
 	      {'name': 'A3_subopcode',
 	       'contents': BitField(subfield_sizes=[15,2,4], endian=VT.BigEndian,
-				    subfield_val_lists=[None, [1,2], [5,6,12]],
+				    subfield_values=[None, [1,2], [5,6,12]],
 				    subfield_val_extremums=[[500, 600], None, None],
 				    determinist=False)},
 

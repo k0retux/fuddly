@@ -177,7 +177,7 @@ class Example_DataModel(DataModel):
         prefix.make_determinist()
 
         te3 = Node('EVT3')
-        te3.set_values(value_type=BitField(subfield_sizes=[4,4], subfield_val_lists=[[0x5, 0x6], [0xF, 0xC]]))
+        te3.set_values(value_type=BitField(subfield_sizes=[4,4], subfield_values=[[0x5, 0x6], [0xF, 0xC]]))
         te3.set_fuzz_weight(8)
         # te3.make_determinist()
 
@@ -192,7 +192,7 @@ class Example_DataModel(DataModel):
         te5.set_fuzz_weight(6)
 
         te6 = Node('EVT6')
-        vt = BitField(subfield_limits=[2,6,8,10], subfield_val_lists=[[4,2,1],[2,15,16,3],[2,3,0],[1]],
+        vt = BitField(subfield_limits=[2,6,8,10], subfield_values=[[4,2,1],[2,15,16,3],[2,3,0],[1]],
                       padding=0, lsb_padding=True, endian=VT.LittleEndian)
         te6.set_values(value_type=vt)
         te6.set_fuzz_weight(5)
@@ -201,7 +201,7 @@ class Example_DataModel(DataModel):
 
         te7 = Node('EVT7')
         vt = BitField(subfield_sizes=[4,4,4],
-                      subfield_val_lists=[[4,2,1], None, [2,3,0]],
+                      subfield_values=[[4,2,1], None, [2,3,0]],
                       subfield_val_extremums=[None, [3, 15], None],
                       padding=0, lsb_padding=False, endian=VT.BigEndian)
         te7.set_values(value_type=vt)
@@ -230,7 +230,7 @@ class Example_DataModel(DataModel):
         vt = UINT16_be(values=[1,2,3,4,5,6])
 
         # vt = BitField(subfield_sizes=[4,4,4],
-        #               subfield_val_lists=[[4,2,1], None, [10,12,13]],
+        #               subfield_values=[[4,2,1], None, [10,12,13]],
         #               subfield_val_extremums=[None, [14, 15], None],
         #               padding=0, lsb_padding=False, endian=VT.BigEndian)
 
@@ -346,7 +346,7 @@ class Example_DataModel(DataModel):
                'contents': [
 
                    {'contents': BitField(subfield_sizes=[21,2,1], endian=VT.BigEndian,
-                                         subfield_val_lists=[None, [0b10], [0,1]],
+                                         subfield_values=[None, [0b10], [0,1]],
                                          subfield_val_extremums=[[500, 600], None, None]),
                     'name': 'val1',
                     'qty': (1, 5)},

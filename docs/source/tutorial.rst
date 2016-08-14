@@ -1316,7 +1316,7 @@ various constructions, and value types.
 	  'contents': [
 
 	      {'contents': BitField(subfield_sizes=[21,2,1], endian=VT.BigEndian,
-				    subfield_val_lists=[None, [0b10], [0,1]],
+				    subfield_values=[None, [0b10], [0,1]],
 				    subfield_val_extremums=[[500, 600], None, None]),
 	       'name': 'val1',
 	       'qty': (1, 5)},
@@ -1910,18 +1910,18 @@ another inappropriate separator.
 	       dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable, dm.NodeInternals.Separator],
 					node_kinds=[dm.NodeInternals_Term])
 
-	   self.val_list = [b'']
+	   self.values = [b'']
 	   if separators is not None:
-	       self.val_list += list(separators)
+	       self.values += list(separators)
 
        def consume_node(self, node):
 	   orig_val = node.to_bytes()
-	   new_val_list = copy.copy(self.val_list)
+	   new_values = copy.copy(self.values)
 
-	   if orig_val in new_val_list:
-	       new_val_list.remove(orig_val)
+	   if orig_val in new_values:
+	       new_values.remove(orig_val)
 
-	   node.import_value_type(value_type=vtype.String(values=new_val_list))
+	   node.import_value_type(value_type=vtype.String(values=new_values))
 
 	   node.make_finite()
 	   node.make_determinist()

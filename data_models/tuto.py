@@ -27,7 +27,7 @@ class MyDF_DataModel(DataModel):
               'contents': [
                   
                   {'contents': BitField(subfield_sizes=[21,2,1], endian=VT.BigEndian,
-                                        subfield_val_lists=[None, [0b10], [0,1]],
+                                        subfield_values=[None, [0b10], [0,1]],
                                         subfield_val_extremums=[[500, 600], None, None]),
                    'name': 'val1',
                    'qty': (1, 5)},
@@ -210,7 +210,7 @@ class MyDF_DataModel(DataModel):
               'contents': [
                   {'name': 'A3_subopcode',
                    'contents': BitField(subfield_sizes=[15,2,4], endian=VT.BigEndian,
-                                        subfield_val_lists=[None, [1,2], [5,6,12]],
+                                        subfield_values=[None, [1,2], [5,6,12]],
                                         subfield_val_extremums=[[500, 600], None, None],
                                         determinist=False)},
 

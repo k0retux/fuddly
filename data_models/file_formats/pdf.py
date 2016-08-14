@@ -794,7 +794,7 @@ class PDFObj(object):
             # node_list last Node is the catalog
             catalog_id = catalog.get_private()
 
-            val_list = list(map(lambda x: x.to_bytes(), node_list))
+            values = list(map(lambda x: x.to_bytes(), node_list))
             sorted_node_list = sorted(node_list, key=lambda x: x.get_private())
 
             nb_objs = len(node_list) + 1  # we have to count the object 0
@@ -802,7 +802,7 @@ class PDFObj(object):
             off = header_len
 
             objs_offset = {}
-            for v, e in zip(val_list, node_list):
+            for v, e in zip(values, node_list):
                 obj_len = len(v)
                 objs_offset[e] = off
                 off += obj_len
@@ -845,7 +845,7 @@ class PDFObj(object):
             # node_list last Node is the catalog
             catalog_id = catalog.get_private()
 
-            val_list = list(map(lambda x: x.to_bytes(), node_list))
+            values = list(map(lambda x: x.to_bytes(), node_list))
             sorted_node_list = sorted(node_list, key=lambda x: x.get_private())
 
             nb_objs = len(node_list) + 1  # we have to count the object 0
@@ -853,7 +853,7 @@ class PDFObj(object):
             off = header_len
 
             objs_offset = {}
-            for v, e in zip(val_list, node_list):
+            for v, e in zip(values, node_list):
                 obj_len = len(v)
                 objs_offset[e] = off
                 off += obj_len

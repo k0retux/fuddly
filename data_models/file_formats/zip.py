@@ -92,7 +92,7 @@ class ZIP_DataModel(DataModel):
                                   'contents': UINT16_le()},
                                  {'name': 'gp_bit_flag',
                                   'contents': BitField(subfield_sizes=[2,1,13], endian=VT.LittleEndian,
-                                                       subfield_val_lists=[None, [0,1], None],
+                                                       subfield_values=[None, [0,1], None],
                                                        subfield_val_extremums=[[0,3], None, [0, 8191]])},
                                  {'name': 'compression_method',
                                   'contents': UINT16_le()},

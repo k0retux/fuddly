@@ -843,20 +843,20 @@ class SeparatorDisruption(NodeConsumerStub):
             dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable, dm.NodeInternals.Separator],
                                      node_kinds=[dm.NodeInternals_Term])
 
-        self.val_list = [b'']
+        self.values = [b'']
         if separators is not None:
-            self.val_list += list(separators)
+            self.values += list(separators)
 
         # self.need_reset_when_structure_change = True
 
     def consume_node(self, node):
         orig_val = node.to_bytes()
-        new_val_list = copy.copy(self.val_list)
+        new_values = copy.copy(self.values)
 
-        if orig_val in new_val_list:
-            new_val_list.remove(orig_val)
+        if orig_val in new_values:
+            new_values.remove(orig_val)
 
-        node.cc.import_value_type(value_type=vtype.String(values=new_val_list))
+        node.cc.import_value_type(value_type=vtype.String(values=new_values))
         # Note, that node attributes are not altered by this
         # operation, especially usefull in our case, because we have
         # to preserve dm.NodeInternals.Separator
