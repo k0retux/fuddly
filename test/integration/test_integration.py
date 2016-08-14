@@ -1518,12 +1518,23 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 4)
 
         print('***')
+
+        results = [
+            b' [!] ++++++++++ [!] ::>:: [!] ? [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::>:: [!] ? [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::>:: [!] ? [!] ',
+            b' [!] >>>>>>>>>> [!] ::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::>:: [!] ',
+        ]
+
         idx = 0
         data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')
         nonterm_consumer = NonTermVisitor(respect_order=True)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True,
                                                                     max_steps=50):
             print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
+            self.assertEqual(rnode.to_bytes(), results[idx-1])
         self.assertEqual(idx, 6)
 
         print('***')

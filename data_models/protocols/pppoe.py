@@ -40,6 +40,7 @@ class PPPOE_DataModel(DataModel):
         {'name': 'tag',
          'contents': [
              {'name': 'type',
+              'random': True,
               'contents': UINT16_be(values=[0,0x0101,0x0102,0x0103,0x0104,0x0105,
                                               0x0110,0x201,0x0202,0x0203]),
               'absorb_csts': AbsFullCsts()},
@@ -228,7 +229,7 @@ class PPPOE_DataModel(DataModel):
 
         mh = ModelHelper(delayed_jobs=True, add_env=False)
         pppoe_msg = mh.create_graph_from_desc(pppoe_desc)
-        pppoe_msg.make_random(recursive=True)
+        # pppoe_msg.make_random(recursive=True)
 
         padi = pppoe_msg.get_clone('padi')
         padi['.*/mac_dst'].set_values(value_type=String(values=[u'\xff\xff\xff\xff\xff\xff']))

@@ -406,13 +406,16 @@ Parameters:
 	 |      |       data structure. Otherwise, fuzz weight (if specified in the 
 	 |      |       data model) is used for ordering
 	 |      | default: False [type: bool]
-     |_ fix
-     |      | desc: fix constraints while walking
-     |      | default: True [type: bool]
 	 |_ deep
 	 |      | desc: when set to True, if a node structure has changed, the modelwalker 
 	 |      |       will reset its walk through the children nodes
 	 |      | default: True [type: bool]
+     |_ fuzz_mag
+     |      | desc: order of magnitude for maximum size of some fuzzing test cases.
+     |      | default: 1.0 [type: float]
+     |_ fix
+     |      | desc: fix constraints while walking
+     |      | default: True [type: bool]
 
 
 tSEP - Alteration of Separator Node

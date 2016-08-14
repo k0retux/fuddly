@@ -100,7 +100,7 @@ class sd_iter_over_data(StatefulDisruptor):
             exported_node = rnode
 
         if self.fix:
-            exported_node.unfreeze(recursive=True, reevaluate_constraints=True)
+            exported_node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
             exported_node.freeze()
             data.add_info('fix constraints (if any)')
 
@@ -119,7 +119,9 @@ class sd_iter_over_data(StatefulDisruptor):
                            'in the data model) is used for ordering', False, bool),
                  'deep': ('when set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes', True, bool),
-                 'fix': ('fix constraints while walking', True, bool)})
+                 'fix': ('fix constraints while walking', True, bool),
+                 'fuzz_mag': ('order of magnitude for maximum size of some fuzzing test cases.',
+                              1.0, float)})
 class sd_fuzz_typed_nodes(StatefulDisruptor):
     '''
     Perform alterations on typed nodes (one at a time) according to
@@ -138,6 +140,7 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
 
         self.consumer = TypedNodeDisruption(max_runs_per_node=self.max_runs_per_node,
                                             min_runs_per_node=self.min_runs_per_node,
+                                            fuzz_magnitude=self.fuzz_mag,
                                             respect_order=self.order)
         self.consumer.need_reset_when_structure_change = self.deep
         self.consumer.set_node_interest(path_regexp=self.path)
@@ -181,7 +184,7 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
             exported_node = rnode
 
         if self.fix:
-            exported_node.unfreeze(recursive=True, reevaluate_constraints=True)
+            exported_node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
             exported_node.freeze()
             data.add_info('fix constraints (if any)')
 
@@ -525,7 +528,7 @@ class sd_struct_constraints(StatefulDisruptor):
         corrupted_seed = Node(self.seed.name, base_node=self.seed, ignore_frozen_state=False, new_env=True)
         self.seed.env.remove_node_to_corrupt(consumed_node)
 
-        corrupted_seed.unfreeze(recursive=True, reevaluate_constraints=True)
+        corrupted_seed.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
         corrupted_seed.freeze()
 
         data.add_info('sample index: {:d}'.format(self.idx))
@@ -901,12 +904,12 @@ class d_fix_constraints(Disruptor):
                 return prev_data
 
             for n in l:
-                n.unfreeze(recursive=True, reevaluate_constraints=True)
+                n.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
                 prev_data.add_info("release constraints from the node '{!s}'".format(n.name))
                 n.freeze()
 
         else:
-            prev_data.node.unfreeze(recursive=True, reevaluate_constraints=True)
+            prev_data.node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
             prev_data.add_info('release constraints from the root')
 
         prev_data.node.freeze()

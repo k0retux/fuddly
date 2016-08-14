@@ -232,7 +232,7 @@ parameters:
   purpose. Additionally, note that such nominal generation are not the
   one used by the generic disruptor ``tTYPE`` which rely on
   ``BitField`` *fuzzy mode* (reachable through
-  :func:`framework.value_types.VT_Alt.switch_mode`).
+  :func:`framework.value_types.VT_Alt.enable_fuzz_mode`).
 
   This parameter is for internal usage and will always follow the *hosting*
   node instructions. If you want to change the deterministic order you have
@@ -312,7 +312,7 @@ the first example. We additionally specify the parameter
              - :func:`framework.value_types.BitField.set_subfield`, :func:`framework.value_types.BitField.get_subfield`
              - :func:`framework.value_types.BitField.extend_right`
              - :func:`framework.value_types.BitField.reset_state`, :func:`framework.value_types.BitField.rewind`
-             - :func:`framework.value_types.VT_Alt.switch_mode` (used currently by the disruptor ``tTYPE``)
+             - :func:`framework.value_types.VT_Alt.enable_fuzz_mode` (used currently by the disruptor ``tTYPE``)
 
 
 .. _dm:generators:

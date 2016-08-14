@@ -131,10 +131,10 @@ class ModelWalker(object):
     def _do_reset(self, node):
         last_gen = self._root_node.get_reachable_nodes(internals_criteria=self.triglast_ic)
         for n in last_gen:
-            n.unfreeze()
+            n.unfreeze(ignore_entanglement=True)
         node.unfreeze(recursive=False)
         # self._root_node.unfreeze(recursive=True, dont_change_state=True)
-        node.unfreeze(recursive=True, dont_change_state=True)
+        node.unfreeze(recursive=True, dont_change_state=True, ignore_entanglement=True)
         self._consumer.do_after_reset(node)
 
     def walk_graph_rec(self, node_list, structure_has_changed, consumed_nodes):
@@ -369,8 +369,10 @@ class NodeConsumerStub(object):
     behave strangely (not the same number of yielded values).
     --> to be investigated (maybe wrong implementation of BasicVisitor and NonTermVisitor)
     '''
-    def __init__(self, max_runs_per_node=-1, min_runs_per_node=-1, respect_order=True, **kwargs):
+    def __init__(self, max_runs_per_node=-1, min_runs_per_node=-1, respect_order=True,
+                 fuzz_magnitude=1.0, **kwargs):
         self.need_reset_when_structure_change = False
+        self.fuzz_magnitude = fuzz_magnitude
 
         self._internals_criteria = None
         self._semantics_criteria = None
@@ -530,7 +532,7 @@ class BasicVisitor(NodeConsumerStub):
                 return True
             if not node.is_exhausted():
                 node.freeze()
-                node.unfreeze(recursive=False)
+                node.unfreeze(recursive=False, ignore_entanglement=True)
                 node.freeze()
             return True
 
@@ -712,7 +714,7 @@ class TypedNodeDisruption(NodeConsumerStub):
             self.orig_internal = node.cc
             self.orig_value = node.to_bytes()
 
-            self.current_fuzz_vt_list = self._create_fuzzy_vt_list(node)
+            self.current_fuzz_vt_list = self._create_fuzzy_vt_list(node, self.fuzz_magnitude)
             self._extend_fuzzy_vt_list(self.current_fuzz_vt_list, node)
 
         DEBUG_PRINT(' *** CONSUME: ' + node.name + ', ' + repr(self.current_fuzz_vt_list), level=0)
@@ -750,13 +752,13 @@ class TypedNodeDisruption(NodeConsumerStub):
             return False
 
     @staticmethod
-    def _create_fuzzy_vt_list(e):
+    def _create_fuzzy_vt_list(e, fuzz_magnitude):
         vt = e.cc.get_value_type()
 
         if issubclass(vt.__class__, vtype.VT_Alt):
             new_vt = copy.copy(vt)
             new_vt.make_private(forget_current_state=False)
-            new_vt.switch_mode()
+            new_vt.enable_fuzz_mode(fuzz_magnitude=fuzz_magnitude)
             fuzzy_vt_list = [new_vt]
 
         else:

@@ -112,9 +112,9 @@ class VT_Alt(VT):
 
     def switch_mode(self):
         if self._fuzzy_mode:
-            self.enable_normal_mode()
+            self._enable_normal_mode()
         else:
-            self.enable_fuzz_mode()
+            self._enable_fuzz_mode()
 
         self._fuzzy_mode = not self._fuzzy_mode
         self.after_enabling_mode()
@@ -122,10 +122,22 @@ class VT_Alt(VT):
     def after_enabling_mode(self):
         pass
 
+    def enable_fuzz_mode(self, fuzz_magnitude=1.0):
+        if not self._fuzzy_mode:
+            self._enable_fuzz_mode(fuzz_magnitude=fuzz_magnitude)
+            self._fuzzy_mode = True
+            self.after_enabling_mode()
+
     def enable_normal_mode(self):
+        if self._fuzzy_mode:
+            self._enable_normal_mode()
+            self._fuzzy_mode = False
+            self.after_enabling_mode()
+
+    def _enable_normal_mode(self):
         raise NotImplementedError
 
-    def enable_fuzz_mode(self):
+    def _enable_fuzz_mode(self, fuzz_magnitude=1.0):
         raise NotImplementedError
 
 
@@ -870,14 +882,14 @@ class String(VT_Alt):
         val = self._bytes2str(self.drawn_val) if str_form else self.drawn_val
         return val
 
-    def enable_normal_mode(self):
+    def _enable_normal_mode(self):
         self.values = self.values_save
         self.values_copy = copy.copy(self.values)
         self.values_fuzzy = None
 
         self.drawn_val = None
 
-    def enable_fuzz_mode(self):
+    def _enable_fuzz_mode(self, fuzz_magnitude=1.0):
         self.values_fuzzy = []
 
         if self.drawn_val is not None:
@@ -889,7 +901,7 @@ class String(VT_Alt):
                 orig_val = random.choice(self.values_copy)
 
         sz = len(orig_val)
-        sz_delta_with_max = self.max_sz - sz
+        sz_delta_with_max = self.max_encoded_sz - sz
 
         try:
             val = bp.corrupt_bits(orig_val, n=1)
@@ -907,7 +919,7 @@ class String(VT_Alt):
             if val != b'':
                 self.values_fuzzy.append(val)
 
-        val = orig_val + b"X"*(self.max_sz*100)
+        val = orig_val + b"X"*(self.max_sz*int(100*fuzz_magnitude))
         self.values_fuzzy.append(val)
 
         self.values_fuzzy.append(b'\x00' * sz if sz > 0 else b'\x00')
@@ -922,11 +934,11 @@ class String(VT_Alt):
                 self.values_fuzzy.append(orig_val[:1] + b'%n' * cpt)
                 self.values_fuzzy.append(orig_val[:1] + b'%s' * cpt)
 
-        self.values_fuzzy.append(orig_val + b'%n' * 400)
-        self.values_fuzzy.append(orig_val + b'%s' * 400)
-        self.values_fuzzy.append(orig_val + b'\"%n\"' * 400)
-        self.values_fuzzy.append(orig_val + b'\"%s\"' * 400)
-        self.values_fuzzy.append(orig_val + b'\r\n' * 100)
+        self.values_fuzzy.append(orig_val + b'%n' * int(400*fuzz_magnitude))
+        self.values_fuzzy.append(orig_val + b'%s' * int(400*fuzz_magnitude))
+        self.values_fuzzy.append(orig_val + b'\"%n\"' * int(400*fuzz_magnitude))
+        self.values_fuzzy.append(orig_val + b'\"%s\"' * int(400*fuzz_magnitude))
+        self.values_fuzzy.append(orig_val + b'\r\n' * int(100*fuzz_magnitude))
 
         if self.extra_fuzzy_list:
             for v in self.extra_fuzzy_list:
@@ -1827,7 +1839,7 @@ class BitField(VT_Alt):
         self.__count_of_possible_values = None
         self._reset_idx()
 
-    def enable_normal_mode(self):
+    def _enable_normal_mode(self):
         if self.determinist_save is not None:
             self.determinist = self.determinist_save
 
@@ -1838,7 +1850,7 @@ class BitField(VT_Alt):
         self.subfield_fuzzy_vals = [None for i in range(len(self.subfield_sizes))]
         self.exhausted = False
 
-    def enable_fuzz_mode(self):
+    def _enable_fuzz_mode(self, fuzz_magnitude=1.0):
 
         for idx in range(len(self.subfield_fuzzy_vals)):
             sz = self.subfield_sizes[idx]
