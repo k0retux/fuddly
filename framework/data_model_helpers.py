@@ -1112,7 +1112,7 @@ class ModelHelper(object):
     def _clone_from_dict(self, node, ref, desc):
         if ref not in self.node_dico:
             raise ValueError("arguments refer to an inexistent node ({:s}, {!s})!".format(ref[0], ref[1]))
-        node.set_contents(self.node_dico[ref])
+        node.set_contents(self.node_dico[ref], preserve_node=False)
         self._handle_custo(node, desc, conf=None)
         self._handle_common_attr(node, desc, conf=None)
 

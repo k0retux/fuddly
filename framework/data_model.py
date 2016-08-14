@@ -901,15 +901,19 @@ class NodeInternals(object):
         else:
             return self._sync_with.get(scope, None)
 
-    def make_private(self, ignore_frozen_state, accept_external_entanglement, delayed_node_internals):
+    def make_private(self, ignore_frozen_state, accept_external_entanglement, delayed_node_internals,
+                     forget_original_sync_objs=False):
         if self.private is not None:
             self.private = copy.copy(self.private)
         self.absorb_constraints = copy.copy(self.absorb_constraints)
         self.__attrs = copy.copy(self.__attrs)
 
-        if self._sync_with:
-            delayed_node_internals.add(self)
-        self._sync_with = copy.copy(self._sync_with)
+        if forget_original_sync_objs:
+            self._sync_with = None
+        else:
+            if self._sync_with:
+                delayed_node_internals.add(self)
+            self._sync_with = copy.copy(self._sync_with)
 
         self._make_private_specific(ignore_frozen_state, accept_external_entanglement)
         self.custo = copy.copy(self.custo)
@@ -921,10 +925,10 @@ class NodeInternals(object):
         self.private = node_internals.private
         self.__attrs = node_internals.__attrs
         self._sync_with = node_internals._sync_with
+        self.absorb_constraints = node_internals.absorb_constraints
 
         if self.__class__ == node_internals.__class__:
             self.custo = node_internals.custo
-            self.absorb_constraints = node_internals.absorb_constraints
             self.absorb_helper = node_internals.absorb_helper
         else:
             if self._sync_with is not None and SyncScope.Size in self._sync_with:
@@ -4868,7 +4872,7 @@ class Node(object):
             node_dico = self.set_contents(base_node,
                                           copy_dico=copy_dico, ignore_frozen_state=ignore_frozen_state,
                                           accept_external_entanglement=accept_external_entanglement,
-                                          acceptance_set=acceptance_set)
+                                          acceptance_set=acceptance_set, preserve_node=False)
 
             if new_env and self.env is not None:
                 self.env.update_node_refs(node_dico, ignore_frozen_state=ignore_frozen_state)
@@ -4923,7 +4927,8 @@ class Node(object):
 
     def set_contents(self, base_node,
                      copy_dico=None, ignore_frozen_state=False,
-                     accept_external_entanglement=False, acceptance_set=None):
+                     accept_external_entanglement=False, acceptance_set=None,
+                     preserve_node=True):
         '''Set the contents of the node based on the one provided within
         `base_node`. This method performs a deep copy of `base_node`,
         but some parameters can change the behavior of the copy.
@@ -4935,6 +4940,8 @@ class Node(object):
           base_node (Node): (Optional) Used as a template to create the new node.
           ignore_frozen_state (bool): If True, the clone process of
             base_node will ignore its current state.
+          preserve_node (bool): preserve the :class:`NodeInternals` attributes (making sense to preserve)
+            of the possible overwritten NodeInternals.
           accept_external_entanglement (bool): If True, during the cloning
             process of base_node, every entangled nodes outside the current graph will be referenced
             within the new node without being copied. Otherwise, a *Warning* message will be raised.
@@ -4973,10 +4980,20 @@ class Node(object):
         for conf in base_node.internals:
             self.add_conf(conf)
 
-            self.internals[conf] = copy.copy(base_node.internals[conf])
-            self.internals[conf].make_private(ignore_frozen_state=ignore_frozen_state,
-                                              accept_external_entanglement=accept_external_entanglement,
-                                              delayed_node_internals=delayed_node_internals)
+            new_internals = copy.copy(base_node.internals[conf])
+            if preserve_node:
+                new_internals.make_private(ignore_frozen_state=ignore_frozen_state,
+                                           accept_external_entanglement=accept_external_entanglement,
+                                           delayed_node_internals=delayed_node_internals,
+                                           forget_original_sync_objs=True)
+                new_internals.set_contents_from(self.internals[conf])
+            else:
+                new_internals.make_private(ignore_frozen_state=ignore_frozen_state,
+                                           accept_external_entanglement=accept_external_entanglement,
+                                           delayed_node_internals=delayed_node_internals,
+                                           forget_original_sync_objs=False)
+
+            self.internals[conf] = new_internals
 
             if base_node.is_nonterm(conf):
                 self.internals[conf].import_subnodes_full_format(internals=base_node.internals[conf])
