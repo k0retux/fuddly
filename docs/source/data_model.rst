@@ -27,7 +27,7 @@ All integer types listed below provide the same interface
 (:class:`framework.value_types.INT`). Their constructor take the
 following parameters:
 
-``int_list`` [optional, default value: **None**]
+``values`` [optional, default value: **None**]
   List of the integers that are considered valid for the node backed
   by this *Integer object*. The default value is the first element of the list.
 
@@ -38,7 +38,7 @@ following parameters:
   Maximum valid value for the node backed by this *Integer object*.
 
 ``default`` [optional, default value: **None**]
-  If ``int_list`` is not provided, this value if provided will be used as the default one.
+  If ``values`` is not provided, this value if provided will be used as the default one.
 
 ``determinist`` [default value: **True**]
   If set to ``True`` generated values will be in a deterministic
@@ -83,7 +83,7 @@ All string types listed below provide the same interface
 (:class:`framework.value_types.String`). Their constructor take the
 following parameters:
 
-``val_list`` [optional, default value: **None**]
+``values`` [optional, default value: **None**]
   List of the character strings that are considered valid for the node
   backed by this *String object*. The default string is the first element of the list.
 
@@ -94,13 +94,13 @@ following parameters:
 ``min_sz`` [optional, default value: **None**]
   Minimum valid size for the character strings for the node backed by
   this *String object*. If not set, this parameter will be
-  automatically inferred by looking at the parameter ``val_list``
+  automatically inferred by looking at the parameter ``values``
   whether this latter is provided.
 
 ``max_sz`` [optional, default value: **None**]
   Maximum valid size for the character strings for the node backed by this *String
   object*. If not set, this parameter will be
-  automatically inferred by looking at the parameter ``val_list``
+  automatically inferred by looking at the parameter ``values``
   whether this latter is provided.
 
 ``deteterminist`` [default value: **True**]
@@ -127,9 +127,9 @@ following parameters:
   :ref:`tuto:dm-absorption` for more information on that topic).
 
 ``alphabet`` [optional, default value: **string.printable**]
-  The alphabet to use for generating data, in case no ``val_list`` is
+  The alphabet to use for generating data, in case no ``values`` is
   provided. Also use during absorption to validate the contents. It is
-  checked if there is no ``val_list``.
+  checked if there is no ``values``.
 
 ``max_encoded_sz`` [optional, default value: **None**]
   Only relevant for subclasses that leverage the encoding infrastructure.
@@ -451,7 +451,7 @@ alt
   .. code-block:: python
 
      'alt': [ {'conf': 'config_n1',
-	       'contents': SINT8(int_list=[1,4,8])},
+	       'contents': SINT8(values=[1,4,8])},
 	      {'conf': 'config_n2',
 	       'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
 	       'determinist': True} ]
@@ -612,25 +612,25 @@ section_type
       'contents': [
       
 	     {'name': 'val1',
-	      'contents': String(val_list=['OK', 'KO']),
+	      'contents': String(values=['OK', 'KO']),
 	      'qty': (0, 5)},
 
              {'section_type': MH.Ordered,
               'contents': [
 
 		     {'name': 'val2',
-		      'contents': UINT16_be(int_list=[10, 20, 30])},
+		      'contents': UINT16_be(values=[10, 20, 30])},
 
 		     {'name': 'val3',
 		      'contents': String(min_sz=2, max_sz=10, alphabet='XYZ')},
 
 		     {'name': 'val4',
-		      'contents': UINT32_le(int_list=[0xDEAD, 0xBEEF])},
+		      'contents': UINT32_le(values=[0xDEAD, 0xBEEF])},
 
 	      ]}
 
 	     {'name': 'val5',
-	      'contents': String(val_list=['OPEN', 'CLOSE']),
+	      'contents': String(values=['OPEN', 'CLOSE']),
 	      'qty': 3}
      ]}
 
@@ -659,7 +659,7 @@ separator
   .. code-block:: python
 
      'separator': {'contents': {'name': 'sep',
-				'contents': String(val_list=['\n'])},
+				'contents': String(values=['\n'])},
 		   'prefix': False,
 		   'suffix': False,
 		   'unique': True},
@@ -895,14 +895,14 @@ exists_if/and, exists_if/or
         {'name': 'test',
          'contents': [
             {'name': 'opcode',
-             'contents': String(val_list=['A3', 'A2'])},
+             'contents': String(values=['A3', 'A2'])},
             {'name': 'subopcode',
              'contents': BitField(subfield_sizes=[15,2,4],
                                   subfield_val_lists=[[500], [1,2], [5,6,12]])},
             {'name': 'and_condition',
              'exists_if/and': [(RawCondition('A2'), 'opcode'),
                                (BitFieldCondition(sf=2, val=[5]), 'subopcode')],
-             'contents': String(val_list=['and_condition_true'])}
+             'contents': String(values=['and_condition_true'])}
          ]}
 
 exists_if_not
@@ -948,7 +948,7 @@ it in terms of shapes like illustrated by the example below:
 
         {'name': 'shape',
          'separator': {'contents': {'name': 'sep',
-                                    'contents': String(val_list=[' [!] '])}},
+                                    'contents': String(values=[' [!] '])}},
          'contents': [
 
 	     ### SHAPE 1 ####
@@ -962,13 +962,13 @@ it in terms of shapes like illustrated by the example below:
 
                        {'name': 'body',
                         'separator': {'contents': {'name': 'sep2',
-                                                   'contents': String(val_list=['::'])}},
+                                                   'contents': String(values=['::'])}},
                         'shape_type': MH.Random,
                         'contents': [
-                            {'contents': String(val_list=['AAA']),
+                            {'contents': String(values=['AAA']),
                              'qty': (0, 4),
                              'name': 'str1'},
-                            {'contents': String(val_list=['42']),
+                            {'contents': String(values=['42']),
                              'name': 'str2'}
                         ]}
                    ]}
@@ -1043,7 +1043,7 @@ parameters with space characters (line 12-14).
 
     {'name': 'separator_test',
      'separator': {'contents': {'name': 'sep',
-				'contents': String(val_list=['\n'], absorb_regexp='[\r\n|\n]+'),
+				'contents': String(values=['\n'], absorb_regexp='[\r\n|\n]+'),
 				'absorb_csts': AbsNoCsts(regexp=True)},
 		   'prefix': False,
 		   'suffix': False,
@@ -1053,7 +1053,7 @@ parameters with space characters (line 12-14).
 	  'contents': [
 	      {'name': 'parameters',
 	       'separator': {'contents': {'name': ('sep',2),
-					  'contents': String(val_list=[' '], absorb_regexp=' +'),
+					  'contents': String(values=[' '], absorb_regexp=' +'),
 					  'absorb_csts': AbsNoCsts(regexp=True)}},
 	       'qty': 3,
 	       'contents': [
@@ -1062,19 +1062,19 @@ parameters with space characters (line 12-14).
 			{'name': 'color',
 			'contents': [
 			    {'name': 'id',
-			     'contents': String(val_list=['color='])},
+			     'contents': String(values=['color='])},
 			    {'name': 'val',
-			     'contents': String(val_list=['red', 'black'])}
+			     'contents': String(values=['red', 'black'])}
 			]},
 			{'name': 'type',
 			 'contents': [
 			     {'name': ('id', 2),
-			      'contents': String(val_list=['type='])},
+			      'contents': String(values=['type='])},
 			     {'name': ('val', 2),
-			      'contents': String(val_list=['circle', 'cube', 'rectangle'], determinist=False)}
+			      'contents': String(values=['circle', 'cube', 'rectangle'], determinist=False)}
 			]},
 		    ]}]},
-	      {'contents': String(val_list=['AAAA', 'BBBB', 'CCCC'], determinist=False),
+	      {'contents': String(values=['AAAA', 'BBBB', 'CCCC'], determinist=False),
 	       'qty': (4, 6),
 	       'name': 'str'}
 	  ]}
@@ -1129,15 +1129,15 @@ that purpose the keyword ``exists_if`` with some subclasses of
      'shape_type': MH.Ordered,
      'contents': [
 	 {'name': 'opcode',
-	  'contents': String(val_list=['A1', 'A2', 'A3'], determinist=True)},
+	  'contents': String(values=['A1', 'A2', 'A3'], determinist=True)},
 
 	 {'name': 'command_A1',
-	  'contents': String(val_list=['AAA', 'BBBB', 'CCCCC']),
+	  'contents': String(values=['AAA', 'BBBB', 'CCCCC']),
 	  'exists_if': (RawCondition('A1'), 'opcode'),
 	  'qty': 3},
 
 	 {'name': 'command_A2',
-	  'contents': UINT32_be(int_list=[0xDEAD, 0xBEEF]),
+	  'contents': UINT32_be(values=[0xDEAD, 0xBEEF]),
 	  'exists_if': (RawCondition('A2'), 'opcode')},
 
 	 {'name': 'command_A3',
@@ -1150,23 +1150,23 @@ that purpose the keyword ``exists_if`` with some subclasses of
 				    determinist=False)},
 
 	      {'name': 'A3_int',
-	       'contents': UINT16_be(int_list=[10, 20, 30], determinist=False)},
+	       'contents': UINT16_be(values=[10, 20, 30], determinist=False)},
 
 	      {'name': 'A3_deco1',
 	       'exists_if': (IntCondition(10), 'A3_int'),
-	       'contents': String(val_list=['*1*0*'])},
+	       'contents': String(values=['*1*0*'])},
 
 	      {'name': 'A3_deco2',
 	       'exists_if': (IntCondition([20, 30]), 'A3_int'),
-	       'contents': String(val_list=['+2+0+3+0+'])}
+	       'contents': String(values=['+2+0+3+0+'])}
 	  ]},
 
 	 {'name': 'A31_payload',
-	  'contents': String(val_list=['$ A31_OK $', '$ A31_KO $'], determinist=False),
+	  'contents': String(values=['$ A31_OK $', '$ A31_KO $'], determinist=False),
 	  'exists_if': (BitFieldCondition(sf=2, val=[6,12]), 'A3_subopcode')},
 
 	 {'name': 'A32_payload',
-	  'contents': String(val_list=['$ A32_VALID $', '$ A32_INVALID $'], determinist=False),
+	  'contents': String(values=['$ A32_VALID $', '$ A32_INVALID $'], determinist=False),
 	  'exists_if': (BitFieldCondition(sf=[0, 1, 2], val=[[500, 501], [1, 2], 5]), 'A3_subopcode')}
      ]}
 
@@ -1235,7 +1235,7 @@ character string in our case.
 	 {'name': 'len',
 	  'type': MH.Generator,
 	  'contents': lambda x: Node('cts', value_type= \
-                                     UINT32_be(int_list=[len(x.to_bytes())])),
+                                     UINT32_be(values=[len(x.to_bytes())])),
 	  'node_args': 'payload'},
 
 	 {'name': 'payload',
@@ -1356,11 +1356,11 @@ Finally, let's take the following example that illustrates other
 	  'contents': [
 	      {'name': 'int16',
 	       'qty': (2, 10),
-	       'contents': UINT16_be(int_list=[16, 1, 6], determinist=False)},
+	       'contents': UINT16_be(values=[16, 1, 6], determinist=False)},
 
 	      {'name': 'int32',
 	       'qty': (3, 8),
-	       'contents': UINT32_be(int_list=[32, 3, 2], determinist=False)}
+	       'contents': UINT32_be(values=[32, 3, 2], determinist=False)}
 	  ]},
 
 	 {'name': 'int16_qty',
@@ -1482,7 +1482,7 @@ on the encoded form or the decoded form of their node parameters.
     {'name': 'enc',
      'contents': [
          {'name': 'data0',
-          'contents': String(val_list=['Plip', 'Plop']) },
+          'contents': String(values=['Plip', 'Plop']) },
          {'name': 'crc',
           'contents': MH.CRC(vt=UINT32_be, after_encoding=False),
           'node_args': ['enc_data', 'data2'],
@@ -1496,10 +1496,10 @@ on the encoded form or the decoded form of their node parameters.
               'node_args': 'data1',
               'absorb_csts': AbsFullCsts(contents=False)},
              {'name': 'data1',
-              'contents': UTF16_LE(val_list=['Test!', 'Hello World!']) },
+              'contents': UTF16_LE(values=['Test!', 'Hello World!']) },
           ]},
          {'name': 'data2',
-          'contents': String(val_list=['Red', 'Green', 'Blue']) }
+          'contents': String(values=['Red', 'Green', 'Blue']) }
      ]}
 
 This data description will enable you to produce data compliant to the specified encoding schemes
@@ -1603,11 +1603,11 @@ Example 1: The basics.
    # is equivalent to
    classic = {'name': 'HTTP_version',
               'contents': [
-                 {'name': 'HTTP_version_1', 'contents': String(val_list=["HTTP"])},
-                 {'name': 'HTTP_version_2', 'contents': String(val_list=["/"])},
+                 {'name': 'HTTP_version_1', 'contents': String(values=["HTTP"])},
+                 {'name': 'HTTP_version_2', 'contents': String(values=["/"])},
                  {'name': 'HTTP_version_3',
                   'contents': String(alphabet="0123456789", size=1)},
-                 {'name': 'HTTP_version_4', 'contents': String(val_list=["."])},
+                 {'name': 'HTTP_version_4', 'contents': String(values=["."])},
                  {'name': 'HTTP_version_5', 'contents': INT_Str(mini=0, maxi=9)} ]}
 
 
@@ -1622,8 +1622,8 @@ Example 2: Introducing choice. (Refer to :ref:`dm:nt-keywords`)
    classic = {'name': 'something',
               'shape_type': MH.Pick,
               'contents': [
-                 {'name':'something_1', 'contents':INT_Str(int_list=[333, 444])},
-                 {'name':'something_1', 'contents':String(val_list=["foo", "bar"])},
+                 {'name':'something_1', 'contents':INT_Str(values=[333, 444])},
+                 {'name':'something_1', 'contents':String(values=["foo", "bar"])},
                  {'name':'something_1', 'contents':String(alphabet="0123456789",size=1)},
                  {'name':'something_1', 'contents':String(alphabet="th|is", size=1)}
               ]}
@@ -1639,13 +1639,13 @@ Example 3: Using quantifiers and the escape character ``\``.
    # is equivalent to
    classic = {'name': 'something',
               'contents': [
-                 {'name': 'something_1', 'contents': String(val_list=["(this"])},
+                 {'name': 'something_1', 'contents': String(values=["(this"])},
                  {'name': 'something_2',
 	              'contents': String(alphabet="is", min_sz=3, max_sz=4)},
-                 {'name': 'something_3', 'contents': String(val_list=["th"])},
+                 {'name': 'something_3', 'contents': String(values=["th"])},
                  {'name': 'something_4', 'qty': (1, -1),
-                  'contents': String(val_list=["e"])},
-                 {'name': 'something_5', 'contents': String(val_list=["end]"])} ]}
+                  'contents': String(values=["e"])},
+                 {'name': 'something_5', 'contents': String(values=["end]"])} ]}
 
 Example 4: Invalid regular expressions.
 

@@ -856,7 +856,7 @@ class SeparatorDisruption(NodeConsumerStub):
         if orig_val in new_val_list:
             new_val_list.remove(orig_val)
 
-        node.cc.import_value_type(value_type=vtype.String(val_list=new_val_list))
+        node.cc.import_value_type(value_type=vtype.String(values=new_val_list))
         # Note, that node attributes are not altered by this
         # operation, especially usefull in our case, because we have
         # to preserve dm.NodeInternals.Separator

@@ -107,7 +107,7 @@ class VT_Alt(VT):
         self._fuzzy_mode = False
         self.init_specific(*args, **kargs)
 
-    def init_specific(self):
+    def init_specific(self, *args, **kargs):
         raise NotImplementedError
 
     def switch_mode(self):
@@ -360,7 +360,7 @@ class String(VT_Alt):
     ASCII = codecs.lookup('ascii').name
     LATIN_1 = codecs.lookup('latin-1').name
 
-    def init_specific(self, val_list=None, size=None, min_sz=None,
+    def init_specific(self, values=None, size=None, min_sz=None,
                       max_sz=None, determinist=True, codec='latin-1',
                       extra_fuzzy_list=None, absorb_regexp=None,
                       alphabet=None, min_encoded_sz=None, max_encoded_sz=None, encoding_arg=None):
@@ -369,7 +369,7 @@ class String(VT_Alt):
         Initialize the String
 
         Args:
-            val_list: List of the character strings that are considered valid for the node
+            values: List of the character strings that are considered valid for the node
               backed by this *String object*.
             size: Valid character string size for the node backed by this *String object*.
             min_sz: Minimum valid size for the character strings for the node backed by
@@ -419,7 +419,7 @@ class String(VT_Alt):
                 self.encoding_arg = encoding_arg
             self.init_encoding_scheme(self.encoding_arg)
 
-        self.set_description(val_list=val_list, size=size, min_sz=min_sz,
+        self.set_description(values=values, size=size, min_sz=min_sz,
                              max_sz=max_sz, determinist=determinist, codec=codec,
                              extra_fuzzy_list=extra_fuzzy_list,
                              absorb_regexp=absorb_regexp, alphabet=alphabet,
@@ -668,9 +668,9 @@ class String(VT_Alt):
 
         self.drawn_val = None
 
-    def _check_sizes(self, val_list):
-        if val_list is not None:
-            for v in val_list:
+    def _check_sizes(self, values):
+        if values is not None:
+            for v in values:
                 sz = len(v)
                 if self.max_sz is not None:
                     assert(self.max_sz >= sz >= self.min_sz)
@@ -678,7 +678,7 @@ class String(VT_Alt):
                     assert(sz >= self.min_sz)
 
 
-    def set_description(self, val_list=None, size=None, min_sz=None,
+    def set_description(self, values=None, size=None, min_sz=None,
                         max_sz=None, determinist=True, codec='latin-1',
                         extra_fuzzy_list=None,
                         absorb_regexp=None, alphabet=None,
@@ -712,9 +712,9 @@ class String(VT_Alt):
         else:
             self.extra_fuzzy_list = None
 
-        if val_list is not None:
-            assert isinstance(val_list, list)
-            self.val_list = self._str2bytes(val_list)
+        if values is not None:
+            assert isinstance(values, list)
+            self.val_list = self._str2bytes(values)
             for val in self.val_list:
                 if not self._check_compliance(val, force_max_enc_sz=self.max_enc_sz_provided,
                                               force_min_enc_sz=self.min_enc_sz_provided,
@@ -750,9 +750,9 @@ class String(VT_Alt):
         elif max_sz is not None:
             self.max_sz = max_sz
             self.min_sz = 0
-        elif val_list is not None:
+        elif values is not None:
             sz = 0
-            for v in val_list:
+            for v in values:
                 length = len(v)
                 if length > sz:
                     sz = length
@@ -768,7 +768,7 @@ class String(VT_Alt):
             self.min_sz = 0
             self.max_sz = self.DEFAULT_MAX_SZ
 
-        self._check_sizes(val_list)
+        self._check_sizes(values)
 
         self.determinist = determinist
 
@@ -1039,16 +1039,16 @@ class INT(VT):
                           # and that mini is not specified by the user
 
 
-    def __init__(self, int_list=None, mini=None, maxi=None, default=None, determinist=True):
+    def __init__(self, values=None, mini=None, maxi=None, default=None, determinist=True):
         self.idx = 0
         self.determinist = determinist
         self.exhausted = False
         self.drawn_val = None
         self.default = None
 
-        if int_list:
+        if values:
             assert default is None
-            self.int_list = list(int_list)
+            self.int_list = list(values)
             self.int_list_copy = list(self.int_list)
 
         else:
@@ -1419,7 +1419,7 @@ class Fuzzy_INT(INT):
             self.extend_value_list(supp_list)
 
         assert(self.int_list is not None)
-        INT.__init__(self, int_list=self.int_list, determinist=True)
+        INT.__init__(self, values=self.int_list, determinist=True)
 
     def make_private(self, forget_current_state):
         self.int_list = copy.copy(self.int_list)
@@ -2456,7 +2456,7 @@ if __name__ == "__main__":
         obj[k].get_value()
 
         try:
-            obj[k] = v(int_list=[0x11,0x12,0x13])
+            obj[k] = v(values=[0x11,0x12,0x13])
         except TypeError:
             obj[k] = v()
 
@@ -2466,7 +2466,7 @@ if __name__ == "__main__":
         print('\n********\n')
 
         try:
-            obj[k] = v(int_list=[0x11,0x12,0x13], determinist=False)
+            obj[k] = v(values=[0x11,0x12,0x13], determinist=False)
         except TypeError:
             print(v().__class__)
             obj[k] = v()
@@ -2537,7 +2537,7 @@ if __name__ == "__main__":
 
     print('\n***** [ String ] *****\n')
 
-    t = String(val_list=['AA', 'BBB', 'CCCC'], min_sz=1, max_sz=10,
+    t = String(values=['AA', 'BBB', 'CCCC'], min_sz=1, max_sz=10,
                extra_fuzzy_list=['XTRA_1', '', 'XTRA_2'])
 
     for i in range(30):
@@ -2564,7 +2564,7 @@ if __name__ == "__main__":
 
     print('\n====> New String\n')
 
-    t = String(val_list=['AAA', 'BBBB', 'CCCCC'], min_sz=3, max_sz=10)
+    t = String(values=['AAA', 'BBBB', 'CCCCC'], min_sz=3, max_sz=10)
 
     for i in range(30):
         print(t.get_value())
@@ -2603,7 +2603,7 @@ if __name__ == "__main__":
 
     print('\n====> New String\n')
 
-    t = String(val_list=['AAA', 'BBBB', 'CCCCC'], max_sz=10)
+    t = String(values=['AAA', 'BBBB', 'CCCCC'], max_sz=10)
 
     print(t.get_value())
     print(t.get_value())

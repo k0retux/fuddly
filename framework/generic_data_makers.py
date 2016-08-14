@@ -622,7 +622,7 @@ class d_call_external_program(Disruptor):
         if node is None:
             prev_data.update_from_str_or_bytes(out_val)
         else:
-            node.set_values(val_list=[out_val])
+            node.set_values(values=[out_val])
             node.get_value()
 
         return prev_data
@@ -825,7 +825,7 @@ class d_corrupt_node_bits(Disruptor):
                     val = self.new_val
                     prev_data.add_info('corrupt data: {!s}'.format(truncate_info(val)))
 
-                i.set_values(val_list=[val])
+                i.set_values(values=[val])
                 i.get_value()
 
             ret = prev_data

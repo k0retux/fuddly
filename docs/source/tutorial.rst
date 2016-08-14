@@ -1151,14 +1151,14 @@ the PNG data format:
    {'name': 'PNG_model',
     'contents': [
 	{'name': 'sig',
-	 'contents': String(val_list=[b'\x89PNG\r\n\x1a\n'], size=8)},
+	 'contents': String(values=[b'\x89PNG\r\n\x1a\n'], size=8)},
 	{'name': 'chunks',
 	 'qty': (2,-1),
 	 'contents': [
 	      {'name': 'len',
 	       'contents': UINT32_be()},
 	      {'name': 'type',
-	       'contents': String(val_list=['IHDR', 'IEND', 'IDAT', 'PLTE'], size=4)},
+	       'contents': String(values=['IHDR', 'IEND', 'IDAT', 'PLTE'], size=4)},
 	      {'name': 'data_gen',
 	       'type': MH.Generator,
 	       'contents': lambda x: Node('data', value_type= \
@@ -1330,7 +1330,7 @@ various constructions, and value types.
 		   'section_type': MH.Random,
 		   'contents': [
 
-		       {'contents': String(val_list=['OK', 'KO'], size=2),
+		       {'contents': String(values=['OK', 'KO'], size=2),
 			'name': 'val2',
 			'qty': (1, -1)},
 
@@ -1353,7 +1353,7 @@ various constructions, and value types.
 	       'sync_qty_with': 'val1',
 	       'alt': [
 		   {'conf': 'alt1',
-		    'contents': SINT8(int_list=[1,4,8])},
+		    'contents': SINT8(values=[1,4,8])},
 		   {'conf': 'alt2',
 		    'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
 		    'determinist': True}]}
@@ -1363,20 +1363,20 @@ various constructions, and value types.
 	 {'section_type': MH.Pick,
 	  'weights': (10,5),
 	  'contents': [
-	      {'contents': String(val_list=['PLIP', 'PLOP'], size=4),
+	      {'contents': String(values=['PLIP', 'PLOP'], size=4),
 	       'name': 'val4'},
 
-	      {'contents': SINT16_be(int_list=[-1, -3, -5, 7]),
+	      {'contents': SINT16_be(values=[-1, -3, -5, 7]),
 	       'name': 'val5'}
 	  ]},
 
 	 # block 3
 	 {'section_type': MH.FullyRandom,
 	  'contents': [
-	      {'contents': String(val_list=['AAA', 'BBBB', 'CCCCC']),
+	      {'contents': String(values=['AAA', 'BBBB', 'CCCCC']),
 	       'name': ('val21', 2)},
 
-	      {'contents': UINT8(int_list=[2, 4, 6, 8]),
+	      {'contents': UINT8(values=[2, 4, 6, 8]),
 	       'qty': (2, 3),
 	       'name': ('val22', 2)}
 	  ]}
@@ -1636,16 +1636,16 @@ like that:
     'contents': [
 
 	{'name': 'prefix',
-	 'contents': UINT8(int_list=[0xcc, 0xff, 0xee])},
+	 'contents': UINT8(values=[0xcc, 0xff, 0xee])},
 
 	{'name': 'variable_string',
 	 'contents': String(max_sz=20)},
 
 	{'name': 'keycode',
-	 'contents': UINT16_be(int_list=[0xd2d3, 0xd2fe, 0xd2aa])},
+	 'contents': UINT16_be(values=[0xd2d3, 0xd2fe, 0xd2aa])},
 
 	{'name': 'variable_suffix',
-	 'contents': String(val_list=['END', 'THE_END'])}
+	 'contents': String(values=['END', 'THE_END'])}
     ]}
 
 It works as intended for data generation, but if you want to absorb a
@@ -1677,18 +1677,18 @@ what follows:
     'contents': [
 
 	{'name': 'prefix',
-	 'contents': UINT8(int_list=[0xcc, 0xff, 0xee])},
+	 'contents': UINT8(values=[0xcc, 0xff, 0xee])},
 
 	{'name': 'variable_string',
 	 'contents': String(max_sz=20),
 	 'set_attrs': [NodeInternals.Abs_Postpone]},
 
 	{'name': 'keycode',
-	 'contents': UINT16_be(int_list=[0xd2d3, 0xd2fe, 0xd2aa]),
+	 'contents': UINT16_be(values=[0xd2d3, 0xd2fe, 0xd2aa]),
 	 'absorb_helper': keycode_helper},
 
 	{'name': 'variable_suffix',
-	 'contents': String(val_list=['END', 'THE_END'])}
+	 'contents': String(values=['END', 'THE_END'])}
     ]}
 
 Notice that we also add a specific attribute to the node
@@ -1921,7 +1921,7 @@ another inappropriate separator.
 	   if orig_val in new_val_list:
 	       new_val_list.remove(orig_val)
 
-	   node.import_value_type(value_type=vtype.String(val_list=new_val_list))
+	   node.import_value_type(value_type=vtype.String(values=new_val_list))
 
 	   node.make_finite()
 	   node.make_determinist()

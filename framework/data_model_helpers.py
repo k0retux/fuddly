@@ -160,7 +160,7 @@ class MH(object):
         '''
         def length(vt, set_attrs, clear_attrs, node):
             blob = node.to_bytes() if after_encoding else node.get_raw_value()
-            n = Node('cts', value_type=vt(int_list=[len(blob)+base_len]))
+            n = Node('cts', value_type=vt(values=[len(blob)+base_len]))
             n.set_semantics(NodeSemantics(['len']))
             MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
@@ -183,7 +183,7 @@ class MH(object):
         '''
         def qty(node_name, vt, set_attrs, clear_attrs, node):
             nb = node.cc.get_drawn_node_qty(node_name)
-            n = Node('cts', value_type=vt(int_list=[nb]))
+            n = Node('cts', value_type=vt(values=[nb]))
             n.set_semantics(NodeSemantics(['qty']))
             MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
@@ -208,7 +208,7 @@ class MH(object):
             else:
                 now = datetime.datetime.now()
             ts = now.strftime(time_format)
-            n = Node('cts', value_type=fvt.String(val_list=[ts], size=len(ts)))
+            n = Node('cts', value_type=fvt.String(values=[ts], size=len(ts)))
             n.set_semantics(NodeSemantics(['timestamp']))
             MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
@@ -248,7 +248,7 @@ class MH(object):
 
             result = crc_func(s)
 
-            n = Node('cts', value_type=vt(int_list=[result]))
+            n = Node('cts', value_type=vt(values=[result]))
             n.set_semantics(NodeSemantics(['crc']))
             MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
@@ -261,7 +261,7 @@ class MH(object):
 
 
     @staticmethod
-    def WRAP(func, vt=fvt.INT_str,
+    def WRAP(func, vt=fvt.String,
              set_attrs=[], clear_attrs=[], after_encoding=True):
         '''Return a *generator* that returns the result (in the chosen type)
         of the provided function applied on the concatenation of all
@@ -290,11 +290,16 @@ class MH(object):
 
             result = func(s)
 
-            n = Node('cts', value_type=vt(int_list=[result]))
+            if issubclass(vt, fvt.String):
+                result = convert_to_internal_repr(result)
+            else:
+                assert isinstance(result, int)
+
+            n = Node('cts', value_type=vt(values=[result]))
             MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
 
-        vt = MH._validate_int_vt(vt)
+        vt = MH._validate_vt(vt)
         return functools.partial(map_func, vt, func, set_attrs, clear_attrs)
 
     @staticmethod
@@ -335,9 +340,9 @@ class MH(object):
                     idx = 0
                 idx = idx % self.vals_sz
                 if issubclass(self.vt, fvt.INT):
-                    vtype = self.vt(int_list=[self.vals[idx]])
+                    vtype = self.vt(values=[self.vals[idx]])
                 elif issubclass(self.vt, fvt.String):
-                    vtype = self.vt(val_list=[self.vals[idx]])
+                    vtype = self.vt(values=[self.vals[idx]])
                 else:
                     raise NotImplementedError('Value type not supported')
 
@@ -422,7 +427,7 @@ class MH(object):
                     base = len(s)
                     off = nodes[-1].get_subnode_off(idx)
 
-                n = Node('cts_off', value_type=self.vt(int_list=[base+off]))
+                n = Node('cts_off', value_type=self.vt(values=[base+off]))
                 MH._handle_attrs(n, set_attrs, clear_attrs)
                 return n
 
@@ -493,9 +498,9 @@ class MH(object):
                         self.vt = tg_node.get_current_subkind()
 
                     if issubclass(self.vt, fvt.INT):
-                        vtype = self.vt(int_list=[tg_node.get_raw_value()])
+                        vtype = self.vt(values=[tg_node.get_raw_value()])
                     elif issubclass(self.vt, fvt.String):
-                        vtype = self.vt(val_list=[blob])
+                        vtype = self.vt(values=[blob])
                     else:
                         raise NotImplementedError('Value type not supported')
                     n = Node('cts', value_type=vtype)
@@ -512,9 +517,13 @@ class MH(object):
     @staticmethod
     def _validate_int_vt(vt):
         if not issubclass(vt, fvt.INT):
-            print("*** WARNING: the value type of typed node requested is not supported!" \
-                  " Use of 'INT_str' instead.")
-            vt = fvt.INT_str             
+            raise DataModelDefinitionError("The value type requested is not supported! (expect a subclass of INT)")
+        return vt
+
+    @staticmethod
+    def _validate_vt(vt):
+        if not issubclass(vt, fvt.INT) and not issubclass(vt, fvt.String):
+            raise DataModelDefinitionError("The value type requested is not supported!")
         return vt
 
     @staticmethod
@@ -1875,9 +1884,9 @@ class RegexParser(StateMachine):
                                        codec=self.codec)), 1, 1]
         else:
             if type == fvt.String:
-                node = Node(name=name, vt=fvt.String(val_list=values, codec=self.codec))
+                node = Node(name=name, vt=fvt.String(values=values, codec=self.codec))
             else:
-                node = Node(name=name, vt=fvt.INT_str(int_list=values))
+                node = Node(name=name, vt=fvt.INT_str(values=values))
 
             return [node, qty[0], -1 if qty[1] is None else qty[1]]
 

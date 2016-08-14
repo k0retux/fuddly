@@ -60,7 +60,7 @@ class TEST_Fuzzy_INT16(Fuzzy_INT16):
     def __init__(self, endian=None, supp_list=None):
         self.endian = endian
         self.idx = 0
-        INT.__init__(self, int_list=self.int_list, determinist=True)
+        INT.__init__(self, values=self.int_list, determinist=True)
 
     def is_compatible(self, integer):
         return False
@@ -1408,7 +1408,7 @@ class TestMisc(unittest.TestCase):
         loop_count = 20
 
         e = Node('VT1')
-        vt = UINT16_be(int_list=[1, 2, 3, 4, 5, 6])
+        vt = UINT16_be(values=[1, 2, 3, 4, 5, 6])
         e.set_values(value_type=vt)
         e.set_env(Env())
         e.make_determinist(all_conf=True, recursive=True)
@@ -1544,7 +1544,7 @@ class TestModelWalker(unittest.TestCase):
              'custo_set': MH.Custo.NTerm.FrozenCopy,
              'custo_clear': MH.Custo.NTerm.MutableClone,
              'separator': {'contents': {'name': 'sep',
-                                        'contents': String(val_list=[' [!] '])}},
+                                        'contents': String(values=[' [!] '])}},
              'contents': [
 
                  {'weight': 20,
@@ -1559,13 +1559,13 @@ class TestModelWalker(unittest.TestCase):
                             'custo_set': MH.Custo.NTerm.FrozenCopy,
                             'custo_clear': MH.Custo.NTerm.MutableClone,
                             'separator': {'contents': {'name': 'sep2',
-                                                       'contents': String(val_list=['::'])}},
+                                                       'contents': String(values=['::'])}},
                             'shape_type': MH.Random,  # ignored in determnist mode
                             'contents': [
-                                {'contents': Filename(val_list=['AAA']),
+                                {'contents': Filename(values=['AAA']),
                                  'qty': (0, 4),
                                  'name': 'str'},
-                                {'contents': UINT8(int_list=[0x3E]),  # chr(0x3E) == '>'
+                                {'contents': UINT8(values=[0x3E]),  # chr(0x3E) == '>'
                                  'name': 'int'}
                             ]}
                        ]}
@@ -1862,12 +1862,12 @@ class TestNodeFeatures(unittest.TestCase):
         pass
 
     def test_absorb_nonterm_1(self):
-        nint_1 = Node('nint1', value_type=UINT16_le(int_list=[0xabcd]))
-        nint_2 = Node('nint2', value_type=UINT8(int_list=[0xf]))
-        nint_3 = Node('nint3', value_type=UINT16_be(int_list=[0xeffe]))
+        nint_1 = Node('nint1', value_type=UINT16_le(values=[0xabcd]))
+        nint_2 = Node('nint2', value_type=UINT8(values=[0xf]))
+        nint_3 = Node('nint3', value_type=UINT16_be(values=[0xeffe]))
 
-        nstr_1 = Node('str1', value_type=String(val_list=['TBD1'], max_sz=5))
-        nstr_2 = Node('str2', value_type=String(val_list=['TBD2'], max_sz=8))
+        nstr_1 = Node('str1', value_type=String(values=['TBD1'], max_sz=5))
+        nstr_2 = Node('str2', value_type=String(values=['TBD2'], max_sz=8))
 
         vt = BitField(subfield_sizes=[4, 4, 4],
                       subfield_val_lists=[[3, 2, 0xe, 1], None, [10, 13, 3]],
@@ -1901,12 +1901,12 @@ class TestNodeFeatures(unittest.TestCase):
         self.assertEqual(size, len(msg))
 
     def test_absorb_nonterm_2(self):
-        nint_1 = Node('nint1', value_type=UINT16_le(int_list=[0xcdab, 0xffee]))
-        nint_2 = Node('nint2', value_type=UINT8(int_list=[0xaf, 0xbf, 0xcf]))
-        nint_3 = Node('nint3', value_type=UINT16_be(int_list=[0xcfab, 0xeffe]))
+        nint_1 = Node('nint1', value_type=UINT16_le(values=[0xcdab, 0xffee]))
+        nint_2 = Node('nint2', value_type=UINT8(values=[0xaf, 0xbf, 0xcf]))
+        nint_3 = Node('nint3', value_type=UINT16_be(values=[0xcfab, 0xeffe]))
 
-        nstr_1 = Node('str1', value_type=String(val_list=['STR1', 'str1'], max_sz=5))
-        nstr_2 = Node('str2', value_type=String(val_list=['STR22', 'str222'], max_sz=8))
+        nstr_1 = Node('str1', value_type=String(values=['STR1', 'str1'], max_sz=5))
+        nstr_2 = Node('str2', value_type=String(values=['STR22', 'str222'], max_sz=8))
 
         top = Node('top')
         top.set_subnodes_with_csts([
@@ -1930,12 +1930,12 @@ class TestNodeFeatures(unittest.TestCase):
         self.assertEqual(size, len(msg))
 
     def test_absorb_nonterm_3(self):
-        nint_1 = Node('nint1', value_type=UINT16_le(int_list=[0xcdab, 0xffee]))
-        nint_2 = Node('nint2', value_type=UINT8(int_list=[0xaf, 0xbf, 0xcf]))
-        nint_3 = Node('nint3', value_type=UINT16_be(int_list=[0xcfab, 0xeffe]))
+        nint_1 = Node('nint1', value_type=UINT16_le(values=[0xcdab, 0xffee]))
+        nint_2 = Node('nint2', value_type=UINT8(values=[0xaf, 0xbf, 0xcf]))
+        nint_3 = Node('nint3', value_type=UINT16_be(values=[0xcfab, 0xeffe]))
 
-        nstr_1 = Node('str1', value_type=String(val_list=['STR1', 'str1'], max_sz=5))
-        nstr_2 = Node('str2', value_type=String(val_list=['STR22', 'str222'], max_sz=8))
+        nstr_1 = Node('str1', value_type=String(values=['STR1', 'str1'], max_sz=5))
+        nstr_2 = Node('str2', value_type=String(values=['STR22', 'str222'], max_sz=8))
 
         top = Node('top')
         top.set_subnodes_with_csts([
@@ -1964,11 +1964,11 @@ class TestNodeFeatures(unittest.TestCase):
              'contents': [
                  {'section_type': MH.FullyRandom,
                   'contents': [
-                      {'contents': String(val_list=['AAA', 'BBBB', 'CCCCC']),
+                      {'contents': String(values=['AAA', 'BBBB', 'CCCCC']),
                        'qty': (2, 3),
                        'name': 'str'},
 
-                      {'contents': UINT8(int_list=[2, 4, 6, 8]),
+                      {'contents': UINT8(values=[2, 4, 6, 8]),
                        'qty': (3, 6),
                        'name': 'int'}
                   ]}
@@ -2013,22 +2013,22 @@ class TestNodeFeatures(unittest.TestCase):
                 self.helper1_called = True
                 return AbsorbStatus.Reject, 0, None
 
-        nint_1 = Node('nint1', value_type=UINT16_le(int_list=[0xabcd, 0xe2e1]))
+        nint_1 = Node('nint1', value_type=UINT16_le(values=[0xabcd, 0xe2e1]))
         nint_1.set_absorb_helper(nint_1_helper)
 
-        nint_1_alt = Node('nint1_alt', value_type=UINT16_le(int_list=[0xabff, 0xe2ff]))
+        nint_1_alt = Node('nint1_alt', value_type=UINT16_le(values=[0xabff, 0xe2ff]))
         nint_1_alt.set_absorb_helper(nint_1_alt_helper)
 
-        nint_2 = Node('nint2', value_type=UINT8(int_list=[0xf, 0xff, 0xee]))
-        nint_3 = Node('nint3', value_type=UINT16_be(int_list=[0xeffe, 0xc1c2, 0x8899]))
+        nint_2 = Node('nint2', value_type=UINT8(values=[0xf, 0xff, 0xee]))
+        nint_3 = Node('nint3', value_type=UINT16_be(values=[0xeffe, 0xc1c2, 0x8899]))
 
-        nstr_1 = Node('cool', value_type=String(val_list=['TBD1'], size=4, codec='ascii'))
+        nstr_1 = Node('cool', value_type=String(values=['TBD1'], size=4, codec='ascii'))
         nstr_1.enforce_absorb_constraints(AbsNoCsts(regexp=True))
-        nstr_2 = Node('str2', value_type=String(val_list=['TBD2TBD2', '12345678'], size=8, codec='ascii'))
+        nstr_2 = Node('str2', value_type=String(values=['TBD2TBD2', '12345678'], size=8, codec='ascii'))
 
-        nint_50 = Node('nint50', value_type=UINT8(int_list=[0xaf, 0xbf, 0xcf]))
-        nint_51 = Node('nint51', value_type=UINT16_be(int_list=[0xcfab, 0xeffe]))
-        nstr_50 = Node('str50', value_type=String(val_list=['HERE', 'IAM'], max_sz=7))
+        nint_50 = Node('nint50', value_type=UINT8(values=[0xaf, 0xbf, 0xcf]))
+        nint_51 = Node('nint51', value_type=UINT16_be(values=[0xcfab, 0xeffe]))
+        nstr_50 = Node('str50', value_type=String(values=['HERE', 'IAM'], max_sz=7))
 
         middle1 = Node('middle1')
         middle1.set_subnodes_with_csts([
@@ -2038,9 +2038,9 @@ class TestNodeFeatures(unittest.TestCase):
                 'u=.', [nint_50, 1], [nint_51, 1], [nstr_50, 2, 3]]
         ])
 
-        yeah = Node('yeah', value_type=String(val_list=['TBD', 'YEAH!'], max_sz=10, codec='ascii'))
+        yeah = Node('yeah', value_type=String(values=['TBD', 'YEAH!'], max_sz=10, codec='ascii'))
 
-        splitter = Node('splitter', value_type=String(val_list=['TBD'], max_sz=10))
+        splitter = Node('splitter', value_type=String(values=['TBD'], max_sz=10))
         splitter.set_attr(NodeInternals.Abs_Postpone)
         splitter.enforce_absorb_constraints(AbsNoCsts())
 
@@ -2052,13 +2052,13 @@ class TestNodeFeatures(unittest.TestCase):
             else:
                 return AbsorbStatus.Reject, 0, None
 
-        nint_10 = Node('nint10', value_type=UINT16_be(int_list=[0xcbbc, 0xd2d3]))
+        nint_10 = Node('nint10', value_type=UINT16_be(values=[0xcbbc, 0xd2d3]))
         nint_10.set_absorb_helper(nint_10_helper)
-        nstr_10 = Node('str10', value_type=String(val_list=['TBD', 'THE_END'], max_sz=7))
+        nstr_10 = Node('str10', value_type=String(values=['TBD', 'THE_END'], max_sz=7))
 
-        delim = Node('delim', value_type=String(val_list=[','], size=1))
-        nint_20 = Node('nint20', value_type=INT_str(int_list=[1, 2, 3]))
-        nint_21 = Node('nint21', value_type=UINT8(int_list=[0xbb]))
+        delim = Node('delim', value_type=String(values=[','], size=1))
+        nint_20 = Node('nint20', value_type=INT_str(values=[1, 2, 3]))
+        nint_21 = Node('nint21', value_type=UINT8(values=[0xbb]))
         bottom = Node('bottom', subnodes=[delim, nint_20, nint_21])
 
         bottom2 = Node('bottom2', base_node=bottom)
@@ -2183,7 +2183,7 @@ class TestNodeFeatures(unittest.TestCase):
              'contents': [
                  {'name': 'opcode',
                   'determinist': True,
-                  'contents': String(val_list=['A3', 'A2'])},
+                  'contents': String(values=['A3', 'A2'])},
 
                  {'name': 'command_A3',
                   'exists_if': (RawCondition('A3'), 'opcode'),
@@ -2196,27 +2196,27 @@ class TestNodeFeatures(unittest.TestCase):
 
                       {'name': 'A3_int',
                        'determinist': True,
-                       'contents': UINT16_be(int_list=[10, 20, 30])},
+                       'contents': UINT16_be(values=[10, 20, 30])},
 
                       {'name': 'A3_deco1',
                        'exists_if/and': [(IntCondition(val=[10]), 'A3_int'),
                                          (BitFieldCondition(sf=2, val=[5]), 'A3_subopcode')],
-                       'contents': String(val_list=['$ and_OK $'])},
+                       'contents': String(values=['$ and_OK $'])},
 
                       {'name': 'A3_deco2',
                        'exists_if/and': [(IntCondition(val=[10]), 'A3_int'),
                                          (BitFieldCondition(sf=2, val=[6]), 'A3_subopcode')],
-                       'contents': String(val_list=['! and_KO !'])}
+                       'contents': String(values=['! and_KO !'])}
                   ]},
 
                  {'name': 'A31_payload1',
-                  'contents': String(val_list=['$ or_OK $']),
+                  'contents': String(values=['$ or_OK $']),
                   'exists_if/or': [(IntCondition(val=[20]), 'A3_int'),
                                    (BitFieldCondition(sf=2, val=[5]), 'A3_subopcode')],
                   },
 
                  {'name': 'A31_payload2',
-                  'contents': String(val_list=['! or_KO !']),
+                  'contents': String(values=['! or_KO !']),
                   'exists_if/or': [(IntCondition(val=[20]), 'A3_int'),
                                    (BitFieldCondition(sf=2, val=[6]), 'A3_subopcode')],
                   },
@@ -2240,44 +2240,44 @@ class TestNodeFeatures(unittest.TestCase):
         gen_exist_desc = \
             {'name': 'gen_exist_cond',
              'separator': {'contents': {'name': 'sep_nl',
-                                        'contents': String(val_list=['\n'], max_sz=100, absorb_regexp='[\r\n|\n]+'),
+                                        'contents': String(values=['\n'], max_sz=100, absorb_regexp='[\r\n|\n]+'),
                                         'absorb_csts': AbsNoCsts(regexp=True)},
                            'prefix': False, 'suffix': False, 'unique': True},
              'contents': [
                  {'name': 'body',
                   'qty': 7,
                   'separator': {'contents': {'name': 'sep_space',
-                                             'contents': String(val_list=[' '], max_sz=100, absorb_regexp=b'\s+'),
+                                             'contents': String(values=[' '], max_sz=100, absorb_regexp=b'\s+'),
                                              'absorb_csts': AbsNoCsts(size=True, regexp=True)},
                                 'prefix': False, 'suffix': False, 'unique': True},
                   'contents': [
                       {'name': 'val_blk',
                        'separator': {'contents': {'name': 'sep_quote',
-                                                  'contents': String(val_list=['"'])},
+                                                  'contents': String(values=['"'])},
                                      'prefix': False, 'suffix': True, 'unique': True},
                        'contents': [
                            {'name': 'key',
-                            'contents': String(val_list=['value='])},
+                            'contents': String(values=['value='])},
                            {'name': 'val1',
-                            'contents': String(val_list=['Toulouse', 'Paris', 'Lyon']),
+                            'contents': String(values=['Toulouse', 'Paris', 'Lyon']),
                             'exists_if': (RawCondition('Location'), 'param')},
                            {'name': 'val2',
-                            'contents': String(val_list=['2015/10/08']),
+                            'contents': String(values=['2015/10/08']),
                             'exists_if': (RawCondition('Date'), 'param')},
                            {'name': 'val3',
-                            'contents': String(val_list=['10:40:42']),
+                            'contents': String(values=['10:40:42']),
                             'exists_if': (RawCondition('Time'), 'param')},
                            {'name': 'val4',
-                            'contents': String(val_list=['NOT_SUPPORTED']),
+                            'contents': String(values=['NOT_SUPPORTED']),
                             'exists_if': (RawCondition(['NOTSUP1', 'NOTSUP2', 'NOTSUP3']), 'param')}
                        ]},
                       {'name': 'name_blk',
                        'separator': {'contents': {'name': ('sep_quote', 2),
-                                                  'contents': String(val_list=['"'])},
+                                                  'contents': String(values=['"'])},
                                      'prefix': False, 'suffix': True, 'unique': True},
                        'contents': [
                            {'name': ('key', 2),
-                            'contents': String(val_list=['name='])},
+                            'contents': String(values=['name='])},
                            {'name': 'param',
                             'contents': MH.CYCLE(['NOTSUP1', 'Date', 'Time', 'NOTSUP2', 'NOTSUP3', 'Location'],
                                                  depth=2)}
@@ -2314,20 +2314,20 @@ class TestNodeFeatures(unittest.TestCase):
              'contents': [
                  {'name': 'opcode',
                   'determinist': True,
-                  'contents': String(val_list=['A1', 'A2', 'A3'])},
+                  'contents': String(values=['A1', 'A2', 'A3'])},
                  {'name': 'part1',
                   'determinist': True,
                   'shape_type': MH.Pick,
                   'contents': [
                       {'name': 'option2',
                        'exists_if': (RawCondition('A2'), 'opcode'),
-                       'contents': String(val_list=[' 1_KO_A2'])},
+                       'contents': String(values=[' 1_KO_A2'])},
                       {'name': 'option3',
                        'exists_if': (RawCondition('A3'), 'opcode'),
-                       'contents': String(val_list=[' 1_KO_A3'])},
+                       'contents': String(values=[' 1_KO_A3'])},
                       {'name': 'option1',
                        'exists_if': (RawCondition('A1'), 'opcode'),
-                       'contents': String(val_list=[' 1_OK_A1'])},
+                       'contents': String(values=[' 1_OK_A1'])},
                   ]},
                  {'name': 'part2',
                   'determinist': False,
@@ -2336,13 +2336,13 @@ class TestNodeFeatures(unittest.TestCase):
                   'contents': [
                       {'name': 'optionB',
                        'exists_if': (RawCondition('A2'), 'opcode'),
-                       'contents': String(val_list=[' 2_KO_A2'])},
+                       'contents': String(values=[' 2_KO_A2'])},
                       {'name': 'optionC',
                        'exists_if': (RawCondition('A3'), 'opcode'),
-                       'contents': String(val_list=[' 2_KO_A3'])},
+                       'contents': String(values=[' 2_KO_A3'])},
                       {'name': 'optionA',
                        'exists_if': (RawCondition('A1'), 'opcode'),
-                       'contents': String(val_list=[' 2_OK_A1'])},
+                       'contents': String(values=[' 2_OK_A1'])},
                   ]},
              ]}
 
@@ -2451,13 +2451,13 @@ class TestNode_NonTerm(unittest.TestCase):
             {'name': 'infinity',
              'contents': [
                  {'name': 'prefix',
-                  'contents': String(val_list=['A']),
+                  'contents': String(values=['A']),
                   'qty': (2, -1)},
                  {'name': 'mid',
-                  'contents': String(val_list=['H']),
+                  'contents': String(values=['H']),
                   'qty': -1},
                  {'name': 'suffix',
-                  'contents': String(val_list=['Z']),
+                  'contents': String(values=['Z']),
                   'qty': (2, -1)},
              ]}
 
@@ -2509,7 +2509,7 @@ class TestNode_NonTerm(unittest.TestCase):
             {'name': 'test',
              'determinist': True,
              'separator': {'contents': {'name': 'SEP',
-                                        'contents': String(val_list=[' ', '  ', '     '],
+                                        'contents': String(values=[' ', '  ', '     '],
                                                            absorb_regexp='\s+', determinist=False),
                                         'absorb_csts': AbsNoCsts(regexp=True)},
                            'prefix': True,
@@ -2518,32 +2518,32 @@ class TestNode_NonTerm(unittest.TestCase):
              'contents': [
                  {'section_type': MH.FullyRandom,
                   'contents': [
-                      {'contents': String(val_list=['AAA', 'BBBB', 'CCCCC']),
+                      {'contents': String(values=['AAA', 'BBBB', 'CCCCC']),
                        'qty': (3, 5),
                        'name': 'str'},
 
-                      {'contents': String(val_list=['1', '22', '333']),
+                      {'contents': String(values=['1', '22', '333']),
                        'qty': (3, 5),
                        'name': 'int'}
                   ]},
 
                  {'section_type': MH.Random,
                   'contents': [
-                      {'contents': String(val_list=['WW', 'YYY', 'ZZZZ']),
+                      {'contents': String(values=['WW', 'YYY', 'ZZZZ']),
                        'qty': (2, 2),
                        'name': 'str2'},
 
-                      {'contents': UINT16_be(int_list=[0xFFFF, 0xAAAA, 0xCCCC]),
+                      {'contents': UINT16_be(values=[0xFFFF, 0xAAAA, 0xCCCC]),
                        'qty': (3, 3),
                        'name': 'int2'}
                   ]},
                  {'section_type': MH.Pick,
                   'contents': [
-                      {'contents': String(val_list=['LAST', 'END']),
+                      {'contents': String(values=['LAST', 'END']),
                        'qty': (2, 2),
                        'name': 'str3'},
 
-                      {'contents': UINT16_be(int_list=[0xDEAD, 0xBEEF]),
+                      {'contents': UINT16_be(values=[0xDEAD, 0xBEEF]),
                        'qty': (2, 2),
                        'name': 'int3'}
                   ]}
@@ -2583,7 +2583,7 @@ class TestNode_NonTerm(unittest.TestCase):
             {'name': 'enc',
              'contents': [
                  {'name': 'data0',
-                  'contents': String(val_list=['Plip', 'Plop'])},
+                  'contents': String(values=['Plip', 'Plop'])},
                  {'name': 'crc',
                   'contents': MH.CRC(vt=UINT32_be, after_encoding=False),
                   'node_args': ['enc_data', 'data2'],
@@ -2597,10 +2597,10 @@ class TestNode_NonTerm(unittest.TestCase):
                        'node_args': 'data1',
                        'absorb_csts': AbsFullCsts(contents=False)},
                       {'name': 'data1',
-                       'contents': String(val_list=['Test!', 'Hello World!'], codec='utf-16-le')},
+                       'contents': String(values=['Test!', 'Hello World!'], codec='utf-16-le')},
                   ]},
                  {'name': 'data2',
-                  'contents': String(val_list=['Red', 'Green', 'Blue'])},
+                  'contents': String(values=['Red', 'Green', 'Blue'])},
              ]}
 
         mh = ModelHelper()
@@ -2647,12 +2647,12 @@ class TestNode_TypedValue(unittest.TestCase):
             {'name': 'top',
              'contents': [
                  {'name': 'alpha1',
-                  'contents': String(min_sz=10, max_sz=100, val_list=['A' * 10], alphabet=alphabet1),
+                  'contents': String(min_sz=10, max_sz=100, values=['A' * 10], alphabet=alphabet1),
                   'set_attrs': [NodeInternals.Abs_Postpone]},
                  {'name': 'alpha2',
                   'contents': String(min_sz=10, max_sz=100, alphabet=alphabet2)},
                  {'name': 'end',
-                  'contents': String(val_list=['END'])},
+                  'contents': String(values=['END'])},
              ]}
 
         mh = ModelHelper()
@@ -2725,9 +2725,9 @@ class TestNode_TypedValue(unittest.TestCase):
                   'node_args': 'user_data',
                   'absorb_csts': AbsFullCsts(contents=False)},
                  {'name': 'user_data',
-                  'contents': EncodedStr(val_list=data, codec='utf8')},
+                  'contents': EncodedStr(values=data, codec='utf8')},
                  {'name': 'compressed_data',
-                  'contents': GZIP(val_list=data, encoding_arg=6)}
+                  'contents': GZIP(values=data, encoding_arg=6)}
              ]}
 
         mh = ModelHelper()
@@ -2836,7 +2836,7 @@ class TestNode_TypedValue(unittest.TestCase):
                   'contents': UINT8()},
                  {'name': 'user_data',
                   'sync_enc_size_with': 'len',
-                  'contents': String(val_list=['TEST'], codec='utf8')},
+                  'contents': String(values=['TEST'], codec='utf8')},
                  {'name': 'padding',
                   'contents': String(max_sz=0),
                   'absorb_csts': AbsNoCsts()},
@@ -2902,7 +2902,7 @@ class TestHLAPI(unittest.TestCase):
                                 'section_type': MH.Ordered,
                                 'contents': [
 
-                                    {'contents': String(val_list=['OK', 'KO'], size=2),
+                                    {'contents': String(values=['OK', 'KO'], size=2),
                                      'name': 'val2'},
 
                                     {'name': 'val21',
@@ -2924,7 +2924,7 @@ class TestHLAPI(unittest.TestCase):
                             'sync_qty_with': 'val1',
                             'alt': [
                                 {'conf': 'alt1',
-                                 'contents': SINT8(int_list=[1, 4, 8])},
+                                 'contents': SINT8(values=[1, 4, 8])},
                                 {'conf': 'alt2',
                                  'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
                                  'determinist': True}]}
@@ -2933,10 +2933,10 @@ class TestHLAPI(unittest.TestCase):
                       # block 2
                       {'section_type': MH.Pick,
                        'contents': [
-                           {'contents': String(val_list=['PLIP', 'PLOP'], size=4),
+                           {'contents': String(values=['PLIP', 'PLOP'], size=4),
                             'name': ('val21', 2)},
 
-                           {'contents': SINT16_be(int_list=[-1, -3, -5, 7]),
+                           {'contents': SINT16_be(values=[-1, -3, -5, 7]),
                             'name': ('val22', 2)}
                        ]}
                   ]}
@@ -3228,12 +3228,12 @@ class TestDataModelHelpers(unittest.TestCase):
         HTTP_version_classic = \
             {'name': 'HTTP_version_classic',
              'contents': [
-                 {'name': 'HTTP_name', 'contents': String(val_list=["HTTP"])},
-                 {'name': 'slash', 'contents': String(val_list=["/"])},
-                 {'name': 'major_version_digit', 'contents': String(size=1, val_list=["0", "1", "2", "3", "4",
+                 {'name': 'HTTP_name', 'contents': String(values=["HTTP"])},
+                 {'name': 'slash', 'contents': String(values=["/"])},
+                 {'name': 'major_version_digit', 'contents': String(size=1, values=["0", "1", "2", "3", "4",
                                                                                       "5", "6", "7", "8", "9"])},
 
-                 {'name': '.', 'contents': String(val_list=["."])},
+                 {'name': '.', 'contents': String(values=["."])},
                  {'name': 'minor_version_digit', 'clone': 'major_version_digit'},
              ]}
 

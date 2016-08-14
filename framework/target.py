@@ -1739,7 +1739,7 @@ class SIMTarget(Target):
         if data.node:
             node_list = data.node[NodeSemanticsCriteria(mandatory_criteria=['tel num'])]
             if node_list and len(node_list)==1:
-                node_list[0].set_values(value_type=GSMPhoneNum(val_list=[self.tel_num]))
+                node_list[0].set_values(value_type=GSMPhoneNum(values=[self.tel_num]))
             else:
                 print('\nWARNING: Data does not contain a mobile number.')
         pdu = b''

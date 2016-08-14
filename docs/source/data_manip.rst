@@ -26,7 +26,7 @@ To guide you over what is possible to perform, let's consider the following data
      {'name': 'ex',
       'contents': [
           {'name': 'data0',
-           'contents': String(val_list=['Plip', 'Plop']) },
+           'contents': String(values=['Plip', 'Plop']) },
 
           {'name': 'data_group',
            'contents': [
@@ -38,7 +38,7 @@ To guide you over what is possible to perform, let's consider the following data
                'absorb_csts': AbsFullCsts(contents=False)},
 
               {'name': 'data1',
-               'contents': String(val_list=['Test!', 'Hello World!']) },
+               'contents': String(values=['Test!', 'Hello World!']) },
 
               {'name': 'data2',
                'qty': (1,3),
@@ -46,21 +46,21 @@ To guide you over what is possible to perform, let's consider the following data
                'contents': UINT16_be(mini=10, maxi=0xa0ff),
                'alt': [
                     {'conf': 'alt1',
-                     'contents': SINT8(int_list=[1,4,8])},
+                     'contents': SINT8(values=[1,4,8])},
                     {'conf': 'alt2',
                      'contents': UINT16_be(mini=0xeeee, maxi=0xff56)} ]},
 
               {'name': 'data3',
                'semantics': ['sem2'],
                'sync_qty_with': 'data2',
-               'contents': UINT8(int_list=[30,40,50]),
+               'contents': UINT8(values=[30,40,50]),
                'alt': [
                     {'conf': 'alt1',
-                     'contents': SINT8(int_list=[1,4,8])}]},
+                     'contents': SINT8(values=[1,4,8])}]},
              ]},
 
           {'name': 'data4',
-           'contents': String(val_list=['Red', 'Green', 'Blue']) }
+           'contents': String(values=['Red', 'Green', 'Blue']) }
       ]}
 
 

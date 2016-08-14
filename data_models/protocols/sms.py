@@ -54,7 +54,7 @@ class SMS_DataModel(DataModel):
                                    ) },
              {'name': 'TP-MR',  # Message Reference (refer to TS 100 901)
               'mutable': False,
-              'contents': UINT8(int_list=[0])},
+              'contents': UINT8(values=[0])},
              {'name': 'TP-DA',  # Destination Address (refer to TS 100 901 - chapter 9.1.2.5)
               'mutable': False,
               'contents': [
@@ -73,7 +73,7 @@ class SMS_DataModel(DataModel):
                                         ) },
                   {'name': 'tel_num',
                    'semantics': ['tel num'],
-                   'contents': GSMPhoneNum(val_list=['33612345678'])}
+                   'contents': GSMPhoneNum(values=['33612345678'])}
                 ]},
              {'name': 'TP-PID',  # Protocol Identifier (refer to TS 100 901)
               'determinist': True,
@@ -92,7 +92,7 @@ class SMS_DataModel(DataModel):
               'contents': MH.LEN(vt=UINT8, after_encoding=False),
               'node_args': 'user_data'},
              {'name': 'user_data',
-              'contents': GSM7bitPacking(val_list=['Hello World!'], max_sz=160)
+              'contents': GSM7bitPacking(values=['Hello World!'], max_sz=160)
              }
          ]
         }
@@ -116,7 +116,7 @@ class SMS_DataModel(DataModel):
                                    ) },
              {'name': 'TP-MR',  # Message Reference (refer to TS 100 901)
               'mutable': False,
-              'contents': UINT8(int_list=[0])},
+              'contents': UINT8(values=[0])},
              {'name': 'TP-DA',  # Destination Address (refer to TS 100 901 - chapter 9.1.2.5)
               'mutable': False,
               'contents': [
@@ -135,7 +135,7 @@ class SMS_DataModel(DataModel):
                                         ) },
                   {'name': 'tel_num',
                    'semantics': ['tel num'],
-                   'contents': GSMPhoneNum(val_list=['33612345678'])}
+                   'contents': GSMPhoneNum(values=['33612345678'])}
                 ]},
              {'name': 'TP-PID',  # Protocol Identifier (refer to TS 100 901)
               'determinist': True,
@@ -183,11 +183,11 @@ class SMS_DataModel(DataModel):
              {'name': 'user_data',
               'contents': [
                   {'name': 'UDHL',
-                   'contents': UINT8(int_list=[2])},
+                   'contents': UINT8(values=[2])},
                   {'name': 'IEIa', # 0x70 = command packet identifier
-                   'contents': UINT8(int_list=[0x70], mini=0x70, maxi=0x7F)},
+                   'contents': UINT8(values=[0x70], mini=0x70, maxi=0x7F)},
                   {'name': 'IEDLa',
-                   'contents': UINT8(int_list=[0])},
+                   'contents': UINT8(values=[0])},
                   {'name': 'CPL',  # command packet length
                    'contents': MH.LEN(vt=UINT16_be),
                    'node_args': 'cmd'},

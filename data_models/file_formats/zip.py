@@ -83,7 +83,7 @@ class ZIP_DataModel(DataModel):
                        {'name': 'header',
                         'contents': [
                             {'name': 'sig',
-                             'contents': UINT32_le(int_list=[0x04034b50]),
+                             'contents': UINT32_le(values=[0x04034b50]),
                              'absorb_csts': AbsFullCsts(),
                              'clear_attrs': [MH.Attr.Mutable]},
                             {'name': 'common_attrs',
@@ -111,7 +111,7 @@ class ZIP_DataModel(DataModel):
                                  {'name': 'compressed_size',
                                   'type': MH.Generator,
                                   'contents': lambda x: Node('cts', value_type=\
-                                                            UINT32_le(int_list=[len(x.to_bytes())])),
+                                                            UINT32_le(values=[len(x.to_bytes())])),
                                   'node_args': 'data',
                                   'alt': [
                                       {'conf': 'ABS',
@@ -139,7 +139,7 @@ class ZIP_DataModel(DataModel):
                        {'name': 'data',
                         'type': MH.Generator,
                         'contents': lambda x: Node('cts', value_type=\
-                                                   String(val_list=[zlib.compress(b'a'*x.get_raw_value())])),
+                                                   String(values=[zlib.compress(b'a'*x.get_raw_value())])),
                         'node_args': 'uncompressed_size',
                         'alt': [
                             {'conf': 'ABS',
@@ -171,7 +171,7 @@ class ZIP_DataModel(DataModel):
                   {'conf': 'ABS',
                    'contents': [
                        {'name': 'archive_extra_data_sig',
-                        'contents': UINT32_le(int_list=[0x08064b50]),
+                        'contents': UINT32_le(values=[0x08064b50]),
                         'absorb_csts': AbsFullCsts(),
                         'clear_attrs': [MH.Attr.Mutable]},
                        {'name': 'extra_enc_field_len',
@@ -198,7 +198,7 @@ class ZIP_DataModel(DataModel):
                              'absorb_csts': AbsNoCsts()}
                         ]},
                        {'name': ('sig', 2),
-                        'contents': UINT32_le(int_list=[0x02014b50]),
+                        'contents': UINT32_le(values=[0x02014b50]),
                         'absorb_csts': AbsFullCsts(),
                         'clear_attrs': [MH.Attr.Mutable]},
                        {'name': 'version_made_by',
@@ -259,7 +259,7 @@ class ZIP_DataModel(DataModel):
                   {'weight': 1,
                    'contents': [
                        {'name': 'full',
-                        'contents': String(val_list=['PK\x06\x06'+'A'*20+'PK\x06\x07'+'B'*16])},
+                        'contents': String(values=['PK\x06\x06'+'A'*20+'PK\x06\x07'+'B'*16])},
                    ]},
               ],
               'alt': [
@@ -271,7 +271,7 @@ class ZIP_DataModel(DataModel):
                             {'name': 'end_of_cdir',
                              'contents': [
                                  {'name': 'zip64_sig_record',
-                                  'contents': UINT32_le(int_list=[0x06064b50]),
+                                  'contents': UINT32_le(values=[0x06064b50]),
                                   'absorb_csts': AbsFullCsts(),
                                   'clear_attrs': [MH.Attr.Mutable]},
                                  {'name': 'record_meta_data',
@@ -279,7 +279,7 @@ class ZIP_DataModel(DataModel):
                                   'set_attrs': [MH.Attr.Abs_Postpone],
                                   'absorb_csts': AbsNoCsts()},
                                  {'name': 'zip64_sig_locator',
-                                  'contents': UINT32_le(int_list=[0x07064b50]),
+                                  'contents': UINT32_le(values=[0x07064b50]),
                                   'absorb_csts': AbsFullCsts(),
                                   'clear_attrs': [MH.Attr.Mutable]},
                                  {'name': 'locator_meta_data',
@@ -294,7 +294,7 @@ class ZIP_DataModel(DataModel):
               'exists_if_not': 'ZIP64_specifics',
               'contents': [
                   {'name': ('ecd_sig', 3),
-                   'contents': UINT32_le(int_list=[0x06054b50]),
+                   'contents': UINT32_le(values=[0x06054b50]),
                    'absorb_csts': AbsFullCsts(),
                    'clear_attrs': [MH.Attr.Mutable]},
                   {'name': 'disk_number',
@@ -303,7 +303,7 @@ class ZIP_DataModel(DataModel):
                    'contents': UINT16_le()},
                   {'name': 'total_nb_of_cdir_entries_in_this_disk',
                    'contents': lambda x: Node('cts', value_type=\
-                                              UINT16_le(int_list=[x.get_subnode_qty()])),
+                                              UINT16_le(values=[x.get_subnode_qty()])),
                    'node_args': 'cdir'},
                   {'name': 'total_nb_of_cdir_entries',
                    'clone': 'total_nb_of_cdir_entries_in_this_disk'},
@@ -312,7 +312,7 @@ class ZIP_DataModel(DataModel):
                   {'name': 'off_of_cdir',
                    'type': MH.Generator,
                    'contents': lambda x: Node('cts', value_type=\
-                                              UINT32_le(int_list=[len(x[0].to_bytes()) \
+                                              UINT32_le(values=[len(x[0].to_bytes()) \
                                                                  + len(x[1].to_bytes()) #])),
                                                                  + len(x[2].to_bytes())])),
                    'node_args': ['start_padding', 'file_list', 'archive_desc_header']},

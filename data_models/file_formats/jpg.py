@@ -84,7 +84,7 @@ class JPG_DataModel(DataModel):
              {'name': 'SOF_hdr',
               'contents': [
                   {'name': 'F_marker',
-                   'contents': UINT16_be(int_list=[m for m in markers['SOF'].values()])},
+                   'contents': UINT16_be(values=[m for m in markers['SOF'].values()])},
                   {'name': 'Lf',
                    'contents': MH.LEN(vt=UINT16_be, base_len=8),
                    'node_args': 'F_CompGroup',
@@ -93,7 +93,7 @@ class JPG_DataModel(DataModel):
                         'contents': UINT16_be()}
                    ]},
                   {'name': 'P',
-                   'contents': UINT8(int_list=[8,12])},
+                   'contents': UINT8(values=[8,12])},
                   {'name': 'Y',
                    'contents': UINT16_be(maxi=65535),
                    'specific_fuzzy_vals': [65500]},
@@ -129,7 +129,7 @@ class JPG_DataModel(DataModel):
              {'name': 'SOS_hdr',
               'contents': [
                   {'name': 'S_marker',
-                   'contents': UINT16_be(int_list=[markers['SOS']])},
+                   'contents': UINT16_be(values=[markers['SOS']])},
                   {'name': 'Ls',
                    'contents': MH.LEN(vt=UINT16_be, base_len=6),
                    'node_args': 'S_CompGroup',

@@ -56,14 +56,14 @@ class PNG_DataModel(DataModel):
         {'name': 'PNG_model',
          'contents': [
              {'name': 'sig',
-              'contents': String(val_list=[u'\x89PNG\r\n\x1a\n'], size=8)},
+              'contents': String(values=[u'\x89PNG\r\n\x1a\n'], size=8)},
              {'name': 'chunks',
               'qty': (2,200),
               'contents': [
                    {'name': 'len',
                     'contents': UINT32_be()},
                    {'name': 'type',
-                    'contents': String(val_list=['IHDR', 'IEND', 'IDAT', 'PLTE'], size=4)},
+                    'contents': String(values=['IHDR', 'IEND', 'IDAT', 'PLTE'], size=4)},
                    {'name': 'data_gen',
                     'contents': lambda x: Node('data', value_type=String(size=x[0].cc.get_raw_value())),
                     'node_args': ['len']},
@@ -78,7 +78,7 @@ class PNG_DataModel(DataModel):
         {'name': 'PNG_model',
          'contents': [
              {'name': 'sig',
-              'contents': String(val_list=[u'\x89PNG\r\n\x1a\n'], size=8)},
+              'contents': String(values=[u'\x89PNG\r\n\x1a\n'], size=8)},
              {'name': 'chunks',
               'qty': (2,200),
               'contents': [
@@ -89,27 +89,27 @@ class PNG_DataModel(DataModel):
                        {'weight': 10,
                         'contents': [
                             {'name': 'type1',
-                             'contents': String(val_list=['IHDR'], size=4),
+                             'contents': String(values=['IHDR'], size=4),
                              'absorb_csts': AbsFullCsts()},
                             {'name': 'width',
                              'contents': UINT32_be()},
                             {'name': 'height',
                              'contents': UINT32_be()},
                             {'name': 'bit_depth',
-                             'contents': UINT8(int_list=[1,2,4,8,16])},
+                             'contents': UINT8(values=[1,2,4,8,16])},
                             {'name': 'color_type',
-                             'contents': UINT8(int_list=[0,2,3,4,6])},
+                             'contents': UINT8(values=[0,2,3,4,6])},
                             {'name': 'compression_method',
-                             'contents': UINT8(int_list=[0])},
+                             'contents': UINT8(values=[0])},
                             {'name': 'filter_method',
-                             'contents': UINT8(int_list=[0])},
+                             'contents': UINT8(values=[0])},
                             {'name': 'interlace_method',
-                             'contents': UINT8(int_list=[0,1])}
+                             'contents': UINT8(values=[0,1])}
                         ]},
                        {'weight': 5,
                         'contents': [
                             {'name': 'type2',
-                             'contents': String(val_list=['IEND', 'IDAT', 'PLTE'], size=4)},
+                             'contents': String(values=['IEND', 'IDAT', 'PLTE'], size=4)},
                             {'name': 'data_gen',
                              'contents': lambda x: Node('data', value_type=String(size=x.get_raw_value())),
                              'node_args': 'len'}

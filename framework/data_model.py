@@ -4895,7 +4895,7 @@ class Node(object):
                 self.set_subnodes_basic(subnodes)
 
             elif values is not None:
-                self.set_values(val_list=values)
+                self.set_values(values=values)
 
             elif value_type is not None:
                 self.set_values(value_type=value_type)
@@ -5387,7 +5387,7 @@ class Node(object):
         self._finalize_nonterm_node(conf)
 
 
-    def set_values(self, val_list=None, value_type=None, conf=None, ignore_entanglement=False,
+    def set_values(self, values=None, value_type=None, conf=None, ignore_entanglement=False,
                    preserve_node=True):
         conf = self.__check_conf(conf)
 
@@ -5396,8 +5396,8 @@ class Node(object):
             new_internals.set_contents_from(self.internals[conf])
         self.internals[conf] = new_internals
 
-        if val_list is not None:
-            self.internals[conf].import_value_type(value_type=fvt.String(val_list=val_list))
+        if values is not None:
+            self.internals[conf].import_value_type(value_type=fvt.String(values=values))
 
         elif value_type is not None:
             self.internals[conf].import_value_type(value_type)
@@ -5410,7 +5410,7 @@ class Node(object):
                 if value_type is not None:
                     value_type = copy.copy(value_type)
                     value_type.make_private(forget_current_state=True)
-                e.set_values(val_list=copy.copy(val_list), value_type=value_type, conf=conf, ignore_entanglement=True)
+                e.set_values(values=copy.copy(values), value_type=value_type, conf=conf, ignore_entanglement=True)
 
 
     def set_func(self, func, func_node_arg=None, func_arg=None,

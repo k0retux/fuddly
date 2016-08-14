@@ -62,7 +62,7 @@ class Example_DataModel(DataModel):
 
         tux_subparts_4 = [u'[\u00c2]PLIP', u'[\u00c2]GLOUP']
         ku.add_conf('ALT')
-        ku.set_values(value_type=String(val_list=tux_subparts_4, codec='utf8'), conf='ALT')
+        ku.set_values(value_type=String(values=tux_subparts_4, codec='utf8'), conf='ALT')
         
         idx = Node('IDX')
         idx.set_values(value_type=SINT16_be(mini=4,maxi=40))
@@ -146,7 +146,7 @@ class Example_DataModel(DataModel):
 
 
         evt1 = Node('EVT1')
-        evt1.set_values(value_type=SINT16_be(int_list=[-4]))
+        evt1.set_values(value_type=SINT16_be(values=[-4]))
         evt1.set_fuzz_weight(10)
 
         evt2 = Node('EVT2')
@@ -187,7 +187,7 @@ class Example_DataModel(DataModel):
         # te4.make_determinist()
 
         te5 = Node('EVT5')
-        te5.set_values(value_type=INT_str(int_list=[9]))
+        te5.set_values(value_type=INT_str(values=[9]))
         te5.cc.set_specific_fuzzy_values([666])
         te5.set_fuzz_weight(6)
 
@@ -227,7 +227,7 @@ class Example_DataModel(DataModel):
         # Simple
         
         tval1_bottom = Node('TV1_bottom')
-        vt = UINT16_be(int_list=[1,2,3,4,5,6])
+        vt = UINT16_be(values=[1,2,3,4,5,6])
 
         # vt = BitField(subfield_sizes=[4,4,4],
         #               subfield_val_lists=[[4,2,1], None, [10,12,13]],
@@ -241,7 +241,7 @@ class Example_DataModel(DataModel):
         sep_bottom_alt = Node('sep_bottom_alt', values=[' ;; '])
 
         tval2_bottom = Node('TV2_bottom')
-        vt = UINT16_be(int_list=[0x42,0x43,0x44])
+        vt = UINT16_be(values=[0x42,0x43,0x44])
         tval2_bottom.set_values(value_type=vt)
 
         alt_tag = Node('AltTag', values=[' |AltTag| ', ' +AltTag+ '])
@@ -270,7 +270,7 @@ class Example_DataModel(DataModel):
                 ], conf='ALT')
 
         tval2_bottom3 = Node('TV2_bottom3')
-        vt = UINT32_be(int_list=[0xF, 0x7])
+        vt = UINT32_be(values=[0xF, 0x7])
         tval2_bottom3.set_values(value_type=vt)
         bottom3 = Node('Bottom_3_NT')
         bottom3.set_subnodes_with_csts([
@@ -307,7 +307,7 @@ class Example_DataModel(DataModel):
         ### NonTerm
 
         e = Node('TV2')
-        vt = UINT16_be(int_list=[1,2,3,4,5,6])
+        vt = UINT16_be(values=[1,2,3,4,5,6])
         e.set_values(value_type=vt)
         sep3 = Node('sep3', values=[' # '])
         nt = Node('Bottom_NT')
@@ -319,7 +319,7 @@ class Example_DataModel(DataModel):
         sep2 = Node('sep2', values=[' -|#|- '])
 
         e_val1 = Node('V1', values=['A', 'B', 'C'])
-        e_typedval1 = Node('TV1', value_type=UINT16_be(int_list=[1,2,3,4,5,6]))
+        e_typedval1 = Node('TV1', value_type=UINT16_be(values=[1,2,3,4,5,6]))
         e_val2 = Node('V2', values=['X', 'Y', 'Z'])
         e_val3 = Node('V3', values=['<', '>'])
 
@@ -357,13 +357,13 @@ class Example_DataModel(DataModel):
                     'custo_set': MH.Custo.NTerm.FrozenCopy,
                     'custo_clear': MH.Custo.NTerm.MutableClone,
                     'separator': {'contents': {'name': 'sep',
-                                               'contents': String(val_list=['\n'], absorb_regexp='\n+'),
+                                               'contents': String(values=['\n'], absorb_regexp='\n+'),
                                                'absorb_csts': AbsNoCsts(regexp=True)}},
                     'contents': [{
                         'section_type': MH.Random,
                         'contents': [
 
-                            {'contents': String(val_list=['OK', 'KO'], size=2),
+                            {'contents': String(values=['OK', 'KO'], size=2),
                              'name': 'val2'},
 
                             {'name': 'val21',
@@ -385,7 +385,7 @@ class Example_DataModel(DataModel):
                     'sync_qty_with': 'val1',
                     'alt': [
                         {'conf': 'alt1',
-                         'contents': SINT8(int_list=[1,4,8])},
+                         'contents': SINT8(values=[1,4,8])},
                         {'conf': 'alt2',
                          'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
                          'determinist': True}]}
@@ -395,10 +395,10 @@ class Example_DataModel(DataModel):
               {'section_type': MH.Pick,
                'weights': (10,5),
                'contents': [
-                   {'contents': String(val_list=['PLIP', 'PLOP'], size=4),
+                   {'contents': String(values=['PLIP', 'PLOP'], size=4),
                     'name': ('val21', 2)},
 
-                   {'contents': SINT16_be(int_list=[-1, -3, -5, 7]),
+                   {'contents': SINT16_be(values=[-1, -3, -5, 7]),
                     'name': ('val22', 2)}
                ]}
          ]}
