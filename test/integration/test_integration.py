@@ -55,12 +55,12 @@ def tearDownModule():
 
 
 class TEST_Fuzzy_INT16(Fuzzy_INT16):
-    int_list = ['TEST_OK', 'BLABLA', 'PLOP']
+    values = ['TEST_OK', 'BLABLA', 'PLOP']
 
     def __init__(self, endian=None, supp_list=None):
         self.endian = endian
         self.idx = 0
-        INT.__init__(self, values=self.int_list, determinist=True)
+        INT.__init__(self, values=self.values, determinist=True)
 
     def is_compatible(self, integer):
         return False
@@ -947,7 +947,7 @@ class TestMisc(unittest.TestCase):
 
         print('\nTurn number when Node has changed: %r, number of test cases: %d' % (turn_nb_list, i))
         good_list = [1, 13, 23, 33, 43, 52, 61, 71, 81, 91, 103, 113, 123, 133, 143, 152, 162, 172, 182, 191, 200, 206, 221]
-        msg = "If Fuzzy_<TypedValue>.int_list have been modified in size, the good_list should be updated.\n" \
+        msg = "If Fuzzy_<TypedValue>.values have been modified in size, the good_list should be updated.\n" \
               "If BitField are in random mode [currently put in determinist mode], the fuzzy_mode can produce more" \
               " or less value depending on drawn value when .get_value() is called (if the drawn value is" \
               " the max for instance, drawn_value+1 will not be produced)"

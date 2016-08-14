@@ -781,8 +781,8 @@ class TypedNodeDisruption(NodeConsumerStub):
             # don't use a set to preserve determinism if needed
             supp_list = [val + 1, val - 1]
 
-            if vt.int_list is not None:
-                orig_set = set(vt.int_list)
+            if vt.values is not None:
+                orig_set = set(vt.values)
                 max_oset = max(orig_set)
                 min_oset = min(orig_set)
                 if min_oset != max_oset:

@@ -1201,9 +1201,6 @@ class NodeInternals(object):
     def pretty_print(self, max_size=None):
         return None
 
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
-        raise NotImplementedError
-
     def reset_depth_specific(self, depth):
         pass
 
@@ -5885,17 +5882,17 @@ class Node(object):
                 return node_internals._get_value(conf=conf, recursive=recursive,
                                                  return_node_internals=False)[0]
 
-        node_int_list = self.freeze(conf=conf, recursive=recursive)
-        if isinstance(node_int_list, list):
-            node_int_list = list(flatten(node_int_list))
-            if node_int_list:
-                if issubclass(node_int_list[0].__class__, NodeInternals):
-                    node_int_list = list(map(tobytes_helper, node_int_list))
-                val = b''.join(node_int_list)
+        node_internals_list = self.freeze(conf=conf, recursive=recursive)
+        if isinstance(node_internals_list, list):
+            node_internals_list = list(flatten(node_internals_list))
+            if node_internals_list:
+                if issubclass(node_internals_list[0].__class__, NodeInternals):
+                    node_internals_list = list(map(tobytes_helper, node_internals_list))
+                val = b''.join(node_internals_list)
             else:
                 val = b''
         else:
-            val = node_int_list
+            val = node_internals_list
 
         return val
 
@@ -5924,17 +5921,17 @@ class Node(object):
                 return node_internals._get_value(conf=conf, recursive=recursive,
                                                  return_node_internals=False)[0]
 
-        node_int_list = self._get_value(conf=conf, recursive=recursive)
-        if isinstance(node_int_list, list):
-            node_int_list = list(flatten(node_int_list))
-            if node_int_list:
-                if issubclass(node_int_list[0].__class__, NodeInternals):
-                    node_int_list = list(map(tobytes_helper, node_int_list))
-                val = b''.join(node_int_list)
+        node_internals_list = self._get_value(conf=conf, recursive=recursive)
+        if isinstance(node_internals_list, list):
+            node_internals_list = list(flatten(node_internals_list))
+            if node_internals_list:
+                if issubclass(node_internals_list[0].__class__, NodeInternals):
+                    node_internals_list = list(map(tobytes_helper, node_internals_list))
+                val = b''.join(node_internals_list)
             else:
                 val = b''
         else:
-            val = node_int_list
+            val = node_internals_list
 
         return val
 

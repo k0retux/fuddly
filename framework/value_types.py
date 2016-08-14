@@ -1048,29 +1048,29 @@ class INT(VT):
 
         if values:
             assert default is None
-            self.int_list = list(values)
-            self.int_list_copy = list(self.int_list)
+            self.values = list(values)
+            self.values_copy = list(self.values)
 
         else:
             if mini is not None and maxi is not None:
                 assert maxi >= mini
 
             if mini is not None and maxi is not None and abs(maxi - mini) < 200:
-                self.int_list = list(range(mini, maxi+1))
+                self.values = list(range(mini, maxi + 1))
                 # we keep min/max information as it may be valuable for fuzzing
                 self.mini = self.mini_gen = mini
                 self.maxi = self.maxi_gen = maxi
                 if default is not None:
                     assert mini <= default <= maxi
-                    self.int_list.remove(default)
-                    self.int_list.insert(0,default)
+                    self.values.remove(default)
+                    self.values.insert(0, default)
                     # Once inserted at this place, its position is preserved, especially with reset_state()
                     # (assuming do_absorb() is not called), so we do not save 'default' value in this case
-                self.int_list_copy = copy.copy(self.int_list)
+                self.values_copy = copy.copy(self.values)
 
             else:
-                self.int_list = None
-                self.int_list_copy = None
+                self.values = None
+                self.values_copy = None
                 if self.mini is not None:
                     self.mini = max(mini, self.mini) if mini is not None else self.mini
                     self.mini_gen = self.mini
@@ -1101,26 +1101,26 @@ class INT(VT):
     def make_private(self, forget_current_state):
         # no need to copy self.default (that should not be modified)
         if forget_current_state:
-            self.int_list_copy = copy.copy(self.int_list)
+            self.values_copy = copy.copy(self.values)
             self.idx = 0
             self.exhausted = False
             self.drawn_val = None
         else:
-            self.int_list_copy = copy.copy(self.int_list_copy)
+            self.values_copy = copy.copy(self.values_copy)
 
 
     def absorb_auto_helper(self, blob, constraints):
         off = 0
         # If 'Contents' constraint is set, we seek for int within
-        # int_list.
-        # If INT() does not have int_list, we assume off==0
+        # values.
+        # If INT() does not have values, we assume off==0
         # and let do_absorb() decide if it's OK.
-        if constraints[AbsCsts.Contents] and self.int_list is not None:
-            for v in self.int_list:
+        if constraints[AbsCsts.Contents] and self.values is not None:
+            for v in self.values:
                 if blob.startswith(self._convert_value(v)):
                     break
             else:
-                for v in self.int_list:
+                for v in self.values:
                     off = blob.find(self._convert_value(v))
                     if off > -1:
                         break
@@ -1133,8 +1133,8 @@ class INT(VT):
 
     def do_absorb(self, blob, constraints, off=0, size=None):
 
-        self.orig_int_list = copy.copy(self.int_list)
-        self.orig_int_list_copy = copy.copy(self.int_list_copy)
+        self.orig_values = copy.copy(self.values)
+        self.orig_values_copy = copy.copy(self.values_copy)
         self.orig_drawn_val = self.drawn_val
 
         blob = blob[off:]
@@ -1142,19 +1142,19 @@ class INT(VT):
         val, sz = self._read_value_from(blob, size)
         orig_val = self._unconvert_value(val)
 
-        if self.int_list is not None:
+        if self.values is not None:
             if constraints[AbsCsts.Contents]:
-                if orig_val not in self.int_list:
+                if orig_val not in self.values:
                     raise ValueError('contents not valid!')
-            self.int_list.insert(0, orig_val)
-            self.int_list_copy = copy.copy(self.int_list)
+            self.values.insert(0, orig_val)
+            self.values_copy = copy.copy(self.values)
         else:
             if constraints[AbsCsts.Contents]:
                 if self.maxi is not None and orig_val > self.maxi:
                     raise ValueError('contents not valid! (max limit)')
                 if self.mini is not None and orig_val < self.mini:
                     raise ValueError('contents not valid! (min limit)')
-            # self.int_list = [orig_val]
+            # self.values = [orig_val]
             self.idx = orig_val - self.mini
 
         # self.reset_state()
@@ -1169,14 +1169,14 @@ class INT(VT):
         If needed should be called just after self.do_absorb().
         '''
         if hasattr(self, 'orig_drawn_val'):
-            self.int_list = self.orig_int_list
-            self.int_list_copy = self.orig_int_list_copy
+            self.values = self.orig_values
+            self.values_copy = self.orig_values_copy
             self.drawn_val = self.orig_drawn_val
 
     def do_cleanup_absorb(self):
         if hasattr(self, 'orig_drawn_val'):
-            del self.orig_int_list
-            del self.orig_int_list_copy
+            del self.orig_values
+            del self.orig_values_copy
             del self.orig_drawn_val
 
     def make_determinist(self):
@@ -1186,7 +1186,7 @@ class INT(VT):
         self.determinist = False
 
     def get_value_list(self):
-        return self.int_list
+        return self.values
 
     def get_current_raw_val(self):
         if self.drawn_val is None:
@@ -1201,69 +1201,69 @@ class INT(VT):
 
     def set_value_list(self, new_list):
         ret = False
-        if self.int_list:
+        if self.values:
             l = list(filter(self.is_compatible, new_list))
             if l:
-                self.int_list = l
-                self.int_list_copy = copy.copy(self.int_list)
+                self.values = l
+                self.values_copy = copy.copy(self.values)
                 self.idx = 0
                 ret = True
 
         return ret
 
     def extend_value_list(self, new_list):
-        if self.int_list is not None:
+        if self.values is not None:
             l = list(filter(self.is_compatible, new_list))
             if l:
-                int_list_enc = list(map(self._convert_value, self.int_list))
+                values_enc = list(map(self._convert_value, self.values))
 
                 # We copy the list as it is a class attribute in
                 # Fuzzy_* classes, and we don't want to change the classes
                 # (as we modify the list contents and not the list itself)
-                self.int_list = list(self.int_list)
+                self.values = list(self.values)
 
                 # we don't use a set to preserve the order
                 for v in l:
                     # we check the converted value to avoid duplicated
                     # values (negative and positive value coded the
                     # same) --> especially usefull for the Fuzzy_INT class
-                    if self._convert_value(v) not in int_list_enc:
-                        self.int_list.insert(0, v)
+                    if self._convert_value(v) not in values_enc:
+                        self.values.insert(0, v)
 
                 self.idx = 0
-                self.int_list_copy = copy.copy(self.int_list)
+                self.values_copy = copy.copy(self.values)
 
 
     def remove_value_list(self, value_list):
-        if self.int_list is not None:
+        if self.values is not None:
             l = list(filter(self.is_compatible, value_list))
             if l:
                 # We copy the list as it is a class attribute in
                 # Fuzzy_* classes, and we don't want to change the classes
                 # (as we modify the list contents and not the list itself)
-                self.int_list = list(self.int_list)
+                self.values = list(self.values)
 
                 for v in l:
                     try:
-                        self.int_list.remove(v)
+                        self.values.remove(v)
                     except ValueError:
                         pass
 
                 self.idx = 0
-                self.int_list_copy = copy.copy(self.int_list)
+                self.values_copy = copy.copy(self.values)
 
     def get_value(self):
-        if self.int_list is not None:
-            if not self.int_list_copy:
-                self.int_list_copy = copy.copy(self.int_list)
+        if self.values is not None:
+            if not self.values_copy:
+                self.values_copy = copy.copy(self.values)
 
             if self.determinist:
-                val = self.int_list_copy.pop(0)
+                val = self.values_copy.pop(0)
             else:
-                val = random.choice(self.int_list_copy)
-                self.int_list_copy.remove(val)
-            if not self.int_list_copy:
-                self.int_list_copy = copy.copy(self.int_list)
+                val = random.choice(self.values_copy)
+                self.values_copy.remove(val)
+            if not self.values_copy:
+                self.values_copy = copy.copy(self.values)
                 self.exhausted = True
             else:
                 self.exhausted = False
@@ -1279,7 +1279,7 @@ class INT(VT):
             else:
                 # Finite mode is implemented in this way when 'max -
                 # min' is considered too big to be transformed as an
-                # 'int_list'. It avoids cunsuming too much memory and
+                # 'values'. It avoids cunsuming too much memory and
                 # provide an end result that seems sufficient for such
                 # situation
                 val = random.randint(self.mini_gen, self.maxi_gen)
@@ -1317,9 +1317,9 @@ class INT(VT):
         if self.exhausted:
             self.exhausted = False
 
-        if self.int_list is not None:
-            if self.int_list_copy is not None and self.drawn_val is not None:
-                self.int_list_copy.insert(0, self.drawn_val)
+        if self.values is not None:
+            if self.values_copy is not None and self.drawn_val is not None:
+                self.values_copy.insert(0, self.drawn_val)
         else:
             if self.idx > 0:
                 self.idx -= 1
@@ -1349,16 +1349,16 @@ class INT(VT):
             self.idx = self.default - self.mini_gen
         else:
             self.idx = 0
-        if self.int_list is not None:
-            self.int_list_copy = copy.copy(self.int_list)
+        if self.values is not None:
+            self.values_copy = copy.copy(self.values)
         self.exhausted = False
         self.drawn_val = None
 
     def update_raw_value(self, val):
         if isinstance(val, int):
-            if self.int_list is not None:
-                self.int_list.append(val)
-                self.int_list_copy = copy.copy(self.int_list)
+            if self.values is not None:
+                self.values.append(val)
+                self.values_copy = copy.copy(self.values)
             else:
                 self.idx = val - self.mini
         else:
@@ -1410,7 +1410,7 @@ class Fuzzy_INT(INT):
     '''
     Base class to be inherited and not used directly
     '''
-    int_list = None
+    values = None
     short_cformat = None
 
     def __init__(self, endian=VT.BigEndian, supp_list=None):
@@ -1418,11 +1418,11 @@ class Fuzzy_INT(INT):
         if supp_list:
             self.extend_value_list(supp_list)
 
-        assert(self.int_list is not None)
-        INT.__init__(self, values=self.int_list, determinist=True)
+        assert(self.values is not None)
+        INT.__init__(self, values=self.values, determinist=True)
 
     def make_private(self, forget_current_state):
-        self.int_list = copy.copy(self.int_list)
+        self.values = copy.copy(self.values)
 
     def is_compatible(self, integer):
         if self.mini <= integer <= self.maxi:
@@ -1478,7 +1478,7 @@ class INT_str(with_metaclass(meta_int_str, INT)):
 
 #class Fuzzy_INT_str(Fuzzy_INT, metaclass=meta_int_str):
 class Fuzzy_INT_str(with_metaclass(meta_int_str, Fuzzy_INT)):
-    int_list = [0, 2**32-1, 2**32]
+    values = [0, 2 ** 32 - 1, 2 ** 32]
 
     def is_compatible(self, integer):
         return True
@@ -2291,7 +2291,7 @@ class UINT8(INT8):
 class Fuzzy_INT8(with_metaclass(meta_8b, Fuzzy_INT)):
     mini = 0
     maxi = 2**8-1
-    int_list = [0xFF, 0, 0x01, 0x80, 0x7F]
+    values = [0xFF, 0, 0x01, 0x80, 0x7F]
     short_cformat = 'B'
     alt_short_cformat = 'b'
 
@@ -2330,14 +2330,14 @@ class UINT16_le(INT16):
 class Fuzzy_INT16(with_metaclass(meta_16b, Fuzzy_INT)):
     mini = 0
     maxi = 2**16-1
-    int_list = [0xFFFF, 0, 0x8000, 0x7FFF]
+    values = [0xFFFF, 0, 0x8000, 0x7FFF]
     short_cformat = 'H'
     alt_short_cformat = 'h'
 
 # class Other_Fuzzy_INT16(Fuzzy_INT16):
 #     mini = 0
 #     maxi = 2**16-1
-#     int_list = [0xDEAD, 0xBEEF, 0xCAFE]
+#     values = [0xDEAD, 0xBEEF, 0xCAFE]
 #     short_cformat = 'H'
 #     alt_short_cformat = 'h'
 
@@ -2375,14 +2375,14 @@ class UINT32_le(INT32):
 class Fuzzy_INT32(with_metaclass(meta_32b, Fuzzy_INT)):
     mini = 0
     maxi = 2**32-1
-    int_list = [0xFFFFFFFF, 0, 0x80000000, 0x7FFFFFFF]
+    values = [0xFFFFFFFF, 0, 0x80000000, 0x7FFFFFFF]
     short_cformat = 'L'
     alt_short_cformat = 'l'
 
 # class Other_Fuzzy_INT32(Fuzzy_INT32):
 #     mini = 0
 #     maxi = 2**32-1
-#     int_list = [0xDEADBEEF, 0xAAAAAAAA]
+#     values = [0xDEADBEEF, 0xAAAAAAAA]
 #     short_cformat = 'L'
 #     alt_short_cformat = 'l'
 
@@ -2420,14 +2420,14 @@ class UINT64_le(INT64):
 class Fuzzy_INT64(with_metaclass(meta_64b, Fuzzy_INT)):
     mini = 0
     maxi = 2**64-1
-    int_list = [0xFFFFFFFFFFFFFFFF, 0, 0x8000000000000000, 0x7FFFFFFFFFFFFFFF, 0x1111111111111111]
+    values = [0xFFFFFFFFFFFFFFFF, 0, 0x8000000000000000, 0x7FFFFFFFFFFFFFFF, 0x1111111111111111]
     short_cformat = 'Q'
     alt_short_cformat = 'q'
 
 # class Other_Fuzzy_INT64(Fuzzy_INT64):
 #     mini = 0
 #     maxi = 2**64-1
-#     int_list = [0xDEADBEEFDEADBEEF, 0xAAAAAAAAAAAAAAAA]
+#     values = [0xDEADBEEFDEADBEEF, 0xAAAAAAAAAAAAAAAA]
 #     short_cformat = 'Q'
 #     alt_short_cformat = 'q'
 
@@ -2507,7 +2507,7 @@ if __name__ == "__main__":
 
     print('\n***\n')
 
-    t = UINT16_le(int_list = range(100,400,4))
+    t = UINT16_le(values=range(100,400,4))
     print('size: ', t.size)
     print('class: ', t.__class__)
     print('compatible classes: ')
