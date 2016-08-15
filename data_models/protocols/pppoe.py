@@ -170,7 +170,7 @@ class PPPOE_DataModel(DataModel):
                    'exists_if': (IntCondition(0x9), 'code'),
                    'contents': [
                        (tag_service_name, 1),
-                       # (tag_node, 0, 4)
+                       (tag_node, 0, 4)
                    ]},
                   {'name': '4pado',
                    'shape_type': MH.FullyRandom,
