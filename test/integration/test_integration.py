@@ -1,4 +1,4 @@
-# -*- coding: latin-1 -*-
+# -*- coding: utf8 -*-
 
 ################################################################################
 #
@@ -22,99 +22,45 @@
 #  along with fuddly. If not, see <http://www.gnu.org/licenses/>
 #
 ################################################################################
-
 from __future__ import print_function
 
 import sys
-import copy
-import re
-import functools
-import binascii
 import unittest
-import collections
-
-import argparse
+import ddt
 
 sys.path.append('.')
 
-from framework.data_model import *
 from framework.value_types import *
 
-from libs.external_modules import *
-
 import data_models.example as example
-import data_models.protocols.usb
 
 from framework.fuzzing_primitives import *
-from framework.basic_primitives import *
 from framework.plumbing import *
-from framework.target import *
-from framework.logger import *
-from framework.operator_helpers import *
-
 from framework.data_model_helpers import *
 from framework.encoders import *
 
-mock_module = True
-try:
-    import unittest.mock as mock
-except ImportError:
-    try:
-        import mock
-    except ImportError:
-        mock_module = False
-        print('ERROR: python-mock module is not installed! '
-              'Should be installed to be able to run every test.')
 
-ddt_module = True
-try:
-    import ddt
-except ImportError:
-    ddt_module = False
-    print('ERROR: python(3)-ddt module is not installed! '
-          'Should be installed to be able to run every test.')
+from test import ignore_data_model_specifics, run_long_tests
 
+def setUpModule():
+    global fmk, dm, results
+    fmk = FmkPlumbing()
+    fmk.run_project(name='tuto', dm_name='example')
+    dm = example.data_model
+    results = collections.OrderedDict()
 
-
-parser = argparse.ArgumentParser(description='Process arguments.')
-parser.add_argument('-a', '--all', action='store_true',
-                    help='Run all test cases. Some can take lot of time. (Disabled by default.)')
-parser.add_argument('--ignore-dm-specifics', action='store_true',
-                    help='Run Data Models specific test cases. (Enabled by default.)')
-
-parser.add_argument('--force', action='store_true',
-                    help='Force testing even if some package dependencies are missing. (Disabled by default.)')
-
-test_args = parser.parse_known_args()
-run_long_tests = test_args[0].all
-ignore_data_model_specifics = test_args[0].ignore_dm_specifics
-force = test_args[0].force
-
-if (not mock_module or not ddt_module) and not force:
-    sys.exit("Some dependencies are missing: use --force to run tests anyway.")
+def tearDownModule():
+    global fmk
+    fmk.exit_fmk()
 
 
 class TEST_Fuzzy_INT16(Fuzzy_INT16):
-    int_list = ['TEST_OK', 'BLABLA', 'PLOP']
-    
-    def __init__(self, endian=None, supp_list=None):
-        self.endian = endian
-        self.idx = 0
-        INT.__init__(self, int_list=self.int_list, determinist=True)
-
-    def is_compatible(self, integer):
-        return False
-
-    def _convert_value(self, val):
-        return val
-
-
+    values = [0xDEAD, 0xBEEF, 0xCAFE]
 
 ######## Tests cases begins Here ########
 
 # Legacy --> Need to be revamped
 class TestBasics(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         cls.dm = example.data_model
@@ -176,7 +122,6 @@ class TestBasics(unittest.TestCase):
 
         results['test1'] = res1 and res2
 
-
         print('\n### TEST 2: generate two different EX1 ###')
 
         node_ex1.unfreeze()
@@ -188,7 +133,6 @@ class TestBasics(unittest.TestCase):
         val2 = node_ex1.to_bytes()
 
         results['test2'] = val1 != val2
-
 
         print('\n### TEST 3: generate 4 identical TUX (with last one flatten) ###')
 
@@ -206,7 +150,6 @@ class TestBasics(unittest.TestCase):
         res = val1 == val2 and val1 == val3
         results['test3'] = res
 
-
         print('\n### TEST 4: generate 2 different flatten TUX ###')
 
         tux.unfreeze()
@@ -218,7 +161,6 @@ class TestBasics(unittest.TestCase):
 
         res = val1 != val2
         results['test4'] = res
-
 
         print('\n### TEST 5: test get_node_by_path() ###')
 
@@ -245,7 +187,8 @@ class TestBasics(unittest.TestCase):
         print('name: %s, result: %s' % ('TUX', tux2.get_node_by_path('TUX').get_path_from(tux2)))
         print('name: %s, result: %s' % ('TX', tux2.get_node_by_path('TX').get_path_from(tux2)))
         print('name: %s, result: %s' % ('KU', tux2.get_node_by_path('KU', conf='ALT').get_path_from(tux2)))
-        print('name: %s, result: %s' % ('MARK3', tux2.get_node_by_path('MARK3', conf='ALT').get_path_from(tux2, conf='ALT')))
+        print('name: %s, result: %s' % (
+        'MARK3', tux2.get_node_by_path('MARK3', conf='ALT').get_path_from(tux2, conf='ALT')))
 
         print('\n*** test 5.3: call get_node_by_path() with real regexp')
 
@@ -280,7 +223,7 @@ class TestBasics(unittest.TestCase):
             print(e)
 
         c1 = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
-                                  node_kinds=[NodeInternals_TypedValue])
+                                   node_kinds=[NodeInternals_TypedValue])
 
         c2 = NodeInternalsCriteria(node_kinds=[NodeInternals_TypedValue])
 
@@ -359,11 +302,10 @@ class TestBasics(unittest.TestCase):
 
             print('\n')
 
-    #        val = cmp(csts1, csts2)
+            #        val = cmp(csts1, csts2)
             val = (csts1 > csts2) - (csts1 < csts2)
             if val != 0:
                 res1 = False
-
 
         print('> l2:')
 
@@ -371,12 +313,10 @@ class TestBasics(unittest.TestCase):
         for e in l2:
             print(e.get_path_from(tux2))
 
-
         print('\n*** test 7.2:')
 
         res2 = len(l2) == len(l1)
         print('len(l2) == len(l1)? %r' % res2)
-
 
         print('\n*** test 7.3:')
 
@@ -407,7 +347,6 @@ class TestBasics(unittest.TestCase):
 
         zip_l = zip(c_l1, c_l2)
 
-
         test = 1
         for zl1, zl2 in zip_l:
 
@@ -426,18 +365,16 @@ class TestBasics(unittest.TestCase):
             res3 = True
 
 
-    #    val = cmp(c_l1, c_l2)
+            #    val = cmp(c_l1, c_l2)
         val = (c_l1 > c_l2) - (c_l1 < c_l2)
         if val != 0:
             res3 = False
         else:
             res3 = True
 
-
         print(res1, res2, res3)
 
         results['test7'] = res1 and res2 and res3
-
 
         print('\n### TEST 8: set_current_conf()')
 
@@ -496,7 +433,6 @@ class TestBasics(unittest.TestCase):
         print(msg)
         node_ex1.unfreeze_all()
 
-
         print('\n*** test 8.2:')
 
         print('\n***** test 8.2.0: subparts:')
@@ -509,14 +445,16 @@ class TestBasics(unittest.TestCase):
 
         node_ex1.set_current_conf('ALT', root_regexp=None)
 
+        nonascii_test_str = u'\u00c2'.encode(internal_repr_codec)
+
         node_ex1.unfreeze_all()
         msg = node_ex1.to_bytes()
-        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or b'[\xc2]' not in msg:
+        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or nonascii_test_str not in msg:
             res2 = False
         print(msg)
         node_ex1.unfreeze_all()
         msg = node_ex1.to_bytes()
-        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or b'[\xc2]' not in msg:
+        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or nonascii_test_str not in msg:
             res2 = False
         print(msg)
 
@@ -524,7 +462,7 @@ class TestBasics(unittest.TestCase):
 
         node_ex1.unfreeze_all()
         msg = node_ex1.to_bytes()
-        if b' ~(..)~ ' in msg or b' ~(X)~ ' in msg or b'[<]' in msg or b'[\xc2]' in msg:
+        if b' ~(..)~ ' in msg or b' ~(X)~ ' in msg or b'[<]' in msg or nonascii_test_str in msg:
             res2 = False
         print(msg)
 
@@ -535,7 +473,7 @@ class TestBasics(unittest.TestCase):
 
         node_ex1.unfreeze_all()
         msg = node_ex1.to_bytes()
-        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or b'[\xc2]' not in msg:
+        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or nonascii_test_str not in msg:
             res2 = False
         print(msg)
 
@@ -590,7 +528,6 @@ class TestBasics(unittest.TestCase):
             res5 = False
         print(msg)
 
-
         print('\n*** test 8.6:')
 
         node_ex1 = dm.get_data('EX1')
@@ -602,7 +539,7 @@ class TestBasics(unittest.TestCase):
         # node_kind3 = [NodeInternals_NonTerm]
 
         crit = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
-                                    node_kinds=[NodeInternals_NonTerm])
+                                     node_kinds=[NodeInternals_NonTerm])
 
         node_ex1.unfreeze_all()
 
@@ -616,15 +553,13 @@ class TestBasics(unittest.TestCase):
         else:
             res6 = False
 
-
         print('Results:')
         print(res0, res1, res2, res21, res3, res4, res5, res6)
 
         results['test8'] = res0 and res1 and res2 and res21 and res3 and res4 and res5 and res6
 
-
         print('\n### TEST 9: test the constraint type: =+(w1,w2,...)\n' \
-                  '--> can be False in really rare case')
+              '--> can be False in really rare case')
 
         node_ex1 = dm.get_data('EX1')
 
@@ -635,10 +570,9 @@ class TestBasics(unittest.TestCase):
             if b' ~(..)~ TUX ~(..)~ ' not in msg:
                 res = False
                 break
-            # print(msg)
+                # print(msg)
 
         results['test9'] = res
-
 
         print('\n### TEST 10: test fuzzing primitives')
 
@@ -648,8 +582,6 @@ class TestBasics(unittest.TestCase):
         fuzz_data_tree(node_ex1)
         node_ex1.get_value()
 
-
-
         print('\n### TEST 11: test terminal Node alternate conf')
 
         print('\n*** test 11.1: value type Node')
@@ -658,27 +590,26 @@ class TestBasics(unittest.TestCase):
 
         res1 = True
         msg = node_ex1.to_bytes(conf='ALT')
-        if b'[<]' not in msg or b'[\xc2]' not in msg:
+        if b'[<]' not in msg or nonascii_test_str not in msg:
             res1 = False
         print(msg)
 
         node_ex1.unfreeze_all()
         msg = node_ex1.to_bytes(conf='ALT')
-        if b'[<]' not in msg or b'[\xc2]' not in msg:
+        if b'[<]' not in msg or nonascii_test_str not in msg:
             res1 = False
         print(msg)
 
         node_ex1.unfreeze_all()
         msg = node_ex1.get_node_by_path('TUX$').to_bytes(conf='ALT', recursive=False)
-        if b'[<]' in msg or b'[\xc2]' in msg or b' ~(..)~ TUX ~(..)~ ' not in msg:
+        if b'[<]' in msg or nonascii_test_str in msg or b' ~(..)~ TUX ~(..)~ ' not in msg:
             res1 = False
         print(msg)
-
 
         print('\n*****\n')
 
         crit = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
-                                    node_kinds=[NodeInternals_TypedValue])
+                                     node_kinds=[NodeInternals_TypedValue])
 
         node_ex1.unfreeze_all()
 
@@ -691,7 +622,6 @@ class TestBasics(unittest.TestCase):
             res2 = True
         else:
             res2 = False
-
 
         print('\n*** test 11.2: func type Node')
 
@@ -714,7 +644,6 @@ class TestBasics(unittest.TestCase):
         if b'___' in msg:
             res3 = False
         print(msg)
-
 
         print(res1, res2, res3)
         results['test11'] = res1 and res2 and res3
@@ -761,7 +690,7 @@ class TestBasics(unittest.TestCase):
             print('Node.env: ', e.env)
             print('Node.value_type: ', e.cc.get_value_type())
             vt[e] = e.cc.get_value_type()
-            if issubclass(vt[e].__class__, VT_Alt): #isinstance(vt[e], (BitField, String)):
+            if issubclass(vt[e].__class__, VT_Alt):  # isinstance(vt[e], (BitField, String)):
                 continue
             compat = list(vt[e].compat_cls.values())
             compat.remove(vt[e].__class__)
@@ -828,7 +757,6 @@ class TestBasics(unittest.TestCase):
             e.set_values(value_type=c())
             print("Set new value type '%s' for the Node %s!" % (c, e.name))
 
-
         print('\n> part2:\n')
 
         print('--[ EVT1 ]-----[ EVT2 ]--')
@@ -853,13 +781,10 @@ class TestBasics(unittest.TestCase):
                         e.set_values(value_type=c())
                         print("Set new value type '%s' for the Node %s!" % (c, e.name))
 
-
             evt.unfreeze_all()
-
 
         print(res1, res2)
         results['test13'] = res1 and res2
-
 
         print('\n*** test 14: test Proxy Node')
 
@@ -870,7 +795,7 @@ class TestBasics(unittest.TestCase):
         print('Blend Node starts with:')
         print(msg[:300] + b' ...')
         print('\nAnd ends with:')
-        print(b'... ' + msg[len(msg)-300:len(msg)])
+        print(b'... ' + msg[len(msg) - 300:len(msg)])
 
         print("\n--> Call unfreeze()")
         blend.unfreeze()
@@ -880,7 +805,7 @@ class TestBasics(unittest.TestCase):
         print('\nBlend Node starts with:')
         print(msg2[:300] + b' ...')
         print('\nAnd ends with:')
-        print(b'... ' + msg2[len(msg2)-300:len(msg2)])
+        print(b'... ' + msg2[len(msg2) - 300:len(msg2)])
 
         print('\n### SUMMARY ###')
 
@@ -891,18 +816,14 @@ class TestBasics(unittest.TestCase):
             self.assertTrue(v)
 
 
-
 class TestMisc(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         cls.dm = example.data_model
         cls.dm.load_data_model(fmk._name2dm)
 
-
     def setUp(self):
         pass
-
 
     def _loop_nodes(self, node, cpt=20, criteria_func=None, transform=lambda x: x):
         stop_loop = False
@@ -922,7 +843,7 @@ class TestMisc(unittest.TestCase):
 
         return i
 
-    # @unittest.skip("demonstrating skipping")    
+    # @unittest.skip("demonstrating skipping")
     def test_Node_unfreeze_dont_change_state(self):
         '''
         unfreeze(dont_change_state)
@@ -944,7 +865,6 @@ class TestMisc(unittest.TestCase):
             res1 = True
 
         self.assertTrue(res1)
-
 
     def test_TypedNode_1(self):
         evt = dm.get_data('TVE')
@@ -1005,7 +925,7 @@ class TestMisc(unittest.TestCase):
                 if not issubclass(vt.__class__, VT_Alt):
                     print('  node vt endian:         ', node.cc.get_value_type().endian)
                 print('  node orig value:        (hexlified) {0!s:s}, {0!s:s}'.format(binascii.hexlify(orig_node_val),
-                                                                                     orig_node_val))
+                                                                                      orig_node_val))
                 print('  node corrupted value:   (hexlified) {0!s:s}, {0!s:s}'.format(binascii.hexlify(node.to_bytes()),
                                                                                       node.to_bytes()))
             else:
@@ -1014,14 +934,13 @@ class TestMisc(unittest.TestCase):
                 break
 
         print('\nTurn number when Node has changed: %r, number of test cases: %d' % (turn_nb_list, i))
-        good_list = [1, 9, 17, 25, 33, 42, 51, 59, 67, 75, 83, 91, 99, 107, 115, 124, 132, 140, 148, 157, 166, 172, 187]
-        msg = "If Fuzzy_<TypedValue>.int_list have been modified in size, the good_list should be updated.\n" \
+        good_list = [1, 13, 23, 33, 43, 52, 61, 71, 81, 91, 103, 113, 123, 133, 143, 152, 162, 172, 182, 191, 200, 206, 221]
+        msg = "If Fuzzy_<TypedValue>.values have been modified in size, the good_list should be updated.\n" \
               "If BitField are in random mode [currently put in determinist mode], the fuzzy_mode can produce more" \
               " or less value depending on drawn value when .get_value() is called (if the drawn value is" \
               " the max for instance, drawn_value+1 will not be produced)"
 
         self.assertTrue(turn_nb_list == good_list, msg=msg)
-
 
     def test_Node_Attr_01(self):
         '''
@@ -1042,7 +961,7 @@ class TestMisc(unittest.TestCase):
             evt.unfreeze()
             print(evt.to_bytes())
 
-        # self.assertEqual(idx, )
+            # self.assertEqual(idx, )
 
     def test_NonTerm_Attr_01(self):
         '''
@@ -1055,34 +974,35 @@ class TestMisc(unittest.TestCase):
 
         print('\n -=[ determinist & finite (loop count: %d) ]=- \n' % loop_count)
 
-        nt  = dm.get_data('NonTerm')
+        nt = dm.get_data('NonTerm')
         nt.make_finite(all_conf=True, recursive=True)
         nt.make_determinist(all_conf=True, recursive=True)
         nb = self._loop_nodes(nt, loop_count, criteria_func=crit_func)
-        
-        self.assertEqual(nb, 6)
+
+        self.assertEqual(nb, 18)
 
         print('\n -=[ determinist & infinite (loop count: %d) ]=- \n' % loop_count)
 
-        nt  = dm.get_data('NonTerm')
+        nt = dm.get_data('NonTerm')
         nt.make_infinite(all_conf=True, recursive=True)
         nt.make_determinist(all_conf=True, recursive=True)
         self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
         print('\n -=[ random & infinite (loop count: %d) ]=- \n' % loop_count)
 
-        nt  = dm.get_data('NonTerm')
+        nt = dm.get_data('NonTerm')
         # nt.make_infinite(all_conf=True, recursive=True)
+        nt.make_random(all_conf=True, recursive=True)
         self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
         print('\n -=[ random & finite (loop count: %d) ]=- \n' % loop_count)
 
         nt = dm.get_data('NonTerm')
         nt.make_finite(all_conf=True, recursive=True)
+        nt.make_random(all_conf=True, recursive=True)
         nb = self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
-        self.assertEqual(nb, 6)
-        
+        self.assertEqual(nb, 18)
 
     def test_BitField_Attr_01(self):
         '''
@@ -1094,9 +1014,9 @@ class TestMisc(unittest.TestCase):
 
         print('\n -=[ random & infinite (loop count: %d) ]=- \n' % loop_count)
 
-        t = BitField(subfield_limits=[2,6,10,12],
-                     subfield_val_lists=[[4,2,1], [2,15,16,3], None, [1]],
-                     subfield_val_extremums=[None, None, [3,11], None],
+        t = BitField(subfield_limits=[2, 6, 10, 12],
+                     subfield_values=[[4, 2, 1], [2, 15, 16, 3], None, [1]],
+                     subfield_val_extremums=[None, None, [3, 11], None],
                      padding=0, lsb_padding=True, endian=VT.LittleEndian)
         node = Node('BF', value_type=t)
         node.set_env(Env())
@@ -1104,7 +1024,6 @@ class TestMisc(unittest.TestCase):
         self._loop_nodes(node, loop_count, criteria_func=lambda x: True, transform=binascii.b2a_hex)
 
         print('\n -=[ determinist & infinite (loop count: %d) ]=- \n' % loop_count)
-
 
         node_copy = Node('BF_copy', base_node=node, ignore_frozen_state=True)
         node_copy.set_env(Env())
@@ -1127,13 +1046,12 @@ class TestMisc(unittest.TestCase):
         node_copy3.make_finite(all_conf=True, recursive=True)
         self._loop_nodes(node_copy3, loop_count, criteria_func=lambda x: True, transform=binascii.b2a_hex)
 
-
     def test_BitField(self):
 
         loop_count = 20
         e_bf = Node('BF')
-        vt = BitField(subfield_sizes=[4,4,4],
-                      subfield_val_lists=[[4,2,1], None, [10,13]],
+        vt = BitField(subfield_sizes=[4, 4, 4],
+                      subfield_values=[[4, 2, 1], None, [10, 13]],
                       subfield_val_extremums=[None, [14, 15], None],
                       padding=0, lsb_padding=False, endian=VT.BigEndian)
         e_bf.set_values(value_type=vt)
@@ -1165,7 +1083,7 @@ class TestMisc(unittest.TestCase):
         print('\n***')
         print('Random & finite: (should result in only 1 possible values)')
 
-        vt = BitField(subfield_sizes=[4,4], subfield_val_lists=[[0x3], [0xF]])
+        vt = BitField(subfield_sizes=[4, 4], subfield_values=[[0x3], [0xF]])
         e = Node('bf_test', value_type=vt)
         e.set_env(Env())
         e.make_finite()
@@ -1174,62 +1092,60 @@ class TestMisc(unittest.TestCase):
 
         self.assertEqual(count, 1)
 
-        
     def test_BitField_basic_features(self):
 
         print('\n***** [ BitField ] *****\n')
 
         i = 0
         ok = True
-        t = BitField(subfield_limits=[2,6,8,10], subfield_val_lists=[[1],[1],[1],[1]],
+        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_values=[[1], [1], [1], [1]],
                      padding=0, lsb_padding=False, endian=VT.LittleEndian)
         val = binascii.b2a_hex(t.get_value())
         print(t.pretty_print(), t.drawn_val)
         print('*** [%d] ' % i, val)
         i += 1
         self.assertEqual(val, b'4501')
-            
-        t = BitField(subfield_limits=[2,6,8,10], subfield_val_lists=[[1],[1],[1],[1]],
+
+        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_values=[[1], [1], [1], [1]],
                      padding=0, lsb_padding=True, endian=VT.BigEndian)
         val = binascii.b2a_hex(t.get_value())
         print('*** [%d] ' % i, val)
         i += 1
         self.assertEqual(val, b'5140')
-                 
-        t = BitField(subfield_limits=[2,6,8,10], subfield_val_lists=[[1],[1],[1],[1]],
+
+        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_values=[[1], [1], [1], [1]],
                      padding=1, lsb_padding=True, endian=VT.BigEndian)
         val = binascii.b2a_hex(t.get_value())
         print('*** [%d] ' % i, val)
         i += 1
         self.assertEqual(val, b'517f')
-                         
-        t = BitField(subfield_limits=[2,6,8,10], subfield_val_lists=[[1],[1],[1],[1]],
+
+        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_values=[[1], [1], [1], [1]],
                      padding=0, lsb_padding=False, endian=VT.BigEndian)
         val = binascii.b2a_hex(t.get_value())
         print('*** [%d] ' % i, val)
         i += 1
-        self.assertEqual(val,b'0145')
-                 
-        t = BitField(subfield_limits=[2,6,8,10], subfield_val_lists=[[1],[1],[1],[1]],
+        self.assertEqual(val, b'0145')
+
+        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_values=[[1], [1], [1], [1]],
                      padding=1, lsb_padding=False, endian=VT.BigEndian)
         val = binascii.b2a_hex(t.get_value())
         print('*** [%d] ' % i, val)
         i += 1
         self.assertEqual(val, b'fd45')
-                 
-        t = BitField(subfield_sizes=[2,4,2,2], subfield_val_lists=[[1],[1],[1],[1]],
+
+        t = BitField(subfield_sizes=[2, 4, 2, 2], subfield_values=[[1], [1], [1], [1]],
                      padding=1, lsb_padding=False, endian=VT.BigEndian)
         val = binascii.b2a_hex(t.get_value())
         print('*** [%d] ' % i, val)
         i += 1
-        self.assertEqual(val,b'fd45')
-                 
+        self.assertEqual(val, b'fd45')
 
-        print('\n******** subfield_val_list\n')
+        print('\n******** subfield_values\n')
 
         # Note that 4 in subfield 1 and 16 in subfield 2 are ignored
         # --> 6 different values are output before looping
-        t = BitField(subfield_limits=[2,6,8,10], subfield_val_lists=[[4,2,1],[2,15,16,3],[2,3,0],[1]],
+        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_values=[[4, 2, 1], [2, 15, 16, 3], [2, 3, 0], [1]],
                      padding=0, lsb_padding=True, endian=VT.LittleEndian, determinist=True)
         for i in range(30):
             val = binascii.b2a_hex(t.get_value())
@@ -1244,12 +1160,11 @@ class TestMisc(unittest.TestCase):
             print(t.pretty_print(), ' --> ', t.get_current_raw_val())
             print('*** [%d] ' % i, val[i])
 
-
         print(list(val.values())[:15])
         self.assertEqual(list(val.values())[:15],
-                         [b'c062',b'0062',b'4062',b'806f', b'8060',b'8063',b'8061',
-                          b'8064',b'806e',b'8072',b'8042',b'8052',b'80e2',b'8022',b'80a2'])
-        
+                         [b'c062', b'0062', b'4062', b'806f', b'8060', b'8063', b'8061',
+                          b'8064', b'806e', b'8072', b'8042', b'8052', b'80e2', b'8022', b'80a2'])
+
         print('\n********\n')
 
         t.switch_mode()
@@ -1257,11 +1172,10 @@ class TestMisc(unittest.TestCase):
             val = binascii.b2a_hex(t.get_value())
             print('*** [%d] ' % i, val)
 
-
         print('\n******** subfield_val_extremums\n')
 
         # --> 14 different values are output before looping
-        t = BitField(subfield_limits=[2,6,8,10], subfield_val_extremums=[[1,2],[4,12],[0,3],[2,3]],
+        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_val_extremums=[[1, 2], [4, 12], [0, 3], [2, 3]],
                      padding=0, lsb_padding=True, endian=VT.LittleEndian, determinist=True)
         for i in range(30):
             val = binascii.b2a_hex(t.get_value())
@@ -1274,7 +1188,6 @@ class TestMisc(unittest.TestCase):
             val = binascii.b2a_hex(t.get_value())
             print('*** [%d] ' % i, val)
 
-
         print('\n********\n')
 
         t.switch_mode()
@@ -1282,12 +1195,11 @@ class TestMisc(unittest.TestCase):
             val = binascii.b2a_hex(t.get_value())
             print('*** [%d] ' % i, val)
 
-
         print('\n******** rewind() tests \n')
 
-        t = BitField(subfield_limits=[2,6,8,10],
-                     subfield_val_extremums=[[1,2],[4,12],[0,3],None],
-                     subfield_val_lists=[None, None, None, [3]],
+        t = BitField(subfield_limits=[2, 6, 8, 10],
+                     subfield_val_extremums=[[1, 2], [4, 12], [0, 3], None],
+                     subfield_values=[None, None, None, [3]],
                      padding=0, lsb_padding=False, endian=VT.BigEndian, determinist=True)
 
         val = {}
@@ -1297,12 +1209,11 @@ class TestMisc(unittest.TestCase):
             if t.is_exhausted():
                 break
 
-
         if val[0] != b'0311' or val[1] != b'0312' or val[2] != b'0316' or val[3] != b'031a' \
-           or val[4] != b'031e' or val[5] != b'0322' or val[6] != b'0326' or val[7] != b'032a' \
-                        or val[8] != b'032e' or val[9] != b'0332' or val[10] != b'0372' or val[11] != b'03b2' or val[12] != b'03f2':
+                or val[4] != b'031e' or val[5] != b'0322' or val[6] != b'0326' or val[7] != b'032a' \
+                or val[8] != b'032e' or val[9] != b'0332' or val[10] != b'0372' or val[11] != b'03b2' or val[
+            12] != b'03f2':
             raise ValueError
-
 
         print('\n********\n')
         t.reset_state()
@@ -1334,7 +1245,6 @@ class TestMisc(unittest.TestCase):
         print(binascii.b2a_hex(t.get_value()))
         print(binascii.b2a_hex(t.get_value()))
         print(binascii.b2a_hex(t.get_value()))
-
 
         print('\n******** Fuzzy mode\n')
         t.reset_state()
@@ -1369,34 +1279,29 @@ class TestMisc(unittest.TestCase):
         print(binascii.b2a_hex(t.get_value()))
         print(binascii.b2a_hex(t.get_value()))
 
-
-
-
-        
     def test_BitField_various_features(self):
 
         bf = Node('BF')
-        vt1 = BitField(subfield_sizes=[3,5,7],
-                      subfield_val_lists=[[2,1], None, [10,120]],
-                      subfield_val_extremums=[None, [6, 15], None],
-                      padding=0, lsb_padding=True, endian=VT.BigEndian)
+        vt1 = BitField(subfield_sizes=[3, 5, 7],
+                       subfield_values=[[2, 1], None, [10, 120]],
+                       subfield_val_extremums=[None, [6, 15], None],
+                       padding=0, lsb_padding=True, endian=VT.BigEndian)
         bf.set_values(value_type=vt1)
         bf.make_determinist(all_conf=True, recursive=True)
         bf.set_env(Env())
 
         print('\n -=[ .extend_right() method ]=- \n')
         print('*** before extension')
-        
+
         bf.show()
         # print(bf.get_raw_value())
         # bf.unfreeze()
         # bf.show()
-        
-        vt2 = BitField(subfield_sizes=[4,3,4,4,2],
-                       subfield_val_lists=[None, [3,5], [15], [14], [2]],
+
+        vt2 = BitField(subfield_sizes=[4, 3, 4, 4, 2],
+                       subfield_values=[None, [3, 5], [15], [14], [2]],
                        subfield_val_extremums=[[8, 12], None, None, None, None],
                        padding=0, lsb_padding=False, endian=VT.BigEndian)
-
 
         print('*** after extension')
 
@@ -1416,36 +1321,35 @@ class TestMisc(unittest.TestCase):
 
         bf.unfreeze()
         bf.show()
-        
+
         self.assertEqual(bf.value_type.get_subfield(idx=3), 5)
         self.assertEqual(bf.value_type.get_subfield(idx=0), 3)
-        
-        
+
     def test_BitField_absorb(self):
 
-        vt = BitField(subfield_sizes=[4,4,4],
-                      subfield_val_lists=[[3,2,0xe,1], None, [10,13,3]],
+        vt = BitField(subfield_sizes=[4, 4, 4],
+                      subfield_values=[[3, 2, 0xe, 1], None, [10, 13, 3]],
                       subfield_val_extremums=[None, [14, 15], None],
-                      padding=1,  endian=VT.BigEndian, lsb_padding=True)
+                      padding=1, endian=VT.BigEndian, lsb_padding=True)
         bfield_1 = Node('bfield_1', value_type=vt)
         # bfield.set_env(Env())
 
-        vt = BitField(subfield_sizes=[4,4,4],
-                      subfield_val_lists=[[3,2,0xe,1], None, [10,13,3]],
+        vt = BitField(subfield_sizes=[4, 4, 4],
+                      subfield_values=[[3, 2, 0xe, 1], None, [10, 13, 3]],
                       subfield_val_extremums=[None, [14, 15], None],
-                      padding=0,  endian=VT.BigEndian, lsb_padding=True)
+                      padding=0, endian=VT.BigEndian, lsb_padding=True)
         bfield_2 = Node('bfield_2', value_type=vt)
 
-        vt = BitField(subfield_sizes=[4,4,4],
-                      subfield_val_lists=[[3,2,0xe,1], None, [10,13,3]],
+        vt = BitField(subfield_sizes=[4, 4, 4],
+                      subfield_values=[[3, 2, 0xe, 1], None, [10, 13, 3]],
                       subfield_val_extremums=[None, [14, 15], None],
-                      padding=1,  endian=VT.BigEndian, lsb_padding=False)
+                      padding=1, endian=VT.BigEndian, lsb_padding=False)
         bfield_3 = Node('bfield_3', value_type=vt)
 
-        vt = BitField(subfield_sizes=[4,4,4],
-                      subfield_val_lists=[[3,2,0xe,1], None, [10,13,3]],
+        vt = BitField(subfield_sizes=[4, 4, 4],
+                      subfield_values=[[3, 2, 0xe, 1], None, [10, 13, 3]],
                       subfield_val_extremums=[None, [14, 15], None],
-                      padding=0,  endian=VT.BigEndian, lsb_padding=False)
+                      padding=0, endian=VT.BigEndian, lsb_padding=False)
         bfield_4 = Node('bfield_4', value_type=vt)
 
         # '?\xef' (\x3f\xe0) + padding 0b1111
@@ -1457,7 +1361,6 @@ class TestMisc(unittest.TestCase):
         bfield_1.show()
         self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
         self.assertEqual(size, len(msg))
-
 
         msg = struct.pack('>H', 0x3fe0)
         status, off, size, name = bfield_2.absorb(msg, constraints=AbsFullCsts())
@@ -1479,13 +1382,12 @@ class TestMisc(unittest.TestCase):
 
         msg = struct.pack('>H', 0x3fe)
         status, off, size, name = bfield_4.absorb(msg, constraints=AbsFullCsts())
-        
+
         print('\n ---[message to absorb]---')
         print(repr(msg))
         bfield_4.show()
         self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
         self.assertEqual(size, len(msg))
-
 
     def test_MISC(self):
         '''
@@ -1494,7 +1396,7 @@ class TestMisc(unittest.TestCase):
         loop_count = 20
 
         e = Node('VT1')
-        vt = UINT16_be(int_list=[1,2,3,4,5,6])
+        vt = UINT16_be(values=[1, 2, 3, 4, 5, 6])
         e.set_values(value_type=vt)
         e.set_env(Env())
         e.make_determinist(all_conf=True, recursive=True)
@@ -1512,8 +1414,8 @@ class TestMisc(unittest.TestCase):
         sep = Node('sep', values=[' # '])
         nt = Node('NT')
         nt.set_subnodes_with_csts([
-                1, ['u>', [e, 3], [sep, 1], [e2, 2]]
-                ])
+            1, ['u>', [e, 3], [sep, 1], [e2, 2]]
+        ])
         nt.set_env(Env())
 
         self._loop_nodes(nt, loop_count, criteria_func=lambda x: True)
@@ -1525,8 +1427,8 @@ class TestMisc(unittest.TestCase):
 
         e = Node('NT')
         e.set_subnodes_with_csts([
-                1, ['u>', [v, 2]]
-                ])
+            1, ['u>', [v, 2]]
+        ])
         e.set_env(Env())
         e.make_determinist(recursive=True)
         self._loop_nodes(e, loop_count, criteria_func=lambda x: True)
@@ -1543,9 +1445,7 @@ class TestMisc(unittest.TestCase):
         self._loop_nodes(e, loop_count, criteria_func=lambda x: x.name == 'Middle_NT')
 
 
-
 class TestModelWalker(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         cls.dm = example.data_model
@@ -1555,176 +1455,271 @@ class TestModelWalker(unittest.TestCase):
         pass
 
     def test_NodeConsumerStub_1(self):
-        nt  = self.dm.get_data('Simple')
+        nt = self.dm.get_data('Simple')
         default_consumer = NodeConsumerStub()
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True, max_steps=70):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
+                                                                    max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 49)
-        
+
     def test_NodeConsumerStub_2(self):
-        nt  = self.dm.get_data('Simple')
+        nt = self.dm.get_data('Simple')
         default_consumer = NodeConsumerStub(max_runs_per_node=-1, min_runs_per_node=2)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True, max_steps=70):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
+                                                                    max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 35)
 
     def test_BasicVisitor(self):
-        nt  = self.dm.get_data('Simple')
-        default_consumer = BasicVisitor()
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True, max_steps=70):
+        nt = self.dm.get_data('Simple')
+        default_consumer = BasicVisitor(respect_order=True, consume_also_singleton=False)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
+                                                                    max_steps=200):
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
+        self.assertEqual(idx, 37)
+
+        print('***')
+        nt = self.dm.get_data('Simple')
+        default_consumer = BasicVisitor(respect_order=False, consume_also_singleton=False)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
+                                                                    max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 37)
 
     def test_NonTermVisitor(self):
         print('***')
-        simple  = self.dm.get_data('Simple')
+        idx = 0
+        simple = self.dm.get_data('Simple')
         nonterm_consumer = NonTermVisitor(respect_order=True)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True, max_steps=20):
-            print(colorize('[%d] '%idx + repr(rnode.to_bytes()), rgb=Color.INFO))
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True,
+                                                                    max_steps=20):
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
+        self.assertEqual(idx, 4)
+
+        print('***')
+        idx = 0
+        simple = self.dm.get_data('Simple')
+        nonterm_consumer = NonTermVisitor(respect_order=False)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True,
+                                                                    max_steps=20):
+            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 4)
 
         print('***')
 
-        simple  = self.dm.get_data('Simple')
-        nonterm_consumer = NonTermVisitor(respect_order=False)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True, max_steps=20):
-            print(colorize('[%d] '%idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 4)
+        results = [
+            b' [!] ++++++++++ [!] ::>:: [!] ? [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::>:: [!] ? [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::>:: [!] ? [!] ',
+            b' [!] >>>>>>>>>> [!] ::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::>:: [!] ',
+        ]
 
-        print('***')
-
-        data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')  # idx == 3
+        idx = 0
+        data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')
         nonterm_consumer = NonTermVisitor(respect_order=True)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True, max_steps=10):
-            print(colorize('[%d] '%idx + rnode.to_str(), rgb=Color.INFO))
-        self.assertEqual(idx, 3)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True,
+                                                                    max_steps=50):
+            print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
+            self.assertEqual(rnode.to_bytes(), results[idx-1])
+        self.assertEqual(idx, 6)
 
         print('***')
-
-        data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')  # idx == 3
+        idx = 0
+        data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')
         nonterm_consumer = NonTermVisitor(respect_order=False)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True, max_steps=10):
-            print(colorize('[%d] '%idx + rnode.to_str(), rgb=Color.INFO))
-        self.assertEqual(idx, 3)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True,
+                                                                    max_steps=50):
+            print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
+        self.assertEqual(idx, 6)
 
         print('***')
-
 
     def test_basics(self):
         # data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')
         shape_desc = \
-        {'name': 'shape',
-         'custo_set': MH.Custo.NTerm.FrozenCopy,
-         'custo_clear': MH.Custo.NTerm.MutableClone,
-         'separator': {'contents': {'name': 'sep',
-                                    'contents': String(val_list=[' [!] '])}},
-         'contents': [
+            {'name': 'shape',
+             'custo_set': MH.Custo.NTerm.FrozenCopy,
+             'custo_clear': MH.Custo.NTerm.MutableClone,
+             'separator': {'contents': {'name': 'sep',
+                                        'contents': String(values=[' [!] '])}},
+             'contents': [
 
-             {'weight': 20,
-              'contents': [
-                  {'name': 'prefix1',
-                   'contents': String(size=10, alphabet='+')},
+                 {'weight': 20,
+                  'contents': [
+                      {'name': 'prefix1',
+                       'contents': String(size=10, alphabet='+')},
 
-                  {'name': 'body_top',
-                   'contents': [
+                      {'name': 'body_top',
+                       'contents': [
 
-                       {'name': 'body',
-                        'custo_set': MH.Custo.NTerm.FrozenCopy,
-                        'custo_clear': MH.Custo.NTerm.MutableClone,
-                        'separator': {'contents': {'name': 'sep2',
-                                                   'contents': String(val_list=['::'])}},
-                        'shape_type': MH.Random, # ignored in determnist mode
-                        'contents': [
-                            {'contents': Filename(val_list=['AAA']),
-                             'qty': (0, 4),
-                             'name': 'str'},
-                            {'contents': UINT8(int_list=[0x3E]), # chr(0x3E) == '>'
-                             'name': 'int'}
-                        ]}
-                   ]}
-              ]},
+                           {'name': 'body',
+                            'custo_set': MH.Custo.NTerm.FrozenCopy,
+                            'custo_clear': MH.Custo.NTerm.MutableClone,
+                            'separator': {'contents': {'name': 'sep2',
+                                                       'contents': String(values=['::'])}},
+                            'shape_type': MH.Random,  # ignored in determnist mode
+                            'contents': [
+                                {'contents': Filename(values=['AAA']),
+                                 'qty': (0, 4),
+                                 'name': 'str'},
+                                {'contents': UINT8(values=[0x3E]),  # chr(0x3E) == '>'
+                                 'name': 'int'}
+                            ]}
+                       ]}
+                  ]},
 
-             {'weight': 20,
-              'contents': [
-                  {'name': 'prefix2',
-                   'contents': String(size=10, alphabet='>')},
+                 {'weight': 20,
+                  'contents': [
+                      {'name': 'prefix2',
+                       'contents': String(size=10, alphabet='>')},
 
-                  {'name': 'body'}
-              ]}
-         ]}
+                      {'name': 'body'}
+                  ]}
+             ]}
 
         mh = ModelHelper(delayed_jobs=True)
         data = mh.create_graph_from_desc(shape_desc)
 
         raw_vals = [
-            ' [!] ++++++++++ [!] ::=:: [!] ',
-            ' [!] ++++++++++ [!] ::?:: [!] ',
-            ' [!] ++++++++++ [!] ::\xff:: [!] ',
-            ' [!] ++++++++++ [!] ::\x00:: [!] ',
-            ' [!] ++++++++++ [!] ::\x01:: [!] ',
-            ' [!] ++++++++++ [!] ::\x80:: [!] ',
-            ' [!] ++++++++++ [!] ::\x7f:: [!] ',
-            ' [!] ++++++++++ [!] ::AA\xc3::AA\xc3::>:: [!] ',  # [8] could change has it is a random corrupt_bit
-            ' [!] ++++++++++ [!] ::AAAA::AAA::>:: [!] ',
-            ' [!] ++++++++++ [!] ::::AAA::>:: [!] ',
-            ' [!] ++++++++++ [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
-            ' [!] ++++++++++ [!] ::../../../../../../etc/password::AAA::>:: [!] ',
-            ' [!] ++++++++++ [!] ::../../../../../../Windows/system.ini::AAA::>:: [!] ',
-            ' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
-            ' [!] ++++++++++ [!] ::AAA::AAA::=:: [!] ',
-            ' [!] ++++++++++ [!] ::AAA::AAA::?:: [!] ',
-            ' [!] ++++++++++ [!] ::AAA::AAA::\xff:: [!] ',
-            ' [!] ++++++++++ [!] ::AAA::AAA::\x00:: [!] ',
-            ' [!] ++++++++++ [!] ::AAA::AAA::\x01:: [!] ',
-            ' [!] ++++++++++ [!] ::AAA::AAA::\x80:: [!] ',
-            ' [!] ++++++++++ [!] ::AAA::AAA::\x7f:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::\xc9AA::\xc9AA::>:: [!] ',  # [22] could change has it is a random corrupt_bit
-            ' [!] >>>>>>>>>> [!] ::AAAA::AAA::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::::AAA::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAAXXXXXXXXXXXXXXXXXXXXXXXX::AAA::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::AAA::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::../../../../../../Windows/system.ini::AAA::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAA::AAA::=:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAA::AAA::?:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAA::AAA::\xff:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAA::AAA::\x00:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAA::AAA::\x01:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAA::AAA::\x80:: [!] ',
-            ' [!] >>>>>>>>>> [!] ::AAA::AAA::\x7f:: [!] '
+            b' [!] ++++++++++ [!] ::=:: [!] ',
+            b' [!] ++++++++++ [!] ::?:: [!] ',
+            b' [!] ++++++++++ [!] ::\xff:: [!] ',
+            b' [!] ++++++++++ [!] ::\x00:: [!] ',
+            b' [!] ++++++++++ [!] ::\x01:: [!] ',
+            b' [!] ++++++++++ [!] ::\x80:: [!] ',
+            b' [!] ++++++++++ [!] ::\x7f:: [!] ',
+            b' [!] ++++++++++ [!] ::IAA::AAA::AAA::AAA::>:: [!] ', # [8] could change has it is a random corrupt_bit
+            b' [!] ++++++++++ [!] ::AAAA::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA' + b'XXX'*100 + b'::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::\x00\x00\x00::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::A%n::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::A%s::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA' + b'%n' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA' + b'%s' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA' + b'\"%n\"' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA' + b'\"%s\"' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA' + b'\r\n' * 100 + b'::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::../../../../../../etc/password::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::../../../../../../Windows/system.ini::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::=:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::?:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\xff:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x00:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x01:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x80:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x7f:: [!] ',
+            b' [!] ++++++++++ [!] ::AAQ::AAA::>:: [!] ',  # [30] could change has it is a random corrupt_bit
+            b' [!] ++++++++++ [!] ::AAAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA' + b'XXX'*100 + b'::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::\x00\x00\x00::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::A%n::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::A%s::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA' + b'%n' * 400 + b'::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA' + b'%s' * 400 + b'::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA' + b'\"%n\"' * 400 + b'::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA' + b'\"%s\"' * 400 + b'::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA' + b'\r\n' * 100 + b'::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::../../../../../../etc/password::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::../../../../../../Windows/system.ini::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::=:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::?:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::\xff:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::\x00:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::\x01:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::\x80:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::\x7f:: [!] ',
+
+            b' [!] >>>>>>>>>> [!] ::=:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::?:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\xff:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\x00:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\x01:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\x80:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\x7f:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::QAA::AAA::AAA::AAA::>:: [!] ', # [59] could change has it is a random corrupt_bit
+            b' [!] >>>>>>>>>> [!] ::AAAA::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA' + b'XXX'*100 + b'::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\x00\x00\x00::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::A%n::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::A%s::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA' + b'%n' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA' + b'%s' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA' + b'\"%n\"' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA' + b'\"%s\"' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA' + b'\r\n' * 100 + b'::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::../../../../../../Windows/system.ini::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::=:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::?:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\xff:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x00:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x01:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x80:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x7f:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAC::AAA::>:: [!] ', # [81] could change has it is a random corrupt_bit
+            b' [!] >>>>>>>>>> [!] ::AAAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA' + b'XXX'*100 + b'::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\x00\x00\x00::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::A%n::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::A%s::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA' + b'%n' * 400 + b'::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA' + b'%s' * 400 + b'::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA' + b'\"%n\"' * 400 + b'::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA' + b'\"%s\"' * 400 + b'::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA' + b'\r\n' * 100 + b'::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::../../../../../../Windows/system.ini::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::=:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::?:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\xff:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x00:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x01:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x80:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x7f:: [!] ',
         ]
 
-        tn_consumer = TypedNodeDisruption()
+        tn_consumer = TypedNodeDisruption(respect_order=True)
         ic = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
                                    negative_attrs=[NodeInternals.Separator],
                                    node_kinds=[NodeInternals_TypedValue],
                                    negative_node_subkinds=[String])
         tn_consumer.set_node_interest(internals_criteria=ic)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, tn_consumer, make_determinist=True, max_steps=100):
-            val = rnode.to_str()
-            print(colorize('[%d] '%idx + repr(val), rgb=Color.INFO))
-            if idx not in [8, 22]:
-                self.assertEqual(val, raw_vals[idx-1])
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, tn_consumer, make_determinist=True,
+                                                                    max_steps=200):
+            val = rnode.to_bytes()
+            print(colorize('[%d] ' % idx + repr(val), rgb=Color.INFO))
+            if idx not in [8, 30, 59, 81]:
+                self.assertEqual(val, raw_vals[idx - 1])
 
-        self.assertEqual(idx, 35)
-
+        self.assertEqual(idx, 102)  # should be even
 
     def test_TypedNodeDisruption_1(self):
-        nt  = self.dm.get_data('Simple')
+        nt = self.dm.get_data('Simple')
         tn_consumer = TypedNodeDisruption()
         ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         tn_consumer.set_node_interest(internals_criteria=ic)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True, max_steps=300):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True,
+                                                                    max_steps=300):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 27)
 
-
     def test_TypedNodeDisruption_2(self):
-        nt  = self.dm.get_data('Simple')
+        nt = self.dm.get_data('Simple')
         tn_consumer = TypedNodeDisruption(max_runs_per_node=3, min_runs_per_node=3)
         ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         tn_consumer.set_node_interest(internals_criteria=ic)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True, max_steps=100):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True,
+                                                                    max_steps=100):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 9)
 
@@ -1733,13 +1728,14 @@ class TestModelWalker(unittest.TestCase):
         Test case similar to test_TermNodeDisruption_1() but with more
         powerfull TypedNodeDisruption.
         '''
-        nt  = self.dm.get_data('Simple')
+        nt = self.dm.get_data('Simple')
         tn_consumer = TypedNodeDisruption(max_runs_per_node=1)
         # ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         # tn_consumer.set_node_interest(internals_criteria=ic)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True, max_steps=-1):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True,
+                                                                    max_steps=-1):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 310)
+        self.assertEqual(idx, 450)
 
     def test_TypedNodeDisruption_BitfieldCollapse(self):
         '''
@@ -1750,7 +1746,7 @@ class TestModelWalker(unittest.TestCase):
         data.freeze()
         data.show()
 
-        print('\norig value: '+repr(data['smscmd/TP-DCS'].to_bytes()))
+        print('\norig value: ' + repr(data['smscmd/TP-DCS'].to_bytes()))
         # self.assertEqual(data['smscmd/TP-DCS'].to_bytes(), b'\xF6')
 
         corrupt_table = {
@@ -1772,77 +1768,55 @@ class TestModelWalker(unittest.TestCase):
             print(colorize('\n[%d] ' % idx + repr(rnode['smscmd/TP-DCS$'].to_bytes()), rgb=Color.INFO))
             print('node name: ' + consumed_node.name)
             print('original value:  {!s} ({!s})'.format(binascii.b2a_hex(orig_node_val),
-                  bin(struct.unpack('B', orig_node_val)[0])))
+                                                        bin(struct.unpack('B', orig_node_val)[0])))
             print('corrupted value: {!s} ({!s})'.format(binascii.b2a_hex(consumed_node.to_bytes()),
-                  bin(struct.unpack('B', consumed_node.to_bytes())[0])))
+                                                        bin(struct.unpack('B', consumed_node.to_bytes())[0])))
             print('result: {!s} ({!s})'.format(binascii.b2a_hex(rnode['smscmd/TP-DCS$'].to_bytes()),
-                  bin(struct.unpack('B', rnode['smscmd/TP-DCS$'].to_bytes())[0])))
+                                               bin(struct.unpack('B', rnode['smscmd/TP-DCS$'].to_bytes())[0])))
             rnode.unfreeze(recursive=True, reevaluate_constraints=True)
             rnode.freeze()
             rnode['smscmd/TP-DCS$'].show()
             self.assertEqual(rnode['smscmd/TP-DCS'].to_bytes(), corrupt_table[idx])
 
-
-    def test_TermNodeDisruption_1(self):
-        simple  = self.dm.get_data('Simple')
-        consumer = TermNodeDisruption()
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=-1):
-            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-            # print('original val: %s' % repr(orig_node_val))
-            # print('corrupted val: %s' % repr(consumed_node.to_bytes()))
-        self.assertEqual(idx, 266)
-
-    def test_TermNodeDisruption_2(self):
-        simple  = self.dm.get_data('Simple')
-        consumer = TermNodeDisruption(max_runs_per_node=-1, min_runs_per_node=2)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=-1):
-            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 91)
-
-    def test_TermNodeDisruption_3(self):
-        simple  = self.dm.get_data('Simple')
-        consumer = TermNodeDisruption(specific_args=['1_BANG_1', '2_PLOUF_2'])
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=-1):
-            print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 152)
-
-
     def test_AltConfConsumer_1(self):
-        simple  = self.dm.get_data('Simple')
+        simple = self.dm.get_data('Simple')
         consumer = AltConfConsumer(max_runs_per_node=-1, min_runs_per_node=-1)
         consumer.set_node_interest(owned_confs=['ALT'])
 
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=100):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True,
+                                                                    max_steps=100):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 15)
 
     def test_AltConfConsumer_2(self):
-        simple  = self.dm.get_data('Simple')
+        simple = self.dm.get_data('Simple')
         consumer = AltConfConsumer(max_runs_per_node=2, min_runs_per_node=1)
         consumer.set_node_interest(owned_confs=['ALT'])
 
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=100):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True,
+                                                                    max_steps=100):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 8)
 
     def test_AltConfConsumer_3(self):
-        simple  = self.dm.get_data('Simple')
+        simple = self.dm.get_data('Simple')
         consumer = AltConfConsumer(max_runs_per_node=-1, min_runs_per_node=-1)
         consumer.set_node_interest(owned_confs=['ALT', 'ALT_2'])
 
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=100):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True,
+                                                                    max_steps=100):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 24)
 
     def test_AltConfConsumer_4(self):
-        simple  = self.dm.get_data('Simple')
+        simple = self.dm.get_data('Simple')
         consumer = AltConfConsumer(max_runs_per_node=-1, min_runs_per_node=-1)
         consumer.set_node_interest(owned_confs=['ALT_2', 'ALT'])
 
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True, max_steps=50):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True,
+                                                                    max_steps=50):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 24)
-
 
     def test_JPG(self):
         nt = self.dm.get_data('jpg')
@@ -1856,184 +1830,29 @@ class TestModelWalker(unittest.TestCase):
             except StopIteration:
                 break
 
-        print(colorize('number of imgs: %d'%idx, rgb=Color.INFO))
+        print(colorize('number of imgs: %d' % idx, rgb=Color.INFO))
 
         self.assertEqual(idx, 116)
-
 
     def test_USB(self):
         dm_usb = fmk.get_data_model_by_name('usb')
         dm_usb.build_data_model()
 
-        data  = dm_usb.get_data('CONF')
+        data = dm_usb.get_data('CONF')
         consumer = TypedNodeDisruption()
         consumer.need_reset_when_structure_change = True
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, consumer, make_determinist=True, max_steps=600):
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, consumer, make_determinist=True,
+                                                                    max_steps=600):
             pass
             # print(colorize('[%d] '%idx + repr(rnode.to_bytes()), rgb=Color.INFO))
 
-        print(colorize('number of confs: %d'%idx, rgb=Color.INFO))
+        print(colorize('number of confs: %d' % idx, rgb=Color.INFO))
 
-        self.assertIn(idx, [159])
-
-
-if mock_module and ddt_module:
-    @ddt.ddt
-    class TestBitFieldCondition(unittest.TestCase):
-
-        @classmethod
-        def setUpClass(cls):
-
-            def side_effect(idx):
-                return [0, 1, 2][idx]
-
-            cls.node = mock.Mock()
-            cls.node.get_subfield = mock.MagicMock(side_effect=side_effect)
-
-
-        @ddt.data((1, 1), (1, [1]), ([1], [1]),
-                      (1, (1,)), ((1,), (1,)),
-              (2, [2, 6, 7]), (2, (2, 6, 7)),
-              ([1, 2], [1, [5, 2, 8]]), ([1, 2], [[1], [5, 6, 2]]),
-              ((1, 2), (1, (5, 2, 8))), ((1, 2), ((1,), (5, 6, 2))))
-        @ddt.unpack
-        def test_with_one_argument(self, sf, val):
-            condition = BitFieldCondition(sf=sf, val=val)
-            self.assertTrue(condition.check(TestBitFieldCondition.node))
-
-            condition = BitFieldCondition(sf=sf, neg_val=val)
-            self.assertFalse(condition.check(TestBitFieldCondition.node))
-
-        @ddt.data(([0, 1, 2], [0, [1, 3], None], [None, None, 5]),
-              ([0, 2], [None, 2], [3, None]))
-        @ddt.unpack
-        def test_true_with_both_arguments(self, sf, val, neg_val):
-            condition = BitFieldCondition(sf=sf, val=val, neg_val=neg_val)
-            self.assertTrue(condition.check(TestBitFieldCondition.node))
-
-        @ddt.data(([0, 1, 2], [[0, 1], [1, 2], None], [None, None, [1, 2, 3]]),
-                  ([0, 1, 2], [[1, 2, 3], [1, 2], None], [None, None, [1, 3, 5]]))
-        @ddt.unpack
-        def test_false_with_both_arguments(self, sf, val, neg_val):
-            condition = BitFieldCondition(sf=sf, val=val, neg_val=neg_val)
-            self.assertFalse(condition.check(TestBitFieldCondition.node))
-
-        def test_true_val_has_priority(self):
-            condition = BitFieldCondition(sf=0, val=[0, 4, 5], neg_val=[0, 4, 5])
-            self.assertTrue(condition.check(TestBitFieldCondition.node))
-
-        def test_false_val_has_priority(self):
-            condition = BitFieldCondition(sf=0, val=[3, 4, 5], neg_val=[3, 4, 5])
-            self.assertFalse(condition.check(TestBitFieldCondition.node))
-
-        @ddt.data((None, [2, 3]), ([1], 1), ((1,), 2),
-              ([1], [2, 1, 4]), ((1,), (2, 1, 4)),
-              ([1, 2], [1]))
-        @ddt.unpack
-        def test_invalid_with_one_argument(self, sf, val):
-            self.assertRaises(Exception, BitFieldCondition, sf=sf, val=val)
-            self.assertRaises(Exception, BitFieldCondition, sf=sf, neg_val=val)
-
-        @ddt.data((1, None, None), (None, 2, 3),
-              ([1, 2], [1, None], [2, None]),
-              ([1, 2], [1, 2], [[1, 2, 3, 4]]),
-              ([1, 2], [1, 2, 3, 4], [[1, 2]]))
-        @ddt.unpack
-        def test_invalid_with_both_arguments(self, sf, val, neg_val):
-            self.assertRaises(Exception, BitFieldCondition, sf=sf, val=val, neg_val=neg_val)
-
-    class ProbeUserTest(unittest.TestCase):
-        """Test case used to test the 'ProbeUser' class."""
-
-        @classmethod
-        def setUpClass(cls):
-            pass
-
-        def setUp(self):
-            """Initialisation des tests."""
-
-            self.timeout = 2
-
-            self.probe = Probe()
-            self.probe.main = mock.Mock()
-
-            self.probe.start = mock.Mock()
-            self.probe.stop = mock.Mock()
-
-            self.dm = mock.Mock()
-            self.target = mock.Mock()
-            self.logger = mock.Mock()
-
-            self._set_up_specific()
-
-        def _set_up_specific(self):
-            self.probe_user = ProbeUser(self.probe)
-
-        def tearDown(self):
-            pass
-
-        def test_not_started_is_alive(self):
-            self.assertFalse(self.probe_user.is_alive())
-
-        def test_started_is_alive(self):
-            self.probe_user.start(self.dm, self.target, self.logger)
-            self.assertTrue(self.probe_user.is_alive())
-
-        def test_stopped_is_alive(self):
-            self.probe_user.start(self.dm, self.target, self.logger)
-            self.probe_user.stop()
-            self.probe_user.join(self.timeout)
-            self.assertFalse(self.probe_user.is_alive())
-
-        def test_multiple_starts(self):
-            self.probe_user.start(self.dm, self.target, self.logger)
-            self.assertRaises(RuntimeError, self.probe_user.start, self.dm, self.target, self.logger)
-
-        def test_start_and_stop(self):
-            self.probe_user.start(self.dm, self.target, self.logger)
-            self.probe_user.stop()
-            self.probe_user.join(self.timeout)
-            self.probe.start.assert_called_once_with(self.dm, self.target, self.logger)
-            self.probe.stop.assert_called_once_with(self.dm, self.target, self.logger)
-
-        def test_main(self):
-            test_period = 0.5
-            delta = 0.005
-            self.probe_user.set_probe_delay(0.05)
-
-            print("***** test period:                       " + str(test_period))
-            print("***** tolerate delta between executions: " + str(delta))
-            print("***** probe delay:                       " + str(self.probe_user.get_probe_delay()))
-
-            execution_times = []
-
-            def side_effect(*args, **kwargs):
-                execution_times.append(datetime.datetime.now())
-                return mock.Mock()
-
-            self.probe.main.side_effect = side_effect
-
-            self.probe_user.start(self.dm, self.target, self.logger)
-            time.sleep(test_period)
-            self.probe_user.stop()
-            self.probe_user.join(self.timeout)
-            self.probe.main.assert_called_with(self.dm, self.target, self.logger)
-
-            print("***** probe's main method execution times:             ")
-            for execution in execution_times:
-                print("      " + str(execution))
-
-            self.assertTrue(self.probe.main.call_count >= test_period/self.probe_user.get_probe_delay() - 1)
-
-            for i in range(len(execution_times)):
-                if i+1 < len(execution_times):
-                    self.assertTrue(0 <= (execution_times[i+1] - execution_times[i]).total_seconds()
-                                    - self.probe_user.get_probe_delay() <= delta)
+        self.assertIn(idx, [527])
 
 
 
 class TestNodeFeatures(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         pass
@@ -2042,17 +1861,17 @@ class TestNodeFeatures(unittest.TestCase):
         pass
 
     def test_absorb_nonterm_1(self):
-        nint_1 = Node('nint1', value_type=UINT16_le(int_list=[0xabcd]))
-        nint_2 = Node('nint2', value_type=UINT8(int_list=[0xf]))
-        nint_3 = Node('nint3', value_type=UINT16_be(int_list=[0xeffe]))
+        nint_1 = Node('nint1', value_type=UINT16_le(values=[0xabcd]))
+        nint_2 = Node('nint2', value_type=UINT8(values=[0xf]))
+        nint_3 = Node('nint3', value_type=UINT16_be(values=[0xeffe]))
 
-        nstr_1 = Node('str1', value_type=String(val_list=['TBD1'], max_sz=5))
-        nstr_2 = Node('str2', value_type=String(val_list=['TBD2'], max_sz=8))
+        nstr_1 = Node('str1', value_type=String(values=['TBD1'], max_sz=5))
+        nstr_2 = Node('str2', value_type=String(values=['TBD2'], max_sz=8))
 
-        vt = BitField(subfield_sizes=[4,4,4],
-                      subfield_val_lists=[[3,2,0xe,1], None, [10,13,3]],
+        vt = BitField(subfield_sizes=[4, 4, 4],
+                      subfield_values=[[3, 2, 0xe, 1], None, [10, 13, 3]],
                       subfield_val_extremums=[None, [14, 15], None],
-                      padding=1,  endian=VT.BigEndian, lsb_padding=True)
+                      padding=1, endian=VT.BigEndian, lsb_padding=True)
 
         bfield = Node('bfield', value_type=vt)
         bfield.enforce_absorb_constraints(AbsCsts())
@@ -2066,14 +1885,14 @@ class TestNodeFeatures(unittest.TestCase):
 
         # '?\xef' (\x3f\xe0) + padding 0b1111
         msg_tail = struct.pack('>H', 0x3fe0 + 0b1111)
-        
+
         msg = b'\xe1\xe2\xff\xeeCOOL!\xc1\xc2\x88\x9912345678' + msg_tail
         status, off, size, name = top.absorb(msg, constraints=AbsNoCsts(size=True))
-        
+
         print('\n ---[message to absorb]---')
         print(repr(msg))
-        print('\n ---[absobed message]---')
-        print(top.get_value())
+        print('\n ---[absorbed message]---')
+        print(top.to_bytes())
 
         top.show()
 
@@ -2081,12 +1900,12 @@ class TestNodeFeatures(unittest.TestCase):
         self.assertEqual(size, len(msg))
 
     def test_absorb_nonterm_2(self):
-        nint_1 = Node('nint1', value_type=UINT16_le(int_list=[0xcdab, 0xffee]))
-        nint_2 = Node('nint2', value_type=UINT8(int_list=[0xaf, 0xbf, 0xcf]))
-        nint_3 = Node('nint3', value_type=UINT16_be(int_list=[0xcfab, 0xeffe]))
+        nint_1 = Node('nint1', value_type=UINT16_le(values=[0xcdab, 0xffee]))
+        nint_2 = Node('nint2', value_type=UINT8(values=[0xaf, 0xbf, 0xcf]))
+        nint_3 = Node('nint3', value_type=UINT16_be(values=[0xcfab, 0xeffe]))
 
-        nstr_1 = Node('str1', value_type=String(val_list=['STR1', 'str1'], max_sz=5))
-        nstr_2 = Node('str2', value_type=String(val_list=['STR22', 'str222'], max_sz=8))
+        nstr_1 = Node('str1', value_type=String(values=['STR1', 'str1'], max_sz=5))
+        nstr_2 = Node('str2', value_type=String(values=['STR22', 'str222'], max_sz=8))
 
         top = Node('top')
         top.set_subnodes_with_csts([
@@ -2096,9 +1915,9 @@ class TestNodeFeatures(unittest.TestCase):
         top.set_env(Env())
 
         # 2*nint_3 + nstr_1 + nstr_2 + 2*nint_2 + nint_1
-        msg = '\xef\xfe\xef\xfeSTR1str222\xcf\xab\xcd'
+        msg = b'\xef\xfe\xef\xfeSTR1str222\xcf\xab\xcd'
         status, off, size, name = top.absorb(msg)
-        
+
         print('\n ---[message to absorb]---')
         print(repr(msg))
         print('\n ---[absobed message]---')
@@ -2109,14 +1928,13 @@ class TestNodeFeatures(unittest.TestCase):
         self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
         self.assertEqual(size, len(msg))
 
-
     def test_absorb_nonterm_3(self):
-        nint_1 = Node('nint1', value_type=UINT16_le(int_list=[0xcdab, 0xffee]))
-        nint_2 = Node('nint2', value_type=UINT8(int_list=[0xaf, 0xbf, 0xcf]))
-        nint_3 = Node('nint3', value_type=UINT16_be(int_list=[0xcfab, 0xeffe]))
+        nint_1 = Node('nint1', value_type=UINT16_le(values=[0xcdab, 0xffee]))
+        nint_2 = Node('nint2', value_type=UINT8(values=[0xaf, 0xbf, 0xcf]))
+        nint_3 = Node('nint3', value_type=UINT16_be(values=[0xcfab, 0xeffe]))
 
-        nstr_1 = Node('str1', value_type=String(val_list=['STR1', 'str1'], max_sz=5))
-        nstr_2 = Node('str2', value_type=String(val_list=['STR22', 'str222'], max_sz=8))
+        nstr_1 = Node('str1', value_type=String(values=['STR1', 'str1'], max_sz=5))
+        nstr_2 = Node('str2', value_type=String(values=['STR22', 'str222'], max_sz=8))
 
         top = Node('top')
         top.set_subnodes_with_csts([
@@ -2127,7 +1945,7 @@ class TestNodeFeatures(unittest.TestCase):
 
         msg = 'str222str222'
         status, off, size, name = top.absorb(msg)
-        
+
         print('\n ---[message to absorb]---')
         print(repr(msg))
         print('\n ---[absobed message]---')
@@ -2138,23 +1956,22 @@ class TestNodeFeatures(unittest.TestCase):
         self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
         self.assertEqual(size, len(msg))
 
-
     def test_absorb_nonterm_fullyrandom(self):
-        
-        test_desc = \
-        {'name': 'test',
-         'contents': [
-             {'section_type': MH.FullyRandom,
-              'contents': [
-                  {'contents': String(val_list=['AAA', 'BBBB', 'CCCCC']),
-                   'qty': (2, 3),
-                   'name': 'str'},
 
-                  {'contents': UINT8(int_list=[2, 4, 6, 8]),
-                   'qty': (3, 6),
-                   'name': 'int'}
-              ]}
-         ]}
+        test_desc = \
+            {'name': 'test',
+             'contents': [
+                 {'section_type': MH.FullyRandom,
+                  'contents': [
+                      {'contents': String(values=['AAA', 'BBBB', 'CCCCC']),
+                       'qty': (2, 3),
+                       'name': 'str'},
+
+                      {'contents': UINT8(values=[2, 4, 6, 8]),
+                       'qty': (3, 6),
+                       'name': 'int'}
+                  ]}
+             ]}
 
         for i in range(5):
             mh = ModelHelper()
@@ -2177,7 +1994,6 @@ class TestNodeFeatures(unittest.TestCase):
 
             self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
 
-
     def test_intg_absorb_1(self):
 
         self.helper1_called = False
@@ -2196,22 +2012,22 @@ class TestNodeFeatures(unittest.TestCase):
                 self.helper1_called = True
                 return AbsorbStatus.Reject, 0, None
 
-        nint_1 = Node('nint1', value_type=UINT16_le(int_list=[0xabcd, 0xe2e1]))
+        nint_1 = Node('nint1', value_type=UINT16_le(values=[0xabcd, 0xe2e1]))
         nint_1.set_absorb_helper(nint_1_helper)
 
-        nint_1_alt = Node('nint1_alt', value_type=UINT16_le(int_list=[0xabff, 0xe2ff]))
+        nint_1_alt = Node('nint1_alt', value_type=UINT16_le(values=[0xabff, 0xe2ff]))
         nint_1_alt.set_absorb_helper(nint_1_alt_helper)
 
-        nint_2 = Node('nint2', value_type=UINT8(int_list=[0xf, 0xff, 0xee]))
-        nint_3 = Node('nint3', value_type=UINT16_be(int_list=[0xeffe, 0xc1c2, 0x8899]))
+        nint_2 = Node('nint2', value_type=UINT8(values=[0xf, 0xff, 0xee]))
+        nint_3 = Node('nint3', value_type=UINT16_be(values=[0xeffe, 0xc1c2, 0x8899]))
 
-        nstr_1 = Node('cool', value_type=String(val_list=['TBD1'], size=4, ascii_mode=True))
+        nstr_1 = Node('cool', value_type=String(values=['TBD1'], size=4, codec='ascii'))
         nstr_1.enforce_absorb_constraints(AbsNoCsts(regexp=True))
-        nstr_2 = Node('str2', value_type=String(val_list=['TBD2TBD2', '12345678'], size=8, ascii_mode=True))
+        nstr_2 = Node('str2', value_type=String(values=['TBD2TBD2', '12345678'], size=8, codec='ascii'))
 
-        nint_50 = Node('nint50', value_type=UINT8(int_list=[0xaf, 0xbf, 0xcf]))
-        nint_51 = Node('nint51', value_type=UINT16_be(int_list=[0xcfab, 0xeffe]))
-        nstr_50 = Node('str50', value_type=String(val_list=['HERE', 'IAM'], max_sz=7))
+        nint_50 = Node('nint50', value_type=UINT8(values=[0xaf, 0xbf, 0xcf]))
+        nint_51 = Node('nint51', value_type=UINT16_be(values=[0xcfab, 0xeffe]))
+        nstr_50 = Node('str50', value_type=String(values=['HERE', 'IAM'], max_sz=7))
 
         middle1 = Node('middle1')
         middle1.set_subnodes_with_csts([
@@ -2221,9 +2037,9 @@ class TestNodeFeatures(unittest.TestCase):
                 'u=.', [nint_50, 1], [nint_51, 1], [nstr_50, 2, 3]]
         ])
 
-        yeah = Node('yeah', value_type=String(val_list=['TBD', 'YEAH!'], max_sz=10, ascii_mode=True))
+        yeah = Node('yeah', value_type=String(values=['TBD', 'YEAH!'], max_sz=10, codec='ascii'))
 
-        splitter = Node('splitter', value_type=String(val_list=['TBD'], max_sz=10))
+        splitter = Node('splitter', value_type=String(values=['TBD'], max_sz=10))
         splitter.set_attr(NodeInternals.Abs_Postpone)
         splitter.enforce_absorb_constraints(AbsNoCsts())
 
@@ -2235,20 +2051,20 @@ class TestNodeFeatures(unittest.TestCase):
             else:
                 return AbsorbStatus.Reject, 0, None
 
-        nint_10 = Node('nint10', value_type=UINT16_be(int_list=[0xcbbc, 0xd2d3]))
+        nint_10 = Node('nint10', value_type=UINT16_be(values=[0xcbbc, 0xd2d3]))
         nint_10.set_absorb_helper(nint_10_helper)
-        nstr_10 = Node('str10', value_type=String(val_list=['TBD', 'THE_END'], max_sz=7))
+        nstr_10 = Node('str10', value_type=String(values=['TBD', 'THE_END'], max_sz=7))
 
-        delim = Node('delim', value_type=String(val_list=[','], size=1))
-        nint_20 = Node('nint20', value_type=INT_str(int_list=[1,2,3]))
-        nint_21 = Node('nint21', value_type=UINT8(int_list=[0xbb]))
+        delim = Node('delim', value_type=String(values=[','], size=1))
+        nint_20 = Node('nint20', value_type=INT_str(values=[1, 2, 3]))
+        nint_21 = Node('nint21', value_type=UINT8(values=[0xbb]))
         bottom = Node('bottom', subnodes=[delim, nint_20, nint_21])
 
         bottom2 = Node('bottom2', base_node=bottom)
 
         middle2 = Node('middle2')
         middle2.set_subnodes_with_csts([
-            1, ['u>', [splitter, 1], [nint_10, 1], [bottom, 0, 1], [nstr_10 ,1], [bottom2, 0, 1]]
+            1, ['u>', [splitter, 1], [nint_10, 1], [bottom, 0, 1], [nstr_10, 1], [bottom2, 0, 1]]
         ])
 
         top = Node('top', subnodes=[middle1, yeah, middle2])
@@ -2257,11 +2073,11 @@ class TestNodeFeatures(unittest.TestCase):
         top.set_env(Env())
         top2.set_env(Env())
 
-        msg = '\xe1\xe2\xe1\xe2\xff\xeeCOOL!\xc1\xc2\x88\x9912345678YEAH!\xef\xdf\xbf\xd2\xd3,2\xbbTHE_END'
+        msg = b'\xe1\xe2\xe1\xe2\xff\xeeCOOL!\xc1\xc2\x88\x9912345678YEAH!\xef\xdf\xbf\xd2\xd3,2\xbbTHE_END'
 
         # middle1: nint_1_alt + nint_3 + 2*nint_1 + nstr_1('ABCD') + nint_51 + 2*nstr_50 + nint_50
-        msg2 = '\xff\xe2\x88\x99\xe1\xe2\xcd\xabABCD\xef\xfeIAMHERE\xbfYEAH!\xef\xdf\xbf\xd2\xd3,2\xbbTHE_END'
-        
+        msg2 = b'\xff\xe2\x88\x99\xe1\xe2\xcd\xabABCD\xef\xfeIAMHERE\xbfYEAH!\xef\xdf\xbf\xd2\xd3,2\xbbTHE_END'
+
         print('\n****** top ******\n')
         status, off, size, name = top.absorb(msg)
 
@@ -2297,7 +2113,7 @@ class TestNodeFeatures(unittest.TestCase):
         # Because constraints are untighten on this node, its nominal
         # size of 4 is set to 5 when absorbing b'COOL!'
         self.assertEqual(top.get_node_by_path("top/middle1/cool").to_bytes(), b'COOL!')
-        
+
         self.assertEqual(status2, AbsorbStatus.FullyAbsorbed)
 
         del self.helper1_called
@@ -2308,7 +2124,6 @@ class TestNodeFeatures(unittest.TestCase):
         print('\n***\n')
         print(repr(top["top/middle2"]))
 
-
     def test_show(self):
 
         a = fmk.dm.get_external_node(dm_name='usb', data_id='DEV')
@@ -2317,12 +2132,11 @@ class TestNodeFeatures(unittest.TestCase):
         a.show(raw_limit=400)
         b.show(raw_limit=400)
 
-        b['PNG_00/chunks/chk/height']=a
+        b['PNG_00/chunks/chk/height'] = a
         b.show(raw_limit=400)
 
-        b['PNG_00/chunks/chk/height/idProduct']=a
+        b['PNG_00/chunks/chk/height/idProduct'] = a
         b.show(raw_limit=400)
-
 
     def test_exist_condition_01(self):
         ''' Test existence condition for generation and absorption
@@ -2331,7 +2145,6 @@ class TestNodeFeatures(unittest.TestCase):
         d = fmk.dm.get_external_node(dm_name='mydf', data_id='exist_cond')
 
         for i in range(10):
-
             d_abs = fmk.dm.get_external_node(dm_name='mydf', data_id='exist_cond')
 
             d.show()
@@ -2353,7 +2166,7 @@ class TestNodeFeatures(unittest.TestCase):
             print('-----------------------')
             print('Absorb Status: status=%s, off=%d, sz=%d, name=%s' % (status, off, size, name))
             print(' \_ length of original data: %d' % len(raw_data))
-            print(' \_ remaining: %r' %raw_data[size:])
+            print(' \_ remaining: %r' % raw_data[size:])
             print('-----------------------')
 
             self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
@@ -2364,50 +2177,50 @@ class TestNodeFeatures(unittest.TestCase):
     def test_exist_condition_02(self):
 
         cond_desc = \
-        {'name': 'exist_cond',
-         'shape_type': MH.Ordered,
-         'contents': [
-             {'name': 'opcode',
-              'determinist': True,
-              'contents': String(val_list=['A3', 'A2'])},
+            {'name': 'exist_cond',
+             'shape_type': MH.Ordered,
+             'contents': [
+                 {'name': 'opcode',
+                  'determinist': True,
+                  'contents': String(values=['A3', 'A2'])},
 
-             {'name': 'command_A3',
-              'exists_if': (RawCondition('A3'), 'opcode'),
-              'contents': [
-                  {'name': 'A3_subopcode',
-                   'contents': BitField(subfield_sizes=[15,2,4], endian=VT.BigEndian,
-                                        subfield_val_lists=[None, [1,2], [5,6,12]],
-                                        subfield_val_extremums=[[500, 600], None, None],
-                                        determinist=False)},
+                 {'name': 'command_A3',
+                  'exists_if': (RawCondition('A3'), 'opcode'),
+                  'contents': [
+                      {'name': 'A3_subopcode',
+                       'contents': BitField(subfield_sizes=[15, 2, 4], endian=VT.BigEndian,
+                                            subfield_values=[None, [1, 2], [5, 6, 12]],
+                                            subfield_val_extremums=[[500, 600], None, None],
+                                            determinist=False)},
 
-                  {'name': 'A3_int',
-                   'determinist': True,
-                   'contents': UINT16_be(int_list=[10, 20, 30])},
+                      {'name': 'A3_int',
+                       'determinist': True,
+                       'contents': UINT16_be(values=[10, 20, 30])},
 
-                  {'name': 'A3_deco1',
-                   'exists_if/and': [(IntCondition(val=[10]), 'A3_int'),
-                                     (BitFieldCondition(sf=2, val=[5]), 'A3_subopcode')],
-                   'contents': String(val_list=['$ and_OK $'])},
+                      {'name': 'A3_deco1',
+                       'exists_if/and': [(IntCondition(val=[10]), 'A3_int'),
+                                         (BitFieldCondition(sf=2, val=[5]), 'A3_subopcode')],
+                       'contents': String(values=['$ and_OK $'])},
 
-                  {'name': 'A3_deco2',
-                   'exists_if/and': [(IntCondition(val=[10]), 'A3_int'),
-                                     (BitFieldCondition(sf=2, val=[6]), 'A3_subopcode')],
-                   'contents': String(val_list=['! and_KO !'])}
-              ]},
+                      {'name': 'A3_deco2',
+                       'exists_if/and': [(IntCondition(val=[10]), 'A3_int'),
+                                         (BitFieldCondition(sf=2, val=[6]), 'A3_subopcode')],
+                       'contents': String(values=['! and_KO !'])}
+                  ]},
 
-             {'name': 'A31_payload1',
-              'contents': String(val_list=['$ or_OK $']),
-              'exists_if/or': [(IntCondition(val=[20]), 'A3_int'),
-                               (BitFieldCondition(sf=2, val=[5]), 'A3_subopcode')],
-              },
+                 {'name': 'A31_payload1',
+                  'contents': String(values=['$ or_OK $']),
+                  'exists_if/or': [(IntCondition(val=[20]), 'A3_int'),
+                                   (BitFieldCondition(sf=2, val=[5]), 'A3_subopcode')],
+                  },
 
-             {'name': 'A31_payload2',
-              'contents': String(val_list=['! or_KO !']),
-              'exists_if/or': [(IntCondition(val=[20]), 'A3_int'),
-                               (BitFieldCondition(sf=2, val=[6]), 'A3_subopcode')],
-              },
+                 {'name': 'A31_payload2',
+                  'contents': String(values=['! or_KO !']),
+                  'exists_if/or': [(IntCondition(val=[20]), 'A3_int'),
+                                   (BitFieldCondition(sf=2, val=[6]), 'A3_subopcode')],
+                  },
 
-         ]}
+             ]}
 
         mh = ModelHelper()
         node = mh.create_graph_from_desc(cond_desc)
@@ -2424,52 +2237,52 @@ class TestNodeFeatures(unittest.TestCase):
     def test_generalized_exist_cond(self):
 
         gen_exist_desc = \
-        {'name': 'gen_exist_cond',
-         'separator': {'contents': {'name': 'sep_nl',
-                                    'contents': String(val_list=['\n'], max_sz=100, absorb_regexp=b'[\r\n|\n]+'),
-                                    'absorb_csts': AbsNoCsts(regexp=True)},
-                       'prefix': False, 'suffix': False, 'unique': True},
-         'contents': [
-            {'name': 'body',
-             'qty': 7,
-             'separator': {'contents': {'name': 'sep_space',
-                                        'contents': String(val_list=[' '], max_sz=100, absorb_regexp=b'\s+'),
-                                        'absorb_csts': AbsNoCsts(size=True, regexp=True)},
+            {'name': 'gen_exist_cond',
+             'separator': {'contents': {'name': 'sep_nl',
+                                        'contents': String(values=['\n'], max_sz=100, absorb_regexp='[\r\n|\n]+'),
+                                        'absorb_csts': AbsNoCsts(regexp=True)},
                            'prefix': False, 'suffix': False, 'unique': True},
              'contents': [
-                 {'name': 'val_blk',
-                  'separator': {'contents': {'name': 'sep_quote',
-                                             'contents': String(val_list=['"'])},
-                                'prefix': False, 'suffix': True, 'unique': True},
+                 {'name': 'body',
+                  'qty': 7,
+                  'separator': {'contents': {'name': 'sep_space',
+                                             'contents': String(values=[' '], max_sz=100, absorb_regexp=b'\s+'),
+                                             'absorb_csts': AbsNoCsts(size=True, regexp=True)},
+                                'prefix': False, 'suffix': False, 'unique': True},
                   'contents': [
-                      {'name': 'key',
-                       'contents': String(val_list=['value='])},
-                      {'name': 'val1',
-                       'contents': String(val_list=['Toulouse', 'Paris', 'Lyon']),
-                       'exists_if': (RawCondition('Location'), 'param')},
-                      {'name': 'val2',
-                       'contents': String(val_list=['2015/10/08']),
-                       'exists_if': (RawCondition('Date'), 'param')},
-                      {'name': 'val3',
-                       'contents': String(val_list=['10:40:42']),
-                       'exists_if': (RawCondition('Time'), 'param')},
-                      {'name': 'val4',
-                       'contents': String(val_list=['NOT_SUPPORTED']),
-                       'exists_if': (RawCondition(['NOTSUP1', 'NOTSUP2', 'NOTSUP3']), 'param')}
-                  ]},
-                 {'name': 'name_blk',
-                  'separator': {'contents': {'name': ('sep_quote', 2),
-                                             'contents': String(val_list=['"'])},
-                                'prefix': False, 'suffix': True, 'unique': True},
-                  'contents': [
-                      {'name': ('key', 2),
-                       'contents': String(val_list=['name='])},
-                      {'name': 'param',
-                       'contents': MH.CYCLE(['NOTSUP1', 'Date', 'Time', 'NOTSUP2', 'NOTSUP3', 'Location'],
-                                            depth=2)}
+                      {'name': 'val_blk',
+                       'separator': {'contents': {'name': 'sep_quote',
+                                                  'contents': String(values=['"'])},
+                                     'prefix': False, 'suffix': True, 'unique': True},
+                       'contents': [
+                           {'name': 'key',
+                            'contents': String(values=['value='])},
+                           {'name': 'val1',
+                            'contents': String(values=['Toulouse', 'Paris', 'Lyon']),
+                            'exists_if': (RawCondition('Location'), 'param')},
+                           {'name': 'val2',
+                            'contents': String(values=['2015/10/08']),
+                            'exists_if': (RawCondition('Date'), 'param')},
+                           {'name': 'val3',
+                            'contents': String(values=['10:40:42']),
+                            'exists_if': (RawCondition('Time'), 'param')},
+                           {'name': 'val4',
+                            'contents': String(values=['NOT_SUPPORTED']),
+                            'exists_if': (RawCondition(['NOTSUP1', 'NOTSUP2', 'NOTSUP3']), 'param')}
+                       ]},
+                      {'name': 'name_blk',
+                       'separator': {'contents': {'name': ('sep_quote', 2),
+                                                  'contents': String(values=['"'])},
+                                     'prefix': False, 'suffix': True, 'unique': True},
+                       'contents': [
+                           {'name': ('key', 2),
+                            'contents': String(values=['name='])},
+                           {'name': 'param',
+                            'contents': MH.CYCLE(['NOTSUP1', 'Date', 'Time', 'NOTSUP2', 'NOTSUP3', 'Location'],
+                                                 depth=2)}
+                       ]}
                   ]}
              ]}
-         ]}
 
         mh = ModelHelper(delayed_jobs=True)
         node = mh.create_graph_from_desc(gen_exist_desc)
@@ -2479,59 +2292,58 @@ class TestNodeFeatures(unittest.TestCase):
         print(raw, len(raw))
 
         result = \
-        b'value="NOT_SUPPORTED" name="NOTSUP1"\n' \
-        b'value="2015/10/08" name="Date"\n' \
-        b'value="10:40:42" name="Time"\n' \
-        b'value="NOT_SUPPORTED" name="NOTSUP2"\n' \
-        b'value="NOT_SUPPORTED" name="NOTSUP3"\n' \
-        b'value="Toulouse" name="Location"\n' \
-        b'value="NOT_SUPPORTED" name="NOTSUP1"'
+            b'value="NOT_SUPPORTED" name="NOTSUP1"\n' \
+            b'value="2015/10/08" name="Date"\n' \
+            b'value="10:40:42" name="Time"\n' \
+            b'value="NOT_SUPPORTED" name="NOTSUP2"\n' \
+            b'value="NOT_SUPPORTED" name="NOTSUP3"\n' \
+            b'value="Toulouse" name="Location"\n' \
+            b'value="NOT_SUPPORTED" name="NOTSUP1"'
 
         print('***')
         print(result, len(result))
 
         self.assertEqual(result, raw)
 
-
     def test_pick_and_cond(self):
 
         pick_cond_desc = \
-        {'name': 'pick_cond',
-         'shape_type': MH.Ordered,
-         'contents': [
-             {'name': 'opcode',
-              'determinist': True,
-              'contents': String(val_list=['A1', 'A2', 'A3'])},
-             {'name': 'part1',
-              'determinist': True,
-              'shape_type': MH.Pick,
-              'contents': [
-                  {'name': 'option2',
-                   'exists_if': (RawCondition('A2'), 'opcode'),
-                   'contents': String(val_list=[' 1_KO_A2'])},
-                  {'name': 'option3',
-                   'exists_if': (RawCondition('A3'), 'opcode'),
-                   'contents': String(val_list=[' 1_KO_A3'])},
-                  {'name': 'option1',
-                   'exists_if': (RawCondition('A1'), 'opcode'),
-                   'contents': String(val_list=[' 1_OK_A1'])},
-              ]},
-             {'name': 'part2',
-              'determinist': False,
-              'weights': (100, 100, 1),
-              'shape_type': MH.Pick,
-              'contents': [
-                  {'name': 'optionB',
-                   'exists_if': (RawCondition('A2'), 'opcode'),
-                   'contents': String(val_list=[' 2_KO_A2'])},
-                  {'name': 'optionC',
-                   'exists_if': (RawCondition('A3'), 'opcode'),
-                   'contents': String(val_list=[' 2_KO_A3'])},
-                  {'name': 'optionA',
-                   'exists_if': (RawCondition('A1'), 'opcode'),
-                   'contents': String(val_list=[' 2_OK_A1'])},
-              ]},
-         ]}
+            {'name': 'pick_cond',
+             'shape_type': MH.Ordered,
+             'contents': [
+                 {'name': 'opcode',
+                  'determinist': True,
+                  'contents': String(values=['A1', 'A2', 'A3'])},
+                 {'name': 'part1',
+                  'determinist': True,
+                  'shape_type': MH.Pick,
+                  'contents': [
+                      {'name': 'option2',
+                       'exists_if': (RawCondition('A2'), 'opcode'),
+                       'contents': String(values=[' 1_KO_A2'])},
+                      {'name': 'option3',
+                       'exists_if': (RawCondition('A3'), 'opcode'),
+                       'contents': String(values=[' 1_KO_A3'])},
+                      {'name': 'option1',
+                       'exists_if': (RawCondition('A1'), 'opcode'),
+                       'contents': String(values=[' 1_OK_A1'])},
+                  ]},
+                 {'name': 'part2',
+                  'determinist': False,
+                  'weights': (100, 100, 1),
+                  'shape_type': MH.Pick,
+                  'contents': [
+                      {'name': 'optionB',
+                       'exists_if': (RawCondition('A2'), 'opcode'),
+                       'contents': String(values=[' 2_KO_A2'])},
+                      {'name': 'optionC',
+                       'exists_if': (RawCondition('A3'), 'opcode'),
+                       'contents': String(values=[' 2_KO_A3'])},
+                      {'name': 'optionA',
+                       'exists_if': (RawCondition('A1'), 'opcode'),
+                       'contents': String(values=[' 2_OK_A1'])},
+                  ]},
+             ]}
 
         mh = ModelHelper(delayed_jobs=True)
         node = mh.create_graph_from_desc(pick_cond_desc)
@@ -2544,54 +2356,52 @@ class TestNodeFeatures(unittest.TestCase):
 
         self.assertEqual(result, raw)
 
-
     def test_collapse_padding(self):
 
         padding_desc = \
-        {'name': 'padding',
-         'shape_type': MH.Ordered,
-         'custo_set': MH.Custo.NTerm.CollapsePadding,
-         'contents': [
-             {'name': 'part1',
-              'determinist': True,
-              'contents': BitField(subfield_sizes=[3,1], padding=0, endian=VT.BigEndian,
-                                   subfield_val_lists=[None, [1]],
-                                   subfield_val_extremums=[[1,3], None])
-              },
-             {'name': 'sublevel',
-              'contents': [
-                  {'name': 'part2_o1',
-                   'exists_if': (BitFieldCondition(sf=0, val=[1]), 'part1'),
-                   'contents': BitField(subfield_sizes=[2,2,1], endian=VT.BigEndian,
-                                        subfield_val_lists=[[1,2], [3], [0]])
+            {'name': 'padding',
+             'shape_type': MH.Ordered,
+             'custo_set': MH.Custo.NTerm.CollapsePadding,
+             'contents': [
+                 {'name': 'part1',
+                  'determinist': True,
+                  'contents': BitField(subfield_sizes=[3, 1], padding=0, endian=VT.BigEndian,
+                                       subfield_values=[None, [1]],
+                                       subfield_val_extremums=[[1, 3], None])
                   },
-                  {'name': 'part2_o2',
-                   'exists_if': (BitFieldCondition(sf=0, val=[1]), 'part1'),
-                   'contents': BitField(subfield_sizes=[2,2], endian=VT.BigEndian,
-                                        subfield_val_lists=[[3], [3]])
-                  },
-                  {'name': 'part2_KO',
-                   'exists_if': (BitFieldCondition(sf=0, val=[2]), 'part1'),
-                   'contents': BitField(subfield_sizes=[2,2], endian=VT.BigEndian,
-                                        subfield_val_lists=[[1], [1]])
-                  }
-              ]}
-         ]}
+                 {'name': 'sublevel',
+                  'contents': [
+                      {'name': 'part2_o1',
+                       'exists_if': (BitFieldCondition(sf=0, val=[1]), 'part1'),
+                       'contents': BitField(subfield_sizes=[2, 2, 1], endian=VT.BigEndian,
+                                            subfield_values=[[1, 2], [3], [0]])
+                       },
+                      {'name': 'part2_o2',
+                       'exists_if': (BitFieldCondition(sf=0, val=[1]), 'part1'),
+                       'contents': BitField(subfield_sizes=[2, 2], endian=VT.BigEndian,
+                                            subfield_values=[[3], [3]])
+                       },
+                      {'name': 'part2_KO',
+                       'exists_if': (BitFieldCondition(sf=0, val=[2]), 'part1'),
+                       'contents': BitField(subfield_sizes=[2, 2], endian=VT.BigEndian,
+                                            subfield_values=[[1], [1]])
+                       }
+                  ]}
+             ]}
 
         mh = ModelHelper()
         node = mh.create_graph_from_desc(padding_desc)
 
         print('***')
         raw = node.to_bytes()
-        node.show()   # part2_KO should not be displayed
+        node.show()  # part2_KO should not be displayed
         print(raw, binascii.b2a_hex(raw),
-              list(map(lambda x: bin(x), struct.unpack('>'+'B'*len(raw), raw))),
+              list(map(lambda x: bin(x), struct.unpack('>' + 'B' * len(raw), raw))),
               len(raw))
 
         result = b'\xf6\xc8'
 
         self.assertEqual(result, raw)
-
 
     def test_search_primitive(self):
 
@@ -2612,7 +2422,7 @@ class TestNodeFeatures(unittest.TestCase):
         for n in l1:
             print(' |_ ' + n.name)
             res.append(n.name)
-        
+
         self.assertEqual(len(res), 3)
         self.assertTrue('command_A3' in res)
 
@@ -2622,13 +2432,12 @@ class TestNodeFeatures(unittest.TestCase):
         # data.env.add_node_to_corrupt(node_to_corrupt)
         # corrupted_data = Node(data.name, base_node=data, ignore_frozen_state=False, new_env=True)
         # data.env.remove_node_to_corrupt(node_to_corrupt)
-        
+
         # corrupted_data.unfreeze(recursive=True, reevaluate_constraints=True)
         # corrupted_data.show()
 
 
 class TestNode_NonTerm(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         pass
@@ -2636,22 +2445,20 @@ class TestNode_NonTerm(unittest.TestCase):
     def setUp(self):
         pass
 
-
     def test_infinity(self):
-
         infinity_desc = \
-        {'name': 'infinity',
-         'contents': [
-             {'name': 'prefix',
-              'contents': String(val_list=['A']),
-              'qty': (2,-1)},
-             {'name': 'mid',
-              'contents': String(val_list=['H']),
-              'qty': -1},
-             {'name': 'suffix',
-              'contents': String(val_list=['Z']),
-              'qty': (2,-1)},
-         ]}
+            {'name': 'infinity',
+             'contents': [
+                 {'name': 'prefix',
+                  'contents': String(values=['A']),
+                  'qty': (2, -1)},
+                 {'name': 'mid',
+                  'contents': String(values=['H']),
+                  'qty': -1},
+                 {'name': 'suffix',
+                  'contents': String(values=['Z']),
+                  'qty': (2, -1)},
+             ]}
 
         mh = ModelHelper()
         node = mh.create_graph_from_desc(infinity_desc)
@@ -2680,8 +2487,9 @@ class TestNode_NonTerm(unittest.TestCase):
         self.assertEqual(raw_data, raw_data_abs)
 
         print('\n*** Test with big raw data\n\nOriginal data:')
-        raw_data2 = b'A'*(NodeInternals_NonTerm.INFINITY_LIMIT + 30) + b'H'*(NodeInternals_NonTerm.INFINITY_LIMIT + 1) + \
-                   b'Z'*(NodeInternals_NonTerm.INFINITY_LIMIT - 1)
+        raw_data2 = b'A' * (NodeInternals_NonTerm.INFINITY_LIMIT + 30) + b'H' * (
+        NodeInternals_NonTerm.INFINITY_LIMIT + 1) + \
+                    b'Z' * (NodeInternals_NonTerm.INFINITY_LIMIT - 1)
         print(repr(raw_data2), len(raw_data2))
 
         status, off, size, name = node_abs2.absorb(raw_data2, constraints=AbsFullCsts())
@@ -2695,51 +2503,50 @@ class TestNode_NonTerm(unittest.TestCase):
         self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
         self.assertEqual(raw_data2, raw_data_abs2)
 
-
     def test_separator(self):
         test_desc = \
-        {'name': 'test',
-         'determinist': True,
-         'separator': {'contents': {'name': 'SEP',
-                                    'contents': String(val_list=[' ', '  ', '     '],
-                                                       absorb_regexp=b'\s+', determinist=False),
-                                    'absorb_csts': AbsNoCsts(regexp=True)},
-                       'prefix': True,
-                       'suffix': True,
-                       'unique': True},
-         'contents': [
-             {'section_type': MH.FullyRandom,
-              'contents': [
-                  {'contents': String(val_list=['AAA', 'BBBB', 'CCCCC']),
-                   'qty': (3, 5),
-                   'name': 'str'},
+            {'name': 'test',
+             'determinist': True,
+             'separator': {'contents': {'name': 'SEP',
+                                        'contents': String(values=[' ', '  ', '     '],
+                                                           absorb_regexp='\s+', determinist=False),
+                                        'absorb_csts': AbsNoCsts(regexp=True)},
+                           'prefix': True,
+                           'suffix': True,
+                           'unique': True},
+             'contents': [
+                 {'section_type': MH.FullyRandom,
+                  'contents': [
+                      {'contents': String(values=['AAA', 'BBBB', 'CCCCC']),
+                       'qty': (3, 5),
+                       'name': 'str'},
 
-                  {'contents': String(val_list=['1', '22', '333']),
-                   'qty': (3, 5),
-                   'name': 'int'}
-              ]},
+                      {'contents': String(values=['1', '22', '333']),
+                       'qty': (3, 5),
+                       'name': 'int'}
+                  ]},
 
-             {'section_type': MH.Random,
-              'contents': [
-                  {'contents': String(val_list=['WW', 'YYY', 'ZZZZ']),
-                   'qty': (2, 2),
-                   'name': 'str2'},
+                 {'section_type': MH.Random,
+                  'contents': [
+                      {'contents': String(values=['WW', 'YYY', 'ZZZZ']),
+                       'qty': (2, 2),
+                       'name': 'str2'},
 
-                  {'contents': UINT16_be(int_list=[0xFFFF, 0xAAAA, 0xCCCC]),
-                   'qty': (3, 3),
-                   'name': 'int2'}
-              ]},
-             {'section_type': MH.Pick,
-              'contents': [
-                  {'contents': String(val_list=['LAST', 'END']),
-                   'qty': (2, 2),
-                   'name': 'str3'},
+                      {'contents': UINT16_be(values=[0xFFFF, 0xAAAA, 0xCCCC]),
+                       'qty': (3, 3),
+                       'name': 'int2'}
+                  ]},
+                 {'section_type': MH.Pick,
+                  'contents': [
+                      {'contents': String(values=['LAST', 'END']),
+                       'qty': (2, 2),
+                       'name': 'str3'},
 
-                  {'contents': UINT16_be(int_list=[0xDEAD, 0xBEEF]),
-                   'qty': (2, 2),
-                   'name': 'int3'}
-              ]}
-         ]}
+                      {'contents': UINT16_be(values=[0xDEAD, 0xBEEF]),
+                       'qty': (2, 2),
+                       'name': 'int3'}
+                  ]}
+             ]}
 
         mh = ModelHelper()
         node = mh.create_graph_from_desc(test_desc)
@@ -2770,32 +2577,30 @@ class TestNode_NonTerm(unittest.TestCase):
 
             node.unfreeze()
 
-
     def test_encoding_attr(self):
-
         enc_desc = \
-        {'name': 'enc',
-         'contents': [
-             {'name': 'data0',
-              'contents': String(val_list=['Plip', 'Plop']) },
-             {'name': 'crc',
-              'contents': MH.CRC(vt=UINT32_be, after_encoding=False),
-              'node_args': ['enc_data', 'data2'],
-              'absorb_csts': AbsFullCsts(contents=False) },
-             {'name': 'enc_data',
-              'encoder': GZIP_Enc(6),
-              'set_attrs': [NodeInternals.Abs_Postpone],
-              'contents': [
-                 {'name': 'len',
-                  'contents': MH.LEN(vt=UINT8, after_encoding=False),
-                  'node_args': 'data1',
+            {'name': 'enc',
+             'contents': [
+                 {'name': 'data0',
+                  'contents': String(values=['Plip', 'Plop'])},
+                 {'name': 'crc',
+                  'contents': MH.CRC(vt=UINT32_be, after_encoding=False),
+                  'node_args': ['enc_data', 'data2'],
                   'absorb_csts': AbsFullCsts(contents=False)},
-                 {'name': 'data1',
-                  'contents': UTF16_LE(val_list=['Test!', 'Hello World!']) },
-              ]},
-             {'name': 'data2',
-              'contents': String(val_list=['Red', 'Green', 'Blue']) },
-         ]}
+                 {'name': 'enc_data',
+                  'encoder': GZIP_Enc(6),
+                  'set_attrs': NodeInternals.Abs_Postpone,
+                  'contents': [
+                      {'name': 'len',
+                       'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                       'node_args': 'data1',
+                       'absorb_csts': AbsFullCsts(contents=False)},
+                      {'name': 'data1',
+                       'contents': String(values=['Test!', 'Hello World!'], codec='utf-16-le')},
+                  ]},
+                 {'name': 'data2',
+                  'contents': String(values=['Red', 'Green', 'Blue'])},
+             ]}
 
         mh = ModelHelper()
         node = mh.create_graph_from_desc(enc_desc)
@@ -2824,9 +2629,7 @@ class TestNode_NonTerm(unittest.TestCase):
         self.assertEqual(raw_data, raw_data_abs)
 
 
-
 class TestNode_TypedValue(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         pass
@@ -2834,23 +2637,22 @@ class TestNode_TypedValue(unittest.TestCase):
     def setUp(self):
         pass
 
-
     def test_str_alphabet(self):
 
         alphabet1 = 'ABC'
         alphabet2 = 'NED'
 
         alpha_desc = \
-        {'name': 'top',
-         'contents': [
-             {'name': 'alpha1',
-              'contents': String(min_sz=10, max_sz=100, val_list=['A'*10], alphabet=alphabet1),
-              'set_attrs': [NodeInternals.Abs_Postpone]},
-             {'name': 'alpha2',
-              'contents': String(min_sz=10, max_sz=100, alphabet=alphabet2)},
-             {'name': 'end',
-              'contents': String(val_list=['END'])},
-         ]}
+            {'name': 'top',
+             'contents': [
+                 {'name': 'alpha1',
+                  'contents': String(min_sz=10, max_sz=100, values=['A' * 10], alphabet=alphabet1),
+                  'set_attrs': [NodeInternals.Abs_Postpone]},
+                 {'name': 'alpha2',
+                  'contents': String(min_sz=10, max_sz=100, alphabet=alphabet2)},
+                 {'name': 'end',
+                  'contents': String(values=['END'])},
+             ]}
 
         mh = ModelHelper()
         node = mh.create_graph_from_desc(alpha_desc)
@@ -2869,9 +2671,8 @@ class TestNode_TypedValue(unittest.TestCase):
                 l = chr(l)
             self.assertTrue(l in alphabet)
 
-
         print('\n*** Test with following  data:')
-        raw_data = b'A'*10 + b'DNE'*30+ b'E'*10 + b'END'
+        raw_data = b'A' * 10 + b'DNE' * 30 + b'E' * 10 + b'END'
         print(repr(raw_data), len(raw_data))
 
         status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
@@ -2890,7 +2691,7 @@ class TestNode_TypedValue(unittest.TestCase):
         node_abs.set_env(Env())
 
         print('\n*** Test with following INVALID data:')
-        raw_data = b'A'*10 + b'DNE'*20 + b'F' + b'END'
+        raw_data = b'A' * 10 + b'DNE' * 20 + b'F' + b'END'
         print(repr(raw_data), len(raw_data))
 
         status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
@@ -2905,30 +2706,28 @@ class TestNode_TypedValue(unittest.TestCase):
         self.assertEqual(status, AbsorbStatus.Reject)
         self.assertEqual(raw_data[size:], b'FEND')
 
-
     def test_encoded_str_1(self):
 
         class EncodedStr(String):
-
             def encode(self, val):
-                return val+b'***'
+                return val + b'***'
 
             def decode(self, val):
                 return val[:-3]
 
-        data = ['Test!', 'Hello World!']
+        data = ['Test!', u'Hell\u00fc World!']
         enc_desc = \
-        {'name': 'enc',
-         'contents': [
-             {'name': 'len',
-              'contents': MH.LEN(vt=UINT8, after_encoding=False),
-              'node_args': 'user_data',
-              'absorb_csts': AbsFullCsts(contents=False)},
-             {'name': 'user_data',
-              'contents': EncodedStr(val_list=data) },
-             {'name': 'compressed_data',
-              'contents': GZIP(val_list=data, encoding_arg=6) }
-         ]}
+            {'name': 'enc',
+             'contents': [
+                 {'name': 'len',
+                  'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                  'node_args': 'user_data',
+                  'absorb_csts': AbsFullCsts(contents=False)},
+                 {'name': 'user_data',
+                  'contents': EncodedStr(values=data, codec='utf8')},
+                 {'name': 'compressed_data',
+                  'contents': GZIP(values=data, encoding_arg=6)}
+             ]}
 
         mh = ModelHelper()
         node = mh.create_graph_from_desc(enc_desc)
@@ -2941,8 +2740,8 @@ class TestNode_TypedValue(unittest.TestCase):
         self.assertEqual(struct.unpack('B', node['enc/len$'].to_bytes())[0],
                          len(node['enc/user_data$'].get_raw_value()))
 
-        raw_data = b'\x0CHello World!***' + \
-                   b'x\x9c\xf3H\xcd\xc9\xc9W\x08\xcf/\xcaIQ\x04\x00\x1cI\x04>'
+        raw_data = b'\x0CHell\xC3\xBC World!***' + \
+                   b'x\x9c\xf3H\xcd\xc9\xf9\xa3\x10\x9e_\x94\x93\xa2\x08\x00 \xb1\x04\xcb'
 
         status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
 
@@ -2972,57 +2771,57 @@ class TestNode_TypedValue(unittest.TestCase):
         gsm_dec = gsm_t.decode(gsm_enc)
         self.assertEqual(msg, gsm_dec)
 
-        msg = b'o\xf9 \xe7a'
-        vtype = UTF16_LE(max_sz=20)
-        enc = vtype.encode(msg)
-        dec = vtype.decode(enc)
-        self.assertEqual(msg, dec)
+        # msg = u'où ça'.encode(internal_repr_codec) #' b'o\xf9 \xe7a'
+        # vtype = UTF16_LE(max_sz=20)
+        # enc = vtype.encode(msg)
+        # dec = vtype.decode(enc)
+        # self.assertEqual(msg, dec)
+        #
+        # msg = u'où ça'.encode(internal_repr_codec)
+        # vtype = UTF16_BE(max_sz=20)
+        # enc = vtype.encode(msg)
+        # dec = vtype.decode(enc)
+        # self.assertEqual(msg, dec)
+        #
+        # msg = u'où ça'.encode(internal_repr_codec)
+        # vtype = UTF8(max_sz=20)
+        # enc = vtype.encode(msg)
+        # dec = vtype.decode(enc)
+        # self.assertEqual(msg, dec)
+        #
+        # msg = u'où ça'.encode(internal_repr_codec)
+        # vtype = Codec(max_sz=20, encoding_arg=None)
+        # enc = vtype.encode(msg)
+        # dec = vtype.decode(enc)
+        # self.assertEqual(msg, dec)
+        #
+        # msg = u'où ça'.encode(internal_repr_codec)
+        # vtype = Codec(max_sz=20, encoding_arg='utf_32')
+        # enc = vtype.encode(msg)
+        # dec = vtype.decode(enc)
+        # self.assertEqual(msg, dec)
+        # utf32_enc = b"\xff\xfe\x00\x00o\x00\x00\x00\xf9\x00\x00\x00 " \
+        #             b"\x00\x00\x00\xe7\x00\x00\x00a\x00\x00\x00"
+        # self.assertEqual(enc, utf32_enc)
 
-        msg = b'o\xf9 \xe7a'
-        vtype = UTF16_BE(max_sz=20)
-        enc = vtype.encode(msg)
-        dec = vtype.decode(enc)
-        self.assertEqual(msg, dec)
-
-        msg = b'o\xf9 \xe7a'
-        vtype = UTF8(max_sz=20)
-        enc = vtype.encode(msg)
-        dec = vtype.decode(enc)
-        self.assertEqual(msg, dec)
-
-        msg = b'o\xf9 \xe7a'
-        vtype = Codec(max_sz=20, encoding_arg=None)
-        enc = vtype.encode(msg)
-        dec = vtype.decode(enc)
-        self.assertEqual(msg, dec)
-
-        msg = b'o\xf9 \xe7a'
-        vtype = Codec(max_sz=20, encoding_arg='utf_32')
-        enc = vtype.encode(msg)
-        dec = vtype.decode(enc)
-        self.assertEqual(msg, dec)
-        utf32_enc = b"\xff\xfe\x00\x00o\x00\x00\x00\xf9\x00\x00\x00 " \
-                    b"\x00\x00\x00\xe7\x00\x00\x00a\x00\x00\x00"
-        self.assertEqual(enc, utf32_enc)
-
-        msg = b'Hello World!'*10
+        msg = b'Hello World!' * 10
         vtype = GZIP(max_sz=20)
         enc = vtype.encode(msg)
         dec = vtype.decode(enc)
         self.assertEqual(msg, dec)
 
         msg = b'Hello World!'
-        vtype = Wrapper(max_sz=20, encoding_arg=['<test>', '</test>'])
+        vtype = Wrapper(max_sz=20, encoding_arg=[b'<test>', b'</test>'])
         enc = vtype.encode(msg)
         dec = vtype.decode(enc)
         self.assertEqual(msg, dec)
 
-        vtype = Wrapper(max_sz=20, encoding_arg=['<test>', None])
+        vtype = Wrapper(max_sz=20, encoding_arg=[b'<test>', None])
         enc = vtype.encode(msg)
         dec = vtype.decode(enc)
         self.assertEqual(msg, dec)
 
-        vtype = Wrapper(max_sz=20, encoding_arg=[None, '</test>'])
+        vtype = Wrapper(max_sz=20, encoding_arg=[None, b'</test>'])
         enc = vtype.encode(msg)
         dec = vtype.decode(enc)
         self.assertEqual(msg, dec)
@@ -3030,17 +2829,17 @@ class TestNode_TypedValue(unittest.TestCase):
     def test_encoded_str_2(self):
 
         enc_desc = \
-        {'name': 'enc',
-         'contents': [
-             {'name': 'len',
-              'contents': UINT8()},
-             {'name': 'user_data',
-              'sync_enc_size_with': 'len',
-              'contents': UTF8(val_list=['TEST'])},
-             {'name': 'padding',
-              'contents': String(max_sz=0),
-              'absorb_csts': AbsNoCsts()},
-         ]}
+            {'name': 'enc',
+             'contents': [
+                 {'name': 'len',
+                  'contents': UINT8()},
+                 {'name': 'user_data',
+                  'sync_enc_size_with': 'len',
+                  'contents': String(values=['TEST'], codec='utf8')},
+                 {'name': 'padding',
+                  'contents': String(max_sz=0),
+                  'absorb_csts': AbsNoCsts()},
+             ]}
 
         mh = ModelHelper()
         node = mh.create_graph_from_desc(enc_desc)
@@ -3057,7 +2856,7 @@ class TestNode_TypedValue(unittest.TestCase):
 
         self.assertEqual(status, AbsorbStatus.Reject)
 
-        raw_data = b'\x05' + b'\xC3\xBCber' + b'padding' # \xC3\xBC = � in UTF8
+        raw_data = b'\x05' + b'\xC3\xBCber' + b'padding'  # \xC3\xBC = ü in UTF8
 
         status, off, size, name = node_abs2.absorb(raw_data, constraints=AbsNoCsts(size=True, struct=True))
 
@@ -3072,7 +2871,6 @@ class TestNode_TypedValue(unittest.TestCase):
 
 
 class TestHLAPI(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         pass
@@ -3080,9 +2878,7 @@ class TestHLAPI(unittest.TestCase):
     def setUp(self):
         pass
 
-
     def test_create_graph(self):
-
         a = {'name': 'top',
              'contents': [
                  {'weight': 2,
@@ -3104,8 +2900,8 @@ class TestHLAPI(unittest.TestCase):
                             'contents': [{
                                 'section_type': MH.Ordered,
                                 'contents': [
-                                    
-                                    {'contents': String(val_list=['OK', 'KO'], size=2),
+
+                                    {'contents': String(values=['OK', 'KO'], size=2),
                                      'name': 'val2'},
 
                                     {'name': 'val21',
@@ -3122,12 +2918,12 @@ class TestHLAPI(unittest.TestCase):
                                      'custo_set': MH.Custo.Func.FrozenArgs}
                                 ]}]},
 
-                           {'contents': String(max_sz = 10),
+                           {'contents': String(max_sz=10),
                             'name': 'val3',
                             'sync_qty_with': 'val1',
                             'alt': [
                                 {'conf': 'alt1',
-                                 'contents': SINT8(int_list=[1,4,8])},
+                                 'contents': SINT8(values=[1, 4, 8])},
                                 {'conf': 'alt2',
                                  'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
                                  'determinist': True}]}
@@ -3136,19 +2932,18 @@ class TestHLAPI(unittest.TestCase):
                       # block 2
                       {'section_type': MH.Pick,
                        'contents': [
-                           {'contents': String(val_list=['PLIP', 'PLOP'], size=4),
+                           {'contents': String(values=['PLIP', 'PLOP'], size=4),
                             'name': ('val21', 2)},
 
-                           {'contents': SINT16_be(int_list=[-1, -3, -5, 7]),
+                           {'contents': SINT16_be(values=[-1, -3, -5, 7]),
                             'name': ('val22', 2)}
                        ]}
                   ]}
              ]}
 
-
         mh = ModelHelper(fmk.dm)
         node = mh.create_graph_from_desc(a)
-        
+
         node.set_env(Env())
         node.show()
 
@@ -3165,14 +2960,12 @@ class TestHLAPI(unittest.TestCase):
         node.set_current_conf('alt2', recursive=True)
         node.show()
 
-
         print('\nNode Dictionnary (size: {:d}):\n'.format(len(mh.node_dico)))
         for name, node in mh.node_dico.items():
             print(name, ': ', repr(node), node.c)
 
 
 class TestDataModel(unittest.TestCase):
-
     @classmethod
     def setUpClass(cls):
         pass
@@ -3199,11 +2992,10 @@ class TestDataModel(unittest.TestCase):
             print("Test '%s' Data Model" % dm.name)
             for data_id in dm.data_identifiers():
                 print("Try to get '%s'" % data_id)
-                data  = dm.get_data(data_id)
+                data = dm.get_data(data_id)
                 data.get_value()
                 # data.show(raw_limit=200)
                 print('Success!')
-
 
     def test_generic_generators(self):
         dm = fmk.get_data_model_by_name('mydf')
@@ -3222,9 +3014,8 @@ class TestDataModel(unittest.TestCase):
             print('\nRetrieved offset is: %d' % retr_off)
 
             int_idx = d['off_gen/body$'].get_subnode_idx(d['off_gen/body/int'])
-            off = int_idx * 3 + 10 # +10 for 'prefix' delta
+            off = int_idx * 3 + 10  # +10 for 'prefix' delta
             self.assertEqual(off, retr_off)
-
 
     @unittest.skipIf(ignore_data_model_specifics, "USB specific test cases")
     def test_usb_specifics(self):
@@ -3235,9 +3026,8 @@ class TestDataModel(unittest.TestCase):
         msd_conf = dm.get_data('CONF')
         msd_conf.set_current_conf('MSD', recursive=True)
         msd_conf.show()
-        
-        self.assertEqual(len(msd_conf.to_bytes()), 32)
 
+        self.assertEqual(len(msd_conf.to_bytes()), 32)
 
     @unittest.skipIf(ignore_data_model_specifics, "PNG specific test cases")
     def test_png_specifics(self):
@@ -3289,7 +3079,6 @@ class TestDataModel(unittest.TestCase):
 
             self.assertEqual(jpg_buff, orig_buff)
 
-
     @unittest.skipIf(ignore_data_model_specifics, "Tutorial specific test cases, cover various construction")
     def test_tuto_specifics(self):
         '''Tutorial specific test cases, cover various data model patterns and
@@ -3298,7 +3087,8 @@ class TestDataModel(unittest.TestCase):
         dm = fmk.get_data_model_by_name('mydf')
         dm.load_data_model(fmk._name2dm)
 
-        data_id_list = ['misc_gen', 'len_gen', 'exist_cond', 'separator', 'AbsTest', 'AbsTest2']
+        data_id_list = ['misc_gen', 'len_gen', 'exist_cond', 'separator', 'AbsTest', 'AbsTest2',
+                        'regex']
         loop_cpt = 5
 
         for data_id in data_id_list:
@@ -3327,14 +3117,13 @@ class TestDataModel(unittest.TestCase):
                 print('-----------------------')
                 print('Absorb Status: status=%s, off=%d, sz=%d, name=%s' % (status, off, size, name))
                 print(' \_ length of original data: %d' % len(raw_data))
-                print(' \_ remaining: %r' %raw_data[size:])
+                print(' \_ remaining: %r' % raw_data[size:])
                 print('-----------------------')
 
                 self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
                 self.assertEqual(raw_data, raw_data_abs)
 
                 d.unfreeze()
-
 
     @unittest.skipIf(ignore_data_model_specifics, "ZIP specific test cases")
     def test_zip_specifics(self):
@@ -3351,7 +3140,7 @@ class TestDataModel(unittest.TestCase):
 
         # dm.pkzip.show(raw_limit=400)
         # dm.pkzip.reset_state(recursive=True)
-        status, off, size, name = abszip.absorb(zip_buff, constraints=AbsNoCsts(size=True,struct=True))
+        status, off, size, name = abszip.absorb(zip_buff, constraints=AbsNoCsts(size=True, struct=True))
         # abszip.show(raw_limit=400)
 
         print('\n*** Absorb Status:', status, off, size, name)
@@ -3407,7 +3196,6 @@ class TestDataModel(unittest.TestCase):
                              flen_before - flen_after)
             self.assertEqual(struct.unpack('<L', csz_after)[0], len(NEWVAL))
 
-
         for n, pkzip in dm.zip_dict.items():
 
             zip_buff = pkzip.to_bytes()
@@ -3419,7 +3207,7 @@ class TestDataModel(unittest.TestCase):
             filename = os.path.join(dm.get_import_directory_path(), n)
             with open(filename, 'rb') as orig:
                 orig_buff = orig.read()
-                
+
             err_msg = "Some ZIP are not supported (those that doesn't store compressed_size" \
                       " in the file headers)"
             if zip_buff == orig_buff:
@@ -3431,12 +3219,45 @@ class TestDataModel(unittest.TestCase):
             self.assertEqual(zip_buff, orig_buff, msg=err_msg)
 
 
-class TestFMK(unittest.TestCase):
+@ddt.ddt
+class TestDataModelHelpers(unittest.TestCase):
 
+    @ddt.data("HTTP_version_regex", ("HTTP_version_regex", 17), ("HTTP_version_regex", "whatever"))
+    def test_regex(self, regex_node_name):
+        HTTP_version_classic = \
+            {'name': 'HTTP_version_classic',
+             'contents': [
+                 {'name': 'HTTP_name', 'contents': String(values=["HTTP"])},
+                 {'name': 'slash', 'contents': String(values=["/"])},
+                 {'name': 'major_version_digit', 'contents': String(size=1, values=["0", "1", "2", "3", "4",
+                                                                                      "5", "6", "7", "8", "9"])},
+
+                 {'name': '.', 'contents': String(values=["."])},
+                 {'name': 'minor_version_digit', 'clone': 'major_version_digit'},
+             ]}
+
+        HTTP_version_regex = \
+            {'name': regex_node_name, 'contents': "(HTTP)(/)(0|1|2|3|4|5|6|7|8|9)(\.)(0|1|2|3|4|5|6|7|8|9)"}
+
+        mh = ModelHelper()
+        node_classic = mh.create_graph_from_desc(HTTP_version_classic)
+        node_classic.make_determinist(recursive=True)
+
+        mh = ModelHelper()
+        node_regex = mh.create_graph_from_desc(HTTP_version_regex)
+        node_regex.make_determinist(recursive=True)
+
+        node_regex.show()
+        node_classic.show()
+
+        self.assertEqual(node_regex.to_bytes(), node_classic.to_bytes())
+
+
+class TestFMK(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         fmk.run_project(name='tuto', dm_name='mydf', tg=0)
-    
+
     def setUp(self):
         fmk.reload_all(tg_num=0)
 
@@ -3462,10 +3283,9 @@ class TestFMK(unittest.TestCase):
                 d.pretty_print()
                 fmk.cleanup_dmaker(dmaker_type=dmaker_type, reset_existing_seed=True)
             else:
-                raise ValueError("\n***WARNING: the sequence {!r} returns {!r}!".format(act,d))
+                raise ValueError("\n***WARNING: the sequence {!r} returns {!r}!".format(act, d))
 
         fmk.cleanup_all_dmakers(reset_existing_seed=True)
-
 
     def test_separator_disruptor(self):
         for i in range(100):
@@ -3476,7 +3296,6 @@ class TestFMK(unittest.TestCase):
             fmk.log_data(d)
 
         self.assertGreater(i, 2)
-
 
     def test_struct_disruptor(self):
 
@@ -3576,7 +3395,6 @@ class TestFMK(unittest.TestCase):
         print(fbk)
         self.assertIn(b'You loose!', fbk)
 
-
     def test_scenario_infra(self):
 
         print('\n*** test scenario SC_NO_REGEN')
@@ -3599,31 +3417,12 @@ class TestFMK(unittest.TestCase):
 
         self.assertEqual(code_vector, ['DataUnusable', 'HandOver', 'DataUnusable', 'HandOver',
                                        'DPHandOver', 'NoMoreData'])
-        self.assertEqual(base_qty, 37)
+        self.assertEqual(base_qty, 53)
 
         print('\n*** test scenario SC_AUTO_REGEN')
 
-        for i in range(base_qty*3):
+        for i in range(base_qty * 3):
             data = fmk.get_data(['SC_AUTO_REGEN'])
             data_list = fmk.send_data([data])
             if not data_list:
                 raise ValueError
-
-
-if __name__ == "__main__":
-
-    results = collections.OrderedDict()
-
-    fmk = FmkPlumbing()
-
-    fmk.run_project(name='tuto', dm_name='example')
-
-    dm = example.data_model
-    # dm.load_data_model(fmk._name2dm)
-
-    # print(test_args, sys.argv)
-    args = [sys.argv[0]] + test_args[1]
-
-    unittest.main(verbosity=2, argv=args, exit=False)
-
-    fmk.exit_fmk()

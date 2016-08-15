@@ -1151,14 +1151,14 @@ the PNG data format:
    {'name': 'PNG_model',
     'contents': [
 	{'name': 'sig',
-	 'contents': String(val_list=[b'\x89PNG\r\n\x1a\n'], size=8)},
+	 'contents': String(values=[b'\x89PNG\r\n\x1a\n'], size=8)},
 	{'name': 'chunks',
 	 'qty': (2,-1),
 	 'contents': [
 	      {'name': 'len',
 	       'contents': UINT32_be()},
 	      {'name': 'type',
-	       'contents': String(val_list=['IHDR', 'IEND', 'IDAT', 'PLTE'], size=4)},
+	       'contents': String(values=['IHDR', 'IEND', 'IDAT', 'PLTE'], size=4)},
 	      {'name': 'data_gen',
 	       'type': MH.Generator,
 	       'contents': lambda x: Node('data', value_type= \
@@ -1316,7 +1316,7 @@ various constructions, and value types.
 	  'contents': [
 
 	      {'contents': BitField(subfield_sizes=[21,2,1], endian=VT.BigEndian,
-				    subfield_val_lists=[None, [0b10], [0,1]],
+				    subfield_values=[None, [0b10], [0,1]],
 				    subfield_val_extremums=[[500, 600], None, None]),
 	       'name': 'val1',
 	       'qty': (1, 5)},
@@ -1330,7 +1330,7 @@ various constructions, and value types.
 		   'section_type': MH.Random,
 		   'contents': [
 
-		       {'contents': String(val_list=['OK', 'KO'], size=2),
+		       {'contents': String(values=['OK', 'KO'], size=2),
 			'name': 'val2',
 			'qty': (1, -1)},
 
@@ -1353,7 +1353,7 @@ various constructions, and value types.
 	       'sync_qty_with': 'val1',
 	       'alt': [
 		   {'conf': 'alt1',
-		    'contents': SINT8(int_list=[1,4,8])},
+		    'contents': SINT8(values=[1,4,8])},
 		   {'conf': 'alt2',
 		    'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
 		    'determinist': True}]}
@@ -1363,20 +1363,20 @@ various constructions, and value types.
 	 {'section_type': MH.Pick,
 	  'weights': (10,5),
 	  'contents': [
-	      {'contents': String(val_list=['PLIP', 'PLOP'], size=4),
+	      {'contents': String(values=['PLIP', 'PLOP'], size=4),
 	       'name': 'val4'},
 
-	      {'contents': SINT16_be(int_list=[-1, -3, -5, 7]),
+	      {'contents': SINT16_be(values=[-1, -3, -5, 7]),
 	       'name': 'val5'}
 	  ]},
 
 	 # block 3
 	 {'section_type': MH.FullyRandom,
 	  'contents': [
-	      {'contents': String(val_list=['AAA', 'BBBB', 'CCCCC']),
+	      {'contents': String(values=['AAA', 'BBBB', 'CCCCC']),
 	       'name': ('val21', 2)},
 
-	      {'contents': UINT8(int_list=[2, 4, 6, 8]),
+	      {'contents': UINT8(values=[2, 4, 6, 8]),
 	       'qty': (2, 3),
 	       'name': ('val22', 2)}
 	  ]}
@@ -1636,16 +1636,16 @@ like that:
     'contents': [
 
 	{'name': 'prefix',
-	 'contents': UINT8(int_list=[0xcc, 0xff, 0xee])},
+	 'contents': UINT8(values=[0xcc, 0xff, 0xee])},
 
 	{'name': 'variable_string',
 	 'contents': String(max_sz=20)},
 
 	{'name': 'keycode',
-	 'contents': UINT16_be(int_list=[0xd2d3, 0xd2fe, 0xd2aa])},
+	 'contents': UINT16_be(values=[0xd2d3, 0xd2fe, 0xd2aa])},
 
 	{'name': 'variable_suffix',
-	 'contents': String(val_list=['END', 'THE_END'])}
+	 'contents': String(values=['END', 'THE_END'])}
     ]}
 
 It works as intended for data generation, but if you want to absorb a
@@ -1677,18 +1677,18 @@ what follows:
     'contents': [
 
 	{'name': 'prefix',
-	 'contents': UINT8(int_list=[0xcc, 0xff, 0xee])},
+	 'contents': UINT8(values=[0xcc, 0xff, 0xee])},
 
 	{'name': 'variable_string',
 	 'contents': String(max_sz=20),
 	 'set_attrs': [NodeInternals.Abs_Postpone]},
 
 	{'name': 'keycode',
-	 'contents': UINT16_be(int_list=[0xd2d3, 0xd2fe, 0xd2aa]),
+	 'contents': UINT16_be(values=[0xd2d3, 0xd2fe, 0xd2aa]),
 	 'absorb_helper': keycode_helper},
 
 	{'name': 'variable_suffix',
-	 'contents': String(val_list=['END', 'THE_END'])}
+	 'contents': String(values=['END', 'THE_END'])}
     ]}
 
 Notice that we also add a specific attribute to the node
@@ -1910,18 +1910,18 @@ another inappropriate separator.
 	       dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable, dm.NodeInternals.Separator],
 					node_kinds=[dm.NodeInternals_Term])
 
-	   self.val_list = [b'']
+	   self.values = [b'']
 	   if separators is not None:
-	       self.val_list += list(separators)
+	       self.values += list(separators)
 
        def consume_node(self, node):
 	   orig_val = node.to_bytes()
-	   new_val_list = copy.copy(self.val_list)
+	   new_values = copy.copy(self.values)
 
-	   if orig_val in new_val_list:
-	       new_val_list.remove(orig_val)
+	   if orig_val in new_values:
+	       new_values.remove(orig_val)
 
-	   node.import_value_type(value_type=vtype.String(val_list=new_val_list))
+	   node.import_value_type(value_type=vtype.String(values=new_values))
 
 	   node.make_finite()
 	   node.make_determinist()
@@ -2363,8 +2363,8 @@ between two decorators:
   call to :meth:`framework.monitor.Probe.main()` which is configurable.
 
 - ``@blocking_probe`` for probe which will be run just once after each
-  data emission (default) or after each feedback retrieval. The default behaviour can be
-  changed by giving a ``after_feedback_retrieval`` parameter set to ``True``.
+  data emission (default) or after each target feedback retrieval. The default behaviour can be
+  changed by giving a ``after_target_feedback_retrieval`` parameter set to ``True``.
 
 These *decorators* have to take the reference of the project as
 parameter, in order to register them within. A really basic
@@ -2390,7 +2390,7 @@ information from the target is given here under:
 .. code-block:: python
    :linenos:
 
-   @blocking_probe(project, after_feedback_retrieval=False)
+   @blocking_probe(project, after_target_feedback_retrieval=False)
    class health_check(Probe):
 
        def start(self, dm, target, logger):
@@ -2445,7 +2445,7 @@ status has been recorded, coming either from:
 
 
 .. seealso:: Refer to :ref:`probes` for details on the available generic
-             probes that you can use within you project.
+             probes that you can use within your project.
 
 In order to associate one or more probe to a target, you have to add them within the ``targets``
 global variable of the related project file (refer to :ref:`tuto:project`). More precisely, for a target ``A``,

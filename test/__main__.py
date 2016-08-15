@@ -21,38 +21,18 @@
 #
 ################################################################################
 
-DEBUG = False
-LEVEL = 0
+import unittest
 
-# related to data_model.py
-DM_DEBUG = False
-ABS_DEBUG = False
+from test import args
+import test.unit, test.integration
 
-# related to value_types.py
-VT_DEBUG = False
+if len(args) == 2 and args[1] == "test":
+    del args[1]
 
-# related to fuzzing_primitives.py
-MW_DEBUG = False
+if len(args) == 1:
+    args.append('test.unit')
+    args.append('test.integration')
 
-try:
-    from xtermcolor import colorize
-except ImportError:
-    print("WARNING [FMK]: python-xtermcolor module is not installed, colors won't be available!")
-    def colorize(string, rgb=None, ansi=None, bg=None, ansi_bg=None, fd=1):
-        return string
-
-class DebugColor:
-    LEVEL = {
-        0: 0xFF0000,
-        1: 0x66FF00,
-        2: 0xB1FF7D
-        }
-    MISC = 0xFF0000
+unittest.main(verbosity=2, argv=args, defaultTest=None, exit=False)
 
 
-def DEBUG_PRINT(msg, level=1, rgb=None):
-    if DEBUG and level <= LEVEL:
-        if rgb is None:
-            print(colorize(msg, rgb=DebugColor.LEVEL[level]))
-        else:
-            print(colorize(msg, rgb=rgb))

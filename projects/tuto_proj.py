@@ -68,7 +68,9 @@ ETH_P_ALL = 3
 rawnetsrv_tg = NetworkTarget(host='eth0', port=ETH_P_ALL,
                              socket_type=(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL)),
                              hold_connection=True, server_mode=False)
-
+rawnetsrv_tg.register_new_interface(host='eth2', port=ETH_P_ALL,
+                                    socket_type=(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL)),
+                                    data_semantics='TG2')
 
 ### PROBE DEFINITION ###
 
@@ -115,11 +117,25 @@ class health_check(Probe):
 
         return ProbeStatus(status)
 
+serial_backend = Serial_Backend('/dev/ttyUSB0', username='test', password='test', slowness_factor=8)
+
+@blocking_probe(project)
+class probe_pid(ProbePID):
+    backend = serial_backend
+    process_name = 'bash'
+
+@probe(project)
+class probe_mem(ProbeMem):
+    backend = serial_backend
+    process_name = 'bash'
+    tolerance = 1
+
 
 ### TARGETS ALLOCATION ###
 
 targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
-           tuto_tg, net_tg, udpnet_tg, udpnetsrv_tg, rawnetsrv_tg]
+           tuto_tg, net_tg, udpnet_tg, udpnetsrv_tg, rawnetsrv_tg,
+           (TestTarget(), probe_pid, (probe_mem, 0.2))]
 
 ### OPERATOR DEFINITION ###
 

@@ -1,3 +1,4 @@
+
 ################################################################################
 #
 #  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
@@ -30,6 +31,7 @@ from libs.external_modules import *
 
 import traceback
 import datetime
+import six
 
 ################################
 # ModelWalker Helper Functions #
@@ -71,6 +73,7 @@ class MH(object):
     NonTerminal = 1
     Generator = 2
     Leaf = 3
+    Regex = 5
 
     RawNode = 4  # if a Node() is provided
 
@@ -87,6 +90,16 @@ class MH(object):
     # duplicate_mode attribute
     Copy = 'u'
     ZeroCopy = 's'
+
+
+    ##############################
+    ### Regex Parser Specific ####
+    ##############################
+
+    class Charset:
+        ASCII = 1
+        ASCII_EXT = 2
+        UNICODE = 3
 
     ##########################
     ### Node Customization ###
@@ -125,13 +138,15 @@ class MH(object):
 
         Separator = NodeInternals.Separator
 
+        DEBUG = NodeInternals.DEBUG
+
     ###########################
     ### Generator Templates ###
     ###########################
 
     @staticmethod
     def LEN(vt=fvt.INT_str, base_len=0,
-            set_attrs=[], clear_attrs=[], after_encoding=True):
+            set_attrs=[], clear_attrs=[], after_encoding=True, freezable=False):
         '''
         Return a *generator* that returns the length of a node parameter.
 
@@ -142,20 +157,30 @@ class MH(object):
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False compute the length before any encoding. Can be
             set to False only if node arguments support encoding.
+          freezable (bool): If ``False`` make the generator unfreezable in order to always provide
+            the right value. (Note that tTYPE will still be able to corrupt the generator.)
         '''
-        def length(vt, set_attrs, clear_attrs, node):
-            blob = node.to_bytes() if after_encoding else node.get_raw_value()
-            n = Node('cts', value_type=vt(int_list=[len(blob)+base_len]))
-            n.set_semantics(NodeSemantics(['len']))
-            MH._handle_attrs(n, set_attrs, clear_attrs)
-            return n
+        class Length(object):
+            unfreezable = not freezable
+
+            def __init__(self, vt, set_attrs, clear_attrs):
+                self.vt = vt
+                self.set_attrs = set_attrs
+                self.clear_attrs = clear_attrs
+
+            def __call__(self, node):
+                blob = node.to_bytes() if after_encoding else node.get_raw_value()
+                n = Node('cts', value_type=self.vt(values=[len(blob)+base_len], force_mode=True))
+                n.set_semantics(NodeSemantics(['len']))
+                MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
+                return n
 
         vt = MH._validate_int_vt(vt)
-        return functools.partial(length, vt, set_attrs, clear_attrs)
+        return Length(vt, set_attrs, clear_attrs)
 
     @staticmethod
     def QTY(node_name, vt=fvt.INT_str,
-            set_attrs=[], clear_attrs=[]):
+            set_attrs=[], clear_attrs=[], freezable=False):
         '''Return a *generator* that returns the quantity of child node instances (referenced
         by name) of the node parameter provided to the *generator*.
 
@@ -165,16 +190,27 @@ class MH(object):
             by the generator
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
+          freezable (bool): If ``False`` make the generator unfreezable in order to always provide
+            the right value. (Note that tTYPE will still be able to corrupt the generator.)
         '''
-        def qty(node_name, vt, set_attrs, clear_attrs, node):
-            nb = node.cc.get_drawn_node_qty(node_name)
-            n = Node('cts', value_type=vt(int_list=[nb]))
-            n.set_semantics(NodeSemantics(['qty']))
-            MH._handle_attrs(n, set_attrs, clear_attrs)
-            return n
+        class Qty(object):
+            unfreezable = not freezable
+
+            def __init__(self, node_name, vt, set_attrs, clear_attrs):
+                self.node_name = node_name
+                self.vt = vt
+                self.set_attrs = set_attrs
+                self.clear_attrs = clear_attrs
+
+            def __call__(self, node):
+                nb = node.cc.get_drawn_node_qty(self.node_name)
+                n = Node('cts', value_type=self.vt(values=[nb], force_mode=True))
+                n.set_semantics(NodeSemantics(['qty']))
+                MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
+                return n
 
         vt = MH._validate_int_vt(vt)
-        return functools.partial(qty, node_name, vt, set_attrs, clear_attrs)
+        return Qty(node_name, vt, set_attrs, clear_attrs)
 
     @staticmethod
     def TIMESTAMP(time_format="%H%M%S", utc=False,
@@ -193,7 +229,7 @@ class MH(object):
             else:
                 now = datetime.datetime.now()
             ts = now.strftime(time_format)
-            n = Node('cts', value_type=fvt.String(val_list=[ts], size=len(ts)))
+            n = Node('cts', value_type=fvt.String(values=[ts], size=len(ts)))
             n.set_semantics(NodeSemantics(['timestamp']))
             MH._handle_attrs(n, set_attrs, clear_attrs)
             return n
@@ -202,7 +238,7 @@ class MH(object):
 
     @staticmethod
     def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=True,
-            set_attrs=[], clear_attrs=[], after_encoding=True):
+            set_attrs=[], clear_attrs=[], after_encoding=True, freezable=False):
         '''Return a *generator* that returns the CRC (in the chosen type) of
         all the node parameters. (Default CRC is PKZIP CRC32)
 
@@ -216,38 +252,53 @@ class MH(object):
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False compute the CRC before any encoding. Can be
             set to False only if node arguments support encoding.
+          freezable (bool): if ``False`` make the generator unfreezable in order to always provide
+            the right value. (Note that tTYPE will still be able to corrupt the generator.)
         '''
-        def crc(vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs, nodes):
-            crc_func = crcmod.mkCrcFun(poly, initCrc=init_crc, xorOut=xor_out, rev=rev)
-            if isinstance(nodes, Node):
-                s = nodes.to_bytes() if after_encoding else nodes.get_raw_value()
-            else:
-                if issubclass(nodes.__class__, NodeAbstraction):
-                    nodes = nodes.get_concrete_nodes()
-                elif not isinstance(nodes, (tuple, list)):
-                    raise TypeError("Contents of 'nodes' parameter is incorrect!")
-                s = b''
-                for n in nodes:
-                    blob = n.to_bytes() if after_encoding else n.get_raw_value()
-                    s += blob
+        class Crc(object):
+            unfreezable = not freezable
 
-            result = crc_func(s)
+            def __init__(self, vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs):
+                self.vt = vt
+                self.poly = poly
+                self.init_crc = init_crc
+                self.xor_out = xor_out
+                self.rev = rev
+                self.set_attrs = set_attrs
+                self.clear_attrs = clear_attrs
 
-            n = Node('cts', value_type=vt(int_list=[result]))
-            n.set_semantics(NodeSemantics(['crc']))
-            MH._handle_attrs(n, set_attrs, clear_attrs)
-            return n
+            def __call__(self, nodes):
+                crc_func = crcmod.mkCrcFun(self.poly, initCrc=self.init_crc,
+                                           xorOut=self.xor_out, rev=self.rev)
+                if isinstance(nodes, Node):
+                    s = nodes.to_bytes() if after_encoding else nodes.get_raw_value()
+                else:
+                    if issubclass(nodes.__class__, NodeAbstraction):
+                        nodes = nodes.get_concrete_nodes()
+                    elif not isinstance(nodes, (tuple, list)):
+                        raise TypeError("Contents of 'nodes' parameter is incorrect!")
+                    s = b''
+                    for n in nodes:
+                        blob = n.to_bytes() if after_encoding else n.get_raw_value()
+                        s += blob
+
+                result = crc_func(s)
+
+                n = Node('cts', value_type=self.vt(values=[result], force_mode=True))
+                n.set_semantics(NodeSemantics(['crc']))
+                MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
+                return n
 
         if not crcmod_module:
             raise NotImplementedError('the CRC template has been disabled because python-crcmod module is not installed!')
 
         vt = MH._validate_int_vt(vt)
-        return functools.partial(crc, vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs)
+        return Crc(vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs)
 
 
     @staticmethod
-    def WRAP(func, vt=fvt.INT_str,
-             set_attrs=[], clear_attrs=[], after_encoding=True):
+    def WRAP(func, vt=fvt.String,
+             set_attrs=[], clear_attrs=[], after_encoding=True, freezable=False):
         '''Return a *generator* that returns the result (in the chosen type)
         of the provided function applied on the concatenation of all
         the node parameters.
@@ -259,28 +310,49 @@ class MH(object):
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False, execute `func` on node arguments before any encoding.
             Can be set to False only if node arguments support encoding.
+          freezable (bool): If ``False`` make the generator unfreezable in order to always provide
+            the right value. (Note that tTYPE will still be able to corrupt the generator.)
         '''
-        def map_func(vt, func, set_attrs, clear_attrs, nodes):
-            if isinstance(nodes, Node):
-                s = nodes.to_bytes() if after_encoding else nodes.get_raw_value()
-            else:
-                if issubclass(nodes.__class__, NodeAbstraction):
-                    nodes = nodes.get_concrete_nodes()
-                elif not isinstance(nodes, (tuple, list)):
-                    raise TypeError("Contents of 'nodes' parameter is incorrect!")
-                s = b''
-                for n in nodes:
-                    blob = n.to_bytes() if after_encoding else n.get_raw_value()
-                    s += blob
+        class WrapFunc(object):
+            unfreezable = not freezable
 
-            result = func(s)
+            def __init__(self, vt, func, set_attrs, clear_attrs):
+                self.vt = vt
+                self.func = func
+                self.set_attrs = set_attrs
+                self.clear_attrs = clear_attrs
 
-            n = Node('cts', value_type=vt(int_list=[result]))
-            MH._handle_attrs(n, set_attrs, clear_attrs)
-            return n
+            def __call__(self, nodes):
+                if isinstance(nodes, Node):
+                    s = nodes.to_bytes() if after_encoding else nodes.get_raw_value()
+                else:
+                    if issubclass(nodes.__class__, NodeAbstraction):
+                        nodes = nodes.get_concrete_nodes()
+                    elif not isinstance(nodes, (tuple, list)):
+                        raise TypeError("Contents of 'nodes' parameter is incorrect!")
+                    s = b''
+                    for n in nodes:
+                        blob = n.to_bytes() if after_encoding else n.get_raw_value()
+                        s += blob
 
-        vt = MH._validate_int_vt(vt)
-        return functools.partial(map_func, vt, func, set_attrs, clear_attrs)
+                result = self.func(s)
+
+                if issubclass(self.vt, fvt.String):
+                    result = convert_to_internal_repr(result)
+                else:
+                    assert isinstance(result, int)
+
+                if issubclass(vt, fvt.INT):
+                    vt_obj = self.vt(values=[result], force_mode=True)
+                else:
+                    vt_obj = self.vt(values=[result])
+                n = Node('cts', value_type=vt_obj)
+                MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
+                return n
+
+        vt = MH._validate_vt(vt)
+        return WrapFunc(vt, func, set_attrs, clear_attrs)
+
 
     @staticmethod
     def CYCLE(vals, depth=1, vt=fvt.String,
@@ -320,9 +392,9 @@ class MH(object):
                     idx = 0
                 idx = idx % self.vals_sz
                 if issubclass(self.vt, fvt.INT):
-                    vtype = self.vt(int_list=[self.vals[idx]])
+                    vtype = self.vt(values=[self.vals[idx]])
                 elif issubclass(self.vt, fvt.String):
-                    vtype = self.vt(val_list=[self.vals[idx]])
+                    vtype = self.vt(values=[self.vals[idx]])
                 else:
                     raise NotImplementedError('Value type not supported')
 
@@ -336,7 +408,7 @@ class MH(object):
 
     @staticmethod
     def OFFSET(use_current_position=True, depth=1, vt=fvt.INT_str,
-               set_attrs=[], clear_attrs=[], after_encoding=True):
+               set_attrs=[], clear_attrs=[], after_encoding=True, freezable=False):
         '''Return a *generator* that computes the offset of a child node
         within its parent node.
 
@@ -363,9 +435,12 @@ class MH(object):
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False compute the fixed amount part of the offset before
             any encoding. Can be set to False only if node arguments support encoding.
+          freezable (bool): If ``False`` make the generator unfreezable in order to always provide
+            the right value. (Note that tTYPE will still be able to corrupt the generator.)
         '''
         class Offset(object):
             provide_helpers = True
+            unfreezable = not freezable
             
             def __init__(self, use_current_position, depth, vt, set_attrs, clear_attrs):
                 self.vt = vt
@@ -407,7 +482,7 @@ class MH(object):
                     base = len(s)
                     off = nodes[-1].get_subnode_off(idx)
 
-                n = Node('cts_off', value_type=self.vt(int_list=[base+off]))
+                n = Node('cts_off', value_type=self.vt(values=[base+off], force_mode=True))
                 MH._handle_attrs(n, set_attrs, clear_attrs)
                 return n
 
@@ -478,9 +553,9 @@ class MH(object):
                         self.vt = tg_node.get_current_subkind()
 
                     if issubclass(self.vt, fvt.INT):
-                        vtype = self.vt(int_list=[tg_node.get_raw_value()])
+                        vtype = self.vt(values=[tg_node.get_raw_value()])
                     elif issubclass(self.vt, fvt.String):
-                        vtype = self.vt(val_list=[blob])
+                        vtype = self.vt(values=[blob])
                     else:
                         raise NotImplementedError('Value type not supported')
                     n = Node('cts', value_type=vtype)
@@ -497,9 +572,13 @@ class MH(object):
     @staticmethod
     def _validate_int_vt(vt):
         if not issubclass(vt, fvt.INT):
-            print("*** WARNING: the value type of typed node requested is not supported!" \
-                  " Use of 'INT_str' instead.")
-            vt = fvt.INT_str             
+            raise DataModelDefinitionError("The value type requested is not supported! (expect a subclass of INT)")
+        return vt
+
+    @staticmethod
+    def _validate_vt(vt):
+        if not issubclass(vt, fvt.INT) and not issubclass(vt, fvt.String):
+            raise DataModelDefinitionError("The value type requested is not supported!")
         return vt
 
     @staticmethod
@@ -540,7 +619,9 @@ class ModelHelper(object):
         'exists_if', 'exists_if_not',
         'exists_if/and', 'exists_if/or',
         'sync_size_with', 'sync_enc_size_with',
-        'post_freeze'
+        'post_freeze', 'charset',
+        # used for debugging purpose
+        'debug'
     ]
 
     def __init__(self, dm=None, delayed_jobs=True, add_env=True):
@@ -618,6 +699,8 @@ class ModelHelper(object):
                 ntype = MH.RawNode
             elif hasattr(contents, '__call__') and pre_ntype in [None, MH.Generator]:
                 ntype = MH.Generator
+            elif isinstance(contents, six.string_types) and pre_ntype in [None, MH.Regex]:
+                ntype = MH.Regex
             else:
                 ntype = MH.Leaf
             return ntype
@@ -626,6 +709,7 @@ class ModelHelper(object):
 
         contents = desc.get('contents', None)
         dispatcher = {MH.NonTerminal: self._create_non_terminal_node,
+                      MH.Regex: self._create_non_terminal_node_from_regex,
                       MH.Generator:  self._create_generator_node,
                       MH.Leaf: self._create_leaf_node,
                       MH.RawNode: self._update_provided_node}
@@ -736,6 +820,10 @@ class ModelHelper(object):
             node_args = desc.get('node_args', None)
             n.set_generator_func(contents, func_arg=other_args,
                                  provide_helpers=provide_helpers, conf=conf)
+
+            if hasattr(contents, 'unfreezable') and contents.unfreezable:
+                n.clear_attr(MH.Attr.Freezable, conf=conf)
+
             if node_args is not None:
                 # node_args interpretation is postponed after all nodes has been created
                 self._register_todo(n, self._complete_generator, args=(node_args, conf), unpack_args=True,
@@ -744,6 +832,41 @@ class ModelHelper(object):
             raise ValueError("*** ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
         self._handle_custo(n, desc, conf)
+        self._handle_common_attr(n, desc, conf)
+
+        return n
+
+
+    def _create_non_terminal_node_from_regex(self, desc, node=None):
+
+        n, conf = self.__pre_handling(desc, node)
+
+        name =  desc.get('name') if desc.get('name') is not None else node.name
+        if isinstance(name, tuple):
+            name = name[0]
+        regexp =  desc.get('contents')
+
+        parser = RegexParser()
+        nodes = parser.parse(regexp, name, desc.get('charset'))
+
+        if len(nodes) == 2 and len(nodes[1]) == 2 and (nodes[1][1][1] == nodes[1][1][2] == 1 or
+                 isinstance(nodes[1][1][0], fvt.String) and nodes[1][1][0].alphabet is not None):
+            n.set_values(value_type=nodes[1][1][0].internals[nodes[1][1][0].current_conf].value_type, conf=conf)
+        else:
+            n.set_subnodes_with_csts(nodes, conf=conf)
+
+        self._handle_custo(n, desc, conf)
+
+        sep_desc = desc.get('separator', None)
+        if sep_desc is not None:
+            sep_node_desc = sep_desc.get('contents', None)
+            assert (sep_node_desc is not None)
+            sep_node = self._create_graph_from_desc(sep_node_desc, n)
+            prefix = sep_desc.get('prefix', True)
+            suffix = sep_desc.get('suffix', True)
+            unique = sep_desc.get('unique', False)
+            n.set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique)
+
         self._handle_common_attr(n, desc, conf)
 
         return n
@@ -944,6 +1067,12 @@ class ModelHelper(object):
                 node.set_attr(MH.Attr.Mutable, conf=conf)
             else:
                 node.clear_attr(MH.Attr.Mutable, conf=conf)
+        param = desc.get('debug', None)
+        if param is not None:
+            if param:
+                node.set_attr(MH.Attr.DEBUG, conf=conf)
+            else:
+                node.clear_attr(MH.Attr.DEBUG, conf=conf)
         param = desc.get('determinist', None)
         if param is not None:
             node.make_determinist(conf=conf)
@@ -1051,7 +1180,7 @@ class ModelHelper(object):
     def _clone_from_dict(self, node, ref, desc):
         if ref not in self.node_dico:
             raise ValueError("arguments refer to an inexistent node ({:s}, {!s})!".format(ref[0], ref[1]))
-        node.set_contents(self.node_dico[ref])
+        node.set_contents(self.node_dico[ref], preserve_node=False)
         self._handle_custo(node, desc, conf=None)
         self._handle_common_attr(node, desc, conf=None)
 
@@ -1145,6 +1274,692 @@ class ModelHelper(object):
                
         return node
 
+
+
+### Helpers for RegExp-based Node ###
+
+class State(object):
+    """
+    Represent states at the lower level
+    """
+
+    def __init__(self, machine):
+        """
+        Args:
+            machine (StateMachine): state machine where it lives (local context)
+        """
+        self.machine = machine
+        self.init_specific()
+
+    def init_specific(self):
+        """
+        Can be overridden to express additional initializations
+        """
+        pass
+
+    def _run(self, context):
+        raise NotImplementedError
+
+    def run(self, context):
+        """
+        Do some actions on the current character.
+        Args:
+            context (StateMachine): root state machine (global context)
+        """
+        if context.input is not None and \
+                ((context.charset == MH.Charset.ASCII and ord(context.input) > 0x7F) or
+                     (context.charset == MH.Charset.ASCII_EXT and ord(context.input) > 0xFF)):
+            raise CharsetError()
+        self._run(context)
+        context.inputs.pop(0)
+
+    def advance(self, context):
+        """
+        Check transitions using the first non-run character.
+        Args:
+            context (StateMachine): root state machine (global context)
+
+        Returns:
+            Class of the next state de run (None if we are in a final state)
+        """
+        raise NotImplementedError
+
+class StateMachine(State):
+    """
+    Represent states that contain other states.
+    """
+
+    def __init__(self, machine=None):
+        self.states = {}
+        self.inputs = None
+
+        for name, cls in inspect.getmembers(self.__class__):
+            if inspect.isclass(cls) and issubclass(cls, State) and hasattr(cls, 'INITIAL'):
+                self.states[cls] = cls(self)
+
+        State.__init__(self, self if machine is None else machine)
+
+    @property
+    def input(self):
+        return None if self.inputs is None or len(self.inputs) == 0 else self.inputs[0]
+
+    def _run(self, context):
+        while self.state is not None:
+            self.state.run(context)
+            next_state = self.state.advance(context)
+            self.state = self.states[next_state] if next_state is not None else None
+
+    def run(self, context):
+        for state in self.states:
+            if state.INITIAL:
+                self.state = self.states[state]
+                break
+        else:
+            raise InitialStateNotFoundError()
+
+        self._run(context)
+
+def register(cls):
+    cls.INITIAL = False
+    return cls
+
+def initial(cls):
+    cls.INITIAL = True
+    return cls
+
+class RegexParser(StateMachine):
+
+    @initial
+    class Initial(State):
+
+        def _run(self, ctx):
+            pass
+
+        def advance(self, ctx):
+            if ctx.input in ('?', '*', '+', '{'):
+                raise QuantificationError()
+            elif ctx.input in ('}', ')', ']'):
+                raise StructureError(ctx.input)
+
+            elif ctx.input == '[':
+                return self.machine.SquareBrackets
+            elif ctx.input == '(':
+                return self.machine.Parenthesis
+            elif ctx.input == '.':
+                return self.machine.Dot
+            elif ctx.input == '\\':
+                return self.machine.Escape
+            else:
+                ctx.append_to_contents("")
+
+                if ctx.input == '|':
+                    return self.machine.Choice
+                elif ctx.input is None:
+                    return self.machine.Final
+                else:
+                    return self.machine.Main
+
+    @register
+    class Choice(Initial):
+
+        def _run(self, ctx):
+            if not ctx.choice:
+                # if it is still possible to build a NT with multiple shapes
+                if len(ctx.nodes) == 0 or (len(ctx.nodes) == 1 and ctx.buffer is None):
+                    ctx.choice = True
+                else:
+                    raise InconvertibilityError()
+            else:
+                pass
+
+    @register
+    class Final(State):
+
+        def _run(self, ctx):
+            ctx.flush()
+
+        def advance(self, ctx):
+            return None
+
+    @register
+    class Main(State):
+
+        def _run(self, ctx):
+            ctx.append_to_buffer(ctx.input)
+
+        def advance(self, ctx):
+            if ctx.input == '(':
+                return self.machine.Parenthesis
+            elif ctx.input == '[':
+                return self.machine.SquareBrackets
+            elif ctx.input == '.':
+                return self.machine.Dot
+            elif ctx.input == '\\':
+                return self.machine.Escape
+            elif ctx.input == '|':
+                return self.machine.Choice
+            elif ctx.input in ('?', '*', '+', '{'):
+
+                if ctx.choice and len(ctx.values) > 1 and len(ctx.buffer) > 1:
+                    raise InconvertibilityError()
+
+                if len(ctx.buffer) == 1:
+                    if len(ctx.values) > 1:
+                        content = ctx.buffer
+                        ctx.values = ctx.values[:-1]
+                        ctx.flush()
+                        ctx.append_to_buffer(content)
+
+                else:
+                    content = ctx.buffer[-1]
+                    ctx.buffer = ctx.buffer[:-1]
+                    ctx.flush()
+                    ctx.append_to_buffer(content)
+
+                if ctx.input == '{':
+                    return self.machine.Brackets
+                else:
+                    return self.machine.QtyState
+
+            elif ctx.input in ('}', ')', ']'):
+                raise StructureError(ctx.input)
+            elif ctx.input is None:
+                return self.machine.Final
+
+            return self.machine.Main
+
+    @register
+    class QtyState(State):
+
+        def _run(self, ctx):
+            ctx.min = 1 if ctx.input == '+' else 0
+            ctx.max = 1 if ctx.input == '?' else None
+
+            ctx.flush()
+
+        def advance(self, ctx):
+            if ctx.input in ('?', '*', '+', '{'):
+                raise QuantificationError()
+            elif ctx.input in ('}', ')', ']'):
+                raise StructureError(ctx.input)
+            elif ctx.input == '|':
+                return self.machine.Choice
+            elif ctx.input is None:
+                return self.machine.Final
+
+            if ctx.choice:
+                raise InconvertibilityError()
+
+            if ctx.input == '(':
+                return self.machine.Parenthesis
+            elif ctx.input == '[':
+                return self.machine.SquareBrackets
+            elif ctx.input == '.':
+                return self.machine.Dot
+            elif ctx.input == '\\':
+                return self.machine.Escape
+            else:
+                return self.machine.Main
+
+    @register
+    class Brackets(StateMachine, QtyState):
+
+        @initial
+        class Initial(State):
+
+            def _run(self, ctx):
+                ctx.min = ""
+
+            def advance(self, ctx):
+                if ctx.input.isdigit():
+                    return self.machine.Min
+                else:
+                    raise QuantificationError()
+
+        @register
+        class Min(State):
+
+            def _run(self, ctx):
+                ctx.min += ctx.input
+
+            def advance(self, context):
+                if context.input.isdigit():
+                    return self.machine.Min
+                elif context.input == ',':
+                    return self.machine.Comma
+                elif context.input == '}':
+                    return self.machine.Final
+                else:
+                    raise QuantificationError()
+
+        @register
+        class Max(State):
+
+            def _run(self, ctx):
+                ctx.max += ctx.input
+
+            def advance(self, context):
+                if context.input.isdigit():
+                    return self.machine.Max
+                elif context.input == '}':
+                    return self.machine.Final
+                else:
+                    raise QuantificationError()
+
+        @register
+        class Comma(Max):
+
+            def _run(self, ctx):
+                ctx.max = ""
+
+        @register
+        class Final(State):
+            def _run(self, ctx):
+                ctx.min = int(ctx.min)
+
+                if ctx.max is None:
+                    ctx.max = ctx.min
+                elif len(ctx.max) == 0:
+                    ctx.max = None
+                else:
+                    ctx.max = int(ctx.max)
+
+                if ctx.max is not None and ctx.min > ctx.max:
+                    raise QuantificationError(u"{X,Y}: X \u2264 Y constraint not respected.")
+
+                ctx.flush()
+
+            def advance(self, context):
+                return None
+
+        def advance(self, ctx):
+            return self.machine.QtyState.advance(self, ctx)
+
+    class Group(State):
+
+        def advance(self, ctx):
+            if ctx.input in (')', '}', ']'):
+                raise StructureError(ctx.input)
+
+            elif ctx.input in ('*', '+', '?'):
+                return self.machine.QtyState
+            elif ctx.input == '{':
+                return self.machine.Brackets
+            else:
+                ctx.flush()
+
+            if ctx.input == '|':
+                return self.machine.Choice
+            elif ctx.input is None:
+                return self.machine.Final
+            elif ctx.choice:
+                raise InconvertibilityError()
+
+            if ctx.input == '(':
+                return self.machine.Parenthesis
+            elif ctx.input == '[':
+                return self.machine.SquareBrackets
+            elif ctx.input == '.':
+                return self.machine.Dot
+            elif ctx.input == '\\':
+                return self.machine.Escape
+            else:
+                return self.machine.Main
+
+    @register
+    class Parenthesis(StateMachine, Group):
+
+        @initial
+        class Initial(State):
+
+            def _run(self, ctx):
+                ctx.flush()
+                ctx.append_to_buffer("")
+
+            def advance(self, ctx):
+                if ctx.input in ('?', '*', '+', '{'):
+                    raise QuantificationError()
+                elif ctx.input in ('}', ']', None):
+                    raise StructureError(ctx.input)
+                elif ctx.input in ('(', '[', '.'):
+                    raise InconvertibilityError()
+                elif ctx.input == '\\':
+                    return self.machine.Escape
+                elif ctx.input == ')':
+                    return self.machine.Final
+                elif ctx.input == '|':
+                    return self.machine.Choice
+                else:
+                    return self.machine.Main
+
+        @register
+        class Final(State):
+
+            def _run(self, context):
+                pass
+
+            def advance(self, context):
+                return None
+
+        @register
+        class Main(Initial):
+            def _run(self, ctx):
+                ctx.append_to_buffer(ctx.input)
+
+            def advance(self, ctx):
+                if ctx.input in ('?', '*', '+', '{'):
+                    raise InconvertibilityError()
+
+                return self.machine.Initial.advance(self, ctx)
+
+        @register
+        class Choice(Initial):
+
+            def _run(self, ctx):
+                ctx.append_to_contents("")
+
+            def advance(self, ctx):
+                if ctx.input in ('?', '*', '+', '{'):
+                    raise QuantificationError()
+
+                return self.machine.Initial.advance(self, ctx)
+
+        @register
+        class Escape(State):
+
+            def _run(self, ctx):
+                pass
+
+            def advance(self, ctx):
+                if ctx.input in ctx.META_SEQUENCES:
+                    raise InconvertibilityError()
+                elif ctx.input in ctx.SPECIAL_CHARS:
+                    return self.machine.Main
+                else:
+                    raise EscapeError(ctx.input)
+
+    @register
+    class SquareBrackets(StateMachine, Group):
+
+        @initial
+        class Initial(State):
+
+            def _run(self, ctx):
+                ctx.flush()
+                ctx.append_to_alphabet("")
+
+            def advance(self, ctx):
+                if ctx.input in ('?', '*', '+', '{'):
+                    raise QuantificationError()
+                elif ctx.input in ('}', ')', None):
+                    raise StructureError(ctx.input)
+                elif ctx.input in ('(', '['):
+                    raise InconvertibilityError()
+                elif ctx.input == '-':
+                    raise InvalidRangeError()
+                elif ctx.input == ']':
+                    raise EmptyAlphabetError()
+                elif ctx.input == '\\':
+                    return self.machine.EscapeBeforeRange
+                else:
+                    return self.machine.BeforeRange
+
+        @register
+        class Final(State):
+
+            def _run(self, ctx):
+                pass
+
+            def advance(self, ctx):
+                return None
+
+        @register
+        class BeforeRange(Initial):
+            def _run(self, ctx):
+                ctx.append_to_alphabet(ctx.input)
+
+            def advance(self, ctx):
+                if ctx.input == ']':
+                    return self.machine.Final
+                elif ctx.input == '-':
+                    return self.machine.Range
+                else:
+                    return self.machine.Initial.advance(self, ctx)
+
+        @register
+        class Range(State):
+            def _run(self, ctx):
+                pass
+
+            def advance(self, ctx):
+                if ctx.input in ('?', '*', '+', '{', '}', '(', ')', '[', ']', '|', '-', None):
+                    raise InvalidRangeError()
+                elif ctx.input == '\\':
+                    return self.machine.EscapeAfterRange
+                else:
+                    return self.machine.AfterRange
+
+        @register
+        class AfterRange(Initial):
+            def _run(self, ctx):
+                if ctx.alphabet[-1] > ctx.input:
+                    raise InvalidRangeError()
+                elif ctx.input == ctx.alphabet[-1]:
+                    pass
+                else:
+                    for i in range(ord(ctx.alphabet[-1]) + 1, ord(ctx.input) + 1):
+                        ctx.append_to_alphabet(ctx.int_to_string(i))
+
+            def advance(self, ctx):
+                if ctx.input == ']':
+                    return self.machine.Final
+                else:
+                    return self.machine.Initial.advance(self, ctx)
+
+        @register
+        class EscapeBeforeRange(State):
+
+            def _run(self, ctx):
+                pass
+
+            def advance(self, ctx):
+                if ctx.input in ctx.META_SEQUENCES:
+                    return self.machine.EscapeMetaSequence
+                elif ctx.input in ctx.SPECIAL_CHARS:
+                    return self.machine.BeforeRange
+                else:
+                    raise EscapeError(ctx.input)
+
+        @register
+        class EscapeMetaSequence(BeforeRange):
+
+            def _run(self, ctx):
+                ctx.append_to_alphabet(ctx.META_SEQUENCES[ctx.input])
+
+        @register
+        class EscapeAfterRange(State):
+
+            def _run(self, ctx):
+                pass
+
+            def advance(self, ctx):
+                if ctx.input in ctx.META_SEQUENCES:
+                    raise InvalidRangeError()
+                elif ctx.input in ctx.SPECIAL_CHARS:
+                    return self.machine.AfterRange
+                else:
+                    raise EscapeError(ctx.input)
+
+    @register
+    class Escape(State):
+
+        def _run(self, ctx):
+            pass
+
+        def advance(self, ctx):
+            if ctx.input in ctx.META_SEQUENCES:
+                return self.machine.EscapeMetaSequence
+            elif ctx.input in ctx.SPECIAL_CHARS:
+                return self.machine.Main
+            else:
+                raise EscapeError(ctx.input)
+
+    @register
+    class EscapeMetaSequence(Group):
+
+        def _run(self, ctx):
+            if ctx.choice and len(ctx.values) > 1 and len(ctx.buffer) > 1:
+                raise InconvertibilityError()
+
+            if ctx.buffer is not None:
+
+                if len(ctx.buffer) == 0:
+
+                    if len(ctx.values[:-1]) > 0:
+                        ctx.values = ctx.values[:-1]
+                        ctx.flush()
+                else:
+                    ctx.flush()
+
+            ctx.append_to_alphabet(ctx.META_SEQUENCES[ctx.input])
+
+    @register
+    class Dot(Group):
+
+        def _run(self, ctx):
+            ctx.flush()
+            ctx.append_to_alphabet(ctx.get_complement(""))
+
+
+    def init_specific(self):
+        self._name = None
+        self.charset = None
+
+        self.values = None
+        self.alphabet = None
+
+        self.choice = False
+
+        self.min = None
+        self.max = None
+
+        self.nodes = []
+
+    def append_to_contents(self, content):
+        if self.values is None:
+            self.values = []
+        self.values.append(content)
+
+    def append_to_buffer(self, str):
+        if self.values is None:
+            self.values = [""]
+        if self.values[-1] is None:
+            self.values[-1] = ""
+        self.values[-1] += str
+
+    def append_to_alphabet(self, alphabet):
+        if self.alphabet is None:
+            self.alphabet = ""
+        self.alphabet += alphabet
+
+    @property
+    def buffer(self):
+        return None if self.values is None else self.values[-1]
+
+    @buffer.setter
+    def buffer(self, buffer):
+        if self.values is None:
+            self.values = [""]
+        self.values[-1] = buffer
+
+    def flush(self):
+
+        if self.values is None and self.alphabet is None:
+            return
+
+        # set default values for min & max if none was provided
+        if self.min is None and self.max is None:
+            self.min = self.max = 1
+
+        # guess the type of the terminal node to create
+        if self.values is not None and all(val.isdigit() for val in self.values):
+            self.values = [int(i) for i in self.values]
+            type = fvt.INT_str
+        else:
+            type = fvt.String
+
+        name = self._name + '_' + str(len(self.nodes) + 1)
+        self.nodes.append(self._create_terminal_node(name, type, values=self.values,
+                                                     alphabet=self.alphabet, qty=(self.min, self.max)))
+        self.reset()
+
+    def reset(self):
+        self.values = None
+        self.alphabet = None
+        self.min = None
+        self.max = None
+
+    def parse(self, inputs, name, charset=MH.Charset.ASCII_EXT):
+        self._name = name
+        self.charset = charset
+        self.int_to_string = chr if sys.version_info[0] == 2 and self.charset != MH.Charset.UNICODE else six.unichr
+
+        if self.charset == MH.Charset.ASCII:
+            max = 0x7F
+            self.codec = 'ascii'
+        elif self.charset == MH.Charset.UNICODE:
+            max = 0xFFFF
+            self.codec = 'utf8'
+        else:
+            max = 0xFF
+            self.codec = 'latin-1'
+
+        def get_complement(chars):
+            return ''.join([self.int_to_string(i) for i in range(0, max + 1) if self.int_to_string(i) not in chars])
+        self.get_complement = get_complement
+
+        self.META_SEQUENCES = {'s': string.whitespace,
+                               'S': get_complement(string.whitespace),
+                               'd': string.digits,
+                               'D': get_complement(string.digits),
+                               'w': string.ascii_letters + string.digits + '_',
+                               'W': get_complement(string.ascii_letters + string.digits + '_')}
+
+        self.SPECIAL_CHARS = list('\\()[]{}*+?|-.')
+
+        # None indicates the beginning and the end of the regex
+        self.inputs = [None] + list(inputs) + [None]
+        self.run(self)
+
+        return self._create_non_terminal_node()
+
+    def _create_terminal_node(self, name, type, values=None, alphabet=None, qty=None):
+
+        assert (values is not None or alphabet is not None)
+
+        if alphabet is not None:
+            return [Node(name=name,
+                         vt=fvt.String(alphabet=alphabet, min_sz=qty[0], max_sz=qty[1],
+                                       codec=self.codec)), 1, 1]
+        else:
+            if type == fvt.String:
+                node = Node(name=name, vt=fvt.String(values=values, codec=self.codec))
+            else:
+                node = Node(name=name, vt=fvt.INT_str(values=values))
+
+            return [node, qty[0], -1 if qty[1] is None else qty[1]]
+
+    def _create_non_terminal_node(self):
+        if self.choice:
+            non_terminal = [1, [MH.Copy + MH.Pick]]
+        else:
+            non_terminal = [1, [MH.Copy + MH.Ordered]]
+        formatted_terminal = non_terminal[1]
+
+        for terminal in self.nodes:
+            formatted_terminal.append(terminal)
+
+        return non_terminal
 
 
 #### Data Model Abstraction

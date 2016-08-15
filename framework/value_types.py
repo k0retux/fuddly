@@ -34,6 +34,7 @@ import collections
 import string
 import re
 import zlib
+import codecs
 
 import six
 from six import with_metaclass
@@ -41,11 +42,13 @@ from six import with_metaclass
 sys.path.append('.')
 
 import framework.basic_primitives as bp
-from framework.data_model import AbsorbStatus, AbsCsts, convert_to_internal_repr, unconvert_from_internal_repr
 from framework.encoders import *
 from framework.error_handling import *
+from framework.global_resources import *
 
-DEBUG = False
+import libs.debug_facility as dbg
+
+DEBUG = dbg.VT_DEBUG
 
 class VT(object):
     '''
@@ -94,31 +97,9 @@ class VT(object):
     def set_size_from_constraints(self, size=None, encoded_size=None):
         raise NotImplementedError
 
-    def pretty_print(self):
+    def pretty_print(self, max_size=None):
         return None
 
-    @staticmethod
-    def _str2internal(arg):
-        if isinstance(arg, (tuple, list)):
-            new_arg = []
-            for v in arg:
-                if sys.version_info[0] > 2 and not isinstance(v, bytes):
-                    new_v = bytes(v, 'latin_1')
-                else:
-                    new_v = v
-                new_arg.append(new_v)
-        elif isinstance(arg, (str, bytes)):
-            if sys.version_info[0] > 2 and not isinstance(arg, bytes):
-                new_arg = bytes(arg, 'latin_1')
-            else:
-                new_arg = arg
-        elif sys.version_info[0] == 2 and isinstance(arg, unicode):
-            new_arg = arg.encode('latin_1')
-        else:
-            raise ValueError
-
-        return new_arg
-                
 
 class VT_Alt(VT):
 
@@ -126,14 +107,14 @@ class VT_Alt(VT):
         self._fuzzy_mode = False
         self.init_specific(*args, **kargs)
 
-    def init_specific(self):
+    def init_specific(self, *args, **kargs):
         raise NotImplementedError
 
     def switch_mode(self):
         if self._fuzzy_mode:
-            self.enable_normal_mode()
+            self._enable_normal_mode()
         else:
-            self.enable_fuzz_mode()
+            self._enable_fuzz_mode()
 
         self._fuzzy_mode = not self._fuzzy_mode
         self.after_enabling_mode()
@@ -141,10 +122,22 @@ class VT_Alt(VT):
     def after_enabling_mode(self):
         pass
 
+    def enable_fuzz_mode(self, fuzz_magnitude=1.0):
+        if not self._fuzzy_mode:
+            self._enable_fuzz_mode(fuzz_magnitude=fuzz_magnitude)
+            self._fuzzy_mode = True
+            self.after_enabling_mode()
+
     def enable_normal_mode(self):
+        if self._fuzzy_mode:
+            self._enable_normal_mode()
+            self._fuzzy_mode = False
+            self.after_enabling_mode()
+
+    def _enable_normal_mode(self):
         raise NotImplementedError
 
-    def enable_fuzz_mode(self):
+    def _enable_fuzz_mode(self, fuzz_magnitude=1.0):
         raise NotImplementedError
 
 
@@ -339,15 +332,48 @@ class String(VT_Alt):
         """
         return None
 
-
     def __repr__(self):
         if DEBUG:
-            return VT_Alt.__repr__(self)[:-1] + ' contents:' + str(self.val_list) + '>'
+            return VT_Alt.__repr__(self)[:-1] + ' contents:' + str(self.values) + '>'
         else:
             return VT_Alt.__repr__(self)
 
-    def init_specific(self, val_list=None, size=None, min_sz=None,
-                      max_sz=None, determinist=True, ascii_mode=False,
+    def _str2bytes(self, val):
+        if val is None:
+            return b''
+        elif isinstance(val, (list, tuple)):
+            b = []
+            for v in val:
+                b.append(self._str2bytes(v))
+        else:
+            if sys.version_info[0] > 2:
+                b = val if isinstance(val, bytes) else val.encode(self.codec)
+            else:
+                try:
+                    b = val.encode(self.codec)
+                except:
+                    if len(val) > 30:
+                        val = val[:30] + ' ...'
+                    err_msg = "\n*** WARNING: Encoding issue. With python2 'str' or 'bytes' means " \
+                              "ASCII, prefix the string {:s} with 'u'".format(repr(val))
+                    print(err_msg)
+                    b = val
+        return b
+
+    def _bytes2str(self, val):
+        if isinstance(val, (list, tuple)):
+            b = [v.decode(self.codec, 'replace') for v in val]
+        else:
+            b = val.decode(self.codec, 'replace')
+        return b
+
+    UTF16LE = codecs.lookup('utf-16-le').name
+    UTF16BE = codecs.lookup('utf-16-be').name
+    ASCII = codecs.lookup('ascii').name
+    LATIN_1 = codecs.lookup('latin-1').name
+
+    def init_specific(self, values=None, size=None, min_sz=None,
+                      max_sz=None, determinist=True, codec='latin-1',
                       extra_fuzzy_list=None, absorb_regexp=None,
                       alphabet=None, min_encoded_sz=None, max_encoded_sz=None, encoding_arg=None):
 
@@ -355,29 +381,28 @@ class String(VT_Alt):
         Initialize the String
 
         Args:
-            val_list: List of the character strings that are considered valid for the node
+            values: List of the character strings that are considered valid for the node
               backed by this *String object*.
             size: Valid character string size for the node backed by this *String object*.
             min_sz: Minimum valid size for the character strings for the node backed by
               this *String object*. If not set, this parameter will be
-              automatically inferred by looking at the parameter ``val_list``
+              automatically inferred by looking at the parameter ``values``
               whether this latter is provided.
             max_sz: Maximum valid size for the character strings for the node backed by this
               *String object*. If not set, this parameter will be
-              automatically inferred by looking at the parameter ``val_list``
+              automatically inferred by looking at the parameter ``values``
               whether this latter is provided.
             determinist: If set to ``True`` generated values will be in a deterministic
               order, otherwise in a random order.
-            ascii_mode: If set to ``True``, it will enforce the string to comply with ASCII
-              7 bits.
+            codec: codec to use for encoding the string (e.g., 'latin-1', 'utf8')
             extra_fuzzy_list: During data generation, if this parameter is specified with some
               specific values, they will be part of the test cases generated by
               the generic disruptor tTYPE.
-            absorb_regexp: You can specify a regular expression in this parameter as a
+            absorb_regexp (str): You can specify a regular expression in this parameter as a
               supplementary constraint for data absorption operation.
-            alphabet: The alphabet to use for generating data, in case no `val_list` is
+            alphabet: The alphabet to use for generating data, in case no ``values`` is
               provided. Also use during absorption to validate the contents. It is
-              checked if there is no `val_list`.
+              checked if there is no ``values``.
             min_encoded_sz: Only relevant for subclasses that leverage the encoding infrastructure.
               Enable to provide the minimum legitimate size for an encoded string.
             max_encoded_sz: Only relevant for subclasses that leverage the encoding infrastructure.
@@ -390,12 +415,12 @@ class String(VT_Alt):
 
         self.drawn_val = None
 
-        self.val_list = None
-        self.val_list_copy = None
-        self.val_list_fuzzy = None
-        self.val_list_save = None
+        self.values = None
+        self.values_copy = None
+        self.values_fuzzy = None
+        self.values_save = None
 
-        self.is_val_list_provided = None
+        self.is_values_provided = None
 
         self.min_sz = None
         self.max_sz = None
@@ -406,22 +431,24 @@ class String(VT_Alt):
                 self.encoding_arg = encoding_arg
             self.init_encoding_scheme(self.encoding_arg)
 
-        self.set_description(val_list=val_list, size=size, min_sz=min_sz,
-                             max_sz=max_sz, determinist=determinist,
-                             ascii_mode=ascii_mode, extra_fuzzy_list=extra_fuzzy_list,
+        self.set_description(values=values, size=size, min_sz=min_sz,
+                             max_sz=max_sz, determinist=determinist, codec=codec,
+                             extra_fuzzy_list=extra_fuzzy_list,
                              absorb_regexp=absorb_regexp, alphabet=alphabet,
                              min_encoded_sz=min_encoded_sz, max_encoded_sz=max_encoded_sz)
 
     def make_private(self, forget_current_state):
         if forget_current_state:
-            if self.is_val_list_provided:
-                self.val_list = copy.copy(self.val_list)
+            if self.is_values_provided:
+                self.values = copy.copy(self.values)
             else:
-                self._populate_val_list()
+                self._populate_values(force_max_enc_sz=self.max_enc_sz_provided,
+                                      force_min_enc_sz=self.min_enc_sz_provided)
+                self._ensure_enc_sizes_consistency()
             self.reset_state()
         else:
-            self.val_list = copy.copy(self.val_list)
-            self.val_list_copy = copy.copy(self.val_list_copy)
+            self.values = copy.copy(self.values)
+            self.values_copy = copy.copy(self.values_copy)
             if self.encoded_string:
                 self.encoding_arg = copy.copy(self.encoding_arg)
 
@@ -435,21 +462,20 @@ class String(VT_Alt):
     def absorb_auto_helper(self, blob, constraints):
         off = 0
         size = self.max_encoded_sz
-
         # If 'Contents' constraint is set, we seek for string within
-        # val_list or conforming to the alphabet.
+        # values or conforming to the alphabet.
         # If 'Regexp' constraint is set, we seek for string matching
         # the regexp.
         # If no such constraints are provided, we assume off==0
         # and let do_absorb() decide if it's OK (via size constraints
         # for instance).
         blob_dec = self.decode(blob)
-        if constraints[AbsCsts.Contents] and self.val_list is not None and self.alphabet is None:
-            for v in self.val_list:
+        if constraints[AbsCsts.Contents] and self.is_values_provided and self.alphabet is None:
+            for v in self.values:
                 if blob_dec.startswith(v):
                     break
             else:
-                for v in self.val_list:
+                for v in self.values:
                     if self.encoded_string:
                         v = self.encode(v)
                     off = blob.find(v)
@@ -459,21 +485,16 @@ class String(VT_Alt):
 
         elif constraints[AbsCsts.Contents] and self.alphabet is not None:
             size = None
-            blob = unconvert_from_internal_repr(blob)
-            if self.encoded_string:
-                blob_dec = unconvert_from_internal_repr(blob_dec)
-            else:
-                blob_dec = blob
-            alp = unconvert_from_internal_repr(self.alphabet)
+            blob_str = self._bytes2str(blob_dec)
+            alp = self._bytes2str(self.alphabet)
             for l in alp:
-                if blob_dec.startswith(l):
+                if blob_str.startswith(l):
                     break
             else:
                 sup_sz = len(blob)+1
                 off = sup_sz
                 for l in alp:
-                    if self.encoded_string:
-                        l = self.encode(l)
+                    l = self.encode(self._str2bytes(l))
                     new_off = blob.find(l)
                     if new_off < off and new_off > -1:
                         off = new_off
@@ -481,15 +502,11 @@ class String(VT_Alt):
                     off = -1
 
         elif constraints[AbsCsts.Regexp] and self.regexp is not None:
-            g = re.search(self.regexp, blob_dec, re.S)
+            g = re.search(self.regexp, self._bytes2str(blob_dec), re.S)
             if g is not None:
-                if self.encoded_string:
-                    pattern_enc = self.encode(g.group(0))
-                    off = blob.find(pattern_enc)
-                    size = len(pattern_enc)
-                else:
-                    off = g.start()
-                    size = g.end() - off
+                pattern_enc = self.encode(self._str2bytes(g.group(0)))
+                off = blob.find(pattern_enc)
+                size = len(pattern_enc)
             else:
                 off = -1
 
@@ -512,39 +529,32 @@ class String(VT_Alt):
         Returns:
             value, off, size
         """
-
         self.orig_max_sz = self.max_sz
         self.orig_min_encoded_sz = self.min_encoded_sz
         self.orig_max_encoded_sz = self.max_encoded_sz
         self.orig_min_sz = self.min_sz
-        self.orig_val_list = copy.copy(self.val_list)
-        self.orig_val_list_copy = copy.copy(self.val_list_copy)
+        self.orig_values = copy.copy(self.values)
+        self.orig_values_copy = copy.copy(self.values_copy)
         self.orig_drawn_val = self.drawn_val
 
         if constraints[AbsCsts.Size]:
-            if self.encoded_string:
-                sz = size if size is not None and size < self.max_encoded_sz else self.max_encoded_sz
-            else:
-                sz = size if size is not None and size < self.max_sz else self.max_sz
+            sz = size if size is not None and size < self.max_encoded_sz else self.max_encoded_sz
 
             # if encoded string, val is returned decoded
             val = self._read_value_from(blob[off:sz+off], constraints)
 
-            if self.encoded_string:
-                val_enc_sz = len(self.encode(val)) # maybe different from sz if blob is smaller
-                if val_enc_sz < self.min_encoded_sz:
-                    raise ValueError('min_encoded_sz constraint not respected!')
-            else:
-                val_sz = len(val) # maybe different from sz if blob is smaller
-                if val_sz < self.min_sz:
-                    raise ValueError('min_sz constraint not respected!')
+            val_enc_sz = len(self.encode(val)) # maybe different from sz if blob is smaller
+            if val_enc_sz < self.min_encoded_sz:
+                raise ValueError('min_encoded_sz constraint not respected!')
+            if not self.encoded_string:
+                val_sz = val_enc_sz
         else:
             blob = blob[off:] #blob[off:size+off] if size is not None else blob[off:]
             val = self._read_value_from(blob, constraints)
             val_sz = len(val)
 
-        if constraints[AbsCsts.Contents] and self.is_val_list_provided:
-            for v in self.val_list:
+        if constraints[AbsCsts.Contents] and self.is_values_provided:
+            for v in self.values:
                 if val.startswith(v):
                     val = v
                     val_sz = len(val)
@@ -574,10 +584,10 @@ class String(VT_Alt):
                 elif val_enc_sz < self.min_encoded_sz:
                     self.min_encoded_sz = val_enc_sz
 
-        if self.val_list is None:
-            self.val_list = []
+        if self.values is None:
+            self.values = []
 
-        self.val_list.insert(0, val)
+        self.values.insert(0, val)
 
         self.reset_state()
 
@@ -621,8 +631,8 @@ class String(VT_Alt):
         (safe to recall it more than once)
         '''
         if hasattr(self, 'orig_drawn_val'):
-            self.val_list = self.orig_val_list
-            self.val_list_copy = self.orig_val_list_copy
+            self.values = self.orig_values
+            self.values_copy = self.orig_values_copy
             self.min_sz = self.orig_min_sz
             self.max_sz = self.orig_max_sz
             self.min_encoded_sz = self.orig_min_encoded_sz
@@ -634,8 +644,8 @@ class String(VT_Alt):
         To be called after self.do_absorb() or self.do_revert_absorb()
         '''
         if hasattr(self, 'orig_drawn_val'):
-            del self.orig_val_list
-            del self.orig_val_list_copy
+            del self.orig_values
+            del self.orig_values_copy
             del self.orig_min_sz
             del self.orig_max_sz
             del self.orig_max_encoded_sz
@@ -645,34 +655,34 @@ class String(VT_Alt):
         if self.encoded_string:
             blob = self.decode(blob)
         if constraints[AbsCsts.Regexp]:
-            g = re.match(self.regexp, blob, re.S)
+            g = re.match(self.regexp, self._bytes2str(blob), re.S)
             if g is None:
                 raise ValueError('regexp not valid!')
             else:
-                return g.group(0)
+                return self._str2bytes(g.group(0))
         else:
             return blob
 
     def reset_state(self):
-        self.val_list_copy = copy.copy(self.val_list)
+        self.values_copy = copy.copy(self.values)
         self.drawn_val = None
         if self.encoded_string:
             self.encoding_arg = copy.copy(self.encoding_arg)
             self.init_encoding_scheme(self.encoding_arg)
 
     def rewind(self):
-        sz_vlist_copy = len(self.val_list_copy)
-        sz_vlist = len(self.val_list)
-        if self.val_list_copy is not None and \
+        sz_vlist_copy = len(self.values_copy)
+        sz_vlist = len(self.values)
+        if self.values_copy is not None and \
            sz_vlist_copy < sz_vlist:
-            val = self.val_list[sz_vlist - sz_vlist_copy - 1]
-            self.val_list_copy.insert(0, val)
+            val = self.values[sz_vlist - sz_vlist_copy - 1]
+            self.values_copy.insert(0, val)
 
         self.drawn_val = None
 
-    def _check_sizes(self):
-        if self.val_list is not None:
-            for v in self.val_list:
+    def _check_sizes(self, values):
+        if values is not None:
+            for v in values:
                 sz = len(v)
                 if self.max_sz is not None:
                     assert(self.max_sz >= sz >= self.min_sz)
@@ -680,50 +690,46 @@ class String(VT_Alt):
                     assert(sz >= self.min_sz)
 
 
-    def set_description(self, val_list=None, size=None, min_sz=None,
-                        max_sz=None, determinist=True,
-                        ascii_mode=False, extra_fuzzy_list=None,
+    def set_description(self, values=None, size=None, min_sz=None,
+                        max_sz=None, determinist=True, codec='latin-1',
+                        extra_fuzzy_list=None,
                         absorb_regexp=None, alphabet=None,
                         min_encoded_sz=None, max_encoded_sz=None):
         '''
         @size take precedence over @min_sz and @max_sz
         '''
+        self.codec = codecs.lookup(codec).name # normalize
         self.max_encoded_sz = max_encoded_sz
         self.min_encoded_sz = min_encoded_sz
+        self.max_enc_sz_provided = max_encoded_sz is not None
+        self.min_enc_sz_provided = min_encoded_sz is not None
 
         if alphabet is not None:
-            self.alphabet = convert_to_internal_repr(alphabet)
+            self.alphabet = self._str2bytes(alphabet)
         else:
             self.alphabet = None
-        self.ascii_mode = ascii_mode
 
         if absorb_regexp is None:
-            if self.ascii_mode:
-                self.regexp = b'[\x00-\x7f]*'
+            if self.codec == self.ASCII:
+                self.regexp = '[\x00-\x7f]*'
             else:
-                self.regexp = b'.*'
+                self.regexp = '.*'
         else:
-            self.regexp = convert_to_internal_repr(absorb_regexp)
+            self.regexp = absorb_regexp
 
         if extra_fuzzy_list is not None:
-            self.extra_fuzzy_list = VT._str2internal(extra_fuzzy_list)
+            self.extra_fuzzy_list = self._str2bytes(extra_fuzzy_list)
         elif hasattr(self, 'specific_fuzzing_list'):
             self.extra_fuzzy_list = self.specific_fuzzing_list
         else:
-            self.extra_fuzzy_list = [
-                b'',
-                b'\x00',
-                b'%s%s%s',
-                b'%n%n%n',
-                b'\r\n'
-            ]
+            self.extra_fuzzy_list = None
 
-        if val_list is not None:
-            assert(isinstance(val_list, list))
-            self.val_list = VT._str2internal(val_list)
-            for val in self.val_list:
-                if not self._check_compliance(val, force_max_enc_sz=max_encoded_sz is not None,
-                                              force_min_enc_sz=min_encoded_sz is not None,
+        if values is not None:
+            assert isinstance(values, list)
+            self.values = self._str2bytes(values)
+            for val in self.values:
+                if not self._check_compliance(val, force_max_enc_sz=self.max_enc_sz_provided,
+                                              force_min_enc_sz=self.min_enc_sz_provided,
                                               update_list=False):
                     raise DataModelDefinitionError
 
@@ -732,82 +738,88 @@ class String(VT_Alt):
                         if l not in self.alphabet:
                             raise ValueError("The value '%s' does not conform to the alphabet!" % val)
 
-            self.val_list_copy = copy.copy(self.val_list)
-            self.is_val_list_provided = True  # distinguish cases where
-                                           # val_list is provided or
-                                           # created based on size
-            self.user_provided_list = copy.copy(self.val_list)
+            self.values_copy = copy.copy(self.values)
+            self.is_values_provided = True  # distinguish cases where
+                                              # values is provided or
+                                              # created based on size
+            self.user_provided_list = copy.copy(self.values)
         else:
-            self.is_val_list_provided = False
+            self.is_values_provided = False
             self.user_provided_list = None
 
         if size is not None:
             self.min_sz = size
             self.max_sz = size
-
         elif min_sz is not None and max_sz is not None:
             assert(max_sz >= 0 and min_sz >= 0 and max_sz - min_sz >= 0)
             self.min_sz = min_sz
             self.max_sz = max_sz
-
         elif min_sz is not None:
             self.min_sz = min_sz
             # for string with no size limit, we set a threshold to
             # DEFAULT_MAX_SZ chars
             self.max_sz = self.DEFAULT_MAX_SZ
-            
         elif max_sz is not None:
             self.max_sz = max_sz
             self.min_sz = 0
-
-        elif val_list is not None:
+        elif values is not None:
             sz = 0
-            for v in self.val_list:
+            for v in values:
                 length = len(v)
                 if length > sz:
                     sz = length
-
             self.max_sz = sz
             self.min_sz = 0
-
         elif max_encoded_sz is not None:
             # If we reach this condition, that means no size has been provided, we thus decide
             # an arbitrary default value for max_sz. Regarding absorption, this arbitrary choice will
             # have no influence, as only max_encoded_sz will be used.
             self.min_sz = 0
             self.max_sz = max_encoded_sz
-
         else:
             self.min_sz = 0
             self.max_sz = self.DEFAULT_MAX_SZ
 
-
-        self._check_sizes()
-
-        if val_list is None:
-            self._populate_val_list(force_max_enc_sz=max_encoded_sz is not None,
-                                    force_min_enc_sz=min_encoded_sz is not None)
+        self._check_sizes(values)
 
         self.determinist = determinist
 
+        self._ensure_enc_sizes_consistency()
+
+    def _ensure_enc_sizes_consistency(self):
+        if not self.encoded_string:
+            # For a non-Encoding type, the size of the string is always lesser or equal than the size
+            # of the encoded string (utf8, ...). Hence the byte string size is still >= to the string size.
+            # As self.max_encoded_sz is needed for absorption, we do the following heuristic (when
+            # information is missing).
+            if self.max_encoded_sz is None or \
+                    (not self.max_enc_sz_provided and self.max_encoded_sz < self.max_sz):
+                self.max_encoded_sz = self.max_sz
+            if self.min_encoded_sz is None or \
+                    (not self.min_enc_sz_provided and self.min_encoded_sz > self.min_sz):
+                self.min_encoded_sz = self.min_sz
 
     def _check_compliance(self, value, force_max_enc_sz, force_min_enc_sz, update_list=True):
         if self.encoded_string:
-            val_sz = len(self.encode(value))
+            try:
+                enc_val = self.encode(value)
+            except:
+                return False
+            val_sz = len(enc_val)
             if not force_max_enc_sz and not force_min_enc_sz:
                 if self.max_encoded_sz is None or val_sz > self.max_encoded_sz:
                     self.max_encoded_sz = val_sz
                 if self.min_encoded_sz is None or val_sz < self.min_encoded_sz:
                     self.min_encoded_sz = val_sz
                 if update_list:
-                    self.val_list.append(value)
+                    self.values.append(value)
                 return True
             elif force_max_enc_sz and not force_min_enc_sz:
                 if val_sz <= self.max_encoded_sz:
                     if self.min_encoded_sz is None or val_sz < self.min_encoded_sz:
                         self.min_encoded_sz = val_sz
                     if update_list:
-                        self.val_list.append(value)
+                        self.values.append(value)
                     return True
                 else:
                     return False
@@ -816,32 +828,37 @@ class String(VT_Alt):
                     if self.max_encoded_sz is None or val_sz > self.max_encoded_sz:
                         self.max_encoded_sz = val_sz
                     if update_list:
-                        self.val_list.append(value)
+                        self.values.append(value)
                     return True
                 else:
                     return False
             else:
                 if val_sz <= self.max_encoded_sz and val_sz >= self.min_encoded_sz:
                     if update_list:
-                        self.val_list.append(value)
+                        self.values.append(value)
                     return True
                 else:
                     return False
         else:
+            val_sz = len(value)
+            if self.max_encoded_sz is None or val_sz > self.max_encoded_sz:
+                self.max_encoded_sz = val_sz
+            if self.min_encoded_sz is None or val_sz < self.min_encoded_sz:
+                self.min_encoded_sz = val_sz
             if update_list:
-                self.val_list.append(value)
+                self.values.append(value)
             return True
 
-    def _populate_val_list(self, force_max_enc_sz=False, force_min_enc_sz=False):
-        self.val_list = []
-        alpbt = string.printable if self.alphabet is None else unconvert_from_internal_repr(self.alphabet)
+    def _populate_values(self, force_max_enc_sz=False, force_min_enc_sz=False):
+        self.values = []
+        alpbt = string.printable if self.alphabet is None else self._bytes2str(self.alphabet)
         if self.min_sz < self.max_sz:
-            self._check_compliance(bp.rand_string(size=self.max_sz, str_set=alpbt),
+            self._check_compliance(self._str2bytes(bp.rand_string(size=self.max_sz, str_set=alpbt)),
                                    force_max_enc_sz=force_max_enc_sz, force_min_enc_sz=force_min_enc_sz)
-            self._check_compliance(bp.rand_string(size=self.min_sz, str_set=alpbt),
+            self._check_compliance(self._str2bytes(bp.rand_string(size=self.min_sz, str_set=alpbt)),
                                    force_max_enc_sz=force_max_enc_sz, force_min_enc_sz=force_min_enc_sz)
         else:
-            self._check_compliance(bp.rand_string(size=self.max_sz, str_set=alpbt),
+            self._check_compliance(self._str2bytes(bp.rand_string(size=self.max_sz, str_set=alpbt)),
                                    force_max_enc_sz=force_max_enc_sz, force_min_enc_sz=force_min_enc_sz)
         if self.min_sz+1 < self.max_sz:
             NB_VALS_MAX = 3
@@ -850,81 +867,125 @@ class String(VT_Alt):
                 retry_cpt = 0
                 while nb_vals < NB_VALS_MAX and retry_cpt < 5:
                     val = bp.rand_string(mini=self.min_sz+1, maxi=self.max_sz-1, str_set=alpbt)
-                    if self._check_compliance(val, force_max_enc_sz=force_max_enc_sz,
+                    if self._check_compliance(self._str2bytes(val), force_max_enc_sz=force_max_enc_sz,
                                               force_min_enc_sz=force_min_enc_sz):
                         nb_vals += 1
                     else:
                         retry_cpt += 1
 
-        if len(self.val_list) == 0:
+        if len(self.values) == 0:
             raise DataModelDefinitionError
 
-    def get_current_raw_val(self):
+    def get_current_raw_val(self, str_form=False):
         if self.drawn_val is None:
             self.get_value()
-        return self.drawn_val
-    
-    def enable_normal_mode(self):
-        self.val_list = self.val_list_save
-        self.val_list_copy = copy.copy(self.val_list)
-        self.val_list_fuzzy = None
+        val = self._bytes2str(self.drawn_val) if str_form else self.drawn_val
+        return val
+
+    def _enable_normal_mode(self):
+        self.values = self.values_save
+        self.values_copy = copy.copy(self.values)
+        self.values_fuzzy = None
 
         self.drawn_val = None
 
-    def enable_fuzz_mode(self):
-        self.val_list_fuzzy = []
+    def _enable_fuzz_mode(self, fuzz_magnitude=1.0):
+        self.values_fuzzy = []
 
         if self.drawn_val is not None:
             orig_val = self.drawn_val
         else:
             if self.determinist:
-                orig_val = self.val_list_copy[0]
+                orig_val = self.values_copy[0]
             else:
-                orig_val = random.choice(self.val_list_copy)
+                orig_val = random.choice(self.values_copy)
+
+        sz = len(orig_val)
+        sz_delta_with_max = self.max_encoded_sz - sz
 
         try:
-            val = bp.corrupt_bits(orig_val, n=1, ascii=self.ascii_mode)
-            self.val_list_fuzzy.append(val)
+            val = bp.corrupt_bits(orig_val, n=1)
+            self.values_fuzzy.append(val)
         except:
             print("\n*** Value is empty! --> skipping bitflip test case ***")
 
-        sz = len(orig_val)
-        sz_delta = self.max_sz - sz
+        val = orig_val + b"A"*(sz_delta_with_max + 1)
+        self.values_fuzzy.append(val)
 
-        val = orig_val + b"A"*(sz_delta + 1)
-        self.val_list_fuzzy.append(val)
-
+        self.values_fuzzy.append(b'')
         if sz > 0:
-            sz_delta = sz - self.min_sz
-            val = orig_val[:-sz_delta-1]
-            self.val_list_fuzzy.append(val)
+            sz_delta_with_min = sz - self.min_sz
+            val = orig_val[:-sz_delta_with_min-1]
+            if val != b'':
+                self.values_fuzzy.append(val)
 
-        val = orig_val + b"X"*(self.max_sz*8)
-        self.val_list_fuzzy.append(val)
+        val = orig_val + b"X"*(self.max_sz*int(100*fuzz_magnitude))
+        self.values_fuzzy.append(val)
 
-        for v in self.extra_fuzzy_list:
-            if v not in self.val_list_fuzzy:
-                self.val_list_fuzzy.append(v)
+        self.values_fuzzy.append(b'\x00' * sz if sz > 0 else b'\x00')
+
+        if sz > 1:
+            is_even = sz % 2 == 0
+            cpt = sz // 2
+            if is_even:
+                self.values_fuzzy.append(b'%n' * cpt)
+                self.values_fuzzy.append(b'%s' * cpt)
+            else:
+                self.values_fuzzy.append(orig_val[:1] + b'%n' * cpt)
+                self.values_fuzzy.append(orig_val[:1] + b'%s' * cpt)
+
+        self.values_fuzzy.append(orig_val + b'%n' * int(400*fuzz_magnitude))
+        self.values_fuzzy.append(orig_val + b'%s' * int(400*fuzz_magnitude))
+        self.values_fuzzy.append(orig_val + b'\"%n\"' * int(400*fuzz_magnitude))
+        self.values_fuzzy.append(orig_val + b'\"%s\"' * int(400*fuzz_magnitude))
+        self.values_fuzzy.append(orig_val + b'\r\n' * int(100*fuzz_magnitude))
+
+        if self.extra_fuzzy_list:
+            for v in self.extra_fuzzy_list:
+                if v not in self.values_fuzzy:
+                    self.values_fuzzy.append(v)
+
+        if self.codec == self.ASCII:
+            val = bytearray(orig_val)
+            if len(val) > 0:
+                val[0] |= 0x80
+                val = bytes(val)
+            else:
+                val = b'\xe9'
+            if val not in self.values_fuzzy:
+                self.values_fuzzy.append(val)
+        elif self.codec == self.UTF16BE or self.codec == self.UTF16LE:
+            if self.max_sz > 0:
+                if self.max_encoded_sz % 2 == 1:
+                    nb = self.max_sz // 2
+                    # euro character at the end that 'fully' use the 2 bytes of utf-16
+                    val = ('A' * nb).encode(self.codec) + b'\xac\x20'
+                    if val not in self.values_fuzzy:
+                        self.values_fuzzy.append(val)
 
         enc_cases = self.encoding_test_cases(orig_val, self.max_sz, self.min_sz,
                                              self.min_encoded_sz, self.max_encoded_sz)
         if enc_cases:
-            self.val_list_fuzzy += enc_cases
+            self.values_fuzzy += enc_cases
 
-        self.val_list_save = self.val_list
-        self.val_list = self.val_list_fuzzy
-        self.val_list_copy = copy.copy(self.val_list)
+        self.values_save = self.values
+        self.values = self.values_fuzzy
+        self.values_copy = copy.copy(self.values)
 
         self.drawn_val = None
 
     def get_value(self):
-        if not self.val_list_copy:
-            self.val_list_copy = copy.copy(self.val_list)
+        if not self.values:
+            self._populate_values(force_max_enc_sz=self.max_enc_sz_provided,
+                                  force_min_enc_sz=self.min_enc_sz_provided)
+            self._ensure_enc_sizes_consistency()
+        if not self.values_copy:
+            self.values_copy = copy.copy(self.values)
         if self.determinist:
-            ret = self.val_list_copy.pop(0)
+            ret = self.values_copy.pop(0)
         else:
-            ret = random.choice(self.val_list_copy)
-            self.val_list_copy.remove(ret)
+            ret = random.choice(self.values_copy)
+            self.values_copy.remove(ret)
 
         self.drawn_val = ret
         if self.encoded_string:
@@ -932,18 +993,18 @@ class String(VT_Alt):
         return ret
 
     def is_exhausted(self):
-        if self.val_list_copy:
+        if self.values_copy:
             return False
         else:
             return True
 
     def set_size_from_constraints(self, size=None, encoded_size=None):
         # This method is used only for absorption purpose, thus no modification
-        # is performed on self.val_list. To be reconsidered in the case the method
+        # is performed on self.values. To be reconsidered in the case the method
         # has to be used for an another purpose.
 
         assert size is not None or encoded_size is not None
-        if self.encoded_string and encoded_size is not None:
+        if encoded_size is not None:
             if encoded_size == self.max_encoded_sz:
                 return
             self.max_encoded_sz = encoded_size
@@ -955,15 +1016,21 @@ class String(VT_Alt):
         else:
             raise ValueError
 
-    def pretty_print(self):
+    def pretty_print(self, max_size=None):
         if self.drawn_val is None:
             self.get_value()
 
-        if self.encoded_string:
+        if self.encoded_string or self.codec not in [self.ASCII, self.LATIN_1]:
             dec = self.drawn_val
-            return repr(dec) + ' [decoded, sz=' + str(len(dec)) + ']'
+            sz = len(dec)
+            if max_size is not None and sz > max_size:
+                dec = dec[:max_size]
+            dec = dec.decode(self.codec, 'replace')
+            if sys.version_info[0] == 2:
+                dec = dec.encode('latin-1')
+            return dec + ' [decoded, sz={!s}, codec={!s}]'.format(len(dec), self.codec)
         else:
-            return None
+            return 'codec={!s}'.format(self.codec)
 
 
 class INT(VT):
@@ -984,38 +1051,52 @@ class INT(VT):
                           # and that mini is not specified by the user
 
 
-    def __init__(self, int_list=None, mini=None, maxi=None, default=None, determinist=True):
+    def __init__(self, values=None, mini=None, maxi=None, default=None, determinist=True,
+                 force_mode=False):
         self.idx = 0
         self.determinist = determinist
         self.exhausted = False
         self.drawn_val = None
         self.default = None
 
-        if int_list:
+        if values:
             assert default is None
-            self.int_list = list(int_list)
-            self.int_list_copy = list(self.int_list)
+            if force_mode:
+                new_values = []
+                for v in values:
+                    if not self.is_compatible(v):
+                        if v > self.__class__.maxi:
+                            v = self.__class__.maxi
+                    new_values.append(v)
+                self.values = new_values
+            else:
+                for v in values:
+                    if not self.is_compatible(v):
+                        raise DataModelDefinitionError("Incompatible value ({!r}) with {!s}".format(v, self.__class__))
+                self.values = list(values)
+
+            self.values_copy = list(self.values)
 
         else:
             if mini is not None and maxi is not None:
                 assert maxi >= mini
 
             if mini is not None and maxi is not None and abs(maxi - mini) < 200:
-                self.int_list = list(range(mini, maxi+1))
+                self.values = list(range(mini, maxi + 1))
                 # we keep min/max information as it may be valuable for fuzzing
                 self.mini = self.mini_gen = mini
                 self.maxi = self.maxi_gen = maxi
                 if default is not None:
                     assert mini <= default <= maxi
-                    self.int_list.remove(default)
-                    self.int_list.insert(0,default)
+                    self.values.remove(default)
+                    self.values.insert(0, default)
                     # Once inserted at this place, its position is preserved, especially with reset_state()
                     # (assuming do_absorb() is not called), so we do not save 'default' value in this case
-                self.int_list_copy = copy.copy(self.int_list)
+                self.values_copy = copy.copy(self.values)
 
             else:
-                self.int_list = None
-                self.int_list_copy = None
+                self.values = None
+                self.values_copy = None
                 if self.mini is not None:
                     self.mini = max(mini, self.mini) if mini is not None else self.mini
                     self.mini_gen = self.mini
@@ -1046,26 +1127,26 @@ class INT(VT):
     def make_private(self, forget_current_state):
         # no need to copy self.default (that should not be modified)
         if forget_current_state:
-            self.int_list_copy = copy.copy(self.int_list)
+            self.values_copy = copy.copy(self.values)
             self.idx = 0
             self.exhausted = False
             self.drawn_val = None
         else:
-            self.int_list_copy = copy.copy(self.int_list_copy)
+            self.values_copy = copy.copy(self.values_copy)
 
 
     def absorb_auto_helper(self, blob, constraints):
         off = 0
         # If 'Contents' constraint is set, we seek for int within
-        # int_list.
-        # If INT() does not have int_list, we assume off==0
+        # values.
+        # If INT() does not have values, we assume off==0
         # and let do_absorb() decide if it's OK.
-        if constraints[AbsCsts.Contents] and self.int_list is not None:
-            for v in self.int_list:
+        if constraints[AbsCsts.Contents] and self.values is not None:
+            for v in self.values:
                 if blob.startswith(self._convert_value(v)):
                     break
             else:
-                for v in self.int_list:
+                for v in self.values:
                     off = blob.find(self._convert_value(v))
                     if off > -1:
                         break
@@ -1078,8 +1159,8 @@ class INT(VT):
 
     def do_absorb(self, blob, constraints, off=0, size=None):
 
-        self.orig_int_list = copy.copy(self.int_list)
-        self.orig_int_list_copy = copy.copy(self.int_list_copy)
+        self.orig_values = copy.copy(self.values)
+        self.orig_values_copy = copy.copy(self.values_copy)
         self.orig_drawn_val = self.drawn_val
 
         blob = blob[off:]
@@ -1087,19 +1168,19 @@ class INT(VT):
         val, sz = self._read_value_from(blob, size)
         orig_val = self._unconvert_value(val)
 
-        if self.int_list is not None:
+        if self.values is not None:
             if constraints[AbsCsts.Contents]:
-                if orig_val not in self.int_list:
+                if orig_val not in self.values:
                     raise ValueError('contents not valid!')
-            self.int_list.insert(0, orig_val)
-            self.int_list_copy = copy.copy(self.int_list)
+            self.values.insert(0, orig_val)
+            self.values_copy = copy.copy(self.values)
         else:
             if constraints[AbsCsts.Contents]:
                 if self.maxi is not None and orig_val > self.maxi:
                     raise ValueError('contents not valid! (max limit)')
                 if self.mini is not None and orig_val < self.mini:
                     raise ValueError('contents not valid! (min limit)')
-            # self.int_list = [orig_val]
+            # self.values = [orig_val]
             self.idx = orig_val - self.mini
 
         # self.reset_state()
@@ -1114,14 +1195,14 @@ class INT(VT):
         If needed should be called just after self.do_absorb().
         '''
         if hasattr(self, 'orig_drawn_val'):
-            self.int_list = self.orig_int_list
-            self.int_list_copy = self.orig_int_list_copy
+            self.values = self.orig_values
+            self.values_copy = self.orig_values_copy
             self.drawn_val = self.orig_drawn_val
 
     def do_cleanup_absorb(self):
         if hasattr(self, 'orig_drawn_val'):
-            del self.orig_int_list
-            del self.orig_int_list_copy
+            del self.orig_values
+            del self.orig_values_copy
             del self.orig_drawn_val
 
     def make_determinist(self):
@@ -1131,7 +1212,7 @@ class INT(VT):
         self.determinist = False
 
     def get_value_list(self):
-        return self.int_list
+        return self.values
 
     def get_current_raw_val(self):
         if self.drawn_val is None:
@@ -1139,76 +1220,73 @@ class INT(VT):
         return self.drawn_val
 
     def is_compatible(self, integer):
-        if self.mini <= integer <= self.maxi:
-            return True
-        else:
-            return False
+        return self.mini <= integer <= self.maxi
 
     def set_value_list(self, new_list):
         ret = False
-        if self.int_list:
+        if self.values:
             l = list(filter(self.is_compatible, new_list))
             if l:
-                self.int_list = l
-                self.int_list_copy = copy.copy(self.int_list)
+                self.values = l
+                self.values_copy = copy.copy(self.values)
                 self.idx = 0
                 ret = True
 
         return ret
 
     def extend_value_list(self, new_list):
-        if self.int_list is not None:
+        if self.values is not None:
             l = list(filter(self.is_compatible, new_list))
             if l:
-                int_list_enc = list(map(self._convert_value, self.int_list))
+                values_enc = list(map(self._convert_value, self.values))
 
                 # We copy the list as it is a class attribute in
                 # Fuzzy_* classes, and we don't want to change the classes
                 # (as we modify the list contents and not the list itself)
-                self.int_list = list(self.int_list)
+                self.values = list(self.values)
 
                 # we don't use a set to preserve the order
                 for v in l:
                     # we check the converted value to avoid duplicated
                     # values (negative and positive value coded the
                     # same) --> especially usefull for the Fuzzy_INT class
-                    if self._convert_value(v) not in int_list_enc:
-                        self.int_list.insert(0, v)
+                    if self._convert_value(v) not in values_enc:
+                        self.values.insert(0, v)
 
                 self.idx = 0
-                self.int_list_copy = copy.copy(self.int_list)
+                self.values_copy = copy.copy(self.values)
 
 
     def remove_value_list(self, value_list):
-        if self.int_list is not None:
+        if self.values is not None:
             l = list(filter(self.is_compatible, value_list))
             if l:
                 # We copy the list as it is a class attribute in
                 # Fuzzy_* classes, and we don't want to change the classes
                 # (as we modify the list contents and not the list itself)
-                self.int_list = list(self.int_list)
+                self.values = list(self.values)
 
                 for v in l:
                     try:
-                        self.int_list.remove(v)
+                        self.values.remove(v)
                     except ValueError:
                         pass
 
                 self.idx = 0
-                self.int_list_copy = copy.copy(self.int_list)
+                self.values_copy = copy.copy(self.values)
 
     def get_value(self):
-        if self.int_list is not None:
-            if not self.int_list_copy:
-                self.int_list_copy = copy.copy(self.int_list)
+        if self.values is not None:
+            if not self.values_copy:
+                self.values_copy = copy.copy(self.values)
 
             if self.determinist:
-                val = self.int_list_copy.pop(0)
+                val = self.values_copy.pop(0)
             else:
-                val = random.choice(self.int_list_copy)
-                self.int_list_copy.remove(val)
-            if not self.int_list_copy:
-                self.int_list_copy = copy.copy(self.int_list)
+                val = random.choice(self.values_copy)
+                self.values_copy.remove(val)
+            if not self.values_copy:
+                self.values_copy = copy.copy(self.values)
                 self.exhausted = True
             else:
                 self.exhausted = False
@@ -1224,7 +1302,7 @@ class INT(VT):
             else:
                 # Finite mode is implemented in this way when 'max -
                 # min' is considered too big to be transformed as an
-                # 'int_list'. It avoids cunsuming too much memory and
+                # 'values'. It avoids cunsuming too much memory and
                 # provide an end result that seems sufficient for such
                 # situation
                 val = random.randint(self.mini_gen, self.maxi_gen)
@@ -1246,7 +1324,7 @@ class INT(VT):
     def set_size_from_constraints(self, size=None, encoded_size=None):
         raise DataModelDefinitionError
 
-    def pretty_print(self):
+    def pretty_print(self, max_size=None):
         if self.drawn_val is None:
             self.get_value()
 
@@ -1262,9 +1340,9 @@ class INT(VT):
         if self.exhausted:
             self.exhausted = False
 
-        if self.int_list is not None:
-            if self.int_list_copy is not None and self.drawn_val is not None:
-                self.int_list_copy.insert(0, self.drawn_val)
+        if self.values is not None:
+            if self.values_copy is not None and self.drawn_val is not None:
+                self.values_copy.insert(0, self.drawn_val)
         else:
             if self.idx > 0:
                 self.idx -= 1
@@ -1294,23 +1372,29 @@ class INT(VT):
             self.idx = self.default - self.mini_gen
         else:
             self.idx = 0
-        if self.int_list is not None:
-            self.int_list_copy = copy.copy(self.int_list)
+        if self.values is not None:
+            self.values_copy = copy.copy(self.values)
         self.exhausted = False
         self.drawn_val = None
 
     def update_raw_value(self, val):
+        ok = True
         if isinstance(val, int):
-            if self.int_list is not None:
-                self.int_list.append(val)
-                self.int_list_copy = copy.copy(self.int_list)
+            if val > self.__class__.maxi:
+                val = self.__class__.maxi
+                ok = False
+            if self.values is not None:
+                self.values.append(val)
+                self.values_copy = copy.copy(self.values)
             else:
-                self.idx = val - self.mini
+                self.idx = val - self.mini_gen
         else:
             raise TypeError
 
         self.drawn_val = val
         self.exhausted = False
+
+        return ok
 
     # To be used after calling get_value()
     def is_exhausted(self):
@@ -1332,32 +1416,11 @@ def from_encoder(encoder_cls, encoding_arg=None):
         string_subclass.encode = new_meth(encoder_cls.encode)
         string_subclass.decode = new_meth(encoder_cls.decode)
         string_subclass.init_encoding_scheme = new_meth(encoder_cls.init_encoding_scheme)
-        string_subclass.to_bytes = encoder_cls.to_bytes  # static method
         if encoding_arg is not None:
             string_subclass.encoding_arg = encoding_arg
         return string_subclass
     return internal_func
 
-
-@from_encoder(PythonCodec_Enc)
-class Codec(String): pass
-
-@from_encoder(PythonCodec_Enc, 'utf_16_le')
-class UTF16_LE(String):
-    def encoding_test_cases(self, current_val, max_sz, min_sz, min_encoded_sz, max_encoded_sz):
-        l = None
-        if max_sz > 0:
-            if max_encoded_sz % 2 == 1:
-                nb = max_sz // 2
-                # euro character at the end that 'fully' use the 2 bytes of utf-16
-                l = [self.encode(b'A'*nb)+b'\xac\x20']
-        return l
-
-@from_encoder(PythonCodec_Enc, 'utf_16_be')
-class UTF16_BE(UTF16_LE): pass
-
-@from_encoder(PythonCodec_Enc, 'utf_8')
-class UTF8(String): pass
 
 @from_encoder(GZIP_Enc)
 class GZIP(String): pass
@@ -1376,7 +1439,7 @@ class Fuzzy_INT(INT):
     '''
     Base class to be inherited and not used directly
     '''
-    int_list = None
+    values = None
     short_cformat = None
 
     def __init__(self, endian=VT.BigEndian, supp_list=None):
@@ -1384,11 +1447,11 @@ class Fuzzy_INT(INT):
         if supp_list:
             self.extend_value_list(supp_list)
 
-        assert(self.int_list is not None)
-        INT.__init__(self, int_list=self.int_list, determinist=True)
+        assert(self.values is not None)
+        INT.__init__(self, values=self.values, determinist=True)
 
     def make_private(self, forget_current_state):
-        self.int_list = copy.copy(self.int_list)
+        self.values = copy.copy(self.values)
 
     def is_compatible(self, integer):
         if self.mini <= integer <= self.maxi:
@@ -1426,20 +1489,25 @@ class INT_str(with_metaclass(meta_int_str, INT)):
         return int(val)
 
     def _convert_value(self, val):
-        return VT._str2internal(str(val))
-        # return str(val)
+        return self._str2bytes(str(val))
 
-    def pretty_print(self):
+    def pretty_print(self, max_size=None):
         if self.drawn_val is None:
             self.get_value()
 
         return str(self.drawn_val)
 
+    def _str2bytes(self, val):
+        if isinstance(val, (list, tuple)):
+            b = [v.encode('utf8') for v in val]
+        else:
+            b = val.encode('utf8')
+        return b
 
 
 #class Fuzzy_INT_str(Fuzzy_INT, metaclass=meta_int_str):
 class Fuzzy_INT_str(with_metaclass(meta_int_str, Fuzzy_INT)):
-    int_list = [0, 2**32-1, 2**32]
+    values = [0, 2 ** 32 - 1, 2 ** 32]
 
     def is_compatible(self, integer):
         return True
@@ -1453,13 +1521,13 @@ class BitField(VT_Alt):
     '''
     Provide:
     - either @subfield_limits or @subfield_sizes
-    - either @subfield_val_lists or @subfield_val_extremums
+    - either @subfield_values or @subfield_val_extremums
 
     '''
     padding_one = [0, 1, 0b11, 0b111, 0b1111, 0b11111, 0b111111, 0b1111111]
 
     def init_specific(self, subfield_limits=None, subfield_sizes=None,
-                      subfield_val_lists=None, subfield_val_extremums=None,
+                      subfield_values=None, subfield_val_extremums=None,
                       padding=0, lsb_padding=True,
                       endian=VT.LittleEndian, determinist=True,
                       subfield_descs=None, defaults=None):
@@ -1488,7 +1556,7 @@ class BitField(VT_Alt):
         self.current_idx = None
         self.idx = None
         self.idx_inuse = None
-        self.set_bitfield(sf_val_lists=subfield_val_lists, sf_val_extremums=subfield_val_extremums,
+        self.set_bitfield(sf_valuess=subfield_values, sf_val_extremums=subfield_val_extremums,
                           sf_limits=subfield_limits, sf_sizes=subfield_sizes, sf_descs=subfield_descs,
                           sf_defaults=defaults)
 
@@ -1552,8 +1620,8 @@ class BitField(VT_Alt):
         else:
             # Note that the case "self.idx[idx]==1" has not to be
             # specifically handled here (for preventing overflow),
-            # because even if len(val_list)==1, we add a new element
-            # within, making a val_list always >= 2.
+            # because even if len(subfield_vals)==1, we add a new element
+            # within, making a subfield_vals always >= 2.
             self.subfield_vals[idx].insert(self.idx[idx], val)
             self.idx_inuse[idx] = self.idx[idx]
 
@@ -1567,14 +1635,14 @@ class BitField(VT_Alt):
             mini, maxi = self.subfield_extrems[idx]
             ret = mini + self.idx_inuse[idx]
         else:
-            val_list = self.subfield_vals[idx]
-            index = 0 if len(val_list) == 1 else self.idx_inuse[idx]
-            ret = val_list[index]
+            values = self.subfield_vals[idx]
+            index = 0 if len(values) == 1 else self.idx_inuse[idx]
+            ret = values[index]
             
         return ret
 
         
-    def set_bitfield(self, sf_val_lists=None, sf_val_extremums=None, sf_limits=None, sf_sizes=None,
+    def set_bitfield(self, sf_valuess=None, sf_val_extremums=None, sf_limits=None, sf_sizes=None,
                      sf_descs=None, sf_defaults=None):
 
         if sf_limits is not None:
@@ -1587,9 +1655,9 @@ class BitField(VT_Alt):
         else:
             raise DataModelDefinitionError
 
-        if sf_val_lists is None:
-            sf_val_lists = [None for i in range(len(self.subfield_limits))]
-        elif len(sf_val_lists) != len(self.subfield_limits):
+        if sf_valuess is None:
+            sf_valuess = [None for i in range(len(self.subfield_limits))]
+        elif len(sf_valuess) != len(self.subfield_limits):
             raise DataModelDefinitionError
 
         if sf_val_extremums is None:
@@ -1624,17 +1692,17 @@ class BitField(VT_Alt):
         # provided limits are not included in the subfields
         for idx, lim in enumerate(self.subfield_limits):
 
-            val_list = sf_val_lists[idx]
+            values = sf_valuess[idx]
             extrems = sf_val_extremums[idx]
 
             size = lim - prev_lim
             self.subfield_sizes.append(size)
 
-            if val_list is not None:
+            if values is not None:
                 default = self.subfield_defaults[idx]
                 assert default is None
                 l = []
-                for v in val_list:
+                for v in values:
                     if self.is_compatible(v, size):
                         l.append(v)
                 self.subfield_vals.append(l)
@@ -1737,10 +1805,10 @@ class BitField(VT_Alt):
         raise DataModelDefinitionError
 
 
-    def pretty_print(self):
+    def pretty_print(self, max_size=None):
 
         first_pass = True
-        for lim, sz, val_list, extrems, i in zip(self.subfield_limits[::-1],
+        for lim, sz, values, extrems, i in zip(self.subfield_limits[::-1],
                                                  self.subfield_sizes[::-1],
                                                  self.subfield_vals[::-1],
                                                  self.subfield_extrems[::-1],
@@ -1757,12 +1825,12 @@ class BitField(VT_Alt):
             else:
                 string += ' ' + prefix
 
-            if val_list is None:
+            if values is None:
                 mini, maxi = extrems
                 string += bin(mini+self.idx_inuse[i])[2:].zfill(sz)
             else:
-                index = 0 if len(val_list) == 1 else self.idx_inuse[i]
-                string += bin(val_list[index])[2:].zfill(sz)
+                index = 0 if len(values) == 1 else self.idx_inuse[i]
+                string += bin(values[index])[2:].zfill(sz)
 
         if self.padding_size != 0:
             if self.padding == 1:
@@ -1788,7 +1856,7 @@ class BitField(VT_Alt):
         self.__count_of_possible_values = None
         self._reset_idx()
 
-    def enable_normal_mode(self):
+    def _enable_normal_mode(self):
         if self.determinist_save is not None:
             self.determinist = self.determinist_save
 
@@ -1799,7 +1867,7 @@ class BitField(VT_Alt):
         self.subfield_fuzzy_vals = [None for i in range(len(self.subfield_sizes))]
         self.exhausted = False
 
-    def enable_fuzz_mode(self):
+    def _enable_fuzz_mode(self, fuzz_magnitude=1.0):
 
         for idx in range(len(self.subfield_fuzzy_vals)):
             sz = self.subfield_sizes[idx]
@@ -1810,9 +1878,9 @@ class BitField(VT_Alt):
             # max is needed because self.idx[0] is equal to 0 in this case
             curr_idx = max(self.idx[idx]-1, 0)
 
-            curr_val_list = self.subfield_vals[idx]
-            if curr_val_list is not None:
-                current = curr_val_list[curr_idx]
+            curr_values = self.subfield_vals[idx]
+            if curr_values is not None:
+                current = curr_values[curr_idx]
             else:
                 mini, maxi = self.subfield_extrems[idx]
                 current = mini + curr_idx
@@ -1843,8 +1911,8 @@ class BitField(VT_Alt):
             if b not in l and self.is_compatible(b, sz):
                 l.append(b)
 
-            if curr_val_list is not None:
-                orig_set = set(curr_val_list)
+            if curr_values is not None:
+                orig_set = set(curr_values)
                 max_oset = max(orig_set)
                 min_oset = min(orig_set)
                 if min_oset != max_oset:
@@ -1891,12 +1959,12 @@ class BitField(VT_Alt):
             return self.__count_of_possible_values
 
         s = 1
-        for val_list, extrems in zip(self.subfield_vals, self.subfield_extrems):
-            if val_list is None:
+        for values, extrems in zip(self.subfield_vals, self.subfield_extrems):
+            if values is None:
                 mini, maxi = extrems
                 s += maxi - mini
             else:
-                s += len(val_list) - 1
+                s += len(values) - 1
 
         self.__count_of_possible_values = s
         return self.__count_of_possible_values
@@ -1943,32 +2011,32 @@ class BitField(VT_Alt):
 
 
     def _read_value_from(self, blob, size, endian, constraints):
-        val_list = list(struct.unpack('B'*size, blob))
+        values = list(struct.unpack('B'*size, blob))
 
         if endian == VT.BigEndian:
-            val_list = val_list[::-1]
+            values = values[::-1]
 
-        # val_list from LSB to MSB
+        # values from LSB to MSB
 
         if self.padding_size != 0:
             if self.lsb_padding:
                 if constraints[AbsCsts.Contents]:
                     mask = self.padding_one[self.padding_size]
-                    if self.padding == 1 and val_list[0] & mask != mask:
+                    if self.padding == 1 and values[0] & mask != mask:
                         raise ValueError('contents not valid! (padding should be 1s)')
-                    elif self.padding == 0 and val_list[0] & self.padding_one[self.padding_size] != 0:
+                    elif self.padding == 0 and values[0] & self.padding_one[self.padding_size] != 0:
                         raise ValueError('contents not valid! (padding should be 0s)')
             else:
                 if constraints[AbsCsts.Contents]:
                     mask = self.padding_one[self.padding_size]<<(8-self.padding_size)
-                    if self.padding == 1 and val_list[-1] & mask != mask:
+                    if self.padding == 1 and values[-1] & mask != mask:
                         raise ValueError('contents not valid! (padding should be 1s)')
-                    elif self.padding == 0 and val_list[-1] & mask != 0:
+                    elif self.padding == 0 and values[-1] & mask != 0:
                         raise ValueError('contents not valid! (padding should be 0s)')
 
-        val_list_sz = len(val_list)
+        values_sz = len(values)
         result = 0
-        for v, i in zip(val_list,range(val_list_sz)):
+        for v, i in zip(values,range(values_sz)):
             result += v<<(i*8)
 
         decoded_val = result
@@ -1977,7 +2045,7 @@ class BitField(VT_Alt):
             if self.lsb_padding:
                 result >>= self.padding_size
             else:
-                shift = (val_list_sz-1)*8
+                shift = (values_sz-1)*8
                 result &= (((1<<(8-self.padding_size))-1)<<shift) + (1<<shift)-1
 
         # We return the decoded integer
@@ -2007,12 +2075,12 @@ class BitField(VT_Alt):
         first_pass = True
         limits = self.subfield_limits[:-1]
         limits.insert(0, 0)
-        for lim, sz, val_list, extrems, i in zip(limits, self.subfield_sizes, self.subfield_vals, self.subfield_extrems,
+        for lim, sz, values, extrems, i in zip(limits, self.subfield_sizes, self.subfield_vals, self.subfield_extrems,
                                              range(len(self.subfield_limits))):
 
             val = (orig_val >> lim) & ((1<<sz)-1)
 
-            if val_list is None:
+            if values is None:
                 mini, maxi = extrems
                 if constraints[AbsCsts.Contents] and (mini > val or maxi < val):
                     raise ValueError("Value for subfield number {:d} does not match the constraints!".format(i+1))
@@ -2021,9 +2089,9 @@ class BitField(VT_Alt):
                     extrems[0] = min(extrems[0], val)
                     extrems[1] = max(extrems[1], val)
             else:
-                if constraints[AbsCsts.Contents] and val not in val_list:
+                if constraints[AbsCsts.Contents] and val not in values:
                     raise ValueError("Value for subfield number {:d} does not match the constraints!".format(i+1))
-                val_list.insert(insert_idx, val)                
+                values.insert(insert_idx, val)
 
             if first_pass:
                 first_pass = False
@@ -2074,11 +2142,11 @@ class BitField(VT_Alt):
 
         self.idx_inuse = copy.copy(self.idx)
 
-        for lim, val_list, extrems, i in zip(self.subfield_limits, self.subfield_vals, self.subfield_extrems,
+        for lim, values, extrems, i in zip(self.subfield_limits, self.subfield_vals, self.subfield_extrems,
                                              range(len(self.subfield_limits))):
             if self.determinist:
                 if i == self.current_idx:
-                    if val_list is None:
+                    if values is None:
                         mini, maxi = extrems
                         v = mini + self.idx[self.current_idx]
                         if v >= maxi:
@@ -2087,45 +2155,45 @@ class BitField(VT_Alt):
                             self.idx[self.current_idx] += 1
                         val += v << prev_lim
                     else:
-                        if len(val_list) == 1:
+                        if len(values) == 1:
                             index = 0
                         else:
                             index = self.idx[self.current_idx]
-                        if index >= len(val_list) - 1:
+                        if index >= len(values) - 1:
                             update_current_idx = True
                         else:
                             self.idx[self.current_idx] += 1
                         self.idx_inuse[self.current_idx] = index
-                        val += val_list[index] << prev_lim
+                        val += values[index] << prev_lim
                 else:
                     if self._fuzzy_mode:
                         cursor = 0
                     else:
-                        if val_list is not None and len(val_list) == 1:
+                        if values is not None and len(values) == 1:
                             cursor = 0
                         else:
                             if i > self.current_idx and self.subfield_defaults[i] is None:
                                 # Note on the use of max(): in the
-                                # case of val_list, idx is always > 1,
+                                # case of values, idx is always > 1,
                                 # whereas when it is extrems, idx can
                                 # be 0.
                                 cursor = max(self.idx[i] - 1, 0)
                             else:
                                 cursor = self.idx[i]
                     self.idx_inuse[i] = cursor
-                    if val_list is None:
+                    if values is None:
                         mini, maxi = extrems
                         val += (mini + cursor) << prev_lim
                     else:
-                        val += (val_list[cursor]) << prev_lim
+                        val += (values[cursor]) << prev_lim
             else:
-                if val_list is None:
+                if values is None:
                     mini, maxi = extrems
                     drawn_val = random.randint(mini, maxi)
                     self.idx[i] = self.idx_inuse[i] = drawn_val - mini
                 else:
-                    drawn_val = random.choice(val_list)
-                    self.idx[i] = self.idx_inuse[i] = val_list.index(drawn_val)
+                    drawn_val = random.choice(values)
+                    self.idx[i] = self.idx_inuse[i] = values.index(drawn_val)
 
                 val += drawn_val << prev_lim
                 
@@ -2177,18 +2245,18 @@ class BitField(VT_Alt):
         val = 0
         prev_lim = 0
 
-        for lim, val_list, extrems, i in zip(self.subfield_limits, self.subfield_vals, self.subfield_extrems,
+        for lim, values, extrems, i in zip(self.subfield_limits, self.subfield_vals, self.subfield_extrems,
                                              range(len(self.subfield_limits))):
-            if val_list is None:
+            if values is None:
                 mini, maxi = extrems
                 v = mini + self.idx_inuse[i]
                 val += v << prev_lim
             else:
-                if len(val_list) == 1:
+                if len(values) == 1:
                     index = 0
                 else:
                     index = self.idx_inuse[i]
-                val += val_list[index] << prev_lim
+                val += values[index] << prev_lim
 
             prev_lim = lim
 
@@ -2252,7 +2320,7 @@ class UINT8(INT8):
 class Fuzzy_INT8(with_metaclass(meta_8b, Fuzzy_INT)):
     mini = 0
     maxi = 2**8-1
-    int_list = [0xFF, 0, 0x01, 0x80, 0x7F]
+    values = [0xFF, 0, 0x01, 0x80, 0x7F]
     short_cformat = 'B'
     alt_short_cformat = 'b'
 
@@ -2291,14 +2359,14 @@ class UINT16_le(INT16):
 class Fuzzy_INT16(with_metaclass(meta_16b, Fuzzy_INT)):
     mini = 0
     maxi = 2**16-1
-    int_list = [0xFFFF, 0, 0x8000, 0x7FFF]
+    values = [0xFFFF, 0, 0x8000, 0x7FFF]
     short_cformat = 'H'
     alt_short_cformat = 'h'
 
 # class Other_Fuzzy_INT16(Fuzzy_INT16):
 #     mini = 0
 #     maxi = 2**16-1
-#     int_list = [0xDEAD, 0xBEEF, 0xCAFE]
+#     values = [0xDEAD, 0xBEEF, 0xCAFE]
 #     short_cformat = 'H'
 #     alt_short_cformat = 'h'
 
@@ -2336,14 +2404,14 @@ class UINT32_le(INT32):
 class Fuzzy_INT32(with_metaclass(meta_32b, Fuzzy_INT)):
     mini = 0
     maxi = 2**32-1
-    int_list = [0xFFFFFFFF, 0, 0x80000000, 0x7FFFFFFF]
+    values = [0xFFFFFFFF, 0, 0x80000000, 0x7FFFFFFF]
     short_cformat = 'L'
     alt_short_cformat = 'l'
 
 # class Other_Fuzzy_INT32(Fuzzy_INT32):
 #     mini = 0
 #     maxi = 2**32-1
-#     int_list = [0xDEADBEEF, 0xAAAAAAAA]
+#     values = [0xDEADBEEF, 0xAAAAAAAA]
 #     short_cformat = 'L'
 #     alt_short_cformat = 'l'
 
@@ -2381,14 +2449,14 @@ class UINT64_le(INT64):
 class Fuzzy_INT64(with_metaclass(meta_64b, Fuzzy_INT)):
     mini = 0
     maxi = 2**64-1
-    int_list = [0xFFFFFFFFFFFFFFFF, 0, 0x8000000000000000, 0x7FFFFFFFFFFFFFFF, 0x1111111111111111]
+    values = [0xFFFFFFFFFFFFFFFF, 0, 0x8000000000000000, 0x7FFFFFFFFFFFFFFF, 0x1111111111111111]
     short_cformat = 'Q'
     alt_short_cformat = 'q'
 
 # class Other_Fuzzy_INT64(Fuzzy_INT64):
 #     mini = 0
 #     maxi = 2**64-1
-#     int_list = [0xDEADBEEFDEADBEEF, 0xAAAAAAAAAAAAAAAA]
+#     values = [0xDEADBEEFDEADBEEF, 0xAAAAAAAAAAAAAAAA]
 #     short_cformat = 'Q'
 #     alt_short_cformat = 'q'
 
@@ -2417,7 +2485,7 @@ if __name__ == "__main__":
         obj[k].get_value()
 
         try:
-            obj[k] = v(int_list=[0x11,0x12,0x13])
+            obj[k] = v(values=[0x11,0x12,0x13])
         except TypeError:
             obj[k] = v()
 
@@ -2427,7 +2495,7 @@ if __name__ == "__main__":
         print('\n********\n')
 
         try:
-            obj[k] = v(int_list=[0x11,0x12,0x13], determinist=False)
+            obj[k] = v(values=[0x11,0x12,0x13], determinist=False)
         except TypeError:
             print(v().__class__)
             obj[k] = v()
@@ -2468,7 +2536,7 @@ if __name__ == "__main__":
 
     print('\n***\n')
 
-    t = UINT16_le(int_list = range(100,400,4))
+    t = UINT16_le(values=range(100,400,4))
     print('size: ', t.size)
     print('class: ', t.__class__)
     print('compatible classes: ')
@@ -2498,7 +2566,7 @@ if __name__ == "__main__":
 
     print('\n***** [ String ] *****\n')
 
-    t = String(val_list=['AA', 'BBB', 'CCCC'], min_sz=1, max_sz=10,
+    t = String(values=['AA', 'BBB', 'CCCC'], min_sz=1, max_sz=10,
                extra_fuzzy_list=['XTRA_1', '', 'XTRA_2'])
 
     for i in range(30):
@@ -2525,7 +2593,7 @@ if __name__ == "__main__":
 
     print('\n====> New String\n')
 
-    t = String(val_list=['AAA', 'BBBB', 'CCCCC'], min_sz=3, max_sz=10)
+    t = String(values=['AAA', 'BBBB', 'CCCCC'], min_sz=3, max_sz=10)
 
     for i in range(30):
         print(t.get_value())
@@ -2564,7 +2632,7 @@ if __name__ == "__main__":
 
     print('\n====> New String\n')
 
-    t = String(val_list=['AAA', 'BBBB', 'CCCCC'], max_sz=10)
+    t = String(values=['AAA', 'BBBB', 'CCCCC'], max_sz=10)
 
     print(t.get_value())
     print(t.get_value())

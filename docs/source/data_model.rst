@@ -27,7 +27,7 @@ All integer types listed below provide the same interface
 (:class:`framework.value_types.INT`). Their constructor take the
 following parameters:
 
-``int_list`` [optional, default value: **None**]
+``values`` [optional, default value: **None**]
   List of the integers that are considered valid for the node backed
   by this *Integer object*. The default value is the first element of the list.
 
@@ -38,7 +38,7 @@ following parameters:
   Maximum valid value for the node backed by this *Integer object*.
 
 ``default`` [optional, default value: **None**]
-  If ``int_list`` is not provided, this value if provided will be used as the default one.
+  If ``values`` is not provided, this value if provided will be used as the default one.
 
 ``determinist`` [default value: **True**]
   If set to ``True`` generated values will be in a deterministic
@@ -83,7 +83,7 @@ All string types listed below provide the same interface
 (:class:`framework.value_types.String`). Their constructor take the
 following parameters:
 
-``val_list`` [optional, default value: **None**]
+``values`` [optional, default value: **None**]
   List of the character strings that are considered valid for the node
   backed by this *String object*. The default string is the first element of the list.
 
@@ -94,13 +94,13 @@ following parameters:
 ``min_sz`` [optional, default value: **None**]
   Minimum valid size for the character strings for the node backed by
   this *String object*. If not set, this parameter will be
-  automatically inferred by looking at the parameter ``val_list``
+  automatically inferred by looking at the parameter ``values``
   whether this latter is provided.
 
 ``max_sz`` [optional, default value: **None**]
   Maximum valid size for the character strings for the node backed by this *String
   object*. If not set, this parameter will be
-  automatically inferred by looking at the parameter ``val_list``
+  automatically inferred by looking at the parameter ``values``
   whether this latter is provided.
 
 ``deteterminist`` [default value: **True**]
@@ -112,10 +112,9 @@ following parameters:
   to do it at the node level by using the data model keyword ``determinist``
   (refer to :ref:`dm:node_prop_keywords`).
 
-
-``ascii_mode`` [default value: **False**]
-  If set to ``True``, it will enforce the string to comply with ASCII
-  7 bits.
+``codec`` [default value: **'latin-1'**]
+  Codec to use for encoding the string (e.g., 'latin-1', 'utf8').
+  Note that depending on the charset, additional fuzzing cases are defined.
 
 ``extra_fuzzy_list`` [optional, default value: **None**]
   During data generation, if this parameter is specified with some
@@ -128,9 +127,9 @@ following parameters:
   :ref:`tuto:dm-absorption` for more information on that topic).
 
 ``alphabet`` [optional, default value: **string.printable**]
-  The alphabet to use for generating data, in case no ``val_list`` is
+  The alphabet to use for generating data, in case no ``values`` is
   provided. Also use during absorption to validate the contents. It is
-  checked if there is no ``val_list``.
+  checked if there is no ``values``.
 
 ``max_encoded_sz`` [optional, default value: **None**]
   Only relevant for subclasses that leverage the encoding infrastructure.
@@ -167,15 +166,6 @@ Below the different currently defined string types:
 - :class:`framework.value_types.Filename`: Filename. Similar to the type
   ``String``, but some disruptors like ``tTYPE`` will generate more specific
   test cases.
-- :class:`framework.value_types.UTF8`: ``String`` encoded in ``UTF8``.
-- :class:`framework.value_types.UTF16_LE`: ``String`` encoded in ``UTF16`` little-endian.
-  Note that some test cases on the encoding scheme are defined.
-- :class:`framework.value_types.UTF16_BE`: ``String`` encoded in ``UTF16`` big-endian.
-  Note that some test cases on the encoding scheme are defined.
-- :class:`framework.value_types.Codec`: ``String`` encoded in any standard encoding
-  supported by Python. You have to provide the parameter ``encoding_arg`` with the
-  codec you want to use. If no codec is provided, this class will behave the same as the class
-  :class:`framework.value_types.String`, that is, the ``latin_1`` codec will be used.
 - :class:`framework.value_types.GZIP`: ``String`` compressed with ``zlib``. The parameter
   ``encoding_arg`` is used to specify the level of compression (0-9).
 - :class:`framework.value_types.GSM7bitPacking`: ``String`` encoded in conformity
@@ -205,7 +195,7 @@ parameters:
   ``subfield_limits``), beginning from the least significant sub-field
   to the more significant sub-field.
 
-``subfield_val_lists`` [optional, default value: **None**]
+``subfield_values`` [optional, default value: **None**]
   List of valid values for each sub-fields. Look at the following
   examples for usage. For each sub-field value list, the first value is the
   default.
@@ -242,7 +232,7 @@ parameters:
   purpose. Additionally, note that such nominal generation are not the
   one used by the generic disruptor ``tTYPE`` which rely on
   ``BitField`` *fuzzy mode* (reachable through
-  :func:`framework.value_types.VT_Alt.switch_mode`).
+  :func:`framework.value_types.VT_Alt.enable_fuzz_mode`).
 
   This parameter is for internal usage and will always follow the *hosting*
   node instructions. If you want to change the deterministic order you have
@@ -251,7 +241,7 @@ parameters:
 
 ``defaults`` [optional, default value: **None**]
   List of default value for each sub-field. Used only when the related sub-field is
-  not described through ``subfield_val_lists``. If ``subfield_val_lists`` describes the related
+  not described through ``subfield_values``. If ``subfield_values`` describes the related
   sub-field, then a ``None`` item should be inserted at the corresponding position in the list.
 
 ``subfield_descs`` [optional, default value: **None**]
@@ -274,7 +264,7 @@ going through the definition of a data model (for this topic refer to
    :emphasize-lines: 8-10
 
     t = BitField(subfield_limits=[2,6,10,12],
-	         subfield_val_lists=[[4,2,1], [2,15,16,3], None, [1]],
+	         subfield_values=[[4,2,1], [2,15,16,3], None, [1]],
 		 subfield_val_extremums=[None, None, [3,11], None],
 		 padding=0, lsb_padding=True, endian=VT.LittleEndian)
 
@@ -302,7 +292,7 @@ the first example. We additionally specify the parameter
    :emphasize-lines: 9-11
 
     t = BitField(subfield_sizes=[4,4,4],
-		 subfield_val_lists=[[4,2,1], None, [10,13]],
+		 subfield_values=[[4,2,1], None, [10,13]],
 		 subfield_val_extremums=[None, [14, 15], None],
 		 padding=0, lsb_padding=False, endian=VT.BigEndian,
 		 subfield_descs=['first', None, 'last'])
@@ -322,7 +312,7 @@ the first example. We additionally specify the parameter
              - :func:`framework.value_types.BitField.set_subfield`, :func:`framework.value_types.BitField.get_subfield`
              - :func:`framework.value_types.BitField.extend_right`
              - :func:`framework.value_types.BitField.reset_state`, :func:`framework.value_types.BitField.rewind`
-             - :func:`framework.value_types.VT_Alt.switch_mode` (used currently by the disruptor ``tTYPE``)
+             - :func:`framework.value_types.VT_Alt.enable_fuzz_mode` (used currently by the disruptor ``tTYPE``)
 
 
 .. _dm:generators:
@@ -418,6 +408,9 @@ contents
     will be used as is. Otherwise, the additional keywords will be used to complement the
     description. Note that the *keyword* ``name`` should not be provided as it will be
     picked from the provided node.
+  - a python ``regular expression`` will represent a node that is
+    terminal or non-terminal but only contains terminal ones
+    (refer to :ref:`dm:pattern:regex`).
 
   Note that for defining a *function node* and not a generator node,
   you have to state the type attribute to ``MH.Leaf``.
@@ -458,7 +451,7 @@ alt
   .. code-block:: python
 
      'alt': [ {'conf': 'config_n1',
-	       'contents': SINT8(int_list=[1,4,8])},
+	       'contents': SINT8(values=[1,4,8])},
 	      {'conf': 'config_n2',
 	       'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
 	       'determinist': True} ]
@@ -550,6 +543,8 @@ custo_set, custo_clear
     Refer to the description of the corresponding *generator node* mode.
 
 
+.. _dm:nt-keywords:
+
 Keywords to Describe Non Terminal Node
 --------------------------------------
 
@@ -617,25 +612,25 @@ section_type
       'contents': [
       
 	     {'name': 'val1',
-	      'contents': String(val_list=['OK', 'KO']),
+	      'contents': String(values=['OK', 'KO']),
 	      'qty': (0, 5)},
 
              {'section_type': MH.Ordered,
               'contents': [
 
 		     {'name': 'val2',
-		      'contents': UINT16_be(int_list=[10, 20, 30])},
+		      'contents': UINT16_be(values=[10, 20, 30])},
 
 		     {'name': 'val3',
 		      'contents': String(min_sz=2, max_sz=10, alphabet='XYZ')},
 
 		     {'name': 'val4',
-		      'contents': UINT32_le(int_list=[0xDEAD, 0xBEEF])},
+		      'contents': UINT32_le(values=[0xDEAD, 0xBEEF])},
 
 	      ]}
 
 	     {'name': 'val5',
-	      'contents': String(val_list=['OPEN', 'CLOSE']),
+	      'contents': String(values=['OPEN', 'CLOSE']),
 	      'qty': 3}
      ]}
 
@@ -664,7 +659,7 @@ separator
   .. code-block:: python
 
      'separator': {'contents': {'name': 'sep',
-				'contents': String(val_list=['\n'])},
+				'contents': String(values=['\n'])},
 		   'prefix': False,
 		   'suffix': False,
 		   'unique': True},
@@ -855,12 +850,18 @@ sync_size_with, sync_enc_size_with
   with the *value* of the node specified by reference (which should be an
   :class:`framework.value_types.INT`-based typed-node). These keywords are useful for size-variable
   node types. They are currently supported for typed-nodes which are
-  :class:`framework.value_types.String`-based with or without an encoding (e.g.,
-  :class:`framework.value_types.UTF8`, ...). Non-terminal nodes are not supported (for absorption).
+  :class:`framework.value_types.String`-based with or without an encoding.
+  Non-terminal nodes are not supported (for absorption).
   The distinction between ``sync_size_with`` and ``sync_enc_size_with`` is that the synchronization
-  will be performed either with respect to the length of the data retrieved from the node
-  (or the decoded data for encoded node), or with respect to the length of the encoded data
-  (only usable in the case of an encoded node).
+  will be performed:
+
+  - either with respect to the length of the data retrieved from the node in a
+    *decoded* form. *Decoded* means that it is agnostic to the *codec* specified
+    (e.g., ``utf-8``, ``latin-1``, ...) in the ``String``, and also, for ``Encoded-String``
+    (e.g., :class:`framework.value_types.GZIP`, ...) , that it is agnostic to any
+    :class:`framework.encoders.Encoder` the ``String`` is wrapped with;
+
+  - or with respect to the length of the encoded form of the data.
 
   Generation and absorption deal with these keywords differently, in order to achieve the expected
   behavior. For generation, the synchronization goes from the described node to the referenced node
@@ -894,14 +895,14 @@ exists_if/and, exists_if/or
         {'name': 'test',
          'contents': [
             {'name': 'opcode',
-             'contents': String(val_list=['A3', 'A2'])},
+             'contents': String(values=['A3', 'A2'])},
             {'name': 'subopcode',
              'contents': BitField(subfield_sizes=[15,2,4],
-                                  subfield_val_lists=[[500], [1,2], [5,6,12]])},
+                                  subfield_values=[[500], [1,2], [5,6,12]])},
             {'name': 'and_condition',
              'exists_if/and': [(RawCondition('A2'), 'opcode'),
                                (BitFieldCondition(sf=2, val=[5]), 'subopcode')],
-             'contents': String(val_list=['and_condition_true'])}
+             'contents': String(values=['and_condition_true'])}
          ]}
 
 exists_if_not
@@ -918,6 +919,16 @@ specific_fuzzy_vals
   be leveraged by the *disruptor* ``tTYPE`` (:ref:`dis:ttype`) while dealing with the related node.
   These additional values are added to the test cases planned by the *disruptor* (if not already
   planned).
+
+charset
+  Used in the context of a `regular expression` ``contents``. It enables to specify the charset
+  that will be considered for interpreting the regular expression and for creating the related
+  nodes. Accepted attributes are:
+
+  - ``MH.Charset.ASCII``
+  - ``MH.Charset.ASCII_EXT`` (default)
+  - ``MH.Charset.UNICODE``
+
 
 .. _dm:patterns:
 
@@ -937,7 +948,7 @@ it in terms of shapes like illustrated by the example below:
 
         {'name': 'shape',
          'separator': {'contents': {'name': 'sep',
-                                    'contents': String(val_list=[' [!] '])}},
+                                    'contents': String(values=[' [!] '])}},
          'contents': [
 
 	     ### SHAPE 1 ####
@@ -951,13 +962,13 @@ it in terms of shapes like illustrated by the example below:
 
                        {'name': 'body',
                         'separator': {'contents': {'name': 'sep2',
-                                                   'contents': String(val_list=['::'])}},
+                                                   'contents': String(values=['::'])}},
                         'shape_type': MH.Random,
                         'contents': [
-                            {'contents': String(val_list=['AAA']),
+                            {'contents': String(values=['AAA']),
                              'qty': (0, 4),
                              'name': 'str1'},
-                            {'contents': String(val_list=['42']),
+                            {'contents': String(values=['42']),
                              'name': 'str2'}
                         ]}
                    ]}
@@ -1032,7 +1043,7 @@ parameters with space characters (line 12-14).
 
     {'name': 'separator_test',
      'separator': {'contents': {'name': 'sep',
-				'contents': String(val_list=['\n'], absorb_regexp=b'[\r\n|\n]+'),
+				'contents': String(values=['\n'], absorb_regexp='[\r\n|\n]+'),
 				'absorb_csts': AbsNoCsts(regexp=True)},
 		   'prefix': False,
 		   'suffix': False,
@@ -1042,7 +1053,7 @@ parameters with space characters (line 12-14).
 	  'contents': [
 	      {'name': 'parameters',
 	       'separator': {'contents': {'name': ('sep',2),
-					  'contents': String(val_list=[' '], absorb_regexp=b' +'),
+					  'contents': String(values=[' '], absorb_regexp=' +'),
 					  'absorb_csts': AbsNoCsts(regexp=True)}},
 	       'qty': 3,
 	       'contents': [
@@ -1051,19 +1062,19 @@ parameters with space characters (line 12-14).
 			{'name': 'color',
 			'contents': [
 			    {'name': 'id',
-			     'contents': String(val_list=['color='])},
+			     'contents': String(values=['color='])},
 			    {'name': 'val',
-			     'contents': String(val_list=['red', 'black'])}
+			     'contents': String(values=['red', 'black'])}
 			]},
 			{'name': 'type',
 			 'contents': [
 			     {'name': ('id', 2),
-			      'contents': String(val_list=['type='])},
+			      'contents': String(values=['type='])},
 			     {'name': ('val', 2),
-			      'contents': String(val_list=['circle', 'cube', 'rectangle'], determinist=False)}
+			      'contents': String(values=['circle', 'cube', 'rectangle'], determinist=False)}
 			]},
 		    ]}]},
-	      {'contents': String(val_list=['AAAA', 'BBBB', 'CCCC'], determinist=False),
+	      {'contents': String(values=['AAAA', 'BBBB', 'CCCC'], determinist=False),
 	       'qty': (4, 6),
 	       'name': 'str'}
 	  ]}
@@ -1118,15 +1129,15 @@ that purpose the keyword ``exists_if`` with some subclasses of
      'shape_type': MH.Ordered,
      'contents': [
 	 {'name': 'opcode',
-	  'contents': String(val_list=['A1', 'A2', 'A3'], determinist=True)},
+	  'contents': String(values=['A1', 'A2', 'A3'], determinist=True)},
 
 	 {'name': 'command_A1',
-	  'contents': String(val_list=['AAA', 'BBBB', 'CCCCC']),
+	  'contents': String(values=['AAA', 'BBBB', 'CCCCC']),
 	  'exists_if': (RawCondition('A1'), 'opcode'),
 	  'qty': 3},
 
 	 {'name': 'command_A2',
-	  'contents': UINT32_be(int_list=[0xDEAD, 0xBEEF]),
+	  'contents': UINT32_be(values=[0xDEAD, 0xBEEF]),
 	  'exists_if': (RawCondition('A2'), 'opcode')},
 
 	 {'name': 'command_A3',
@@ -1134,28 +1145,28 @@ that purpose the keyword ``exists_if`` with some subclasses of
 	  'contents': [
 	      {'name': 'A3_subopcode',
 	       'contents': BitField(subfield_sizes=[15,2,4], endian=VT.BigEndian,
-				    subfield_val_lists=[None, [1,2], [5,6,12]],
+				    subfield_values=[None, [1,2], [5,6,12]],
 				    subfield_val_extremums=[[500, 600], None, None],
 				    determinist=False)},
 
 	      {'name': 'A3_int',
-	       'contents': UINT16_be(int_list=[10, 20, 30], determinist=False)},
+	       'contents': UINT16_be(values=[10, 20, 30], determinist=False)},
 
 	      {'name': 'A3_deco1',
 	       'exists_if': (IntCondition(10), 'A3_int'),
-	       'contents': String(val_list=['*1*0*'])},
+	       'contents': String(values=['*1*0*'])},
 
 	      {'name': 'A3_deco2',
 	       'exists_if': (IntCondition([20, 30]), 'A3_int'),
-	       'contents': String(val_list=['+2+0+3+0+'])}
+	       'contents': String(values=['+2+0+3+0+'])}
 	  ]},
 
 	 {'name': 'A31_payload',
-	  'contents': String(val_list=['$ A31_OK $', '$ A31_KO $'], determinist=False),
+	  'contents': String(values=['$ A31_OK $', '$ A31_KO $'], determinist=False),
 	  'exists_if': (BitFieldCondition(sf=2, val=[6,12]), 'A3_subopcode')},
 
 	 {'name': 'A32_payload',
-	  'contents': String(val_list=['$ A32_VALID $', '$ A32_INVALID $'], determinist=False),
+	  'contents': String(values=['$ A32_VALID $', '$ A32_INVALID $'], determinist=False),
 	  'exists_if': (BitFieldCondition(sf=[0, 1, 2], val=[[500, 501], [1, 2], 5]), 'A3_subopcode')}
      ]}
 
@@ -1224,7 +1235,7 @@ character string in our case.
 	 {'name': 'len',
 	  'type': MH.Generator,
 	  'contents': lambda x: Node('cts', value_type= \
-                                     UINT32_be(int_list=[len(x.to_bytes())])),
+                                     UINT32_be(values=[len(x.to_bytes())])),
 	  'node_args': 'payload'},
 
 	 {'name': 'payload',
@@ -1345,11 +1356,11 @@ Finally, let's take the following example that illustrates other
 	  'contents': [
 	      {'name': 'int16',
 	       'qty': (2, 10),
-	       'contents': UINT16_be(int_list=[16, 1, 6], determinist=False)},
+	       'contents': UINT16_be(values=[16, 1, 6], determinist=False)},
 
 	      {'name': 'int32',
 	       'qty': (3, 8),
-	       'contents': UINT32_be(int_list=[32, 3, 2], determinist=False)}
+	       'contents': UINT32_be(values=[32, 3, 2], determinist=False)}
 	  ]},
 
 	 {'name': 'int16_qty',
@@ -1471,7 +1482,7 @@ on the encoded form or the decoded form of their node parameters.
     {'name': 'enc',
      'contents': [
          {'name': 'data0',
-          'contents': String(val_list=['Plip', 'Plop']) },
+          'contents': String(values=['Plip', 'Plop']) },
          {'name': 'crc',
           'contents': MH.CRC(vt=UINT32_be, after_encoding=False),
           'node_args': ['enc_data', 'data2'],
@@ -1485,10 +1496,10 @@ on the encoded form or the decoded form of their node parameters.
               'node_args': 'data1',
               'absorb_csts': AbsFullCsts(contents=False)},
              {'name': 'data1',
-              'contents': UTF16_LE(val_list=['Test!', 'Hello World!']) },
+              'contents': UTF16_LE(values=['Test!', 'Hello World!']) },
           ]},
          {'name': 'data2',
-          'contents': String(val_list=['Red', 'Green', 'Blue']) }
+          'contents': String(values=['Red', 'Green', 'Blue']) }
      ]}
 
 This data description will enable you to produce data compliant to the specified encoding schemes
@@ -1542,3 +1553,109 @@ The following picture displays the result of the previous code (triggered by lin
 .. note:: Line 11 is to make the absorption operation work correctly. Indeed because of the
    encoding, constraints are not rigid enough to make fuddly work out the absorption
    without some help.
+
+
+
+.. _dm:pattern:regex:
+
+How to Describe a Data Format That Contains Complex Strings
+-----------------------------------------------------------
+
+Parts of the data that only contain strings can easily be described using python's regular expressions.
+Here are some rules to respect:
+
+- Using square brackets ``[ ]`` to indicate a set of characters will result in the creation of a
+  :class:`framework.value_types.String` terminal node that contains an *alphabet*. Likewise, the usage of
+  ``.`` or meta-sequences such as ``\s``, ``\S``, ``\w``, ``\W``, ``\d`` or ``\D`` will lead to the
+  creation of such type of nodes.
+
+- Anything else will be translated into a :class:`framework.value_types.String` terminal node that
+  declares a list of values. ``( )`` can be used to delimit a portion of
+  the regular expression that need to be translated into a terminal node on its own.
+
+.. note:: If each item in a list of values are integers an :class:`framework.value_types.INT_Str` will
+   be created instead of a :class:`framework.value_types.String`.
+
+- ``(``, ``)``, ``[``, ``]``, ``?``, ``*``, ``+``, ``{``, ``}``, ``|``, ``\``, ``-``, ``.`` are the only
+  recognised special characters. They cannot be used in an unsuitable context without being escaped
+  (exceptions are made for ``|``, ``.`` and ``-``).
+
+- Are only allowed regular expressions that can be translated into one terminal node or into one non-terminal
+  node composed of terminal ones. If this rule is not respected an
+  :class:`framework.error_handling.InconvertibilityError` will be raised.
+
+- An inconsistency between the charset and the characters that compose the regular expression will result
+  in an :class:`framework.error_handling.CharsetError`.
+
+.. note:: The default charset used by Fuddly is ``MH.Charset.ASCII_EXT``. To change this behaviour,
+   use the keyword ``charset`` (refer to :ref:`dm:node_prop_keywords`).
+
+
+To embody these rules, let's take some examples:
+
+Example 1: The basics.
+
+.. code-block:: python
+   :linenos:
+
+   regex = {'name': 'HTTP_version',
+            'contents': '(HTTP)/[0-9]\.(0|1|2|\x33|4|5|6|7|8|9)'}
+   # is equivalent to
+   classic = {'name': 'HTTP_version',
+              'contents': [
+                 {'name': 'HTTP_version_1', 'contents': String(values=["HTTP"])},
+                 {'name': 'HTTP_version_2', 'contents': String(values=["/"])},
+                 {'name': 'HTTP_version_3',
+                  'contents': String(alphabet="0123456789", size=1)},
+                 {'name': 'HTTP_version_4', 'contents': String(values=["."])},
+                 {'name': 'HTTP_version_5', 'contents': INT_Str(mini=0, maxi=9)} ]}
+
+
+Example 2: Introducing choice. (Refer to :ref:`dm:nt-keywords`)
+
+.. code-block:: python
+   :linenos:
+
+   regex = {'name': 'something',
+            'contents': '(333|444)|(foo|bar)|[\d]|[th|is]'}
+   # is equivalent to
+   classic = {'name': 'something',
+              'shape_type': MH.Pick,
+              'contents': [
+                 {'name':'something_1', 'contents':INT_Str(values=[333, 444])},
+                 {'name':'something_1', 'contents':String(values=["foo", "bar"])},
+                 {'name':'something_1', 'contents':String(alphabet="0123456789",size=1)},
+                 {'name':'something_1', 'contents':String(alphabet="th|is", size=1)}
+              ]}
+
+
+Example 3: Using quantifiers and the escape character ``\``.
+
+.. code-block:: python
+   :linenos:
+
+   regex = {'name': 'something',
+            'contents': '\(this[is]{3,4}the+end\]'}
+   # is equivalent to
+   classic = {'name': 'something',
+              'contents': [
+                 {'name': 'something_1', 'contents': String(values=["(this"])},
+                 {'name': 'something_2',
+	              'contents': String(alphabet="is", min_sz=3, max_sz=4)},
+                 {'name': 'something_3', 'contents': String(values=["th"])},
+                 {'name': 'something_4', 'qty': (1, -1),
+                  'contents': String(values=["e"])},
+                 {'name': 'something_5', 'contents': String(values=["end]"])} ]}
+
+Example 4: Invalid regular expressions.
+
+.. code-block:: python
+   :linenos:
+
+   error_1 = {'name': 'rejected', 'contents': '(HT(T)P)/'}
+   # raise an framework.error_handling.InconvertibilityError
+   # because there are two nested parenthesis.
+
+   error_2 = {'name': 'rejected', 'contents': '(HTTP)foo|bar'}
+   # raise also an framework.error_handling.InconvertibilityError
+   # because | has priority over parenthesis in regular expressions.

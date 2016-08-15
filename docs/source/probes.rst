@@ -1,38 +1,94 @@
 .. _probes:
 
-Generic Probes
-**************
+Generic Probes and Backend
+**************************
 
 The following section present some generic probes that inherit from
 :class:`framework.monitor.Probe`. They can be used within your project
-files (refer to :ref:`tuto:project`) by only inheriting from them
-and providing the expected parameters,
+files (refer to :ref:`tuto:project`) by inheriting from them
+and providing the expected parameters. Besides, you have to provide them with a means to
+access the monitored system, namely a :class:`framework.monitor.Backend`. Note that you can use
+the same backend for simultaneous probes.
 
-ProbePID_SSH
-============
+Let's illustrate this with the following example where two probes are used to monitor a process
+through an SSH connection. One is used to check if the PID of the process has changed after each
+data sending, and the other one to check if the memory used by the process has exceeded
+its initial memory footprint by 5% (with a probing period of 0.2 second).
 
-Reference:
-  :class:`framework.monitor.ProbePID_SSH`
-
-Description:
-  This generic probe enables you to monitor a process PID through an
-  SSH connection.
-
-Usage Example:
-   Within your project file you can add such a probe like this:
+The project file should look like this:
 
    .. code-block:: python
       :linenos:
 
         # Assuming your Project() is referred by the 'project' variable
 
-        @blocking_probe(project)
-        class health_check(ProbePID_SSH):
-            process_name = 'the_process_to_monitor'
-            sshd_ip = '127.0.0.1'
-            sshd_port = 22
-            username = 'user'
-            password = 'pass'
+        ssh_backend = SSH_Backend(username='user', password='pass',
+                                  sshd_ip='127.0.0.1', sshd_port=22)
 
-   .. seealso:: Refer to the class definition itself to look for the parameters available.
+        @blocking_probe(project)
+        class health_check(ProbePID):
+            process_name = 'the_process_to_monitor'
+            backend = ssh_backend
+
+        @probe(project)
+        class probe_mem(ProbeMem):
+            process_name = 'the_process_to_monitor'
+            tolerance = 5
+            backend = ssh_backend
+
+        targets = [ (YourTarget(), probe_pid, (probe_mem, 0.2)) ]
+
+
+Generic Backend
+===============
+
+.. seealso:: Refer to the class documentation for more details.
+
+SSH_Backend
+-----------
+
+Reference:
+  :class:`framework.monitor.SSH_Backend`
+
+Description:
+  This generic backend enables you to interact with a monitored system through an
+  SSH connection.
+
+
+Serial_Backend
+--------------
+
+Reference:
+  :class:`framework.monitor.Serial_Backend`
+
+Description:
+  This generic backend enables you to interact with a monitored system through an
+  serial line.
+
+
+Generic Probes
+==============
+
+.. seealso:: Refer to the class documentation for more details.
+
+ProbePID
+--------
+
+Reference:
+  :class:`framework.monitor.ProbePID`
+
+Description:
+  This generic probe enables you to monitor a process PID through an
+  SSH connection.
+
+ProbeMem
+--------
+
+Reference:
+  :class:`framework.monitor.ProbeMem`
+
+Description:
+  Generic probe that enables you to monitor the process memory (RSS...) consumption.
+  It can be done by specifying a ``threshold`` and/or a ``tolerance`` ratio.
+
 

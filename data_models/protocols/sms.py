@@ -42,7 +42,7 @@ class SMS_DataModel(DataModel):
              {'name': 'SMS-SUBMIT',  # refer to TS 100 901 (chapter 9.2.3)
               'mutable': False,
               'contents': BitField(subfield_sizes=[2,1,2,1,1,1], endian=VT.BigEndian,
-                                   subfield_val_lists=[
+                                   subfield_values=[
                                        [0b01], # message type indicator,
                                        [0,1],  # reject duplicates
                                        [0b00,0b10,0b01,0b11],   # validity period format
@@ -54,7 +54,7 @@ class SMS_DataModel(DataModel):
                                    ) },
              {'name': 'TP-MR',  # Message Reference (refer to TS 100 901)
               'mutable': False,
-              'contents': UINT8(int_list=[0])},
+              'contents': UINT8(values=[0])},
              {'name': 'TP-DA',  # Destination Address (refer to TS 100 901 - chapter 9.1.2.5)
               'mutable': False,
               'contents': [
@@ -63,7 +63,7 @@ class SMS_DataModel(DataModel):
                    'node_args': 'tel_num'},
                   {'name': 'addr_type',
                    'contents': BitField(subfield_sizes=[4,3,1], endian=VT.BigEndian,
-                                        subfield_val_lists=[[0b0001], # numbering-plan-identification
+                                        subfield_values=[[0b0001], # numbering-plan-identification
                                                             [0b001],  # type of number
                                                             [1]],     # always set to 1
                                         subfield_val_extremums=[None,
@@ -73,26 +73,26 @@ class SMS_DataModel(DataModel):
                                         ) },
                   {'name': 'tel_num',
                    'semantics': ['tel num'],
-                   'contents': GSMPhoneNum(val_list=['33612345678'])}
+                   'contents': GSMPhoneNum(values=['33612345678'])}
                 ]},
              {'name': 'TP-PID',  # Protocol Identifier (refer to TS 100 901)
               'determinist': True,
               'contents': BitField(subfield_sizes=[5,1,2], endian=VT.BigEndian,
-                                   subfield_val_lists=[[0b00000], # implicit
+                                   subfield_values=[[0b00000], # implicit
                                                        [0, 1],    # no interworking (default)
                                                        [0b00]]    # kind of opcode
                                    ) },
              {'name': 'TP-DCS',  # Data Coding Scheme (refer to GSM 03.38)
               'determinist': True,
               'contents': BitField(subfield_sizes=[4,4], endian=VT.BigEndian,
-                                   subfield_val_lists=[[0b0000],   # default alphabet
+                                   subfield_values=[[0b0000],   # default alphabet
                                                        [0b0000]]   # first coding group
                                    ) },
              {'name': 'UDL',
               'contents': MH.LEN(vt=UINT8, after_encoding=False),
               'node_args': 'user_data'},
              {'name': 'user_data',
-              'contents': GSM7bitPacking(val_list=['Hello World!'], max_sz=160)
+              'contents': GSM7bitPacking(values=['Hello World!'], max_sz=160)
              }
          ]
         }
@@ -104,7 +104,7 @@ class SMS_DataModel(DataModel):
              {'name': 'SMS-SUBMIT',  # refer to TS 100 901 (chapter 9.2.3)
               'mutable': False,
               'contents': BitField(subfield_sizes=[2,1,2,1,1,1], endian=VT.BigEndian,
-                                   subfield_val_lists=[
+                                   subfield_values=[
                                        [0b01], # message type indicator,
                                        [0,1],  # reject duplicates
                                        [0b00,0b10,0b01,0b11],   # validity period format
@@ -116,7 +116,7 @@ class SMS_DataModel(DataModel):
                                    ) },
              {'name': 'TP-MR',  # Message Reference (refer to TS 100 901)
               'mutable': False,
-              'contents': UINT8(int_list=[0])},
+              'contents': UINT8(values=[0])},
              {'name': 'TP-DA',  # Destination Address (refer to TS 100 901 - chapter 9.1.2.5)
               'mutable': False,
               'contents': [
@@ -125,7 +125,7 @@ class SMS_DataModel(DataModel):
                    'node_args': 'tel_num'},
                   {'name': 'addr_type',
                    'contents': BitField(subfield_sizes=[4,3,1], endian=VT.BigEndian,
-                                        subfield_val_lists=[[0b0001], # numbering-plan-identification
+                                        subfield_values=[[0b0001], # numbering-plan-identification
                                                             [0b001],  # type of number
                                                             [1]],     # always set to 1
                                         subfield_val_extremums=[None,
@@ -135,12 +135,12 @@ class SMS_DataModel(DataModel):
                                         ) },
                   {'name': 'tel_num',
                    'semantics': ['tel num'],
-                   'contents': GSMPhoneNum(val_list=['33612345678'])}
+                   'contents': GSMPhoneNum(values=['33612345678'])}
                 ]},
              {'name': 'TP-PID',  # Protocol Identifier (refer to TS 100 901)
               'determinist': True,
               'contents': BitField(subfield_sizes=[6,2], endian=VT.BigEndian,
-                                   subfield_val_lists=[[0b111111], # SIM Data Download
+                                   subfield_values=[[0b111111], # SIM Data Download
                                                        [0b01]],    # kind of opcode
                                    ) },
              {'name': 'TP-DCS',  # Data Coding Scheme (refer to GSM 03.38)
@@ -150,7 +150,7 @@ class SMS_DataModel(DataModel):
                    'determinist': True,
                    'exists_if': (BitFieldCondition(sf=0, val=[0b1111]), 'msb'),
                    'contents': BitField(subfield_sizes=[2,1,1], endian=VT.BigEndian,
-                                        subfield_val_lists=[[0b10,0b11,0b00,0b01], # class 2 (default)
+                                        subfield_values=[[0b10,0b11,0b00,0b01], # class 2 (default)
                                                             [1,0],    # 8-bit data (default)
                                                             [0]]      # reserved
                                         ) },
@@ -158,7 +158,7 @@ class SMS_DataModel(DataModel):
                    'determinist': True,
                    'exists_if': (BitFieldCondition(sf=0, val=[0b1101,0b1100]), 'msb'),
                    'contents': BitField(subfield_sizes=[2,1,1], endian=VT.BigEndian,
-                                        subfield_val_lists=[[0b10,0b11,0b00,0b01], # indication type
+                                        subfield_values=[[0b10,0b11,0b00,0b01], # indication type
                                                             [0],    # reserved
                                                             [0,1]]  # set indication Active/Inactive
                                         ) },
@@ -166,14 +166,14 @@ class SMS_DataModel(DataModel):
                    'determinist': True,
                    'exists_if': (BitFieldCondition(sf=0, val=[0]), 'msb'),
                    'contents': BitField(subfield_sizes=[4], endian=VT.BigEndian,
-                                        subfield_val_lists=[
+                                        subfield_values=[
                                             [0b0000]  # Default alphabet
                                         ]
                                         ) },
                   {'name': 'msb',
                    'determinist': True,
                    'contents': BitField(subfield_sizes=[4], endian=VT.BigEndian,
-                                        subfield_val_lists=[
+                                        subfield_values=[
                                             [0b1111,0b1101,0b1100,0b0000]],  # last coding group
                                         ) },
              ]},
@@ -183,11 +183,11 @@ class SMS_DataModel(DataModel):
              {'name': 'user_data',
               'contents': [
                   {'name': 'UDHL',
-                   'contents': UINT8(int_list=[2])},
+                   'contents': UINT8(values=[2])},
                   {'name': 'IEIa', # 0x70 = command packet identifier
-                   'contents': UINT8(int_list=[0x70], mini=0x70, maxi=0x7F)},
+                   'contents': UINT8(values=[0x70], mini=0x70, maxi=0x7F)},
                   {'name': 'IEDLa',
-                   'contents': UINT8(int_list=[0])},
+                   'contents': UINT8(values=[0])},
                   {'name': 'CPL',  # command packet length
                    'contents': MH.LEN(vt=UINT16_be),
                    'node_args': 'cmd'},
@@ -200,7 +200,7 @@ class SMS_DataModel(DataModel):
                         'contents': [
                             {'name': 'SPI_p1',  # Security Parameter Indicator (part 1)
                              'contents': BitField(subfield_sizes=[2,1,2,3], endian=VT.BigEndian,
-                                                  subfield_val_lists=[None,None,None,[0b000]],
+                                                  subfield_values=[None,None,None,[0b000]],
                                                   subfield_val_extremums=[[0,3],[0,1],[0,3],None],
                                                   defaults = [1, # redundancy check
                                                               0, # no ciphering
@@ -211,7 +211,7 @@ class SMS_DataModel(DataModel):
 
                             {'name': 'SPI_p2',  # Security Parameter Indicator (part 1)
                              'contents': BitField(subfield_sizes=[2,2,1,1,2], endian=VT.BigEndian,
-                                                  subfield_val_lists=[None,None,None,None,[0b00]],
+                                                  subfield_values=[None,None,None,None,[0b00]],
                                                   defaults = [1, # PoR required
                                                               3, # PoR Digital Signature required
                                                               0, # PoR not ciphered
@@ -224,7 +224,7 @@ class SMS_DataModel(DataModel):
 
                             {'name': 'KIc',  # Key and algo ID for ciphering
                              'contents': BitField(subfield_sizes=[2,2,4], endian=VT.BigEndian,
-                                                  subfield_val_lists=[[1,0,3], # 1 = DES (default)
+                                                  subfield_values=[[1,0,3], # 1 = DES (default)
                                                                       [3],     # ECB mode
                                                                       [0b1010]],
                                                   subfield_val_extremums=[None,[0,3],None],
@@ -233,7 +233,7 @@ class SMS_DataModel(DataModel):
 
                             {'name': 'KID_RC',  # Key and algo ID for CRC  # TS 102 225 (5.1.3.2)
                              'contents': BitField(subfield_sizes=[2,2,4], endian=VT.BigEndian,
-                                                  subfield_val_lists=[[1,0,3], # 1 = CRC (default)
+                                                  subfield_values=[[1,0,3], # 1 = CRC (default)
                                                                       [0b01,0b00], # 0b01 = CRC 32
                                                                       [0b1010]],
                                                   subfield_val_extremums=[None,None,
@@ -243,7 +243,7 @@ class SMS_DataModel(DataModel):
 
                             {'name': 'TAR',  # Toolkit Application Reference
                              'contents': BitField(subfield_sizes=[24],
-                                                  subfield_val_lists=[[0]], # Card Manager
+                                                  subfield_values=[[0]], # Card Manager
                                                   subfield_val_extremums=[[0,2**24-1]])},
 
                             {'name': 'CNTR',  # Counter (replay detection and sequence integrity counter)

@@ -1,5 +1,3 @@
-# -*- coding: latin-1 -*-
-
 ################################################################################
 #
 #  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
@@ -42,7 +40,8 @@ class PPPOE_DataModel(DataModel):
         {'name': 'tag',
          'contents': [
              {'name': 'type',
-              'contents': UINT16_be(int_list=[0,0x0101,0x0102,0x0103,0x0104,0x0105,
+              'random': True,
+              'contents': UINT16_be(values=[0,0x0101,0x0102,0x0103,0x0104,0x0105,
                                               0x0110,0x201,0x0202,0x0203]),
               'absorb_csts': AbsFullCsts()},
              {'name': 'len',
@@ -53,63 +52,63 @@ class PPPOE_DataModel(DataModel):
               'contents': [
                   {'name': 'v000', # Final Tag (optional)
                    'exists_if': (IntCondition(0), 'type'),
-                   'sync_size_with': 'len',
+                   'sync_enc_size_with': 'len',
                    'contents': String(size=0)},
                   {'name': 'v101', # Service Name
                    'exists_if': (IntCondition(0x0101), 'type'),
                    'sync_enc_size_with': 'len',
-                   'contents': UTF8(val_list=['my \xfcber service']), # \xfc=ü encoded in latin1
+                   'contents': String(values=[u'my \u00fcber service'], codec='utf8'),
                    },
                   {'name': 'v102', # AC name
                    'exists_if': (IntCondition(0x0102), 'type'),
                    'sync_enc_size_with': 'len',
-                   'contents': UTF8(val_list=['AC name']),
+                   'contents': String(values=['AC name'], codec='utf8'),
                    },
                   {'name': 'v103', # Host Identifier
                    'exists_if': (IntCondition(0x0103), 'type'),
-                   'sync_size_with': 'len',
-                   'contents': String(val_list=['Host Identifier']),
+                   'sync_enc_size_with': 'len',
+                   'contents': String(values=['Host Identifier']),
                    },
                   {'name': 'v104', # Cookie
                    'exists_if': (IntCondition(0x0104), 'type'),
-                   'sync_size_with': 'len',
-                   'contents': String(val_list=['Cookie'], min_sz=0,max_sz=1000),
+                   'sync_enc_size_with': 'len',
+                   'contents': String(values=['Cookie'], min_sz=0, max_sz=1000),
                    },
                   {'name': 'v105', # Vendor Specific
                    'exists_if': (IntCondition(0x0105), 'type'),
                    'contents': [
                        {'name': 'vendorID',
                         'contents': BitField(subfield_sizes=[24,8], endian=VT.BigEndian,
-                                             subfield_val_lists=[None,[0]],
+                                             subfield_values=[None,[0]],
                                              subfield_descs=['type','version']) },
                        {'name': 'remainder',
-                        'sync_size_with': ('len', 4),
-                        'contents': String(val_list=['unspecified...'], min_sz=0,max_sz=1000),
+                        'sync_enc_size_with': ('len', 4),
+                        'contents': String(values=['unspecified...'], min_sz=0, max_sz=1000),
                         },
                    ]},
                   {'name': 'v110', # Relay session ID
                    'exists_if': (IntCondition(0x0110), 'type'),
-                   'sync_size_with': 'len',
+                   'sync_enc_size_with': 'len',
                    'contents': String(size=12)},
                   {'name': 'v201',
                    'exists_if': (IntCondition([0x201, 0x202]), 'type'),
                    'sync_enc_size_with': 'len',
-                   'contents': UTF8(val_list=['Service Name Error or AC System Error!']),
+                   'contents': String(values=['Service Name Error or AC System Error!'], codec='utf8'),
                    },
                   {'name': 'v203', # Generic Error
                    'exists_if': (IntCondition(0x0203), 'type'),
                    'sync_enc_size_with': 'len',
-                   'contents': UTF8(val_list=['Generic Error!']),
+                   'contents': String(values=['Generic Error!'], codec='utf8'),
                    'alt': [
                        {'conf': 'null-terminated',  # RFC2516 says it MUST NOT be null terminated
                         'exists_if': (IntCondition(0x0203), 'type'),
                         'contents': [
                             {'name': 'data',
                              'sync_enc_size_with': ('len', -1),
-                             'contents': UTF8(val_list=['Generic Error!'])},
+                             'contents': String(values=['Generic Error!'], codec='utf8')},
                             {'name': 'null',
                              'mutable': False,
-                             'contents': UINT8(int_list=[0])}
+                             'contents': UINT8(values=[0])}
                         ]}
                    ]},
               ]}
@@ -120,16 +119,16 @@ class PPPOE_DataModel(DataModel):
         tag_node_4pads = tag_node.get_clone()
 
         tag_service_name = tag_node.get_clone('tag_sn')
-        tag_service_name['.*/type'].set_values(value_type=UINT16_be(int_list=[0x0101]))
+        tag_service_name['.*/type'].set_values(value_type=UINT16_be(values=[0x0101]))
 
         tag_host_uniq = tag_node.get_clone('tag_host_uniq')
-        tag_host_uniq['.*/type'].set_values(value_type=UINT16_be(int_list=[0x0103]))
+        tag_host_uniq['.*/type'].set_values(value_type=UINT16_be(values=[0x0103]))
 
         tag_ac_name = tag_node.get_clone('tag_ac_name') # Access Concentrator Name
-        tag_ac_name['.*/type'].set_values(value_type=UINT16_be(int_list=[0x0102]))
+        tag_ac_name['.*/type'].set_values(value_type=UINT16_be(values=[0x0102]))
 
         tag_sn_error = tag_node.get_clone('tag_sn_error')  # Service Name Error
-        tag_sn_error['.*/type'].set_values(value_type=UINT16_be(int_list=[0x0202]))
+        tag_sn_error['.*/type'].set_values(value_type=UINT16_be(values=[0x0202]))
 
         pppoe_desc = \
         {'name': 'pppoe',
@@ -144,14 +143,14 @@ class PPPOE_DataModel(DataModel):
               'contents': String(size=6)},
              {'name': 'proto',
               'mutable': False,
-              'contents': UINT16_be(int_list=[0x8863])},
+              'contents': UINT16_be(values=[0x8863])},
              {'name': 'version-type',
               'contents': BitField(subfield_sizes=[4,4], endian=VT.BigEndian,
-                                   subfield_val_lists=[[1],[1]],
+                                   subfield_values=[[1],[1]],
                                    subfield_descs=['type','version'])},
              {'name': 'code',
               'mutable': False,
-              'contents': UINT8(int_list=[0x9,0x7,0x19,0x65,0xa7]),
+              'contents': UINT8(values=[0x9,0x7,0x19,0x65,0xa7]),
               'absorb_csts': AbsFullCsts()},
              {'name': 'session_id',
               'contents': UINT16_be()},
@@ -180,7 +179,7 @@ class PPPOE_DataModel(DataModel):
                        (tag_ac_name, 1),
                        (tag_service_name.get_clone(), 1),
                        {'name': 'host_uniq_stub',
-                        'contents': String(val_list=[''])},
+                        'contents': String(values=[''])},
                        (tag_node.get_clone(), 0, 4)
                    ]},
                   {'name': '4padr',
@@ -199,9 +198,9 @@ class PPPOE_DataModel(DataModel):
                        # Accept PPPoE session Case
                        {'weight': 10,
                         'contents': [
-                            (tag_ac_name.get_clone(), 1),
+                            (tag_service_name.get_clone(), 1),
                             {'name': ('host_uniq_stub', 2),
-                             'contents': String(val_list=[''])},
+                             'contents': String(values=[''])},
                             (tag_node_4pads, 0, 4)
                         ]},
                        # Reject PPPoE session Case
@@ -217,6 +216,8 @@ class PPPOE_DataModel(DataModel):
                    'custo_clear': MH.Custo.NTerm.FrozenCopy,
                    'exists_if': (IntCondition(0xa7), 'code'),
                    'contents': [
+                       {'name': ('host_uniq_stub', 3),
+                        'contents': String(values=[''])},
                        (tag_node.get_clone(), 0, 4)
                    ]}
               ]},
@@ -228,24 +229,24 @@ class PPPOE_DataModel(DataModel):
 
         mh = ModelHelper(delayed_jobs=True, add_env=False)
         pppoe_msg = mh.create_graph_from_desc(pppoe_desc)
-        pppoe_msg.make_random(recursive=True)
+        # pppoe_msg.make_random(recursive=True)
 
         padi = pppoe_msg.get_clone('padi')
-        padi['.*/mac_dst'].set_values(value_type=String(val_list=['\xff\xff\xff\xff\xff\xff']))
-        padi['.*/code'].set_values(value_type=UINT8(int_list=[0x9]))
+        padi['.*/mac_dst'].set_values(value_type=String(values=[u'\xff\xff\xff\xff\xff\xff']))
+        padi['.*/code'].set_values(value_type=UINT8(values=[0x9]))
 
         pado = pppoe_msg.get_clone('pado')
-        pado['.*/code'].set_values(value_type=UINT8(int_list=[0x7]))
+        pado['.*/code'].set_values(value_type=UINT8(values=[0x7]))
         pado['.*/code'].clear_attr(MH.Attr.Mutable)
 
         padr = pppoe_msg.get_clone('padr')
-        padr['.*/code'].set_values(value_type=UINT8(int_list=[0x19]))
+        padr['.*/code'].set_values(value_type=UINT8(values=[0x19]))
 
         pads = pppoe_msg.get_clone('pads')
-        pads['.*/code'].set_values(value_type=UINT8(int_list=[0x65]))
+        pads['.*/code'].set_values(value_type=UINT8(values=[0x65]))
 
         padt = pppoe_msg.get_clone('padt')
-        padt['.*/code'].set_values(value_type=UINT8(int_list=[0xa7]))
+        padt['.*/code'].set_values(value_type=UINT8(values=[0xa7]))
 
         self.register(pppoe_msg, padi, pado, padr, pads, padt, tag_host_uniq)
 

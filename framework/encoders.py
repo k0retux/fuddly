@@ -27,6 +27,8 @@ import zlib
 import copy
 import binascii
 
+from framework.global_resources import *
+
 class Encoder(object):
     def __init__(self, encoding_arg):
         self._encoding_arg = encoding_arg
@@ -78,56 +80,6 @@ class Encoder(object):
         """
         pass
 
-    @staticmethod
-    def to_bytes(val):
-        if isinstance(val, (str, bytes)):
-            if sys.version_info[0] > 2 and not isinstance(val, bytes):
-                new_val = bytes(val, 'latin_1')
-            else:
-                new_val = val
-        elif sys.version_info[0] == 2 and isinstance(val, unicode):
-            try:
-                new_val = val.encode('latin_1')
-            except UnicodeEncodeError:
-                new_val = val.encode('utf8')
-        elif isinstance(val, (tuple, list)):
-            new_val = []
-            for v in val:
-                if sys.version_info[0] > 2 and not isinstance(v, bytes):
-                    new_v = bytes(v, 'latin_1')
-                else:
-                    new_v = v
-                new_val.append(new_v)
-        elif val is None:
-            new_val = b''
-        else:
-            raise ValueError
-
-        return new_val
-
-
-class PythonCodec_Enc(Encoder):
-    """
-    Encoder enabling the usage of every standard encodings supported by Python.
-    """
-    def init_encoding_scheme(self, arg=None):
-        if arg is None:
-            self._codec = 'latin_1'
-        else:
-            self._codec = arg
-
-    def encode(self, val):
-        enc = val.decode('latin_1').encode(self._codec)
-        return enc
-
-    def decode(self, val):
-        try:
-            dec = val.decode(self._codec)
-        except:
-            dec = b''
-        return Encoder.to_bytes(dec)
-
-
 class GZIP_Enc(Encoder):
 
     def init_encoding_scheme(self, arg=None):
@@ -160,9 +112,12 @@ class Wrap_Enc(Encoder):
             arg (list): Prefix and suffix character strings.
               Can be individually set to None
         """
-        assert(isinstance(arg, (tuple, list)))
-        self.prefix = Encoder.to_bytes(arg[0])
-        self.suffix = Encoder.to_bytes(arg[1])
+        assert isinstance(arg, (tuple, list))
+        if sys.version_info[0] > 2:
+            assert arg[0] is None or isinstance(arg[0], bytes)
+            assert arg[1] is None or isinstance(arg[1], bytes)
+        self.prefix = b'' if arg[0] is None else arg[0]
+        self.suffix = b'' if arg[1] is None else arg[1]
         self.prefix_sz = 0 if self.prefix is None else len(self.prefix)
         self.suffix_sz = 0 if self.suffix is None else len(self.suffix)
 

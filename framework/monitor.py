@@ -26,6 +26,7 @@ import threading
 import datetime
 import time
 import traceback
+import re
 
 from libs.external_modules import *
 from framework.global_resources import *
@@ -34,10 +35,12 @@ import framework.error_handling as eh
 
 class ProbeUser(object):
     timeout = 10.0
+    probe_init_timeout = 20.0
 
     def __init__(self, probe):
         self._probe = probe
         self._thread = None
+        self._started_event = threading.Event()
         self._stop_event = threading.Event()
 
     def start(self, *args, **kwargs):
@@ -61,6 +64,17 @@ class ProbeUser(object):
 
             self._stop_event.clear()
 
+    def wait_for_probe_init(self, timeout=None):
+        try:
+            self._wait_for_probe(self._started_event, timeout)
+        except ProbeTimeoutError as e:
+            e.blocking_methods = ["start()"]
+            raise e
+
+        # Once a probe has started we do not clear self._started_event to avoid blocking the framework
+        # in the situation where this method will be called again while the probe won't have been
+        # restarted (currently in launch_operator, after having started the operator).
+
     def is_alive(self):
         return self._thread is not None and self._thread.is_alive()
 
@@ -78,7 +92,14 @@ class ProbeUser(object):
         self._probe.delay = delay
 
     def get_probe_status(self):
+        try:
+            self._probe.reset()
+        except:
+            self._handle_exception('during reset()')
         return self._probe.status
+
+    def _notify_probe_started(self):
+        self._started_event.set()
 
     def _go_on(self):
         return not self._stop_event.is_set()
@@ -86,8 +107,24 @@ class ProbeUser(object):
     def _wait(self, delay):
         self._stop_event.wait(delay)
 
+    def _wait_for_probe(self, event, timeout=None):
+        """
+        Wait for the probe to trigger a specific event
+        """
+        timeout = ProbeUser.timeout if timeout is None else timeout
+        start = datetime.datetime.now()
+
+        while not event.is_set():
+            if (datetime.datetime.now() - start).total_seconds() >= timeout:
+                self.stop()
+                raise ProbeTimeoutError(self.__class__.__name__, timeout)
+            if not self.is_alive() or not self._go_on():
+                break
+            event.wait(1)
+
     def _clear(self):
         """ Clear all events """
+        self._started_event.clear()
         self._stop_event.clear()
 
     def _run(self, *args, **kwargs):
@@ -99,6 +136,8 @@ class ProbeUser(object):
 
         if status is not None:
             self._probe.status = status
+
+        self._notify_probe_started()
 
         while self._go_on():
             try:
@@ -124,10 +163,10 @@ class ProbeUser(object):
 
 class BlockingProbeUser(ProbeUser):
 
-    def __init__(self, probe, after_feedback_retrieval):
+    def __init__(self, probe, after_target_feedback_retrieval):
         ProbeUser.__init__(self, probe)
 
-        self._after_feedback_retrieval = after_feedback_retrieval
+        self._after_target_feedback_retrieval = after_target_feedback_retrieval
 
         self._continue_event = threading.Event()
 
@@ -137,8 +176,8 @@ class BlockingProbeUser(ProbeUser):
         self._probe_status_event = threading.Event()
 
     @property
-    def after_feedback_retrieval(self):
-        return self._after_feedback_retrieval
+    def after_target_feedback_retrieval(self):
+        return self._after_target_feedback_retrieval
 
     def stop(self):
         ProbeUser.stop(self)
@@ -147,30 +186,16 @@ class BlockingProbeUser(ProbeUser):
     def notify_data_ready(self):
         self._arm_event.set()
 
-    def _wait_for_probe(self, event, timeout=None):
-        """
-        Wait for the probe to trigger a specific event
-        """
-        timeout = ProbeUser.timeout if timeout is None else timeout
-        start = datetime.datetime.now()
-
-        while not event.is_set():
-            if (datetime.datetime.now() - start).total_seconds() >= timeout:
-                self.stop()
-                raise ProbeTimeoutError(self.__class__.__name__, timeout)
-            if not self.is_alive() or not self._go_on():
-                break
-            event.wait(1)
-
 
     def wait_until_armed(self, timeout=None):
         try:
             self._wait_for_probe(self._armed_event, timeout)
         except ProbeTimeoutError as e:
-            e.blocking_methods = ["start()", "arm()"]
+            e.blocking_methods = ["arm()"]
             raise
         finally:
             self._armed_event.clear()
+            # if error before wait_until_ready, we need to clear its event
             self._probe_status_event.clear()
 
     def wait_until_ready(self, timeout=None):
@@ -178,8 +203,9 @@ class BlockingProbeUser(ProbeUser):
             self._wait_for_probe(self._probe_status_event, timeout)
         except ProbeTimeoutError as e:
             e.blocking_methods = ["main()"]
-            raise e
-
+            raise
+        finally:
+            self._probe_status_event.clear()
 
     def notify_blocking(self):
         self._blocking_event.set()
@@ -210,6 +236,7 @@ class BlockingProbeUser(ProbeUser):
             self._arm_event.wait(1)
 
         self._arm_event.clear()
+        self._continue_event.clear()
         return True
 
     def _notify_armed(self):
@@ -226,7 +253,6 @@ class BlockingProbeUser(ProbeUser):
         timeout_appended = True
         while not self._blocking_event.is_set():
             if self._continue_event.is_set() or not self._go_on():
-                self._continue_event.clear()
                 self._notify_status_retrieved()
                 timeout_appended = False
                 break
@@ -246,6 +272,8 @@ class BlockingProbeUser(ProbeUser):
 
         if status is not None:
             self._probe.status = status
+
+        self._notify_probe_started()
 
         while self._go_on():
 
@@ -301,12 +329,12 @@ class Monitor(object):
     def set_data_model(self, dm):
         self._dm = dm
 
-    def add_probe(self, probe, blocking=False, after_feedback_retrieval=False):
+    def add_probe(self, probe, blocking=False, after_target_feedback_retrieval=False):
         if probe.__class__.__name__ in self.probe_users:
-            raise AddExistingProbeToMonitorError(probe.__class_.__name__)
+            raise AddExistingProbeToMonitorError(probe.__class__.__name__)
 
         if blocking:
-            self.probe_users[probe.__class__.__name__] = BlockingProbeUser(probe, after_feedback_retrieval)
+            self.probe_users[probe.__class__.__name__] = BlockingProbeUser(probe, after_target_feedback_retrieval)
         else:
             self.probe_users[probe.__class__.__name__] = ProbeUser(probe)
 
@@ -348,7 +376,6 @@ class Monitor(object):
                 return False
         return True
 
-
     def stop_probe(self, probe):
         probe_name = self._get_probe_ref(probe)
         if probe_name in self.probe_users:
@@ -386,18 +413,22 @@ class Monitor(object):
             probes_names.append(probe_name)
         return probes_names
 
-    def _wait_for_specific_probes(self, probe_user_class, probe_user_wait_method, probes=None):
+    def _wait_for_specific_probes(self, probe_user_class, probe_user_wait_method, probes=None,
+                                  timeout=None):
         """
         Wait for probes to trigger a specific event
 
         Args:
-            probe_user_class (ProbeUser): probe_user class that defines the method
-            probe_user_wait_method (method): name of the probe_user's method that will be used to wait
-            probes (list of :class:`ProbeUser`): probes to wait for. If None all probes will be concerned
+            probe_user_class (ProbeUser): probe_user class that defines the method.
+            probe_user_wait_method (method): name of the probe_user's method that will be used to wait.
+            probes (list of :class:`ProbeUser`): probes to wait for. If None all probes will be concerned.
+            timeout (float): maximum time to wait for in seconds.
         """
         probes = self.probe_users.items() if probes is None else probes
 
-        timeout = datetime.timedelta(seconds=ProbeUser.timeout)
+        if timeout is None:
+            timeout = ProbeUser.timeout
+        timeout = datetime.timedelta(seconds=timeout)
         start = datetime.datetime.now()
 
         for _, probe_user in probes:
@@ -410,11 +441,14 @@ class Monitor(object):
                                            .format(e.probe_name, e.blocking_methods),
                                            code=Error.OperationCancelled)
 
-    def do_before_sending_data(self):
+    def wait_for_probe_initialization(self):
+        self._wait_for_specific_probes(ProbeUser, ProbeUser.wait_for_probe_init,
+                                       timeout=ProbeUser.probe_init_timeout)
+
+    def notify_imminent_data_sending(self):
         if not self.__enable:
             return
         self._target_status = None
-
 
         for _, probe_user in self.probe_users.items():
             if isinstance(probe_user, BlockingProbeUser):
@@ -423,31 +457,33 @@ class Monitor(object):
         self._wait_for_specific_probes(BlockingProbeUser, BlockingProbeUser.wait_until_armed)
 
 
-    def do_after_sending_data(self):
+    def notify_data_sending_event(self):
         if not self.__enable:
             return
 
         for _, probe_user in self.probe_users.items():
-            if isinstance(probe_user, BlockingProbeUser) and not probe_user.after_feedback_retrieval:
+            if isinstance(probe_user, BlockingProbeUser) and not probe_user.after_target_feedback_retrieval:
                 probe_user.notify_blocking()
 
 
-    def do_after_timeout(self):
+    def notify_target_feedback_retrieval(self):
         if not self.__enable:
             return
         for _, probe_user in self.probe_users.items():
-            if isinstance(probe_user, BlockingProbeUser) and probe_user.after_feedback_retrieval:
+            if isinstance(probe_user, BlockingProbeUser) and probe_user.after_target_feedback_retrieval:
                 probe_user.notify_blocking()
 
 
-    def do_before_feedback_retrieval(self):
+    def wait_for_probe_status_retrieval(self):
         if not self.__enable:
             return
 
         self._wait_for_specific_probes(BlockingProbeUser, BlockingProbeUser.wait_until_ready)
 
 
-    def do_on_error(self):
+    def notify_error(self):
+        # WARNING: do not use between BlockingProbeUser.notify_data_ready and
+        # BlockingProbeUser.wait_until_armed
         if not self.__enable:
             return
 
@@ -523,6 +559,7 @@ class Probe(object):
         Called by the framework just before sending a data.
 
         Args:
+            dm: the current data model
             target: the current target
             logger: the current logger
         """
@@ -548,6 +585,19 @@ class Probe(object):
         """
         raise NotImplementedError
 
+    def reset(self):
+        """
+        To be overloaded by user-code (if needed).
+
+        Called each time the probe status is retrieved by the framework
+        (through :meth:`Monitor.get_probe_status`).
+        Useful especially for periodic probe that may need to be reset after each
+        data sending.
+
+        Note: shall be stateless and reentrant.
+        """
+        pass
+
     def configure(self, *args):
         """
         (Optional method) To be overloaded with any signature that fits your needs
@@ -558,6 +608,7 @@ class Probe(object):
             *args: anything that fits your needs
         """
         pass
+
 
 class ProbeStatus(object):
 
@@ -588,69 +639,276 @@ class ProbeStatus(object):
     def get_timestamp(self):
         return self._now
 
-class ProbePID_SSH(Probe):
+
+class Backend(object):
+
+    def __init__(self, codec='latin_1'):
+        """
+        Args:
+            codec (str): codec used by the monitored system to answer.
+        """
+        self._started = False
+        self.codec = codec
+        self._sync_lock = threading.Lock()
+
+    def start(self):
+        with self._sync_lock:
+            if not self._started:
+                self._started = True
+                self._start()
+
+    def stop(self):
+        with self._sync_lock:
+            if self._started:
+                self._started = False
+                self._stop()
+
+    def exec_command(self, cmd):
+        with self._sync_lock:
+            return self._exec_command(cmd)
+
+    def _exec_command(self, cmd):
+        raise NotImplementedError
+
+    def _start(self):
+        pass
+
+    def _stop(self):
+        pass
+
+
+class SSH_Backend(Backend):
     """
-    This generic probe enables you to monitor a process PID through an
-    SSH connection.
+    Backend to execute command through a serial line.
+    """
+    def __init__(self, username, password, sshd_ip, sshd_port=22, codec='latin_1'):
+        """
+        Args:
+            sshd_ip (str): IP of the SSH server.
+            sshd_port (int): port of the SSH server.
+            username (str): username to connect with.
+            password (str): password related to the username.
+            codec (str): codec used by the monitored system to answer.
+        """
+        Backend.__init__(self, codec=codec)
+        if not ssh_module:
+            raise eh.UnavailablePythonModule('Python module for SSH is not available!')
+        self.sshd_ip = sshd_ip
+        self.sshd_port = sshd_port
+        self.username = username
+        self.password = password
+        self.client = None
+
+    def _start(self):
+        self.client = ssh.SSHClient()
+        self.client.set_missing_host_key_policy(ssh.AutoAddPolicy())
+        self.client.connect(self.sshd_ip, port=self.sshd_port,
+                            username=self.username,
+                            password=self.password)
+
+    def _stop(self):
+        self.client.close()
+
+    def _exec_command(self, cmd):
+        ssh_in, ssh_out, ssh_err = \
+            self.client.exec_command(cmd)
+
+        if ssh_err.read():
+            # the command does not exist on the system
+            raise BackendError('The command does not exist on the host')
+        else:
+            return ssh_out.read()
+
+
+class Serial_Backend(Backend):
+    """
+    Backend to execute command through a serial line.
+    """
+    def __init__(self, serial_port, baudrate=115200, bytesize=8, parity='N', stopbits=1,
+                 xonxoff=False, rtscts=False, dsrdtr=False,
+                 username=None, password=None, slowness_factor=5,
+                 cmd_notfound=b'command not found', codec='latin_1'):
+        """
+        Args:
+            serial_port (str): path to the tty device file. (e.g., '/dev/ttyUSB0')
+            baudrate (int): baud rate of the serial line.
+            bytesize (int): number of data bits. (5, 6, 7, or 8)
+            parity (str): parity checking. ('N', 'O, 'E', 'M', or 'S')
+            stopbits (int): number of stop bits. (1, 1.5 or 2)
+            xonxoff (bool): enable software flow control.
+            rtscts (bool): enable hardware (RTS/CTS) flow control.
+            dsrdtr (bool): enable hardware (DSR/DTR) flow control.
+            username (str): username to connect with. If None, no authentication step will be attempted.
+            password (str): password related to the username.
+            slowness_factor (int): characterize the slowness of the monitored system. The scale goes from
+              1 (fastest) to 10 (slowest). This factor is a base metric to compute the time to wait
+              for the authentication step to terminate (if `username` and `password` parameter are provided)
+              and other operations involving to wait for the monitored system.
+            cmd_notfound (bytes): pattern used to detect if the command does not exist on the
+              monitored system.
+            codec (str): codec used to send/receive information through the serial line
+        """
+        Backend.__init__(self, codec=codec)
+        if not serial_module:
+            raise eh.UnavailablePythonModule('Python module for Serial is not available!')
+
+        self.serial_port = serial_port
+        self.baudrate = baudrate
+        self.bytesize = bytesize
+        self.parity = parity
+        self.stopbits= stopbits
+        self.xonxoff = xonxoff
+        self.rtscts = rtscts
+        self.dsrdtr = dsrdtr
+        self.slowness_factor = slowness_factor
+        self.cmd_notfound = cmd_notfound
+        if sys.version_info[0] > 2:
+            self.username = bytes(username, self.codec)
+            self.password = bytes(password, self.codec)
+        else:
+            self.username = username
+            self.password = password
+
+        self.client = None
+
+    def _start(self):
+        self.ser = serial.Serial(self.serial_port, self.baudrate, bytesize=self.bytesize,
+                                 parity=self.parity, stopbits=self.stopbits,
+                                 xonxoff=self.xonxoff, dsrdtr=self.dsrdtr, rtscts=self.rtscts,
+                                 timeout=self.slowness_factor*0.1)
+        if self.username is not None:
+            assert self.password is not None
+            self.ser.flushInput()
+            self.ser.write(self.username+b'\r\n')
+            time.sleep(0.1)
+            self.ser.readline() # we read login echo
+            pass_prompt = self.ser.readline()
+            retry = 0
+            eot_sent = False
+            while pass_prompt.lower().find(b'password') == -1:
+                retry += 1
+                if retry > 3 and eot_sent:
+                    self.stop()
+                    raise BackendError('Unable to establish a connection with the serial line.')
+                elif retry > 3:
+                    # we send an EOT if ever the console was not in its initial state
+                    # (already logged, or with the password prompt, ...) when we first write on
+                    # the serial line.
+                    self.ser.write(b'\x04\r\n')
+                    time.sleep(self.slowness_factor*0.8)
+                    self.ser.flushInput()
+                    self.ser.write(self.username+b'\r\n')
+                    time.sleep(0.1)
+                    self.ser.readline() # we consume the login echo
+                    pass_prompt = self.ser.readline()
+                    retry = 0
+                    eot_sent = True
+                else:
+                    chunks = self._read_serial(duration=self.slowness_factor*0.2)
+                    pass_prompt = b''.join(chunks)
+            time.sleep(0.1)
+            self.ser.write(self.password+b'\r\n')
+            time.sleep(self.slowness_factor*0.7)
+
+    def _stop(self):
+        self.ser.write(b'\x04\r\n') # we send an EOT (Ctrl+D)
+        self.ser.close()
+
+    def _exec_command(self, cmd):
+        if not self.ser.is_open:
+            raise BackendError('Serial port not open')
+
+        if sys.version_info[0] > 2:
+            cmd = bytes(cmd, self.codec)
+        cmd += b'\r\n'
+        self.ser.flushInput()
+        self.ser.write(cmd)
+        time.sleep(0.1)
+        self.ser.readline() # we consume the 'writing echo' from the input
+        try:
+            result = self._read_serial(duration=self.slowness_factor*0.8)
+        except serial.SerialException:
+            raise BackendError('Exception while reading serial line')
+        else:
+            # We have to remove the new prompt line at the end.
+            # But in our testing environment, the two last entries had to be removed, namely
+            # 'prompt_line \r\n' and 'prompt_line ' !?
+            # print('\n*** DBG: ', result)
+            result = result[:-2]
+            ret = b''.join(result)
+            if ret.find(self.cmd_notfound) != -1:
+                raise BackendError('The command does not exist on the host')
+            else:
+                return ret
+
+    def _read_serial(self, duration):
+        result = []
+        t0 = datetime.datetime.now()
+        delta = -1
+        while delta < duration:
+            now = datetime.datetime.now()
+            delta = (now - t0).total_seconds()
+            res = self.ser.readline()
+            if res == b'':
+                break
+            result.append(res)
+        return result
+
+
+class BackendError(Exception): pass
+
+class ProbePID(Probe):
+    """
+    Generic probe that enables you to monitor a process PID.
+
+    The monitoring can be done through different backend (e.g., :class:`SSH_Backend`,
+    :class:`Serial_Backend`).
 
     Attributes:
+        backend (Backend): backend to be used (e.g., :class:`SSH_Backend`).
         process_name (str): name of the process to monitor.
-        sshd_ip (str): IP of the SSH server.
-        sshd_port (int): port of the SSH server.
-        username (str): username to connect with.
-        password (str): password related to the username.
         max_attempts (int): maximum number of attempts for getting
           the process ID.
         delay_between_attempts (float): delay in seconds between
           each attempt.
         delay (float): delay before retrieving the process PID.
-        ssh_command_pattern (str): format string for the ssh command. '{0:s}' refer
+        command_pattern (str): format string for the ssh command. '{0:s}' refer
           to the process name.
     """
+    backend = None
     process_name = None
-    sshd_ip = None
-    sshd_port = 22
-    username = None
-    password = None
+    command_pattern = 'pgrep {0:s}'
     max_attempts = 10
     delay_between_attempts = 0.1
     delay = 0.5
-    ssh_command_pattern = 'pgrep {0:s}'
 
     def __init__(self):
-        assert(self.process_name != None)
-        assert(self.sshd_ip != None)
-        assert(self.username != None)
-        assert(self.password != None)
-
-        if not ssh_module:
-            raise eh.UnavailablePythonModule('Python module for SSH is not available!')
-
+        assert self.process_name != None
+        assert self.backend != None
         Probe.__init__(self)
 
     def _get_pid(self, logger):
-        ssh_in, ssh_out, ssh_err = \
-            self.client.exec_command(self.ssh_command_pattern.format(self.process_name))
-
-        if ssh_err.read():
-            # fallback method as previous command does not exist on the system
-            fallback_cmd = 'ps a -opid,comm'
-            ssh_in, ssh_out, ssh_err = self.client.exec_command(fallback_cmd)
-            res = ssh_out.read()
+        try:
+            res = self.backend.exec_command(self.command_pattern.format(self.process_name))
+        except BackendError:
+            fallback_cmd = 'ps a -opid,comm | grep {0:s}'.format(self.process_name)
+            res = self.backend.exec_command(fallback_cmd)
             if sys.version_info[0] > 2:
-                res = res.decode('latin_1')
+                res = res.decode(self.backend.codec)
             pid_list = res.split('\n')
             for entry in pid_list:
                 if entry.find(self.process_name) >= 0:
-                    pid = int(entry.split()[0])
+                    try:
+                        pid = int(entry.split()[0])
+                    except ValueError:
+                        pid = -10
                     break
             else:
                 # process not found
                 pid = -1
         else:
-            res = ssh_out.read()
             if sys.version_info[0] > 2:
-                res = res.decode('latin_1')
+                res = res.decode(self.backend.codec)
             l = res.split()
             if len(l) > 1:
                 logger.print_console("*** ERROR: more than one PID detected for process name '{:s}'"
@@ -659,7 +917,10 @@ class ProbePID_SSH(Probe):
                                      nl_before=True)
                 pid = -10
             elif len(l) == 1:
-                pid = int(l[0])
+                try:
+                    pid = int(l[0])
+                except ValueError:
+                    pid = -10
             else:
                 # process not found
                 pid = -1
@@ -667,11 +928,7 @@ class ProbePID_SSH(Probe):
         return pid
 
     def start(self, dm, target, logger):
-        self.client = ssh.SSHClient()
-        self.client.set_missing_host_key_policy(ssh.AutoAddPolicy())
-        self.client.connect(self.sshd_ip, port=self.sshd_port,
-                            username=self.username,
-                            password=self.password)
+        self.backend.start()
         self._saved_pid = self._get_pid(logger)
         if self._saved_pid < 0:
             msg = "*** INIT ERROR: unable to retrieve process PID ***\n"
@@ -684,7 +941,7 @@ class ProbePID_SSH(Probe):
         return ProbeStatus(self._saved_pid, info=msg)
 
     def stop(self, dm, target, logger):
-        self.client.close()
+        self.backend.stop()
 
     def main(self, dm, target, logger):
         cpt = self.max_attempts
@@ -698,8 +955,8 @@ class ProbePID_SSH(Probe):
         status = ProbeStatus()
 
         if current_pid == -10:
-            status.set_status(10)
-            status.set_private_info("ERROR with the ssh command")
+            status.set_status(-10)
+            status.set_private_info("ERROR with the command")
         elif current_pid == -1:
             status.set_status(-2)
             status.set_private_info("'{:s}' is not running anymore!".format(self.process_name))
@@ -709,10 +966,110 @@ class ProbePID_SSH(Probe):
             status.set_private_info("'{:s}' PID({:d}) has changed!".format(self.process_name,
                                                                            current_pid))
         else:
-            status.set_status(0)
+            status.set_status(current_pid)
             status.set_private_info(None)
 
         return status
+
+
+class ProbeMem(Probe):
+    """
+    Generic probe that enables you to monitor the process memory (RSS...) consumption.
+    It can be done by specifying a ``threshold`` and/or a ``tolerance`` ratio.
+
+    The monitoring can be done through different backend (e.g., :class:`SSH_Backend`,
+    :class:`Serial_Backend`).
+
+    Attributes:
+        backend (Backend): backend to be used (e.g., :class:`SSH_Backend`).
+        process_name (str): name of the process to monitor.
+        threshold (int): memory (RSS) threshold in bytes that the monitored process should not exceed.
+        tolerance (int): tolerance expressed in percentage of the memory (RSS) the process was
+          using at the beginning of the monitoring.
+        command_pattern (str): format string for the ssh command. '{0:s}' refer
+          to the process name.
+    """
+    backend = None
+    process_name = None
+    threshold = None
+    tolerance = 2
+    command_pattern = 'ps -e -orss,comm | grep {0:s}'
+
+    def __init__(self):
+        assert self.process_name != None
+        assert self.backend != None
+        self._saved_mem = None
+        Probe.__init__(self)
+
+    def _get_mem(self):
+        res = self.backend.exec_command(self.command_pattern.format(self.process_name))
+
+        if sys.version_info[0] > 2:
+            res = res.decode(self.backend.codec)
+        proc_list = res.split('\n')
+        for entry in proc_list:
+            if entry.find(self.process_name) >= 0:
+                try:
+                    rss = int(re.search('\d+', entry.split()[0]).group(0))
+                except:
+                    rss = -10
+                break
+        else:
+            # process not found
+            rss = -1
+
+        return rss
+
+    def start(self, dm, target, logger):
+        self.backend.start()
+        self._saved_mem = self._get_mem()
+        self.reset()
+        if self._saved_mem < 0:
+            msg = "*** INIT ERROR: unable to retrieve process RSS ***\n"
+        else:
+            msg = "*** INIT: '{:s}' current RSS: {:d} ***\n".format(self.process_name,
+                                                                    self._saved_mem)
+        return ProbeStatus(self._saved_mem, info=msg)
+
+    def stop(self, dm, target, logger):
+        self.backend.stop()
+
+    def main(self, dm, target, logger):
+        current_mem = self._get_mem()
+
+        status = ProbeStatus()
+
+        if current_mem == -10:
+            status.set_status(-10)
+            status.set_private_info("ERROR with the command")
+        elif current_mem == -1:
+            status.set_status(-2)
+            status.set_private_info("'{:s}' is not found!".format(self.process_name))
+        else:
+            if current_mem > self._max_mem:
+                self._max_mem = current_mem
+
+            ok = True
+            info = "*** '{:s}' maximum RSS: {:d} ***\n".format(self.process_name, self._max_mem)
+            err_msg = ''
+            if self.threshold is not None and self._max_mem > self.threshold:
+                ok = False
+                err_msg += '\n*** Threshold exceeded ***'
+            if self.tolerance is not None:
+                delta = abs(self._max_mem - self._saved_mem)
+                if (delta/float(self._saved_mem))*100 > self.tolerance:
+                    ok = False
+                    err_msg += '\n*** Tolerance exceeded ***'
+            if not ok:
+                status.set_status(-1)
+                status.set_private_info(err_msg+'\n'+info)
+            else:
+                status.set_status(self._max_mem)
+                status.set_private_info(info)
+        return status
+
+    def reset(self):
+        self._max_mem = self._saved_mem
 
 
 def probe(project):
@@ -723,9 +1080,10 @@ def probe(project):
     return internal_func
 
 
-def blocking_probe(project, after_feedback_retrieval=False):
+def blocking_probe(project, after_target_feedback_retrieval=False):
     def internal_func(probe_cls):
-        project.monitor.add_probe(probe_cls(), blocking=True, after_feedback_retrieval=after_feedback_retrieval)
+        project.monitor.add_probe(probe_cls(), blocking=True,
+                                  after_target_feedback_retrieval=after_target_feedback_retrieval)
         return probe_cls
 
     return internal_func

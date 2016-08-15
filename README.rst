@@ -49,22 +49,22 @@ About documentation
 Launch fuddly test cases
 ------------------------
 
-The file ``framework/test.py`` include all unit & integration test cases
+The package ``test`` include all unit & integration test cases
 of ``fuddly`` itself. Usage is as follows:
 
-- To launch all the test, issue the command::
+- To launch all the tests, issue the command::
 
-    >> python framework/test.py -a
+    >> python -m test -a
 
-- To launch all the test but the longer ones, issue the command::
+- To launch all the tests but the longer ones, issue the command::
 
-    >> python framework/test.py
+    >> python -m test
 
 - To avoid data model specific test cases use the option ``--ignore-dm-specifics``
 
-- To launch a specific test category issue the folowing command::
+- To launch a specific test category issue the following command::
 
-    >> python framework/test.py <Test_Class>.<test_method>
+    >> python -m test test.<test_package>.<test_module>.<Test_Class>.<test_method>
 
 
 Miscellaneous

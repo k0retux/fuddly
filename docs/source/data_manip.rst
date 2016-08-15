@@ -26,7 +26,7 @@ To guide you over what is possible to perform, let's consider the following data
      {'name': 'ex',
       'contents': [
           {'name': 'data0',
-           'contents': String(val_list=['Plip', 'Plop']) },
+           'contents': String(values=['Plip', 'Plop']) },
 
           {'name': 'data_group',
            'contents': [
@@ -38,7 +38,7 @@ To guide you over what is possible to perform, let's consider the following data
                'absorb_csts': AbsFullCsts(contents=False)},
 
               {'name': 'data1',
-               'contents': String(val_list=['Test!', 'Hello World!']) },
+               'contents': String(values=['Test!', 'Hello World!']) },
 
               {'name': 'data2',
                'qty': (1,3),
@@ -46,39 +46,39 @@ To guide you over what is possible to perform, let's consider the following data
                'contents': UINT16_be(mini=10, maxi=0xa0ff),
                'alt': [
                     {'conf': 'alt1',
-                     'contents': SINT8(int_list=[1,4,8])},
+                     'contents': SINT8(values=[1,4,8])},
                     {'conf': 'alt2',
                      'contents': UINT16_be(mini=0xeeee, maxi=0xff56)} ]},
 
               {'name': 'data3',
                'semantics': ['sem2'],
                'sync_qty_with': 'data2',
-               'contents': UINT8(int_list=[30,40,50]),
+               'contents': UINT8(values=[30,40,50]),
                'alt': [
                     {'conf': 'alt1',
-                     'contents': SINT8(int_list=[1,4,8])}]},
+                     'contents': SINT8(values=[1,4,8])}]},
              ]},
 
           {'name': 'data4',
-           'contents': String(val_list=['Red', 'Green', 'Blue']) }
+           'contents': String(values=['Red', 'Green', 'Blue']) }
       ]}
 
 
 This is what we call a data descriptor. It cannot be used directly, it should first be
 transformed to ``fuddly`` internal representation based on :class:`framework.data_model.Node`.
-The code below show how to perform that:
+The code below shows how to perform that:
 
 .. code-block:: python
    :linenos:
 
     mh = ModelHelper()
-    rnode = mh.create_graph_from_desc(enc_desc)
+    rnode = mh.create_graph_from_desc(example_desc)
     rnode.set_env(Env())
 
 
 ``fuddly`` models data as directed acyclic graphs whose terminal
 nodes describe the different parts of a data format (refer to :ref:`data-model`). In order to
-enable elaborated manipulations it also create a specific object to share between all the nodes
+enable elaborated manipulations it also creates a specific object to share between all the nodes
 some common information related to the graph: the :class:`framework.data_model.Env` object. You should
 note that we create this *environment* object and setup the root node with it. Actually it
 provides all the nodes of the graph with this environment. From now on it is possible to access
@@ -107,7 +107,7 @@ Generate Data a.k.a. Freeze a Graph
 If you want to get a data from the graph you have to freeze it first as it represents many
 different potential data at once (actually it acts like a template). To do so, just call the method
 :meth:`framework.data_model.Node.freeze` on the root node. It will provide you with a nested set of
-list containing the frozen value for each node selected within the graph to provide you with a data.
+lists containing the frozen value for each node selected within the graph to provide you with a data.
 
 What is way more interesting in the general case is obtaining a byte string of the data. For
 this you just have to call :meth:`framework.data_model.Node.to_bytes` on the root node which will
@@ -590,7 +590,7 @@ This infrastructure is based on the following primitives:
 - :meth:`framework.data_model.Env.remove_node_to_corrupt`
 
 The typical way to perform a corruption with this infrastructure is illustrated in what follows.
-The example perform a corruption that change from the model the allowed amount for a specific
+This example performs a corruption that changes from the model the allowed amount for a specific
 node (``targeted_node``) of a graph (referenced by ``rnode``) that can be created during the data
 generation from the graph.
 
@@ -607,8 +607,8 @@ generation from the graph.
     rnode.env.remove_node_to_corrupt(targeted_node)
 
 From now on, you have still a clean graph referenced by ``rnode``, and a corrupted one referenced
-by ``corrupt_rnode``. You can now instanciate some data from ``corrupt_rnode`` that complies to an
-altered data model (because we change the grammar that constrain the data generation).
+by ``corrupt_rnode``. You can now instantiate some data from ``corrupt_rnode`` that complies to an
+altered data model (because we change the grammar that constrains the data generation).
 
 The corruption operations currently defined are:
 

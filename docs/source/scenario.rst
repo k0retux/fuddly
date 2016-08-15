@@ -17,7 +17,7 @@ Once a `scenario` has been defined and registered, ``Fuddly`` will automatically
   `Generators` and `Disruptors`. The Generators which are backed by a scenario are prefixed by
   ``SC_``.
 
-A `scenario` is a state-machine. Its description follow an oriented graph where the nodes, called
+A `scenario` is a state-machine. Its description follows an oriented graph where the nodes, called
 `steps`, define the data to be sent to the target. The transitions that interconnect these
 steps can be guarded by different kinds of callbacks that trigger at different moment (before
 the framework sends the data, after sending the data, or after having retrieved any feedback
@@ -56,7 +56,7 @@ Let's begin with a simple example that interconnect 3 steps in a loop without an
 
     tactics.register_scenarios(sc1)
 
-You should first note that scenarios have to be described in a ``*_strategy.py`` file that match
+You should first note that scenarios have to be described in a ``*_strategy.py`` file that matches
 the data model you base your scenarios on. In our case we use the data model ``mydf`` defined in
 ``tuto.py`` (refer to :ref:`dm:mydf` for further explanation on file organization).
 The special object ``tactics`` (line 4) is usually used to register the data makers (`disruptors` or
@@ -68,7 +68,7 @@ From line 9 to 11 we define 3 :class:`framework.scenario.Step`:
 - The first one commands the framework to send a data of type ``exist_cond`` (which is the name of a data registered
   in the data model ``mydf``) as well as starting 2 tasks (threaded entities of the framework) that
   will emit each one a specific data. The first one will send the specified string every 5 seconds
-  while the other one will send another string only once. Finally, the step set also the maximum
+  while the other one will send another string only once. Finally, the step sets also the maximum
   time duration that ``Fuddly`` should respect for collecting the feedback from the target (feedback
   timeout). This timeout is actually handled by the ``Target`` object, which may decide to respect it
   or not. For instance the ``NetworkTarget`` respect it while the ``EmptyTarget`` (default target)
@@ -226,12 +226,12 @@ service for instance. This is illustrated in the following example in the lines 
     periodic2 = Periodic(Data('2nd Periodic (3s)\n'), period=3)
 
     step1 = Step('exist_cond', fbk_timeout=2, set_periodic=[periodic1, periodic2])
-    step2 = Step('separator', fbk_timeout=5, cbk_after_fbk=feedback_handler)
+    step2 = Step('separator', fbk_timeout=5)
     step3 = NoDataStep()
     step4 = Step(DataProcess(process=[('C',None,UI(nb=1)),'tTYPE'], seed='enc'))
 
     step1.connect_to(step2)
-    step2.connect_to(step3, cbk_after_fbk=cbk_transition2)
+    step2.connect_to(step3, cbk_after_fbk=feedback_handler)
     step3.connect_to(step4)
     step4.connect_to(FinalStep())
 

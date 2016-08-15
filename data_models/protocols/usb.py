@@ -22,20 +22,10 @@
 ################################################################################
 
 import sys
-import os
-import copy
-import re
-import functools
-import struct
-import random
-import zlib
 
-from framework.plumbing import *
 from framework.data_model import *
 from framework.data_model_helpers import *
 from framework.value_types import *
-from framework.fuzzing_primitives import *
-from framework.basic_primitives import *
 
 
 class USB_DEFS:
@@ -85,51 +75,51 @@ class USB_DataModel(DataModel):
         {'name': 'EP_desc',
          'contents': [
              {'name': 'bLength',
-              'contents': UINT8(int_list=[7])},
+              'contents': UINT8(values=[7])},
              {'name': 'bDescType',
-              'contents': UINT8(int_list=[USB_DEFS.DT_ENDPOINT])},
+              'contents': UINT8(values=[USB_DEFS.DT_ENDPOINT])},
              {'name': 'bEndpointAddr',
               'contents': BitField(subfield_limits=[4,7,8],
                                    subfield_val_extremums=[[0,0b1111],None,[0,1]],
-                                   subfield_val_lists=[None,[0],None],
+                                   subfield_values=[None,[0],None],
                                    endian=VT.LittleEndian),
               'alt': [
                   {'conf': 'BULK-IN',
                    'contents': BitField(subfield_limits=[4,7,8],
-                                        subfield_val_lists=[[1],[0],[1]],
+                                        subfield_values=[[1],[0],[1]],
                                         endian=VT.LittleEndian)},
                   {'conf': 'BULK-OUT',
                    'contents': BitField(subfield_limits=[4,7,8],
-                                        subfield_val_lists=[[2],[0],[0]],
+                                        subfield_values=[[2],[0],[0]],
                                         endian=VT.LittleEndian)}]},
              {'name': 'bmAttributes',
-              'contents': BitField(subfield_limits=[2,6,8], subfield_val_lists=[[0,2,3],[0],[0]],
+              'contents': BitField(subfield_limits=[2,6,8], subfield_values=[[0,2,3],[0],[0]],
                                    endian=VT.LittleEndian),
               'fuzz_weight': 5,
               'alt': [
                   {'conf': 'ISO',
                    'contents': BitField(subfield_limits=[2,4,6,8],
                                         subfield_val_extremums=[None,[0,3],[0,2],None],
-                                        subfield_val_lists=[[1],None,None,[0]],
+                                        subfield_values=[[1],None,None,[0]],
                                         endian=VT.LittleEndian)}
               ]},
              {'name': 'wMaxPacketSize',
               'contents': BitField(subfield_limits=[11,13,16],
                                    subfield_val_extremums=[None,[0,2],[0,0]],
-                                   subfield_val_lists=[[2**x for x in range(1,12)],None,[0]],
+                                   subfield_values=[[2**x for x in range(1,12)],None,[0]],
                                    endian=VT.LittleEndian),
               'random': True,
               'alt': [
                   {'conf': 'MSD',
                    'contents': BitField(subfield_limits=[11,13,16],
                                         subfield_val_extremums=[None,[0,2],[0,0]],
-                                        subfield_val_lists=[[0x8, 0x10, 0x20, 0x40],[0],[0]],
+                                        subfield_values=[[0x8, 0x10, 0x20, 0x40],[0],[0]],
                                         endian=VT.LittleEndian)}]},
              {'name': 'bInterval',
-              'contents': UINT8(int_list=[4]),
+              'contents': UINT8(values=[4]),
               'alt': [
                   {'conf': 'MSD',
-                   'contents': UINT8(int_list=[0])}]}
+                   'contents': UINT8(values=[0])}]}
          ]}
 
         mh = ModelHelper(add_env=False)
@@ -148,22 +138,22 @@ class USB_DataModel(DataModel):
              {'name': ('Ihdr', 2),
               'contents': [
                   {'name': ('bLength', 2),
-                   'contents': UINT8(int_list=[9])},
+                   'contents': UINT8(values=[9])},
                   {'name': ('bDescType', 2),
-                   'contents': UINT8(int_list=[USB_DEFS.DT_INTERFACE])},
+                   'contents': UINT8(values=[USB_DEFS.DT_INTERFACE])},
                   {'name': 'bInterfaceNum',
                    'contents': UINT8(mini=0, maxi=10)},
                   {'name': 'bAlternateSetting',
-                   'contents': UINT8(int_list=[0, 1, 2, 3, 4])},
+                   'contents': UINT8(values=[0, 1, 2, 3, 4])},
                   {'name': 'bNumEndpoints',
                    # 'random': True,
                    'contents': UINT8(mini=1, maxi=8, default=4),
                    'alt': [
                        {'conf': 'MSD',
-                        'contents': UINT8(int_list=[2])}
+                        'contents': UINT8(values=[2])}
                    ]},
                   {'name': 'bInterfaceClass',
-                   'contents': UINT8(int_list=[
+                   'contents': UINT8(values=[
                        USB_DEFS.USB_CLASS_MASS_STORAGE,
                        USB_DEFS.USB_CLASS_PRINTER,
                        USB_DEFS.USB_CLASS_HID,
@@ -174,23 +164,23 @@ class USB_DataModel(DataModel):
                    ),
                    'alt': [
                        {'conf': 'MSD',
-                        'contents': UINT8(int_list=[0x8])}
+                        'contents': UINT8(values=[0x8])}
                    ]
                    },
                   {'name': 'bInterfaceSubClass',
-                   'contents': UINT8(int_list=[0x06, 0, 1, 2, 3, 4, 5, 7, 8]),
+                   'contents': UINT8(values=[0x06, 0, 1, 2, 3, 4, 5, 7, 8]),
                    'alt': [
                        {'conf': 'MSD',
-                        'contents': UINT8(int_list=[0x6])}
+                        'contents': UINT8(values=[0x6])}
                    ]},
                   {'name': 'bInterfaceProtocol',
-                   'contents': UINT8(int_list=[0x80, 0x06, 0, 1, 2]),
+                   'contents': UINT8(values=[0x80, 0x06, 0, 1, 2]),
                    'alt': [
                        {'conf': 'MSD',
-                        'contents': UINT8(int_list=[0x50])}
+                        'contents': UINT8(values=[0x50])}
                    ]},
                   {'name': 'iInterface',
-                   'contents': UINT8(int_list=[USB_DEFS.STRINGID_INTERFACE])},
+                   'contents': UINT8(values=[USB_DEFS.STRINGID_INTERFACE])},
               ]},
              {'name': 'EP_Group',
               'custo_clear': MH.Custo.NTerm.MutableClone,
@@ -217,9 +207,9 @@ class USB_DataModel(DataModel):
              {'name': 'hdr',
               'contents': [
                   {'name': 'bLength',
-                   'contents': UINT8(int_list=[9])},
+                   'contents': UINT8(values=[9])},
                   {'name': 'bDescType',
-                   'contents': UINT8(int_list=[USB_DEFS.DT_CONFIGURATION])},
+                   'contents': UINT8(values=[USB_DEFS.DT_CONFIGURATION])},
                   {'name': 'wTotalLength',
                    'contents': MH.LEN(vt=UINT16_le, base_len=9),
                    'node_args': 'Intf_Group'},
@@ -228,18 +218,18 @@ class USB_DataModel(DataModel):
                    'node_args': 'Intf_Group',
                    'alt': [
                        {'conf': 'MSD',
-                        'contents': UINT8(int_list=[1])}
+                        'contents': UINT8(values=[1])}
                    ]},
                   {'name': 'bConfValue',
                    'contents': UINT8(mini=1, maxi=50)},
                   {'name': 'iConf',
-                   'contents': UINT8(int_list=[USB_DEFS.STRINGID_CONFIG])},
+                   'contents': UINT8(values=[USB_DEFS.STRINGID_CONFIG])},
                   {'name': 'bmAttributes',
                    'contents': BitField(subfield_limits=[5,6,7,8],
-                                        subfield_val_lists=[[0],[1],[1],[1]],
+                                        subfield_values=[[0],[1],[1],[1]],
                                         endian=VT.LittleEndian)},
                   {'name': 'bMaxPower',
-                   'contents': UINT8(int_list=[50])},
+                   'contents': UINT8(values=[50])},
               ]},
              {'name': 'Intf_Group',
               'custo_clear': MH.Custo.NTerm.MutableClone,
@@ -265,45 +255,45 @@ class USB_DataModel(DataModel):
          'semantics': 'DEV_DESC',
          'contents': [
              {'name': 'bLength',
-              'contents': UINT8(int_list=[18])},
+              'contents': UINT8(values=[18])},
              {'name': 'bDescType',
-              'contents': UINT8(int_list=[USB_DEFS.DT_DEVICE])},
+              'contents': UINT8(values=[USB_DEFS.DT_DEVICE])},
              {'name': 'bcdUSB',
-              'contents': UINT16_le(int_list=[0x200, 0x100])},
+              'contents': UINT16_le(values=[0x200, 0x100])},
              {'name': 'bDeviceClass',
-              'contents': UINT8(int_list=[0]),
+              'contents': UINT8(values=[0]),
               'alt': [
                   {'conf': 'MS', # mass-storage
-                   'contents': UINT8(int_list=[0])}
+                   'contents': UINT8(values=[0])}
               ]},
              {'name': 'bDeviceSubClass',
-              'contents': UINT8(int_list=[0]),
+              'contents': UINT8(values=[0]),
               'alt': [
                   {'conf': 'MS', # mass-storage
-                   'contents': UINT8(int_list=[0])}
+                   'contents': UINT8(values=[0])}
               ]},
              {'name': 'bDeviceProto',
-              'contents': UINT8(int_list=[0]),
+              'contents': UINT8(values=[0]),
               'alt': [
                   {'conf': 'MS', # mass-storage
-                   'contents': UINT8(int_list=[0])}
+                   'contents': UINT8(values=[0])}
               ]},
              {'name': 'bMaxPacketSize0',
-              'contents': UINT8(int_list=[64])},
+              'contents': UINT8(values=[64])},
              {'name': 'idVendor',
-              'contents': UINT16_le(int_list=[0x1307])},
+              'contents': UINT16_le(values=[0x1307])},
              {'name': 'idProduct',
-              'contents': UINT16_le(int_list=[0x0165])},
+              'contents': UINT16_le(values=[0x0165])},
              {'name': 'bcdDevice',
-              'contents': UINT16_le(int_list=[0x100])},
+              'contents': UINT16_le(values=[0x100])},
              {'name': 'iManufacturer',
-              'contents': UINT8(int_list=[USB_DEFS.STRINGID_MFR])},
+              'contents': UINT8(values=[USB_DEFS.STRINGID_MFR])},
              {'name': 'iProduct',
-              'contents': UINT8(int_list=[USB_DEFS.STRINGID_PRODUCT])},
+              'contents': UINT8(values=[USB_DEFS.STRINGID_PRODUCT])},
              {'name': 'iSerialNumber',
-              'contents': UINT8(int_list=[USB_DEFS.STRINGID_SERIAL])},
+              'contents': UINT8(values=[USB_DEFS.STRINGID_SERIAL])},
              {'name': 'bNumConfigs',
-              'contents': UINT8(int_list=[1])}
+              'contents': UINT8(values=[1])}
          ]}
 
         langid_desc = \
@@ -314,12 +304,12 @@ class USB_DataModel(DataModel):
               'contents': MH.LEN(vt=UINT8,base_len=2),
               'node_args': 'contents'},
              {'name': 'bDescType',
-              'contents': UINT8(int_list=[USB_DEFS.DT_STRING])},
+              'contents': UINT8(values=[USB_DEFS.DT_STRING])},
              {'name': 'contents',
               'contents': [
                   {'name': 'LangID',
                    'qty': (0,30),
-                   'contents': UINT16_le(int_list=[0x040c, 0x0409])}
+                   'contents': UINT16_le(values=[0x040c, 0x0409])}
               ]},
          ]}
 
@@ -330,11 +320,11 @@ class USB_DataModel(DataModel):
              {'name': 'bLength',
               'contents': UINT8()},
              {'name': 'bDescType',
-              'contents': UINT8(int_list=[USB_DEFS.DT_STRING])},
+              'contents': UINT8(values=[USB_DEFS.DT_STRING])},
              {'name': 'contents',
               'sync_enc_size_with': ('bLength', 2),
-              'contents': UTF16_LE(val_list=['\xfcber string', 'what an interesting string!'],
-                                   max_sz=126, max_encoded_sz=253)},
+              'contents': String(values=[u'\u00fcber string', u'what an interesting string!'],
+                                 max_sz=126, max_encoded_sz=253, codec='utf-16-le')},
          ]}
 
 

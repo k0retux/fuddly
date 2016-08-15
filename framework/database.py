@@ -72,7 +72,8 @@ class Database(object):
         valid = False
         with connection:
             tmp_con = sqlite3.connect(':memory:', detect_types=sqlite3.PARSE_DECLTYPES)
-            fmk_db_sql = open(gr.fmk_folder + self.DDL_fname).read()
+            with open(gr.fmk_folder + self.DDL_fname) as fd:
+                fmk_db_sql = fd.read()
             with tmp_con:
                 cur = tmp_con.cursor()
                 cur.executescript(fmk_db_sql)
@@ -460,7 +461,8 @@ class Database(object):
         msg += colorize("{:s}".format(prj), rgb=Color.FMKSUBINFO)
         msg += colorize(" | Target: ", rgb=Color.FMKINFO)
         msg += colorize("{:s}".format(tg), rgb=Color.FMKSUBINFO)
-        msg += colorize("\n    Status: ", rgb=Color.FMKINFO)
+        status_prefix = "    Status: "
+        msg += colorize('\n' + status_prefix, rgb=Color.FMKINFO)
         src_max_sz = 0
         for idx, fbk in enumerate(feedback):
             src, tstamp, status, _ = fbk
@@ -472,7 +474,7 @@ class Database(object):
                    colorize(" by ", rgb=Color.FMKINFO) + \
                    colorize("{!s}".format(src), rgb=Color.FMKSUBINFO)
             if idx < len(feedback) - 1:
-                msg += colorize(", ".format(src), rgb=Color.FMKINFO)
+                msg += colorize(",\n".format(src) + ' '*len(status_prefix), rgb=Color.FMKINFO)
 
         msg += '\n'
         sentd = sent_date.strftime("%d/%m/%Y - %H:%M:%S") if sent_date else 'None'
@@ -499,10 +501,9 @@ class Database(object):
                 msg += colorize("  | ID source: ", rgb=Color.FMKINFO)
                 msg += colorize(str(id_src), rgb=Color.FMKSUBINFO)
             if info is not None:
+                info = gr.unconvert_from_internal_repr(info)
                 if sys.version_info[0] > 2:
-                    info = info.decode("latin_1")
-                else:
-                    info = str(info)
+                    info = eval('{!a}'.format(info))
                 info = info.split('\n')
                 for i in info:
                     chks = chunk_lines(i, page_width - prefix_sz - 10)
@@ -584,11 +585,7 @@ class Database(object):
         msg = ''
         if with_data:
             msg += colorize("\n Sent Data:\n", rgb=Color.FMKINFOGROUP)
-            if sys.version_info[0] > 2:
-                data_content = data_content.decode("latin_1")
-                data_content = "{!a}".format(data_content)
-            else:
-                data_content = repr(str(data_content))
+            data_content = gr.unconvert_from_internal_repr(data_content)
             if len(data_content) > limit_data_sz:
                 data_content = data_content[:limit_data_sz]
                 data_content = data_content
@@ -608,11 +605,9 @@ class Database(object):
                        colorize(")", rgb=Color.FMKINFOGROUP) + \
                        colorize(" = {!s}".format(status), rgb=Color.FMKSUBINFO)
                 if content:
+                    content = gr.unconvert_from_internal_repr(content)
                     if sys.version_info[0] > 2:
-                        content = content.decode("latin_1")
-                        content = "{!a}".format(content)
-                    else:
-                        content = repr(str(content))
+                        content = eval('{!a}'.format(content))
                     chks = chunk_lines(content, page_width - 4)
                     for c in chks:
                         c_sz = len(c)
@@ -805,7 +800,8 @@ class Database(object):
             "WHERE ID == {data_id:d};".format(data_id=data_id)
         )
 
-        print(colorize("*** Data and all related records have been removed ***", rgb=Color.FMKINFO))
+        print(colorize("*** Data {:d} and all related records have been removed ***".format(data_id),
+                       rgb=Color.FMKINFO))
 
 
     def get_project_record(self, prj_name=None):
@@ -948,8 +944,7 @@ class Database(object):
                                    colorized=True):
         colorize = self._get_color_function(colorized)
 
-        if sys.version_info[0] > 2:
-            fbk = bytes(fbk, 'latin_1')
+        fbk = gr.convert_to_internal_repr(fbk)
 
         if fbk_src:
             fbk_records = self.execute_sql_statement(

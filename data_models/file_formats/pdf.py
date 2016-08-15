@@ -157,7 +157,7 @@ class PDFObj(object):
 
         int_part = Node('int_part', value_type=INT_str(mini=int_m, maxi=int_M, determinist=False))
         int_part.add_conf('ALT')
-        int_part.set_values(value_type=INT_str(int_list=[20000000]), conf='ALT')
+        int_part.set_values(value_type=INT_str(values=[20000000]), conf='ALT')
 
         dot = Node('dot', values=['.'])
         val = Node('val', value_type=INT_str(mini=dec_m, maxi=dec_M, determinist=False))
@@ -425,14 +425,14 @@ class PDFObj(object):
                                           prefix = ["/Filter "])
         
         def gen_length_func(e_stream):
-            return Node('length', value_type=INT_str(int_list=[len(e_stream.to_bytes())]))
+            return Node('length', value_type=INT_str(values=[len(e_stream.to_bytes())]))
 
         if use_generator_func:
             e_length = Node('length_wrapper')
             e_length.set_generator_func(gen_length_func, func_node_arg=e_stream)
             e_length.customize(GenFuncCusto(items_to_set=GenFuncCusto.CloneExtNodeArgs))
         else:
-            e_length = Node('length', value_type=INT_str(int_list=[len(e_stream.to_bytes())]))
+            e_length = Node('length', value_type=INT_str(values=[len(e_stream.to_bytes())]))
 
         e_length_entry = make_wrapped_node('E_Length',
                                           node = e_length,
@@ -487,7 +487,7 @@ class PDFObj(object):
 
         xobj_id = e_jpg_xobj.get_private()
         e_resources_internals = make_wrapped_node('IMG_XObj_resource_' + name,
-                                                 node=Node("xobj_id", value_type=INT_str(int_list=[xobj_id])),
+                                                 node=Node("xobj_id", value_type=INT_str(values=[xobj_id])),
                                                  prefix=["<< /ProcSet [/PDF /ImageC]\n /XObject << /Im1 "],
                                                  suffix=[" 0 R >> >>"])
         e_resources = PDFObj.create_wrapped_obj('IMG_XObj_resource_' + name, e_resources_internals)
@@ -522,14 +522,14 @@ class PDFObj(object):
 
         cpt = count if count is not None else len(l)
 
-        e_count_nb = Node("count", value_type=INT_str(int_list=[cpt]))
+        e_count_nb = Node("count", value_type=INT_str(values=[cpt]))
         e_count = make_wrapped_node("Count_E",
                                    node=e_count_nb,
                                    prefix=["/Count "],
                                    suffix=["\n"])
         
         if parent_id is not None:
-            e_parent_id = Node("parent_id", value_type=INT_str(int_list=[parent_id]))
+            e_parent_id = Node("parent_id", value_type=INT_str(values=[parent_id]))
             e_parent = make_wrapped_node("Parent_E",
                                         node=e_parent_id,
                                         prefix=["/Parent "],
@@ -554,7 +554,7 @@ class PDFObj(object):
 
         e_prefix = Node('prefix', values=["<<\n"])
 
-        e_parent_id = Node("parent_id", value_type=INT_str(int_list=[parent_id]))
+        e_parent_id = Node("parent_id", value_type=INT_str(values=[parent_id]))
         e_parent = make_wrapped_node("Parent_E",
                                     node=e_parent_id,
                                     prefix=["/Parent "],
@@ -576,13 +576,13 @@ class PDFObj(object):
                                        prefix=["/MediaBox "],
                                        suffix=["\n"])
 
-        e_resources_id = Node("resource_id", value_type=INT_str(int_list=[resources_id]))
+        e_resources_id = Node("resource_id", value_type=INT_str(values=[resources_id]))
         e_resources = make_wrapped_node("Resources_E",
                                        node=e_resources_id,
                                        prefix=["/Resources "],
                                        suffix=[" 0 R\n"])
 
-        e_contents_id = Node("contents_id", value_type=INT_str(int_list=[contents_id]))
+        e_contents_id = Node("contents_id", value_type=INT_str(values=[contents_id]))
         e_contents = make_wrapped_node("Contents_E",
                                       node=e_contents_id,
                                       prefix=["/Contents "],
@@ -759,7 +759,7 @@ class PDFObj(object):
             node_list = obj_list + pagetree_objs
 
             e_raw_catalog = make_wrapped_node("Catalog",
-                                             node=Node("pagetree_id", value_type=INT_str(int_list=[pagetree_id])),
+                                             node=Node("pagetree_id", value_type=INT_str(values=[pagetree_id])),
                                              prefix=["<<\n/Pages "],
                                              suffix=[" 0 R\n/Type /Catalog\n>>"])
             e_catalog = PDFObj.create_wrapped_obj("Catalog", e_raw_catalog)
@@ -794,7 +794,7 @@ class PDFObj(object):
             # node_list last Node is the catalog
             catalog_id = catalog.get_private()
 
-            val_list = list(map(lambda x: x.to_bytes(), node_list))
+            values = list(map(lambda x: x.to_bytes(), node_list))
             sorted_node_list = sorted(node_list, key=lambda x: x.get_private())
 
             nb_objs = len(node_list) + 1  # we have to count the object 0
@@ -802,7 +802,7 @@ class PDFObj(object):
             off = header_len
 
             objs_offset = {}
-            for v, e in zip(val_list, node_list):
+            for v, e in zip(values, node_list):
                 obj_len = len(v)
                 objs_offset[e] = off
                 off += obj_len
@@ -845,7 +845,7 @@ class PDFObj(object):
             # node_list last Node is the catalog
             catalog_id = catalog.get_private()
 
-            val_list = list(map(lambda x: x.to_bytes(), node_list))
+            values = list(map(lambda x: x.to_bytes(), node_list))
             sorted_node_list = sorted(node_list, key=lambda x: x.get_private())
 
             nb_objs = len(node_list) + 1  # we have to count the object 0
@@ -853,7 +853,7 @@ class PDFObj(object):
             off = header_len
 
             objs_offset = {}
-            for v, e in zip(val_list, node_list):
+            for v, e in zip(values, node_list):
                 obj_len = len(v)
                 objs_offset[e] = off
                 off += obj_len
@@ -1081,7 +1081,7 @@ class PageNode(object):
         self.e_kids_id.set_subnodes_basic(rawlist)
 
         if count_update is not None:
-            self.e_count_nb.set_values(value_type=INT_str(int_list=[count_update]))
+            self.e_count_nb.set_values(value_type=INT_str(values=[count_update]))
 
 
 class PageLeaf(object):
@@ -1096,7 +1096,7 @@ class PageLeaf(object):
         return self.e_leaf.get_private()
 
     def set_parent_id(self, pid):
-        self.e_parent_id.set_values(value_type=INT_str(int_list=[pid]))
+        self.e_parent_id.set_values(value_type=INT_str(values=[pid]))
 
     def set_actions(self, subnodes=None, vals=None):
         if subnodes is not None:

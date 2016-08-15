@@ -46,14 +46,19 @@ tactics = Tactics()
 # STATEFUL DISRUPTORS #
 #######################
 
+def truncate_info(info, max_size=60):
+    if len(info) > max_size:
+        info = info[:max_size] + b' ...'
+    return repr(info)
 
 @disruptor(tactics, dtype="tWALK", weight=1,
            gen_args = GENERIC_ARGS,
            args={'path': ('graph path regexp to select nodes on which' \
                           ' the disruptor should apply', None, str),
                  'nt_only': ('walk through non-terminal nodes only', False, bool),
-                 'singleton': ('consume also terminal nodes with only one possible value', False, bool),
-                 'fix': ('fix constraints while walking', True, bool)})
+                 'singleton': ('consume also terminal nodes with only one possible value', True, bool),
+                 'fix_all': ('for each produced data, reevaluate the constraints on the whole graph',
+                             True, bool)})
 class sd_iter_over_data(StatefulDisruptor):
     '''
     Walk through the provided data and for each visited node, iterates
@@ -73,7 +78,7 @@ class sd_iter_over_data(StatefulDisruptor):
         if self.nt_only:
             consumer = NonTermVisitor()
         else:
-            consumer = BasicVisitor(specific_args=self.singleton)
+            consumer = BasicVisitor(consume_also_singleton=self.singleton)
         consumer.set_node_interest(path_regexp=self.path)
         self.modelwalker = ModelWalker(prev_data.node, consumer, max_steps=self.max_steps, initial_step=self.init)
         self.walker = iter(self.modelwalker)
@@ -88,17 +93,17 @@ class sd_iter_over_data(StatefulDisruptor):
             return data
 
         data.add_info('model walking index: {:d}'.format(idx))
-        data.add_info('current node:     %s' % self.modelwalker.consumed_node_path)
+        data.add_info('current node:     {!s}'.format(self.modelwalker.consumed_node_path))
 
         if self.clone_node:
             exported_node = Node(rnode.name, base_node=rnode, new_env=True)
         else:
             exported_node = rnode
 
-        if self.fix:
-            exported_node.unfreeze(recursive=True, reevaluate_constraints=True)
+        if self.fix_all:
+            exported_node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
             exported_node.freeze()
-            data.add_info('fix constraints (if any)')
+            data.add_info('reevaluate all the constraints (if any)')
 
         data.update_from_node(exported_node)
 
@@ -114,7 +119,13 @@ class sd_iter_over_data(StatefulDisruptor):
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
                            'in the data model) is used for ordering', False, bool),
                  'deep': ('when set to True, if a node structure has changed, the modelwalker ' \
-                          'will reset its walk through the children nodes', True, bool)})
+                          'will reset its walk through the children nodes', True, bool),
+                 'fix_all': ('for each produced data, reevaluate the constraints on the whole graph',
+                             False, bool),
+                 'fix': ("limit constraints fixing to the nodes related to the currently fuzzed one"
+                         " (only implemented for 'sync_size_with' and 'sync_enc_size_with')", True, bool),
+                 'fuzz_mag': ('order of magnitude for maximum size of some fuzzing test cases.',
+                              1.0, float)})
 class sd_fuzz_typed_nodes(StatefulDisruptor):
     '''
     Perform alterations on typed nodes (one at a time) according to
@@ -133,6 +144,8 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
 
         self.consumer = TypedNodeDisruption(max_runs_per_node=self.max_runs_per_node,
                                             min_runs_per_node=self.min_runs_per_node,
+                                            fuzz_magnitude=self.fuzz_mag,
+                                            fix_constraints=self.fix,
                                             respect_order=self.order)
         self.consumer.need_reset_when_structure_change = self.deep
         self.consumer.set_node_interest(path_regexp=self.path)
@@ -159,21 +172,28 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
         else:
             self.run_num +=1
 
+        corrupt_node_bytes = consumed_node.to_bytes()
+
         data.add_info('model walking index: {:d}'.format(idx))        
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
-        data.add_info('current fuzzed node:     %s' % self.modelwalker.consumed_node_path)
-        data.add_info(' |_ value type:         %s' % consumed_node.cc.get_value_type())
-        data.add_info(' |_ original node value: %s (ascii: %s)' % \
-                      (binascii.b2a_hex(orig_node_val), orig_node_val))
-        data.add_info(' |_ corrupt node value:  %s (ascii: %s)' % \
-                      (binascii.b2a_hex(consumed_node.to_bytes()),
-                      consumed_node.to_bytes()))
+        data.add_info('current fuzzed node:     {!s}'.format(self.modelwalker.consumed_node_path))
+        data.add_info(' |_ value type:          {!s}'.format(consumed_node.cc.get_value_type()))
+        data.add_info(' |_ original node value (hex): {!s}'.format(truncate_info(binascii.b2a_hex(orig_node_val))))
+        data.add_info(' |                    (ascii): {!s}'.format(truncate_info(orig_node_val)))
+        data.add_info(' |_ corrupt node value  (hex): {!s}'.format(truncate_info(binascii.b2a_hex(corrupt_node_bytes))))
+        data.add_info('                      (ascii): {!s}'.format(truncate_info(corrupt_node_bytes)))
 
         if self.clone_node:
             exported_node = Node(rnode.name, base_node=rnode, new_env=True)
-            data.update_from_node(exported_node)
         else:
-            data.update_from_node(rnode)
+            exported_node = rnode
+
+        if self.fix_all:
+            exported_node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
+            exported_node.freeze()
+            data.add_info('reevaluate all the constraints (if any)')
+
+        data.update_from_node(exported_node)
 
         return data
 
@@ -256,9 +276,9 @@ class sd_switch_to_alternate_conf(StatefulDisruptor):
 
         data.add_info('model walking index: {:d}'.format(idx))        
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
-        data.add_info('current node with alternate conf: %s' % self.modelwalker.consumed_node_path)
-        data.add_info(' |_ associated value: %s' % repr(consumed_node.to_bytes()))
-        data.add_info(' |_ original node value: %s' % orig_node_val)
+        data.add_info('current node with alternate conf: {!s}'.format(self.modelwalker.consumed_node_path))
+        data.add_info(' |_ associated value: {!s}'.format(truncate_info(consumed_node.to_bytes())))
+        data.add_info(' |_ original node value: {!s}'.format(truncate_info(orig_node_val)))
 
         if self.clone_node:
             exported_node = Node(rnode.name, base_node=rnode, new_env=True)
@@ -305,7 +325,7 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
         self.consumer = SeparatorDisruption(max_runs_per_node=self.max_runs_per_node,
                                             min_runs_per_node=self.min_runs_per_node,
                                             respect_order=self.order,
-                                            specific_args=sep_list)
+                                            separators=sep_list)
         self.consumer.need_reset_when_structure_change = self.deep
         self.consumer.set_node_interest(path_regexp=self.path)
         self.modelwalker = ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init)
@@ -331,15 +351,16 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
         else:
             self.run_num +=1
 
+        corrupt_node_bytes = consumed_node.to_bytes()
+
         data.add_info('model walking index: {:d}'.format(idx))        
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
-        data.add_info('current fuzzed separator:     %s' % self.modelwalker.consumed_node_path)
-        data.add_info(' |_ value type:         %s' % consumed_node.cc.get_value_type())
-        data.add_info(' |_ original separator: %s (ascii: %s)' % \
-                      (binascii.b2a_hex(orig_node_val), orig_node_val))
-        data.add_info(' |_ replaced by:        %s (ascii: %s)' % \
-                      (binascii.b2a_hex(consumed_node.to_bytes()),
-                      consumed_node.to_bytes()))
+        data.add_info('current fuzzed separator:     {!s}'.format(self.modelwalker.consumed_node_path))
+        data.add_info(' |_ value type:         {!s}'.format(consumed_node.cc.get_value_type()))
+        data.add_info(' |_ original separator (hex): {!s}'.format(truncate_info(binascii.b2a_hex(orig_node_val))))
+        data.add_info(' |                   (ascii): {!s}'.format(truncate_info(orig_node_val)))
+        data.add_info(' |_ replaced by        (hex): {!s}'.format(truncate_info(binascii.b2a_hex(corrupt_node_bytes))))
+        data.add_info('                     (ascii): {!s}'.format(truncate_info(corrupt_node_bytes)))
 
         if self.clone_node:
             exported_node = Node(rnode.name, base_node=rnode, new_env=True)
@@ -449,43 +470,55 @@ class sd_struct_constraints(StatefulDisruptor):
     def disrupt_data(self, dm, target, data):
 
         stop = False
-        for i in range(self.init):
+        if self.idx == 0:
+            step_idx = self.init-1
+        else:
+            step_idx = self.idx
+
+        while self.idx <= step_idx:
             if self.exist_cst_nodelist:
                 consumed_node = self.exist_cst_nodelist.pop()
-                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_EXIST_COND)
-                op_performed = 'existence condition switched'
+                if self.idx == step_idx:
+                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_EXIST_COND)
+                    op_performed = 'existence condition switched'
             elif self.qty_cst_nodelist_1:
                 consumed_node = self.qty_cst_nodelist_1.pop()
-                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_QTY_SYNC,
-                                                  corrupt_op=lambda x: x+1)
-                op_performed = 'increase quantity constraint by 1'
+                if self.idx == step_idx:
+                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_QTY_SYNC,
+                                                      corrupt_op=lambda x: x+1)
+                    op_performed = 'increase quantity constraint by 1'
             elif self.qty_cst_nodelist_2:
                 consumed_node = self.qty_cst_nodelist_2.pop()
-                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_QTY_SYNC,
-                                                  corrupt_op=lambda x: max(x-1, 0))
-                op_performed = 'decrease quantity constraint by 1'
+                if self.idx == step_idx:
+                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_QTY_SYNC,
+                                                      corrupt_op=lambda x: max(x-1, 0))
+                    op_performed = 'decrease quantity constraint by 1'
             elif self.size_cst_nodelist_1:
                 consumed_node = self.size_cst_nodelist_1.pop()
-                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_SIZE_SYNC,
-                                                  corrupt_op=lambda x: x+1)
-                op_performed = 'increase size constraint by 1'
+                if self.idx == step_idx:
+                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_SIZE_SYNC,
+                                                      corrupt_op=lambda x: x+1)
+                    op_performed = 'increase size constraint by 1'
             elif self.size_cst_nodelist_2:
                 consumed_node = self.size_cst_nodelist_2.pop()
-                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_SIZE_SYNC,
-                                                  corrupt_op=lambda x: max(x-1, 0))
-                op_performed = 'decrease size constraint by 1'
+                if self.idx == step_idx:
+                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_SIZE_SYNC,
+                                                      corrupt_op=lambda x: max(x-1, 0))
+                    op_performed = 'decrease size constraint by 1'
             elif self.deep and self.minmax_cst_nodelist_1:
                 consumed_node, mini, maxi = self.minmax_cst_nodelist_1.pop()
-                new_mini = max(0, mini-1)
-                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
-                                                  corrupt_op=lambda x, y: (new_mini, new_mini))
-                op_performed = "set node amount to its minimum minus one"
+                if self.idx == step_idx:
+                    new_mini = max(0, mini-1)
+                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
+                                                      corrupt_op=lambda x, y: (new_mini, new_mini))
+                    op_performed = "set node amount to its minimum minus one"
             elif self.deep and self.minmax_cst_nodelist_2:
                 consumed_node, mini, maxi = self.minmax_cst_nodelist_2.pop()
-                new_maxi = (maxi+1)
-                self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
-                                                  corrupt_op=lambda x, y: (new_maxi, new_maxi))
-                op_performed = "set node amount to its maximum plus one"
+                if self.idx == step_idx:
+                    new_maxi = (maxi+1)
+                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
+                                                      corrupt_op=lambda x, y: (new_maxi, new_maxi))
+                    op_performed = "set node amount to its maximum plus one"
             else:
                 stop = True
                 break
@@ -500,7 +533,7 @@ class sd_struct_constraints(StatefulDisruptor):
         corrupted_seed = Node(self.seed.name, base_node=self.seed, ignore_frozen_state=False, new_env=True)
         self.seed.env.remove_node_to_corrupt(consumed_node)
 
-        corrupted_seed.unfreeze(recursive=True, reevaluate_constraints=True)
+        corrupted_seed.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
         corrupted_seed.freeze()
 
         data.add_info('sample index: {:d}'.format(self.idx))
@@ -597,7 +630,7 @@ class d_call_external_program(Disruptor):
         if node is None:
             prev_data.update_from_str_or_bytes(out_val)
         else:
-            node.set_values(val_list=[out_val])
+            node.set_values(values=[out_val])
             node.get_value()
 
         return prev_data
@@ -671,14 +704,14 @@ class d_switch_to_alternate_conf(Disruptor):
                     self.existing_conf = True
 
             if self.provided_alt and not self.existing_conf:
-                prev_data.add_info("NO ALTERNATE CONF '%s' AVAILABLE" % str(self.conf))
+                prev_data.add_info("NO ALTERNATE CONF '{!s}' AVAILABLE".format(self.conf))
                 return prev_data
 
             if self.conf_fallback is None:
                 prev_data.add_info("NO ALTERNATE CONF AVAILABLE")
                 return prev_data
 
-            prev_data.add_info("ALTERNATE CONF '%s' USED" % str(self.conf))
+            prev_data.add_info("ALTERNATE CONF '{!s}' USED".format(self.conf))
 
             prev_data.node.unfreeze_all()
             prev_data.node.set_current_conf(self.conf, recursive=self.recursive, root_regexp=self.path)
@@ -716,7 +749,7 @@ class d_max_size(Disruptor):
 
             val = node.to_bytes()
             orig_len = len(val)
-            prev_data.add_info('orig node length: %d' % orig_len)
+            prev_data.add_info('orig node length: {:d}'.format(orig_len))
             
             if self.sz >= 0:
                 node.set_values([val[:min(self.sz, orig_len)]])
@@ -726,14 +759,14 @@ class d_max_size(Disruptor):
                 node.set_values([val[orig_len - min(self.sz, orig_len):]])
                 prev_data.add_info('left truncation')
 
-            prev_data.add_info('new node length: %d' % min(self.sz, orig_len))
+            prev_data.add_info('new node length: {:d}'.format(min(self.sz, orig_len)))
 
             ret = prev_data
 
         else:
             val = prev_data.to_bytes()
             orig_len = len(val)
-            prev_data.add_info('orig data length: %d' % orig_len)
+            prev_data.add_info('orig data length: {:d}'.format(orig_len))
 
             if self.sz >= 0:
                 new_val = val[:min(self.sz, orig_len)]
@@ -743,7 +776,7 @@ class d_max_size(Disruptor):
                 new_val = val[orig_len - min(self.sz, orig_len):]
                 prev_data.add_info('left truncation')
 
-            prev_data.add_info('new data length: %d' % len(new_val))
+            prev_data.add_info('new data length: {:d}'.format(len(new_val)))
 
             prev_data.update_from_str_or_bytes(new_val)
             ret = prev_data
@@ -787,20 +820,20 @@ class d_corrupt_node_bits(Disruptor):
 
             for i in l:
                 val = i.to_bytes()
-                prev_data.add_info('current fuzzed node: %s' % i.get_path_from(prev_data.node))
-                prev_data.add_info('orig data: %s' % repr(val))
+                prev_data.add_info('current fuzzed node: {!s}'.format(i.get_path_from(prev_data.node)))
+                prev_data.add_info('orig data: {!s}'.format(truncate_info(val)))
 
                 if self.new_val is None:
                     if val != b'':
                         val = corrupt_bits(val, n=1, ascii=self.ascii)
-                        prev_data.add_info('corrupted data: %s' % repr(val))
+                        prev_data.add_info('corrupt data: {!s}'.format(truncate_info(val)))
                     else:
                         prev_data.add_info('Nothing to corrupt!')
                 else:
                     val = self.new_val
-                    prev_data.add_info('corrupted data: %s' % repr(val))
+                    prev_data.add_info('corrupt data: {!s}'.format(truncate_info(val)))
 
-                i.set_values(val_list=[val])
+                i.set_values(values=[val])
                 i.get_value()
 
             ret = prev_data
@@ -832,7 +865,7 @@ class d_corrupt_bits_by_position(Disruptor):
         else:
             val = prev_data.to_bytes()
 
-        prev_data.add_info('corrupted bit index: %d' % self.idx)
+        prev_data.add_info('corrupted bit index: {:d}'.format(self.idx))
 
         new_value = self.new_val if self.new_val is not None \
                     else corrupt_bits(val[self.idx-1:self.idx], n=1, ascii=self.ascii)
@@ -876,14 +909,16 @@ class d_fix_constraints(Disruptor):
                 return prev_data
 
             for n in l:
-                n.unfreeze(recursive=True, reevaluate_constraints=True)
-                prev_data.add_info("release constraints from the node '%s'" % n.name)
+                n.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
+                prev_data.add_info("release constraints from the node '{!s}'".format(n.name))
+                n.freeze()
 
         else:
-            prev_data.node.unfreeze(recursive=True, reevaluate_constraints=True)
+            prev_data.node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
             prev_data.add_info('release constraints from the root')
 
         prev_data.node.freeze()
+        prev_data.node.show()
 
         if self.clone_node:
             exported_node = Node(prev_data.node.name, base_node=prev_data.node, new_env=True)
@@ -925,8 +960,8 @@ class d_next_node_content(Disruptor):
             for n in l:
                 n.unfreeze(recursive=self.recursive)
                 n.freeze()
-                prev_data.add_info("unfreeze the node '{:s}'".format(n.get_path_from(prev_data.node)))
-                prev_data.add_info("new value:        '{:s}'".format(n.to_bytes()))
+                prev_data.add_info("unfreeze the node '{!s}'".format(n.get_path_from(prev_data.node)))
+                prev_data.add_info("new value:        '{!s}'".format(n.to_bytes()))
 
         else:
             prev_data.node.unfreeze(recursive=self.recursive)
@@ -989,9 +1024,9 @@ class d_modify_nodes(Disruptor):
 
     def _add_info(self, prev_data, n, status, size):
         val_len = len(self.value)
-        prev_data.add_info("changed node:     '{:s}'".format(n.name))
-        prev_data.add_info("absorption status: {:s}".format(status))
-        prev_data.add_info("value provided:   '{:s}'".format(self.value))
+        prev_data.add_info("changed node:     '{!s}'".format(n.name))
+        prev_data.add_info("absorption status: {!s}".format(status))
+        prev_data.add_info("value provided:   '{!s}'".format(truncate_info(self.value)))
         prev_data.add_info("__ length:         {:d}".format(val_len))
         if status != AbsorbStatus.FullyAbsorbed:
             prev_data.add_info("absorbed size:     {:d}".format(size))
@@ -999,7 +1034,7 @@ class d_modify_nodes(Disruptor):
                 remaining = self.value[size:size+100] + ' ...'
             else:
                 remaining = self.value[size:]
-            prev_data.add_info("remaining:      '{:s}'".format(remaining))
+            prev_data.add_info("remaining:      '{!s}'".format(remaining))
 
 
 @disruptor(tactics, dtype="COPY", weight=4,
@@ -1023,75 +1058,4 @@ class d_shallow_copy(Disruptor):
         prev_data.update_from_node(exported_node)
 
         return prev_data
-
-
-#######################
-# OBSOLETE DISRUPTORS #
-#######################
-
-
-@disruptor(tactics, dtype="tTERM", weight=1,
-           gen_args = GENERIC_ARGS,
-           args={'ascii': ('enforce all outputs to be ascii 7bits', False, bool),
-                 'determinist': ('make the disruptor determinist', True, bool),
-                 'alt_values': ('list of alternative values to be tested ' \
-                                '(replace the current base list used by the disruptor)', None, list)})
-class sd_fuzz_terminal_nodes(StatefulDisruptor):
-    '''
-    [OBSOLETE] Perform alterations on terminal nodes (one at a time),
-    without considering its type.
-    '''
-    def setup(self, dm, user_input):
-        return True
-
-    def set_seed(self, prev_data):
-        if prev_data.node is None:
-            prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
-            return prev_data
-
-        prev_data.node.make_finite(all_conf=True, recursive=True)
-
-        self.consumer = TermNodeDisruption(max_runs_per_node=self.max_runs_per_node,
-                                           min_runs_per_node=self.min_runs_per_node,
-                                           respect_order=False,
-                                           specific_args=self.alt_values)
-        self.consumer.determinist = self.determinist
-        if self.ascii:
-            self.consumer.ascii = True
-        
-        self.walker = iter(ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init))
-        
-        self.max_runs = None
-        self.current_node = None
-        self.run_num = None
-
-    def disrupt_data(self, dm, target, data):
-        try:
-            rnode, consumed_node, orig_node_val, idx = next(self.walker)
-        except StopIteration:
-            data.make_unusable()
-            self.handover()
-            return data
-
-        new_max_runs = self.consumer.max_nb_runs_for(consumed_node)
-        if self.max_runs != new_max_runs or self.current_node != consumed_node:
-            self.current_node = consumed_node
-            self.max_runs = new_max_runs
-            self.run_num = 1
-        else:
-            self.run_num +=1
-
-        data.add_info('model walking index: {:d}'.format(idx))
-        data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
-        data.add_info('current fuzzed node: %s' % consumed_node.get_path_from(rnode))
-        data.add_info('original val: %s' % repr(orig_node_val))
-        data.add_info('corrupted val: %s' % repr(consumed_node.to_bytes()))
-
-        if self.clone_node:
-            exported_node = Node(rnode.name, base_node=rnode, new_env=True)
-            data.update_from_node(exported_node)
-        else:
-            data.update_from_node(rnode)
-
-        return data
 

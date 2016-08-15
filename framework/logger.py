@@ -133,7 +133,7 @@ class Logger(object):
                 rgb = None
                 style = None
             elif issubclass(x.__class__, bytes) and sys.version_info[0] > 2:
-                data = repr(x) if self.__export_raw_data else x.decode('latin-1')
+                data = repr(x) if self.__export_raw_data else x.decode(internal_repr_codec)
             else:
                 data = x
             self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)
@@ -173,7 +173,7 @@ class Logger(object):
                     rgb = None
                     style = None
                 elif issubclass(x.__class__, bytes) and sys.version_info[0] > 2:
-                    data = repr(x) if self.__export_raw_data else x.decode('latin-1')
+                    data = repr(x) if self.__export_raw_data else x.decode(internal_repr_codec)
                 else:
                     data = x
                 self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)
@@ -261,10 +261,7 @@ class Logger(object):
                 info = self._current_dmaker_info.get((dmaker_type,dmaker_name), None)
                 if info is not None:
                     info = '\n'.join(info)
-                    if sys.version_info[0] > 2:
-                        info = bytes(info, 'latin_1')
-                    else:
-                        info = bytes(info)
+                    info = convert_to_internal_repr(info)
                 self.fmkDB.insert_steps(self.last_data_id, step_id, dmaker_type, dmaker_name,
                                         self._current_src_data_id,
                                         str(user_input), info)
@@ -281,15 +278,11 @@ class Logger(object):
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO,
                      data_id=None, do_record=True):
         now = datetime.datetime.now()
-        if nl_before:
-            p = '\n'
-        else:
-            p = ''
-        if nl_after:
-            s = '\n'
-        else:
-            s = ''
-        msg = p + "*** [ %s ] ***" % info + s
+
+        p = '\n' if nl_before else ''
+        s = '\n' if nl_after else ''
+
+        msg = "{prefix:s}*** [ {message:s} ] ***{suffix:s}".format(prefix=p, suffix=s, message=info)
         self.log_fn(msg, rgb=rgb)
         data_id = self.last_data_id if data_id is None else data_id
         if do_record:
@@ -309,10 +302,8 @@ class Logger(object):
         """
         now = datetime.datetime.now()
 
-        if sys.version_info[0] > 2 and isinstance(fbk, bytes):
-            fbk = fbk.decode('latin_1')
         with self._tg_fbk_lck:
-            self._tg_fbk.append((now, str(fbk), status_code))
+            self._tg_fbk.append((now, fbk, status_code))
 
     def log_collected_target_feedback(self, preamble=None, epilogue=None):
         """
@@ -348,7 +339,7 @@ class Logger(object):
             record = False
 
         if preamble is not None:
-            self.log_fn(preamble, do_record=record)
+            self.log_fn(preamble, do_record=record, rgb=Color.FMKINFO)
 
         for fbk, idx in zip(fbk_list, range(len(fbk_list))):
             timestamp, m, status = fbk
@@ -368,7 +359,7 @@ class Logger(object):
                 error_detected = True
 
         if epilogue is not None:
-            self.log_fn(epilogue, do_record=record)
+            self.log_fn(epilogue, do_record=record, rgb=Color.FMKINFO)
 
         return error_detected
 
@@ -385,7 +376,7 @@ class Logger(object):
             record = False
 
         if preamble is not None:
-            self.log_fn(preamble, do_record=record)
+            self.log_fn(preamble, do_record=record, rgb=Color.FMKINFO)
 
         if not decoded_feedback and (status_code is None or status_code >= 0):
             msg_hdr = "### No Target Feedback!" if source is None else '### No Target Feedback from "{!s}"!'.format(
@@ -422,7 +413,7 @@ class Logger(object):
                                                status_code=status_code)
 
         if epilogue is not None:
-            self.log_fn(epilogue, do_record=record)
+            self.log_fn(epilogue, do_record=record, rgb=Color.FMKINFO)
 
     def log_operator_feedback(self, feedback, timestamp, op_name, status_code=None):
         if feedback is None:
@@ -469,25 +460,23 @@ class Logger(object):
             for f in feedback:
                 new_f = f.strip()
                 if sys.version_info[0] > 2 and new_f and isinstance(new_f, bytes):
-                    new_f = new_f.decode('latin_1')
-                    new_f = '{!a}'.format(new_f)
+                    new_f = new_f.decode(internal_repr_codec, 'replace')
+                    new_f = eval('{!a}'.format(new_f))
                 new_fbk.append(new_f)
             if not list(filter(lambda x: x != b'', new_fbk)):
                 new_fbk = None
         else:
             new_fbk = feedback.strip()
             if sys.version_info[0] > 2 and new_fbk and isinstance(new_fbk, bytes):
-                new_fbk = new_fbk.decode('latin_1')
-                new_fbk = '{!a}'.format(new_fbk)
+                new_fbk = new_fbk.decode(internal_repr_codec, 'replace')
+                new_fbk = eval('{!a}'.format(new_fbk))
 
         return new_fbk
 
     def _encode_target_feedback(self, feedback):
         if feedback is None:
             return None
-        if sys.version_info[0] > 2 and not isinstance(feedback, bytes):
-            feedback = bytes(feedback, 'latin_1')
-        return feedback
+        return convert_to_internal_repr(feedback)
 
     def log_probe_feedback(self, source, timestamp, content, status_code, force_record=False):
         if self.last_data_recordable or not self.__explicit_data_recording or force_record:
@@ -722,12 +711,8 @@ class Logger(object):
 
         prefix = p + self.p
 
-        if sys.version_info[0] > 2:
-            if issubclass(msg.__class__, Data) or isinstance(msg, bytes):
-                msg = repr(msg)
-        else:
-            if issubclass(msg.__class__, Data):
-                msg = repr(msg)
+        if (sys.version_info[0] > 2 and isinstance(msg, bytes)) or issubclass(msg.__class__, Data):
+            msg = repr(msg)
 
         suffix = ''
         if limit_output and len(msg) > raw_limit:
