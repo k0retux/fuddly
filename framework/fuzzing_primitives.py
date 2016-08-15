@@ -704,7 +704,7 @@ class TypedNodeDisruption(NodeConsumerStub):
                                                             negative_attrs=[dm.NodeInternals.Separator],
                                                             node_kinds=[dm.NodeInternals_TypedValue,
                                                                         dm.NodeInternals_GenFunc])
-        self.orig_value = None
+        # self.orig_value = None
         self.current_fuzz_vt_list = None
         self.current_node = None
         self.orig_internal = None
@@ -722,7 +722,9 @@ class TypedNodeDisruption(NodeConsumerStub):
 
         if not self.current_fuzz_vt_list:
             self.orig_internal = node.cc
-            self.orig_value = node.to_bytes()
+            self.orig_all_attrs = node.cc.get_attrs_copy()
+            # self.orig_value = node.to_bytes()
+
 
             vt_node = node.generated_node if node.is_genfunc() else node
             self.current_fuzz_vt_list = self._create_fuzzy_vt_list(vt_node, self.fuzz_magnitude)
@@ -749,6 +751,7 @@ class TypedNodeDisruption(NodeConsumerStub):
 
     def recover_node(self, node):
         node.cc = self.orig_internal
+        node.cc.set_attrs_from(self.orig_all_attrs)
 
     def need_reset(self, node):
         if node.is_nonterm():

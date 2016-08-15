@@ -69,8 +69,7 @@ class PNG_DataModel(DataModel):
                     'node_args': ['len']},
                    {'name': 'crc32_gen',
                     'contents': MH.CRC(vt=UINT32_be, clear_attrs=[MH.Attr.Mutable]),
-                    'node_args': ['type', 'data_gen'],
-                    'clear_attrs': MH.Attr.Freezable}
+                    'node_args': ['type', 'data_gen']}
               ]}
          ]}
 
@@ -117,8 +116,7 @@ class PNG_DataModel(DataModel):
                    ]},
                   {'name': 'crc32_gen',
                    'contents': MH.CRC(vt=UINT32_be, clear_attrs=[MH.Attr.Mutable]),
-                   'node_args': ['chk'],
-                   'clear_attrs': MH.Attr.Freezable}
+                   'node_args': ['chk']}
               ]}
          ]}
 

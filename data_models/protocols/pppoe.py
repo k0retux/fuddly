@@ -155,7 +155,6 @@ class PPPOE_DataModel(DataModel):
              {'name': 'session_id',
               'contents': UINT16_be()},
              {'name': 'length',
-              'clear_attrs': MH.Attr.Freezable,
               'contents': MH.LEN(vt=UINT16_be),
               'node_args': 'payload',
               'alt': [

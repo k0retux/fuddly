@@ -512,11 +512,11 @@ class SyncSizeObj(SyncObj):
         return max(0, self._node.get_raw_value() - self.base_size)
 
     def set_size_on_source_node(self, size):
-        try:
-            self._node.update_raw_value(size)
-            self._node.set_frozen_value(self._node.get_current_encoded_value())
-        except:
-            raise DataModelDefinitionError("The node '{:s}' is not compatible with integer absorption".format(self._node.name))
+        ok = self._node.update_raw_value(size)
+        if not ok:
+            print("\n*** WARNING: The node '{:s}' is not compatible with the integer"
+                  " '{:d}'".format(self._node.name, size))
+        self._node.set_frozen_value(self._node.get_current_encoded_value())
 
     def _sync_nodes_specific(self, src_node):
         if self.apply_to_enc_size:
@@ -969,6 +969,13 @@ class NodeInternals(object):
                 # This SyncScope is currently only supported by String-based
                 # NodeInternals_TypedValue
                 del self._sync_with[SyncScope.Size]
+
+    def get_attrs_copy(self):
+        return (copy.copy(self.__attrs), copy.copy(self.custo))
+
+    def set_attrs_from(self, all_attrs):
+        self.__attrs = all_attrs[0]
+        self.custo = all_attrs[1]
 
     # Called near the end of Node copy (Node.set_contents) to update
     # node references inside the NodeInternals

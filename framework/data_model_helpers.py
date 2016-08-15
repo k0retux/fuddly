@@ -146,7 +146,7 @@ class MH(object):
 
     @staticmethod
     def LEN(vt=fvt.INT_str, base_len=0,
-            set_attrs=[], clear_attrs=[], after_encoding=True):
+            set_attrs=[], clear_attrs=[], after_encoding=True, freezable=False):
         '''
         Return a *generator* that returns the length of a node parameter.
 
@@ -157,20 +157,30 @@ class MH(object):
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False compute the length before any encoding. Can be
             set to False only if node arguments support encoding.
+          freezable (bool): If ``False`` make the generator unfreezable in order to always provide
+            the right value. (Note that tTYPE will still be able to corrupt the generator.)
         '''
-        def length(vt, set_attrs, clear_attrs, node):
-            blob = node.to_bytes() if after_encoding else node.get_raw_value()
-            n = Node('cts', value_type=vt(values=[len(blob)+base_len]))
-            n.set_semantics(NodeSemantics(['len']))
-            MH._handle_attrs(n, set_attrs, clear_attrs)
-            return n
+        class Length(object):
+            unfreezable = not freezable
+
+            def __init__(self, vt, set_attrs, clear_attrs):
+                self.vt = vt
+                self.set_attrs = set_attrs
+                self.clear_attrs = clear_attrs
+
+            def __call__(self, node):
+                blob = node.to_bytes() if after_encoding else node.get_raw_value()
+                n = Node('cts', value_type=self.vt(values=[len(blob)+base_len], force_mode=True))
+                n.set_semantics(NodeSemantics(['len']))
+                MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
+                return n
 
         vt = MH._validate_int_vt(vt)
-        return functools.partial(length, vt, set_attrs, clear_attrs)
+        return Length(vt, set_attrs, clear_attrs)
 
     @staticmethod
     def QTY(node_name, vt=fvt.INT_str,
-            set_attrs=[], clear_attrs=[]):
+            set_attrs=[], clear_attrs=[], freezable=False):
         '''Return a *generator* that returns the quantity of child node instances (referenced
         by name) of the node parameter provided to the *generator*.
 
@@ -180,16 +190,27 @@ class MH(object):
             by the generator
           set_attrs (list): attributes that will be set on the generated node.
           clear_attrs (list): attributes that will be cleared on the generated node.
+          freezable (bool): If ``False`` make the generator unfreezable in order to always provide
+            the right value. (Note that tTYPE will still be able to corrupt the generator.)
         '''
-        def qty(node_name, vt, set_attrs, clear_attrs, node):
-            nb = node.cc.get_drawn_node_qty(node_name)
-            n = Node('cts', value_type=vt(values=[nb]))
-            n.set_semantics(NodeSemantics(['qty']))
-            MH._handle_attrs(n, set_attrs, clear_attrs)
-            return n
+        class Qty(object):
+            unfreezable = not freezable
+
+            def __init__(self, node_name, vt, set_attrs, clear_attrs):
+                self.node_name = node_name
+                self.vt = vt
+                self.set_attrs = set_attrs
+                self.clear_attrs = clear_attrs
+
+            def __call__(self, node):
+                nb = node.cc.get_drawn_node_qty(self.node_name)
+                n = Node('cts', value_type=self.vt(values=[nb], force_mode=True))
+                n.set_semantics(NodeSemantics(['qty']))
+                MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
+                return n
 
         vt = MH._validate_int_vt(vt)
-        return functools.partial(qty, node_name, vt, set_attrs, clear_attrs)
+        return Qty(node_name, vt, set_attrs, clear_attrs)
 
     @staticmethod
     def TIMESTAMP(time_format="%H%M%S", utc=False,
@@ -217,7 +238,7 @@ class MH(object):
 
     @staticmethod
     def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=True,
-            set_attrs=[], clear_attrs=[], after_encoding=True):
+            set_attrs=[], clear_attrs=[], after_encoding=True, freezable=False):
         '''Return a *generator* that returns the CRC (in the chosen type) of
         all the node parameters. (Default CRC is PKZIP CRC32)
 
@@ -231,38 +252,53 @@ class MH(object):
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False compute the CRC before any encoding. Can be
             set to False only if node arguments support encoding.
+          freezable (bool): if ``False`` make the generator unfreezable in order to always provide
+            the right value. (Note that tTYPE will still be able to corrupt the generator.)
         '''
-        def crc(vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs, nodes):
-            crc_func = crcmod.mkCrcFun(poly, initCrc=init_crc, xorOut=xor_out, rev=rev)
-            if isinstance(nodes, Node):
-                s = nodes.to_bytes() if after_encoding else nodes.get_raw_value()
-            else:
-                if issubclass(nodes.__class__, NodeAbstraction):
-                    nodes = nodes.get_concrete_nodes()
-                elif not isinstance(nodes, (tuple, list)):
-                    raise TypeError("Contents of 'nodes' parameter is incorrect!")
-                s = b''
-                for n in nodes:
-                    blob = n.to_bytes() if after_encoding else n.get_raw_value()
-                    s += blob
+        class Crc(object):
+            unfreezable = not freezable
 
-            result = crc_func(s)
+            def __init__(self, vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs):
+                self.vt = vt
+                self.poly = poly
+                self.init_crc = init_crc
+                self.xor_out = xor_out
+                self.rev = rev
+                self.set_attrs = set_attrs
+                self.clear_attrs = clear_attrs
 
-            n = Node('cts', value_type=vt(values=[result]))
-            n.set_semantics(NodeSemantics(['crc']))
-            MH._handle_attrs(n, set_attrs, clear_attrs)
-            return n
+            def __call__(self, nodes):
+                crc_func = crcmod.mkCrcFun(self.poly, initCrc=self.init_crc,
+                                           xorOut=self.xor_out, rev=self.rev)
+                if isinstance(nodes, Node):
+                    s = nodes.to_bytes() if after_encoding else nodes.get_raw_value()
+                else:
+                    if issubclass(nodes.__class__, NodeAbstraction):
+                        nodes = nodes.get_concrete_nodes()
+                    elif not isinstance(nodes, (tuple, list)):
+                        raise TypeError("Contents of 'nodes' parameter is incorrect!")
+                    s = b''
+                    for n in nodes:
+                        blob = n.to_bytes() if after_encoding else n.get_raw_value()
+                        s += blob
+
+                result = crc_func(s)
+
+                n = Node('cts', value_type=self.vt(values=[result], force_mode=True))
+                n.set_semantics(NodeSemantics(['crc']))
+                MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
+                return n
 
         if not crcmod_module:
             raise NotImplementedError('the CRC template has been disabled because python-crcmod module is not installed!')
 
         vt = MH._validate_int_vt(vt)
-        return functools.partial(crc, vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs)
+        return Crc(vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs)
 
 
     @staticmethod
     def WRAP(func, vt=fvt.String,
-             set_attrs=[], clear_attrs=[], after_encoding=True):
+             set_attrs=[], clear_attrs=[], after_encoding=True, freezable=False):
         '''Return a *generator* that returns the result (in the chosen type)
         of the provided function applied on the concatenation of all
         the node parameters.
@@ -274,33 +310,49 @@ class MH(object):
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False, execute `func` on node arguments before any encoding.
             Can be set to False only if node arguments support encoding.
+          freezable (bool): If ``False`` make the generator unfreezable in order to always provide
+            the right value. (Note that tTYPE will still be able to corrupt the generator.)
         '''
-        def map_func(vt, func, set_attrs, clear_attrs, nodes):
-            if isinstance(nodes, Node):
-                s = nodes.to_bytes() if after_encoding else nodes.get_raw_value()
-            else:
-                if issubclass(nodes.__class__, NodeAbstraction):
-                    nodes = nodes.get_concrete_nodes()
-                elif not isinstance(nodes, (tuple, list)):
-                    raise TypeError("Contents of 'nodes' parameter is incorrect!")
-                s = b''
-                for n in nodes:
-                    blob = n.to_bytes() if after_encoding else n.get_raw_value()
-                    s += blob
+        class WrapFunc(object):
+            unfreezable = not freezable
 
-            result = func(s)
+            def __init__(self, vt, func, set_attrs, clear_attrs):
+                self.vt = vt
+                self.func = func
+                self.set_attrs = set_attrs
+                self.clear_attrs = clear_attrs
 
-            if issubclass(vt, fvt.String):
-                result = convert_to_internal_repr(result)
-            else:
-                assert isinstance(result, int)
+            def __call__(self, nodes):
+                if isinstance(nodes, Node):
+                    s = nodes.to_bytes() if after_encoding else nodes.get_raw_value()
+                else:
+                    if issubclass(nodes.__class__, NodeAbstraction):
+                        nodes = nodes.get_concrete_nodes()
+                    elif not isinstance(nodes, (tuple, list)):
+                        raise TypeError("Contents of 'nodes' parameter is incorrect!")
+                    s = b''
+                    for n in nodes:
+                        blob = n.to_bytes() if after_encoding else n.get_raw_value()
+                        s += blob
 
-            n = Node('cts', value_type=vt(values=[result]))
-            MH._handle_attrs(n, set_attrs, clear_attrs)
-            return n
+                result = self.func(s)
+
+                if issubclass(self.vt, fvt.String):
+                    result = convert_to_internal_repr(result)
+                else:
+                    assert isinstance(result, int)
+
+                if issubclass(vt, fvt.INT):
+                    vt_obj = self.vt(values=[result], force_mode=True)
+                else:
+                    vt_obj = self.vt(values=[result])
+                n = Node('cts', value_type=vt_obj)
+                MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
+                return n
 
         vt = MH._validate_vt(vt)
-        return functools.partial(map_func, vt, func, set_attrs, clear_attrs)
+        return WrapFunc(vt, func, set_attrs, clear_attrs)
+
 
     @staticmethod
     def CYCLE(vals, depth=1, vt=fvt.String,
@@ -356,7 +408,7 @@ class MH(object):
 
     @staticmethod
     def OFFSET(use_current_position=True, depth=1, vt=fvt.INT_str,
-               set_attrs=[], clear_attrs=[], after_encoding=True):
+               set_attrs=[], clear_attrs=[], after_encoding=True, freezable=False):
         '''Return a *generator* that computes the offset of a child node
         within its parent node.
 
@@ -383,9 +435,12 @@ class MH(object):
           clear_attrs (list): attributes that will be cleared on the generated node.
           after_encoding (bool): if False compute the fixed amount part of the offset before
             any encoding. Can be set to False only if node arguments support encoding.
+          freezable (bool): If ``False`` make the generator unfreezable in order to always provide
+            the right value. (Note that tTYPE will still be able to corrupt the generator.)
         '''
         class Offset(object):
             provide_helpers = True
+            unfreezable = not freezable
             
             def __init__(self, use_current_position, depth, vt, set_attrs, clear_attrs):
                 self.vt = vt
@@ -427,7 +482,7 @@ class MH(object):
                     base = len(s)
                     off = nodes[-1].get_subnode_off(idx)
 
-                n = Node('cts_off', value_type=self.vt(values=[base+off]))
+                n = Node('cts_off', value_type=self.vt(values=[base+off], force_mode=True))
                 MH._handle_attrs(n, set_attrs, clear_attrs)
                 return n
 
@@ -765,6 +820,10 @@ class ModelHelper(object):
             node_args = desc.get('node_args', None)
             n.set_generator_func(contents, func_arg=other_args,
                                  provide_helpers=provide_helpers, conf=conf)
+
+            if hasattr(contents, 'unfreezable') and contents.unfreezable:
+                n.clear_attr(MH.Attr.Freezable, conf=conf)
+
             if node_args is not None:
                 # node_args interpretation is postponed after all nodes has been created
                 self._register_todo(n, self._complete_generator, args=(node_args, conf), unpack_args=True,

@@ -55,19 +55,7 @@ def tearDownModule():
 
 
 class TEST_Fuzzy_INT16(Fuzzy_INT16):
-    values = ['TEST_OK', 'BLABLA', 'PLOP']
-
-    def __init__(self, endian=None, supp_list=None):
-        self.endian = endian
-        self.idx = 0
-        INT.__init__(self, values=self.values, determinist=True)
-
-    def is_compatible(self, integer):
-        return False
-
-    def _convert_value(self, val):
-        return val
-
+    values = [0xDEAD, 0xBEEF, 0xCAFE]
 
 ######## Tests cases begins Here ########
 
@@ -1860,7 +1848,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of confs: %d' % idx, rgb=Color.INFO))
 
-        self.assertIn(idx, [523])
+        self.assertIn(idx, [527])
 
 
 

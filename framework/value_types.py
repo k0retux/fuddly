@@ -1051,7 +1051,8 @@ class INT(VT):
                           # and that mini is not specified by the user
 
 
-    def __init__(self, values=None, mini=None, maxi=None, default=None, determinist=True):
+    def __init__(self, values=None, mini=None, maxi=None, default=None, determinist=True,
+                 force_mode=False):
         self.idx = 0
         self.determinist = determinist
         self.exhausted = False
@@ -1060,7 +1061,20 @@ class INT(VT):
 
         if values:
             assert default is None
-            self.values = list(values)
+            if force_mode:
+                new_values = []
+                for v in values:
+                    if not self.is_compatible(v):
+                        if v > self.__class__.maxi:
+                            v = self.__class__.maxi
+                    new_values.append(v)
+                self.values = new_values
+            else:
+                for v in values:
+                    if not self.is_compatible(v):
+                        raise DataModelDefinitionError("Incompatible value ({!r}) with {!s}".format(v, self.__class__))
+                self.values = list(values)
+
             self.values_copy = list(self.values)
 
         else:
@@ -1206,10 +1220,7 @@ class INT(VT):
         return self.drawn_val
 
     def is_compatible(self, integer):
-        if self.mini <= integer <= self.maxi:
-            return True
-        else:
-            return False
+        return self.mini <= integer <= self.maxi
 
     def set_value_list(self, new_list):
         ret = False
@@ -1367,17 +1378,23 @@ class INT(VT):
         self.drawn_val = None
 
     def update_raw_value(self, val):
+        ok = True
         if isinstance(val, int):
+            if val > self.__class__.maxi:
+                val = self.__class__.maxi
+                ok = False
             if self.values is not None:
                 self.values.append(val)
                 self.values_copy = copy.copy(self.values)
             else:
-                self.idx = val - self.mini
+                self.idx = val - self.mini_gen
         else:
             raise TypeError
 
         self.drawn_val = val
         self.exhausted = False
+
+        return ok
 
     # To be used after calling get_value()
     def is_exhausted(self):
