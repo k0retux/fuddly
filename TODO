@@ -5,9 +5,16 @@
 - Add GDB/PIN/QEMU probes/managers
 - Add support for evolutionary fuzzing
 - Add FmkDB visualization tools
+- Add support for automatic adaptation of fuzz test cases depending on
+  specific Target meta-data (HW architecture, programming language, ...)
 - Implement new node types that leverage python-constraint, or more
   powerfull constraint programming library
 
 [ENHANCEMENT]
 
-- Clean up test.py
+- Add support for absorption of nodes leveraging the 'Bitfield collapse'
+  customization (i.e., absorption of bit-oriented nodes without a byte boundary).
+  (Counter-part of the generation supported feature.)
+- Add support for absorption of nodes whose existence has not been resolved yet.
+  (Counter-part of the generation supported feature.)
+- Clean up test/test_integration.py
