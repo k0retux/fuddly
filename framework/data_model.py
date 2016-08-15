@@ -2450,18 +2450,24 @@ class NodeInternals_NonTerm(NodeInternals):
             self.exhausted = False
             self.excluded_components = []
             self.subcomp_exhausted = True
-            self.expanded_nodelist = []
             self.expanded_nodelist_sz = None
             self.expanded_nodelist_origsz = None
+            self.expanded_nodelist = []
             self.component_seed = None
             self._perform_first_step = True
         else:
             self.exhausted = exhaust_info[0]
             self.excluded_components = exhaust_info[1]
             self.subcomp_exhausted = exhaust_info[2]
-            self.expanded_nodelist = None
             self.expanded_nodelist_sz = exhaust_info[3]
             self.expanded_nodelist_origsz = exhaust_info[4]
+            if self.expanded_nodelist_sz is None:
+                # this case may exist if a node has been created (sz/origsz == None) and copied
+                # without being frozen first. (e.g., node absorption during a data model construction)
+                assert self.expanded_nodelist_origsz is None
+                self.expanded_nodelist = []
+            else:
+                self.expanded_nodelist = None
             self.component_seed = exhaust_info[5]
             self._perform_first_step = exhaust_info[6]
 
