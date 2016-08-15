@@ -468,6 +468,12 @@ class SyncObj(object):
             else:
                 raise TypeError
 
+    def synchronize_nodes(self, src_node):
+        self._sync_nodes_specific(src_node)
+
+    def _sync_nodes_specific(self, src_node):
+        pass
+
 
 class SyncQtyFromObj(SyncObj):
 
@@ -511,6 +517,25 @@ class SyncSizeObj(SyncObj):
             self._node.set_frozen_value(self._node.get_current_encoded_value())
         except:
             raise DataModelDefinitionError("The node '{:s}' is not compatible with integer absorption".format(self._node.name))
+
+    def _sync_nodes_specific(self, src_node):
+        if self.apply_to_enc_size:
+            sz = len(src_node.to_bytes())
+        else:
+            if src_node.is_typed_value(subkind=fvt.String):
+                # We need to get the str form to be agnostic to any low-level encoding
+                # that may change the size ('utf8', ...).
+                decoded_val = src_node.get_raw_value(str_form=True)
+            else:
+                decoded_val = src_node.get_raw_value()
+                if not isinstance(decoded_val, bytes):
+                    # In this case, this is a BitField or an INT-based object, which are
+                    # fixed size object
+                    raise DataModelDefinitionError('size sync should not be used for fixed sized object!')
+            sz = len(decoded_val)
+        sz += self.base_size
+        self.set_size_on_source_node(NodeInternals_NonTerm.sizesync_corrupt_hook(src_node, sz))
+
 
 class SyncExistenceObj(SyncObj):
 
@@ -900,6 +925,15 @@ class NodeInternals(object):
             return None
         else:
             return self._sync_with.get(scope, None)
+
+    def synchronize_nodes(self, src_node):
+        if self._sync_with is None:
+            return
+
+        for scope, obj in self._sync_with.items():
+            if isinstance(obj, SyncObj):
+                obj.synchronize_nodes(src_node)
+
 
     def make_private(self, ignore_frozen_state, accept_external_entanglement, delayed_node_internals,
                      forget_original_sync_objs=False):
@@ -2964,22 +2998,7 @@ class NodeInternals_NonTerm(NodeInternals):
         def _sync_size_handling(node):
             obj = node.synchronized_with(SyncScope.Size)
             if obj is not None:
-                if obj.apply_to_enc_size:
-                    sz = len(node.to_bytes())
-                else:
-                    if node.is_typed_value(subkind=fvt.String):
-                        # We need to get the str form to be agnostic to any low-level encoding
-                        # that may change the size ('utf8', ...).
-                        decoded_val = node.get_raw_value(str_form=True)
-                    else:
-                        decoded_val = node.get_raw_value()
-                        if not isinstance(decoded_val, bytes):
-                            # In this case, this is a BitField or an INT-based object, which are
-                            # fixed size object
-                            raise DataModelDefinitionError('size sync should not be used for fixed sized object!')
-                    sz = len(decoded_val)
-                sz += obj.base_size
-                obj.set_size_on_source_node(NodeInternals_NonTerm.sizesync_corrupt_hook(node, sz))
+                obj.synchronize_nodes(node)
 
         node_attrs = node_desc[1:]
         # node = node_desc[0]
@@ -5944,8 +5963,12 @@ class Node(object):
         else:
             raise ValueError
 
+    def fix_synchronized_nodes(self, conf=None):
+        conf = self.__check_conf(conf)
+        self.internals[conf].synchronize_nodes(self)
 
-    def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False,
+    def unfreeze(self, conf=None, recursive=True, dont_change_state=False,
+                 ignore_entanglement=False, only_generators=False,
                  reevaluate_constraints=False):
         self._delayed_jobs_called = False
 

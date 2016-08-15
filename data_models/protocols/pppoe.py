@@ -155,6 +155,7 @@ class PPPOE_DataModel(DataModel):
              {'name': 'session_id',
               'contents': UINT16_be()},
              {'name': 'length',
+              'clear_attrs': MH.Attr.Freezable,
               'contents': MH.LEN(vt=UINT16_be),
               'node_args': 'payload',
               'alt': [
@@ -169,7 +170,7 @@ class PPPOE_DataModel(DataModel):
                    'exists_if': (IntCondition(0x9), 'code'),
                    'contents': [
                        (tag_service_name, 1),
-                       (tag_node, 0, 4)
+                       # (tag_node, 0, 4)
                    ]},
                   {'name': '4pado',
                    'shape_type': MH.FullyRandom,

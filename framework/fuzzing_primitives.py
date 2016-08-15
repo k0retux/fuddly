@@ -90,7 +90,7 @@ class ModelWalker(object):
 
         self._cpt = 1
         gen = self.walk_graph_rec([self._root_node], structure_has_changed=False,
-                                  consumed_nodes=set())
+                                  consumed_nodes=set(), parent_node=self._root_node)
         for consumed_node, orig_node_val in gen:
             self._root_node.freeze()
 
@@ -137,7 +137,7 @@ class ModelWalker(object):
         node.unfreeze(recursive=True, dont_change_state=True, ignore_entanglement=True)
         self._consumer.do_after_reset(node)
 
-    def walk_graph_rec(self, node_list, structure_has_changed, consumed_nodes):
+    def walk_graph_rec(self, node_list, structure_has_changed, consumed_nodes, parent_node):
 
         reset = False
         guilty = None
@@ -168,7 +168,6 @@ class ModelWalker(object):
                 # For each node we look for direct subnodes
                 fnodes = node.get_reachable_nodes(internals_criteria=self.ic, exclude_self=True,
                                                   respect_order=self._consumer.respect_order, relative_depth=1)
-
                 if DEBUG:
                     DEBUG_PRINT('--(2)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()), level=2)
                     for e in fnodes:
@@ -178,7 +177,8 @@ class ModelWalker(object):
                 # node is terminal, and we go to Step 2. Otherwise, we
                 # call ourselves recursively with the list of subnodes
                 if fnodes:
-                    generator = self.walk_graph_rec(fnodes, structure_has_changed, consumed_nodes)
+                    generator = self.walk_graph_rec(fnodes, structure_has_changed, consumed_nodes,
+                                                    parent_node=node)
                     for consumed_node, orig_node_val in generator:
                         yield consumed_node, orig_node_val # YIELD
 
@@ -188,7 +188,8 @@ class ModelWalker(object):
                 # for possible uses/modifications. This is performed within our
                 # method node_consumer_helper().
                 if perform_second_step:
-                    consumer_gen = self.node_consumer_helper(node, structure_has_changed, consumed_nodes)
+                    consumer_gen = self.node_consumer_helper(node, structure_has_changed, consumed_nodes,
+                                                             parent_node=parent_node)
                     for consumed_node, orig_node_val, reset, ignore_node in consumer_gen:
 
                         DEBUG_PRINT("   [ reset: {!r:s} | ignore_node: {!r:s} | " \
@@ -243,7 +244,7 @@ class ModelWalker(object):
 
                     idx = node_list.index(node)
 
-                    gen = self.walk_graph_rec(node_list[:idx], False, set())
+                    gen = self.walk_graph_rec(node_list[:idx], False, set(), parent_node=parent_node)
                     for consumed_node, orig_node_val in gen:
                         yield consumed_node, orig_node_val # YIELD
 
@@ -267,7 +268,7 @@ class ModelWalker(object):
         return
 
 
-    def node_consumer_helper(self, node, structure_has_changed, consumed_nodes):
+    def node_consumer_helper(self, node, structure_has_changed, consumed_nodes, parent_node):
 
         def _do_if_not_interested(node, orig_node_val):
             reset = self._consumer.need_reset(node)
@@ -328,6 +329,8 @@ class ModelWalker(object):
                         self._consumer.consume_node(node)
                     else:
                         self._consumer.recover_node(node)
+                        if self._consumer.fix_constraints:
+                            node.fix_synchronized_nodes()
                         yield _do_if_not_interested(node, orig_node_val)
                         raise ValueError  # We should never return here, otherwise its a bug we want to alert on
 
@@ -338,6 +341,8 @@ class ModelWalker(object):
                 else:
                     if node in consumed_nodes:
                         self._consumer.recover_node(node)
+                        if self._consumer.fix_constraints:
+                            node.fix_synchronized_nodes()
                         not_recovered = False
                     return
 
@@ -349,9 +354,13 @@ class ModelWalker(object):
                 # In this case we iterate only on the current node
                 node.unfreeze(recursive=False, ignore_entanglement=True)
                 node.freeze()
+                if self._consumer.fix_constraints:
+                    node.fix_synchronized_nodes()
             elif not consume_called_again:
                 if not_recovered and (self._consumer.interested_by(node) or node in consumed_nodes):
                     self._consumer.recover_node(node)
+                    if self._consumer.fix_constraints:
+                        node.fix_synchronized_nodes()
                     if not node.is_exhausted() and self._consumer.need_reset(node):
                         yield None, None, True, True
                 again = False
@@ -364,15 +373,11 @@ class ModelWalker(object):
 
 
 class NodeConsumerStub(object):
-    '''
-    TOFIX (TBC since last cleanup): when respect_order=False, BasicVisitor
-    behave strangely (not the same number of yielded values).
-    --> to be investigated (maybe wrong implementation of BasicVisitor and NonTermVisitor)
-    '''
     def __init__(self, max_runs_per_node=-1, min_runs_per_node=-1, respect_order=True,
-                 fuzz_magnitude=1.0, **kwargs):
+                 fuzz_magnitude=1.0, fix_constraints=False, **kwargs):
         self.need_reset_when_structure_change = False
         self.fuzz_magnitude = fuzz_magnitude
+        self.fix_constraints = fix_constraints
 
         self._internals_criteria = None
         self._semantics_criteria = None
@@ -697,7 +702,8 @@ class TypedNodeDisruption(NodeConsumerStub):
     def init_specific(self, **kwargs):
         self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable],
                                                             negative_attrs=[dm.NodeInternals.Separator],
-                                                            node_kinds=[dm.NodeInternals_TypedValue])
+                                                            node_kinds=[dm.NodeInternals_TypedValue,
+                                                                        dm.NodeInternals_GenFunc])
         self.orig_value = None
         self.current_fuzz_vt_list = None
         self.current_node = None
@@ -706,6 +712,10 @@ class TypedNodeDisruption(NodeConsumerStub):
         self.need_reset_when_structure_change = True
 
     def consume_node(self, node):
+        if node.is_genfunc() and (node.is_attr_set(dm.NodeInternals.Freezable) or
+                not node.generated_node.is_typed_value()):
+            return False
+
         if node is not self.current_node:
             self.current_node = node
             self.current_fuzz_vt_list = None
@@ -714,8 +724,9 @@ class TypedNodeDisruption(NodeConsumerStub):
             self.orig_internal = node.cc
             self.orig_value = node.to_bytes()
 
-            self.current_fuzz_vt_list = self._create_fuzzy_vt_list(node, self.fuzz_magnitude)
-            self._extend_fuzzy_vt_list(self.current_fuzz_vt_list, node)
+            vt_node = node.generated_node if node.is_genfunc() else node
+            self.current_fuzz_vt_list = self._create_fuzzy_vt_list(vt_node, self.fuzz_magnitude)
+            self._extend_fuzzy_vt_list(self.current_fuzz_vt_list, vt_node)
 
         DEBUG_PRINT(' *** CONSUME: ' + node.name + ', ' + repr(self.current_fuzz_vt_list), level=0)
 
@@ -726,8 +737,8 @@ class TypedNodeDisruption(NodeConsumerStub):
             node.make_finite()
             node.make_determinist()
             node.unfreeze(ignore_entanglement=True)
-            # we need to be sure that the current node is freezable (always the case by default)
-            # node.set_attr(dm.NodeInternals.Freezable)
+            # we need to be sure that the current node is freezable
+            node.set_attr(dm.NodeInternals.Freezable)
 
             return True
         else:

@@ -57,7 +57,8 @@ def truncate_info(info, max_size=60):
                           ' the disruptor should apply', None, str),
                  'nt_only': ('walk through non-terminal nodes only', False, bool),
                  'singleton': ('consume also terminal nodes with only one possible value', True, bool),
-                 'fix': ('fix constraints while walking', True, bool)})
+                 'fix_all': ('for each produced data, reevaluate the constraints on the whole graph',
+                             True, bool)})
 class sd_iter_over_data(StatefulDisruptor):
     '''
     Walk through the provided data and for each visited node, iterates
@@ -99,10 +100,10 @@ class sd_iter_over_data(StatefulDisruptor):
         else:
             exported_node = rnode
 
-        if self.fix:
+        if self.fix_all:
             exported_node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
             exported_node.freeze()
-            data.add_info('fix constraints (if any)')
+            data.add_info('reevaluate all the constraints (if any)')
 
         data.update_from_node(exported_node)
 
@@ -119,7 +120,10 @@ class sd_iter_over_data(StatefulDisruptor):
                            'in the data model) is used for ordering', False, bool),
                  'deep': ('when set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes', True, bool),
-                 'fix': ('fix constraints while walking', True, bool),
+                 'fix_all': ('for each produced data, reevaluate the constraints on the whole graph',
+                             False, bool),
+                 'fix': ("limit constraints fixing to the nodes related to the currently fuzzed one"
+                         " (only implemented for 'sync_size_with' and 'sync_enc_size_with')", True, bool),
                  'fuzz_mag': ('order of magnitude for maximum size of some fuzzing test cases.',
                               1.0, float)})
 class sd_fuzz_typed_nodes(StatefulDisruptor):
@@ -141,6 +145,7 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
         self.consumer = TypedNodeDisruption(max_runs_per_node=self.max_runs_per_node,
                                             min_runs_per_node=self.min_runs_per_node,
                                             fuzz_magnitude=self.fuzz_mag,
+                                            fix_constraints=self.fix,
                                             respect_order=self.order)
         self.consumer.need_reset_when_structure_change = self.deep
         self.consumer.set_node_interest(path_regexp=self.path)
@@ -183,10 +188,10 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
         else:
             exported_node = rnode
 
-        if self.fix:
+        if self.fix_all:
             exported_node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
             exported_node.freeze()
-            data.add_info('fix constraints (if any)')
+            data.add_info('reevaluate all the constraints (if any)')
 
         data.update_from_node(exported_node)
 
