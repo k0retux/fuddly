@@ -76,10 +76,6 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', u
                         host_uniq = host_uniq.to_bytes()
                         env.host_uniq = host_uniq
                         t_fix_pppoe_msg_fields.host_uniq = host_uniq
-                    elif update and hasattr(env, 'host_uniq'):
-                        host_uniq = env.host_uniq
-                    else:
-                        pass
 
                     if update:  # we update the seed of the data process
                         next_step.node.freeze()
@@ -159,20 +155,16 @@ class t_fix_pppoe_msg_fields(Disruptor):
 
         if self.reevaluate_csts:
             n.unfreeze(recursive=True, reevaluate_constraints=True)
-        else:
-            try:
-                n['.*/length$'].unfreeze()
-            except:
-                print(error_msg.format('length'))
+
         n.freeze()
-        n.show()
+        # n.show()
 
         return prev_data
 
 ### PADI fuzz scenario ###
 step_wait_padi = NoDataStep(fbk_timeout=1)
 
-dp_pado = DataProcess(process=[('tTYPE', UI(init=1), UI(order=True)), 'FIX_FIELDS'], seed='pado')
+dp_pado = DataProcess(process=[('tTYPE', UI(init=1), UI(order=True, fuzz_mag=0.7)), 'FIX_FIELDS'], seed='pado')
 dp_pado.append_new_process([('tSTRUCT', UI(init=1), UI(deep=True)), 'FIX_FIELDS'])
 step_send_pado = Step(dp_pado)
 # step_send_pado = Step('pado')
@@ -192,7 +184,7 @@ step_send_valid_pado = Step(DataProcess(process=[('FIX_FIELDS#2', None, UI(reeva
 step_send_padt = Step(DataProcess(process=[('FIX_FIELDS#3', None, UI(reevaluate_csts=True))],
                                   seed='padt'), fbk_timeout=0.1)
 
-dp_pads = DataProcess(process=[('tTYPE#2', UI(init=1), UI(order=True)), 'FIX_FIELDS'], seed='pads')
+dp_pads = DataProcess(process=[('tTYPE#2', UI(init=1), UI(order=True, fuzz_mag=0.7)), 'FIX_FIELDS'], seed='pads')
 dp_pads.append_new_process([('tSTRUCT#2', UI(init=1), UI(deep=True)), 'FIX_FIELDS'])
 step_send_fuzzed_pads = Step(dp_pads)
 step_wait_padr = NoDataStep(fbk_timeout=1)
