@@ -1808,10 +1808,11 @@ class RegexParser(StateMachine):
     class EscapeMetaSequence(Group):
 
         def _run(self, ctx):
-            if ctx.choice and len(ctx.values) > 1 and len(ctx.buffer) > 1:
-                raise InconvertibilityError()
 
             if ctx.buffer is not None:
+
+                if ctx.choice and len(ctx.values) > 1 and len(ctx.buffer) > 1:
+                    raise InconvertibilityError()
 
                 if len(ctx.buffer) == 0:
 

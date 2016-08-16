@@ -431,7 +431,7 @@ class MyDF_DataModel(DataModel):
          ]}
 
         regex_desc = {'name': 'regex',
-                      'contents': '(333|444)|(foo|bar)|[\d]|[th|is]'}
+                      'contents': '(333|444)|(foo|bar)|\d|[th|is]'}
 
 
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
