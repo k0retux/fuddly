@@ -51,6 +51,150 @@ def truncate_info(info, max_size=60):
         info = info[:max_size] + b' ...'
     return repr(info)
 
+# allowed error percent ?
+
+@disruptor(tactics, dtype="tCROSS", weight=1,
+           gen_args = GENERIC_ARGS,
+           args={'node': ('node to crossover with', None, Node),
+                 'to_keep': ('percentage of the base node to keep', None, list)})
+class sd_crossover(StatefulDisruptor):
+    '''
+    Merge two node
+    '''
+    def setup(self, dm, user_input):
+        if self.to_keep is None:
+            self.to_keep = [float(random.randint(2, 8)) / 10.0 for _ in range(2)]
+        elif len(self.to_keep) != 2 or \
+             not (isinstance(self.to_keep[0], float) and isinstance(self.to_keep[1], float)) or \
+             not (0 < self.to_keep[0] < 1 and 0 < self.to_keep[1] < 1):
+            raise InvalidPercentageError()
+
+        return True
+
+
+    def _count_brothers(self, paths, index, pattern):
+        count = 1
+        p = re.compile(u'^' + pattern + '($|/*)')
+        for i in range(index + 1, len(paths)):
+            if re.match(p, paths[i]) is not None:
+                count += 1
+
+        return count
+
+    def _merge_brothers(self, paths, index, pattern, length):
+
+        for _ in range(0, length, 1):
+            del paths[index]
+
+        paths.insert(index, pattern)
+
+    def _reduce_path_list(self, paths, tree):
+
+        # calculate the paths of the portions of the graph that needs to be deleted
+        # in order to get rid only of these leafs
+        paths.sort()
+
+        change = True
+        while change:
+            change = False
+            index = 0
+
+            length = len(paths)
+            while index < length:
+
+                path = paths[index]
+
+                slash_index = path[::-1].find('/')
+
+                # check if we are dealing with the root node
+                if slash_index == -1:
+                    index += 1
+                    continue
+
+                parent_path = path[:-path[::-1].find('/') - 1]
+                children_nb = self._count_brothers(paths, index, parent_path)
+                if children_nb == tree.get_node_by_path(parent_path).internals[tree.get_current_conf()].get_subnode_qty():
+                    self._merge_brothers(paths, index, parent_path, children_nb)
+                    change = True
+                    index += 1
+                    length = len(paths)
+                else:
+                    index += children_nb
+
+        return paths
+
+
+    def _compute_subtree_to_delete(self, tree, percentage):
+
+        # get all leafs
+        leafs = []
+        for path, node in tree.iter_paths():
+            if node.is_term() and path not in leafs:
+                leafs.append(path)
+
+        # pick the right percentage of leafs and
+        # compute a list of subtrees to delete
+        random.shuffle(leafs)
+        return self._reduce_path_list(leafs[:int(round(len(leafs) * percentage))], tree)
+
+
+    def set_seed(self, prev_data):
+
+        self.count = 0  # number of element sent
+
+        if prev_data.node is None:
+            prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
+            return prev_data
+
+        # generate two nodes
+        # one in brothers and modify the current
+
+        if self.node is None:
+            self.node = copy.copy(prev_data.node)
+
+        source = self._compute_subtree_to_delete(prev_data.node, self.to_keep[0])
+        param = self._compute_subtree_to_delete(self.node, self.to_keep[1])
+
+        # do not unfreeze the nodes
+        # nodes generated with qty keyword and unique separators are manipulated as normal nodes
+
+        random.shuffle(source)
+        random.shuffle(param)
+
+        if len(source) < len(param):
+            smallest = (source, prev_data.node)
+            largest = (param, self.node)
+        else:
+            smallest = (param, self.node)
+            largest = (source, prev_data.node)
+
+        for i in range(len(smallest[0])):
+            print(smallest[0][i])
+            smallest_node = smallest[1].get_node_by_path(path=smallest[0][i])
+            smallest_node_copy = copy.copy(smallest_node)
+
+            largest_node = largest[1].get_node_by_path(path=largest[0][i])
+            smallest_node.set_contents(largest_node)
+
+            print(param)
+            print(source)
+            largest_node.set_contents(smallest_node_copy)
+
+
+
+    def disrupt_data(self, dm, target, data):
+
+        if self.count == 2:
+            data.make_unusable()
+            self.handover()
+
+        elif self.count == 1:
+            data.update_from_node(self.node)
+
+        self.count += 1
+        return data
+
+
 @disruptor(tactics, dtype="tWALK", weight=1,
            gen_args = GENERIC_ARGS,
            args={'path': ('graph path regexp to select nodes on which' \
