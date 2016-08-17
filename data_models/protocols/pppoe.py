@@ -41,9 +41,14 @@ class PPPOE_DataModel(DataModel):
          'contents': [
              {'name': 'type',
               'random': True,
-              'contents': UINT16_be(values=[0,0x0101,0x0102,0x0103,0x0104,0x0105,
-                                              0x0110,0x201,0x0202,0x0203]),
-              'absorb_csts': AbsFullCsts()},
+              'contents': UINT16_be(values=[0x0101,0x0102,0x0103,0x0104,0x0105,
+                                            0x0110,0x201,0x0202,0x0203,0]),
+              'absorb_csts': AbsFullCsts(),
+              'alt': [
+                  {'conf': 'fuzz',
+                   'contents': MH.CYCLE([0x0101,0x0102,0x0104,0x0105,
+                                         0x0110,0x201,0x0202,0x0203,0], vt=UINT16_be, depth=1)}
+              ]},
              {'name': 'len',
               'contents': UINT16_be(),
               'absorb_csts': AbsNoCsts(),
@@ -116,19 +121,26 @@ class PPPOE_DataModel(DataModel):
 
         mh = ModelHelper(delayed_jobs=True, add_env=False)
         tag_node = mh.create_graph_from_desc(tag_desc)
-        tag_node_4pads = tag_node.get_clone()
 
-        tag_service_name = tag_node.get_clone('tag_sn')
+        tag_node_norm = tag_node.get_clone()
+        tag_node_norm['.*/type'].remove_conf('fuzz')
+
+        tag_service_name = tag_node_norm.get_clone('tag_sn')
         tag_service_name['.*/type'].set_values(value_type=UINT16_be(values=[0x0101]))
 
-        tag_host_uniq = tag_node.get_clone('tag_host_uniq')
+        tag_host_uniq = tag_node_norm.get_clone('tag_host_uniq')
         tag_host_uniq['.*/type'].set_values(value_type=UINT16_be(values=[0x0103]))
 
-        tag_ac_name = tag_node.get_clone('tag_ac_name') # Access Concentrator Name
+        tag_host_uniq_pads = tag_host_uniq.get_clone()
+
+        tag_ac_name = tag_node_norm.get_clone('tag_ac_name') # Access Concentrator Name
         tag_ac_name['.*/type'].set_values(value_type=UINT16_be(values=[0x0102]))
 
-        tag_sn_error = tag_node.get_clone('tag_sn_error')  # Service Name Error
+        tag_sn_error = tag_node_norm.get_clone('tag_sn_error')  # Service Name Error
         tag_sn_error['.*/type'].set_values(value_type=UINT16_be(values=[0x0202]))
+
+        tag_service_name_pads = tag_service_name.get_clone()
+        tag_node_pads = tag_node_norm.get_clone()
 
         pppoe_desc = \
         {'name': 'pppoe',
@@ -168,19 +180,28 @@ class PPPOE_DataModel(DataModel):
                    'custo_clear': MH.Custo.NTerm.FrozenCopy,
                    'exists_if': (IntCondition(0x9), 'code'),
                    'contents': [
-                       (tag_service_name, 1),
-                       (tag_node, 0, 4)
+                       (tag_service_name.get_clone(), 1),
+                       (tag_node_norm.get_clone(), 0, 4)
                    ]},
                   {'name': '4pado',
                    'shape_type': MH.FullyRandom,
                    'custo_clear': MH.Custo.NTerm.FrozenCopy,
                    'exists_if': (IntCondition(0x7), 'code'),
                    'contents': [
-                       (tag_ac_name, 1),
+                       (tag_host_uniq.get_clone(), 1),
+                       (tag_ac_name.get_clone(), 1),
                        (tag_service_name.get_clone(), 1),
-                       {'name': 'host_uniq_stub',
-                        'contents': String(values=[''])},
-                       (tag_node.get_clone(), 0, 4)
+                   ],
+                   'alt': [
+                       {'conf': 'fuzz',
+                        'shape_type': MH.Ordered,
+                        'exists_if': (IntCondition(0x7), 'code'),
+                        'contents': [
+                            (tag_node.get_clone(), 0, 8),
+                            (tag_host_uniq.get_clone(), 1),
+                            (tag_ac_name.get_clone(), 1),
+                            (tag_service_name.get_clone(), 1),
+                        ]}
                    ]},
                   {'name': '4padr',
                    'shape_type': MH.FullyRandom,
@@ -188,7 +209,7 @@ class PPPOE_DataModel(DataModel):
                    'exists_if': (IntCondition(0x19), 'code'),
                    'contents': [
                        (tag_service_name.get_clone(), 1),
-                       (tag_node.get_clone(), 0, 4)
+                       (tag_node_norm.get_clone(), 0, 4)
                    ]},
                   {'name': '4pads',
                    'shape_type': MH.FullyRandom,
@@ -198,27 +219,34 @@ class PPPOE_DataModel(DataModel):
                        # Accept PPPoE session Case
                        {'weight': 10,
                         'contents': [
-                            (tag_service_name.get_clone(), 1),
-                            {'name': ('host_uniq_stub', 2),
-                             'contents': String(values=[''])},
-                            (tag_node_4pads, 0, 4)
+                            (tag_service_name_pads, 1),
+                            (tag_host_uniq_pads, 1),
+                            (tag_node_pads, 0, 4)
                         ]},
                        # Reject PPPoE session Case
                        {'weight': 2,
                         'contents': [
                             (tag_sn_error, 1),
-                            {'name': ('host_uniq_stub', 2)},
-                            (tag_node_4pads, 0, 4)
+                            (tag_host_uniq_pads, 1),
+                            (tag_node_pads, 0, 4)
                         ]},
+                   ],
+                   'alt': [
+                       {'conf': 'fuzz',
+                        'exists_if': (IntCondition(0x65), 'code'),
+                        'contents': [
+                            (tag_node.get_clone(), 0, 8),
+                            (tag_service_name_pads, 1),
+                            (tag_host_uniq_pads, 1)
+                        ]}
                    ]},
                   {'name': '4padt',
                    'shape_type': MH.FullyRandom,
                    'custo_clear': MH.Custo.NTerm.FrozenCopy,
                    'exists_if': (IntCondition(0xa7), 'code'),
                    'contents': [
-                       {'name': ('host_uniq_stub', 3),
-                        'contents': String(values=[''])},
-                       (tag_node.get_clone(), 0, 4)
+                       {'contents': tag_host_uniq.get_clone()},
+                       {'contents': tag_node_norm.get_clone(), 'qty': (0, 4)}
                    ]}
               ]},
              {'name': 'padding',

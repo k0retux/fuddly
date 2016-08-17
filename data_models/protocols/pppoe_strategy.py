@@ -24,6 +24,7 @@
 from framework.tactics_helpers import *
 from framework.scenario import *
 from framework.global_resources import *
+from framework.data_model_helpers import MH
 
 tactics = Tactics()
 
@@ -82,7 +83,7 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', u
                         try:
                             next_step.node['.*/tag_sn/value/v101'] = service_name
                             next_step.node['.*/tag_sn$'].unfreeze(recursive=True, reevaluate_constraints=True)
-                            next_step.node.freeze()
+                            next_step.node['.*/tag_sn$'].freeze()
                         except:
                             pass
 
@@ -141,17 +142,21 @@ class t_fix_pppoe_msg_fields(Disruptor):
                 print("\n*** 'service_name' not found in the environment! ***")
 
         if self.host_uniq:
-            new_tag = dm.get_data('tag_host_uniq')
-            new_tag['.*/v103'] = self.host_uniq
-            new_tag.unfreeze(recursive=True, reevaluate_constraints=True)
-            new_tag.freeze()
-            try:
-                n['.*/host_uniq_stub'].set_contents(new_tag)
-                prev_data.add_info("update 'host_uniq'")
-            except:
-                print(error_msg.format('host_uniq_stub'))
+            if not n['.*/tag_host_uniq/.*/v103'].is_attr_set(MH.Attr.LOCKED) and \
+                not n['.*/tag_host_uniq/len'].is_attr_set(MH.Attr.LOCKED) and \
+                not n['.*/tag_host_uniq/type'].is_attr_set(MH.Attr.LOCKED):
+                try:
+                    n['.*/tag_host_uniq/.*/v103'] = self.host_uniq
+                    tag_uniq = n['.*/tag_host_uniq$']
+                    tag_uniq.unfreeze(recursive=True, reevaluate_constraints=True)
+                    tag_uniq.freeze()
+                    prev_data.add_info("update 'host_uniq' with: {!s}".format(self.host_uniq))
+                except:
+                    print(error_msg.format('tag_host_uniq'))
+            else:
+                print("\n*** 'tag_host_uniq' is currently fuzzed. ignore its update ***")
         else:
-            print("\n*** 'host_uniq_stub' not found in the environment! ***")
+            print("\n*** 'tag_host_uniq' not found in the environment! ***")
 
         if self.reevaluate_csts:
             n.unfreeze(recursive=True, reevaluate_constraints=True)
@@ -164,8 +169,11 @@ class t_fix_pppoe_msg_fields(Disruptor):
 ### PADI fuzz scenario ###
 step_wait_padi = NoDataStep(fbk_timeout=1)
 
-dp_pado = DataProcess(process=[('tTYPE', UI(init=1), UI(order=True, fuzz_mag=0.7)), 'FIX_FIELDS'], seed='pado')
-dp_pado.append_new_process([('tSTRUCT', UI(init=1), UI(deep=True)), 'FIX_FIELDS'])
+dp_pado = DataProcess(process=[('ALT', None, UI(conf='fuzz')),
+                               ('tTYPE', UI(init=1), UI(order=True, fuzz_mag=0.7)),
+                               'FIX_FIELDS'], seed='pado')
+dp_pado.append_new_process([('ALT', None, UI(conf='fuzz')),
+                            ('tSTRUCT', UI(init=1), UI(deep=True)), 'FIX_FIELDS'])
 step_send_pado = Step(dp_pado)
 # step_send_pado = Step('pado')
 step_end = Step('padt')
@@ -184,8 +192,11 @@ step_send_valid_pado = Step(DataProcess(process=[('FIX_FIELDS#2', None, UI(reeva
 step_send_padt = Step(DataProcess(process=[('FIX_FIELDS#3', None, UI(reevaluate_csts=True))],
                                   seed='padt'), fbk_timeout=0.1)
 
-dp_pads = DataProcess(process=[('tTYPE#2', UI(init=1), UI(order=True, fuzz_mag=0.7)), 'FIX_FIELDS'], seed='pads')
-dp_pads.append_new_process([('tSTRUCT#2', UI(init=1), UI(deep=True)), 'FIX_FIELDS'])
+dp_pads = DataProcess(process=[('ALT', None, UI(conf='fuzz')),
+                               ('tTYPE#2', UI(init=1), UI(order=True, fuzz_mag=0.7)),
+                               'FIX_FIELDS'], seed='pads')
+dp_pads.append_new_process([('ALT', None, UI(conf='fuzz')),
+                            ('tSTRUCT#2', UI(init=1), UI(deep=True)), 'FIX_FIELDS'])
 step_send_fuzzed_pads = Step(dp_pads)
 step_wait_padr = NoDataStep(fbk_timeout=1)
 
