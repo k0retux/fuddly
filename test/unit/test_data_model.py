@@ -38,7 +38,7 @@ class TestBitFieldCondition(unittest.TestCase):
 
         cls.node = mock.Mock()
         cls.node.get_subfield = mock.MagicMock(side_effect=side_effect)
-
+        cls.node.is_genfunc = mock.MagicMock(return_value=False)
 
     @ddt.data((1, 1), (1, [1]), ([1], [1]),
                   (1, (1,)), ((1,), (1,)),
