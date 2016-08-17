@@ -138,6 +138,7 @@ class MH(object):
 
         Separator = NodeInternals.Separator
 
+        LOCKED = NodeInternals.LOCKED
         DEBUG = NodeInternals.DEBUG
 
     ###########################

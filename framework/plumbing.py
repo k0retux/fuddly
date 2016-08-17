@@ -1787,6 +1787,7 @@ class FmkPlumbing(object):
             if not self._is_data_valid(data_list):
                 self.set_error("send_data(): Data has been provided empty --> won't be sent",
                                code=Error.DataInvalid)
+                self.mon.notify_error()
                 return None
 
             data_list = self._do_before_sending_data(data_list)
@@ -1794,11 +1795,13 @@ class FmkPlumbing(object):
             if not data_list:
                 self.set_error("send_data(): No more data to send",
                                code=Error.NoMoreData)
+                self.mon.notify_error()
                 return None
 
             if not self._is_data_valid(data_list):
                 self.set_error("send_data(): Data became empty --> won't be sent",
                                code=Error.DataInvalid)
+                self.mon.notify_error()
                 return None
 
             self._sending_error = False

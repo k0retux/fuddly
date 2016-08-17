@@ -693,7 +693,6 @@ class d_switch_to_alternate_conf(Disruptor):
 
     def disrupt_data(self, dm, target, prev_data):
         if prev_data.node:
-            
             # try to get more specific default conf
             if not self.provided_alt and self.available_confs:
                 confs = prev_data.node.gather_alt_confs()
@@ -713,10 +712,9 @@ class d_switch_to_alternate_conf(Disruptor):
 
             prev_data.add_info("ALTERNATE CONF '{!s}' USED".format(self.conf))
 
-            prev_data.node.unfreeze_all()
             prev_data.node.set_current_conf(self.conf, recursive=self.recursive, root_regexp=self.path)
-
-            prev_data.node.get_value()
+            prev_data.node.unfreeze(recursive=True, reevaluate_constraints=True)
+            prev_data.node.freeze()
 
         else:
             prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')

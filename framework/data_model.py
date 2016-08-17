@@ -648,7 +648,10 @@ class IntCondition(NodeCondition):
             self.val = neg_val
 
     def check(self, node):
-        assert(node.is_typed_value(subkind=fvt.INT))
+        if node.is_genfunc():
+            node = node.generated_node
+
+        assert node.is_typed_value(subkind=fvt.INT)
 
         if isinstance(self.val, (tuple, list)):
             if self.positive_mode:
@@ -708,6 +711,9 @@ class BitFieldCondition(NodeCondition):
 
 
     def check(self, node):
+        if node.is_genfunc():
+            node = node.generated_node
+
         assert(node.is_typed_value(subkind=fvt.BitField))
 
         for sf, val, neg_val in zip(self.sf, self.val, self.neg_val):
@@ -860,9 +866,9 @@ class NodeInternals(object):
     Separator = 15
 
     DEBUG = 30
+    LOCKED = 50
 
     DISABLED = 100
-
 
     default_custo = None
 
@@ -884,6 +890,10 @@ class NodeInternals(object):
             NodeInternals.Separator: False,
             # Used for debugging purpose
             NodeInternals.DEBUG: False,
+            # Used to express that someone (a disruptor for instance) is
+            # currently doing something with the node and doesn't want
+            # that someone else modify it.
+            NodeInternals.LOCKED: False,
             ### INTERNAL USAGE ###
             NodeInternals.DISABLED: False
             }

@@ -741,6 +741,7 @@ class TypedNodeDisruption(NodeConsumerStub):
             node.unfreeze(ignore_entanglement=True)
             # we need to be sure that the current node is freezable
             node.set_attr(dm.NodeInternals.Freezable)
+            node.set_attr(dm.NodeInternals.LOCKED)
 
             return True
         else:
