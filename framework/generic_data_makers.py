@@ -55,8 +55,10 @@ def truncate_info(info, max_size=60):
            gen_args = GENERIC_ARGS,
            args={'path': ('graph path regexp to select nodes on which' \
                           ' the disruptor should apply', None, str),
+                 'order': ('when set to True, the walking order is strictly guided ' \
+                           'by the data structure. Otherwise, fuzz weight (if specified ' \
+                           'in the data model) is used for ordering', True, bool),
                  'nt_only': ('walk through non-terminal nodes only', False, bool),
-                 'singleton': ('consume also terminal nodes with only one possible value', True, bool),
                  'fix_all': ('for each produced data, reevaluate the constraints on the whole graph',
                              True, bool)})
 class sd_iter_over_data(StatefulDisruptor):
@@ -76,9 +78,9 @@ class sd_iter_over_data(StatefulDisruptor):
         prev_data.node.make_finite(all_conf=True, recursive=True)
 
         if self.nt_only:
-            consumer = NonTermVisitor()
+            consumer = NonTermVisitor(respect_order=self.order)
         else:
-            consumer = BasicVisitor(consume_also_singleton=self.singleton)
+            consumer = BasicVisitor(respect_order=self.order)
         consumer.set_node_interest(path_regexp=self.path)
         self.modelwalker = ModelWalker(prev_data.node, consumer, max_steps=self.max_steps, initial_step=self.init)
         self.walker = iter(self.modelwalker)

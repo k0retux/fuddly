@@ -243,17 +243,18 @@ Parameters:
         |      | desc: graph path regexp to select nodes on which the disruptor should
         |      |       apply
         |      | default: None [type: str]
-        |_ singleton
-        |      | desc: consume also terminal nodes with only one possible value
-        |      | default: False [type: bool]
-        |_ nt_only
-        |      | desc: walk through non-terminal nodes only
-        |      | default: False [type: bool]
+        |_ order
+        |      | desc: when set to True, the walking order is strictly guided by the
+        |      |       data structure. Otherwise, fuzz weight (if specified in the
+        |      |       data model) is used for ordering
+        |      | default: True [type: bool]
         |_ fix_all
         |      | desc: for each produced data, reevaluate the constraints on the whole
         |      |       graph
         |      | default: True [type: bool]
-
+        |_ nt_only
+        |      | desc: walk through non-terminal nodes only
+        |      | default: False [type: bool]
 
 Stateless Disruptors
 ====================

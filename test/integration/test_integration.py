@@ -1472,7 +1472,7 @@ class TestModelWalker(unittest.TestCase):
 
     def test_BasicVisitor(self):
         nt = self.dm.get_data('Simple')
-        default_consumer = BasicVisitor(respect_order=True, consume_also_singleton=False)
+        default_consumer = BasicVisitor(respect_order=True)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
                                                                     max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
@@ -1480,7 +1480,7 @@ class TestModelWalker(unittest.TestCase):
 
         print('***')
         nt = self.dm.get_data('Simple')
-        default_consumer = BasicVisitor(respect_order=False, consume_also_singleton=False)
+        default_consumer = BasicVisitor(respect_order=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
                                                                     max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
@@ -1581,6 +1581,8 @@ class TestModelWalker(unittest.TestCase):
 
         mh = ModelHelper(delayed_jobs=True)
         data = mh.create_graph_from_desc(shape_desc)
+        bv_data = data.get_clone()
+        nt_data = data.get_clone()
 
         raw_vals = [
             b' [!] ++++++++++ [!] ::=:: [!] ',
@@ -1702,6 +1704,25 @@ class TestModelWalker(unittest.TestCase):
                 self.assertEqual(val, raw_vals[idx - 1])
 
         self.assertEqual(idx, 102)  # should be even
+
+        print('***')
+        idx = 0
+        bv_consumer = BasicVisitor(respect_order=True)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(bv_data, bv_consumer,
+                                                                    make_determinist=True,
+                                                                    max_steps=100):
+            print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
+        self.assertEqual(idx, 6)
+
+        print('***')
+        idx = 0
+        nt_consumer = NonTermVisitor(respect_order=True)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt_data, nt_consumer,
+                                                                    make_determinist=True,
+                                                                    max_steps=100):
+            print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
+        self.assertEqual(idx, 6)  # shall be equal to the previous test
+
 
     def test_TypedNodeDisruption_1(self):
         nt = self.dm.get_data('Simple')
