@@ -33,6 +33,7 @@ import re
 import binascii
 import collections
 import traceback
+import uuid
 
 from enum import Enum
 
@@ -616,7 +617,9 @@ class RawCondition(NodeCondition):
 
     def check(self, node):
         node_val = node._tobytes()
-        # node_val = node_val.replace(Node.DEFAULT_DISABLED_VALUE, b'')
+        if Node.DEFAULT_DISABLED_VALUE:
+            node_val = node_val.replace(Node.DEFAULT_DISABLED_VALUE, b'')
+
         if self.positive_mode:
             if isinstance(self.val, (tuple, list)):
                 result = node_val in self.val
@@ -1468,10 +1471,10 @@ class NodeInternals_Empty(NodeInternals):
         if return_node_internals:
             return (Node.DEFAULT_DISABLED_NODEINT, True)
         else:
-            return (b'<EMPTY>', True)
+            return (Node.DEFAULT_DISABLED_VALUE, True)
 
     def get_raw_value(self, **kwargs):
-        return b'<EMPTY>'
+        return Node.DEFAULT_DISABLED_VALUE
 
     def set_child_env(self, env):
         print('Empty:', hex(id(self)))
@@ -4841,7 +4844,7 @@ class Node(object):
     DJOBS_PRIO_dynhelpers = 200
     DJOBS_PRIO_genfunc = 300
 
-    DEFAULT_DISABLED_VALUE = b'' #b'**TO_REMOVE**'
+    DEFAULT_DISABLED_VALUE = b'' #b'<EMPTY::' + uuid.uuid4().bytes + b'::>'
     DEFAULT_DISABLED_NODEINT = NodeInternals_Empty()
 
     CORRUPT_EXIST_COND = 5
@@ -5841,7 +5844,8 @@ class Node(object):
         ret = self._get_value(conf=conf, recursive=recursive,
                               return_node_internals=return_node_internals)
 
-        if self.env is not None and self.env.delayed_jobs_enabled and not self._delayed_jobs_called:
+        if self.env is not None and self.env.delayed_jobs_enabled and \
+                (not self._delayed_jobs_called or self.env.delayed_jobs_pending):
             self._delayed_jobs_called = True
 
             if self.env.djobs_exists(Node.DJOBS_PRIO_nterm_existence):
@@ -6420,6 +6424,10 @@ class Env(object):
         self._reentrancy_cpt = 0
         # self.cpt = 0
 
+    @property
+    def delayed_jobs_pending(self):
+        return bool(self._sorted_jobs)
+
     def __getattr__(self, name):
         if hasattr(self.env4NT, name):
             return self.env4NT.__getattribute__(name)
@@ -6633,7 +6641,7 @@ class Env(object):
         # new_env._sorted_jobs = copy.copy(self._sorted_jobs)
         # new_env._djob_keys = copy.copy(self._djob_keys)
         # new_env._djob_groups = copy.copy(self._djob_groups)
-        new_env.id_list = copy.copy(self.id_list)
+        # new_env.id_list = copy.copy(self.id_list)
         # new_env.cpt = 0
         return new_env
 

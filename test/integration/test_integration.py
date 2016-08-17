@@ -1881,6 +1881,71 @@ class TestNodeFeatures(unittest.TestCase):
     def setUp(self):
         pass
 
+    def test_djobs(self):
+        tag_desc = \
+        {'name': 'tag',
+         'contents': [
+             {'name': 'type',
+              'contents': UINT16_be(values=[0x0101,0x0102,0x0103,0x0104, 0]),
+              'absorb_csts': AbsFullCsts()},
+             {'name': 'len',
+              'contents': UINT16_be(),
+              'absorb_csts': AbsNoCsts()},
+             {'name': 'value',
+              'contents': [
+                  {'name': 'v000', # Final Tag (optional)
+                   'exists_if': (IntCondition(0), 'type'),
+                   'sync_enc_size_with': 'len',
+                   'contents': String(size=0)},
+                  {'name': 'v101', # Service Name
+                   'exists_if': (IntCondition(0x0101), 'type'),
+                   'sync_enc_size_with': 'len',
+                   'contents': String(values=[u'my \u00fcber service'], codec='utf8'),
+                   },
+                  {'name': 'v102', # AC name
+                   'exists_if': (IntCondition(0x0102), 'type'),
+                   'sync_enc_size_with': 'len',
+                   'contents': String(values=['AC name'], codec='utf8'),
+                   },
+                  {'name': 'v103', # Host Identifier
+                   'exists_if': (IntCondition(0x0103), 'type'),
+                   'sync_enc_size_with': 'len',
+                   'contents': String(values=['Host Identifier']),
+                   },
+                  {'name': 'v104', # Cookie
+                   'exists_if': (IntCondition(0x0104), 'type'),
+                   'sync_enc_size_with': 'len',
+                   'contents': String(values=['Cookie'], min_sz=0, max_sz=1000),
+                   },
+              ]}
+        ]}
+
+        mh = ModelHelper(delayed_jobs=True)
+        d = mh.create_graph_from_desc(tag_desc)
+        d.make_determinist(recursive=True)
+        d2 = d.get_clone()
+        d3 = d.get_clone()
+
+        d.freeze()
+        d['.*/value$'].unfreeze()
+        d_raw = d.to_bytes()
+        d.show()
+
+        d2.freeze()
+        d2['.*/value$'].unfreeze()
+        d2['.*/value$'].freeze()
+        d2_raw = d2.to_bytes()
+        d2.show()
+
+        d3.freeze()
+        d3['.*/value$'].unfreeze()
+        d3['.*/len$'].unfreeze()
+        d3_raw = d3.to_bytes()
+        d3.show()
+
+        self.assertEqual(d_raw, d2_raw)
+        self.assertEqual(d_raw, d3_raw)
+
     def test_absorb_nonterm_1(self):
         nint_1 = Node('nint1', value_type=UINT16_le(values=[0xabcd]))
         nint_2 = Node('nint2', value_type=UINT8(values=[0xf]))
