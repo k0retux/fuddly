@@ -742,7 +742,8 @@ class NodeCustomization(object):
     """
     _custo_items = {}
 
-    def __init__(self, items_to_set=None, items_to_clear=None):
+    def __init__(self, items_to_set=None, items_to_clear=None, transform_func=None):
+        self._transform_func = transform_func
         self._custo_items = copy.copy(self._custo_items)
         if items_to_set is not None:
             if isinstance(items_to_set, int):
@@ -766,6 +767,10 @@ class NodeCustomization(object):
             return self._custo_items[key]
         else:
             return None
+
+    @property
+    def transform_func(self):
+        return self._transform_func
 
     def __copy__(self):
         new_custo = type(self)()
@@ -3058,6 +3063,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
         new_node = None
 
+        transformed_node = None
         for i in range(nb):
             # 'unique' mode
             if mode == 'u':
@@ -3069,7 +3075,8 @@ class NodeInternals_NonTerm(NodeInternals):
                     # if self.is_attr_set(NodeInternals.Determinist):
                     ignore_fstate = not self.custo.frozen_copy_mode
 
-                    new_node = Node(nid, base_node=base_node, ignore_frozen_state=ignore_fstate,
+                    node_to_copy = base_node if transformed_node is None else transformed_node
+                    new_node = Node(nid, base_node=node_to_copy, ignore_frozen_state=ignore_fstate,
                                     accept_external_entanglement=True,
                                     acceptance_set=set(external_entangled_nodes + subnode_list))
                     new_node._reset_depth(parent_depth=base_node.depth-1)
@@ -3080,6 +3087,19 @@ class NodeInternals_NonTerm(NodeInternals):
                         new_node.clear_attr(NodeInternals.Mutable, all_conf=True, recursive=True)
                     else:
                         pass
+
+                    if base_node.custo and base_node.custo.transform_func is not None:
+                        try:
+                            transformed_node = base_node.custo.transform_func(new_node)
+                        except:
+                            print('\n*** ERROR: User-provided NodeCustomization.transform_func()'
+                                  ' raised an exception. We ignore it.')
+                        else:
+                            if isinstance(new_node, Node):
+                                new_node = transformed_node
+                            else:
+                                print('\n*** ERROR: User-provided NodeCustomization.transform_func()'
+                                      ' should return a Node. Thus we ignore its production.')
 
                 new_node._set_clone_info((base_node.tmp_ref_count-1, nb), base_node)
                 _sync_size_handling(new_node)

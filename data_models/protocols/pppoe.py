@@ -36,19 +36,20 @@ class PPPOE_DataModel(DataModel):
 
         # refer to RFC 2516
 
+        def cycle_tags(tag):
+            tag.freeze()
+            tag['.*/type'].unfreeze()
+            tag.unfreeze(reevaluate_constraints=True)
+            return tag
+
         tag_desc = \
         {'name': 'tag',
+         'evolution_func': cycle_tags,
          'contents': [
              {'name': 'type',
-              'random': True,
               'contents': UINT16_be(values=[0x0101,0x0102,0x0103,0x0104,0x0105,
                                             0x0110,0x201,0x0202,0x0203,0]),
-              'absorb_csts': AbsFullCsts(),
-              'alt': [
-                  {'conf': 'fuzz',
-                   'contents': MH.CYCLE([0x0101,0x0102,0x0104,0x0105,
-                                         0x0110,0x201,0x0202,0x0203,0], vt=UINT16_be, depth=1)}
-              ]},
+              'absorb_csts': AbsFullCsts()},
              {'name': 'len',
               'contents': UINT16_be(),
               'absorb_csts': AbsNoCsts(),
@@ -122,25 +123,22 @@ class PPPOE_DataModel(DataModel):
         mh = ModelHelper(delayed_jobs=True, add_env=False)
         tag_node = mh.create_graph_from_desc(tag_desc)
 
-        tag_node_norm = tag_node.get_clone()
-        tag_node_norm['.*/type'].remove_conf('fuzz')
-
-        tag_service_name = tag_node_norm.get_clone('tag_sn')
+        tag_service_name = tag_node.get_clone('tag_sn')
         tag_service_name['.*/type'].set_values(value_type=UINT16_be(values=[0x0101]))
 
-        tag_host_uniq = tag_node_norm.get_clone('tag_host_uniq')
+        tag_host_uniq = tag_node.get_clone('tag_host_uniq')
         tag_host_uniq['.*/type'].set_values(value_type=UINT16_be(values=[0x0103]))
 
         tag_host_uniq_pads = tag_host_uniq.get_clone()
 
-        tag_ac_name = tag_node_norm.get_clone('tag_ac_name') # Access Concentrator Name
+        tag_ac_name = tag_node.get_clone('tag_ac_name') # Access Concentrator Name
         tag_ac_name['.*/type'].set_values(value_type=UINT16_be(values=[0x0102]))
 
-        tag_sn_error = tag_node_norm.get_clone('tag_sn_error')  # Service Name Error
+        tag_sn_error = tag_node.get_clone('tag_sn_error')  # Service Name Error
         tag_sn_error['.*/type'].set_values(value_type=UINT16_be(values=[0x0202]))
 
         tag_service_name_pads = tag_service_name.get_clone()
-        tag_node_pads = tag_node_norm.get_clone()
+        tag_node_pads = tag_node.get_clone()
 
         pppoe_desc = \
         {'name': 'pppoe',
@@ -181,7 +179,7 @@ class PPPOE_DataModel(DataModel):
                    'exists_if': (IntCondition(0x9), 'code'),
                    'contents': [
                        (tag_service_name.get_clone(), 1),
-                       (tag_node_norm.get_clone(), 0, 4)
+                       (tag_node.get_clone(), 0, 4)
                    ]},
                   {'name': '4pado',
                    'shape_type': MH.FullyRandom,
@@ -209,7 +207,7 @@ class PPPOE_DataModel(DataModel):
                    'exists_if': (IntCondition(0x19), 'code'),
                    'contents': [
                        (tag_service_name.get_clone(), 1),
-                       (tag_node_norm.get_clone(), 0, 4)
+                       (tag_node.get_clone(), 0, 4)
                    ]},
                   {'name': '4pads',
                    'shape_type': MH.FullyRandom,
@@ -246,7 +244,7 @@ class PPPOE_DataModel(DataModel):
                    'exists_if': (IntCondition(0xa7), 'code'),
                    'contents': [
                        {'contents': tag_host_uniq.get_clone()},
-                       {'contents': tag_node_norm.get_clone(), 'qty': (0, 4)}
+                       {'contents': tag_node.get_clone(), 'qty': (0, 4)}
                    ]}
               ]},
              {'name': 'padding',
