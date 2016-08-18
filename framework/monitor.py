@@ -1042,6 +1042,7 @@ class ProbeMem(Probe):
         assert self.process_name != None
         assert self.backend != None
         self._saved_mem = None
+        self._max_mem = None
         Probe.__init__(self)
 
     def _get_mem(self):
@@ -1065,6 +1066,7 @@ class ProbeMem(Probe):
 
     def start(self, dm, target, logger):
         self.backend.start()
+        self._max_mem = None
         self._saved_mem = self._get_mem()
         self.reset()
         if self._saved_mem < 0:
@@ -1112,8 +1114,9 @@ class ProbeMem(Probe):
         return status
 
     def reset(self):
+        if self._max_mem is not None:
+            self._saved_mem = self._max_mem
         self._max_mem = self._saved_mem
-
 
 def probe(project):
     def internal_func(probe_cls):

@@ -38,6 +38,9 @@ class PPPOE_DataModel(DataModel):
 
         def cycle_tags(tag):
             tag.freeze()
+            if tag['.*/type'].get_current_raw_val() == 0x102:
+                tag['.*/type'].unfreeze()
+                tag.freeze()
             tag['.*/type'].unfreeze()
             tag.unfreeze(reevaluate_constraints=True)
             return tag
