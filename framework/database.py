@@ -714,6 +714,14 @@ class Database(object):
         else:
             print(colorize("*** ERROR: Statistics are unavailable ***", rgb=Color.ERROR))
 
+        data_records = self.execute_sql_statement(
+            "SELECT ID FROM DATA;"
+        )
+        nb_data_records = len(data_records)
+        title = colorize("Number of Data IDs: ", rgb=Color.FMKINFOGROUP)
+        content = colorize("{:d}".format(nb_data_records), rgb=Color.FMKSUBINFO)
+        print(title + content)
+
 
     def export_data(self, first, last=None, colorized=True):
         colorize = self._get_color_function(colorized)
