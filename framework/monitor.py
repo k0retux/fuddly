@@ -1095,16 +1095,17 @@ class ProbeMem(Probe):
                 self._max_mem = current_mem
 
             ok = True
-            info = "*** '{:s}' maximum RSS: {:d} ***\n".format(self.process_name, self._max_mem)
+            info = "*** '{:s}' Max RSS recorded: {:d} / Original " \
+                   "RSS: {:d} ***\n".format(self.process_name, self._max_mem, self._saved_mem)
             err_msg = ''
             if self.threshold is not None and self._max_mem > self.threshold:
                 ok = False
-                err_msg += '\n*** Threshold exceeded ***'
+                err_msg += '\n*** Threshold exceeded (original RSS: {:d}) ***'.format(self._saved_mem)
             if self.tolerance is not None:
                 delta = abs(self._max_mem - self._saved_mem)
                 if (delta/float(self._saved_mem))*100 > self.tolerance:
                     ok = False
-                    err_msg += '\n*** Tolerance exceeded ***'
+                    err_msg += '\n*** Tolerance exceeded (original RSS: {:d}) ***'.format(self._saved_mem)
             if not ok:
                 status.set_status(-1)
                 status.set_private_info(err_msg+'\n'+info)

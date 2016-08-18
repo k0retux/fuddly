@@ -597,13 +597,13 @@ class Database(object):
 
         if with_fbk:
             for src, tstamp, status, content in feedback:
-                msg += colorize("\n Status(", rgb=Color.FMKINFOGROUP) + \
-                       colorize("{:s}".format(src), rgb=Color.FMKSUBINFO) + \
-                       colorize(" | ", rgb=Color.FMKINFOGROUP) + \
-                       colorize("{:s}".format(tstamp.strftime("%d/%m/%Y - %H:%M:%S")),
-                                rgb=Color.FMKSUBINFO) + \
-                       colorize(")", rgb=Color.FMKINFOGROUP) + \
-                       colorize(" = {!s}".format(status), rgb=Color.FMKSUBINFO)
+                msg += colorize("\n Status(", rgb=Color.FMKINFOGROUP)
+                msg += colorize("{!s}".format(src), rgb=Color.FMKSUBINFO)
+                msg += colorize(" | ", rgb=Color.FMKINFOGROUP)
+                msg += colorize("{:s}".format(tstamp.strftime("%d/%m/%Y - %H:%M:%S")),
+                                rgb=Color.FMKSUBINFO)
+                msg += colorize(")", rgb=Color.FMKINFOGROUP)
+                msg += colorize(" = {!s}".format(status), rgb=Color.FMKSUBINFO)
                 if content:
                     content = gr.unconvert_from_internal_repr(content)
                     if sys.version_info[0] > 2:
