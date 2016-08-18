@@ -138,6 +138,7 @@ class MH(object):
 
         Separator = NodeInternals.Separator
 
+        LOCKED = NodeInternals.LOCKED
         DEBUG = NodeInternals.DEBUG
 
     ###########################
@@ -599,7 +600,7 @@ class ModelHelper(object):
     valid_keys = [
         # generic description keys
         'name', 'contents', 'qty', 'clone', 'type', 'alt', 'conf',
-        'custo_set', 'custo_clear',
+        'custo_set', 'custo_clear', 'evolution_func',
         # NonTerminal description keys
         'weight', 'shape_type', 'section_type', 'duplicate_mode', 'weights',
         'separator', 'prefix', 'suffix', 'unique',
@@ -1018,6 +1019,7 @@ class ModelHelper(object):
     def _handle_custo(self, node, desc, conf):
         custo_set = desc.get('custo_set', None)
         custo_clear = desc.get('custo_clear', None)
+        transform_func = desc.get('evolution_func', None)
 
         if node.is_genfunc(conf=conf):
             Custo = GenFuncCusto
@@ -1049,8 +1051,9 @@ class ModelHelper(object):
             else:
                 return
 
-        if custo_set or custo_clear:
-            custo = Custo(items_to_set=custo_set, items_to_clear=custo_clear)
+        if custo_set or custo_clear or transform_func:
+            custo = Custo(items_to_set=custo_set, items_to_clear=custo_clear,
+                          transform_func=transform_func)
             internals = node.conf(conf)
             internals.customize(custo)
 
@@ -1808,10 +1811,11 @@ class RegexParser(StateMachine):
     class EscapeMetaSequence(Group):
 
         def _run(self, ctx):
-            if ctx.choice and len(ctx.values) > 1 and len(ctx.buffer) > 1:
-                raise InconvertibilityError()
 
             if ctx.buffer is not None:
+
+                if ctx.choice and len(ctx.values) > 1 and len(ctx.buffer) > 1:
+                    raise InconvertibilityError()
 
                 if len(ctx.buffer) == 0:
 

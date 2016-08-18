@@ -54,6 +54,15 @@ class Target(object):
     Class abstracting the target we interact with.
     '''
     feedback_timeout = None
+
+    FBK_WAIT_FULL_TIME = 1
+    fbk_wait_full_time_slot_msg = 'Wait for the full time slot allocated for feedback retrieval'
+    FBK_WAIT_UNTIL_RECV = 2
+    fbk_wait_until_recv_msg = 'Wait until the target has sent something back to us'
+
+    _feedback_mode = None
+    supported_feedback_mode = []
+
     _logger = None
     _probes = None
     _send_data_lock = threading.Lock()
@@ -206,6 +215,17 @@ class Target(object):
         '''
         pass
 
+    def set_feedback_mode(self, mode):
+        if mode in self.supported_feedback_mode:
+            self._feedback_mode = mode
+            return True
+        else:
+            return False
+
+    @property
+    def wait_full_time_slot(self):
+        return self._feedback_mode == Target.FBK_WAIT_FULL_TIME
+
     def get_description(self):
         return None
 
@@ -305,6 +325,9 @@ class TargetFeedback(object):
 
 class EmptyTarget(Target):
 
+    _feedback_mode = None
+    supported_feedback_mode = []
+
     def send_data(self, data, from_fmk=False):
         pass
 
@@ -313,6 +336,9 @@ class EmptyTarget(Target):
 
 
 class TestTarget(Target):
+
+    _feedback_mode = None
+    supported_feedback_mode = []
 
     def __init__(self, recover_ratio=100):
         self._cpt = None
@@ -352,6 +378,9 @@ class NetworkTarget(Target):
     UNKNOWN_SEMANTIC = 42
     CHUNK_SZ = 2048
     _INTERNALS_ID = 'NetworkTarget()'
+
+    _feedback_mode = Target.FBK_WAIT_FULL_TIME
+    supported_feedback_mode = [Target.FBK_WAIT_FULL_TIME, Target.FBK_WAIT_UNTIL_RECV]
 
     def __init__(self, host='localhost', port=12345, socket_type=(socket.AF_INET, socket.SOCK_STREAM),
                  data_semantics=UNKNOWN_SEMANTIC, server_mode=False, hold_connection=False,
@@ -1121,10 +1150,11 @@ class NetworkTarget(Target):
                 chunks[fd].append(pre_fbk[fd])
 
         socket_errors = []
+        has_read = False
 
         while dont_stop:
             ready_to_read = []
-            for fd, ev in epobj.poll(timeout=0.2):
+            for fd, ev in epobj.poll(timeout=0.1):
                 skt = fileno2fd[fd]
                 if ev != select.EPOLLIN:
                     _check_and_handle_obsolete_socket(skt, error=ev, error_list=socket_errors)
@@ -1178,6 +1208,9 @@ class NetworkTarget(Target):
                         bytes_recd[s] = bytes_recd[s] + len(chunk)
                         chunks[s].append(chunk)
 
+                has_read = True
+
+
             if fbk_sockets:
                 for s in fbk_sockets:
                     if s in ready_to_read:
@@ -1191,7 +1224,7 @@ class NetworkTarget(Target):
                 else:
                     dont_stop = False
 
-                if duration > fbk_timeout:
+                if duration > fbk_timeout or (has_read and not self.wait_full_time_slot):
                     dont_stop = False
 
             else:
@@ -1436,6 +1469,10 @@ class NetworkTarget(Target):
 
 class PrinterTarget(Target):
 
+    # No target feedback implemented
+    _feedback_mode = None
+    supported_feedback_mode = []
+
     def __init__(self, tmpfile_ext):
         self.__suffix = '{:0>12d}'.format(random.randint(2**16, 2**32))
         self.__feedback = TargetFeedback()
@@ -1523,6 +1560,9 @@ class PrinterTarget(Target):
 
 
 class LocalTarget(Target):
+
+    _feedback_mode = Target.FBK_WAIT_UNTIL_RECV
+    supported_feedback_mode = [Target.FBK_WAIT_UNTIL_RECV]
 
     def __init__(self, tmpfile_ext, target_path=None):
         self.__suffix = '{:0>12d}'.format(random.randint(2**16, 2**32))
@@ -1621,7 +1661,8 @@ class LocalTarget(Target):
         finally:
             self._data_sent = False
 
-    def get_feedback(self, delay=0.2):
+    def get_feedback(self, timeout=0.2):
+        timeout = self.feedback_timeout if timeout is None else timeout
         if self._feedback_computed:
             return self.__feedback
         else:
@@ -1641,7 +1682,7 @@ class LocalTarget(Target):
                                          "Negative return status ({:d})".format(exit_status))
 
         err_detected = False
-        ret = select.select([self.__app.stdout, self.__app.stderr], [], [], delay)
+        ret = select.select([self.__app.stdout, self.__app.stderr], [], [], timeout)
         if ret[0]:
             byte_string = b''
             for fd in ret[0][:-1]:
@@ -1669,6 +1710,9 @@ class LocalTarget(Target):
 
 class SIMTarget(Target):
     delay_between_write = 0.1  # without, it seems some commands can be lost
+
+    _feedback_mode = Target.FBK_WAIT_FULL_TIME
+    supported_feedback_mode = [Target.FBK_WAIT_FULL_TIME]
 
     def __init__(self, serial_port, baudrate, pin_code, targeted_tel_num, codec='latin_1'):
         self.serial_port = serial_port

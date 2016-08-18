@@ -87,6 +87,13 @@ class RegexParserTest(unittest.TestCase):
          'nodes': [{"values": [u"\u0443"]}, {"values": [u"abcd"]}]},
         {'regex': u"hi(ab\u0443cd)", "charset": MH.Charset.UNICODE,
          'nodes': [{"values": [u"hi"]}, {"values": [u"ab\u0443cd"]}]},
+        {'regex': u"(333|444)|foo-bar|\d|[th|is]",
+         'nodes': [
+             {"type": fvt.INT_str, "values": [333,444]},
+             {"values": [u"foo-bar"]},
+             {"alphabet": "0123456789"},
+             {"alphabet": "th|is"}]},
+
     )
     def test_escape(self, test_case):
         self.assert_regex_is_valid(test_case)

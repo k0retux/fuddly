@@ -27,6 +27,8 @@ import datetime
 import time
 import traceback
 import re
+import subprocess
+import select
 
 from libs.external_modules import *
 from framework.global_resources import *
@@ -855,6 +857,47 @@ class Serial_Backend(Backend):
         return result
 
 
+class Shell_Backend(Backend):
+    """
+    Backend to execute shell commands locally
+    """
+    def __init__(self, timeout=None, codec='latin_1'):
+        """
+        Args:
+            timeout (float): timeout in seconds for reading the result of the command
+            codec (str): codec used by the monitored system to answer.
+        """
+        Backend.__init__(self, codec=codec)
+        self._timeout = timeout
+        self._app = None
+
+    def _start(self):
+        pass
+
+    def _stop(self):
+        pass
+
+    def _exec_command(self, cmd):
+        self._app = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        ready_to_read, ready_to_write, in_error = \
+            select.select([self._app.stdout, self._app.stderr], [], [], self._timeout)
+
+        if in_error:
+            # the command does not exist on the system
+            raise BackendError('Issue with file descriptors')
+        elif ready_to_read:
+            if len(ready_to_read) == 2:
+                err = ready_to_read[1].read()
+                if err.strip():
+                    raise BackendError('ERROR: {!s}'.format(ready_to_read[1].read()))
+            if ready_to_read[0]:
+                return ready_to_read[0].read()
+            else:
+                raise BackendError('BUG')
+        else:
+            return b''
+
+
 class BackendError(Exception): pass
 
 class ProbePID(Probe):
@@ -999,6 +1042,7 @@ class ProbeMem(Probe):
         assert self.process_name != None
         assert self.backend != None
         self._saved_mem = None
+        self._max_mem = None
         Probe.__init__(self)
 
     def _get_mem(self):
@@ -1022,6 +1066,7 @@ class ProbeMem(Probe):
 
     def start(self, dm, target, logger):
         self.backend.start()
+        self._max_mem = None
         self._saved_mem = self._get_mem()
         self.reset()
         if self._saved_mem < 0:
@@ -1050,16 +1095,17 @@ class ProbeMem(Probe):
                 self._max_mem = current_mem
 
             ok = True
-            info = "*** '{:s}' maximum RSS: {:d} ***\n".format(self.process_name, self._max_mem)
+            info = "*** '{:s}' Max RSS recorded: {:d} / Original " \
+                   "RSS: {:d} ***\n".format(self.process_name, self._max_mem, self._saved_mem)
             err_msg = ''
             if self.threshold is not None and self._max_mem > self.threshold:
                 ok = False
-                err_msg += '\n*** Threshold exceeded ***'
+                err_msg += '\n*** Threshold exceeded (original RSS: {:d}) ***'.format(self._saved_mem)
             if self.tolerance is not None:
                 delta = abs(self._max_mem - self._saved_mem)
                 if (delta/float(self._saved_mem))*100 > self.tolerance:
                     ok = False
-                    err_msg += '\n*** Tolerance exceeded ***'
+                    err_msg += '\n*** Tolerance exceeded (original RSS: {:d}) ***'.format(self._saved_mem)
             if not ok:
                 status.set_status(-1)
                 status.set_private_info(err_msg+'\n'+info)
@@ -1069,8 +1115,9 @@ class ProbeMem(Probe):
         return status
 
     def reset(self):
+        if self._max_mem is not None:
+            self._saved_mem = self._max_mem
         self._max_mem = self._saved_mem
-
 
 def probe(project):
     def internal_func(probe_cls):

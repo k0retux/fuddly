@@ -522,13 +522,12 @@ class NodeConsumerStub(object):
 
 class BasicVisitor(NodeConsumerStub):
 
-    def init_specific(self, consume_also_singleton=False):
+    def init_specific(self):
         self._internals_criteria = dm.NodeInternalsCriteria(negative_node_kinds=[dm.NodeInternals_NonTerm])
-        self.consume_also_singleton = consume_also_singleton
         self.firstcall = True
 
     def consume_node(self, node):
-        if node.is_exhausted() and not self.consume_also_singleton:
+        if node.is_exhausted() and not self.firstcall:
             # in this case we ignore the node
             return False
         else:
@@ -741,6 +740,7 @@ class TypedNodeDisruption(NodeConsumerStub):
             node.unfreeze(ignore_entanglement=True)
             # we need to be sure that the current node is freezable
             node.set_attr(dm.NodeInternals.Freezable)
+            node.set_attr(dm.NodeInternals.LOCKED)
 
             return True
         else:

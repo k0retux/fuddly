@@ -33,6 +33,7 @@ import re
 import binascii
 import collections
 import traceback
+import uuid
 
 from enum import Enum
 
@@ -62,6 +63,7 @@ class Data(object):
         self._blocked = False
 
         self.feedback_timeout = None
+        self.feedback_mode = None
 
         self.info_list = []
         self.info = {}
@@ -616,7 +618,9 @@ class RawCondition(NodeCondition):
 
     def check(self, node):
         node_val = node._tobytes()
-        # node_val = node_val.replace(Node.DEFAULT_DISABLED_VALUE, b'')
+        if Node.DEFAULT_DISABLED_VALUE:
+            node_val = node_val.replace(Node.DEFAULT_DISABLED_VALUE, b'')
+
         if self.positive_mode:
             if isinstance(self.val, (tuple, list)):
                 result = node_val in self.val
@@ -648,7 +652,10 @@ class IntCondition(NodeCondition):
             self.val = neg_val
 
     def check(self, node):
-        assert(node.is_typed_value(subkind=fvt.INT))
+        if node.is_genfunc():
+            node = node.generated_node
+
+        assert node.is_typed_value(subkind=fvt.INT)
 
         if isinstance(self.val, (tuple, list)):
             if self.positive_mode:
@@ -708,6 +715,9 @@ class BitFieldCondition(NodeCondition):
 
 
     def check(self, node):
+        if node.is_genfunc():
+            node = node.generated_node
+
         assert(node.is_typed_value(subkind=fvt.BitField))
 
         for sf, val, neg_val in zip(self.sf, self.val, self.neg_val):
@@ -732,7 +742,8 @@ class NodeCustomization(object):
     """
     _custo_items = {}
 
-    def __init__(self, items_to_set=None, items_to_clear=None):
+    def __init__(self, items_to_set=None, items_to_clear=None, transform_func=None):
+        self._transform_func = transform_func
         self._custo_items = copy.copy(self._custo_items)
         if items_to_set is not None:
             if isinstance(items_to_set, int):
@@ -756,6 +767,10 @@ class NodeCustomization(object):
             return self._custo_items[key]
         else:
             return None
+
+    @property
+    def transform_func(self):
+        return self._transform_func
 
     def __copy__(self):
         new_custo = type(self)()
@@ -860,9 +875,9 @@ class NodeInternals(object):
     Separator = 15
 
     DEBUG = 30
+    LOCKED = 50
 
     DISABLED = 100
-
 
     default_custo = None
 
@@ -884,6 +899,10 @@ class NodeInternals(object):
             NodeInternals.Separator: False,
             # Used for debugging purpose
             NodeInternals.DEBUG: False,
+            # Used to express that someone (a disruptor for instance) is
+            # currently doing something with the node and doesn't want
+            # that someone else modify it.
+            NodeInternals.LOCKED: False,
             ### INTERNAL USAGE ###
             NodeInternals.DISABLED: False
             }
@@ -1458,10 +1477,10 @@ class NodeInternals_Empty(NodeInternals):
         if return_node_internals:
             return (Node.DEFAULT_DISABLED_NODEINT, True)
         else:
-            return (b'<EMPTY>', True)
+            return (Node.DEFAULT_DISABLED_VALUE, True)
 
     def get_raw_value(self, **kwargs):
-        return b'<EMPTY>'
+        return Node.DEFAULT_DISABLED_VALUE
 
     def set_child_env(self, env):
         print('Empty:', hex(id(self)))
@@ -3044,6 +3063,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
         new_node = None
 
+        transformed_node = None
         for i in range(nb):
             # 'unique' mode
             if mode == 'u':
@@ -3055,7 +3075,8 @@ class NodeInternals_NonTerm(NodeInternals):
                     # if self.is_attr_set(NodeInternals.Determinist):
                     ignore_fstate = not self.custo.frozen_copy_mode
 
-                    new_node = Node(nid, base_node=base_node, ignore_frozen_state=ignore_fstate,
+                    node_to_copy = base_node if transformed_node is None else transformed_node
+                    new_node = Node(nid, base_node=node_to_copy, ignore_frozen_state=ignore_fstate,
                                     accept_external_entanglement=True,
                                     acceptance_set=set(external_entangled_nodes + subnode_list))
                     new_node._reset_depth(parent_depth=base_node.depth-1)
@@ -3066,6 +3087,19 @@ class NodeInternals_NonTerm(NodeInternals):
                         new_node.clear_attr(NodeInternals.Mutable, all_conf=True, recursive=True)
                     else:
                         pass
+
+                    if base_node.custo and base_node.custo.transform_func is not None:
+                        try:
+                            transformed_node = base_node.custo.transform_func(new_node)
+                        except:
+                            print('\n*** ERROR: User-provided NodeCustomization.transform_func()'
+                                  ' raised an exception. We ignore it.')
+                        else:
+                            if isinstance(new_node, Node):
+                                new_node = transformed_node
+                            else:
+                                print('\n*** ERROR: User-provided NodeCustomization.transform_func()'
+                                      ' should return a Node. Thus we ignore its production.')
 
                 new_node._set_clone_info((base_node.tmp_ref_count-1, nb), base_node)
                 _sync_size_handling(new_node)
@@ -4831,7 +4865,7 @@ class Node(object):
     DJOBS_PRIO_dynhelpers = 200
     DJOBS_PRIO_genfunc = 300
 
-    DEFAULT_DISABLED_VALUE = b'' #b'**TO_REMOVE**'
+    DEFAULT_DISABLED_VALUE = b'' #b'<EMPTY::' + uuid.uuid4().bytes + b'::>'
     DEFAULT_DISABLED_NODEINT = NodeInternals_Empty()
 
     CORRUPT_EXIST_COND = 5
@@ -5831,7 +5865,8 @@ class Node(object):
         ret = self._get_value(conf=conf, recursive=recursive,
                               return_node_internals=return_node_internals)
 
-        if self.env is not None and self.env.delayed_jobs_enabled and not self._delayed_jobs_called:
+        if self.env is not None and self.env.delayed_jobs_enabled and \
+                (not self._delayed_jobs_called or self.env.delayed_jobs_pending):
             self._delayed_jobs_called = True
 
             if self.env.djobs_exists(Node.DJOBS_PRIO_nterm_existence):
@@ -6410,6 +6445,10 @@ class Env(object):
         self._reentrancy_cpt = 0
         # self.cpt = 0
 
+    @property
+    def delayed_jobs_pending(self):
+        return bool(self._sorted_jobs)
+
     def __getattr__(self, name):
         if hasattr(self.env4NT, name):
             return self.env4NT.__getattribute__(name)
@@ -6623,7 +6662,7 @@ class Env(object):
         # new_env._sorted_jobs = copy.copy(self._sorted_jobs)
         # new_env._djob_keys = copy.copy(self._djob_keys)
         # new_env._djob_groups = copy.copy(self._djob_groups)
-        new_env.id_list = copy.copy(self.id_list)
+        # new_env.id_list = copy.copy(self.id_list)
         # new_env.cpt = 0
         return new_env
 

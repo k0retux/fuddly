@@ -65,6 +65,15 @@ Description:
   This generic backend enables you to interact with a monitored system through an
   serial line.
 
+Shell_Backend
+-------------
+
+Reference:
+  :class:`framework.monitor.Shell_Backend`
+
+Description:
+  This generic backend enables you to interact with a local monitored system
+  through a shell.
 
 Generic Probes
 ==============

@@ -72,7 +72,8 @@ From line 9 to 11 we define 3 :class:`framework.scenario.Step`:
   time duration that ``Fuddly`` should respect for collecting the feedback from the target (feedback
   timeout). This timeout is actually handled by the ``Target`` object, which may decide to respect it
   or not. For instance the ``NetworkTarget`` respect it while the ``EmptyTarget`` (default target)
-  do not.
+  do not. Note that the feedback mode (refer to :ref:`targets`) is also supported and can be set
+  through the parameter ``fbk_mode``.
 
 - The second step commands the framework to send a data of type ``separator`` and change the
   feedback timeout to 5.

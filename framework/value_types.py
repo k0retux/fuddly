@@ -1489,7 +1489,17 @@ class INT_str(with_metaclass(meta_int_str, INT)):
         return int(val)
 
     def _convert_value(self, val):
-        return self._str2bytes(str(val))
+        return str(val).encode('utf8')
+
+
+#class Fuzzy_INT_str(Fuzzy_INT, metaclass=meta_int_str):
+class Fuzzy_INT_str(with_metaclass(meta_int_str, Fuzzy_INT)):
+    values = [0, -1, -2**32, 2 ** 32 - 1, 2 ** 32,
+              b'%n'*8, b'%n'*100, b'\"%n\"'*100,
+              b'%s'*8, b'%s'*100, b'\"%s\"'*100]
+
+    def is_compatible(self, integer):
+        return True
 
     def pretty_print(self, max_size=None):
         if self.drawn_val is None:
@@ -1497,23 +1507,12 @@ class INT_str(with_metaclass(meta_int_str, INT)):
 
         return str(self.drawn_val)
 
-    def _str2bytes(self, val):
-        if isinstance(val, (list, tuple)):
-            b = [v.encode('utf8') for v in val]
-        else:
-            b = val.encode('utf8')
-        return b
-
-
-#class Fuzzy_INT_str(Fuzzy_INT, metaclass=meta_int_str):
-class Fuzzy_INT_str(with_metaclass(meta_int_str, Fuzzy_INT)):
-    values = [0, 2 ** 32 - 1, 2 ** 32]
-
-    def is_compatible(self, integer):
-        return True
-
     def _convert_value(self, val):
-        return str(val)
+        if isinstance(val, int):
+            return str(val).encode('utf8')
+        else:
+            assert isinstance(val, bytes)
+            return val
 
 
 

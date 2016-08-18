@@ -55,8 +55,10 @@ def truncate_info(info, max_size=60):
            gen_args = GENERIC_ARGS,
            args={'path': ('graph path regexp to select nodes on which' \
                           ' the disruptor should apply', None, str),
+                 'order': ('when set to True, the walking order is strictly guided ' \
+                           'by the data structure. Otherwise, fuzz weight (if specified ' \
+                           'in the data model) is used for ordering', True, bool),
                  'nt_only': ('walk through non-terminal nodes only', False, bool),
-                 'singleton': ('consume also terminal nodes with only one possible value', True, bool),
                  'fix_all': ('for each produced data, reevaluate the constraints on the whole graph',
                              True, bool)})
 class sd_iter_over_data(StatefulDisruptor):
@@ -76,9 +78,9 @@ class sd_iter_over_data(StatefulDisruptor):
         prev_data.node.make_finite(all_conf=True, recursive=True)
 
         if self.nt_only:
-            consumer = NonTermVisitor()
+            consumer = NonTermVisitor(respect_order=self.order)
         else:
-            consumer = BasicVisitor(consume_also_singleton=self.singleton)
+            consumer = BasicVisitor(respect_order=self.order)
         consumer.set_node_interest(path_regexp=self.path)
         self.modelwalker = ModelWalker(prev_data.node, consumer, max_steps=self.max_steps, initial_step=self.init)
         self.walker = iter(self.modelwalker)
@@ -693,7 +695,6 @@ class d_switch_to_alternate_conf(Disruptor):
 
     def disrupt_data(self, dm, target, prev_data):
         if prev_data.node:
-            
             # try to get more specific default conf
             if not self.provided_alt and self.available_confs:
                 confs = prev_data.node.gather_alt_confs()
@@ -713,10 +714,9 @@ class d_switch_to_alternate_conf(Disruptor):
 
             prev_data.add_info("ALTERNATE CONF '{!s}' USED".format(self.conf))
 
-            prev_data.node.unfreeze_all()
             prev_data.node.set_current_conf(self.conf, recursive=self.recursive, root_regexp=self.path)
-
-            prev_data.node.get_value()
+            prev_data.node.unfreeze(recursive=True, reevaluate_constraints=True)
+            prev_data.node.freeze()
 
         else:
             prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')

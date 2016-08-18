@@ -461,6 +461,16 @@ conf
   Used within the scope of the description of an alternative
   configuration. It set the name of the alternative configuration.
 
+evolution_func
+  This attribute allows to provide a function that will be used in the case the described node is
+  instantiated more than once by a containing non-terminal node further to a
+  :meth:`framework.data_model.Node.freeze` operation (refer to the ``qty`` keyword).
+  The function will be called on every node instance (but the first one) before this node
+  incorporate the frozen form of the non-terminal. Besides, the node returned by the function will
+  be used as the base node for the next instantiation (which makes node evolution easier).
+  The function shall have the following signature::
+
+     func_name( Node ) --> Node
 
 custo_set, custo_clear
   These attributes are used to customize the behavior of the described node.

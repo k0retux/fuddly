@@ -934,7 +934,7 @@ class TestMisc(unittest.TestCase):
                 break
 
         print('\nTurn number when Node has changed: %r, number of test cases: %d' % (turn_nb_list, i))
-        good_list = [1, 13, 23, 33, 43, 52, 61, 71, 81, 91, 103, 113, 123, 133, 143, 152, 162, 172, 182, 191, 200, 206, 221]
+        good_list = [1, 13, 23, 33, 43, 52, 61, 71, 81, 91, 103, 113, 123, 133, 143, 152, 162, 172, 182, 191, 200, 214, 229]
         msg = "If Fuzzy_<TypedValue>.values have been modified in size, the good_list should be updated.\n" \
               "If BitField are in random mode [currently put in determinist mode], the fuzzy_mode can produce more" \
               " or less value depending on drawn value when .get_value() is called (if the drawn value is" \
@@ -1472,7 +1472,7 @@ class TestModelWalker(unittest.TestCase):
 
     def test_BasicVisitor(self):
         nt = self.dm.get_data('Simple')
-        default_consumer = BasicVisitor(respect_order=True, consume_also_singleton=False)
+        default_consumer = BasicVisitor(respect_order=True)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
                                                                     max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
@@ -1480,7 +1480,7 @@ class TestModelWalker(unittest.TestCase):
 
         print('***')
         nt = self.dm.get_data('Simple')
-        default_consumer = BasicVisitor(respect_order=False, consume_also_singleton=False)
+        default_consumer = BasicVisitor(respect_order=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
                                                                     max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
@@ -1581,6 +1581,8 @@ class TestModelWalker(unittest.TestCase):
 
         mh = ModelHelper(delayed_jobs=True)
         data = mh.create_graph_from_desc(shape_desc)
+        bv_data = data.get_clone()
+        nt_data = data.get_clone()
 
         raw_vals = [
             b' [!] ++++++++++ [!] ::=:: [!] ',
@@ -1702,6 +1704,25 @@ class TestModelWalker(unittest.TestCase):
                 self.assertEqual(val, raw_vals[idx - 1])
 
         self.assertEqual(idx, 102)  # should be even
+
+        print('***')
+        idx = 0
+        bv_consumer = BasicVisitor(respect_order=True)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(bv_data, bv_consumer,
+                                                                    make_determinist=True,
+                                                                    max_steps=100):
+            print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
+        self.assertEqual(idx, 6)
+
+        print('***')
+        idx = 0
+        nt_consumer = NonTermVisitor(respect_order=True)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt_data, nt_consumer,
+                                                                    make_determinist=True,
+                                                                    max_steps=100):
+            print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
+        self.assertEqual(idx, 6)  # shall be equal to the previous test
+
 
     def test_TypedNodeDisruption_1(self):
         nt = self.dm.get_data('Simple')
@@ -1859,6 +1880,71 @@ class TestNodeFeatures(unittest.TestCase):
 
     def setUp(self):
         pass
+
+    def test_djobs(self):
+        tag_desc = \
+        {'name': 'tag',
+         'contents': [
+             {'name': 'type',
+              'contents': UINT16_be(values=[0x0101,0x0102,0x0103,0x0104, 0]),
+              'absorb_csts': AbsFullCsts()},
+             {'name': 'len',
+              'contents': UINT16_be(),
+              'absorb_csts': AbsNoCsts()},
+             {'name': 'value',
+              'contents': [
+                  {'name': 'v000', # Final Tag (optional)
+                   'exists_if': (IntCondition(0), 'type'),
+                   'sync_enc_size_with': 'len',
+                   'contents': String(size=0)},
+                  {'name': 'v101', # Service Name
+                   'exists_if': (IntCondition(0x0101), 'type'),
+                   'sync_enc_size_with': 'len',
+                   'contents': String(values=[u'my \u00fcber service'], codec='utf8'),
+                   },
+                  {'name': 'v102', # AC name
+                   'exists_if': (IntCondition(0x0102), 'type'),
+                   'sync_enc_size_with': 'len',
+                   'contents': String(values=['AC name'], codec='utf8'),
+                   },
+                  {'name': 'v103', # Host Identifier
+                   'exists_if': (IntCondition(0x0103), 'type'),
+                   'sync_enc_size_with': 'len',
+                   'contents': String(values=['Host Identifier']),
+                   },
+                  {'name': 'v104', # Cookie
+                   'exists_if': (IntCondition(0x0104), 'type'),
+                   'sync_enc_size_with': 'len',
+                   'contents': String(values=['Cookie'], min_sz=0, max_sz=1000),
+                   },
+              ]}
+        ]}
+
+        mh = ModelHelper(delayed_jobs=True)
+        d = mh.create_graph_from_desc(tag_desc)
+        d.make_determinist(recursive=True)
+        d2 = d.get_clone()
+        d3 = d.get_clone()
+
+        d.freeze()
+        d['.*/value$'].unfreeze()
+        d_raw = d.to_bytes()
+        d.show()
+
+        d2.freeze()
+        d2['.*/value$'].unfreeze()
+        d2['.*/value$'].freeze()
+        d2_raw = d2.to_bytes()
+        d2.show()
+
+        d3.freeze()
+        d3['.*/value$'].unfreeze()
+        d3['.*/len$'].unfreeze()
+        d3_raw = d3.to_bytes()
+        d3.show()
+
+        self.assertEqual(d_raw, d2_raw)
+        self.assertEqual(d_raw, d3_raw)
 
     def test_absorb_nonterm_1(self):
         nint_1 = Node('nint1', value_type=UINT16_le(values=[0xabcd]))

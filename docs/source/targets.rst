@@ -14,6 +14,20 @@ Some of them will automatically provide feedback if an error occurs,
 to make ``fuddly`` aware of it and act accordingly (refer to :ref:`tuto:probes`
 for more information on that topic).
 
+Additionally, if the generic target support feedback retrieval, the way it
+is retrieved is guided by a feedback timeout and one of the following mode:
+
+- :const:`framework.target.Target.FBK_WAIT_FULL_TIME`: Wait for the full
+  time slot allocated for feedback retrieval
+- :const:`framework.target.Target.FBK_WAIT_UNTIL_RECV`: Wait until the
+  target has sent something back to us
+
+The feedback timeout is set through :meth:`framework.target.Target.set_feedback_timeout`,
+while the modes are set through :meth:`framework.target.Target.set_feedback_mode`.
+
+.. note::
+   Depending on the generic target, all the feedback modes are not supported.
+
 NetworkTarget
 =============
 
@@ -46,6 +60,11 @@ Description:
 Feedback:
   This target will automatically provide feedback on any network-related error
   encountered while delivering data to the target.
+
+
+Supported Feedback Mode:
+  - :const:`framework.target.Target.FBK_WAIT_FULL_TIME`
+  - :const:`framework.target.Target.FBK_WAIT_UNTIL_RECV`
 
 
 Usage Example:
@@ -98,7 +117,8 @@ Usage Example:
      We set some time constraints: ``fbk_timeout`` for gathering
      feedback from all the interfaces; ``sending_delay`` for sending
      data to the target (client mode) or waiting for client connections before
-     sending data to them (server mode).
+     sending data to them (server mode). Note this method is specific to
+     this target and remains consistent with :meth:`framework.target.Target.set_feedback_timeout`.
 
 
 
@@ -123,6 +143,11 @@ Description:
 Feedback:
   This target will automatically provide feedback if the application writes on
   ``stderr`` or returns a negative status or terminates/crashes.
+
+
+Supported Feedback Mode:
+  - :const:`framework.target.Target.FBK_WAIT_UNTIL_RECV`
+
 
 Usage example:
    .. code-block:: python
@@ -205,6 +230,9 @@ Description:
 Feedback:
   This target will automatically provide feedback if an error is received
   through the serial line used to interact with the SIM card.
+
+Supported Feedback Mode:
+  - :const:`framework.target.Target.FBK_WAIT_FULL_TIME`
 
 Usage Example:
    .. code-block:: python
