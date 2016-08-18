@@ -305,7 +305,11 @@ class FmkPlumbing(object):
     def _recompute_health_check_timeout(self, base_timeout, do_show=True):
         if base_timeout is not None:
             if base_timeout != 0:
-                self.set_health_check_timeout(base_timeout + 2.0, do_show=do_show)
+                if 0 < base_timeout < 1:
+                    hc_timeout = base_timeout + 0.2
+                else:
+                    hc_timeout = base_timeout + 2.0
+                self.set_health_check_timeout(hc_timeout, do_show=do_show)
             else:
                 # base_timeout comes from feedback_timeout, if it is equal to 0
                 # this is a special meaning used internally to collect residual feedback.
@@ -1061,14 +1065,21 @@ class FmkPlumbing(object):
         for genid in self.__dynamic_generator_ids[self.dm]:
             yield genid
 
-
     @EnforceOrder(accepted_states=['S2'])
     def show_fmk_internals(self):
+        if not self.tg.supported_feedback_mode:
+            fbk_mode = 'Target does not provide feedback'
+        elif self.tg.wait_full_time_slot:
+            fbk_mode = self.tg.fbk_wait_full_time_slot_msg
+        else:
+            fbk_mode = self.tg.fbk_wait_until_recv_msg
+
         print(colorize(FontStyle.BOLD + '\n-=[ FMK Internals ]=-\n', rgb=Color.INFO))
         print(colorize('                     Fuzz delay: ', rgb=Color.SUBINFO) + str(self._delay))
         print(colorize('   Number of data sent in burst: ', rgb=Color.SUBINFO) + str(self._burst))
         print(colorize('    Target health-check timeout: ', rgb=Color.SUBINFO) + str(self._hc_timeout))
         print(colorize('        Target feedback timeout: ', rgb=Color.SUBINFO) + str(self.tg.feedback_timeout))
+        print(colorize('           Target feedback mode: ', rgb=Color.SUBINFO) + fbk_mode)
         print(colorize('              Workspace enabled: ', rgb=Color.SUBINFO) + repr(self._wkspace_enabled))
         print(colorize('                  FmkDB enabled: ', rgb=Color.SUBINFO) + repr(self.fmkDB.enabled))
 
@@ -1405,7 +1416,7 @@ class FmkPlumbing(object):
     def set_health_check_timeout(self, timeout, do_record=False, do_show=True):
         if timeout >= 0:
             self._hc_timeout = timeout
-            if do_show:
+            if do_show or do_record:
                 self.lg.log_fmk_info('Target health-check timeout = {:.1f}s'.format(self._hc_timeout),
                                      do_record=do_record)
             return True
@@ -1421,7 +1432,7 @@ class FmkPlumbing(object):
             self._recompute_health_check_timeout(timeout, do_show=do_show)
         elif timeout >= 0:
             self.tg.set_feedback_timeout(timeout)
-            if do_show:
+            if do_show or do_record:
                 self.lg.log_fmk_info('Target feedback timeout = {:.1f}s'.format(timeout),
                                      do_record=do_record)
             self._recompute_health_check_timeout(timeout, do_show=do_show)
@@ -1429,6 +1440,25 @@ class FmkPlumbing(object):
         else:
             self.lg.log_fmk_info('Wrong timeout value!', do_record=False)
             return False
+
+    @EnforceOrder(accepted_states=['S1','S2'])
+    def set_feedback_mode(self, mode, do_record=False, do_show=True):
+        ok = self.tg.set_feedback_mode(mode)
+        if not ok:
+            self.set_error('The target does not support this feedback Mode', code=Error.CommandError)
+        elif do_show or do_record:
+            if self.tg.wait_full_time_slot:
+                msg = 'Feedback Mode = ' + self.tg.fbk_wait_full_time_slot_msg
+            else:
+                msg = 'Feedback Mode = ' + self.tg.fbk_wait_until_recv_msg
+            self.lg.log_fmk_info(msg, do_record=do_record)
+
+    @EnforceOrder(accepted_states=['S1','S2'])
+    def switch_feedback_mode(self, do_record=False, do_show=True):
+        if self.tg.wait_full_time_slot:
+            self.set_feedback_mode(Target.FBK_WAIT_UNTIL_RECV, do_record=do_record, do_show=do_show)
+        else:
+            self.set_feedback_mode(Target.FBK_WAIT_FULL_TIME, do_record=do_record, do_show=do_show)
 
     # Used to introduce some delay after sending data
     def __delay_fuzzing(self):
@@ -1497,6 +1527,8 @@ class FmkPlumbing(object):
         for d in data_list:
             if d.feedback_timeout is not None:
                 self.set_feedback_timeout(d.feedback_timeout)
+            if d.feedback_mode is not None:
+                self.set_feedback_mode(d.feedback_mode)
 
         blocked_data = list(filter(lambda x: x.is_blocked(), data_list))
         data_list = list(filter(lambda x: not x.is_blocked(), data_list))
@@ -4206,6 +4238,14 @@ class FmkShell(cmd.Cmd):
         self.__error = False
         return False
 
+    def do_switch_feedback_mode(self, line):
+        '''
+        Switch target feedback mode between:
+          - wait for the full time slot allocated for feedback retrieval
+          - wait until the target has send something back to us
+        '''
+        self.fz.switch_feedback_mode(do_record=True, do_show=True)
+        return False
 
     def do_set_health_timeout(self, line):
         '''

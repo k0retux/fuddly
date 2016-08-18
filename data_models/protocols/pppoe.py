@@ -236,8 +236,8 @@ class PPPOE_DataModel(DataModel):
                         'exists_if': (IntCondition(0x65), 'code'),
                         'contents': [
                             (tag_node.get_clone(), 0, 8),
-                            (tag_service_name_pads, 1),
-                            (tag_host_uniq_pads, 1)
+                            (tag_service_name_pads.get_clone(), 1),
+                            (tag_host_uniq_pads.get_clone(), 1)
                         ]}
                    ]},
                   {'name': '4padt',

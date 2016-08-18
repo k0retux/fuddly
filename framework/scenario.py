@@ -54,6 +54,7 @@ class DataProcess(object):
         self.auto_regen = auto_regen
         self.outcomes = None
         self.feedback_timeout = None
+        self.feedback_mode = None
         self._process = [process]
         self._process_idx = 0
         self._blocked = False
@@ -92,6 +93,7 @@ class DataProcess(object):
         new_datap._process_idx = self._process_idx
         new_datap._blocked = self._blocked
         new_datap.feedback_timeout = self.feedback_timeout
+        new_datap.feedback_mode = self.feedback_mode
         return new_datap
 
 
@@ -103,7 +105,8 @@ class Periodic(object):
 
 class Step(object):
 
-    def __init__(self, data_desc=None, final=False, fbk_timeout=None,
+    def __init__(self, data_desc=None, final=False,
+                 fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None):
 
         self.final = final
@@ -123,7 +126,9 @@ class Step(object):
 
         self.make_free()
 
+        # need to be set after self._data_desc
         self.feedback_timeout = fbk_timeout
+        self.feedback_mode = fbk_mode
 
         self._dm = None
         self._scenario_env = None
@@ -177,6 +182,16 @@ class Step(object):
         self._feedback_timeout = fbk_timeout
         if isinstance(self._data_desc, (Data, DataProcess)):
             self._data_desc.feedback_timeout = fbk_timeout
+
+    @property
+    def feedback_mode(self):
+        return self._feedback_mode
+
+    @feedback_mode.setter
+    def feedback_mode(self, fbk_mode):
+        self._feedback_mode = fbk_mode
+        if isinstance(self._data_desc, (Data, DataProcess)):
+            self._data_desc.feedback_mode = fbk_mode
 
     @property
     def transitions(self):
@@ -240,6 +255,8 @@ class Step(object):
             d.make_blocked()
         if self._feedback_timeout is not None:
             d.feedback_timeout = self._feedback_timeout
+        if self._feedback_mode is not None:
+            d.feedback_mode = self._feedback_mode
 
         return d
 
@@ -277,7 +294,7 @@ class Step(object):
         new_periodic_to_rm = copy.copy(self._periodic_data_to_remove)
         new_transitions = copy.copy(self._transitions)
         new_step = type(self)(data_desc=copy.copy(self._data_desc), final=self.final,
-                              fbk_timeout=self.feedback_timeout,
+                              fbk_timeout=self.feedback_timeout, fbk_mode=self.feedback_mode,
                               set_periodic=copy.copy(self._periodic_data),
                               step_desc=self._step_desc)
         new_step._node = None
@@ -289,14 +306,15 @@ class Step(object):
 
 
 class FinalStep(Step):
-    def __init__(self, data_desc=None, final=False, fbk_timeout=None,
+    def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None , step_desc=None):
         Step.__init__(self, final=True)
 
 class NoDataStep(Step):
-    def __init__(self, data_desc=None, final=False, fbk_timeout=None,
+    def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None):
-        Step.__init__(self, data_desc=Data(''), final=final, fbk_timeout=fbk_timeout,
+        Step.__init__(self, data_desc=Data(''), final=final,
+                      fbk_timeout=fbk_timeout, fbk_mode=fbk_mode,
                       set_periodic=set_periodic, clear_periodic=clear_periodic,
                       step_desc=step_desc)
         self.make_blocked()

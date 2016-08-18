@@ -25,6 +25,7 @@ from framework.tactics_helpers import *
 from framework.scenario import *
 from framework.global_resources import *
 from framework.data_model_helpers import MH
+from framework.target import *
 
 tactics = Tactics()
 
@@ -61,6 +62,7 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', u
                 off = data.find(mac_dst)
                 data = data[off:]
                 result = msg_x.absorb(data, constraints=AbsNoCsts(size=True, struct=True))
+                print('\n [ ABS result: {!s} ]'.format(result))
                 if result[0] == AbsorbStatus.FullyAbsorbed:
                     try:
                         service_name = msg_x['.*/value/v101'].to_bytes()
@@ -142,19 +144,19 @@ class t_fix_pppoe_msg_fields(Disruptor):
                 print("\n*** 'service_name' not found in the environment! ***")
 
         if self.host_uniq:
-            if not n['.*/tag_host_uniq/.*/v103'].is_attr_set(MH.Attr.LOCKED) and \
-                not n['.*/tag_host_uniq/len'].is_attr_set(MH.Attr.LOCKED) and \
-                not n['.*/tag_host_uniq/type'].is_attr_set(MH.Attr.LOCKED):
-                try:
+            try:
+                if not n['.*/tag_host_uniq/.*/v103'].is_attr_set(MH.Attr.LOCKED) and \
+                    not n['.*/tag_host_uniq/len'].is_attr_set(MH.Attr.LOCKED) and \
+                    not n['.*/tag_host_uniq/type'].is_attr_set(MH.Attr.LOCKED):
                     n['.*/tag_host_uniq/.*/v103'] = self.host_uniq
                     tag_uniq = n['.*/tag_host_uniq$']
                     tag_uniq.unfreeze(recursive=True, reevaluate_constraints=True)
                     tag_uniq.freeze()
                     prev_data.add_info("update 'host_uniq' with: {!s}".format(self.host_uniq))
-                except:
-                    print(error_msg.format('tag_host_uniq'))
-            else:
-                print("\n*** 'tag_host_uniq' is currently fuzzed. ignore its update ***")
+                else:
+                    print("\n*** 'tag_host_uniq' is currently fuzzed. ignore its update ***")
+            except:
+                print(error_msg.format('tag_host_uniq'))
         else:
             print("\n*** 'tag_host_uniq' not found in the environment! ***")
 
@@ -167,16 +169,17 @@ class t_fix_pppoe_msg_fields(Disruptor):
         return prev_data
 
 ### PADI fuzz scenario ###
-step_wait_padi = NoDataStep(fbk_timeout=1)
+step_wait_padi = NoDataStep(fbk_timeout=10, fbk_mode=Target.FBK_WAIT_UNTIL_RECV)
 
 dp_pado = DataProcess(process=[('ALT', None, UI(conf='fuzz')),
-                               ('tTYPE', UI(init=1), UI(order=True, fuzz_mag=0.7)),
-                               'FIX_FIELDS'], seed='pado')
+                               ('tTYPE', UI(init=20), UI(order=True, fuzz_mag=0.7)),
+                               'FIX_FIELDS#pado1'], seed='pado')
 dp_pado.append_new_process([('ALT', None, UI(conf='fuzz')),
-                            ('tSTRUCT', UI(init=1), UI(deep=True)), 'FIX_FIELDS'])
-step_send_pado = Step(dp_pado)
+                            ('tSTRUCT', UI(init=1), UI(deep=True)), 'FIX_FIELDS#pado2'])
+step_send_pado = Step(dp_pado, fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
 # step_send_pado = Step('pado')
-step_end = Step('padt')
+step_end = Step(DataProcess(process=[('FIX_FIELDS#pado3', None, UI(reevaluate_csts=True))],
+                            seed='padt'), fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
 
 step_wait_padi.connect_to(step_send_pado, cbk_after_fbk=retrieve_padi_from_feedback_and_update)
 step_send_pado.connect_to(step_end)
@@ -186,19 +189,19 @@ sc1 = Scenario('PADO')
 sc1.set_anchor(step_wait_padi)
 
 ### PADS fuzz scenario ###
-step_wait_padi = NoDataStep(fbk_timeout=1)
-step_send_valid_pado = Step(DataProcess(process=[('FIX_FIELDS#2', None, UI(reevaluate_csts=True))],
-                                        seed='pado'))
-step_send_padt = Step(DataProcess(process=[('FIX_FIELDS#3', None, UI(reevaluate_csts=True))],
-                                  seed='padt'), fbk_timeout=0.1)
+step_wait_padi = NoDataStep(fbk_timeout=10, fbk_mode=Target.FBK_WAIT_UNTIL_RECV)
+step_send_valid_pado = Step(DataProcess(process=[('FIX_FIELDS#pads1', None, UI(reevaluate_csts=True))],
+                                        seed='pado'), fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
+step_send_padt = Step(DataProcess(process=[('FIX_FIELDS#pads2', None, UI(reevaluate_csts=True))],
+                                  seed='padt'), fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
 
 dp_pads = DataProcess(process=[('ALT', None, UI(conf='fuzz')),
                                ('tTYPE#2', UI(init=1), UI(order=True, fuzz_mag=0.7)),
-                               'FIX_FIELDS'], seed='pads')
+                               'FIX_FIELDS#pads3'], seed='pads')
 dp_pads.append_new_process([('ALT', None, UI(conf='fuzz')),
-                            ('tSTRUCT#2', UI(init=1), UI(deep=True)), 'FIX_FIELDS'])
-step_send_fuzzed_pads = Step(dp_pads)
-step_wait_padr = NoDataStep(fbk_timeout=1)
+                            ('tSTRUCT#2', UI(init=1), UI(deep=True)), 'FIX_FIELDS#pads4'])
+step_send_fuzzed_pads = Step(dp_pads, fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
+step_wait_padr = NoDataStep(fbk_timeout=10, fbk_mode=Target.FBK_WAIT_UNTIL_RECV)
 
 step_wait_padi.connect_to(step_send_valid_pado, cbk_after_fbk=retrieve_padi_from_feedback)
 step_send_valid_pado.connect_to(step_send_fuzzed_pads, cbk_after_fbk=retrieve_padr_from_feedback_and_update)

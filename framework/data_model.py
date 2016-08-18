@@ -63,6 +63,7 @@ class Data(object):
         self._blocked = False
 
         self.feedback_timeout = None
+        self.feedback_mode = None
 
         self.info_list = []
         self.info = {}
