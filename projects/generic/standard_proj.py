@@ -39,6 +39,13 @@ printer1_tg = PrinterTarget(tmpfile_ext='.png')
 printer1_tg.set_target_ip('127.0.0.1')
 printer1_tg.set_printer_name('PDF')
 
+local_backend = Shell_Backend(timeout=2)
+@blocking_probe(project)
+class display_mem_check(ProbeMem):
+    backend = local_backend
+    process_name = 'display'
+    tolerance = 10
+
 local_tg = LocalTarget(tmpfile_ext='.png')
 local_tg.set_target_path('/usr/bin/display')
 
@@ -62,7 +69,7 @@ rawnetsrv_tg = NetworkTarget(host='eth0', port=ETH_P_ALL,
                              socket_type=(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL)),
                              hold_connection=True, server_mode=False)
 
-targets = [local_tg,
+targets = [(local_tg, (display_mem_check, 0.1)),
            local2_tg,
            local3_tg,
            printer1_tg, net_tg, netsrv_tg, rawnetsrv_tg]

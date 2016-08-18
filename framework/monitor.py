@@ -27,6 +27,8 @@ import datetime
 import time
 import traceback
 import re
+import subprocess
+import select
 
 from libs.external_modules import *
 from framework.global_resources import *
@@ -853,6 +855,47 @@ class Serial_Backend(Backend):
                 break
             result.append(res)
         return result
+
+
+class Shell_Backend(Backend):
+    """
+    Backend to execute shell commands locally
+    """
+    def __init__(self, timeout=None, codec='latin_1'):
+        """
+        Args:
+            timeout (float): timeout in seconds for reading the result of the command
+            codec (str): codec used by the monitored system to answer.
+        """
+        Backend.__init__(self, codec=codec)
+        self._timeout = timeout
+        self._app = None
+
+    def _start(self):
+        pass
+
+    def _stop(self):
+        pass
+
+    def _exec_command(self, cmd):
+        self._app = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        ready_to_read, ready_to_write, in_error = \
+            select.select([self._app.stdout, self._app.stderr], [], [], self._timeout)
+
+        if in_error:
+            # the command does not exist on the system
+            raise BackendError('Issue with file descriptors')
+        elif ready_to_read:
+            if len(ready_to_read) == 2:
+                err = ready_to_read[1].read()
+                if err.strip():
+                    raise BackendError('ERROR: {!s}'.format(ready_to_read[1].read()))
+            if ready_to_read[0]:
+                return ready_to_read[0].read()
+            else:
+                raise BackendError('BUG')
+        else:
+            return b''
 
 
 class BackendError(Exception): pass
