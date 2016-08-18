@@ -30,8 +30,6 @@ class UserInterruption(Exception): pass
 
 class DataModelDefinitionError(Exception): pass
 
-class InvalidPercentageError(Exception): pass
-
 class RegexParserError(DataModelDefinitionError): pass
 
 class EscapeError(RegexParserError):

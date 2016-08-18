@@ -21,13 +21,8 @@
 #
 ################################################################################
 
-import sys
-import random
-import array
-import time
-import itertools
-import binascii
 import subprocess
+import math
 from copy import *
 
 from framework.data_model import *
@@ -51,135 +46,22 @@ def truncate_info(info, max_size=60):
         info = info[:max_size] + b' ...'
     return repr(info)
 
-# allowed error percent ?
 
-@disruptor(tactics, dtype="tCROSS", weight=1,
-           gen_args = GENERIC_ARGS,
-           args={'node': ('node to crossover with', None, Node),
-                 'to_keep': ('percentage of the base node to keep', None, list)})
-class sd_crossover(StatefulDisruptor):
-    '''
-    Merge two node
-    '''
-    def setup(self, dm, user_input):
-        if self.to_keep is None:
-            self.to_keep = [float(random.randint(2, 8)) / 10.0 for _ in range(2)]
-        elif len(self.to_keep) != 2 or \
-             not (isinstance(self.to_keep[0], float) and isinstance(self.to_keep[1], float)) or \
-             not (0 < self.to_keep[0] < 1 and 0 < self.to_keep[1] < 1):
-            raise InvalidPercentageError()
-
-        return True
-
-
-    def _count_brothers(self, paths, index, pattern):
-        count = 1
-        p = re.compile(u'^' + pattern + '($|/*)')
-        for i in range(index + 1, len(paths)):
-            if re.match(p, paths[i]) is not None:
-                count += 1
-
-        return count
-
-    def _merge_brothers(self, paths, index, pattern, length):
-
-        for _ in range(0, length, 1):
-            del paths[index]
-
-        paths.insert(index, pattern)
-
-    def _reduce_path_list(self, paths, tree):
-
-        # calculate the paths of the portions of the graph that needs to be deleted
-        # in order to get rid only of these leafs
-        paths.sort()
-
-        change = True
-        while change:
-            change = False
-            index = 0
-
-            length = len(paths)
-            while index < length:
-
-                path = paths[index]
-
-                slash_index = path[::-1].find('/')
-
-                # check if we are dealing with the root node
-                if slash_index == -1:
-                    index += 1
-                    continue
-
-                parent_path = path[:-path[::-1].find('/') - 1]
-                children_nb = self._count_brothers(paths, index, parent_path)
-                if children_nb == tree.get_node_by_path(parent_path).internals[tree.get_current_conf()].get_subnode_qty():
-                    self._merge_brothers(paths, index, parent_path, children_nb)
-                    change = True
-                    index += 1
-                    length = len(paths)
-                else:
-                    index += children_nb
-
-        return paths
-
-
-    def _compute_subtree_to_delete(self, tree, percentage):
-
-        # get all leafs
-        leafs = []
-        for path, node in tree.iter_paths():
-            if node.is_term() and path not in leafs:
-                leafs.append(path)
-
-        # pick the right percentage of leafs and
-        # compute a list of subtrees to delete
-        random.shuffle(leafs)
-        return self._reduce_path_list(leafs[:int(round(len(leafs) * percentage))], tree)
-
+class SwapperDisruptor(StatefulDisruptor):
+    """
+    Merge two nodes to produce two children
+    """
+    def _swap_nodes(self, node_1, node_2):
+        node_2_copy = copy.copy(node_2)
+        node_2.set_contents(node_1)
+        node_1.set_contents(node_2_copy)
 
     def set_seed(self, prev_data):
 
-        self.count = 0  # number of element sent
-
-        if prev_data.node is None:
-            prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
-            return prev_data
-
-        # generate two nodes
-        # one in brothers and modify the current
+        self.count = 0  # number of sent element
 
         if self.node is None:
             self.node = copy.copy(prev_data.node)
-
-        source = self._compute_subtree_to_delete(prev_data.node, self.to_keep[0])
-        param = self._compute_subtree_to_delete(self.node, self.to_keep[1])
-
-        # do not unfreeze the nodes
-        # nodes generated with qty keyword and unique separators are manipulated as normal nodes
-
-        random.shuffle(source)
-        random.shuffle(param)
-
-        if len(source) < len(param):
-            smallest = (source, prev_data.node)
-            largest = (param, self.node)
-        else:
-            smallest = (param, self.node)
-            largest = (source, prev_data.node)
-
-        for i in range(len(smallest[0])):
-            print(smallest[0][i])
-            smallest_node = smallest[1].get_node_by_path(path=smallest[0][i])
-            smallest_node_copy = copy.copy(smallest_node)
-
-            largest_node = largest[1].get_node_by_path(path=largest[0][i])
-            smallest_node.set_contents(largest_node)
-
-            print(param)
-            print(source)
-            largest_node.set_contents(smallest_node_copy)
-
 
 
     def disrupt_data(self, dm, target, data):
@@ -193,6 +75,159 @@ class sd_crossover(StatefulDisruptor):
 
         self.count += 1
         return data
+
+
+@disruptor(tactics, dtype="tCROSS", weight=1,
+           gen_args = GENERIC_ARGS,
+           args={'node': ('node to crossover with', None, Node),
+                 'percentage_to_share': ('percentage of the base node to share', None, float)})
+class sd_crossover(SwapperDisruptor):
+    """
+    Makes two graphs share a certain percentages of their leaf nodes in order to produce two children
+    """
+
+    class Operand(object):
+
+        def __init__(self, node):
+            self.node = node
+
+            self.leafs = []
+
+            for path, node in self.node.iter_paths():
+                if node.is_term() and path not in self.leafs:
+                    self.leafs.append(path)
+
+            self.shared = None
+
+        def compute_sub_graphs(self, percentage):
+            random.shuffle(self.leafs)
+            self.shared = self.leafs[:int(round(len(self.leafs) * percentage))]
+            self.shared.sort()
+
+            change = True
+            while change:
+
+                change = False
+                index = 0
+                length = len(self.shared)
+
+                while index < length:
+
+                    current_path = self.shared[index]
+
+                    slash_index = current_path[::-1].find('/')
+
+                    # check if we are dealing with the root node
+                    if slash_index == -1:
+                        index += 1
+                        continue
+
+                    parent_path = current_path[:-current_path[::-1].find('/') - 1]
+                    children_nb = self._count_brothers(self.shared, index, parent_path)
+                    if children_nb == self.node.get_node_by_path(parent_path).internals[
+                        self.node.get_current_conf()].get_subnode_qty():
+                        self._merge_brothers(self.shared, index, parent_path, children_nb)
+                        change = True
+                        index += 1
+                        length = len(self.shared)
+                    else:
+                        index += children_nb
+
+        def _count_brothers(self, paths, index, pattern):
+            count = 1
+            p = re.compile(u'^' + pattern + '($|/*)')
+            for i in range(index + 1, len(paths)):
+                if re.match(p, paths[i]) is not None:
+                    count += 1
+            return count
+
+        def _merge_brothers(self, paths, index, pattern, length):
+            for _ in range(0, length, 1):
+                del paths[index]
+            paths.insert(index, pattern)
+
+
+
+    def setup(self, dm, user_input):
+        if self.percentage_to_share is None:
+            self.percentage_to_share = float(random.randint(2, 8)) / 10.0
+        elif not (0 < self.percentage_to_share < 1):
+            print("Invalid percentage, a float between 0 and 1 need to be provided")
+            return False
+
+        return True
+
+    def set_seed(self, prev_data):
+
+        if prev_data.node is None:
+            prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
+            return prev_data
+
+        SwapperDisruptor.set_seed(self, prev_data)
+
+        source = self.Operand(prev_data.node)
+        source.compute_sub_graphs(self.percentage_to_share)
+        random.shuffle(source.shared)
+
+        param = self.Operand(self.node)
+        param.compute_sub_graphs(1.0 - self.percentage_to_share)
+        random.shuffle(param.shared)
+
+        swap_nb = len(source.shared) if len(source.shared) < len(param.shared) else len(param.shared)
+
+        print(source.shared)
+        print(param.shared)
+        for i in range(swap_nb):
+            node_1 = source.node.get_node_by_path(path=source.shared[i])
+            node_2 = param.node.get_node_by_path(path=param.shared[i])
+            self._swap_nodes(node_1, node_2)
+
+
+@disruptor(tactics, dtype="tCOMB", weight=1,
+           gen_args = GENERIC_ARGS,
+           args={'node': ('node to combine with', None, Node)})
+class sd_combine(SwapperDisruptor):
+    """
+    Merge two nodes to produce two children
+    """
+
+    def setup(self, dm, user_input):
+        return True
+
+    def get_nodes(self, node):
+        while True:
+            nodes = [node] if node.is_term() else node.internals[node.get_current_conf()].frozen_node_list
+
+            if len(nodes) == 1 and not nodes[0].is_term():
+                node = nodes[0]
+            else:
+                break
+
+        return nodes
+
+    def set_seed(self, prev_data):
+
+        if prev_data.node is None:
+            prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
+            return prev_data
+
+        SwapperDisruptor.set_seed(self, prev_data)
+
+        source = self.get_nodes(prev_data.node)
+        param = self.get_nodes(self.node)
+
+        if len(source) == 0 or len(param) == 0:
+            prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
+            return prev_data
+
+        swap_nb = len(source) if len(source) < len(param) else len(param)
+        swap_nb = int(math.ceil(float(swap_nb)/2.0))
+
+        random.shuffle(source)
+        random.shuffle(param)
+
+        for i in range(swap_nb):
+            self._swap_nodes(source[i], param[i])
 
 
 @disruptor(tactics, dtype="tWALK", weight=1,
