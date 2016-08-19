@@ -86,6 +86,12 @@ class FontStyle:
     UNDERLINE = '\033[4m'
     END = '\033[0m'
 
+graphviz_module = True
+try:
+    import graphviz
+except ImportError:
+    graphviz_module = False
+    print('WARNING [FMK]: python(3)-graphviz module is not installed, Printer targets will not be available!')
 
 sqlite3_module = True
 try:

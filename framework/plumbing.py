@@ -2106,6 +2106,31 @@ class FmkPlumbing(object):
         data.node.show(raw_limit=400)
         self.lg.print_console('\n\n', nl_before=False)
 
+    @EnforceOrder(accepted_states=['S2'])
+    def show_scenario(self, sc_name, fmt='pdf'):
+        generators_gen = self._generic_tactics.get_generators()
+        generators_spe = self._tactics.get_generators()
+        err_msg = "The scenario '{!s}' does not exist!".format(sc_name)
+
+        if generators_gen and sc_name in generators_gen:
+            generators_list = self._generic_tactics.get_generators_list(sc_name)
+            tactics = self._generic_tactics
+        elif generators_spe and sc_name in generators_spe:
+            generators_list = self._tactics.get_generators_list(sc_name)
+            tactics = self._tactics
+        else:
+            self.set_error(err_msg, code=Error.FmkWarning)
+            return False
+
+        if generators_list:
+            cls_name = list(generators_list.keys())[0]
+            sc_obj = tactics.get_generator_obj(sc_name, cls_name)
+            if sc_obj and isinstance(sc_obj, DynGeneratorFromScenario):
+                sc_obj.graph_scenario(fmt=fmt)
+            else:
+                self.set_error(err_msg, code=Error.FmkWarning)
+        else:
+            self.set_error(err_msg, code=Error.FmkWarning)
 
     @EnforceOrder(accepted_states=['S2'])
     def show_dm_data_identifiers(self):
@@ -3179,7 +3204,6 @@ class FmkPlumbing(object):
                     self.lg.print_console(msg, limit_output=False)
 
         self.lg.print_console('\n', nl_before=False)
-            
 
     @EnforceOrder(accepted_states=['S2'])
     def show_disruptors(self, dmaker_type=None):
@@ -4481,6 +4505,35 @@ class FmkShell(cmd.Cmd):
 
         self.__error = False
         return False
+
+    def do_show_scenario(self, line):
+        '''
+        Show a scenario in the specific format FMT (e.g., xdot, png, pdf, ...)
+        |_ syntax: show_scenario SCENARIO_NAME [FMT]
+
+        FMT defaults to 'pdf'
+        '''
+
+        self.__error = True
+        self.__error_msg = "Syntax Error!"
+
+        args = line.split()
+
+        if len(args) > 2 or len(args) < 1:
+            return False
+
+        if len(args) == 2:
+            sc_name = args[0]
+            fmt = args[1]
+        else:
+            sc_name = args[0]
+            fmt = 'pdf'
+
+        self.fz.show_scenario(sc_name=sc_name, fmt=fmt)
+
+        self.__error = False
+        return False
+
 
     def do_replay_last(self, line):
         '''

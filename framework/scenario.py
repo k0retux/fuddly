@@ -25,6 +25,7 @@ import copy
 
 from framework.global_resources import *
 from framework.data_model import Data
+from libs.external_modules import *
 
 class DataProcess(object):
     def __init__(self, process, seed=None, auto_regen=False):
@@ -86,6 +87,29 @@ class DataProcess(object):
         self._blocked = False
         if self.outcomes is not None:
             self.outcomes.make_free()
+
+    def formatted_str(self, oneliner=False):
+        desc = ''
+        suffix = ', PROCESS: ' if oneliner else '\n'
+        if isinstance(self.seed, str):
+            desc += 'SEED: ' + self.seed + suffix
+        elif isinstance(self.seed, Data):
+            desc += 'SEED: Data(...)' + suffix
+        else:
+            desc += suffix[2:]
+
+        for d in self.process:
+            if isinstance(d, (list, tuple)):
+                desc += '{!s} / '.format(d[0])
+            else:
+                assert isinstance(d, str)
+                desc += '{!s} / '.format(d)
+        desc = desc[:-3]
+
+        return desc
+
+    def __repr__(self):
+        return self.formatted_str(oneliner=True)
 
     def __copy__(self):
         new_datap = type(self)(self.process, seed=self.seed, auto_regen=self.auto_regen)
@@ -236,18 +260,18 @@ class Step(object):
             d = Data('')
         if self._step_desc is None:
             if isinstance(self._data_desc, DataProcess):
-                step_desc = 'generate ' + repr(self._data_desc)
+                d.add_info(repr(self._data_desc))
             elif isinstance(self._data_desc, Data):
-                step_desc = 'use provided Data(...)'
+                d.add_info('Use provided Data(...)')
             else:
                 assert isinstance(self._data_desc, str)
-                d.add_info("instantiate a node '{:s}' from the model".format(self._node_name))
+                d.add_info("Instantiate a node '{:s}' from the model".format(self._node_name))
             if self._periodic_data is not None:
                 p_sz = len(self._periodic_data)
-                d.add_info("set {:d} periodic{:s}".format(p_sz, 's' if p_sz > 1 else ''))
+                d.add_info("Set {:d} periodic{:s}".format(p_sz, 's' if p_sz > 1 else ''))
             if self._periodic_data_to_remove is not None:
                 p_sz = len(self._periodic_data_to_remove)
-                d.add_info("clear {:d} periodic{:s}".format(p_sz, 's' if p_sz > 1 else ''))
+                d.add_info("Clear {:d} periodic{:s}".format(p_sz, 's' if p_sz > 1 else ''))
         else:
             d.add_info(self._step_desc)
 
@@ -283,6 +307,25 @@ class Step(object):
 
     def set_transitions(self, transitions):
         self._transitions = transitions
+
+    def __str__(self):
+        if self._step_desc:
+            step_desc = self._step_desc
+        elif isinstance(self._data_desc, DataProcess):
+            step_desc = self._data_desc.formatted_str(oneliner=False)
+        elif isinstance(self._data_desc, Data):
+            if self.__class__.__name__ != 'Step':
+                step_desc = '[' + self.__class__.__name__ + ']'
+            else:
+                step_desc = 'Data(...)'
+        elif isinstance(self._data_desc, str):
+            step_desc = "{:s}".format(self._node_name.upper())
+        else:
+            assert self._data_desc is None
+            step_desc = '[' + self.__class__.__name__ + ']'
+
+        return step_desc
+
 
     def __hash__(self):
         return id(self)
@@ -363,6 +406,13 @@ class Transition(object):
 
         return go_on
 
+    def __str__(self):
+        desc = ''
+        for k, v in self._callbacks.items():
+            desc += str(k) + '\n' + v.__name__ + '()'
+
+        return desc
+
     def __hash__(self):
         return id(self)
 
@@ -415,6 +465,48 @@ class Scenario(object):
     def periodic_to_clear(self):
         for pid in self._periodic_ids:
             yield pid
+
+    def graph(self, fmt='pdf'):
+
+        def graph_creation(init_step, node_list, edge_list):
+            if init_step.final or init_step is self._anchor:
+                f.attr('node', fontcolor='white', shape='oval', style='rounded,filled',
+                       fillcolor='darkgrey')
+            else:
+                f.attr('node', fontcolor='black', shape='oval', style='rounded,filled',
+                       fillcolor='lightgrey')
+            f.node(str(id(init_step)), label=str(init_step))
+            for idx, tr in enumerate(init_step.transitions):
+                if tr.step not in node_list:
+                    if tr.step.final:
+                        f.attr('node', fontcolor='white', shape='oval', style='rounded,filled',
+                               fillcolor='darkgrey')
+                    else:
+                        f.attr('node', fontcolor='black', shape='oval', style='rounded,filled',
+                               fillcolor='lightgrey')
+                    f.node(str(id(tr.step)), label=str(tr.step))
+                edge = [id(init_step), id(tr.step)]
+                if edge not in edge_list:
+                    f.edge(str(id(init_step)), str(id(tr.step)), label='[{:d}] {!s}'.format(idx+1, tr))
+                    edge_list.append(edge)
+                if tr.step in node_list:
+                    continue
+                if tr.step not in node_list:
+                    node_list.append(tr.step)
+                graph_creation(tr.step, node_list=node_list, edge_list=edge_list)
+
+        if not graphviz_module:
+            print("\n*** ERROR: need python graphviz module to be installed ***")
+            return
+
+        try:
+            f = graphviz.Digraph(self.name, format=fmt,
+                                 filename=os.path.join(workspace_folder, self.name+'.gv'))
+        except:
+            print("\n*** ERROR: Unknown format ({!s})! ***".format(fmt))
+        else:
+            graph_creation(self._anchor, node_list=[], edge_list=[])
+            f.view()
 
     def __copy__(self):
 

@@ -671,6 +671,9 @@ class DynGeneratorFromScenario(Generator):
         # mechanism
         pass
 
+    def graph_scenario(self, fmt):
+        self.scenario.graph(fmt=fmt)
+
     def setup(self, dm, user_input):
         if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
             return False
