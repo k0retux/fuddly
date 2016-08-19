@@ -74,8 +74,10 @@ group.add_argument('--with-fbk', action='store_true', help='Display full feedbac
 group.add_argument('--with-data', action='store_true', help='Display data content (expect --info)')
 group.add_argument('--without-fmkinfo', action='store_true',
                    help='Do not display fmkinfo (expect --info)')
-group.add_argument('--limit', type=int, default=600,
-                   help='Limit the size of what is displayed from data (expect --with-data)')
+group.add_argument('--limit', type=int, default=None,
+                   help='Limit the size of what is displayed from the sent data and the '
+                        'retrieved feedback (expect --with-data or --with-fbk).')
+group.add_argument('--raw', action='store_true', help='Display data and feedback in raw format')
 
 group = parser.add_argument_group('Fuddly Database Operations')
 group.add_argument('--export-data', nargs=2, metavar=('FIRST_DATA_ID','LAST_DATA_ID'), type=int,
@@ -155,6 +157,7 @@ if __name__ == "__main__":
     with_data = args.with_data
     without_fmkinfo = args.without_fmkinfo
     limit_data_sz = args.limit
+    raw_data = args.raw
 
     export_data = args.export_data
     export_one_data = args.export_one_data
@@ -181,7 +184,7 @@ if __name__ == "__main__":
 
         fmkdb.display_data_info(data_info, with_data=with_data, with_fbk=with_fbk,
                                 with_fmkinfo=not without_fmkinfo, fbk_src=fbk_src,
-                                limit_data_sz=limit_data_sz, page_width=page_width,
+                                limit_data_sz=limit_data_sz, raw=raw_data, page_width=page_width,
                                 colorized=colorized)
 
     elif data_info_by_date is not None:
@@ -192,7 +195,7 @@ if __name__ == "__main__":
         fmkdb.display_data_info_by_date(start, end, with_data=with_data, with_fbk=with_fbk,
                                         with_fmkinfo=not without_fmkinfo, fbk_src=fbk_src,
                                         prj_name=prj_name,
-                                        limit_data_sz=limit_data_sz, page_width=page_width,
+                                        limit_data_sz=limit_data_sz, raw=raw_data, page_width=page_width,
                                         colorized=colorized)
 
     elif data_info_by_range is not None:
@@ -203,7 +206,7 @@ if __name__ == "__main__":
         fmkdb.display_data_info_by_range(first_id, last_id, with_data=with_data, with_fbk=with_fbk,
                                          with_fmkinfo=not without_fmkinfo, fbk_src=fbk_src,
                                          prj_name=prj_name,
-                                         limit_data_sz=limit_data_sz, page_width=page_width,
+                                         limit_data_sz=limit_data_sz, raw=raw_data, page_width=page_width,
                                          colorized=colorized)
 
     elif export_data is not None or export_one_data is not None:
