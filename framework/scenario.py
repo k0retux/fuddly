@@ -409,7 +409,8 @@ class Transition(object):
     def __str__(self):
         desc = ''
         for k, v in self._callbacks.items():
-            desc += str(k) + '\n' + v.__name__ + '()'
+            desc += str(k) + '\n' + v.__name__ + '()\n'
+        desc = desc[:-1]
 
         return desc
 
@@ -471,7 +472,7 @@ class Scenario(object):
         def graph_creation(init_step, node_list, edge_list):
             if init_step.final or init_step is self._anchor:
                 f.attr('node', fontcolor='white', shape='oval', style='rounded,filled',
-                       fillcolor='darkgrey')
+                       fillcolor='black')
             else:
                 f.attr('node', fontcolor='black', shape='oval', style='rounded,filled',
                        fillcolor='lightgrey')
@@ -480,15 +481,14 @@ class Scenario(object):
                 if tr.step not in node_list:
                     if tr.step.final:
                         f.attr('node', fontcolor='white', shape='oval', style='rounded,filled',
-                               fillcolor='darkgrey')
+                               fillcolor='black')
                     else:
                         f.attr('node', fontcolor='black', shape='oval', style='rounded,filled',
                                fillcolor='lightgrey')
                     f.node(str(id(tr.step)), label=str(tr.step))
-                edge = [id(init_step), id(tr.step)]
-                if edge not in edge_list:
+                if id(tr) not in edge_list:
                     f.edge(str(id(init_step)), str(id(tr.step)), label='[{:d}] {!s}'.format(idx+1, tr))
-                    edge_list.append(edge)
+                    edge_list.append(id(tr))
                 if tr.step in node_list:
                     continue
                 if tr.step not in node_list:
