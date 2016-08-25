@@ -503,8 +503,6 @@ class Database(object):
                 msg += colorize(str(id_src), rgb=Color.FMKSUBINFO)
             if info is not None:
                 info = gr.unconvert_from_internal_repr(info)
-                if sys.version_info[0] > 2:
-                    info = '{!a}'.format(info)
                 info = info.split('\n')
                 for i in info:
                     chks = chunk_lines(i, page_width - prefix_sz - 10)

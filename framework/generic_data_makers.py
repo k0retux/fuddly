@@ -122,6 +122,8 @@ class sd_iter_over_data(StatefulDisruptor):
                            'in the data model) is used for ordering', False, bool),
                  'deep': ('when set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes', True, bool),
+                 'ign_sep': ('when set to True, non-terminal separators will be ignored ' \
+                          'if any are defined.', False, bool),
                  'fix_all': ('for each produced data, reevaluate the constraints on the whole graph',
                              False, bool),
                  'fix': ("limit constraints fixing to the nodes related to the currently fuzzed one"
@@ -148,7 +150,8 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
                                             min_runs_per_node=self.min_runs_per_node,
                                             fuzz_magnitude=self.fuzz_mag,
                                             fix_constraints=self.fix,
-                                            respect_order=self.order)
+                                            respect_order=self.order,
+                                            ignore_separator=self.ign_sep)
         self.consumer.need_reset_when_structure_change = self.deep
         self.consumer.set_node_interest(path_regexp=self.path)
         self.modelwalker = ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init)
@@ -176,7 +179,7 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
 
         corrupt_node_bytes = consumed_node.to_bytes()
 
-        data.add_info('model walking index: {:d}'.format(idx))        
+        data.add_info('model walking index: {:d}'.format(idx))
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
         data.add_info('current fuzzed node:     {!s}'.format(self.modelwalker.consumed_node_path))
         data.add_info(' |_ value type:          {!s}'.format(consumed_node.cc.get_value_type()))

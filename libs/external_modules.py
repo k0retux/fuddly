@@ -22,7 +22,9 @@
 ################################################################################
 
 try:
+    import xtermcolor
     from xtermcolor import colorize
+    xtermcolor.isatty = lambda x: True
 except ImportError:
     print("WARNING [FMK]: python-xtermcolor module is not installed, colors won't be available!")
     def colorize(string, rgb=None, ansi=None, bg=None, ansi_bg=None, fd=1):

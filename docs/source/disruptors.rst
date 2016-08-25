@@ -52,6 +52,10 @@ Parameters:
         |      | desc: when set to True, if a node structure has changed, the modelwalker
         |      |       will reset its walk through the children nodes
         |      | default: True [type: bool]
+        |_ ign_sep
+        |      | desc: when set to True, non-terminal separators will be ignored if
+        |      |       any are defined.
+        |      | default: False [type: bool]
         |_ fix
         |      | desc: limit constraints fixing to the nodes related to the currently
         |      |       fuzzed one (only implemented for 'sync_size_with' and

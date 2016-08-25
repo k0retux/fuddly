@@ -5310,6 +5310,7 @@ class Node(object):
         self.internals = backup.internals
         self.current_conf = backup.current_conf
         self.entangled_nodes = backup.entangled_nodes
+        self._delayed_jobs_called = backup._delayed_jobs_called
 
     def __check_conf(self, conf):
         if conf is None:
