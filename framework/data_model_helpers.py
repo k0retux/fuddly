@@ -1383,19 +1383,18 @@ class RegexParser(StateMachine):
                 raise QuantificationError()
             elif ctx.input in ('}', ')', ']'):
                 raise StructureError(ctx.input)
-
-            elif ctx.input == '[':
-                return self.machine.SquareBrackets
-            elif ctx.input == '(':
-                return self.machine.Parenthesis
-            elif ctx.input == '.':
-                return self.machine.Dot
-            elif ctx.input == '\\':
-                return self.machine.Escape
             else:
                 ctx.append_to_contents("")
 
-                if ctx.input == '|':
+                if ctx.input == '[':
+                    return self.machine.SquareBrackets
+                elif ctx.input == '(':
+                    return self.machine.Parenthesis
+                elif ctx.input == '.':
+                    return self.machine.Dot
+                elif ctx.input == '\\':
+                    return self.machine.Escape
+                elif ctx.input == '|':
                     return self.machine.Choice
                 elif ctx.input is None:
                     return self.machine.Final
@@ -1406,14 +1405,7 @@ class RegexParser(StateMachine):
     class Choice(Initial):
 
         def _run(self, ctx):
-            if not ctx.choice:
-                # if it is still possible to build a NT with multiple shapes
-                if len(ctx.nodes) == 0 or (len(ctx.nodes) == 1 and ctx.buffer is None):
-                    ctx.choice = True
-                else:
-                    raise InconvertibilityError()
-            else:
-                pass
+            ctx.start_new_shape()
 
     @register
     class Final(State):
@@ -1431,33 +1423,32 @@ class RegexParser(StateMachine):
             ctx.append_to_buffer(ctx.input)
 
         def advance(self, ctx):
-            if ctx.input == '(':
-                return self.machine.Parenthesis
-            elif ctx.input == '[':
-                return self.machine.SquareBrackets
-            elif ctx.input == '.':
+
+            if ctx.input == '.':
                 return self.machine.Dot
             elif ctx.input == '\\':
                 return self.machine.Escape
             elif ctx.input == '|':
+
+                if len(ctx.current_shape) > 0:
+                    ctx.flush()
+
                 return self.machine.Choice
+
+            elif ctx.input == '(':
+                return self.machine.Parenthesis
+            elif ctx.input == '[':
+                return self.machine.SquareBrackets
+
             elif ctx.input in ('?', '*', '+', '{'):
 
-                if ctx.choice and len(ctx.values) > 1 and len(ctx.buffer) > 1:
-                    raise InconvertibilityError()
+                ctx.start_new_shape_from_buffer()
 
-                if len(ctx.buffer) == 1:
-                    if len(ctx.values) > 1:
-                        content = ctx.buffer
-                        ctx.values = ctx.values[:-1]
-                        ctx.flush()
-                        ctx.append_to_buffer(content)
-
-                else:
-                    content = ctx.buffer[-1]
+                if len(ctx.buffer) > 1:
+                    char = ctx.buffer[-1]
                     ctx.buffer = ctx.buffer[:-1]
                     ctx.flush()
-                    ctx.append_to_buffer(content)
+                    ctx.append_to_buffer(char)
 
                 if ctx.input == '{':
                     return self.machine.Brackets
@@ -1490,8 +1481,7 @@ class RegexParser(StateMachine):
             elif ctx.input is None:
                 return self.machine.Final
 
-            if ctx.choice:
-                raise InconvertibilityError()
+            ctx.append_to_contents("")
 
             if ctx.input == '(':
                 return self.machine.Parenthesis
@@ -1595,8 +1585,8 @@ class RegexParser(StateMachine):
                 return self.machine.Choice
             elif ctx.input is None:
                 return self.machine.Final
-            elif ctx.choice:
-                raise InconvertibilityError()
+
+            ctx.append_to_contents("")
 
             if ctx.input == '(':
                 return self.machine.Parenthesis
@@ -1616,8 +1606,10 @@ class RegexParser(StateMachine):
         class Initial(State):
 
             def _run(self, ctx):
-                ctx.flush()
-                ctx.append_to_buffer("")
+                ctx.start_new_shape_from_buffer()
+                if len(ctx.buffer) > 0:
+                    ctx.flush()
+                    ctx.append_to_contents("")
 
             def advance(self, ctx):
                 if ctx.input in ('?', '*', '+', '{'):
@@ -1688,7 +1680,12 @@ class RegexParser(StateMachine):
         class Initial(State):
 
             def _run(self, ctx):
-                ctx.flush()
+                ctx.start_new_shape_from_buffer()
+                if len(ctx.buffer) > 0:
+                    ctx.flush()
+                else:
+                    ctx.values = None
+
                 ctx.append_to_alphabet("")
 
             def advance(self, ctx):
@@ -1812,18 +1809,11 @@ class RegexParser(StateMachine):
 
         def _run(self, ctx):
 
-            if ctx.buffer is not None:
-
-                if ctx.choice and len(ctx.values) > 1 and len(ctx.buffer) > 1:
-                    raise InconvertibilityError()
-
-                if len(ctx.buffer) == 0:
-
-                    if len(ctx.values[:-1]) > 0:
-                        ctx.values = ctx.values[:-1]
-                        ctx.flush()
-                else:
-                    ctx.flush()
+            ctx.start_new_shape_from_buffer()
+            if len(ctx.buffer) > 0:
+                ctx.flush()
+            else:
+                ctx.values = None
 
             ctx.append_to_alphabet(ctx.META_SEQUENCES[ctx.input])
 
@@ -1831,7 +1821,13 @@ class RegexParser(StateMachine):
     class Dot(Group):
 
         def _run(self, ctx):
-            ctx.flush()
+
+            ctx.start_new_shape_from_buffer()
+            if len(ctx.buffer) > 0:
+                ctx.flush()
+            else:
+                ctx.values = None
+
             ctx.append_to_alphabet(ctx.get_complement(""))
 
 
@@ -1842,12 +1838,26 @@ class RegexParser(StateMachine):
         self.values = None
         self.alphabet = None
 
-        self.choice = False
-
         self.min = None
         self.max = None
 
-        self.nodes = []
+        self.shapes = [[]]
+        self.current_shape = self.shapes[0]
+
+
+    def start_new_shape_from_buffer(self):
+        if self.values is not None and len(self.values) > 1:
+            buffer = self.buffer
+            self.values = self.values[:-1]
+            self.flush()
+
+            self.start_new_shape()
+            self.append_to_buffer(buffer)
+
+    def start_new_shape(self):
+        if len(self.current_shape) > 0:
+            self.shapes.append([])
+            self.current_shape = self.shapes[-1]
 
     def append_to_contents(self, content):
         if self.values is None:
@@ -1892,9 +1902,15 @@ class RegexParser(StateMachine):
         else:
             type = fvt.String
 
-        name = self._name + '_' + str(len(self.nodes) + 1)
-        self.nodes.append(self._create_terminal_node(name, type, values=self.values,
-                                                     alphabet=self.alphabet, qty=(self.min, self.max)))
+        node_nb = 0
+        for nodes in self.shapes:
+            node_nb += len(nodes)
+
+        name = self._name + '_' + str(node_nb + 1)
+        self.current_shape.append(self._create_terminal_node(name, type,
+                                                             values=self.values,
+                                                             alphabet=self.alphabet,
+                                                             qty=(self.min, self.max)))
         self.reset()
 
     def reset(self):
@@ -1954,14 +1970,15 @@ class RegexParser(StateMachine):
             return [node, qty[0], -1 if qty[1] is None else qty[1]]
 
     def _create_non_terminal_node(self):
-        if self.choice:
-            non_terminal = [1, [MH.Copy + MH.Pick]]
-        else:
-            non_terminal = [1, [MH.Copy + MH.Ordered]]
-        formatted_terminal = non_terminal[1]
 
-        for terminal in self.nodes:
-            formatted_terminal.append(terminal)
+        if len(self.shapes) == 1:
+            non_terminal = [1, [MH.Copy + MH.Ordered] + self.shapes[0]]
+        elif all(len(nodes) == 1 for nodes in self.shapes):
+            non_terminal = [1, [MH.Copy + MH.Pick] + [nodes[0] for nodes in self.shapes]]
+        else:
+            non_terminal = []
+            for nodes in self.shapes:
+                non_terminal += [1, [MH.Copy + MH.Ordered] + nodes]
 
         return non_terminal
 

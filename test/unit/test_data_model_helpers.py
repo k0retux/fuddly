@@ -26,12 +26,47 @@ class RegexParserTest(unittest.TestCase):
               {'regex': "(salut))les(louloux)"}, {'regex': "(sal*ut)oo"}, {'regex': "(sal?ut)oo"},
               {'regex': "sal{utoo"}, {'regex': "(sal+ut)oo"}, {'regex': "(sal{u)too"},
               {'regex': "(sal{2}u)too"}, {'regex': "sal{2,1}utoo"}, {'regex': "sal(u[t]o)o"},
-              {'regex': "whatever|toto?ff"}, {'regex': "whate?ver|toto"}, {'regex': "(toto)*ohoho|haha"},
-              {'regex': "(toto)ohoho|haha"}, {'regex': "salut[abcd]{,15}rr"}, {'regex': "[]whatever"},
-              {'regex': "t{,15}"}, {'regex': "hi|b?whatever"}, {'regex': "hi|b{3}whatever"},
-              {'regex': "whatever(bar.foo)"})
+              {'regex': "salut[abcd]{,15}rr"}, {'regex': "[]whatever"},
+              {'regex': "t{,15}"}, {'regex': "whatever(bar.foo)"})
     def test_invalid_regexes(self, regex):
         self.assert_regex_is_invalid(regex)
+
+    @ddt.data(
+        {'regex': "whatever|toto?ff",
+         'nodes': [
+             {'values': ['whatever']},
+             {'values': ['tot']},
+             {'values': ['o'], 'qty': (0, 1)},
+             {'values': ['ff']}]},
+        {'regex': "whate?ver|toto",
+         'nodes': [
+             {'values': ['what']},
+             {'values': ['e'], 'qty': (0, 1)},
+             {'values': ['ver']},
+             {'values': ['toto']}]},
+        {'regex': "(toto)*ohoho|haha",
+         'nodes': [
+             {'values': ['toto'], 'qty':(0, None)},
+             {'values': ['ohoho']},
+             {'values': ['haha']}]},
+        {'regex': "(toto)ohoho|haha",
+         'nodes': [
+             {'values': ['toto']},
+             {'values': ['ohoho']},
+             {'values': ['haha']}]},
+        {'regex': "hi|b?whatever",
+         'nodes': [
+             {'values': ['hi']},
+             {'values': ['b'], 'qty': (0, 1)},
+             {'values': ['whatever']}]},
+        {'regex': "hi|b{3}whatever",
+         'nodes': [
+             {'values': ['hi']},
+             {'values': ['b'], 'qty': (3, 3)},
+             {'values': ['whatever']}]},
+    )
+    def test_shapes(self, test_case):
+        self.assert_regex_is_valid(test_case)
 
     @ddt.data(
         {'regex': ".", 'nodes': [{"alphabet": ASCII_EXT}]},
@@ -92,6 +127,11 @@ class RegexParserTest(unittest.TestCase):
              {"type": fvt.INT_str, "values": [333,444]},
              {"values": [u"foo-bar"]},
              {"alphabet": "0123456789"},
+             {"alphabet": "th|is"}]},
+        {'regex': u"(333|444)|foo-bar|\||[th|is]",
+         'nodes': [
+             {"type": fvt.INT_str, "values": [333, 444]},
+             {"values": [u"foo-bar", "|"]},
              {"alphabet": "th|is"}]},
 
     )
@@ -316,7 +356,7 @@ class RegexParserTest(unittest.TestCase):
 
         charset = test_case['charset'] if 'charset' in test_case else MH.Charset.ASCII_EXT
         self._parser.parse(test_case['regex'], "name", charset)
-        self.assertEquals(self._parser._create_terminal_node.call_count, len(test_case['nodes']))
+
 
         calls = []
         nodes = test_case['nodes']
@@ -330,6 +370,8 @@ class RegexParserTest(unittest.TestCase):
             calls.append(mock.call("name" + "_" + str(i + 1), type, values=values, alphabet=alphabet, qty=qty))
 
         self._parser._create_terminal_node.assert_has_calls(calls)
+
+        self.assertEquals(self._parser._create_terminal_node.call_count, len(test_case['nodes']))
 
 
     def assert_regex_is_invalid(self, test_case):
