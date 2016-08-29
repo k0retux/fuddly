@@ -1621,7 +1621,7 @@ Example 1: The basics.
                  {'name': 'HTTP_version_5', 'contents': INT_Str(mini=0, maxi=9)} ]}
 
 
-Example 2: Introducing choice. (Refer to :ref:`dm:nt-keywords`)
+Example 2: Introducing choices. (Refer to :ref:`dm:nt-keywords`)
 
 .. code-block:: python
    :linenos:
@@ -1633,13 +1633,43 @@ Example 2: Introducing choice. (Refer to :ref:`dm:nt-keywords`)
               'shape_type': MH.Pick,
               'contents': [
                  {'name':'something_1', 'contents':INT_Str(values=[333, 444])},
-                 {'name':'something_1', 'contents':String(values=["foo", "bar"])},
-                 {'name':'something_1', 'contents':String(alphabet="0123456789",size=1)},
-                 {'name':'something_1', 'contents':String(alphabet="th|is", size=1)}
+                 {'name':'something_2', 'contents':String(values=["foo", "bar"])},
+                 {'name':'something_3', 'contents':String(alphabet="0123456789",size=1)},
+                 {'name':'something_4', 'contents':String(alphabet="th|is", size=1)}
               ]}
 
 
-Example 3: Using quantifiers and the escape character ``\``.
+Example 3: Using shapes. (Refer to :ref:`dm:patterns`)
+
+.. code-block:: python
+   :linenos:
+
+   regex = {'name': 'something',
+            'contents': 'this[\d](is)|a|digit[!]'}
+   # is equivalent to
+   classic = {'name': 'something',
+              'contents': [
+                 {'weights': 1,
+                  'contents': [
+                     {'name': 'something_1', 'contents': String(values=['this'])},
+                     {'name': 'something_2', 'contents': String(alphabet='0123456789')},
+                     {'name': 'something_3', 'contents': String(values=['is'])},
+                  ]},
+
+                 {'weights': 1,
+                  'contents': [
+                     {'name': 'something_4', 'contents': String(values=['a'])},
+                  ]},
+
+                 {'weights': 1,
+                  'contents': [
+                     {'name': 'something_5', 'contents': String(values=['digit'])},
+                     {'name': 'something_6', 'contents': String(alphabet='!')},
+                  ]},
+              ]}
+
+
+Example 4: Using quantifiers and the escape character ``\``.
 
 .. code-block:: python
    :linenos:
@@ -1651,13 +1681,13 @@ Example 3: Using quantifiers and the escape character ``\``.
               'contents': [
                  {'name': 'something_1', 'contents': String(values=["(this"])},
                  {'name': 'something_2',
-	              'contents': String(alphabet="is", min_sz=3, max_sz=4)},
+                  'contents': String(alphabet="is", min_sz=3, max_sz=4)},
                  {'name': 'something_3', 'contents': String(values=["th"])},
                  {'name': 'something_4', 'qty': (1, -1),
                   'contents': String(values=["e"])},
                  {'name': 'something_5', 'contents': String(values=["end]"])} ]}
 
-Example 4: Invalid regular expressions.
+Example 5: Invalid regular expressions.
 
 .. code-block:: python
    :linenos:
@@ -1666,6 +1696,7 @@ Example 4: Invalid regular expressions.
    # raise an framework.error_handling.InconvertibilityError
    # because there are two nested parenthesis.
 
-   error_2 = {'name': 'rejected', 'contents': '(HTTP)foo|bar'}
+   error_2 = {'name': 'rejected', 'contents': '(HT?TP)foo|bar'}
    # raise also an framework.error_handling.InconvertibilityError
-   # because | has priority over parenthesis in regular expressions.
+   # because a quantifier (that requires the creation of a terminal node)
+   # has been found within parenthesis.
