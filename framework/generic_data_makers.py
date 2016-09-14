@@ -119,7 +119,7 @@ class sd_iter_over_data(StatefulDisruptor):
                           ' the disruptor should apply', None, str),
                  'order': ('when set to True, the fuzzing order is strictly guided ' \
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
-                           'in the data model) is used for ordering', False, bool),
+                           'in the data model) is used for ordering', True, bool),
                  'deep': ('when set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes', True, bool),
                  'ign_sep': ('when set to True, non-terminal separators will be ignored ' \
@@ -300,7 +300,7 @@ class sd_switch_to_alternate_conf(StatefulDisruptor):
                           ' the disruptor should apply', None, str),
                  'order': ('when set to True, the fuzzing order is strictly guided ' \
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
-                           'in the data model) is used for ordering', False, bool),
+                           'in the data model) is used for ordering', True, bool),
                  'deep': ('when set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes', True, bool)})
 class sd_fuzz_separator_nodes(StatefulDisruptor):
@@ -464,12 +464,13 @@ class sd_struct_constraints(StatefulDisruptor):
                     self.minmax_cst_nodelist_1.remove((n, mini, maxi))
 
             self.minmax_cst_nodelist_2 = copy.copy(self.minmax_cst_nodelist_1)
+            self.minmax_cst_nodelist_3 = copy.copy(self.minmax_cst_nodelist_1)
 
         else:
-            self.minmax_cst_nodelist_1 = self.minmax_cst_nodelist_2 = []
+            self.minmax_cst_nodelist_1 = self.minmax_cst_nodelist_2 = self.minmax_cst_nodelist_3 = []
 
         self.max_runs = len(self.exist_cst_nodelist) + 2*len(self.size_cst_nodelist_1) + \
-                        2*len(self.qty_cst_nodelist_1) + 2*len(self.minmax_cst_nodelist_1)
+                        2*len(self.qty_cst_nodelist_1) + 3*len(self.minmax_cst_nodelist_1)
         
 
     def disrupt_data(self, dm, target, data):
@@ -524,6 +525,13 @@ class sd_struct_constraints(StatefulDisruptor):
                     self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
                                                       corrupt_op=lambda x, y: (new_maxi, new_maxi))
                     op_performed = "set node amount to its maximum plus one"
+            elif self.deep and self.minmax_cst_nodelist_3:
+                consumed_node, mini, maxi = self.minmax_cst_nodelist_3.pop()
+                if self.idx == step_idx:
+                    new_maxi = (maxi*10)
+                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
+                                                      corrupt_op=lambda x, y: (new_maxi, new_maxi))
+                    op_performed = "set node amount to a value way beyond its maximum"
             else:
                 stop = True
                 break

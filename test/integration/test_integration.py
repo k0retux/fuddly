@@ -3531,7 +3531,7 @@ class TestFMK(unittest.TestCase):
 
         self.assertEqual(code_vector, ['DataUnusable', 'HandOver', 'DataUnusable', 'HandOver',
                                        'DPHandOver', 'NoMoreData'])
-        self.assertEqual(base_qty, 53)
+        self.assertEqual(base_qty, 55)
 
         print('\n*** test scenario SC_AUTO_REGEN')
 

@@ -592,10 +592,11 @@ class Database(object):
 
         if with_fbk:
             for src, tstamp, status, content in feedback:
+                formatted_ts = None if tstamp is None else tstamp.strftime("%d/%m/%Y - %H:%M:%S")
                 msg += colorize("\n Status(", rgb=Color.FMKINFOGROUP)
                 msg += colorize("{!s}".format(src), rgb=Color.FMKSUBINFO)
                 msg += colorize(" | ", rgb=Color.FMKINFOGROUP)
-                msg += colorize("{:s}".format(tstamp.strftime("%d/%m/%Y - %H:%M:%S")),
+                msg += colorize("{!s}".format(formatted_ts),
                                 rgb=Color.FMKSUBINFO)
                 msg += colorize(")", rgb=Color.FMKINFOGROUP)
                 msg += colorize(" = {!s}".format(status), rgb=Color.FMKSUBINFO)
