@@ -58,7 +58,7 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', u
                     raise ValueError
 
                 if data is None:
-                    return False
+                    continue
                 off = data.find(mac_dst)
                 data = data[off:]
                 result = msg_x.absorb(data, constraints=AbsNoCsts(size=True, struct=True))
@@ -173,7 +173,7 @@ step_wait_padi = NoDataStep(fbk_timeout=10, fbk_mode=Target.FBK_WAIT_UNTIL_RECV,
                             step_desc='Wait PADI')
 
 dp_pado = DataProcess(process=[('ALT', None, UI(conf='fuzz')),
-                               ('tTYPE', UI(init=20), UI(order=True, fuzz_mag=0.7)),
+                               ('tTYPE', UI(init=1), UI(order=True, fuzz_mag=0.7)),
                                'FIX_FIELDS#pado1'], seed='pado')
 dp_pado.append_new_process([('ALT', None, UI(conf='fuzz')),
                             ('tSTRUCT', UI(init=1), UI(deep=True)), 'FIX_FIELDS#pado2'])
