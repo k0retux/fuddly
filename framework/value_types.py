@@ -903,24 +903,25 @@ class String(VT_Alt):
         sz = len(orig_val)
         sz_delta_with_max = self.max_encoded_sz - sz
 
-        try:
+        if sz > 0:
             val = bp.corrupt_bits(orig_val, n=1)
             self.values_fuzzy.append(val)
-        except:
-            print("\n*** Value is empty! --> skipping bitflip test case ***")
 
         val = orig_val + b"A"*(sz_delta_with_max + 1)
         self.values_fuzzy.append(val)
 
-        self.values_fuzzy.append(b'')
+        if len(self.encode(orig_val)) > 0:
+            self.values_fuzzy.append(b'')
+
         if sz > 0:
             sz_delta_with_min = sz - self.min_sz
             val = orig_val[:-sz_delta_with_min-1]
             if val != b'':
                 self.values_fuzzy.append(val)
 
-        val = orig_val + b"X"*(self.max_sz*int(100*fuzz_magnitude))
-        self.values_fuzzy.append(val)
+        if self.max_sz > 0:
+            val = orig_val + b"X"*(self.max_sz*int(100*fuzz_magnitude))
+            self.values_fuzzy.append(val)
 
         self.values_fuzzy.append(b'\x00' * sz if sz > 0 else b'\x00')
 

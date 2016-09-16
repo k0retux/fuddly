@@ -105,6 +105,10 @@ a client listening on a TCP socket bound to the port 12345::
 
   [another term] # nc -k -l 12345
 
+If you want to visualize your scenario, you can issue the following command
+(``[FMT]`` is optional and can be ``xdot``, ``pdf``, ``png``, ...)::
+
+  [fuddly term] >> show_scenario SC_EX1 [FMT]
 
 Finally, note that a step once executed will display a description related to what it did. You
 can override this description by providing the ``step_desc`` parameter of a

@@ -3338,6 +3338,34 @@ class TestDataModelHelpers(unittest.TestCase):
 
         self.assertEqual(node_regex.to_bytes(), node_classic.to_bytes())
 
+    @ddt.data(('(HTTP)/[0-9]\.[0-9]|this|is|it[0123456789]', [5, 1, 2]),
+              ('this|.is|it|[0123456789]', [1, 2, 1, 1]),
+              ('|this|is|it[0123456789]|\dyes\-', [1, 2, 2]))
+    @ddt.unpack
+    def test_regex_shape(self, regexp, shapes):
+        revisited_HTTP_version = {'name': 'HTTP_version_classic', 'contents': regexp}
+
+        mh = ModelHelper()
+        node = mh.create_graph_from_desc(revisited_HTTP_version)
+
+        excluded_idx = []
+
+        while True:
+            node_list, idx = node.cc._get_next_heavier_component(node.subnodes_csts, excluded_idx=excluded_idx)
+            if len(node_list) == 0:
+                break
+            excluded_idx.append(idx)
+            print(node_list)
+            try:
+                idx = shapes.index(len(node_list[0][1]))
+            except ValueError:
+                print(len(node_list[0][1]))
+                self.fail()
+            else:
+                del shapes[idx]
+
+        self.assertEqual(len(shapes), 0)
+
 
 class TestFMK(unittest.TestCase):
     @classmethod
@@ -3503,7 +3531,7 @@ class TestFMK(unittest.TestCase):
 
         self.assertEqual(code_vector, ['DataUnusable', 'HandOver', 'DataUnusable', 'HandOver',
                                        'DPHandOver', 'NoMoreData'])
-        self.assertEqual(base_qty, 53)
+        self.assertEqual(base_qty, 55)
 
         print('\n*** test scenario SC_AUTO_REGEN')
 

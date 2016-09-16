@@ -4352,13 +4352,23 @@ class NodeInternals_NonTerm(NodeInternals):
                             self.expanded_nodelist_sz += 1
                             self.expanded_nodelist = fresh_expanded_nodelist[:self.expanded_nodelist_sz]
                         else:
-                            # This case should not exist, a priori
-                            self.expanded_nodelist_sz = len(fresh_expanded_nodelist)
-                            self.expanded_nodelist = fresh_expanded_nodelist
+                            # This case should never trigger
+                            raise ValueError
+                            # self.expanded_nodelist_sz = len(fresh_expanded_nodelist)
+                            # self.expanded_nodelist = fresh_expanded_nodelist
                     else:
                         # assert self.expanded_nodelist_origsz > self.expanded_nodelist_sz
-                        self.expanded_nodelist.append(fresh_expanded_nodelist[self.expanded_nodelist_sz])
-                        self.expanded_nodelist_sz += 1
+                        if self.expanded_nodelist_sz is None:
+                            # This means that nothing has been computed yet. This is the case after
+                            # a call to reset() which is either due to a node copy after an absorption
+                            # or at node initialization.
+                            # In such a case, self.expanded_nodelist should be equal to []
+                            assert self.expanded_nodelist == []
+                            self.expanded_nodelist = fresh_expanded_nodelist
+                            self.expanded_nodelist_sz = len(fresh_expanded_nodelist)
+                        else:
+                            self.expanded_nodelist.append(fresh_expanded_nodelist[self.expanded_nodelist_sz])
+                            self.expanded_nodelist_sz += 1
                 else:
                     # In this case the states are random, thus we
                     # don't bother trying to recover the previous one
@@ -5310,6 +5320,7 @@ class Node(object):
         self.internals = backup.internals
         self.current_conf = backup.current_conf
         self.entangled_nodes = backup.entangled_nodes
+        self._delayed_jobs_called = backup._delayed_jobs_called
 
     def __check_conf(self, conf):
         if conf is None:

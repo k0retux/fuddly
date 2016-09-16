@@ -22,7 +22,9 @@
 ################################################################################
 
 try:
+    import xtermcolor
     from xtermcolor import colorize
+    xtermcolor.isatty = lambda x: True
 except ImportError:
     print("WARNING [FMK]: python-xtermcolor module is not installed, colors won't be available!")
     def colorize(string, rgb=None, ansi=None, bg=None, ansi_bg=None, fd=1):
@@ -86,13 +88,19 @@ class FontStyle:
     UNDERLINE = '\033[4m'
     END = '\033[0m'
 
+graphviz_module = True
+try:
+    import graphviz
+except ImportError:
+    graphviz_module = False
+    print('WARNING [FMK]: python(3)-graphviz module is not installed, Scenario could not be visualized!')
 
 sqlite3_module = True
 try:
     import sqlite3
 except ImportError:
     sqlite3_module = False
-    print('WARNING [FMK]: SQLite3 not installed, FMKDB will not be available!')
+    print('WARNING [FMK]: SQLite3 not installed, FmkDB will not be available!')
 
 cups_module = True
 try:

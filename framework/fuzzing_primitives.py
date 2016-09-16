@@ -698,11 +698,17 @@ class AltConfConsumer(NodeConsumerStub):
 
 class TypedNodeDisruption(NodeConsumerStub):
 
-    def init_specific(self, **kwargs):
-        self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable],
-                                                            negative_attrs=[dm.NodeInternals.Separator],
-                                                            node_kinds=[dm.NodeInternals_TypedValue,
-                                                                        dm.NodeInternals_GenFunc])
+    def init_specific(self, ignore_separator=False):
+        if ignore_separator:
+            self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable],
+                                                                negative_attrs=[dm.NodeInternals.Separator],
+                                                                node_kinds=[dm.NodeInternals_TypedValue,
+                                                                            dm.NodeInternals_GenFunc])
+        else:
+            self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable],
+                                                                node_kinds=[dm.NodeInternals_TypedValue,
+                                                                            dm.NodeInternals_GenFunc])
+
         # self.orig_value = None
         self.current_fuzz_vt_list = None
         self.current_node = None

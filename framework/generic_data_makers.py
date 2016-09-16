@@ -119,9 +119,11 @@ class sd_iter_over_data(StatefulDisruptor):
                           ' the disruptor should apply', None, str),
                  'order': ('when set to True, the fuzzing order is strictly guided ' \
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
-                           'in the data model) is used for ordering', False, bool),
+                           'in the data model) is used for ordering', True, bool),
                  'deep': ('when set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes', True, bool),
+                 'ign_sep': ('when set to True, non-terminal separators will be ignored ' \
+                          'if any are defined.', False, bool),
                  'fix_all': ('for each produced data, reevaluate the constraints on the whole graph',
                              False, bool),
                  'fix': ("limit constraints fixing to the nodes related to the currently fuzzed one"
@@ -148,7 +150,8 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
                                             min_runs_per_node=self.min_runs_per_node,
                                             fuzz_magnitude=self.fuzz_mag,
                                             fix_constraints=self.fix,
-                                            respect_order=self.order)
+                                            respect_order=self.order,
+                                            ignore_separator=self.ign_sep)
         self.consumer.need_reset_when_structure_change = self.deep
         self.consumer.set_node_interest(path_regexp=self.path)
         self.modelwalker = ModelWalker(prev_data.node, self.consumer, max_steps=self.max_steps, initial_step=self.init)
@@ -176,7 +179,7 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
 
         corrupt_node_bytes = consumed_node.to_bytes()
 
-        data.add_info('model walking index: {:d}'.format(idx))        
+        data.add_info('model walking index: {:d}'.format(idx))
         data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
         data.add_info('current fuzzed node:     {!s}'.format(self.modelwalker.consumed_node_path))
         data.add_info(' |_ value type:          {!s}'.format(consumed_node.cc.get_value_type()))
@@ -297,7 +300,7 @@ class sd_switch_to_alternate_conf(StatefulDisruptor):
                           ' the disruptor should apply', None, str),
                  'order': ('when set to True, the fuzzing order is strictly guided ' \
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
-                           'in the data model) is used for ordering', False, bool),
+                           'in the data model) is used for ordering', True, bool),
                  'deep': ('when set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes', True, bool)})
 class sd_fuzz_separator_nodes(StatefulDisruptor):
@@ -461,12 +464,13 @@ class sd_struct_constraints(StatefulDisruptor):
                     self.minmax_cst_nodelist_1.remove((n, mini, maxi))
 
             self.minmax_cst_nodelist_2 = copy.copy(self.minmax_cst_nodelist_1)
+            self.minmax_cst_nodelist_3 = copy.copy(self.minmax_cst_nodelist_1)
 
         else:
-            self.minmax_cst_nodelist_1 = self.minmax_cst_nodelist_2 = []
+            self.minmax_cst_nodelist_1 = self.minmax_cst_nodelist_2 = self.minmax_cst_nodelist_3 = []
 
         self.max_runs = len(self.exist_cst_nodelist) + 2*len(self.size_cst_nodelist_1) + \
-                        2*len(self.qty_cst_nodelist_1) + 2*len(self.minmax_cst_nodelist_1)
+                        2*len(self.qty_cst_nodelist_1) + 3*len(self.minmax_cst_nodelist_1)
         
 
     def disrupt_data(self, dm, target, data):
@@ -521,6 +525,13 @@ class sd_struct_constraints(StatefulDisruptor):
                     self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
                                                       corrupt_op=lambda x, y: (new_maxi, new_maxi))
                     op_performed = "set node amount to its maximum plus one"
+            elif self.deep and self.minmax_cst_nodelist_3:
+                consumed_node, mini, maxi = self.minmax_cst_nodelist_3.pop()
+                if self.idx == step_idx:
+                    new_maxi = (maxi*10)
+                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
+                                                      corrupt_op=lambda x, y: (new_maxi, new_maxi))
+                    op_performed = "set node amount to a value way beyond its maximum"
             else:
                 stop = True
                 break

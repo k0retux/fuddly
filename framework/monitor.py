@@ -1026,9 +1026,12 @@ class ProbeMem(Probe):
     Attributes:
         backend (Backend): backend to be used (e.g., :class:`SSH_Backend`).
         process_name (str): name of the process to monitor.
-        threshold (int): memory (RSS) threshold in bytes that the monitored process should not exceed.
+        threshold (int): memory (RSS) threshold that the monitored process should not exceed.
+          (dimension should be the same as what is provided by the `ps` command of the system
+          under test)
         tolerance (int): tolerance expressed in percentage of the memory (RSS) the process was
-          using at the beginning of the monitoring.
+          using at the beginning of the monitoring (or after each time the tolerance has been
+          exceeded).
         command_pattern (str): format string for the ssh command. '{0:s}' refer
           to the process name.
     """
@@ -1043,6 +1046,7 @@ class ProbeMem(Probe):
         assert self.backend != None
         self._saved_mem = None
         self._max_mem = None
+        self._last_status_ok = None
         Probe.__init__(self)
 
     def _get_mem(self):
@@ -1068,6 +1072,7 @@ class ProbeMem(Probe):
         self.backend.start()
         self._max_mem = None
         self._saved_mem = self._get_mem()
+        self._last_status_ok = True
         self.reset()
         if self._saved_mem < 0:
             msg = "*** INIT ERROR: unable to retrieve process RSS ***\n"
@@ -1109,13 +1114,20 @@ class ProbeMem(Probe):
             if not ok:
                 status.set_status(-1)
                 status.set_private_info(err_msg+'\n'+info)
+                self._last_status_ok = False
             else:
                 status.set_status(self._max_mem)
                 status.set_private_info(info)
+                self._last_status_ok = True
         return status
 
     def reset(self):
-        if self._max_mem is not None:
+        if self._max_mem is not None and not self._last_status_ok:
+            # In this case, the memory consumption exceeds the `tolerance` ratio or the `threshold`.
+            # We update saved_mem with what was witnessed to avoid triggering an issue
+            # continuously when the tolerance ratio has been exceeded.
+            # Thus, in order for the probe to trigger a new issue, the
+            # `tolerance` ratio should be exceeded again with the new saved_mem.
             self._saved_mem = self._max_mem
         self._max_mem = self._saved_mem
 

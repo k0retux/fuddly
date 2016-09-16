@@ -58,7 +58,7 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', u
                     raise ValueError
 
                 if data is None:
-                    return False
+                    continue
                 off = data.find(mac_dst)
                 data = data[off:]
                 result = msg_x.absorb(data, constraints=AbsNoCsts(size=True, struct=True))
@@ -169,10 +169,11 @@ class t_fix_pppoe_msg_fields(Disruptor):
         return prev_data
 
 ### PADI fuzz scenario ###
-step_wait_padi = NoDataStep(fbk_timeout=10, fbk_mode=Target.FBK_WAIT_UNTIL_RECV)
+step_wait_padi = NoDataStep(fbk_timeout=10, fbk_mode=Target.FBK_WAIT_UNTIL_RECV,
+                            step_desc='Wait PADI')
 
 dp_pado = DataProcess(process=[('ALT', None, UI(conf='fuzz')),
-                               ('tTYPE', UI(init=20), UI(order=True, fuzz_mag=0.7)),
+                               ('tTYPE', UI(init=1), UI(order=True, fuzz_mag=0.7)),
                                'FIX_FIELDS#pado1'], seed='pado')
 dp_pado.append_new_process([('ALT', None, UI(conf='fuzz')),
                             ('tSTRUCT', UI(init=1), UI(deep=True)), 'FIX_FIELDS#pado2'])
@@ -189,7 +190,7 @@ sc1 = Scenario('PADO')
 sc1.set_anchor(step_wait_padi)
 
 ### PADS fuzz scenario ###
-step_wait_padi = NoDataStep(fbk_timeout=10, fbk_mode=Target.FBK_WAIT_UNTIL_RECV)
+step_wait_padi = NoDataStep(fbk_timeout=10, fbk_mode=Target.FBK_WAIT_UNTIL_RECV, step_desc='Wait PADI')
 step_send_valid_pado = Step(DataProcess(process=[('FIX_FIELDS#pads1', None, UI(reevaluate_csts=True))],
                                         seed='pado'), fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
 step_send_padt = Step(DataProcess(process=[('FIX_FIELDS#pads2', None, UI(reevaluate_csts=True))],
@@ -201,7 +202,8 @@ dp_pads = DataProcess(process=[('ALT', None, UI(conf='fuzz')),
 dp_pads.append_new_process([('ALT', None, UI(conf='fuzz')),
                             ('tSTRUCT#2', UI(init=1), UI(deep=True)), 'FIX_FIELDS#pads4'])
 step_send_fuzzed_pads = Step(dp_pads, fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
-step_wait_padr = NoDataStep(fbk_timeout=10, fbk_mode=Target.FBK_WAIT_UNTIL_RECV)
+step_wait_padr = NoDataStep(fbk_timeout=10, fbk_mode=Target.FBK_WAIT_UNTIL_RECV,
+                            step_desc='Wait PADR/PADI')
 
 step_wait_padi.connect_to(step_send_valid_pado, cbk_after_fbk=retrieve_padi_from_feedback)
 step_send_valid_pado.connect_to(step_send_fuzzed_pads, cbk_after_fbk=retrieve_padr_from_feedback_and_update)

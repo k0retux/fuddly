@@ -83,10 +83,11 @@ Dependencies
 + Optional:
 
   - `xtermcolor`_: Terminal color support
-  - `cups`_: Python bindings for libcups
-  - `rpyc`_: Remote Python Call (RPyC), a transparent and symmetric RPC library
+  - `graphviz`_: For graphic visualization (e.g., scenario display)
   - `paramiko`_: Python implementation of the SSHv2 protocol
   - `serial`_: For serial port access
+  - `cups`_: Python bindings for libcups
+  - `rpyc`_: Remote Python Call (RPyC), a transparent and symmetric RPC library
 
 + For testing:
 
@@ -102,10 +103,11 @@ Dependencies
 .. _six: http://pythonhosted.org/six/
 .. _sqlite3: https://www.sqlite.org/
 .. _xtermcolor: https://github.com/broadinstitute/xtermcolor
-.. _cups: https://pypi.python.org/pypi/pycups
-.. _rpyc: https://pypi.python.org/pypi/rpyc
+.. _graphviz: https://pypi.python.org/pypi/graphviz
 .. _paramiko: http://www.paramiko.org/
 .. _serial: https://github.com/pyserial/pyserial
+.. _cups: https://pypi.python.org/pypi/pycups
+.. _rpyc: https://pypi.python.org/pypi/rpyc
 .. _ddt: https://github.com/txels/ddt
 .. _mock: https://pypi.python.org/pypi/mock
 .. _sphinx: http://sphinx-doc.org/
