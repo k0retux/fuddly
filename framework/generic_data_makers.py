@@ -51,7 +51,7 @@ class SwapperDisruptor(StatefulDisruptor):
     Merge two nodes to produce two children
     """
     def _swap_nodes(self, node_1, node_2):
-        node_2_copy = copy.copy(node_2)
+        node_2_copy = node_2.get_clone()
         node_2.set_contents(node_1)
         node_1.set_contents(node_2_copy)
 
@@ -59,8 +59,10 @@ class SwapperDisruptor(StatefulDisruptor):
 
         self.count = 0  # number of sent element
 
+        prev_data.node.freeze(recursive=True)
+
         if self.node is None:
-            self.node = copy.copy(prev_data.node)
+            self.node = prev_data.node.get_clone()
 
 
     def disrupt_data(self, dm, target, data):
