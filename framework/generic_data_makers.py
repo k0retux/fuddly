@@ -22,7 +22,6 @@
 ################################################################################
 
 import subprocess
-import math
 from copy import *
 
 from framework.data_model import *
@@ -123,34 +122,32 @@ class sd_crossover(SwapperDisruptor):
                         continue
 
                     parent_path = current_path[:-current_path[::-1].find('/') - 1]
-                    children_nb = self._count_brothers(self.shared, index, parent_path)
+                    children_nb = self._count_brothers(index, parent_path)
                     if children_nb == self.node.get_node_by_path(parent_path).internals[
                         self.node.get_current_conf()].get_subnode_qty():
-                        self._merge_brothers(self.shared, index, parent_path, children_nb)
+                        self._merge_brothers(index, parent_path, children_nb)
                         change = True
                         index += 1
                         length = len(self.shared)
                     else:
                         index += children_nb
 
-        def _count_brothers(self, paths, index, pattern):
+        def _count_brothers(self, index, pattern):
             count = 1
             p = re.compile(u'^' + pattern + '($|/*)')
-            for i in range(index + 1, len(paths)):
-                if re.match(p, paths[i]) is not None:
+            for i in range(index + 1, len(self.shared)):
+                if re.match(p, self.shared[i]) is not None:
                     count += 1
             return count
 
-        def _merge_brothers(self, paths, index, pattern, length):
+        def _merge_brothers(self, index, pattern, length):
             for _ in range(0, length, 1):
-                del paths[index]
-            paths.insert(index, pattern)
-
-
+                del self.shared[index]
+            self.shared.insert(index, pattern)
 
     def setup(self, dm, user_input):
         if self.percentage_to_share is None:
-            self.percentage_to_share = float(random.randint(2, 8)) / 10.0
+            self.percentage_to_share = float(random.randint(3, 7)) / 10.0
         elif not (0 < self.percentage_to_share < 1):
             print("Invalid percentage, a float between 0 and 1 need to be provided")
             return False
@@ -175,8 +172,6 @@ class sd_crossover(SwapperDisruptor):
 
         swap_nb = len(source.shared) if len(source.shared) < len(param.shared) else len(param.shared)
 
-        print(source.shared)
-        print(param.shared)
         for i in range(swap_nb):
             node_1 = source.node.get_node_by_path(path=source.shared[i])
             node_2 = param.node.get_node_by_path(path=param.shared[i])
@@ -188,7 +183,7 @@ class sd_crossover(SwapperDisruptor):
            args={'node': ('node to combine with', None, Node)})
 class sd_combine(SwapperDisruptor):
     """
-    Merge two nodes to produce two children
+    Merge two nodes by swapping some roots' children
     """
 
     def setup(self, dm, user_input):
@@ -221,7 +216,7 @@ class sd_combine(SwapperDisruptor):
             return prev_data
 
         swap_nb = len(source) if len(source) < len(param) else len(param)
-        swap_nb = int(math.ceil(float(swap_nb)/2.0))
+        swap_nb = int(math.ceil(swap_nb/2.0))
 
         random.shuffle(source)
         random.shuffle(param)
