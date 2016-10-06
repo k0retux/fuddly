@@ -265,11 +265,12 @@ class Target(object):
 class TargetFeedback(object):
     fbk_lock = threading.Lock()
 
-    def __init__(self, bstring=b''):
+    def __init__(self):
         self.cleanup()
         self._feedback_collector = collections.OrderedDict()
         self._feedback_collector_tstamped = collections.OrderedDict()
-        self.set_bytes(bstring)
+        self._tstamped_bstring = None
+        # self.set_bytes(bstring)
 
     def add_fbk_from(self, ref, fbk):
         now = datetime.datetime.now()
@@ -383,19 +384,20 @@ class NetworkTarget(Target):
     supported_feedback_mode = [Target.FBK_WAIT_FULL_TIME, Target.FBK_WAIT_UNTIL_RECV]
 
     def __init__(self, host='localhost', port=12345, socket_type=(socket.AF_INET, socket.SOCK_STREAM),
-                 data_semantics=UNKNOWN_SEMANTIC, server_mode=False, hold_connection=False,
+                 data_semantics=UNKNOWN_SEMANTIC, server_mode=False, target_address=None,
+                 hold_connection=False,
                  mac_src=None, mac_dst=None):
         '''
         Args:
-          host (str): the IP address of the target to connect to, or
+          host (str): IP address of the target to connect to, or
             the IP address on which we will wait for target connecting
             to us (if `server_mode` is True). For raw socket type, it should contain the name of
             the interface.
-          port (int): the port for communicating with the target, or
+          port (int): Port for communicating with the target, or
             the port to listen to. For raw socket type, it should contain the protocol ID.
-          socket_type (tuple): tuple composed of the socket address family
+          socket_type (tuple): Tuple composed of the socket address family
             and socket type
-          data_semantics (str): string of characters that will be used for
+          data_semantics (str): String of characters that will be used for
             data routing decision. Useful only when more than one interface
             are defined. In such case, the data semantics will be checked in
             order to find a matching interface to which data will be sent. If
@@ -404,6 +406,11 @@ class NetworkTarget(Target):
           server_mode (bool): If `True`, the interface will be set in server mode,
             which means we will wait for the real target to connect to us for sending
             it data.
+          target_address (tuple): Used only if `server_mode` is `True` and socket type
+            is `SOCK_DGRAM`. To be used if data has to be sent to a specific address
+            (which is not necessarily the client). It is especially
+            useful if you need to send data before receiving anything. What should be provided is
+            a tuple `(host(str), port(int))` associated to the target.
           hold_connection (bool): If `True`, we will maintain the connection while
             sending data to the real target. Otherwise, after each data emission,
             we close the related socket.
@@ -448,6 +455,9 @@ class NetworkTarget(Target):
         if socket_type[1] == socket.SOCK_RAW:
             self._mac_src[(host, port)] = self.get_mac_addr(host) if mac_src is None else mac_src
             self._mac_dst[(host, port)] = mac_dst
+
+        self._target_address = {}
+        self._target_address[(host, port)] = target_address
 
         self._host = {}
         self._port = {}
@@ -498,6 +508,7 @@ class NetworkTarget(Target):
         return True
 
     def register_new_interface(self, host, port, socket_type, data_semantics, server_mode=False,
+                               target_address = None,
                                hold_connection=False, mac_src=None, mac_dst=None):
 
         if not self._is_valid_socket_type(socket_type):
@@ -509,6 +520,7 @@ class NetworkTarget(Target):
         self._socket_type[data_semantics] = socket_type
         self.known_semantics.append(data_semantics)
         self.server_mode[(host,port)] = server_mode
+        self._target_address[(host, port)] = target_address
         self._default_fbk_id[(host, port)] = self._default_fbk_socket_id + ' - {:s}:{:d}'.format(host, port)
         self.hold_connection[(host, port)] = hold_connection
         if socket_type[1] == socket.SOCK_RAW:
@@ -570,6 +582,7 @@ class NetworkTarget(Target):
             assert(not str(fbk_id).startswith('Default Additional Feedback ID'))
         self._additional_fbk_desc[fbk_id] = (host, port, socket_type, fbk_id, fbk_length, server_mode)
         self.hold_connection[(host, port)] = True
+        self._target_address[(host, port)] = None
 
     def _custom_data_handling_before_emission(self, data_list):
         '''To be overloaded if you want to perform some operation before
@@ -934,7 +947,7 @@ class NetworkTarget(Target):
             try:
                 s.bind((host, port))
             except socket.error as serr:
-                print('\n*** ERROR(while binding socket): ' + str(serr))
+                print('\n*** ERROR(while binding socket -- host={!s} port={:d}): {:s}'.format(host, port, str(serr)))
                 return False
         else:
             try:
@@ -994,7 +1007,7 @@ class NetworkTarget(Target):
         if sock_type != socket.SOCK_RAW:
             serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             if sock_type == socket.SOCK_STREAM:
-                serversocket.settimeout(0.2)
+                serversocket.settimeout(0.2) # to avoid waiting too long for binding
 
         if sock_type == socket.SOCK_DGRAM or sock_type == socket.SOCK_RAW:
             serversocket.settimeout(self._sending_delay)
@@ -1004,7 +1017,7 @@ class NetworkTarget(Target):
         try:
             serversocket.bind((host, port))
         except socket.error as serr:
-            print('\n*** ERROR(while binding socket): ' + str(serr))
+            print('\n*** ERROR(while binding socket|host={!s},port={:d}): {:s}'.format(host, port, str(serr)))
             return False
 
         self._server_sock2hp[serversocket] = (host, port)
@@ -1024,6 +1037,7 @@ class NetworkTarget(Target):
         else:
             raise ValueError("Unrecognized socket type")
 
+    # For SOCK_STREAM
     def _server_main(self, serversocket, host, port, func):
         while not self.stop_event.is_set():
             try:
@@ -1044,16 +1058,31 @@ class NetworkTarget(Target):
                     args = self._server_thread_share[(host, port)]
                 func(clientsocket, address, args)
 
+    # For SOCK_RAW and SOCK_DGRAM
     def _raw_server_main(self, serversocket, host, port, func):
 
         with self._server_thread_lock:
             args = self._server_thread_share[(host, port)]
 
+        target_address = self._target_address[(host, port)]
+        wait_for_reception = True
+        if target_address is not None:
+            wait_for_reception = False
+        elif func == self._handle_connection_to_fbk_server:
+            # args = fbk_id, fbk_length, connected_client_event
+            wait_for_reception = False if args[0] in self._additional_fbk_desc else True
+        elif func == self._handle_target_connection:
+            # args = data, host, port, connected_client_event, from_fmk
+            wait_for_reception = False if args[0] is None else True
+            # In the case 'data' is None there is no data to send,
+            # thus we are requested to only collect feedback
+        else:
+            raise ValueError
+
         retry = 0
         while retry < 10:
             try:
-                # accept UDP from outside
-                if args[0] is not None:
+                if wait_for_reception:
                     data, address = serversocket.recvfrom(self.CHUNK_SZ)
                 else:
                     data, address = None, None
@@ -1074,6 +1103,7 @@ class NetworkTarget(Target):
                     time.sleep(0.5)
                     continue
             else:
+                address = address if target_address is None else target_address
                 serversocket.settimeout(self.feedback_timeout)
                 func(serversocket, address, args, pre_fbk=data)
                 break

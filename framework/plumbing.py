@@ -2057,11 +2057,13 @@ class FmkPlumbing(object):
                                                      epilogue=epilogue,
                                                      source=ref, status_code=err_code)
 
-            self.lg.log_target_feedback_from(tg_fbk.get_bytes(),
-                                             tg_fbk.get_timestamp(),
-                                             status_code=err_code,
-                                             preamble=preamble,
-                                             epilogue=epilogue)
+            raw_fbk = tg_fbk.get_bytes()
+            if raw_fbk is not None:
+                self.lg.log_target_feedback_from(raw_fbk,
+                                                 tg_fbk.get_timestamp(),
+                                                 status_code=err_code,
+                                                 preamble=preamble,
+                                                 epilogue=epilogue)
 
             tg_fbk.cleanup()
 
