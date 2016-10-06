@@ -1238,12 +1238,11 @@ character string in our case.
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 5-6
+   :emphasize-lines: 4-5
 
     {'name': 'len_gen',
      'contents': [
 	 {'name': 'len',
-	  'type': MH.Generator,
 	  'contents': lambda x: Node('cts', value_type= \
                                      UINT32_be(values=[len(x.to_bytes())])),
 	  'node_args': 'payload'},
@@ -1274,12 +1273,11 @@ of it.
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 5
+   :emphasize-lines: 4
 
     {'name': 'len_gen',
      'contents': [
 	 {'name': 'len',
-	  'type': MH.Generator,
 	  'contents': MH.LEN(UINT32_be),
 	  'node_args': 'payload'},
 
@@ -1305,12 +1303,11 @@ constraints for this node, as shown in the following example:
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 7
+   :emphasize-lines: 6
 
     {'name': 'len_gen',
      'contents': [
 	 {'name': 'len',
-	  'type': MH.Generator,
 	  'contents': MH.LEN(UINT32_be),
 	  'node_args': 'payload',
 	  'absorb_csts': AbsNoCsts()  # or more accurately AbsCsts(contents=False)
@@ -1325,12 +1322,11 @@ be used only for absorption:
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 7-9
+   :emphasize-lines: 6-8
 
     {'name': 'len_gen',
      'contents': [
 	 {'name': 'len',
-	  'type': MH.Generator,
 	  'contents': MH.LEN(UINT32_be),
 	  'node_args': 'payload',
 	  'alt': [
@@ -1358,7 +1354,7 @@ Finally, let's take the following example that illustrates other
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 16, 21, 26, 31
+   :emphasize-lines: 15, 19, 23, 27
 
     {'name': 'misc_gen',
      'contents': [
@@ -1374,22 +1370,18 @@ Finally, let's take the following example that illustrates other
 	  ]},
 
 	 {'name': 'int16_qty',
-	  'type': MH.Generator,
 	  'contents': MH.QTY(node_name='int16', vt=UINT8),
 	  'node_args': 'integers'},
 
 	 {'name': 'int32_qty',
-	  'type': MH.Generator,
 	  'contents': MH.QTY(node_name='int32', vt=UINT8),
 	  'node_args': 'integers'},
 
 	 {'name': 'tstamp',
-	  'type': MH.Generator,
 	  'contents': MH.TIMESTAMP("%H%M%S"),
 	  'absorb_csts': AbsCsts(contents=False)},
 
 	 {'name': 'crc',
-	  'type': MH.Generator,
 	  'contents': MH.CRC(UINT32_be),
 	  'node_args': ['tstamp', 'int32_qty'],
 	  'absorb_csts': AbsCsts(contents=False)}
@@ -1649,19 +1641,19 @@ Example 3: Using shapes. (Refer to :ref:`dm:patterns`)
    # is equivalent to
    classic = {'name': 'something',
               'contents': [
-                 {'weights': 1,
+                 {'weight': 1,
                   'contents': [
                      {'name': 'something_1', 'contents': String(values=['this'])},
                      {'name': 'something_2', 'contents': String(alphabet='0123456789')},
                      {'name': 'something_3', 'contents': String(values=['is'])},
                   ]},
 
-                 {'weights': 1,
+                 {'weight': 1,
                   'contents': [
                      {'name': 'something_4', 'contents': String(values=['a'])},
                   ]},
 
-                 {'weights': 1,
+                 {'weight': 1,
                   'contents': [
                      {'name': 'something_5', 'contents': String(values=['digit'])},
                      {'name': 'something_6', 'contents': String(alphabet='!')},
