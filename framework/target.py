@@ -384,7 +384,7 @@ class NetworkTarget(Target):
     supported_feedback_mode = [Target.FBK_WAIT_FULL_TIME, Target.FBK_WAIT_UNTIL_RECV]
 
     def __init__(self, host='localhost', port=12345, socket_type=(socket.AF_INET, socket.SOCK_STREAM),
-                 data_semantics=UNKNOWN_SEMANTIC, server_mode=False, target_address=None,
+                 data_semantics=UNKNOWN_SEMANTIC, server_mode=False, target_address=None, wait_for_client=True,
                  hold_connection=False,
                  mac_src=None, mac_dst=None):
         '''
@@ -411,6 +411,11 @@ class NetworkTarget(Target):
             (which is not necessarily the client). It is especially
             useful if you need to send data before receiving anything. What should be provided is
             a tuple `(host(str), port(int))` associated to the target.
+          wait_for_client (bool): Used only in server mode (`server_mode` is `True`) when the
+            `socket type` is `SOCK_DGRAM` and a `target_address` is provided, or when the `socket_type`
+            is `SOCK_RAW`. If set to `True`, before sending any data, the `NetworkTarget` will
+            wait for the reception of data (from any client); otherwise it will send data as soon
+            as provided.
           hold_connection (bool): If `True`, we will maintain the connection while
             sending data to the real target. Otherwise, after each data emission,
             we close the related socket.
@@ -456,8 +461,8 @@ class NetworkTarget(Target):
             self._mac_src[(host, port)] = self.get_mac_addr(host) if mac_src is None else mac_src
             self._mac_dst[(host, port)] = mac_dst
 
-        self._target_address = {}
-        self._target_address[(host, port)] = target_address
+        self._server_mode_additional_info = {}
+        self._server_mode_additional_info[(host, port)] = (target_address, wait_for_client)
 
         self._host = {}
         self._port = {}
@@ -508,7 +513,7 @@ class NetworkTarget(Target):
         return True
 
     def register_new_interface(self, host, port, socket_type, data_semantics, server_mode=False,
-                               target_address = None,
+                               target_address = None, wait_for_client=True,
                                hold_connection=False, mac_src=None, mac_dst=None):
 
         if not self._is_valid_socket_type(socket_type):
@@ -520,7 +525,7 @@ class NetworkTarget(Target):
         self._socket_type[data_semantics] = socket_type
         self.known_semantics.append(data_semantics)
         self.server_mode[(host,port)] = server_mode
-        self._target_address[(host, port)] = target_address
+        self._server_mode_additional_info[(host, port)] = (target_address, wait_for_client)
         self._default_fbk_id[(host, port)] = self._default_fbk_socket_id + ' - {:s}:{:d}'.format(host, port)
         self.hold_connection[(host, port)] = hold_connection
         if socket_type[1] == socket.SOCK_RAW:
@@ -582,7 +587,7 @@ class NetworkTarget(Target):
             assert(not str(fbk_id).startswith('Default Additional Feedback ID'))
         self._additional_fbk_desc[fbk_id] = (host, port, socket_type, fbk_id, fbk_length, server_mode)
         self.hold_connection[(host, port)] = True
-        self._target_address[(host, port)] = None
+        self._server_mode_additional_info[(host, port)] = (None, None)
 
     def _custom_data_handling_before_emission(self, data_list):
         '''To be overloaded if you want to perform some operation before
@@ -861,7 +866,13 @@ class NetworkTarget(Target):
                         sockets.append(s)
                         data_refs[s] = (data, host, port, None)
 
-        self._send_data(sockets, data_refs, self._sending_id, from_fmk)
+        if data_refs:
+            self._send_data(sockets, data_refs, self._sending_id, from_fmk)
+        else:
+            # this case exist when data are only sent through 'server_mode'-configured interfaces
+            # or a connection error has occurred.
+            pass
+
         t0 = datetime.datetime.now()
 
         if connected_client_event:
@@ -970,7 +981,7 @@ class NetworkTarget(Target):
 
         def start_raw_server(serversocket):
             server_thread = threading.Thread(None, self._raw_server_main, name='SRV-' + '',
-                                             args=(serversocket, host, port, func))
+                                             args=(serversocket, host, port, sock_type, func))
             server_thread.start()
 
         skt_sz = len(socket_type)
@@ -1059,30 +1070,36 @@ class NetworkTarget(Target):
                 func(clientsocket, address, args)
 
     # For SOCK_RAW and SOCK_DGRAM
-    def _raw_server_main(self, serversocket, host, port, func):
+    def _raw_server_main(self, serversocket, host, port, sock_type, func):
 
         with self._server_thread_lock:
             args = self._server_thread_share[(host, port)]
 
-        target_address = self._target_address[(host, port)]
-        wait_for_reception = True
+        target_address, wait_for_client = self._server_mode_additional_info[(host, port)]
         if target_address is not None:
-            wait_for_reception = False
+            wait_before_sending = wait_for_client
         elif func == self._handle_connection_to_fbk_server:
             # args = fbk_id, fbk_length, connected_client_event
-            wait_for_reception = False if args[0] in self._additional_fbk_desc else True
+            assert args[0] in self._additional_fbk_desc
+            wait_before_sending = False
         elif func == self._handle_target_connection:
             # args = data, host, port, connected_client_event, from_fmk
-            wait_for_reception = False if args[0] is None else True
-            # In the case 'data' is None there is no data to send,
-            # thus we are requested to only collect feedback
+            if args[0] is None:
+                # In the case 'data' is None there is no data to send,
+                # thus we are requested to only collect feedback
+                wait_before_sending = False
+            elif sock_type == socket.SOCK_RAW:
+                # in this case target_address is not provided, but it is OK if it is a SOCK_RAW
+                wait_before_sending = wait_for_client
+            else:
+                wait_before_sending = True
         else:
             raise ValueError
 
         retry = 0
         while retry < 10:
             try:
-                if wait_for_reception:
+                if wait_before_sending:
                     data, address = serversocket.recvfrom(self.CHUNK_SZ)
                 else:
                     data, address = None, None
@@ -1423,9 +1440,9 @@ class NetworkTarget(Target):
         for data in data_list:
             if data.node is None:
                 continue
+            data.node.freeze()
             host, port, socket_type, _ = self._get_net_info_from(data)
             if socket_type[1] == socket.SOCK_RAW:
-                data.node.freeze()
                 mac_src = self._mac_src[(host,port)]
                 mac_dst = self._mac_dst[(host,port)]
                 if mac_src is not None:

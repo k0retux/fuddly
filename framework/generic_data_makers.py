@@ -1105,7 +1105,6 @@ class d_fix_constraints(Disruptor):
             prev_data.add_info('release constraints from the root')
 
         prev_data.node.freeze()
-        prev_data.node.show()
 
         if self.clone_node:
             exported_node = Node(prev_data.node.name, base_node=prev_data.node, new_env=True)
@@ -1147,8 +1146,8 @@ class d_next_node_content(Disruptor):
             for n in l:
                 n.unfreeze(recursive=self.recursive)
                 n.freeze()
-                prev_data.add_info("unfreeze the node '{!s}'".format(n.get_path_from(prev_data.node)))
-                prev_data.add_info("new value:        '{!s}'".format(n.to_bytes()))
+                prev_data.add_info("unfreeze the node {!s}".format(n.get_path_from(prev_data.node)))
+                prev_data.add_info("new value:        {!s}".format(n.to_bytes()))
 
         else:
             prev_data.node.unfreeze(recursive=self.recursive)
@@ -1211,9 +1210,9 @@ class d_modify_nodes(Disruptor):
 
     def _add_info(self, prev_data, n, status, size):
         val_len = len(self.value)
-        prev_data.add_info("changed node:     '{!s}'".format(n.name))
+        prev_data.add_info("changed node:     {!s}".format(n.name))
         prev_data.add_info("absorption status: {!s}".format(status))
-        prev_data.add_info("value provided:   '{!s}'".format(truncate_info(self.value)))
+        prev_data.add_info("value provided:   {!s}".format(truncate_info(self.value)))
         prev_data.add_info("__ length:         {:d}".format(val_len))
         if status != AbsorbStatus.FullyAbsorbed:
             prev_data.add_info("absorbed size:     {:d}".format(size))
