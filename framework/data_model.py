@@ -1876,6 +1876,15 @@ class NodeInternals_GenFunc(NodeInternals):
             # look at .get_child_all_path() comments
             pass
 
+    def __getattr__(self, name):
+        gen_node = self.__getattribute__('_generated_node')
+        if gen_node is not None:
+            # to avoid looping in __getattr__
+            return getattr(gen_node, name)
+        else:
+            return object.__getattribute__(self, name)
+
+
 class NodeInternals_Term(NodeInternals):
     def _init_specific(self, arg):
         self.frozen_node = None

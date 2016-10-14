@@ -440,12 +440,12 @@ class ScenarioEnv(object):
 
 class Scenario(object):
 
-    def __init__(self, name):
+    def __init__(self, name, anchor=None):
         self.name = name
         self._dm = None
         self._env = ScenarioEnv()
         self._periodic_ids = set()
-        self._anchor = None
+        self._anchor = anchor
 
     def set_data_model(self, dm):
         self._dm = dm

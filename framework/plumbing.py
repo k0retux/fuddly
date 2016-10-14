@@ -1845,7 +1845,10 @@ class FmkPlumbing(object):
                 else:
                     raise ValueError
             except TargetStuck as e:
-                self.lg.log_comment("*** WARNING: Unable to send data to the target! [reason: %s]" % str(e))
+                self.lg.log_target_feedback_from(
+                    '*** WARNING: Unable to send data to the target! [reason: {!s}]'.format(e),
+                    datetime.datetime.now(), status_code=-1, source='Fuddly FmK'
+                )
                 self.mon.notify_error()
                 self._sending_error = True
             except:
@@ -2083,7 +2086,10 @@ class FmkPlumbing(object):
                     time.sleep(0.1)
                     now = datetime.datetime.now()
                     if (now - t0).total_seconds() > self._hc_timeout:
-                        self.lg.log_comment("*** Timeout! The target does not seem to be ready.\n")
+                        self.lg.log_target_feedback_from(
+                            '*** Timeout! The target does not seem to be ready.',
+                            now, status_code=-1, source='Fuddly FmK'
+                        )
                         ret = -1
                         break
             except KeyboardInterrupt:
@@ -2193,7 +2199,7 @@ class FmkPlumbing(object):
         try:
             entry = self.__data_bank[i]
         except KeyError:
-            return (None, None, None)
+            return None, None
 
         return entry
 

@@ -822,8 +822,11 @@ class ModelHelper(object):
             n.set_generator_func(contents, func_arg=other_args,
                                  provide_helpers=provide_helpers, conf=conf)
 
-            if hasattr(contents, 'unfreezable') and contents.unfreezable:
-                n.clear_attr(MH.Attr.Freezable, conf=conf)
+            if hasattr(contents, 'unfreezable'):
+                if contents.unfreezable:
+                    n.clear_attr(MH.Attr.Freezable, conf=conf)
+                else:
+                    n.set_attr(MH.Attr.Freezable, conf=conf)
 
             if node_args is not None:
                 # node_args interpretation is postponed after all nodes has been created

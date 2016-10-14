@@ -546,20 +546,11 @@ class NetworkTarget(Target):
             fbk_timeout: time duration for feedback gathering (in seconds)
             sending_delay: sending delay (in seconds)
         '''
-        assert sending_delay < fbk_timeout
         self._sending_delay = sending_delay
         self.set_feedback_timeout(fbk_timeout)
 
     def _set_feedback_timeout_specific(self, fbk_timeout):
         self._feedback_timeout = fbk_timeout
-        if fbk_timeout == 0:
-            # In this case, we do not alter 'sending_delay', as setting feedback timeout to 0
-            # is a special case for retrieving residual feedback and because an alteration
-            # of 'sending_delay' from this method is not recoverable.
-            return
-
-        if self._sending_delay > self._feedback_timeout:
-            self._sending_delay = max(self._feedback_timeout-0.2, 0)
 
     def initialize(self):
         '''
@@ -952,6 +943,7 @@ class NetworkTarget(Target):
 
         s = socket.socket(*socket_type)
         # s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
+        s.settimeout(self._sending_delay)
 
         if sock_type == socket.SOCK_RAW:
             assert port == socket.ntohs(proto)
@@ -1017,19 +1009,16 @@ class NetworkTarget(Target):
         serversocket = socket.socket(*socket_type)
         if sock_type != socket.SOCK_RAW:
             serversocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            if sock_type == socket.SOCK_STREAM:
-                serversocket.settimeout(0.2) # to avoid waiting too long for binding
-
-        if sock_type == socket.SOCK_DGRAM or sock_type == socket.SOCK_RAW:
-            serversocket.settimeout(self._sending_delay)
-            if sock_type == socket.SOCK_RAW:
-                assert port == socket.ntohs(proto)
+        else:
+            assert port == socket.ntohs(proto)
 
         try:
             serversocket.bind((host, port))
         except socket.error as serr:
             print('\n*** ERROR(while binding socket|host={!s},port={:d}): {:s}'.format(host, port, str(serr)))
             return False
+
+        serversocket.settimeout(self._sending_delay)
 
         self._server_sock2hp[serversocket] = (host, port)
         with self._server_thread_lock:
@@ -1201,7 +1190,7 @@ class NetworkTarget(Target):
 
         while dont_stop:
             ready_to_read = []
-            for fd, ev in epobj.poll(timeout=0.1):
+            for fd, ev in epobj.poll(timeout=0.05):
                 skt = fileno2fd[fd]
                 if ev != select.EPOLLIN:
                     _check_and_handle_obsolete_socket(skt, error=ev, error_list=socket_errors)
@@ -1339,7 +1328,7 @@ class NetworkTarget(Target):
 
             return
 
-        ready_to_read, ready_to_write, in_error = select.select([], sockets, [], self._sending_delay)
+        ready_to_read, ready_to_write, in_error = select.select([], sockets, [], 1)
         if ready_to_write:
 
             for s in ready_to_write:
