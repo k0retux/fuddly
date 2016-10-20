@@ -1448,8 +1448,9 @@ class NetworkTarget(Target):
         if from_fmk:
             self._last_ack_date = None
             self._first_send_data_call = True  # related to additional feedback
-            self._feedback_handled = False
-            self._sending_id += 1
+            with self._fbk_handling_lock:
+                self._sending_id += 1
+                self._feedback_handled = False
         else:
             self._first_send_data_call = False  # we ignore all additional feedback
 
