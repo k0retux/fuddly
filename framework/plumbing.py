@@ -1528,7 +1528,7 @@ class FmkPlumbing(object):
         # We try to avoid unnecessary latency in this case, as well as
         # to avoid retrieving some feedback that could be a trigger for sending the next data
         # (e.g., with a NetworkTarget in server_mode + wait_for_client)
-        do_residual_fbk_gathering = self.tg.feedback_timeout > 0
+        do_residual_fbk_gathering = True if self.tg.feedback_timeout is None else self.tg.feedback_timeout > 0
 
         for d in data_list:
             if d.feedback_timeout is not None:
