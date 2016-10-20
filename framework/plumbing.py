@@ -300,15 +300,15 @@ class FmkPlumbing(object):
         # where SIGINT is accepted from user
         self.set_fuzz_delay(0.1)
         self.set_fuzz_burst(1)
-        self._recompute_health_check_timeout(self.tg.feedback_timeout)
+        self._recompute_health_check_timeout(self.tg.feedback_timeout, self.tg.sending_delay)
 
-    def _recompute_health_check_timeout(self, base_timeout, do_show=True):
+    def _recompute_health_check_timeout(self, base_timeout, sending_delay, do_show=True):
         if base_timeout is not None:
             if base_timeout != 0:
                 if 0 < base_timeout < 1:
-                    hc_timeout = base_timeout + 0.2
+                    hc_timeout = base_timeout + sending_delay + 0.5
                 else:
-                    hc_timeout = base_timeout + 2.0
+                    hc_timeout = base_timeout + sending_delay + 2.0
                 self.set_health_check_timeout(hc_timeout, do_show=do_show)
             else:
                 # base_timeout comes from feedback_timeout, if it is equal to 0
@@ -316,7 +316,7 @@ class FmkPlumbing(object):
                 # Thus, we don't change the current health_check timeout.
                 return
         else:
-            self.set_health_check_timeout(10, do_show=do_show)
+            self.set_health_check_timeout(max(10,sending_delay), do_show=do_show)
 
     def _handle_user_code_exception(self, msg='', context=None):
         self.set_error(msg, code=Error.UserCodeError, context=context)
@@ -485,7 +485,7 @@ class FmkPlumbing(object):
 
     def _recover_target(self):
         if self.group_id == self._saved_group_id:
-            # This method can be called after checking target feedback or checking
+            # This method can be called after checking target health, feedback and
             # probes status. However, we have to avoid to recover the target twice.
             return True
         else:
@@ -1069,7 +1069,7 @@ class FmkPlumbing(object):
     def show_fmk_internals(self):
         if not self.tg.supported_feedback_mode:
             fbk_mode = 'Target does not provide feedback'
-        elif self.tg.wait_full_time_slot:
+        elif self.tg.fbk_wait_full_time_slot_mode:
             fbk_mode = self.tg.fbk_wait_full_time_slot_msg
         else:
             fbk_mode = self.tg.fbk_wait_until_recv_msg
@@ -1429,13 +1429,13 @@ class FmkPlumbing(object):
         if timeout is None:
             # This case occurs in self._do_sending_and_logging_init()
             # if the Target has not defined a feedback_timeout (like the EmptyTarget)
-            self._recompute_health_check_timeout(timeout, do_show=do_show)
+            self._recompute_health_check_timeout(timeout, self.tg.sending_delay, do_show=do_show)
         elif timeout >= 0:
             self.tg.set_feedback_timeout(timeout)
             if do_show or do_record:
                 self.lg.log_fmk_info('Target feedback timeout = {:.1f}s'.format(timeout),
                                      do_record=do_record)
-            self._recompute_health_check_timeout(timeout, do_show=do_show)
+            self._recompute_health_check_timeout(timeout, self.tg.sending_delay, do_show=do_show)
             return True
         else:
             self.lg.log_fmk_info('Wrong timeout value!', do_record=False)
@@ -1447,7 +1447,7 @@ class FmkPlumbing(object):
         if not ok:
             self.set_error('The target does not support this feedback Mode', code=Error.CommandError)
         elif do_show or do_record:
-            if self.tg.wait_full_time_slot:
+            if self.tg.fbk_wait_full_time_slot_mode:
                 msg = 'Feedback Mode = ' + self.tg.fbk_wait_full_time_slot_msg
             else:
                 msg = 'Feedback Mode = ' + self.tg.fbk_wait_until_recv_msg
@@ -1455,7 +1455,7 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S1','S2'])
     def switch_feedback_mode(self, do_record=False, do_show=True):
-        if self.tg.wait_full_time_slot:
+        if self.tg.fbk_wait_full_time_slot_mode:
             self.set_feedback_mode(Target.FBK_WAIT_UNTIL_RECV, do_record=do_record, do_show=do_show)
         else:
             self.set_feedback_mode(Target.FBK_WAIT_FULL_TIME, do_record=do_record, do_show=do_show)
@@ -1524,6 +1524,12 @@ class FmkPlumbing(object):
 
     def _do_sending_and_logging_init(self, data_list):
 
+        # If feedback_timeout = 0 then we don't consider residual feedback.
+        # We try to avoid unnecessary latency in this case, as well as
+        # to avoid retrieving some feedback that could be a trigger for sending the next data
+        # (e.g., with a NetworkTarget in server_mode + wait_for_client)
+        do_residual_fbk_gathering = self.tg.feedback_timeout > 0
+
         for d in data_list:
             if d.feedback_timeout is not None:
                 self.set_feedback_timeout(d.feedback_timeout)
@@ -1537,7 +1543,7 @@ class FmkPlumbing(object):
 
         user_interrupt = False
         go_on = True
-        if self._burst_countdown == self._burst:
+        if self._burst_countdown == self._burst and do_residual_fbk_gathering:
             # log residual just before sending new data to avoid
             # polluting feedback logs of the next emission
             if not blocked_data:
@@ -1545,13 +1551,19 @@ class FmkPlumbing(object):
                 # we change feedback timeout has the target could use it to determine if it is
                 # ready to accept new data (check_target_readiness). For instance, the NetworkTarget
                 # launch a thread when collect_feedback_without_sending() is called for a duration
-                # of 'feedback_timeout'. 0 has a special meaning
+                # of 'feedback_timeout'.
                 self.set_feedback_timeout(0, do_show=False)
 
-            if self.tg.collect_feedback_without_sending() and blocked_data:
-                ret = self.check_target_readiness()  # this call enable to wait for feedback timeout
+            # print('\nDBG: before collecting residual', self.tg._feedback_handled)
+            if self.tg.collect_feedback_without_sending():
+                # We have to make sure the target is ready for sending data after
+                # collecting feedback.
+                # print('\nDBG: collecting residual', self.tg._feedback_handled)
+                ret = self.check_target_readiness()
+                # print('\nDBG: target_ready', self.tg._feedback_handled)
                 user_interrupt = ret == -2
             go_on = self.log_target_residual_feedback()
+            # print('\nDBG: residual fbk logged')
 
             if not blocked_data:
                 self.set_feedback_timeout(fbk_timeout, do_show=False)
@@ -2028,8 +2040,8 @@ class FmkPlumbing(object):
     def log_target_residual_feedback(self):
         err_detected1, err_detected2 = False, False
         if self.__send_enabled:
-            p = "\n*** RESIDUAL TARGET FEEDBACK ***"
-            e = "********************************\n"
+            p = "*** RESIDUAL TARGET FEEDBACK ***"
+            e = "********************************"
             try:
                 err_detected1 = self.lg.log_collected_target_feedback(preamble=p, epilogue=e)
             except NotImplementedError:
@@ -2055,10 +2067,12 @@ class FmkPlumbing(object):
                 err_detected = True
 
             if tg_fbk.has_fbk_collector():
-                for ref, fbk, tstamp in tg_fbk.iter_and_cleanup_collector():
+                for ref, fbk, status, tstamp in tg_fbk.iter_and_cleanup_collector():
+                    if status < 0:
+                        err_detected = True
                     self.lg.log_target_feedback_from(fbk, tstamp, preamble=preamble,
                                                      epilogue=epilogue,
-                                                     source=ref, status_code=err_code)
+                                                     source=ref, status_code=status)
 
             raw_fbk = tg_fbk.get_bytes()
             if raw_fbk is not None:
@@ -2086,20 +2100,24 @@ class FmkPlumbing(object):
                     time.sleep(0.1)
                     now = datetime.datetime.now()
                     if (now - t0).total_seconds() > self._hc_timeout:
+                        # print('\n***DBG: FBK timeout')
                         self.lg.log_target_feedback_from(
                             '*** Timeout! The target does not seem to be ready.',
                             now, status_code=-1, source='Fuddly FmK'
                         )
                         ret = -1
+                        self.tg.cleanup()
                         break
             except KeyboardInterrupt:
                 self.lg.log_comment("*** Waiting for target to become ready has been cancelled by the user!\n")
                 self.set_error("Waiting for target to become ready has been cancelled by the user!",
                                code=Error.OperationCancelled)
                 ret = -2
+                self.tg.cleanup()
             except:
                 self._handle_user_code_exception()
                 ret = -3
+                self.tg.cleanup()
             finally:
                 signal.signal(signal.SIGINT, signal.SIG_IGN)
 

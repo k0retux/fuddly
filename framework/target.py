@@ -223,8 +223,21 @@ class Target(object):
             return False
 
     @property
-    def wait_full_time_slot(self):
+    def fbk_wait_full_time_slot_mode(self):
         return self._feedback_mode == Target.FBK_WAIT_FULL_TIME
+
+    sending_delay = 0
+
+    def set_sending_delay(self, sending_delay):
+        '''
+        Set the sending delay.
+
+        Args:
+            sending_delay (int): maximum time (in seconds) taken to send data
+              once the method send_(multiple_)data() has been called.
+        '''
+        assert sending_delay >= 0
+        self.sending_delay = sending_delay
 
     def get_description(self):
         return None
@@ -272,14 +285,17 @@ class TargetFeedback(object):
         self._tstamped_bstring = None
         # self.set_bytes(bstring)
 
-    def add_fbk_from(self, ref, fbk):
+    def add_fbk_from(self, ref, fbk, status=0):
         now = datetime.datetime.now()
         with self.fbk_lock:
             if ref not in self._feedback_collector:
-                self._feedback_collector[ref] = []
+                self._feedback_collector[ref] = {}
+                self._feedback_collector[ref]['data'] = []
+                self._feedback_collector[ref]['status'] = 0
                 self._feedback_collector_tstamped[ref] = []
             if fbk.strip() not in self._feedback_collector[ref]:
-                self._feedback_collector[ref].append(fbk)
+                self._feedback_collector[ref]['data'].append(fbk)
+                self._feedback_collector[ref]['status'] = status
                 self._feedback_collector_tstamped[ref].append(now)
 
     def has_fbk_collector(self):
@@ -289,8 +305,8 @@ class TargetFeedback(object):
         with self.fbk_lock:
             fbk_collector = copy.copy(self._feedback_collector)
             fbk_collector_ts = copy.copy(self._feedback_collector_tstamped)
-        for ref, fbk_list in fbk_collector.items():
-            yield ref, fbk_list, fbk_collector_ts[ref]
+        for ref, fbk in fbk_collector.items():
+            yield ref, fbk['data'], fbk['status'], fbk_collector_ts[ref]
 
     def iter_and_cleanup_collector(self):
         with self.fbk_lock:
@@ -298,8 +314,8 @@ class TargetFeedback(object):
             fbk_collector_ts = self._feedback_collector_tstamped
             self._feedback_collector = collections.OrderedDict()
             self._feedback_collector_tstamped = collections.OrderedDict()
-        for ref, fbk_list in fbk_collector.items():
-            yield ref, fbk_list, fbk_collector_ts[ref]
+        for ref, fbk in fbk_collector.items():
+            yield ref, fbk['data'], fbk['status'], fbk_collector_ts[ref]
 
     def set_error_code(self, err_code):
         self._err_code = err_code
@@ -318,7 +334,7 @@ class TargetFeedback(object):
         return None if self._tstamped_bstring is None else self._tstamped_bstring[1]
 
     def cleanup(self):
-        # collector cleanup is done during consumption to avoid loss of feedback in
+        # fbk_collector cleanup is done during consumption to avoid loss of feedback in
         # multi-threading context
         self._tstamped_bstring = None
         self.set_error_code(0)
@@ -471,7 +487,7 @@ class NetworkTarget(Target):
         self.port = self._port[self.UNKNOWN_SEMANTIC] = self._port[data_semantics] = port
         self._socket_type[self.UNKNOWN_SEMANTIC] = self._socket_type[data_semantics] = socket_type
 
-        self.known_semantics = []
+        self.known_semantics = {data_semantics}
         self.sending_sockets = []
         self.multiple_destination = False
 
@@ -523,7 +539,8 @@ class NetworkTarget(Target):
         self._host[data_semantics] = host
         self._port[data_semantics] = port
         self._socket_type[data_semantics] = socket_type
-        self.known_semantics.append(data_semantics)
+        assert data_semantics not in self.known_semantics
+        self.known_semantics.add(data_semantics)
         self.server_mode[(host,port)] = server_mode
         self._server_mode_additional_info[(host, port)] = (target_address, wait_for_client)
         self._default_fbk_id[(host, port)] = self._default_fbk_socket_id + ' - {:s}:{:d}'.format(host, port)
@@ -546,7 +563,7 @@ class NetworkTarget(Target):
             fbk_timeout: time duration for feedback gathering (in seconds)
             sending_delay: sending delay (in seconds)
         '''
-        self._sending_delay = sending_delay
+        self.set_sending_delay(sending_delay)
         self.set_feedback_timeout(fbk_timeout)
 
     def _set_feedback_timeout_specific(self, fbk_timeout):
@@ -554,7 +571,7 @@ class NetworkTarget(Target):
 
     def initialize(self):
         '''
-        To be overloaded if some intial setup for the target is necessary. 
+        To be overloaded if some intial setup for the target is necessary.
         '''
         return True
 
@@ -605,6 +622,14 @@ class NetworkTarget(Target):
         '''
         return fbk, 0
 
+    def cleanup(self):
+        # print('\n***DBG:', self.feedback_complete_cpt, self.feedback_thread_qty,
+        #       'sending_id=', self._sending_id)
+
+        self.feedback_thread_qty = 0
+        self.feedback_complete_cpt = 0
+
+        return True
 
     def listen_to(self, host, port, ref_id,
                   socket_type=(socket.AF_INET, socket.SOCK_STREAM),
@@ -797,15 +822,9 @@ class NetworkTarget(Target):
         return self.terminate()
 
     def send_data(self, data, from_fmk=False):
+        assert data is not None
         self._before_sending_data(data, from_fmk)
         host, port, socket_type, server_mode = self._get_net_info_from(data)
-
-        if data is None and (not self.hold_connection[(host, port)] or self.feedback_timeout == 0):
-            # If data is None, it means that we want to collect feedback without sending data.
-            # And that case makes sense only if we keep the socket (thus, 'hold_connection'
-            # has to be True) or if a data callback wait for feedback (thus, in this case,
-            # feedback_timeout will be > 0)
-            return
 
         connected_client_event = None
         if server_mode:
@@ -813,20 +832,16 @@ class NetworkTarget(Target):
             self._listen_to_target(host, port, socket_type,
                                    self._handle_target_connection,
                                    args=(data, host, port, connected_client_event, from_fmk))
-            connected_client_event.wait(self._sending_delay)
+            connected_client_event.wait(self.sending_delay)
             if socket_type[1] == socket.SOCK_STREAM and not connected_client_event.is_set():
-                self._feedback.set_error_code(-2)
                 err_msg = ">>> WARNING: unable to send data because the target did not connect" \
                           " to us [{:s}:{:d}] <<<".format(host, port)
-                # self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
-                self._feedback.add_fbk_from(self._INTERNALS_ID, err_msg)
+                self._feedback.add_fbk_from(self._INTERNALS_ID, err_msg, status=-2)
         else:
             s = self._connect_to_target(host, port, socket_type)
             if s is None:
-                self._feedback.set_error_code(-1)
                 err_msg = '>>> WARNING: unable to send data to {:s}:{:d} <<<'.format(host, port)
-                # self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
-                self._feedback.add_fbk_from(self._INTERNALS_ID, err_msg)
+                self._feedback.add_fbk_from(self._INTERNALS_ID, err_msg, status=-1)
             else:
                 self._send_data([s], {s:(data, host, port, None)}, self._sending_id, from_fmk)
 
@@ -837,8 +852,26 @@ class NetworkTarget(Target):
         data_refs = {}
         connected_client_event = {}
         client_event = None
-        for data in data_list:
-            host, port, socket_type, server_mode = self._get_net_info_from(data)
+
+        sending_list = []
+        if data_list is None:
+            # If data_list is None, it means that we want to collect feedback from every interface
+            # without sending data.
+            for key in self.known_semantics:
+                host = self._host[key]
+                port = self._port[key]
+                socket_type = self._socket_type[key]
+                server_mode = self.server_mode[(host, port)]
+                if self.hold_connection[(host, port)]:
+                    # Collecting feedback makes sense only if we keep the socket (thus, 'hold_connection'
+                    # has to be True) or if a data callback wait for feedback.
+                    sending_list.append((None, host, port, socket_type, server_mode))
+        else:
+            for data in data_list:
+                host, port, socket_type, server_mode = self._get_net_info_from(data)
+                sending_list.append((data, host, port, socket_type, server_mode))
+
+        for data, host, port, socket_type, server_mode in sending_list:
             if server_mode:
                 connected_client_event[(host, port)] = threading.Event()
                 self._listen_to_target(host, port, socket_type,
@@ -848,10 +881,8 @@ class NetworkTarget(Target):
             else:
                 s = self._connect_to_target(host, port, socket_type)
                 if s is None:
-                    self._feedback.set_error_code(-2)
                     err_msg = '>>> WARNING: unable to send data to {:s}:{:d} <<<'.format(host, port)
-                    # self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
-                    self._feedback.add_fbk_from(self._INTERNALS_ID, err_msg)
+                    self._feedback.add_fbk_from(self._INTERNALS_ID, err_msg, status=-2)
                 else:
                     if s not in sockets:
                         sockets.append(s)
@@ -864,13 +895,15 @@ class NetworkTarget(Target):
             # or a connection error has occurred.
             pass
 
-        t0 = datetime.datetime.now()
+        if data_list is None:
+            return
 
         if connected_client_event:
+            t0 = datetime.datetime.now()
             duration = 0
             client_event = connected_client_event
             client_event_copy = copy.copy(connected_client_event)
-            while duration < self._sending_delay:
+            while duration < self.sending_delay:
                 if len(client_event) != len(client_event_copy):
                     client_event = copy.copy(client_event_copy)
                 for ref, event in client_event.items():
@@ -883,16 +916,11 @@ class NetworkTarget(Target):
             for ref, event in connected_client_event.items():
                 host, port = ref
                 if not event.is_set():
-                    self._feedback.set_error_code(-1)
                     err_msg = ">>> WARNING: unable to send data because the target did not connect" \
                               " to us [{:s}:{:d}] <<<".format(host, port)
-                    # self._feedback.add_fbk_from(self._default_fbk_id[(host, port)], err_msg)
-                    self._feedback.add_fbk_from(self._INTERNALS_ID, err_msg)
+                    self._feedback.add_fbk_from(self._INTERNALS_ID, err_msg, status=-1)
 
     def _get_data_semantic_key(self, data):
-        if data is None:
-            return self.UNKNOWN_SEMANTIC
-
         if data.node is None:
             if data.raw is None:
                 print('\n*** ERROR: Empty data has been received!')
@@ -943,7 +971,7 @@ class NetworkTarget(Target):
 
         s = socket.socket(*socket_type)
         # s.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65536)
-        s.settimeout(self._sending_delay)
+        s.settimeout(self.sending_delay)
 
         if sock_type == socket.SOCK_RAW:
             assert port == socket.ntohs(proto)
@@ -1018,7 +1046,7 @@ class NetworkTarget(Target):
             print('\n*** ERROR(while binding socket|host={!s},port={:d}): {:s}'.format(host, port, str(serr)))
             return False
 
-        serversocket.settimeout(self._sending_delay)
+        serversocket.settimeout(self.sending_delay)
 
         self._server_sock2hp[serversocket] = (host, port)
         with self._server_thread_lock:
@@ -1065,9 +1093,7 @@ class NetworkTarget(Target):
             args = self._server_thread_share[(host, port)]
 
         target_address, wait_for_client = self._server_mode_additional_info[(host, port)]
-        if target_address is not None:
-            wait_before_sending = wait_for_client
-        elif func == self._handle_connection_to_fbk_server:
+        if func == self._handle_connection_to_fbk_server:
             # args = fbk_id, fbk_length, connected_client_event
             assert args[0] in self._additional_fbk_desc
             wait_before_sending = False
@@ -1077,6 +1103,8 @@ class NetworkTarget(Target):
                 # In the case 'data' is None there is no data to send,
                 # thus we are requested to only collect feedback
                 wait_before_sending = False
+            elif target_address is not None:
+                wait_before_sending = wait_for_client
             elif sock_type == socket.SOCK_RAW:
                 # in this case target_address is not provided, but it is OK if it is a SOCK_RAW
                 wait_before_sending = wait_for_client
@@ -1218,7 +1246,7 @@ class NetworkTarget(Target):
                             chunk = s.recv(sz)
                         except socket.timeout:
                             chunk = b''
-                            socket_timed_out = True  # UDP
+                            socket_timed_out = True  # for UDP we keep the socket
                             break
                         except socket.error as serr:
                             chunk = b''
@@ -1260,7 +1288,7 @@ class NetworkTarget(Target):
                 else:
                     dont_stop = False
 
-                if duration > fbk_timeout or (has_read and not self.wait_full_time_slot):
+                if duration > fbk_timeout or (has_read and not self.fbk_wait_full_time_slot_mode):
                     dont_stop = False
 
             else:
@@ -1324,7 +1352,8 @@ class NetworkTarget(Target):
                 fbk_ids[s] = self._default_fbk_id[(host, port)]
                 fbk_lengths[s] = self.feedback_length
 
-            self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk)
+            self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk,
+                                      pre_fbk=pre_fbk)
 
             return
 
@@ -1354,7 +1383,9 @@ class NetworkTarget(Target):
                             time.sleep(0.2)
                             continue
                         elif serr.errno == socket.errno.EMSGSIZE:  # for SOCK_RAW
-                            self._feedback.add_fbk_from(self._INTERNALS_ID, 'Message was not sent because it was too long!')
+                            self._feedback.add_fbk_from(self._INTERNALS_ID,
+                                                        'Message was not sent because it was too long!',
+                                                        status=-1)
                             break
                         else:
                             # add_main_socket = False
@@ -1399,17 +1430,19 @@ class NetworkTarget(Target):
                                                  pre_fbk))
         feedback_thread.start()
 
-
     def _feedback_collect(self, fbk, ref, error=0):
         if error < 0:
             self._feedback.set_error_code(error)
-        self._feedback.add_fbk_from(ref, fbk)
+        self._feedback.add_fbk_from(ref, fbk, status=error)
 
     def _feedback_complete(self, sid):
+        # print('\n***DBG1:', self.feedback_complete_cpt, self.feedback_thread_qty,
+        #       'sending_id=', self._sending_id, sid)
         if sid == self._sending_id:
             self.feedback_complete_cpt += 1
-        if self.feedback_complete_cpt == self.feedback_thread_qty:
-            self._feedback_handled = True
+            if self.feedback_complete_cpt == self.feedback_thread_qty:
+                self._feedback_handled = True
+        # print('\n***DBG2:', self.feedback_complete_cpt, self.feedback_thread_qty)
 
     def _before_sending_data(self, data_list, from_fmk):
         if from_fmk:
@@ -1449,7 +1482,7 @@ class NetworkTarget(Target):
 
 
     def collect_feedback_without_sending(self):
-        self.send_data(None, from_fmk=True)
+        self.send_multiple_data(None, from_fmk=True)
         return True
 
     def get_feedback(self):
@@ -1704,20 +1737,23 @@ class LocalTarget(Target):
         else:
             self._feedback_computed = True
 
+        err_detected = False
+
         if self.__app is None and self._data_sent:
-            self.__feedback.set_error_code(-3)
-            self.__feedback.add_fbk_from("LocalTarget", "Application has terminated (crash?)")
+            err_detected = True
+            self.__feedback.add_fbk_from("LocalTarget", "Application has terminated (crash?)",
+                                         status=-3)
             return self.__feedback
         elif self.__app is None:
             return self.__feedback
 
         exit_status = self.__app.poll()
         if exit_status is not None and exit_status < 0:
-            self.__feedback.set_error_code(exit_status)
+            err_detected = True
             self.__feedback.add_fbk_from("Application[{:d}]".format(self.__app.pid),
-                                         "Negative return status ({:d})".format(exit_status))
+                                         "Negative return status ({:d})".format(exit_status),
+                                         status=exit_status)
 
-        err_detected = False
         ret = select.select([self.__app.stdout, self.__app.stderr], [], [], timeout)
         if ret[0]:
             byte_string = b''
@@ -1725,13 +1761,17 @@ class LocalTarget(Target):
                 byte_string += fd.read() + b'\n\n'
 
             if b'error' in byte_string or b'invalid' in byte_string:
-                self.__feedback.set_error_code(-1)
-                self.__feedback.add_fbk_from("LocalTarget[stdout]", "Application outputs errors on stdout")
+                err_detected = True
+                self.__feedback.add_fbk_from("LocalTarget[stdout]",
+                                             "Application outputs errors on stdout",
+                                             status=-1)
 
             stderr_msg = ret[0][-1].read()
             if stderr_msg:
-                self.__feedback.set_error_code(-2)
-                self.__feedback.add_fbk_from("LocalTarget[stderr]", "Application outputs on stderr")
+                err_detected = True
+                self.__feedback.add_fbk_from("LocalTarget[stderr]",
+                                             "Application outputs on stderr",
+                                             status=-2)
                 byte_string += stderr_msg
             else:
                 byte_string = byte_string[:-2]  # remove '\n\n'
@@ -1739,6 +1779,8 @@ class LocalTarget(Target):
         else:
             byte_string = b''
 
+        if err_detected:
+            self.__feedback.set_error_code(-1)
         self.__feedback.set_bytes(byte_string)
 
         return self.__feedback
