@@ -234,7 +234,7 @@ class Target(object):
 
         Args:
             sending_delay (int): maximum time (in seconds) taken to send data
-              once the method send_(multiple_)data() has been called.
+              once the method ``send_(multiple_)data()`` has been called.
         '''
         assert sending_delay >= 0
         self.sending_delay = sending_delay
@@ -869,7 +869,8 @@ class NetworkTarget(Target):
         else:
             for data in data_list:
                 host, port, socket_type, server_mode = self._get_net_info_from(data)
-                sending_list.append((data, host, port, socket_type, server_mode))
+                d = data.to_bytes()
+                sending_list.append((d, host, port, socket_type, server_mode))
 
         for data, host, port, socket_type, server_mode in sending_list:
             if server_mode:
@@ -1366,7 +1367,7 @@ class NetworkTarget(Target):
                 epobj.register(s, select.EPOLLIN)
                 fileno2fd[s.fileno()] = s
 
-                raw_data = data.to_bytes()
+                raw_data = data.to_bytes() if isinstance(data, Data) else data
                 totalsent = 0
                 send_retry = 0
                 while totalsent < len(raw_data) and send_retry < 10:

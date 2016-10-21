@@ -207,7 +207,7 @@ method ``make_blocked()`` on the current step and to return `False`. In this cas
 Note that you can `block` from any callback, but only ``cbk_after_fbk`` will be called further on
 and will be able to `unblock` the situation.
 
-Such ability can be usefull if you are not sure about the time to wait for the answer of a network
+Such ability can be useful if you are not sure about the time to wait for the answer of a network
 service for instance. This is illustrated in the following example in the lines 2-4.
 
 .. code-block:: python
@@ -353,3 +353,7 @@ Here under examples of steps leveraging the different ways to describe their dat
    Step( DataProcess(process=['C', 'tTYPE'], seed='enc') )
    Step( DataProcess(process=['C'], seed=Data('my seed')) )
 
+Finally, it is possible for a ``Step`` to describe multiple data to send at once;
+meaning the framework will be ordered to use :meth:`framework.target.Target.send_multiple_data`
+(refer to :ref:`targets-def`). For that purpose, you have to provide the ``Step`` constructor with
+a list of `data descriptors` (instead of one).

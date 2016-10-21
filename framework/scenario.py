@@ -98,13 +98,16 @@ class DataProcess(object):
         else:
             desc += suffix[2:]
 
-        for d in self.process:
-            if isinstance(d, (list, tuple)):
-                desc += '{!s} / '.format(d[0])
-            else:
-                assert isinstance(d, str)
-                desc += '{!s} / '.format(d)
-        desc = desc[:-3]
+        for proc in self._process:
+            for d in proc:
+                if isinstance(d, (list, tuple)):
+                    desc += '{!s} / '.format(d[0])
+                else:
+                    assert isinstance(d, str)
+                    desc += '{!s} / '.format(d)
+            desc = desc[:-3]
+            desc += ' - ' if oneliner else '\n'
+        desc = desc[:-3] if oneliner else desc[:-1]
 
         return desc
 
@@ -139,14 +142,24 @@ class Step(object):
 
         if not final:
             assert data_desc is not None
-            self._data_desc = data_desc
-            if isinstance(data_desc, str):
-                self._node_name = data_desc
+            if isinstance(data_desc, (list,tuple)):
+                self._data_desc = data_desc
             else:
-                self._node_name = None
+                self._data_desc = [data_desc]
+            if isinstance(data_desc, str):
+                self._node_name = [data_desc]
+            elif isinstance(data_desc, (list,tuple)):
+                self._node_name = []
+                for d in data_desc:
+                    if isinstance(d, str):
+                        self._node_name.append(d)
+                    else:
+                        self._node_name.append(None)
+            else:
+                self._node_name = [None]
         else:
-            self._node_name = None
-            self._data_desc = None
+            self._node_name = [None]
+            self._data_desc = [None]
 
         self.make_free()
 
@@ -179,23 +192,35 @@ class Step(object):
 
     def make_blocked(self):
         self._blocked = True
-        if isinstance(self._data_desc, (Data, DataProcess)):
-            self._data_desc.make_blocked()
+        for d in self._data_desc:
+            if isinstance(d, (Data, DataProcess)):
+                d.make_blocked()
 
     def make_free(self):
         self._blocked = False
-        if isinstance(self._data_desc, (Data, DataProcess)):
-            self._data_desc.make_free()
+        for d in self._data_desc:
+            if isinstance(d, (Data, DataProcess)):
+                d.make_free()
 
     def is_blocked(self):
         return self._blocked
 
     def cleanup(self):
-        if isinstance(self._data_desc, DataProcess):
-            self._data_desc.outcomes = None
+        for d in self._data_desc:
+            if isinstance(d, DataProcess):
+                d.outcomes = None
 
     def has_dataprocess(self):
-        return isinstance(self._data_desc, DataProcess)
+        if len(self._data_desc) > 1:
+            # In this case we have multiple data
+            # Practically it means that the creation of these data need to be performed
+            # by data framework callback (CallBackOps.Replace_Data) because
+            # a generator (by which a scenario will be executed) can only provide one data.
+            return True
+        elif isinstance(self._data_desc[0], DataProcess):
+            return True
+        else:
+            return False
 
     @property
     def feedback_timeout(self):
@@ -204,8 +229,9 @@ class Step(object):
     @feedback_timeout.setter
     def feedback_timeout(self, fbk_timeout):
         self._feedback_timeout = fbk_timeout
-        if isinstance(self._data_desc, (Data, DataProcess)):
-            self._data_desc.feedback_timeout = fbk_timeout
+        for d in self._data_desc:
+            if isinstance(d, (Data, DataProcess)):
+                d.feedback_timeout = fbk_timeout
 
     @property
     def feedback_mode(self):
@@ -214,8 +240,9 @@ class Step(object):
     @feedback_mode.setter
     def feedback_mode(self, fbk_mode):
         self._feedback_mode = fbk_mode
-        if isinstance(self._data_desc, (Data, DataProcess)):
-            self._data_desc.feedback_mode = fbk_mode
+        for d in self._data_desc:
+            if isinstance(d, (Data, DataProcess)):
+                d.feedback_mode = fbk_mode
 
     @property
     def transitions(self):
@@ -224,48 +251,59 @@ class Step(object):
 
     @property
     def node(self):
-        if isinstance(self._data_desc, DataProcess):
-            if self._data_desc.outcomes is not None and self._data_desc.outcomes.node:
-                # that means that a data creation process has been registered and it has been
-                # carried out
-                return self._data_desc.outcomes.node
-            elif self._data_desc.seed is not None:
-                if isinstance(self._data_desc.seed, str):
-                    seed_name = self._data_desc.seed
-                    node = self._dm.get_data(self._data_desc.seed)
-                    self._data_desc.seed = Data(node)
-                    self._data_desc.seed.set_initial_dmaker([seed_name.upper(), 'g_'+seed_name, None])
-                    return node
-                elif isinstance(self._data_desc.seed, Data):
-                    return self._data_desc.seed.node  # if data is raw, .node is None
+        node_list = []
+        update_node = False
+        for idx, d in enumerate(self._data_desc):
+            if isinstance(d, DataProcess):
+                if d.outcomes is not None and d.outcomes.node:
+                    # that means that a data creation process has been registered and it has been
+                    # carried out
+                    node_list.append(d.outcomes.node)
+                elif d.seed is not None:
+                    if isinstance(d.seed, str):
+                        seed_name = d.seed
+                        node = self._dm.get_data(d.seed)
+                        d.seed = Data(node)
+                        d.seed.set_initial_dmaker([seed_name.upper(), 'g_'+seed_name, None])
+                        node_list.append(node)
+                    elif isinstance(d.seed, Data):
+                        node_list.append(d.seed.node)  # if data is raw, .node is None
+                    else:
+                        node_list.append(None)
                 else:
-                    return None
+                    node_list.append(None)
+            elif self._node_name[idx] is None:
+                # that means that a data creation process has been registered and will be
+                # carried out by the framework through a callback
+                node_list.append(None)
             else:
-                return None
-        elif self._node_name is None:
-            # that means that a data creation process has been registered and will be
-            # carried out by the framework through a callback
-            return None
-        else:
-            if self._node is None:
-                self._node = self._dm.get_data(self._node_name)
-            return self._node
+                if self._node is None:
+                    update_node = True
+                    self._node = {}
+                if update_node:
+                    self._node[idx] = self._dm.get_data(self._node_name[idx])
+                node_list.append(self._node[idx])
+
+        return node_list[0] if len(node_list) == 1 else node_list
 
     def get_data(self):
-        if self.node is not None:
-            d = Data(self.node)
+        node_list = self.node
+        if node_list is not None and not isinstance(node_list, list):
+            d = Data(node_list)
         else:
             # in this case a data creation process is provided to the framework through the
             # callback HOOK.before_sending
             d = Data('')
+
         if self._step_desc is None:
-            if isinstance(self._data_desc, DataProcess):
-                d.add_info(repr(self._data_desc))
-            elif isinstance(self._data_desc, Data):
-                d.add_info('Use provided Data(...)')
-            else:
-                assert isinstance(self._data_desc, str)
-                d.add_info("Instantiate a node '{:s}' from the model".format(self._node_name))
+            for idx, d_desc in enumerate(self._data_desc):
+                if isinstance(d_desc, DataProcess):
+                    d.add_info(repr(d_desc))
+                elif isinstance(d_desc, Data):
+                    d.add_info('Use provided Data(...)')
+                else:
+                    assert isinstance(d_desc, str)
+                    d.add_info("Instantiate a node '{!s}' from the model".format(self._node_name[idx]))
             if self._periodic_data is not None:
                 p_sz = len(self._periodic_data)
                 d.add_info("Set {:d} periodic{:s}".format(p_sz, 's' if p_sz > 1 else ''))
@@ -311,18 +349,23 @@ class Step(object):
     def __str__(self):
         if self._step_desc:
             step_desc = self._step_desc
-        elif isinstance(self._data_desc, DataProcess):
-            step_desc = self._data_desc.formatted_str(oneliner=False)
-        elif isinstance(self._data_desc, Data):
-            if self.__class__.__name__ != 'Step':
-                step_desc = '[' + self.__class__.__name__ + ']'
-            else:
-                step_desc = 'Data(...)'
-        elif isinstance(self._data_desc, str):
-            step_desc = "{:s}".format(self._node_name.upper())
         else:
-            assert self._data_desc is None
-            step_desc = '[' + self.__class__.__name__ + ']'
+            step_desc = ''
+            for idx, d in enumerate(self._data_desc):
+                if isinstance(d, DataProcess):
+                    step_desc += d.formatted_str(oneliner=False)
+                elif isinstance(d, Data):
+                    if self.__class__.__name__ != 'Step':
+                        step_desc += '[' + self.__class__.__name__ + ']'
+                    else:
+                        step_desc += 'Data(...)'
+                elif isinstance(d, str):
+                    step_desc += "{:s}".format(self._node_name[idx].upper())
+                else:
+                    assert d is None
+                    step_desc += '[' + self.__class__.__name__ + ']'
+                step_desc += '\n'
+            step_desc = step_desc[:-1]
 
         return step_desc
 
@@ -336,7 +379,8 @@ class Step(object):
         new_dm = self._dm
         new_periodic_to_rm = copy.copy(self._periodic_data_to_remove)
         new_transitions = copy.copy(self._transitions)
-        new_step = type(self)(data_desc=copy.copy(self._data_desc), final=self.final,
+        data_desc_copy = [copy.copy(d) for d in self._data_desc]
+        new_step = type(self)(data_desc=data_desc_copy, final=self.final,
                               fbk_timeout=self.feedback_timeout, fbk_mode=self.feedback_mode,
                               set_periodic=copy.copy(self._periodic_data),
                               step_desc=self._step_desc)

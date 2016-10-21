@@ -1666,13 +1666,19 @@ class FmkPlumbing(object):
 
                     data_desc = op[CallBackOps.Replace_Data]
                     if data_desc is not None:
-                        data_tmp = self._handle_data_desc(data_desc)
-                        if data_tmp is not None:
-                            data_tmp.copy_callback_from(data)
-                            new_data = data_tmp
-                        else:
-                            new_data = Data()
-                            new_data.make_unusable()
+                        new_data = []
+                        first_step = True
+                        for d_desc in data_desc:
+                            data_tmp = self._handle_data_desc(d_desc)
+                            if data_tmp is not None:
+                                if first_step:
+                                    first_step = False
+                                    data_tmp.copy_callback_from(data)
+                                new_data.append(data_tmp)
+                            else:
+                                newd = Data()
+                                newd.make_unusable()
+                                new_data.append(newd)
 
                     for idx in op[CallBackOps.Del_PeriodicData]:
                         self._unregister_task(idx)
@@ -1702,7 +1708,11 @@ class FmkPlumbing(object):
                             self.set_error(msg='Data descriptor is incorrect!',
                                            code=Error.UserCodeError)
 
-            if not new_data.is_unusable():
+            if isinstance(new_data, list):
+                for newd in new_data:
+                    if not newd.is_unusable():
+                        new_data_list.append(newd)
+            elif not new_data.is_unusable():
                 new_data_list.append(new_data)
 
         return new_data_list
@@ -1751,9 +1761,8 @@ class FmkPlumbing(object):
             data_list = [data_list]
             if orig_data_provided:
                 original_data = [original_data]
-            multiple_data = False
         elif isinstance(data_list, list):
-            multiple_data = True
+            assert isinstance(original_data, (list, tuple))
         else:
             raise ValueError
 
@@ -1768,6 +1777,12 @@ class FmkPlumbing(object):
         data_list = self.send_data(data_list, add_preamble=True)
         if data_list is None or self._sending_error:
             return False
+
+        if len(data_list) > 1:
+            # the provided data_list can be changed after having called self.send_data()
+            multiple_data = True
+        else:
+            multiple_data = False
 
         if self._wkspace_enabled:
             for idx, dt in zip(range(len(data_list)), data_list):
@@ -2488,8 +2503,6 @@ class FmkPlumbing(object):
                 for d in data_list:
                     fmk_feedback.add_produced_data(d)
 
-                multiple_data = len(data_list) > 1
-
                 fmk_feedback.clear_flag(FmkFeedback.NeedChange)
 
                 try:
@@ -2509,6 +2522,8 @@ class FmkPlumbing(object):
                 elif data_list is None:
                     self.lg.log_fmk_info("Operator will shutdown because there is no data to send")
                     break
+
+                multiple_data = len(data_list) > 1
 
                 try:
                     linst = operator.do_after_all(self._exportable_fmk_ops, self.dm, self.mon, self.tg, self.lg)
