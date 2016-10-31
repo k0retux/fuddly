@@ -28,6 +28,8 @@ class TargetFeedbackError(Exception): pass
 class DataProcessTermination(Exception): pass
 class UserInterruption(Exception): pass
 
+class ExtinctPopulationError(Exception): pass
+
 class DataModelDefinitionError(Exception): pass
 
 class RegexParserError(DataModelDefinitionError): pass

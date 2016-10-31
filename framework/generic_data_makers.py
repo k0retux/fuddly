@@ -37,6 +37,24 @@ tactics = Tactics()
 
 
 #######################
+#     GENERATORS      #
+#######################
+
+@generator(tactics, gtype='POPULATION', weight=1,
+           gen_args=GENERIC_ARGS,
+           args={'population': ('the population to iterate over', None, None)})
+class g_population(Generator):
+
+    def setup(self, dm, user_input):
+        if self.population is None:
+            raise Exception
+        return True
+
+    def generate_data(self, dm, monitor, target):
+        return Data(self.population.next().node)
+
+
+#######################
 # STATEFUL DISRUPTORS #
 #######################
 
