@@ -21,7 +21,7 @@ class FitnessScore(object):
 
     @feature(1)
     def string_distance(self):
-        pass
+        return 0
 
     @feature(1)
     def specific_words(self, output, words):
@@ -33,6 +33,11 @@ class FitnessScore(object):
     @feature(1)
     def size_variation(self, input, output):
         return len(input) / len(output)
+
+    def compute(self, input, output):
+        return self.specific_words(output, ['error', 'failure']) + \
+               self.string_distance() + \
+               self.size_variation(input, output)
 
 
 class Individual(object):
@@ -51,35 +56,47 @@ class Individual(object):
 
 class Population(object):
 
-    def __init__(self, fmk, dm, model):
+    def __init__(self, model, size, max_generation_nb, fitness_score):
+        """
+            Generate the first generation of individuals
+            The default implementation creates them in a random way
+            Args:
+                model (string): name of the model to use
+        """
+        self.MODEL = model
+        self.SIZE = size
+        self.MAX_GENERATION_NB = max_generation_nb
+
+        self._individuals = []
+        self.generation = 0
+        self.index = 0
+
+        self.fmk = None
+
+        self.fitness_score = fitness_score
+
+    def setup(self, fmk, dm):
         """
             Generate the first generation of individuals
             The default implementation creates them in a random way
             Args:
                 fmk (FmkPlumbing): the framework plumbing to use
                 dm (DataModel): the data model to use
-                model (string): the model to use
         """
         self.fmk = fmk
-
-        self.SIZE = 5
-        self.MAX_GENERATION_NB = 3
-
-        self._individuals = []
-        self.generation = 0
 
         # we iterate through the entire population
         for _ in range(0, self.SIZE):
             # first population is full random
-            node = dm.get_data(model)
+            node = dm.get_data(self.MODEL)
             node.make_random(recursive=True)
             node.freeze()
-            self._individuals.append(Individual(fmk, node))
-
-        self.index = 0
+            self._individuals.append(Individual(self.fmk, node))
 
     def _compute_scores(self):
-        raise NotImplementedError
+
+        for individual in self._individuals:
+            individual.score = self.fitness_score.compute(individual.node, individual.fbk)
 
     def _compute_probability_of_survival(self):
         """ The default implementation simply normalize the score between 0 and 1 """

@@ -21,16 +21,12 @@
 #
 ################################################################################
 
-import subprocess
 from copy import *
 
-from framework.data_model import *
-from framework.tactics_helpers import *
 from framework.fuzzing_primitives import *
-from framework.basic_primitives import *
 from framework.value_types import *
-from framework.data_model_helpers import GENERIC_ARGS
-
+from framework.plumbing import *
+from evolutionary_helpers import Population
 from framework.global_resources import *
 
 tactics = Tactics()
@@ -42,12 +38,14 @@ tactics = Tactics()
 
 @generator(tactics, gtype='POPULATION', weight=1,
            gen_args=GENERIC_ARGS,
-           args={'population': ('the population to iterate over', None, None)})
+           args={'population': ('the population to iterate over', None, Population)})
 class g_population(Generator):
 
     def setup(self, dm, user_input):
         if self.population is None:
             raise Exception
+        else:
+            self.population.setup(dm=dm, fmk=FmkPlumbing())
         return True
 
     def generate_data(self, dm, monitor, target):
