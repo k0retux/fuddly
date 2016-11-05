@@ -87,6 +87,7 @@ class ExportableFMKOps(object):
         self.load_data_model = fmk.load_data_model
         self.load_multiple_data_model = fmk.load_multiple_data_model
         self.reload_all = fmk.reload_all
+        self.get_data = fmk.get_data
 
 class FmkFeedback(object):
     
@@ -633,6 +634,12 @@ class FmkPlumbing(object):
             except:
                 print(colorize("*** ERROR: '%s_strategy.py' shall contain a global variable 'tactics' ***" % (name), rgb=Color.ERROR))
                 return None
+
+            # give evolutionary scenarios access to fmk
+            for name, stuff in dm_params['tactics'].generators.items():
+                for obj in stuff[2]:
+                    if hasattr(obj, 'scenario') and hasattr(obj.scenario._env, 'population'):
+                        obj.scenario._env.population.fmk = self._exportable_fmk_ops
 
             if dm_params['dm'].name is None:
                 dm_params['dm'].name = name

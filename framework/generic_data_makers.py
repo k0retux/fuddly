@@ -40,12 +40,12 @@ tactics = Tactics()
            gen_args=GENERIC_ARGS,
            args={'population': ('the population to iterate over', None, Population)})
 class g_population(Generator):
-
+    """ Walk through the given population """
     def setup(self, dm, user_input):
         if self.population is None:
             raise Exception
         else:
-            self.population.setup(dm=dm, fmk=FmkPlumbing())
+            self.population.setup()
         return True
 
     def generate_data(self, dm, monitor, target):

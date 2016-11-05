@@ -41,6 +41,7 @@ class FitnessScore(object):
 
 
 class Individual(object):
+    """ Represents a population member """
 
     def __init__(self, fmk, node):
         self.fmk = fmk
@@ -58,10 +59,12 @@ class Population(object):
 
     def __init__(self, model, size, max_generation_nb, fitness_score):
         """
-            Generate the first generation of individuals
-            The default implementation creates them in a random way
+            Configure the population
             Args:
-                model (string): name of the model to use
+                model (string): individuals that compose this population will be built using this model
+                size (integer): size of the population to manipulate
+                max_generation_nb (integer): criteria used to stop the evolution process
+                fitness_score (FitnessScore): used to compute fitness scores
         """
         self.MODEL = model
         self.SIZE = size
@@ -71,32 +74,25 @@ class Population(object):
         self.generation = 0
         self.index = 0
 
-        self.fmk = None
+        self.fmk = None  # initialized by the framework itself
 
         self.fitness_score = fitness_score
 
-    def setup(self, fmk, dm):
+    def setup(self):
         """
             Generate the first generation of individuals
             The default implementation creates them in a random way
-            Args:
-                fmk (FmkPlumbing): the framework plumbing to use
-                dm (DataModel): the data model to use
         """
-        self.fmk = fmk
-
-        # we iterate through the entire population
-        for _ in range(0, self.SIZE):
-            # first population is full random
-            node = dm.get_data(self.MODEL)
+        for _ in range(0, self.SIZE + 1):
+            node = self.fmk.get_data([self.MODEL]).node
             node.make_random(recursive=True)
             node.freeze()
             self._individuals.append(Individual(self.fmk, node))
 
     def _compute_scores(self):
-
+        """ Compute the scores of each individuals using a FitnessScore object """
         for individual in self._individuals:
-            individual.score = self.fitness_score.compute(individual.node, individual.fbk)
+            individual.score = self.fitness_score.compute(individual.node, individual.feedback)
 
     def _compute_probability_of_survival(self):
         """ The default implementation simply normalize the score between 0 and 1 """
@@ -179,7 +175,7 @@ class EvolutionaryScenariosBuilder(object):
     @staticmethod
     def build(name, population):
         """
-        Create a scenario to take advantage of an evolutionary approach
+        Create a scenario that takes advantage of an evolutionary approach
         Args:
             name (string): name of the scenario to create
             population (Population): population to use
@@ -196,21 +192,19 @@ class EvolutionaryScenariosBuilder(object):
             print("Callback after")
 
             # set the feedback of the last played individual
-            population[population.index].feedback = fbk
+            env.population[env.population.index].feedback = fbk
 
-            if population.index == len(population) - 1:
-                if population.generation == population.MAX_GENERATION_NB:
+            if env.population.index == len(env.population) - 1:
+                if env.population.generation == env.population.MAX_GENERATION_NB:
                     return False
                 else:
-                    population.evolve()
+                    env.population.evolve()
 
-            print("Individual updated")
             return True
 
         step = Step(data_desc=DataProcess(process=[('POPULATION', None, UI(population=population))]))
         step.connect_to(step, cbk_before_sending=cbk_before, cbk_after_fbk=cbk_after)
 
-        sc = Scenario(name)
-        sc.set_anchor(step)
-
+        sc = Scenario(name, anchor=step)
+        sc._env.population = population
         return sc
