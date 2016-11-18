@@ -5921,7 +5921,7 @@ class Node(object):
                                                   return_node_internals=return_node_internals)
 
         if was_not_frozen:
-            self._post_freeze(internal)
+            self._post_freeze(internal, self)
             # We need to test self.env because an Node can be freezed
             # before being registered in the data model. It triggers
             # for instance when a generator Node is freezed
@@ -5933,9 +5933,9 @@ class Node(object):
         return ret
 
 
-    def _post_freeze(self, node_internals):
+    def _post_freeze(self, node_internals, wrapping_node):
         if self._post_freeze_handler is not None:
-            self._post_freeze_handler(node_internals)
+            self._post_freeze_handler(node_internals, wrapping_node)
         
     def register_post_freeze_handler(self, func):
         self._post_freeze_handler = func

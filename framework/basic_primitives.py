@@ -68,6 +68,7 @@ def corrupt_bits(s, p=0.01, n=None, ascii=False):
     return bytes(s)
 
 def calc_parity_bit(x):
+    """return 0 if the number of bits is even, otherwise returns 1"""
     bit = 0
     num_bits = 0
     while x:

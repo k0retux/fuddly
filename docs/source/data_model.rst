@@ -1469,9 +1469,8 @@ The non-terminal node named ``enc`` (lines 9-19) has the attribute ``encoder``
 (refer to :ref:`dm:keywords`) which means that it will be encoded following the scheme of the
 specified encoder. In this case it is the :class:`framework.encoders.GZIP_Enc` with a level
 of compression of 6. Within this node is also defined a typed node (lines 17-18) named
-``data1`` which is encoded in *UTF16 little endian* thanks to the type
-:class:`framework.value_types.UTF16_LE` (which inherit from :class:`framework.value_types.String`)
-that leverages the encoder :class:`framework.encoders.UTF16LE_Enc`.
+``data1`` which is encoded in *UTF16 little endian* through the parameter ``codec``
+of :class:`framework.value_types.String`.
 
 Note also the parameter ``after_encoding=False`` (lines 6 and 14), which is supported by every
 relevant generator node templates (refer to :ref:`dm:generators`) and enable them to act either
@@ -1498,7 +1497,7 @@ on the encoded form or the decoded form of their node parameters.
               'node_args': 'data1',
               'absorb_csts': AbsFullCsts(contents=False)},
              {'name': 'data1',
-              'contents': UTF16_LE(values=['Test!', 'Hello World!']) },
+              'contents': String(values=['Test!', 'Hello World!'], codec='utf-16-le') },
           ]},
          {'name': 'data2',
           'contents': String(values=['Red', 'Green', 'Blue']) }
@@ -1511,8 +1510,8 @@ perform on any data parts will be done *before* any encoding takes place.
 If you want to perform some fuzzing on the encoding scheme itself you will have first to
 describe its format. Then it boils down to run some generic disruptors on them or some of your own.
 However, note that some value types that support encoding (refer to :ref:`vt:value-types`) embed
-specific test cases on the encoding scheme (which is the case of
-:class:`framework.value_types.UTF16_LE` for instance).
+specific test cases on the encoding scheme (which is the case for ``utf-16-le``-encoded strings
+for instance).
 
 Finally, absorption (refer to :ref:`tuto:dm-absorption`) is also supported when encoding is used
 within your data description. For instance, the following data will be absorbed by the previous

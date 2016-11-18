@@ -300,6 +300,7 @@ class Step(object):
                 if isinstance(d_desc, DataProcess):
                     d.add_info(repr(d_desc))
                 elif isinstance(d_desc, Data):
+                    d = d_desc
                     d.add_info('Use provided Data(...)')
                 else:
                     assert isinstance(d_desc, str)

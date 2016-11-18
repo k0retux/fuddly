@@ -298,7 +298,7 @@ class FmkPlumbing(object):
         self.cleanup_all_dmakers(reset_existing_seed)
         # Warning: fuzz delay is not set to 0 by default in order to have a time frame
         # where SIGINT is accepted from user
-        self.set_fuzz_delay(0.1)
+        self.set_fuzz_delay(0.01)
         self.set_fuzz_burst(1)
         self._recompute_health_check_timeout(self.tg.feedback_timeout, self.tg.sending_delay)
 
@@ -2112,7 +2112,7 @@ class FmkPlumbing(object):
                 signal.signal(signal.SIGINT, sig_int_handler)
                 ret = 0
                 while not self.tg.is_target_ready_for_new_data():
-                    time.sleep(0.1)
+                    time.sleep(0.01)
                     now = datetime.datetime.now()
                     if (now - t0).total_seconds() > self._hc_timeout:
                         # print('\n***DBG: FBK timeout')
