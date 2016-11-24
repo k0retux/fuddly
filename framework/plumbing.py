@@ -1678,7 +1678,8 @@ class FmkPlumbing(object):
                             else:
                                 newd = Data()
                                 newd.make_unusable()
-                                new_data.append(newd)
+                                new_data = [newd]
+                                break
 
                     for idx in op[CallBackOps.Del_PeriodicData]:
                         self._unregister_task(idx)
