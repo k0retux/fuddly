@@ -223,6 +223,7 @@ class Logger(object):
         self._current_dmaker_list= []
         self._current_dmaker_info = {}
         self._current_src_data_id = None
+        self._current_fmk_info = []
 
     def commit_log_entry(self, group_id, prj_name, tg_name):
         if self._current_data is not None:  # that means data will be recorded
@@ -266,6 +267,8 @@ class Logger(object):
                                         self._current_src_data_id,
                                         str(user_input), info)
 
+            for msg, now in self._current_fmk_info:
+                self.fmkDB.insert_fmk_info(self.last_data_id, msg, now)
 
             self._reset_current_state()
 
@@ -276,7 +279,7 @@ class Logger(object):
 
 
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO,
-                     data_id=None, do_record=True):
+                     data_id=None, do_record=True, delay_recording=False):
         now = datetime.datetime.now()
 
         p = '\n' if nl_before else ''
@@ -286,7 +289,10 @@ class Logger(object):
         self.log_fn(msg, rgb=rgb)
         data_id = self.last_data_id if data_id is None else data_id
         if do_record:
-            self.fmkDB.insert_fmk_info(data_id, msg, now)
+            if not delay_recording:
+                self.fmkDB.insert_fmk_info(data_id, info, now)
+            else:
+                self._current_fmk_info.append((info, now))
 
     def collect_target_feedback(self, fbk, status_code=None):
         """

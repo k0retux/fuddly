@@ -1923,12 +1923,12 @@ class FmkPlumbing(object):
                 raise ValueError
 
             if multiple_data:
-                 self.lg.log_fmk_info("MULTIPLE DATA EMISSION", nl_after=True)
+                 self.lg.log_fmk_info("MULTIPLE DATA EMISSION", nl_after=True, delay_recording=True)
 
             for idx, dt in zip(range(len(data_list)), data_list):
                 dt_mk_h = dt.get_history()
                 if multiple_data:
-                    self.lg.log_fmk_info("Data #%d" % (idx+1), nl_before=True)
+                    self.lg.log_fmk_info("Data #%d" % (idx+1), nl_before=True, delay_recording=True)
                     self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
 
                 gen_info = dt.get_initial_dmaker()
