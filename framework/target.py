@@ -392,7 +392,7 @@ class NetworkTarget(Target):
     fit your needs.
     '''
 
-    UNKNOWN_SEMANTIC = 42
+    UNKNOWN_SEMANTIC = "Unknown Semantic"
     CHUNK_SZ = 2048
     _INTERNALS_ID = 'NetworkTarget()'
 
@@ -514,7 +514,7 @@ class NetworkTarget(Target):
 
         self.stop_event = threading.Event()
         self._server_thread_lock = threading.Lock()
-
+        self._raw_server_private = None
 
     def _is_valid_socket_type(self, socket_type):
         skt_sz = len(socket_type)
@@ -759,11 +759,14 @@ class NetworkTarget(Target):
 
 
     def start(self):
+        self.stop_event.clear()
+
         # Used by _raw_listen_to()
         self._server_sock2hp = {}
         self._server_thread_share = {}
         self._last_client_sock2hp = {}  # only for hold_connection
         self._last_client_hp2sock = {}  # only for hold_connection
+        self._raw_server_private = {}  # useful only for hold_connection
 
         # Used by _raw_connect_to()
         self._hclient_sock2hp = {}  # only for hold_connection
@@ -799,6 +802,8 @@ class NetworkTarget(Target):
 
     def stop(self):
         self.stop_event.set()
+        for ev, _ in self._raw_server_private.values():
+            ev.set()
         for s in self._server_sock2hp.keys():
             s.close()
         for s in self._last_client_sock2hp.keys():
@@ -1000,9 +1005,10 @@ class NetworkTarget(Target):
 
     def _listen_to_target(self, host, port, socket_type, func, args=None):
 
-        def start_raw_server(serversocket):
+        def start_raw_server(serversocket, sending_event, notif_host_event):
             server_thread = threading.Thread(None, self._raw_server_main, name='SRV-' + '',
-                                             args=(serversocket, host, port, sock_type, func))
+                                             args=(serversocket, host, port, sock_type, func,
+                                                   sending_event, notif_host_event))
             server_thread.start()
 
         skt_sz = len(socket_type)
@@ -1022,8 +1028,12 @@ class NetworkTarget(Target):
                 with self._server_thread_lock:
                     self._server_thread_share[(host, port)] = args
                 if self.hold_connection[(host, port)] and (host, port) in self._last_client_hp2sock:
-                    serversocket, _ = self._last_client_hp2sock[(host, port)]
-                    start_raw_server(serversocket)
+                    sending_event, notif_host_event = self._raw_server_private[(host, port)]
+                    sending_event.set()
+                    # serversocket, _ = self._last_client_hp2sock[(host, port)]
+                    # start_raw_server(serversocket)
+                    notif_host_event.wait(5)
+                    notif_host_event.clear()
             else:
                 with self._server_thread_lock:
                     self._server_thread_share[(host, port)] = args
@@ -1060,9 +1070,13 @@ class NetworkTarget(Target):
             server_thread.start()
 
         elif sock_type == socket.SOCK_DGRAM or sock_type == socket.SOCK_RAW:
+            sending_event = threading.Event()
+            notif_host_event = threading.Event()
+            self._raw_server_private[(host, port)] = (sending_event, notif_host_event)
             self._last_client_hp2sock[(host, port)] = (serversocket, None)
             self._last_client_sock2hp[serversocket] = (host, port)
-            start_raw_server(serversocket)
+            start_raw_server(serversocket, sending_event, notif_host_event)
+            sending_event.set()
         else:
             raise ValueError("Unrecognized socket type")
 
@@ -1088,60 +1102,70 @@ class NetworkTarget(Target):
                 func(clientsocket, address, args)
 
     # For SOCK_RAW and SOCK_DGRAM
-    def _raw_server_main(self, serversocket, host, port, sock_type, func):
+    def _raw_server_main(self, serversocket, host, port, sock_type, func,
+                         sending_event, notif_host_event):
+        while True:
 
-        with self._server_thread_lock:
-            args = self._server_thread_share[(host, port)]
+            sending_event.wait()
+            sending_event.clear()
+            if self.stop_event.is_set():
+                notif_host_event.set()
+                break
 
-        target_address, wait_for_client = self._server_mode_additional_info[(host, port)]
-        if func == self._handle_connection_to_fbk_server:
-            # args = fbk_id, fbk_length, connected_client_event
-            assert args[0] in self._additional_fbk_desc
-            wait_before_sending = False
-        elif func == self._handle_target_connection:
-            # args = data, host, port, connected_client_event, from_fmk
-            if args[0] is None:
-                # In the case 'data' is None there is no data to send,
-                # thus we are requested to only collect feedback
+            with self._server_thread_lock:
+                args = self._server_thread_share[(host, port)]
+
+            notif_host_event.set()
+
+            target_address, wait_for_client = self._server_mode_additional_info[(host, port)]
+            if func == self._handle_connection_to_fbk_server:
+                # args = fbk_id, fbk_length, connected_client_event
+                assert args[0] in self._additional_fbk_desc
                 wait_before_sending = False
-            elif target_address is not None:
-                wait_before_sending = wait_for_client
-            elif sock_type == socket.SOCK_RAW:
-                # in this case target_address is not provided, but it is OK if it is a SOCK_RAW
-                wait_before_sending = wait_for_client
+            elif func == self._handle_target_connection:
+                # args = data, host, port, connected_client_event, from_fmk
+                if args[0] is None:
+                    # In the case 'data' is None there is no data to send,
+                    # thus we are requested to only collect feedback
+                    wait_before_sending = False
+                elif target_address is not None:
+                    wait_before_sending = wait_for_client
+                elif sock_type == socket.SOCK_RAW:
+                    # in this case target_address is not provided, but it is OK if it is a SOCK_RAW
+                    wait_before_sending = wait_for_client
+                else:
+                    wait_before_sending = True
             else:
-                wait_before_sending = True
-        else:
-            raise ValueError
+                raise ValueError
 
-        retry = 0
-        while retry < 10:
-            try:
-                if wait_before_sending:
-                    data, address = serversocket.recvfrom(self.CHUNK_SZ)
-                else:
-                    data, address = None, None
-            except socket.timeout:
-                break
-            except OSError as e:
-                if e.errno == 9: # [Errno 9] Bad file descriptor
+            retry = 0
+            while retry < 10:
+                try:
+                    if wait_before_sending:
+                        data, address = serversocket.recvfrom(self.CHUNK_SZ)
+                    else:
+                        data, address = None, None
+                except socket.timeout:
                     break
-                elif e.errno == 11: # [Errno 11] Resource temporarily unavailable
-                    retry += 1
-                    time.sleep(0.5)
-                    continue
+                except OSError as e:
+                    if e.errno == 9: # [Errno 9] Bad file descriptor
+                        break
+                    elif e.errno == 11: # [Errno 11] Resource temporarily unavailable
+                        retry += 1
+                        time.sleep(0.5)
+                        continue
+                    else:
+                        raise
+                except socket.error as serr:
+                    if serr.errno == 11:  # [Errno 11] Resource temporarily unavailable
+                        retry += 1
+                        time.sleep(0.5)
+                        continue
                 else:
-                    raise
-            except socket.error as serr:
-                if serr.errno == 11:  # [Errno 11] Resource temporarily unavailable
-                    retry += 1
-                    time.sleep(0.5)
-                    continue
-            else:
-                address = address if target_address is None else target_address
-                serversocket.settimeout(self.feedback_timeout)
-                func(serversocket, address, args, pre_fbk=data)
-                break
+                    address = address if target_address is None else target_address
+                    serversocket.settimeout(self.feedback_timeout)
+                    func(serversocket, address, args, pre_fbk=data)
+                    break
 
     def _handle_connection_to_fbk_server(self, clientsocket, address, args, pre_fbk=None):
         fbk_id, fbk_length, connected_client_event = args
