@@ -6,6 +6,56 @@ from framework.scenario import *
 from framework.error_handling import ExtinctPopulationError
 
 
+class FitnessScore(object):
+
+    def compute(self, input, output):
+        raise NotImplementedError
+
+
+class Population(object):
+
+    def __init__(self):
+        self._individuals = []
+        self.index = 0
+
+    def setup(self):
+        """ Generate the first generation of individuals """
+        self._individuals = []
+        self.index = 0
+
+    def evolve(self):
+        """ Describe the evolutionary process """
+        raise NotImplementedError
+
+    def stop_criteria(self):
+        """ Check the stop criteria """
+        raise NotImplementedError
+
+    def __len__(self):
+        return len(self._individuals)
+
+    def __delitem__(self, key):
+        del self._individuals[key]
+
+    def __getitem__(self, key):
+        return self._individuals[key]
+
+    def __setitem__(self, key, value):
+        self._individuals[key] = value
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.index == len(self._individuals):
+            raise StopIteration
+        else:
+            self.index += 1
+            return self._individuals[self.index-1]
+
+    next = __next__
+
+
 def feature(coefficient):
     def features_decorator(func):
         def func_wrapper(*args, **kwargs):
@@ -14,10 +64,7 @@ def feature(coefficient):
     return features_decorator
 
 
-class FitnessScore(object):
-
-    def __init__(self):
-        pass
+class DefaultFitnessScore(FitnessScore):
 
     @feature(1)
     def string_distance(self):
@@ -27,7 +74,7 @@ class FitnessScore(object):
     def specific_words(self, output, words):
         result = 0
         for word in words:
-            result += len(re.findall(word, output))
+            result += len(re.findall(word, output.to_bytes()))
         return result
 
     @feature(1)
@@ -35,9 +82,7 @@ class FitnessScore(object):
         return len(input) / len(output)
 
     def compute(self, input, output):
-        return self.specific_words(output, ['error', 'failure']) + \
-               self.string_distance() + \
-               self.size_variation(input, output)
+        return random.uniform(1, 100)
 
 
 class Individual(object):
@@ -52,10 +97,10 @@ class Individual(object):
         self.probability_of_survival = None  # between 0 and 1
 
     def mutate(self, nb):
-        self.node = self.fmk.get_data(['C', None, UI(nb=nb)], data_orig=Data(self.node)).node
+        self.node = self.fmk.get_data([('C', None, UI(nb=nb))], data_orig=Data(self.node)).node
 
 
-class Population(object):
+class DefaultPopulation(Population):
 
     def __init__(self, model, size, max_generation_nb, fitness_score):
         """
@@ -66,13 +111,12 @@ class Population(object):
                 max_generation_nb (integer): criteria used to stop the evolution process
                 fitness_score (FitnessScore): used to compute fitness scores
         """
+        Population.__init__(self)
         self.MODEL = model
         self.SIZE = size
         self.MAX_GENERATION_NB = max_generation_nb
 
-        self._individuals = []
-        self.generation = 0
-        self.index = 0
+        self.generation = 1
 
         self.fmk = None  # initialized by the framework itself
 
@@ -83,7 +127,11 @@ class Population(object):
             Generate the first generation of individuals
             The default implementation creates them in a random way
         """
-        for _ in range(0, self.SIZE + 1):
+        Population.setup(self)
+
+        self.generation = 1
+
+        for _ in range(0, self.SIZE):
             node = self.fmk.get_data([self.MODEL]).node
             node.make_random(recursive=True)
             node.freeze()
@@ -102,15 +150,18 @@ class Population(object):
 
         for ind in self._individuals:
             if min_score != max_score:
-                ind.probability_of_survival = (ind.probability_of_survival - min_score) / (max_score - min_score)
+                ind.probability_of_survival = (ind.score - min_score) / (max_score - min_score)
             else:
                 ind.probability_of_survival = 0.50
 
     def _kill(self):
         """ The default implementation simply rolls the dice """
         for i in range(len(self._individuals))[::-1]:
-            if random.randrange(100) < self._individuals[i].probability_of_survival*100:
+            if random.randrange(100) > self._individuals[i].probability_of_survival*100:
                 del self._individuals[i]
+
+        if len(self._individuals) < 2:
+            raise ExtinctPopulationError()
 
     def _mutate(self):
         """ The default implementation operates three bit flips on each individual """
@@ -124,14 +175,14 @@ class Population(object):
         current_size = len(self._individuals)
 
         i = 0
-        while len(self._individuals) < self.SIZE and i <= int(current_size / 2):
-            individual_1 = self._individuals[i].node
-            individual_2 = self._individuals[i+1].node.get_clone()
+        while len(self._individuals) < self.SIZE and i < int(current_size / 2):
+            ind_1 = self._individuals[i].node
+            ind_2 = self._individuals[i+1].node.get_clone()
 
-            self._individuals.extend([self.fmk.get_data(['tCOMB', None, UI(node=individual_2.node)],
-                                                        data_orig=Data(individual_1.node)).node,
-                                      self.fmk.get_data(['tCOMB'],
-                                                        data_orig=Data(individual_1.node)).node])
+            self._individuals.extend([
+                Individual(self.fmk, self.fmk.get_data([('tCOMB', None, UI(node=ind_2))], data_orig=Data(ind_1)).node),
+                Individual(self.fmk, self.fmk.get_data(['tCOMB'], data_orig=Data(ind_1)).node)])
+
             i += 2
 
     def evolve(self):
@@ -144,30 +195,6 @@ class Population(object):
 
         self.generation += 1
 
-        if len(self._individuals) < 2:
-            raise ExtinctPopulationError()
-
-    def __len__(self):
-        return len(self._individuals)
-
-    def __delitem__(self, key):
-        del self._individuals[key]
-
-    def __getitem__(self, key):
-        return self._individuals[key]
-
-    def __setitem__(self, key, value):
-        self._individuals[key] = value
-
-    def __iter__(self):
-        return self
-
-    def next(self):
-        if self.index == len(self._individuals):
-            raise StopIteration
-        else:
-            self.index += 1
-            return self._individuals[self.index-1]
 
 
 class EvolutionaryScenariosBuilder(object):
@@ -192,18 +219,24 @@ class EvolutionaryScenariosBuilder(object):
             print("Callback after")
 
             # set the feedback of the last played individual
-            env.population[env.population.index].feedback = fbk
+            env.population[env.population.index - 1].feedback = fbk
 
-            if env.population.index == len(env.population) - 1:
+            if env.population.index == len(env.population):
+
                 if env.population.generation == env.population.MAX_GENERATION_NB:
                     return False
                 else:
-                    env.population.evolve()
+                    env.population.index = 0
+                    try:
+                        env.population.evolve()
+                    except ExtinctPopulationError:
+                        return False
 
             return True
 
         step = Step(data_desc=DataProcess(process=[('POPULATION', None, UI(population=population))]))
         step.connect_to(step, cbk_before_sending=cbk_before, cbk_after_fbk=cbk_after)
+        step.connect_to(FinalStep())
 
         sc = Scenario(name, anchor=step)
         sc._env.population = population

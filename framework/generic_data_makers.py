@@ -49,7 +49,13 @@ class g_population(Generator):
         return True
 
     def generate_data(self, dm, monitor, target):
-        return Data(self.population.next().node)
+        try:
+            data = Data(self.population.next().node)
+        except StopIteration:
+            data = Data()
+            data.make_unusable()
+
+        return data
 
 
 #######################

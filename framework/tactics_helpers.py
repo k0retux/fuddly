@@ -458,7 +458,7 @@ def _handle_user_inputs(dmaker, ui):
             if isinstance(arg_type, tuple):
                 assert(type(ui_val) in arg_type or ui_val is None)
             elif isinstance(arg_type, type):
-                assert(type(ui_val) == arg_type or ui_val is None)
+                assert(type(ui_val) == arg_type or issubclass(type(ui_val), arg_type) or ui_val is None)
             else:
                 raise ValueError
             if ui_val is None:
