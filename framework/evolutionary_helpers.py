@@ -186,13 +186,10 @@ class DefaultPopulation(Population):
 
             while True:
                 data = self.fmk.get_data([('tCOMB', None, UI(node=ind_2))], data_orig=Data(ind_1))
-                if data is None:
-                    for error in self.fmk.get_error():
-                        print error.message
-                if data.is_unusable():
-                    self._individuals.append(Individual(self.fmk, data.node))
-                else:
+                if data is None or data.is_unusable():
                     break
+                else:
+                    self._individuals.append(Individual(self.fmk, data.node))
 
             i += 2
 

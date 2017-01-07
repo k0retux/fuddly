@@ -26,7 +26,7 @@ from copy import *
 from framework.fuzzing_primitives import *
 from framework.value_types import *
 from framework.plumbing import *
-from evolutionary_helpers import *
+from framework.evolutionary_helpers import Population
 from framework.global_resources import *
 
 tactics = Tactics()
@@ -740,11 +740,11 @@ class sd_combine(SwapperDisruptor):
 
     def set_seed(self, prev_data):
 
+        SwapperDisruptor.set_seed(self, prev_data)
+
         if prev_data.node is None:
             prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
             return prev_data
-
-        SwapperDisruptor.set_seed(self, prev_data)
 
         source = self.get_nodes(prev_data.node)
         param = self.get_nodes(self.node)
