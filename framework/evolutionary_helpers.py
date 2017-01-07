@@ -18,8 +18,12 @@ class Population(object):
         self._individuals = []
         self.index = 0
 
+        self.need_setup = True
+
     def setup(self):
         """ Generate the first generation of individuals """
+        self.need_setup = False
+
         self._individuals = []
         self.index = 0
 
@@ -179,9 +183,16 @@ class DefaultPopulation(Population):
             ind_1 = self._individuals[i].node
             ind_2 = self._individuals[i+1].node.get_clone()
 
-            self._individuals.extend([
-                Individual(self.fmk, self.fmk.get_data([('tCOMB', None, UI(node=ind_2))], data_orig=Data(ind_1)).node),
-                Individual(self.fmk, self.fmk.get_data(['tCOMB'], data_orig=Data(ind_1)).node)])
+
+            while True:
+                data = self.fmk.get_data([('tCOMB', None, UI(node=ind_2))], data_orig=Data(ind_1))
+                if data is None:
+                    for error in self.fmk.get_error():
+                        print error.message
+                if data.is_unusable():
+                    self._individuals.append(Individual(self.fmk, data.node))
+                else:
+                    break
 
             i += 2
 
@@ -217,6 +228,7 @@ class EvolutionaryScenariosBuilder(object):
 
         def cbk_after(env, current_step, next_step, fbk):
             print("Callback after")
+            cont = True
 
             # set the feedback of the last played individual
             env.population[env.population.index - 1].feedback = fbk
@@ -224,15 +236,18 @@ class EvolutionaryScenariosBuilder(object):
             if env.population.index == len(env.population):
 
                 if env.population.generation == env.population.MAX_GENERATION_NB:
-                    return False
+                    cont = False
                 else:
                     env.population.index = 0
                     try:
                         env.population.evolve()
                     except ExtinctPopulationError:
-                        return False
+                        cont = False
 
-            return True
+            if cont is False:
+                env.population.need_setup = True
+
+            return cont
 
         step = Step(data_desc=DataProcess(process=[('POPULATION', None, UI(population=population))]))
         step.connect_to(step, cbk_before_sending=cbk_before, cbk_after_fbk=cbk_after)

@@ -26,7 +26,7 @@ from copy import *
 from framework.fuzzing_primitives import *
 from framework.value_types import *
 from framework.plumbing import *
-from evolutionary_helpers import Population
+from evolutionary_helpers import *
 from framework.global_resources import *
 
 tactics = Tactics()
@@ -44,16 +44,20 @@ class g_population(Generator):
     def setup(self, dm, user_input):
         if self.population is None:
             raise Exception
-        else:
-            self.population.setup()
         return True
 
     def generate_data(self, dm, monitor, target):
+
+        if self.population.need_setup:
+            self.population.setup()
+
         try:
             data = Data(self.population.next().node)
+
         except StopIteration:
             data = Data()
             data.make_unusable()
+            self.need_reset()
 
         return data
 
