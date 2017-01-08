@@ -50,6 +50,7 @@ from framework.operator_helpers import *
 from framework.project import *
 from framework.error_handling import *
 from framework.scenario import *
+from framework.evolutionary_helpers import EvolutionaryScenariosBuilder
 
 import framework.generic_data_makers
 
@@ -635,11 +636,18 @@ class FmkPlumbing(object):
                 print(colorize("*** ERROR: '%s_strategy.py' shall contain a global variable 'tactics' ***" % (name), rgb=Color.ERROR))
                 return None
 
-            # give evolutionary scenarios access to fmk
-            for name, stuff in dm_params['tactics'].generators.items():
-                for obj in stuff[2]:
-                    if hasattr(obj, 'scenario') and hasattr(obj.scenario._env, 'population'):
-                        obj.scenario._env.population.fmk = self._exportable_fmk_ops
+            try:
+                evolutionary_scenarios = eval(prefix + name + '_strategy' + '.evolutionary_scenarios')
+            except:
+                pass
+            else:
+                evol_scs = []
+                for evol_sc in evolutionary_scenarios:
+                    evol = EvolutionaryScenariosBuilder.build(*evol_sc)
+                    evol._env.population.fmk = self._exportable_fmk_ops
+                    evol_scs.append(evol)
+
+                dm_params['tactics'].register_scenarios(*evol_scs)
 
             if dm_params['dm'].name is None:
                 dm_params['dm'].name = name
