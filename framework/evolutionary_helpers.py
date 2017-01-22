@@ -6,7 +6,7 @@ from framework.error_handling import ExtinctPopulationError, PopulationError
 
 
 class Population(object):
-    """ Represent a population to be used within an evolutionary scenario """
+    """ Population to be used within an evolutionary scenario """
     def __init__(self, fmk, *args, **kwargs):
         self._fmk = fmk
         self._individuals = None
@@ -16,14 +16,14 @@ class Population(object):
     def _initialize(self, *args, **kwargs):
         """
             Initialize the population
-            It is only called once during the creating of the Population instance
+            Only called once during the creating of the Population instance
         """
         pass
 
     def reset(self):
         """
             Reset the population
-            It is called before each evolutionary process
+            Called before each evolutionary process
         """
         self._individuals = []
         self.index = 0
@@ -69,18 +69,6 @@ class Individual(object):
         self.feedback = None
 
 
-class FitnessScore(object):
-    """ Contain all the fitness score logic of the default evolutionary scenario """
-    def compute(self, input, output):
-        raise NotImplementedError
-
-
-class DefaultFitnessScore(FitnessScore):
-
-    def compute(self, input, output):
-        return random.uniform(0, 100)
-
-
 class DefaultIndividual(Individual):
     """ Provide a default implementation of the Individual class """
 
@@ -98,24 +86,21 @@ class DefaultIndividual(Individual):
 
 
 class DefaultPopulation(Population):
-    """ Provide a default implementation of the Population class """
+    """ Provide a default implementation of the Population base class """
 
-    def _initialize(self, model, size=100, max_generation_nb=50, fitness_score=None):
+    def _initialize(self, model, size=100, max_generation_nb=50):
         """
             Configure the population
             Args:
                 model (string): individuals that compose this population will be built using this model
                 size (integer): size of the population to manipulate
                 max_generation_nb (integer): criteria used to stop the evolution process
-                fitness_score (FitnessScore): used to compute fitness scores
         """
         Population._initialize(self)
 
         self.MODEL = model
         self.SIZE = size
         self.MAX_GENERATION_NB = max_generation_nb
-
-        self.FITNESS_SCORE = fitness_score if fitness_score is not None else DefaultFitnessScore()
 
         self.generation = None
 
@@ -136,9 +121,9 @@ class DefaultPopulation(Population):
             self._individuals.append(DefaultIndividual(self._fmk, node))
 
     def _compute_scores(self):
-        """ Compute the scores of each individuals using a FitnessScore object """
+        """ Compute the scores of each individuals """
         for individual in self._individuals:
-            individual.score = self.FITNESS_SCORE.compute(individual.node, individual.feedback)
+            individual.score = random.uniform(0, 100)
 
     def _compute_probability_of_survival(self):
         """ Normalize fitness scores between 0 and 1 """
@@ -211,8 +196,10 @@ class EvolutionaryScenariosFactory(object):
         """
         Create a scenario that takes advantage of an evolutionary approach
         Args:
+            fmk (FmkPlumbing): reference to FmkPlumbing
             name (string): name of the scenario to create
-            population (Population): population to use
+            population_cls (classobj): population class to instantiate
+            args (dict of str: object): arguments that will be used to instantiate a population
 
         Returns:
             Scenario : evolutionary scenario
