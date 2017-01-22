@@ -21,41 +21,23 @@
 #
 ################################################################################
 
-import sys
-import os
-import traceback
-import random
-import collections
-
-import copy
-import re
 import pickle
 import readline
 import cmd
 import atexit
-import datetime
-import time
-import signal
 
-from libs.external_modules import *
-
-from framework.database import Database
 from framework.tactics_helpers import *
 from framework.data_model import *
 from framework.data_model_helpers import DataModel
 from framework.target import *
 from framework.logger import *
-from framework.monitor import *
 from framework.operator_helpers import *
 from framework.project import *
 from framework.error_handling import *
 from framework.scenario import *
-from framework.evolutionary_helpers import EvolutionaryScenariosBuilder
+from framework.evolutionary_helpers import EvolutionaryScenariosFactory
 
 import framework.generic_data_makers
-
-import data_models
-import projects
 
 from framework.global_resources import *
 from libs.utils import *
@@ -637,17 +619,16 @@ class FmkPlumbing(object):
                 return None
 
             try:
-                evolutionary_scenarios = eval(prefix + name + '_strategy' + '.evolutionary_scenarios')
+                evol_scs = eval(prefix + name + '_strategy' + '.evolutionary_scenarios')
             except:
                 pass
             else:
-                evol_scs = []
-                for evol_sc in evolutionary_scenarios:
-                    evol = EvolutionaryScenariosBuilder.build(*evol_sc)
-                    evol._env.population.fmk = self._exportable_fmk_ops
-                    evol_scs.append(evol)
+                built_evol_scs = []
+                for evol_sc in evol_scs:
+                    built_evol_sc = EvolutionaryScenariosFactory.build(self._exportable_fmk_ops, *evol_sc)
+                    built_evol_scs.append(built_evol_sc)
 
-                dm_params['tactics'].register_scenarios(*evol_scs)
+                dm_params['tactics'].register_scenarios(*built_evol_scs)
 
             if dm_params['dm'].name is None:
                 dm_params['dm'].name = name

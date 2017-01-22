@@ -42,19 +42,32 @@ tactics = Tactics()
 class g_population(Generator):
     """ Walk through the given population """
     def setup(self, dm, user_input):
-        if self.population is None:
-            raise Exception
+        assert self.population is not None
+
+        self.population.reset()
+
         return True
 
     def generate_data(self, dm, monitor, target):
-
-        if self.population.need_setup:
-            self.population.setup()
+        reset = False
 
         try:
             data = Data(self.population.next().node)
-
         except StopIteration:
+
+            # all individuals of the current population have been sent
+
+            if self.population.is_final():
+                reset = True
+            else:
+                try:
+                    self.population.evolve()
+                except ExtinctPopulationError:
+                    reset = True
+                else:
+                    return self.generate_data(dm, monitor, target)
+
+        if reset:
             data = Data()
             data.make_unusable()
             self.need_reset()
@@ -661,8 +674,7 @@ class sd_crossover(SwapperDisruptor):
 
                     parent_path = current_path[:-current_path[::-1].find('/') - 1]
                     children_nb = self._count_brothers(index, parent_path)
-                    if children_nb == self.node.get_node_by_path(parent_path).internals[
-                        self.node.get_current_conf()].get_subnode_qty():
+                    if children_nb == self.node.get_node_by_path(parent_path).cc.get_subnode_qty():
                         self._merge_brothers(index, parent_path, children_nb)
                         change = True
                         index += 1
@@ -729,7 +741,7 @@ class sd_combine(SwapperDisruptor):
 
     def get_nodes(self, node):
         while True:
-            nodes = [node] if node.is_term() else node.internals[node.get_current_conf()].frozen_node_list
+            nodes = [node] if node.is_term() else node.cc.frozen_node_list
 
             if len(nodes) == 1 and not nodes[0].is_term():
                 node = nodes[0]

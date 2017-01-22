@@ -28,7 +28,8 @@ class TargetFeedbackError(Exception): pass
 class DataProcessTermination(Exception): pass
 class UserInterruption(Exception): pass
 
-class ExtinctPopulationError(Exception): pass
+class PopulationError(Exception): pass
+class ExtinctPopulationError(PopulationError): pass
 
 class DataModelDefinitionError(Exception): pass
 

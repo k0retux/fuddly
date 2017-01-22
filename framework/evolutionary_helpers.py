@@ -1,29 +1,30 @@
-import re
 from operator import attrgetter
 
 from framework.tactics_helpers import *
 from framework.scenario import *
-from framework.error_handling import ExtinctPopulationError
-
-
-class FitnessScore(object):
-
-    def compute(self, input, output):
-        raise NotImplementedError
+from framework.error_handling import ExtinctPopulationError, PopulationError
 
 
 class Population(object):
+    """ Represent a population to be used within an evolutionary scenario """
+    def __init__(self, fmk, *args, **kwargs):
+        self._fmk = fmk
+        self._individuals = None
+        self.index = None
+        self._initialize(*args, **kwargs)
 
-    def __init__(self):
-        self._individuals = []
-        self.index = 0
+    def _initialize(self, *args, **kwargs):
+        """
+            Initialize the population
+            It is only called once during the creating of the Population instance
+        """
+        pass
 
-        self.need_setup = True
-
-    def setup(self):
-        """ Generate the first generation of individuals """
-        self.need_setup = False
-
+    def reset(self):
+        """
+            Reset the population
+            It is called before each evolutionary process
+        """
         self._individuals = []
         self.index = 0
 
@@ -31,8 +32,8 @@ class Population(object):
         """ Describe the evolutionary process """
         raise NotImplementedError
 
-    def stop_criteria(self):
-        """ Check the stop criteria """
+    def is_final(self):
+        """ Check if the population can still evolve or not """
         raise NotImplementedError
 
     def __len__(self):
@@ -60,53 +61,46 @@ class Population(object):
     next = __next__
 
 
-def feature(coefficient):
-    def features_decorator(func):
-        def func_wrapper(*args, **kwargs):
-            return coefficient * func(*args, **kwargs)
-        return func_wrapper
-    return features_decorator
+class Individual(object):
+    """ Represents a population member """
+    def __init__(self, fmk, node):
+        self._fmk = fmk
+        self.node = node
+        self.feedback = None
+
+
+class FitnessScore(object):
+    """ Contain all the fitness score logic of the default evolutionary scenario """
+    def compute(self, input, output):
+        raise NotImplementedError
 
 
 class DefaultFitnessScore(FitnessScore):
 
-    @feature(1)
-    def string_distance(self):
-        return 0
-
-    @feature(1)
-    def specific_words(self, output, words):
-        result = 0
-        for word in words:
-            result += len(re.findall(word, output.to_bytes()))
-        return result
-
-    @feature(1)
-    def size_variation(self, input, output):
-        return len(input) / len(output)
-
     def compute(self, input, output):
-        return random.uniform(1, 100)
+        return random.uniform(0, 100)
 
 
-class Individual(object):
-    """ Represents a population member """
+class DefaultIndividual(Individual):
+    """ Provide a default implementation of the Individual class """
 
     def __init__(self, fmk, node):
-        self.fmk = fmk
+        Individual.__init__(self, fmk, node)
 
-        self.node = node
-        self.feedback = None
         self.score = None
         self.probability_of_survival = None  # between 0 and 1
 
     def mutate(self, nb):
-        self.node = self.fmk.get_data([('C', None, UI(nb=nb))], data_orig=Data(self.node)).node
+        data = self._fmk.get_data([('C', None, UI(nb=nb))], data_orig=Data(self.node))
+        if data is None:
+            raise PopulationError
+        self.node = data.node
 
 
 class DefaultPopulation(Population):
+    """ Provide a default implementation of the Population class """
 
-    def __init__(self, model, size, max_generation_nb, fitness_score):
+    def _initialize(self, model, size=100, max_generation_nb=50, fitness_score=None):
         """
             Configure the population
             Args:
@@ -115,65 +109,63 @@ class DefaultPopulation(Population):
                 max_generation_nb (integer): criteria used to stop the evolution process
                 fitness_score (FitnessScore): used to compute fitness scores
         """
-        Population.__init__(self)
+        Population._initialize(self)
+
         self.MODEL = model
         self.SIZE = size
         self.MAX_GENERATION_NB = max_generation_nb
 
-        self.generation = 1
+        self.FITNESS_SCORE = fitness_score if fitness_score is not None else DefaultFitnessScore()
 
-        self.fmk = None  # initialized by the framework itself
+        self.generation = None
 
-        self.fitness_score = fitness_score
-
-    def setup(self):
-        """
-            Generate the first generation of individuals
-            The default implementation creates them in a random way
-        """
-        Population.setup(self)
+    def reset(self):
+        """ Generate the first generation of individuals in a random way """
+        Population.reset(self)
 
         self.generation = 1
 
+        # individuals initialization
         for _ in range(0, self.SIZE):
-            node = self.fmk.get_data([self.MODEL]).node
+            data = self._fmk.get_data([self.MODEL])
+            if data is None:
+                raise PopulationError
+            node = data.node
             node.make_random(recursive=True)
             node.freeze()
-            self._individuals.append(Individual(self.fmk, node))
+            self._individuals.append(DefaultIndividual(self._fmk, node))
 
     def _compute_scores(self):
         """ Compute the scores of each individuals using a FitnessScore object """
         for individual in self._individuals:
-            individual.score = self.fitness_score.compute(individual.node, individual.feedback)
+            individual.score = self.FITNESS_SCORE.compute(individual.node, individual.feedback)
 
     def _compute_probability_of_survival(self):
-        """ The default implementation simply normalize the score between 0 and 1 """
+        """ Normalize fitness scores between 0 and 1 """
 
         min_score = min(self._individuals, key=attrgetter('score')).score
         max_score = max(self._individuals, key=attrgetter('score')).score
 
         for ind in self._individuals:
             if min_score != max_score:
-                ind.probability_of_survival = (ind.score - min_score) / (max_score - min_score)
+                ind.probability_of_survival = (ind.score - min_score) / (max_score - min_score) + 0.3
             else:
                 ind.probability_of_survival = 0.50
 
     def _kill(self):
-        """ The default implementation simply rolls the dice """
+        """ Simply rolls the dice """
         for i in range(len(self._individuals))[::-1]:
             if random.randrange(100) > self._individuals[i].probability_of_survival*100:
                 del self._individuals[i]
 
-        if len(self._individuals) < 2:
-            raise ExtinctPopulationError()
-
     def _mutate(self):
-        """ The default implementation operates three bit flips on each individual """
+        """ Operates three bit flips on each individual """
         for individual in self._individuals:
             individual.mutate(3)
+            print(str(individual) + "mutated !!")
 
     def _crossover(self):
-        """ The default implementation compensates the kills through the usage of the tCROSS disruptor """
+        """ Compensates the kills through the usage of the tCROSS disruptor """
         random.shuffle(self._individuals)
 
         current_size = len(self._individuals)
@@ -185,16 +177,20 @@ class DefaultPopulation(Population):
 
 
             while True:
-                data = self.fmk.get_data([('tCOMB', None, UI(node=ind_2))], data_orig=Data(ind_1))
+                data = self._fmk.get_data([('tCOMB', None, UI(node=ind_2))], data_orig=Data(ind_1))
                 if data is None or data.is_unusable():
                     break
                 else:
-                    self._individuals.append(Individual(self.fmk, data.node))
+                    self._individuals.append(DefaultIndividual(self._fmk, data.node))
 
             i += 2
 
     def evolve(self):
         """ Describe the evolutionary process """
+
+        if len(self) < 2:
+            raise ExtinctPopulationError()
+
         self._compute_scores()
         self._compute_probability_of_survival()
         self._kill()
@@ -202,13 +198,16 @@ class DefaultPopulation(Population):
         self._crossover()
 
         self.generation += 1
+        self.index = 0
+
+    def is_final(self):
+        return self.generation == self.MAX_GENERATION_NB
 
 
-
-class EvolutionaryScenariosBuilder(object):
+class EvolutionaryScenariosFactory(object):
 
     @staticmethod
-    def build(name, population):
+    def build(fmk, name, population_cls, args):
         """
         Create a scenario that takes advantage of an evolutionary approach
         Args:
@@ -219,37 +218,17 @@ class EvolutionaryScenariosBuilder(object):
             Scenario : evolutionary scenario
         """
 
-        def cbk_before(env, current_step, next_step):
-            print("Callback before")
-            return True
+        population = population_cls(fmk, **args)
 
         def cbk_after(env, current_step, next_step, fbk):
             print("Callback after")
-            cont = True
 
             # set the feedback of the last played individual
-            env.population[env.population.index - 1].feedback = fbk
+            population[population.index - 1].feedback = fbk
 
-            if env.population.index == len(env.population):
-
-                if env.population.generation == env.population.MAX_GENERATION_NB:
-                    cont = False
-                else:
-                    env.population.index = 0
-                    try:
-                        env.population.evolve()
-                    except ExtinctPopulationError:
-                        cont = False
-
-            if cont is False:
-                env.population.need_setup = True
-
-            return cont
+            return True
 
         step = Step(data_desc=DataProcess(process=[('POPULATION', None, UI(population=population))]))
-        step.connect_to(step, cbk_before_sending=cbk_before, cbk_after_fbk=cbk_after)
-        step.connect_to(FinalStep())
+        step.connect_to(step, cbk_after_fbk=cbk_after)
 
-        sc = Scenario(name, anchor=step)
-        sc._env.population = population
-        return sc
+        return Scenario(name, anchor=step)
