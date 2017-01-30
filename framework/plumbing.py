@@ -2836,6 +2836,7 @@ class FmkPlumbing(object):
                                 # Usefull to replay from the beginning a modelwalking sequence
                                 data.materialize()
                                 dmaker_obj.produced_seed = Data(data.get_contents(do_copy=True))
+                        invalid_data = not self._is_data_valid(data)
                     elif isinstance(dmaker_obj, Disruptor):
                         if not self._is_data_valid(data):
                             invalid_data = True
