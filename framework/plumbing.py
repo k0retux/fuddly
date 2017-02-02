@@ -21,16 +21,32 @@
 #
 ################################################################################
 
+
+import sys
+import os
+import traceback
+import random
+import collections
+
+import copy
+import re
 import pickle
 import readline
 import cmd
 import atexit
+import datetime
+import time
+import signal
 
+from libs.external_modules import *
+
+from framework.database import Database
 from framework.tactics_helpers import *
 from framework.data_model import *
 from framework.data_model_helpers import DataModel
 from framework.target import *
 from framework.logger import *
+from framework.monitor import *
 from framework.operator_helpers import *
 from framework.project import *
 from framework.error_handling import *
@@ -38,6 +54,9 @@ from framework.scenario import *
 from framework.evolutionary_helpers import EvolutionaryScenariosFactory
 
 import framework.generic_data_makers
+
+import data_models
+import projects
 
 from framework.global_resources import *
 from libs.utils import *
