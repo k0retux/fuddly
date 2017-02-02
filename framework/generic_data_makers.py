@@ -31,9 +31,54 @@ from framework.basic_primitives import *
 from framework.value_types import *
 from framework.data_model_helpers import GENERIC_ARGS
 
+from framework.plumbing import *
+from framework.evolutionary_helpers import Population
 from framework.global_resources import *
 
 tactics = Tactics()
+
+
+#######################
+#     GENERATORS      #
+#######################
+
+@generator(tactics, gtype='POPULATION', weight=1,
+           gen_args=GENERIC_ARGS,
+           args={'population': ('the population to iterate over', None, Population)})
+class g_population(Generator):
+    """ Walk through the given population """
+    def setup(self, dm, user_input):
+        assert self.population is not None
+
+        self.population.reset()
+
+        return True
+
+    def generate_data(self, dm, monitor, target):
+        reset = False
+
+        try:
+            data = Data(self.population.next().node)
+        except StopIteration:
+
+            # all individuals of the current population have been sent
+
+            if self.population.is_final():
+                reset = True
+            else:
+                try:
+                    self.population.evolve()
+                except ExtinctPopulationError:
+                    reset = True
+                else:
+                    return self.generate_data(dm, monitor, target)
+
+        if reset:
+            data = Data()
+            data.make_unusable()
+            self.need_reset()
+
+        return data
 
 
 #######################
@@ -635,8 +680,7 @@ class sd_crossover(SwapperDisruptor):
 
                     parent_path = current_path[:-current_path[::-1].find('/') - 1]
                     children_nb = self._count_brothers(index, parent_path)
-                    if children_nb == self.node.get_node_by_path(parent_path).internals[
-                        self.node.get_current_conf()].get_subnode_qty():
+                    if children_nb == self.node.get_node_by_path(parent_path).cc.get_subnode_qty():
                         self._merge_brothers(index, parent_path, children_nb)
                         change = True
                         index += 1
@@ -703,7 +747,7 @@ class sd_combine(SwapperDisruptor):
 
     def get_nodes(self, node):
         while True:
-            nodes = [node] if node.is_term() else node.internals[node.get_current_conf()].frozen_node_list
+            nodes = [node] if node.is_term() else node.cc.frozen_node_list
 
             if len(nodes) == 1 and not nodes[0].is_term():
                 node = nodes[0]
@@ -714,11 +758,11 @@ class sd_combine(SwapperDisruptor):
 
     def set_seed(self, prev_data):
 
+        SwapperDisruptor.set_seed(self, prev_data)
+
         if prev_data.node is None:
             prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
             return prev_data
-
-        SwapperDisruptor.set_seed(self, prev_data)
 
         source = self.get_nodes(prev_data.node)
         param = self.get_nodes(self.node)

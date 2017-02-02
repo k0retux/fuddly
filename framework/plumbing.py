@@ -21,6 +21,7 @@
 #
 ################################################################################
 
+
 import sys
 import os
 import traceback
@@ -50,6 +51,7 @@ from framework.operator_helpers import *
 from framework.project import *
 from framework.error_handling import *
 from framework.scenario import *
+from framework.evolutionary_helpers import EvolutionaryScenariosFactory
 
 import framework.generic_data_makers
 
@@ -87,6 +89,7 @@ class ExportableFMKOps(object):
         self.load_data_model = fmk.load_data_model
         self.load_multiple_data_model = fmk.load_multiple_data_model
         self.reload_all = fmk.reload_all
+        self.get_data = fmk.get_data
 
 class FmkFeedback(object):
     
@@ -633,6 +636,18 @@ class FmkPlumbing(object):
             except:
                 print(colorize("*** ERROR: '%s_strategy.py' shall contain a global variable 'tactics' ***" % (name), rgb=Color.ERROR))
                 return None
+
+            try:
+                evol_scs = eval(prefix + name + '_strategy' + '.evolutionary_scenarios')
+            except:
+                pass
+            else:
+                built_evol_scs = []
+                for evol_sc in evol_scs:
+                    built_evol_sc = EvolutionaryScenariosFactory.build(self._exportable_fmk_ops, *evol_sc)
+                    built_evol_scs.append(built_evol_sc)
+
+                dm_params['tactics'].register_scenarios(*built_evol_scs)
 
             if dm_params['dm'].name is None:
                 dm_params['dm'].name = name
