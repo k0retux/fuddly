@@ -1,4 +1,4 @@
-from framework.data_model_helpers import *
+from framework.data_model_builder import *
 import framework.value_types as vt
 import unittest
 import ddt

@@ -43,7 +43,7 @@ from libs.external_modules import *
 from framework.database import Database
 from framework.tactics_helpers import *
 from framework.data_model import *
-from framework.data_model_helpers import DataModel
+from framework.data_model_builder import DataModel
 from framework.target import *
 from framework.logger import *
 from framework.monitor import *

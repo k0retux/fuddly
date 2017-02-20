@@ -28,7 +28,7 @@ import copy
 import collections
 
 import framework.data_model as fdm
-from framework.data_model_helpers import modelwalker_inputs_handling_helper, GENERIC_ARGS
+from framework.data_model_builder import modelwalker_inputs_handling_helper, GENERIC_ARGS
 from framework.global_resources import *
 
 DEBUG = False

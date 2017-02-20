@@ -1038,6 +1038,8 @@ class INT(VT):
     '''
     Base class to be inherited and not used directly
     '''
+    usable = False
+
     mini = None
     maxi = None
     cformat = None
@@ -1059,6 +1061,10 @@ class INT(VT):
         self.exhausted = False
         self.drawn_val = None
         self.default = None
+
+        if not self.usable:
+            raise DataModelDefinitionError("ERROR: {!r} is not usable! (use a subclass of it)"
+                                           .format(self.__class__))
 
         if values:
             assert default is None

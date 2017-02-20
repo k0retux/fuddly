@@ -36,7 +36,7 @@ sys.path.append('.')
 
 from framework.plumbing import *
 from framework.data_model import *
-from framework.data_model_helpers import *
+from framework.data_model_builder import *
 from framework.value_types import *
 from framework.fuzzing_primitives import *
 from framework.basic_primitives import *

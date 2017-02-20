@@ -23,7 +23,7 @@
 
 from framework.data_model import *
 from framework.value_types import *
-from framework.data_model_helpers import *
+from framework.data_model_builder import *
 
 class SMS_DataModel(DataModel):
 
@@ -59,7 +59,7 @@ class SMS_DataModel(DataModel):
               'mutable': False,
               'contents': [
                   {'name': 'addr_len',
-                   'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                   'contents': LEN(vt=UINT8, after_encoding=False),
                    'node_args': 'tel_num'},
                   {'name': 'addr_type',
                    'contents': BitField(subfield_sizes=[4,3,1], endian=VT.BigEndian,
@@ -89,7 +89,7 @@ class SMS_DataModel(DataModel):
                                                        [0b0000]]   # first coding group
                                    ) },
              {'name': 'UDL',
-              'contents': MH.LEN(vt=UINT8, after_encoding=False),
+              'contents': LEN(vt=UINT8, after_encoding=False),
               'node_args': 'user_data'},
              {'name': 'user_data',
               'contents': GSM7bitPacking(values=['Hello World!'], max_sz=160)
@@ -121,7 +121,7 @@ class SMS_DataModel(DataModel):
               'mutable': False,
               'contents': [
                   {'name': 'addr_len',
-                   'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                   'contents': LEN(vt=UINT8, after_encoding=False),
                    'node_args': 'tel_num'},
                   {'name': 'addr_type',
                    'contents': BitField(subfield_sizes=[4,3,1], endian=VT.BigEndian,
@@ -178,7 +178,7 @@ class SMS_DataModel(DataModel):
                                         ) },
              ]},
              {'name': 'UDL',
-              'contents': MH.LEN(vt=UINT8),
+              'contents': LEN(vt=UINT8),
               'node_args': 'user_data'},
              {'name': 'user_data',
               'contents': [
@@ -189,12 +189,12 @@ class SMS_DataModel(DataModel):
                   {'name': 'IEDLa',
                    'contents': UINT8(values=[0])},
                   {'name': 'CPL',  # command packet length
-                   'contents': MH.LEN(vt=UINT16_be),
+                   'contents': LEN(vt=UINT16_be),
                    'node_args': 'cmd'},
                   {'name': 'cmd',
                    'contents': [
                        {'name': 'CHL', # command header length
-                        'contents': MH.LEN(vt=UINT8),
+                        'contents': LEN(vt=UINT8),
                         'node_args': 'cmd_hdr'},
                        {'name': 'cmd_hdr',
                         'contents': [
@@ -255,7 +255,7 @@ class SMS_DataModel(DataModel):
 
                             {'name': 'RC|CC|DS',  # redundancy check, (crypto check, or digital sig)
                              'exists_if': (BitFieldCondition(sf=0,val=1), 'SPI_p1'),  # RC only
-                             'contents': MH.CRC(poly=0b100000100110000010001110110110111,  # TS 102 225 (5.1.3.2)
+                             'contents': CRC(poly=0b100000100110000010001110110110111,  # TS 102 225 (5.1.3.2)
                                                 init_crc=0, # init_crc=0xFFFFFFFF match the spec but to
                                                             # match the example of annex B, init_crc should 0.
                                                 xor_out=0xFFFFFFFF,

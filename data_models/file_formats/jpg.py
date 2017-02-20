@@ -22,7 +22,7 @@
 ################################################################################
 
 from framework.data_model import *
-from framework.data_model_helpers import *
+from framework.data_model_builder import *
 from framework.value_types import *
 from framework.global_resources import *
 
@@ -86,7 +86,7 @@ class JPG_DataModel(DataModel):
                   {'name': 'F_marker',
                    'contents': UINT16_be(values=[m for m in markers['SOF'].values()])},
                   {'name': 'Lf',
-                   'contents': MH.LEN(vt=UINT16_be, base_len=8),
+                   'contents': LEN(vt=UINT16_be, base_len=8),
                    'node_args': 'F_CompGroup',
                    'alt': [
                        {'conf': 'ABS',
@@ -131,7 +131,7 @@ class JPG_DataModel(DataModel):
                   {'name': 'S_marker',
                    'contents': UINT16_be(values=[markers['SOS']])},
                   {'name': 'Ls',
-                   'contents': MH.LEN(vt=UINT16_be, base_len=6),
+                   'contents': LEN(vt=UINT16_be, base_len=6),
                    'node_args': 'S_CompGroup',
                    'alt': [
                        {'conf': 'ABS',
@@ -169,8 +169,8 @@ class JPG_DataModel(DataModel):
               'absorb_csts': AbsNoCsts()}
          ]}
 
-        mh = ModelHelper(delayed_jobs=True)
-        self.jpg = mh.create_graph_from_desc(jpg_desc)
+        mb = ModelBuilder(delayed_jobs=True)
+        self.jpg = mb.create_graph_from_desc(jpg_desc)
 
         self.jpg_dict = self.import_file_contents(extension='jpg')
         self.register(self.jpg, *self.jpg_dict.values())

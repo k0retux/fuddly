@@ -1,4 +1,4 @@
-from framework.data_model_helpers import *
+from framework.data_model_builder import *
 from framework.value_types import *
 
 
@@ -294,7 +294,7 @@ class HTTPModel(DataModel):
 
             ]}
 
-        model_helper = ModelHelper(self)
+        model_helper = ModelBuilder(self)
         model_root_node = model_helper.create_graph_from_desc(HTTP_message)
         model_root_node.set_current_conf(conf="standard", recursive=True)
         self.register(model_root_node)

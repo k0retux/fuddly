@@ -103,6 +103,20 @@ def unconvert_from_internal_repr(val):
             val = val.decode('latin-1')
     return val
 
+def is_string_compatible(val):
+    if isinstance(val, list):
+        for v in val:
+            if not is_string_compatible(v):
+                return False
+        else:
+            return True
+    elif sys.version_info[0] > 2:
+        return isinstance(val, (str, bytes))
+    elif isinstance(val, (unicode, str)):  # only for python2
+        return True
+    else:
+        return False
+
 ### Exports for Node Absorption ###
 
 class AbsorbStatus(Enum):

@@ -36,7 +36,7 @@ import data_models.example as example
 
 from framework.fuzzing_primitives import *
 from framework.plumbing import *
-from framework.data_model_helpers import *
+from framework.data_model_builder import *
 from framework.encoders import *
 
 
@@ -1579,8 +1579,8 @@ class TestModelWalker(unittest.TestCase):
                   ]}
              ]}
 
-        mh = ModelHelper(delayed_jobs=True)
-        data = mh.create_graph_from_desc(shape_desc)
+        mb = ModelBuilder(delayed_jobs=True)
+        data = mb.create_graph_from_desc(shape_desc)
         bv_data = data.get_clone()
         nt_data = data.get_clone()
 
@@ -1920,8 +1920,8 @@ class TestNodeFeatures(unittest.TestCase):
               ]}
         ]}
 
-        mh = ModelHelper(delayed_jobs=True)
-        d = mh.create_graph_from_desc(tag_desc)
+        mb = ModelBuilder(delayed_jobs=True)
+        d = mb.create_graph_from_desc(tag_desc)
         d.make_determinist(recursive=True)
         d2 = d.get_clone()
         d3 = d.get_clone()
@@ -2060,8 +2060,8 @@ class TestNodeFeatures(unittest.TestCase):
              ]}
 
         for i in range(5):
-            mh = ModelHelper()
-            node = mh.create_graph_from_desc(test_desc)
+            mb = ModelBuilder()
+            node = mb.create_graph_from_desc(test_desc)
             node_abs = Node('test_abs', base_node=node)
 
             node.set_env(Env())
@@ -2308,8 +2308,8 @@ class TestNodeFeatures(unittest.TestCase):
 
              ]}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(cond_desc)
+        mb = ModelBuilder()
+        node = mb.create_graph_from_desc(cond_desc)
 
         print('***')
         raw = node.to_bytes()
@@ -2364,14 +2364,14 @@ class TestNodeFeatures(unittest.TestCase):
                            {'name': ('key', 2),
                             'contents': String(values=['name='])},
                            {'name': 'param',
-                            'contents': MH.CYCLE(['NOTSUP1', 'Date', 'Time', 'NOTSUP2', 'NOTSUP3', 'Location'],
+                            'contents': CYCLE(['NOTSUP1', 'Date', 'Time', 'NOTSUP2', 'NOTSUP3', 'Location'],
                                                  depth=2)}
                        ]}
                   ]}
              ]}
 
-        mh = ModelHelper(delayed_jobs=True)
-        node = mh.create_graph_from_desc(gen_exist_desc)
+        mb = ModelBuilder(delayed_jobs=True)
+        node = mb.create_graph_from_desc(gen_exist_desc)
 
         print('***')
         raw = node.to_bytes()
@@ -2431,8 +2431,8 @@ class TestNodeFeatures(unittest.TestCase):
                   ]},
              ]}
 
-        mh = ModelHelper(delayed_jobs=True)
-        node = mh.create_graph_from_desc(pick_cond_desc)
+        mb = ModelBuilder(delayed_jobs=True)
+        node = mb.create_graph_from_desc(pick_cond_desc)
 
         print('***')
         raw = node.to_bytes()
@@ -2475,8 +2475,8 @@ class TestNodeFeatures(unittest.TestCase):
                   ]}
              ]}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(padding_desc)
+        mb = ModelBuilder()
+        node = mb.create_graph_from_desc(padding_desc)
 
         print('***')
         raw = node.to_bytes()
@@ -2546,8 +2546,8 @@ class TestNode_NonTerm(unittest.TestCase):
                   'qty': (2, -1)},
              ]}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(infinity_desc)
+        mb = ModelBuilder()
+        node = mb.create_graph_from_desc(infinity_desc)
         node_abs = Node('infinity_abs', base_node=node)
         node_abs2 = Node('infinity_abs', base_node=node)
 
@@ -2634,8 +2634,8 @@ class TestNode_NonTerm(unittest.TestCase):
                   ]}
              ]}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(test_desc)
+        mb = ModelBuilder()
+        node = mb.create_graph_from_desc(test_desc)
         node.set_env(Env())
 
         for i in range(5):
@@ -2670,7 +2670,7 @@ class TestNode_NonTerm(unittest.TestCase):
                  {'name': 'data0',
                   'contents': String(values=['Plip', 'Plop'])},
                  {'name': 'crc',
-                  'contents': MH.CRC(vt=UINT32_be, after_encoding=False),
+                  'contents': CRC(vt=UINT32_be, after_encoding=False),
                   'node_args': ['enc_data', 'data2'],
                   'absorb_csts': AbsFullCsts(contents=False)},
                  {'name': 'enc_data',
@@ -2678,7 +2678,7 @@ class TestNode_NonTerm(unittest.TestCase):
                   'set_attrs': NodeInternals.Abs_Postpone,
                   'contents': [
                       {'name': 'len',
-                       'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                       'contents': LEN(vt=UINT8, after_encoding=False),
                        'node_args': 'data1',
                        'absorb_csts': AbsFullCsts(contents=False)},
                       {'name': 'data1',
@@ -2688,8 +2688,8 @@ class TestNode_NonTerm(unittest.TestCase):
                   'contents': String(values=['Red', 'Green', 'Blue'])},
              ]}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(enc_desc)
+        mb = ModelBuilder()
+        node = mb.create_graph_from_desc(enc_desc)
         node.set_env(Env())
 
         node_abs = Node('abs', base_node=node, new_env=True)
@@ -2740,8 +2740,8 @@ class TestNode_TypedValue(unittest.TestCase):
                   'contents': String(values=['END'])},
              ]}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(alpha_desc)
+        mb = ModelBuilder()
+        node = mb.create_graph_from_desc(alpha_desc)
         node.set_env(Env())
 
         node_abs = Node('alpha_abs', base_node=node)
@@ -2806,7 +2806,7 @@ class TestNode_TypedValue(unittest.TestCase):
             {'name': 'enc',
              'contents': [
                  {'name': 'len',
-                  'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                  'contents': LEN(vt=UINT8, after_encoding=False),
                   'node_args': 'user_data',
                   'absorb_csts': AbsFullCsts(contents=False)},
                  {'name': 'user_data',
@@ -2815,8 +2815,8 @@ class TestNode_TypedValue(unittest.TestCase):
                   'contents': GZIP(values=data, encoding_arg=6)}
              ]}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(enc_desc)
+        mb = ModelBuilder()
+        node = mb.create_graph_from_desc(enc_desc)
         node.set_env(Env())
 
         node_abs = Node('enc_abs', base_node=node, new_env=True)
@@ -2927,8 +2927,8 @@ class TestNode_TypedValue(unittest.TestCase):
                   'absorb_csts': AbsNoCsts()},
              ]}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(enc_desc)
+        mb = ModelBuilder()
+        node = mb.create_graph_from_desc(enc_desc)
         node.set_env(Env())
 
         node_abs = Node('enc_abs', base_node=node, new_env=True)
@@ -3027,8 +3027,8 @@ class TestHLAPI(unittest.TestCase):
                   ]}
              ]}
 
-        mh = ModelHelper(fmk.dm)
-        node = mh.create_graph_from_desc(a)
+        mb = ModelBuilder(fmk.dm)
+        node = mb.create_graph_from_desc(a)
 
         node.set_env(Env())
         node.show()
@@ -3046,8 +3046,8 @@ class TestHLAPI(unittest.TestCase):
         node.set_current_conf('alt2', recursive=True)
         node.show()
 
-        print('\nNode Dictionnary (size: {:d}):\n'.format(len(mh.node_dico)))
-        for name, node in mh.node_dico.items():
+        print('\nNode Dictionnary (size: {:d}):\n'.format(len(mb.node_dico)))
+        for name, node in mb.node_dico.items():
             print(name, ': ', repr(node), node.c)
 
 
@@ -3325,12 +3325,12 @@ class TestDataModelHelpers(unittest.TestCase):
         HTTP_version_regex = \
             {'name': regex_node_name, 'contents': "(HTTP)(/)(0|1|2|3|4|5|6|7|8|9)(\.)(0|1|2|3|4|5|6|7|8|9)"}
 
-        mh = ModelHelper()
-        node_classic = mh.create_graph_from_desc(HTTP_version_classic)
+        mb = ModelBuilder()
+        node_classic = mb.create_graph_from_desc(HTTP_version_classic)
         node_classic.make_determinist(recursive=True)
 
-        mh = ModelHelper()
-        node_regex = mh.create_graph_from_desc(HTTP_version_regex)
+        mb = ModelBuilder()
+        node_regex = mb.create_graph_from_desc(HTTP_version_regex)
         node_regex.make_determinist(recursive=True)
 
         node_regex.show()
@@ -3345,8 +3345,8 @@ class TestDataModelHelpers(unittest.TestCase):
     def test_regex_shape(self, regexp, shapes):
         revisited_HTTP_version = {'name': 'HTTP_version_classic', 'contents': regexp}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(revisited_HTTP_version)
+        mb = ModelBuilder()
+        node = mb.create_graph_from_desc(revisited_HTTP_version)
 
         excluded_idx = []
 
@@ -3384,6 +3384,9 @@ class TestFMK(unittest.TestCase):
         print(gen_disruptors)
 
         for dis in gen_disruptors:
+            if dis in ['tCROSS', 'tCOMB']:
+                continue
+
             print("\n\n---[ Tested Disruptor %r ]---" % dis)
             if dis == 'EXT':
                 act = [dmaker_type, (dis, None, UI(cmd='/bin/cat', file_mode=True))]

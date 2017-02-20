@@ -1523,14 +1523,14 @@ class NodeInternals_GenFunc(NodeInternals):
         if name in [NodeInternals.Determinist, NodeInternals.Finite, NodeInternals.Abs_Postpone,
                     NodeInternals.Separator]:
             if self._generated_node is not None:
-                self.generated_node.set_attr(name)
+                self.generated_node.set_attr(name, recursive=True)
         return True
 
     def _unmake_specific(self, name):
         if name in [NodeInternals.Determinist, NodeInternals.Finite, NodeInternals.Abs_Postpone,
                     NodeInternals.Separator]:
             if self._generated_node is not None:
-                self.generated_node.clear_attr(name)
+                self.generated_node.clear_attr(name, recursive=True)
         return True
 
     def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement):

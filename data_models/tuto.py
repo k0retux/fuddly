@@ -5,8 +5,9 @@ from framework.plumbing import *
 
 from framework.data_model import *
 from framework.value_types import *
-from framework.data_model_helpers import *
+from framework.data_model_builder import *
 from framework.encoders import *
+import framework.dmhelpers.xml as xml
 
 class MyDF_DataModel(DataModel):
 
@@ -241,7 +242,7 @@ class MyDF_DataModel(DataModel):
          'contents': [
              {'name': 'len',
               'type': MH.Generator,
-              'contents': MH.LEN(UINT32_be),
+              'contents': LEN(UINT32_be),
               'node_args': 'payload',
               'absorb_csts': AbsNoCsts()},
 
@@ -272,7 +273,7 @@ class MyDF_DataModel(DataModel):
 
              {'name': 'len',
               'type': MH.Generator,
-              'contents': MH.OFFSET(use_current_position=False, vt=UINT8),
+              'contents': OFFSET(use_current_position=False, vt=UINT8),
               'node_args': ['prefix', 'int', 'body']},
          ]}
 
@@ -293,22 +294,22 @@ class MyDF_DataModel(DataModel):
 
              {'name': 'int16_qty',
               'type': MH.Generator,
-              'contents': MH.QTY(node_name='int16', vt=UINT8),
+              'contents': QTY(node_name='int16', vt=UINT8),
               'node_args': 'integers'},
 
              {'name': 'int32_qty',
               'type': MH.Generator,
-              'contents': MH.QTY(node_name='int32', vt=UINT8),
+              'contents': QTY(node_name='int32', vt=UINT8),
               'node_args': 'integers'},
 
              {'name': 'tstamp',
               'type': MH.Generator,
-              'contents': MH.TIMESTAMP("%H%M%S"),
+              'contents': TIMESTAMP("%H%M%S"),
               'absorb_csts': AbsCsts(contents=False)},
 
              {'name': 'crc',
               'type': MH.Generator,
-              'contents': MH.CRC(UINT32_be),
+              'contents': CRC(UINT32_be),
               'node_args': ['tstamp', 'int32_qty'],
               'absorb_csts': AbsCsts(contents=False)}
 
@@ -369,7 +370,7 @@ class MyDF_DataModel(DataModel):
              {'name': 'data0',
               'contents': String(values=['Plip', 'Plop']) },
              {'name': 'crc',
-              'contents': MH.CRC(vt=UINT32_be, after_encoding=False),
+              'contents': CRC(vt=UINT32_be, after_encoding=False),
               'node_args': ['enc_data', 'data2'],
               'absorb_csts': AbsFullCsts(contents=False) },
              {'name': 'enc_data',
@@ -377,7 +378,7 @@ class MyDF_DataModel(DataModel):
               'set_attrs': [NodeInternals.Abs_Postpone],
               'contents': [
                  {'name': 'len',
-                  'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                  'contents': LEN(vt=UINT8, after_encoding=False),
                   'node_args': 'data1',
                   'absorb_csts': AbsFullCsts(contents=False)},
                  {'name': 'data1',
@@ -400,7 +401,7 @@ class MyDF_DataModel(DataModel):
 
                  {'name': 'len',
                   'mutable': False,
-                  'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                  'contents': LEN(vt=UINT8, after_encoding=False),
                   'node_args': 'data1',
                   'absorb_csts': AbsFullCsts(contents=False)},
 
@@ -434,10 +435,40 @@ class MyDF_DataModel(DataModel):
                       'contents': '(333|444)|(foo|bar)|\d|[th|is]'}
 
 
+        xml1_desc = xml.tag_builder('A1', params={'p1':'a', 'p2': ['foo', 'bar'], 'p3': 'c'},
+                                    contents=['foo', 'bar'], node_name='xml1')
+
+        xml2_desc = xml.tag_builder('B1', params={'p1':'a', 'p2': ['foo', 'bar'], 'p3': 'c'},
+                                    contents=Node('intg',vt=UINT32_be(values=[1,2,3])),
+                                    node_name='xml2')
+
+        xml3_desc = xml.tag_builder('C1', params={'p1':'a', 'p2': ['foo', 'bar'], 'p3': 'c'},
+                     contents= \
+                         {'name': 'intg',
+                          'contents': UINT16_be(values=[60,70,80])}, node_name='xml3')
+
+        xml4_desc = \
+            {'name': 'xml4',
+             'contents': [
+                 {'name': 'inside_cpy',
+                  'clone': 'i2'},
+                 xml.tag_builder('D1', params={'p1':'a', 'p2': ['foo', 'bar'], 'p3': 'c'},
+                                 contents= \
+                                     {'name': 'inside',
+                                      'contents': [
+                                          {'name': 'i1',
+                                           'clone': 'outside'},
+                                          {'name': 'i2',
+                                           'contents': String(values=['FOO', 'BAR'])}
+                                      ]} ),
+                 {'name': 'outside',
+                  'contents': UINT16_be(values=[30,40,50])},
+             ] }
+
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
                       shape_desc, for_network_tg1, for_network_tg2, enc_desc, example_desc,
-                      regex_desc)
+                      regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc)
 
 
 data_model = MyDF_DataModel()

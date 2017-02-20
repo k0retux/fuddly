@@ -238,7 +238,7 @@ which will invoke the ``unzip`` program with a ZIP file:
    ...
    >> 
 
-Note that a :class:`framework.data_model_helpers.DataModel` can define any number of data
+Note that a :class:`framework.data_model_builder.DataModel` can define any number of data
 types---to model for instance the various atoms within a data format,
 or to represent some specific use cases, ...
 
@@ -1214,7 +1214,7 @@ is a simple skeleton for ``mydf.py``:
 
    from framework.data_model import *
    from framework.value_types import *
-   from framework.data_model_helpers import *
+   from framework.data_model_builder import *
 
    class MyDF_DataModel(DataModel):
 
@@ -1241,20 +1241,20 @@ is a simple skeleton for ``mydf.py``:
           (:ref:`tuto:start-fuzzshell`).
 
 In this skeleton, you can notice that you have to define a class that
-inherits from the :class:`framework.data_model_helpers.DataModel` class,
+inherits from the :class:`framework.data_model_builder.DataModel` class,
 as seen in line 5. The definition of the data types of a data format
 will be written in python within the method
-:meth:`framework.data_model_helpers.DataModel.build_data_model()`.  In
+:meth:`framework.data_model_builder.DataModel.build_data_model()`.  In
 the previous listing, the data types are represented by ``d1``, ``d2``
 and ``d3``. Once defined, they should be registered within the data
 model, by calling
-:func:`framework.data_model_helpers.DataModel.register()` on them.
+:func:`framework.data_model_builder.DataModel.register()` on them.
 
 .. note:: If you want to import data samples complying to your data
           model:
 	  
 	  - First, you have to overwrite the method
-            :meth:`framework.data_model_helpers.DataModel.absorb` in
+            :meth:`framework.data_model_builder.DataModel.absorb` in
             order to perform the operations for absorbing the samples
             (refer to :ref:`tuto:dm-absorption`). This method is
             called for each file found in ``~/fuddly_data/imported_data/mydf/``, and
@@ -1262,9 +1262,9 @@ model, by calling
 
 	  - Then, you have to perform the import manually within the
             method
-            :meth:`framework.data_model_helpers.DataModel.build_data_model()`
+            :meth:`framework.data_model_builder.DataModel.build_data_model()`
             by calling the method
-            :meth:`framework.data_model_helpers.DataModel.import_file_contents()`
+            :meth:`framework.data_model_builder.DataModel.import_file_contents()`
             which returns a dictionary with every imported data samples.
 
 	  The following code illustrates that:
@@ -1447,7 +1447,7 @@ lines 45
 
 
 To register such a description within the data model ``MyDF`` you can
-directly use :func:`framework.data_model_helpers.DataModel.register()`
+directly use :func:`framework.data_model_builder.DataModel.register()`
 as seen in the previous example. But if you want to access afterwards
 to the defined nodes, you can also transform this description to a
 graph, before registering it, like this:
@@ -1455,13 +1455,16 @@ graph, before registering it, like this:
 .. code-block:: python
    :linenos:
 
-   mh = ModelHelper(self)
-   root_node = mh.create_graph_from_desc(d1)
+   mb = ModelBuilder(self)
+   root_node = mb.create_graph_from_desc(d1)
 
 You could then access to all the registered nodes tided up in the
-specific dictionary ``mh.node_dico``, whether you want to perform
+specific dictionary ``mb.node_dico``, whether you want to perform
 extra operation on them.
 
+.. seealso:: In order to make easier the modeling of data formats, some helpers are provided,
+  namely: some *generator*-node templates (refer to :ref:`dm:generators`) and some block builders
+  (refer to :ref:`dm:builders`).
 
 --------------
 
@@ -2323,7 +2326,7 @@ the following section :ref:`tuto:probes`.
             to :class:`framework.plumbing.ExportableFMKOps`.
 
 	  - ``dm``: a reference to the current
-            :class:`framework.data_model_helpers.DataModel`.
+            :class:`framework.data_model_builder.DataModel`.
 
 	  - ``monitor``: a reference to the monitor subsystem, in
             order to start/stop probes and get status from them.

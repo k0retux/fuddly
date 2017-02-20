@@ -20,7 +20,7 @@ To guide you over what is possible to perform, let's consider the following data
 
     from framework.data_model import *
     from framework.value_types import *
-    from framework.data_model_helpers import *
+    from framework.data_model_builder import *
 
      example_desc = \
      {'name': 'ex',
@@ -33,7 +33,7 @@ To guide you over what is possible to perform, let's consider the following data
 
               {'name': 'len',
                'mutable': False,
-               'contents': MH.LEN(vt=UINT8, after_encoding=False),
+               'contents': LEN(vt=UINT8, after_encoding=False),
                'node_args': 'data1',
                'absorb_csts': AbsFullCsts(contents=False)},
 
@@ -71,8 +71,8 @@ The code below shows how to perform that:
 .. code-block:: python
    :linenos:
 
-    mh = ModelHelper()
-    rnode = mh.create_graph_from_desc(example_desc)
+    mb = ModelBuilder()
+    rnode = mb.create_graph_from_desc(example_desc)
     rnode.set_env(Env())
 
 
@@ -84,19 +84,19 @@ note that we create this *environment* object and setup the root node with it. A
 provides all the nodes of the graph with this environment. From now on it is possible to access
 the environment from any node, and ``fuddly`` is now able to deal with this graph.
 
-.. note:: The method :meth:`framework.data_model_helpers.ModelHelper.create_graph_from_desc` return a
+.. note:: The method :meth:`framework.data_model_builder.ModelBuilder.create_graph_from_desc` return a
    :class:`framework.data_model.Node` which is the root of the graph.
 
 .. note:: When you instantiate a data from a model through
-   :meth:`framework.data_model_helpers.DataModel.get_data` as illustrated in :ref:`fuddly-advanced`,
+   :meth:`framework.data_model_builder.DataModel.get_data` as illustrated in :ref:`fuddly-advanced`,
    the environment object is created for you. Likewise, when you register a data descriptor through
-   :meth:`framework.data_model_helpers.DataModel.register` (refer to :ref:`dm:mydf`), no need to worry
+   :meth:`framework.data_model_builder.DataModel.register` (refer to :ref:`dm:mydf`), no need to worry
    about the environment.
 
-.. note:: The :class:`framework.data_model_helpers.ModelHelper` object which is used to create a
+.. note:: The :class:`framework.data_model_builder.ModelBuilder` object which is used to create a
    graph from a data descriptor is bound to the graph and should not be used for creating another
    graph. It contains some information on the created graph such as a dictionary of all its
-   nodes ``mh.node_dico``.
+   nodes ``mb.node_dico``.
 
 
 .. _dmanip:freeze:

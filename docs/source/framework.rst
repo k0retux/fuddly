@@ -21,10 +21,10 @@ framework.data_model module
     :exclude-members: __dict__, __weakref__
     :show-inheritance:
 
-framework.data_model_helpers module
+framework.data_model_builder module
 -----------------------------------
 
-.. automodule:: framework.data_model_helpers
+.. automodule:: framework.data_model_builder
     :members:
     :undoc-members:
     :private-members:
@@ -164,6 +164,41 @@ framework.scenario module
 -------------------------
 
 .. automodule:: framework.scenario
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
+
+framework.dmhelpers module
+--------------------------
+
+.. automodule:: framework.dmhelpers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
+
+
+framework.dmhelpers.generic module
+----------------------------------
+
+.. automodule:: framework.dmhelpers.generic
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
+
+
+framework.dmhelpers.xml module
+------------------------------
+
+.. automodule:: framework.dmhelpers.xml
    :members:
    :undoc-members:
    :show-inheritance:

@@ -25,7 +25,7 @@ import sys
 
 from framework.data_model import *
 from framework.value_types import *
-from framework.data_model_helpers import *
+from framework.data_model_builder import *
 from framework.global_resources import *
 
 
@@ -68,7 +68,7 @@ class PNG_DataModel(DataModel):
                     'contents': lambda x: Node('data', value_type=String(size=x[0].cc.get_raw_value())),
                     'node_args': ['len']},
                    {'name': 'crc32_gen',
-                    'contents': MH.CRC(vt=UINT32_be, clear_attrs=[MH.Attr.Mutable]),
+                    'contents': CRC(vt=UINT32_be, clear_attrs=[MH.Attr.Mutable]),
                     'node_args': ['type', 'data_gen']}
               ]}
          ]}
@@ -115,14 +115,14 @@ class PNG_DataModel(DataModel):
                         ]}
                    ]},
                   {'name': 'crc32_gen',
-                   'contents': MH.CRC(vt=UINT32_be, clear_attrs=[MH.Attr.Mutable]),
+                   'contents': CRC(vt=UINT32_be, clear_attrs=[MH.Attr.Mutable]),
                    'node_args': ['chk']}
               ]}
          ]}
 
 
-        mh = ModelHelper()
-        self.png = mh.create_graph_from_desc(png_desc)
+        mb = ModelBuilder()
+        self.png = mb.create_graph_from_desc(png_desc)
 
         self.png_dict = self.import_file_contents(extension='png')
        
