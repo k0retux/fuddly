@@ -22,6 +22,8 @@ Contents:
 
    scenario
 
+   evolutionary_fuzzing
+
    disruptors
 
    targets
