@@ -12,17 +12,18 @@ of test cases populations. The test cases creation is not only based on
 classic methods but also on the feedback retrieved from the targets. In this context, the first population
 is the only one instantiated the traditional way. The ones that follow are spawned using five steps:
 
-#. **Fitness score computation**: each test case, member of the current population, is given a score which is
-   function of some metrics. These features are calculated by the element in charge of the monitoring aspects.
+#. **Fitness score computation**: each test case, member of the current population, is given a
+   score which is function of some metrics (impact on the target, diversity, and so on). These
+   features are calculated by the element in charge of the monitoring aspects.
 
 #. **Probabilities of survival association**: depending on the score computed in the previous step, a probability
    of survival is associated to each individual.
 
-#. **Dice are rolled** using the probabilities of survival: weakest test cases are killed.
+#. **Dice are rolled**: using the probabilities of survival: weakest test cases are killed.
 
-#. **Mutation** aims to modify a little bit each individuals (flip some bits for instance) to find local optimums.
+#. **Mutation**: aims to modify a little bit each individuals (flip some bits for instance) to find local optimums.
 
-#. **Cross-over**, on the contrary, involves huge changes in order to find other optimums. It combines the test cases
+#. **Cross-over**: on the contrary, involves huge changes in order to find other optimums. It combines the test cases
    that are still alive in order to generate even better solutions. This process can be used to compensate the kills
    done in step 3.
 
@@ -36,10 +37,10 @@ is the only one instantiated the traditional way. The ones that follow are spawn
 
 The implementation within Fuddly can be divided into three main components:
 
-* A :class:`framework.evolutionary_fuzzing.Population` class that is composed of
-  :class:`framework.evolutionary_fuzzing.Individual` instances. Each individual represents a data to be sent.
-  The population, on the other hand, contains all the evolutionary logic. More details about these classes will
-  be given in the next section.
+* A :class:`framework.evolutionary_helpers.Population` class that is composed of
+  :class:`framework.evolutionary_helpers.Individual` instances. Each individual represents a data to be sent.
+  The population, on the other hand, contains all the evolutionary logic. More details about these classes are
+  given in the next section.
 * The :class:`framework.generic_data_makers.g_population` generator that loops through the population members
   and triggers an evolution when necessary.
 * A scenario only used for one of its callback. It is in charge of retrieving the feedback after each sending.
@@ -51,21 +52,23 @@ User interface
 ==============
 
 An evolutionary process can be configurable by extending the
-:class:`framework.evolutionary_fuzzing.Population` and :class:`framework.evolutionary_fuzzing.Individual`
+:class:`framework.evolutionary_helpers.Population` and :class:`framework.evolutionary_helpers.Individual`
 abstract classes. These elements describe the contract that needs to be satisfied in order for the evolutionary process
 to get running. In general, the methods :meth:`_initialize()` and :meth:`reset()` can be
 used to initialize the first population, :meth:`evolve()` to get the population to the next generation
 and :meth:`is_final()` to specify a stop criteria.
 
 As these are very generic, they bring a lot of flexibility but require some work.
-To address this issue, Fuddly also proposes a default implementation that describes the classic approach
+To address this issue, ``fuddly`` also proposes a default implementation that describes the classic approach
 introduced in the previous section. Each step is expressed using one of the
-:class:`framework.evolutionary_fuzzing.Population` class methods. The evolution stops when the population extincts
+:class:`framework.evolutionary_helpers.DefaultPopulation` methods. The evolution stops when the population extincts
 or if a maximum number of generation exceeds.
 
-* :meth:`_compute_scores()`: computes a random score between 0 and 100. This one is one of the most important method
-  because it is used to characterise what a weakness could look like. So, in practise, it should always be
-  overridden because this default implementation is making this whole evolutionary process useless.
+* :meth:`_compute_scores()`: computes the *individuals* fitness scores, which is, in the default
+  implementation, a random score between 0 and 100. This implementation have to be overridden to match the context.
+  Indeed, this method is used to characterize the *adaptation* of each test case to the target, meaning the
+  negative impact it had on the target. Besides, it also deals with the diversity of the population
+  in order to avoid its premature extinction.
 * :meth:`_compute_probability_of_survival()`: simply normalize fitness scores between 0 and 1.
 * :meth:`_kill()`: rolls the dices !
 * :meth:`_mutate()`: operates three bit flips on each individual using the stateless disruptor ``C``.
@@ -74,12 +77,16 @@ or if a maximum number of generation exceeds.
   the next section).
 
 Finally, to make an evolutionary scenario available, it needs to be registered inside a ``*_strategy.py`` file.
-To do so, an ``evolutionary_scenarios`` variable has to be created. This variable is an array that contains 3-tuples.
-As shown in the following example, each one of these contains a name for the evolutionary scenario,
-a population class and arguments that will be passed to the
-:class:`framework.evolutionary_fuzzing.EvolutionaryScenariosFactory` in order to instantiate the appropriate
-population object.
+To do so, an ``evolutionary_scenarios`` variable has to be created. This variable is an array that
+contains 3-tuples. Each one has to provide:
 
+* a name for the evolutionary scenario that will be created;
+* a class that inherits from :class:`framework.evolutionary_helpers.Population`;
+* and parameters that will be passed to the
+  :class:`framework.evolutionary_helpers.EvolutionaryScenariosFactory` in order to instantiate the appropriate
+  population object.
+
+Here under is provided an example to setup an evolutionary scenario:
 
 .. code-block:: python
 

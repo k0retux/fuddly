@@ -206,6 +206,18 @@ framework.dmhelpers.xml module
    :special-members:
    :exclude-members: __dict__, __weakref__
 
+
+framework.evolutionary_helpers module
+-------------------------------------
+
+.. automodule:: framework.evolutionary_helpers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
+
 ..
    framework.plumbing module
    -----------------------

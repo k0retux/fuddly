@@ -91,6 +91,7 @@ class DefaultPopulation(Population):
     def _initialize(self, model, size=100, max_generation_nb=50):
         """
             Configure the population
+
             Args:
                 model (string): individuals that compose this population will be built using this model
                 size (integer): size of the population to manipulate
