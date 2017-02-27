@@ -150,7 +150,7 @@ class DefaultPopulation(Population):
             print(str(individual) + "mutated !!")
 
     def _crossover(self):
-        """ Compensates the kills through the usage of the tCROSS disruptor """
+        """ Compensates the kills through the usage of the tCOMB disruptor """
         random.shuffle(self._individuals)
 
         current_size = len(self._individuals)

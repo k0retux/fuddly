@@ -636,7 +636,7 @@ class SwapperDisruptor(StatefulDisruptor):
 @disruptor(tactics, dtype="tCROSS", weight=1,
            gen_args=GENERIC_ARGS,
            args={'node': ('node to crossover with', None, Node),
-                 'percentage_to_share': ('percentage of the base node to share', None, float)})
+                 'percentage_to_share': ('percentage of the base node to share', 0.50, float)})
 class sd_crossover(SwapperDisruptor):
     """
     Makes two graphs share a certain percentages of their leaf nodes in order to produce two children
