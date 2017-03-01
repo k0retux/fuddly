@@ -68,6 +68,7 @@ class Example_DataModel(DataModel):
         idx.set_values(value_type=SINT16_be(mini=4,maxi=40))
 
         tx.set_subnodes_basic([tx_h, idx, ku_h, ku, kv_h, kv])
+        tx_cpy = tx.get_clone('TX_cpy')
 
         tc = Node('TC')
         tc_h = Node('h', values=['/TC'])
@@ -86,6 +87,8 @@ class Example_DataModel(DataModel):
 
         tc.add_conf('ALT')
         tc.set_subnodes_basic([mark3, tc_h, ku2, kv_h2], conf='ALT')
+        tc_cpy1= tc.get_clone('TC_cpy1')
+        tc_cpy2= tc.get_clone('TC_cpy2')
 
         mark = Node('MARK', values=[' [#] '])
 
@@ -95,19 +98,20 @@ class Example_DataModel(DataModel):
 
         # set 'mutable' attribute to False
         tux_h.clear_attr(NodeInternals.Mutable)
+        tux_h_cpy = tux_h.get_clone('h_cpy')
 
         tux.set_subnodes_with_csts([
             100, ['u>', [tux_h, 1], [idx2, 1], [mark, 1],
-                  'u=+(1,2)', [tc, 2], [tx, 1, 2],
-                  'u>', [mark, 1], [tx, 1], [tc, 1],
+                  'u=+(1,2)', [tc_cpy2, 2], [tx_cpy, 1, 2],
+                  'u>', [mark, 1], [tx, 1], [tc_cpy1, 1],
                   'u=..', [tux_h, 1], [idx2, 1]],
 
             1, ['u>', [mark, 1],
-                's=..', [tux_h, 1, 3], [tc, 3],
+                's=..', [tux_h_cpy, 1, 3], [tc, 3],
                 'u>', [mark, 1], [tx, 1], [idx2, 1]],
 
             15, ['u>', [mark, 1],
-                 'u=.', [tux_h, 1, 3], [tc, 3],
+                 'u=.', [tux_h_cpy, 1, 3], [tc, 3],
                  'u=.', [mark, 1], [tx, 1], [idx2, 1]]
             ])
 
@@ -212,27 +216,10 @@ class Example_DataModel(DataModel):
 
         typed_node = Node('TVE', subnodes=[prefix, sub1, sep, sub2, suffix])
 
-
-        e_pre1 = Node('pre1', value_type=UINT32_le(determinist=False))
-        e_pre2 = Node('pre2', values=['  [1]  ', '  [2]  ', '  [3]  ', '  [4]  '])
-        e_post = Node('post', values=[' [A]', ' [B]', ' [C]', ' [D]'])
-
-        e_jpg = self.get_external_node(dm_name='jpg', data_id='jpg')
-
-        e_mid = Node('mid', subnodes=[e_pre2, e_jpg, e_post])
-
-        e_blend = Node('BLEND')
-        e_blend.set_subnodes_basic([e_pre1, e_mid])
-
         # Simple
         
         tval1_bottom = Node('TV1_bottom')
         vt = UINT16_be(values=[1,2,3,4,5,6])
-
-        # vt = BitField(subfield_sizes=[4,4,4],
-        #               subfield_values=[[4,2,1], None, [10,12,13]],
-        #               subfield_val_extremums=[None, [14, 15], None],
-        #               padding=0, lsb_padding=False, endian=VT.BigEndian)
 
         tval1_bottom.set_values(value_type=vt)
         tval1_bottom.make_determinist()
@@ -245,6 +232,7 @@ class Example_DataModel(DataModel):
         tval2_bottom.set_values(value_type=vt)
 
         alt_tag = Node('AltTag', values=[' |AltTag| ', ' +AltTag+ '])
+        alt_tag_cpy = alt_tag.get_clone('AltTag_cpy')
 
         bottom = Node('Bottom_NT')
         bottom.set_subnodes_with_csts([
@@ -258,15 +246,17 @@ class Example_DataModel(DataModel):
         val1_bottom2.set_values(['=2ALT2_BOTTOM_2=', '**2ALT2_BOTTOM_2**', '~~2ALT2_BOTTOM_2~~'], conf='ALT_2')
         val1_bottom2.set_fuzz_weight(2)
 
+        val1_bottom2_cpy = val1_bottom2.get_clone('V1_bottom2_cpy')
+
         bottom2 = Node('Bottom_2_NT')
         bottom2.set_subnodes_with_csts([
                 5, ['u>', [sep_bottom, 1], [val1_bottom2, 1]],
-                1, ['u>', [sep_bottom_alt, 1], [val1_bottom2, 2], [sep_bottom_alt, 1]]
+                1, ['u>', [sep_bottom_alt, 1], [val1_bottom2_cpy, 2], [sep_bottom_alt, 1]]
                 ])
         bottom2.add_conf('ALT')
         bottom2.set_subnodes_with_csts([
                 5, ['u>', [alt_tag, 1], [val1_bottom2, 1], [alt_tag, 1]],
-                1, ['u>', [alt_tag, 2], [val1_bottom2, 2], [alt_tag, 2]]
+                1, ['u>', [alt_tag_cpy, 2], [val1_bottom2_cpy, 2], [alt_tag_cpy, 2]]
                 ], conf='ALT')
 
         tval2_bottom3 = Node('TV2_bottom3')
@@ -281,11 +271,14 @@ class Example_DataModel(DataModel):
         sep_middle = Node('sep_middle', values=[' :: '])
         alt_tag2 = Node('AltTag-Mid', values=[' ||AltTag-Mid|| ', ' ++AltTag-Mid++ '])
 
+        val1_middle_cpy1 = val1_middle.get_clone('V1_middle_cpy1')
+        val1_middle_cpy2 = val1_middle.get_clone('V1_middle_cpy2')
+
         middle = Node('Middle_NT')
         middle.set_subnodes_with_csts([
                 5, ['u>', [val1_middle, 1], [sep_middle, 1], [bottom, 1]],
-                3, ['u>', [val1_middle, 2], [sep_middle, 1], [bottom2, 1]],
-                1, ['u>', [val1_middle, 3], [sep_middle, 1], [bottom3, 1]]
+                3, ['u>', [val1_middle_cpy1, 2], [sep_middle, 1], [bottom2, 1]],
+                1, ['u>', [val1_middle_cpy2, 3], [sep_middle, 1], [bottom3, 1]]
                 ])
         middle.add_conf('ALT')
         middle.set_subnodes_with_csts([
@@ -319,21 +312,23 @@ class Example_DataModel(DataModel):
         sep2 = Node('sep2', values=[' -|#|- '])
 
         e_val1 = Node('V1', values=['A', 'B', 'C'])
+        e_val1_cpy = e_val1.get_clone('V1_cpy')
         e_typedval1 = Node('TV1', value_type=UINT16_be(values=[1,2,3,4,5,6]))
         e_val2 = Node('V2', values=['X', 'Y', 'Z'])
         e_val3 = Node('V3', values=['<', '>'])
 
         e_val_random = Node('Rnd', values=['RANDOM'])
+        e_val_random2 = Node('Rnd2', values=['RANDOM'])
 
         e_nonterm = Node('NonTerm')
         e_nonterm.set_subnodes_with_csts([
                 100, ['u>', [e_val1, 1, 6], [sep, 1], [e_typedval1, 1, 6],
                       [sep2, 1],
-                      'u=+(2,3,3)', [e_val1, 1], [e_val2, 1, 3], [e_val3, 1],
+                      'u=+(2,3,3)', [e_val1_cpy, 1], [e_val2, 1, 3], [e_val3, 1],
                       'u>', [sep2, 1],
                       'u=..', [e_val1, 1, 6], [sep, 1], [e_typedval1, 1, 6]],
                 50, ['u>', [e_val_random, 0, 1], [sep, 1], [nt, 1]],
-                90, ['u>', [e_val_random, 3]]
+                90, ['u>', [e_val_random2, 3]]
                 ])
 
 
@@ -406,8 +401,8 @@ class Example_DataModel(DataModel):
         mb = ModelBuilder(dm=self)
         test_node = mb.create_graph_from_desc(test_node_desc)
 
-        self.register_nodes(node_ex1, tux, typed_node, e_blend, e_nonterm, e_simple,
-                            val1_middle, middle, e_jpg, test_node)
+        self.register_nodes(node_ex1, tux, typed_node, e_nonterm, e_simple,
+                            val1_middle, middle, test_node)
 
 
 

@@ -293,11 +293,11 @@ class TestBasics(unittest.TestCase):
         for e in l1:
             print(e.get_path_from(tux2))
             e.cc.change_subnodes_csts([('*', 'u=.')])
-            csts1 = e.cc.get_subnodes_csts_copy()
+            csts1, _ = e.cc.get_subnodes_csts_copy()
             print(csts1)
 
             e.cc.change_subnodes_csts([('*', 'u=.'), ('u=.', 'u>')])
-            csts2 = e.cc.get_subnodes_csts_copy()
+            csts2, _ = e.cc.get_subnodes_csts_copy()
             print(csts2)
 
             print('\n')
@@ -324,15 +324,15 @@ class TestBasics(unittest.TestCase):
         l1 = tux.get_reachable_nodes(internals_criteria=crit)
         c_l1 = []
         for e in l1:
-            orig = e.cc.get_subnodes_csts_copy()
+            order, attrs = e.cc.get_subnodes_csts_copy()
 
             e.cc.change_subnodes_csts([('u=.', 'u>'), ('u>', 'u=.')])
-            csts1 = e.cc.get_subnodes_csts_copy()
+            csts1, _ = e.cc.get_subnodes_csts_copy()
             print(csts1)
             print('\n')
             c_l1.append(csts1)
 
-            e.set_subnodes_full_format(orig)
+            e.set_subnodes_full_format(order, attrs)
 
         l2 = tux.get_reachable_nodes(internals_criteria=crit)
         c_l2 = []
@@ -340,7 +340,7 @@ class TestBasics(unittest.TestCase):
             orig = e.cc.get_subnodes_csts_copy()
 
             e.cc.change_subnodes_csts([('u>', 'u=.'), ('u=.', 'u>')])
-            csts2 = e.cc.get_subnodes_csts_copy()
+            csts2, _ = e.cc.get_subnodes_csts_copy()
             print(csts2)
             print('\n')
             c_l2.append(csts2)
@@ -468,7 +468,7 @@ class TestBasics(unittest.TestCase):
 
         node_ex1 = dm.get_data('EX1')
 
-        node_ex1.set_current_conf('ALT', root_regexp='TC/KV')
+        node_ex1.set_current_conf('ALT', root_regexp='(TC)|(TC_.*)/KV')
         node_ex1.set_current_conf('ALT', root_regexp='TUX$')
 
         node_ex1.unfreeze_all()
@@ -548,7 +548,7 @@ class TestBasics(unittest.TestCase):
         for e in l:
             print(e.get_path_from(tux2))
 
-        if len(l) == 2:
+        if len(l) == 4:
             res6 = True
         else:
             res6 = False
@@ -618,7 +618,7 @@ class TestBasics(unittest.TestCase):
         for e in l:
             print(e.get_path_from(node_ex1))
 
-        if len(l) == 4:
+        if len(l) == 10:
             res2 = True
         else:
             res2 = False
@@ -647,9 +647,6 @@ class TestBasics(unittest.TestCase):
 
         print(res1, res2, res3)
         results['test11'] = res1 and res2 and res3
-
-        # raise ValueError
-
 
         print('\n### TEST 12: get_all_path() test')
 
@@ -705,7 +702,7 @@ class TestBasics(unittest.TestCase):
             e.set_values(value_type=c())
 
         res1 = False
-        if len(l1) == 13:
+        if len(l1) == 29:
             res1 = True
 
         print('\n> after changing types:')
@@ -785,27 +782,6 @@ class TestBasics(unittest.TestCase):
 
         print(res1, res2)
         results['test13'] = res1 and res2
-
-        print('\n*** test 14: test Proxy Node')
-
-        res1 = False
-
-        blend = dm.get_data('BLEND')
-        msg = blend.to_bytes()
-        print('Blend Node starts with:')
-        print(msg[:300] + b' ...')
-        print('\nAnd ends with:')
-        print(b'... ' + msg[len(msg) - 300:len(msg)])
-
-        print("\n--> Call unfreeze()")
-        blend.unfreeze()
-
-        msg2 = blend.to_bytes()
-
-        print('\nBlend Node starts with:')
-        print(msg2[:300] + b' ...')
-        print('\nAnd ends with:')
-        print(b'... ' + msg2[len(msg2) - 300:len(msg2)])
 
         print('\n### SUMMARY ###')
 
@@ -1840,7 +1816,10 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 24)
 
     def test_JPG(self):
-        nt = self.dm.get_data('jpg')
+        dm = fmk.get_data_model_by_name('jpg')
+        dm.build_data_model()
+
+        nt = dm.get_data('jpg')
         tn_consumer = TypedNodeDisruption()
 
         walker = iter(ModelWalker(nt, tn_consumer, make_determinist=True))
@@ -2100,12 +2079,15 @@ class TestNodeFeatures(unittest.TestCase):
 
         nint_1 = Node('nint1', value_type=UINT16_le(values=[0xabcd, 0xe2e1]))
         nint_1.set_absorb_helper(nint_1_helper)
+        nint_1_cpy = nint_1.get_clone('nint1_cpy')
 
         nint_1_alt = Node('nint1_alt', value_type=UINT16_le(values=[0xabff, 0xe2ff]))
         nint_1_alt.set_absorb_helper(nint_1_alt_helper)
+        nint_1_alt_cpy = nint_1_alt.get_clone('nint1_alt_cpy')
 
         nint_2 = Node('nint2', value_type=UINT8(values=[0xf, 0xff, 0xee]))
         nint_3 = Node('nint3', value_type=UINT16_be(values=[0xeffe, 0xc1c2, 0x8899]))
+        nint_3_cpy = nint_3.get_clone('nint3_cpy')
 
         nstr_1 = Node('cool', value_type=String(values=['TBD1'], size=4, codec='ascii'))
         nstr_1.enforce_absorb_constraints(AbsNoCsts(regexp=True))
@@ -2119,7 +2101,7 @@ class TestNodeFeatures(unittest.TestCase):
         middle1.set_subnodes_with_csts([
             3, ['u>', [nint_1_alt, 2]],
             2, ['u>', [nint_1, 1, 10], [nint_2, 2], [nstr_1, 1], [nint_3, 2], [nstr_2, 1]],
-            1, ['u>', [nint_1_alt, 1], [nint_3, 1], 'u=+', [nstr_2, 1], [nint_1, 2], 'u>', [nstr_1, 1],
+            1, ['u>', [nint_1_alt_cpy, 1], [nint_3_cpy, 1], 'u=+', [nstr_2, 1], [nint_1_cpy, 2], 'u>', [nstr_1, 1],
                 'u=.', [nint_50, 1], [nint_51, 1], [nstr_50, 2, 3]]
         ])
 
@@ -3351,7 +3333,7 @@ class TestDataModelHelpers(unittest.TestCase):
         excluded_idx = []
 
         while True:
-            node_list, idx = node.cc._get_next_heavier_component(node.subnodes_csts, excluded_idx=excluded_idx)
+            node_list, idx = node.cc._get_next_heavier_component(node.subnodes_order, excluded_idx=excluded_idx)
             if len(node_list) == 0:
                 break
             excluded_idx.append(idx)
@@ -3384,7 +3366,7 @@ class TestFMK(unittest.TestCase):
         print(gen_disruptors)
 
         for dis in gen_disruptors:
-            if dis in ['tCROSS', 'tCOMB']:
+            if dis in ['tCROSS']:
                 continue
 
             print("\n\n---[ Tested Disruptor %r ]---" % dis)

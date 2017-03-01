@@ -7,9 +7,10 @@ import datetime
 #####################
 
 class MH(object):
-    '''Define constants and generator templates for data
+    """
+    Define constants and generator templates for data
     model description.
-    '''
+    """
 
     #################
     ### Node Type ###
@@ -105,10 +106,12 @@ class MH(object):
 
     @staticmethod
     def _handle_attrs(n, set_attrs, clear_attrs):
-        for sa in set_attrs:
-            n.set_attr(sa)
-        for ca in clear_attrs:
-            n.clear_attr(ca)
+        if set_attrs is not None:
+            for sa in set_attrs:
+                n.set_attr(sa)
+        if clear_attrs is not None:
+            for ca in clear_attrs:
+                n.clear_attr(ca)
 
 
 ################################
@@ -117,8 +120,8 @@ class MH(object):
 
 
 def LEN(vt=fvt.INT_str, base_len=0,
-        set_attrs=[], clear_attrs=[], after_encoding=True, freezable=False):
-    '''
+        set_attrs=None, clear_attrs=None, after_encoding=True, freezable=False):
+    """
     Return a *generator* that returns the length of a node parameter.
 
     Args:
@@ -130,7 +133,7 @@ def LEN(vt=fvt.INT_str, base_len=0,
         set to False only if node arguments support encoding.
       freezable (bool): If ``False`` make the generator unfreezable in order to always provide
         the right value. (Note that tTYPE will still be able to corrupt the generator.)
-    '''
+    """
     class Length(object):
         unfreezable = not freezable
 
@@ -151,8 +154,9 @@ def LEN(vt=fvt.INT_str, base_len=0,
 
 
 def QTY(node_name, vt=fvt.INT_str,
-        set_attrs=[], clear_attrs=[], freezable=False):
-    '''Return a *generator* that returns the quantity of child node instances (referenced
+        set_attrs=None, clear_attrs=None, freezable=False):
+    """
+    Return a *generator* that returns the quantity of child node instances (referenced
     by name) of the node parameter provided to the *generator*.
 
     Args:
@@ -163,7 +167,7 @@ def QTY(node_name, vt=fvt.INT_str,
       clear_attrs (list): attributes that will be cleared on the generated node.
       freezable (bool): If ``False`` make the generator unfreezable in order to always provide
         the right value. (Note that tTYPE will still be able to corrupt the generator.)
-    '''
+    """
     class Qty(object):
         unfreezable = not freezable
 
@@ -185,15 +189,15 @@ def QTY(node_name, vt=fvt.INT_str,
 
 
 def TIMESTAMP(time_format="%H%M%S", utc=False,
-              set_attrs=[], clear_attrs=[]):
-    '''
+              set_attrs=None, clear_attrs=None):
+    """
     Return a *generator* that returns the current time (in a String node).
 
     Args:
       time_format (str): time format to be used by the generator.
       set_attrs (list): attributes that will be set on the generated node.
       clear_attrs (list): attributes that will be cleared on the generated node.
-    '''
+    """
     def timestamp(time_format, utc, set_attrs, clear_attrs):
         if utc:
             now = datetime.datetime.utcnow()
@@ -209,8 +213,9 @@ def TIMESTAMP(time_format="%H%M%S", utc=False,
 
 
 def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=True,
-        set_attrs=[], clear_attrs=[], after_encoding=True, freezable=False):
-    '''Return a *generator* that returns the CRC (in the chosen type) of
+        set_attrs=None, clear_attrs=None, after_encoding=True, freezable=False):
+    """
+    Return a *generator* that returns the CRC (in the chosen type) of
     all the node parameters. (Default CRC is PKZIP CRC32)
 
     Args:
@@ -225,7 +230,7 @@ def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=Tr
         set to False only if node arguments support encoding.
       freezable (bool): if ``False`` make the generator unfreezable in order to always provide
         the right value. (Note that tTYPE will still be able to corrupt the generator.)
-    '''
+    """
     class Crc(object):
         unfreezable = not freezable
 
@@ -269,8 +274,9 @@ def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=Tr
 
 
 def WRAP(func, vt=fvt.String,
-         set_attrs=[], clear_attrs=[], after_encoding=True, freezable=False):
-    '''Return a *generator* that returns the result (in the chosen type)
+         set_attrs=None, clear_attrs=None, after_encoding=True, freezable=False):
+    """
+    Return a *generator* that returns the result (in the chosen type)
     of the provided function applied on the concatenation of all
     the node parameters.
 
@@ -283,7 +289,7 @@ def WRAP(func, vt=fvt.String,
         Can be set to False only if node arguments support encoding.
       freezable (bool): If ``False`` make the generator unfreezable in order to always provide
         the right value. (Note that tTYPE will still be able to corrupt the generator.)
-    '''
+    """
     class WrapFunc(object):
         unfreezable = not freezable
 
@@ -326,8 +332,9 @@ def WRAP(func, vt=fvt.String,
 
 
 def CYCLE(vals, depth=1, vt=fvt.String,
-          set_attrs=[], clear_attrs=[]):
-    '''Return a *generator* that iterates other the provided value list
+          set_attrs=None, clear_attrs=None):
+    """
+    Return a *generator* that iterates other the provided value list
     and returns at each step a `vt` node corresponding to the
     current value.
 
@@ -340,7 +347,7 @@ def CYCLE(vals, depth=1, vt=fvt.String,
       vt (type): value type used for node generation (refer to :mod:`framework.value_types`).
       set_attrs (list): attributes that will be set on the generated node.
       clear_attrs (list): attributes that will be cleared on the generated node.
-    '''
+    """
     class Cycle(object):
         provide_helpers = True
 
@@ -377,8 +384,9 @@ def CYCLE(vals, depth=1, vt=fvt.String,
 
 
 def OFFSET(use_current_position=True, depth=1, vt=fvt.INT_str,
-           set_attrs=[], clear_attrs=[], after_encoding=True, freezable=False):
-    '''Return a *generator* that computes the offset of a child node
+           set_attrs=None, clear_attrs=None, after_encoding=True, freezable=False):
+    """
+    Return a *generator* that computes the offset of a child node
     within its parent node.
 
     If `use_current_position` is `True`, the child node is
@@ -406,7 +414,7 @@ def OFFSET(use_current_position=True, depth=1, vt=fvt.INT_str,
         any encoding. Can be set to False only if node arguments support encoding.
       freezable (bool): If ``False`` make the generator unfreezable in order to always provide
         the right value. (Note that tTYPE will still be able to corrupt the generator.)
-    '''
+    """
     class Offset(object):
         provide_helpers = True
         unfreezable = not freezable
@@ -460,8 +468,9 @@ def OFFSET(use_current_position=True, depth=1, vt=fvt.INT_str,
 
 
 def COPY_VALUE(path, depth=None, vt=None,
-               set_attrs=[], clear_attrs=[], after_encoding=True):
-    '''Return a *generator* that retrieves the value of another node, and
+               set_attrs=None, clear_attrs=None, after_encoding=True):
+    """
+    Return a *generator* that retrieves the value of another node, and
     then return a `vt` node with this value. The other node is
     selected:
 
@@ -483,7 +492,7 @@ def COPY_VALUE(path, depth=None, vt=None,
       clear_attrs (list): attributes that will be cleared on the generated node.
       after_encoding (bool): if False, copy the raw value, otherwise the encoded one. Can be
         set to False only if node arguments support encoding.
-    '''
+    """
     class CopyValue(object):
         provide_helpers = True
 

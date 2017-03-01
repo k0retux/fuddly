@@ -2461,43 +2461,22 @@ class NodeInternals_NonTerm(NodeInternals):
 
     def _init_specific(self, arg):
         self.encoder = None
+        self.subnodes_set = None
+        self.subnodes_order = None
+        self.subnodes_attrs = None
         self.reset()
 
     def reset(self, nodes_drawn_qty=None, custo=None, exhaust_info=None, preserve_node=False):
-        self.frozen_node_list = None
         self.subnodes_set = set()
-        self.subnodes_csts = []
-        self.subnodes_csts_total_weight = 0
-        self.subnodes_minmax = {}
+        self.subnodes_order = []
+        self.subnodes_order_total_weight = 0
+        self.subnodes_attrs = {}
         self.separator = None
 
         if self.encoder:
             self.encoder.reset()
 
-        if exhaust_info is None:
-            self.exhausted = False
-            self.excluded_components = []
-            self.subcomp_exhausted = True
-            self.expanded_nodelist_sz = None
-            self.expanded_nodelist_origsz = None
-            self.expanded_nodelist = []
-            self.component_seed = None
-            self._perform_first_step = True
-        else:
-            self.exhausted = exhaust_info[0]
-            self.excluded_components = exhaust_info[1]
-            self.subcomp_exhausted = exhaust_info[2]
-            self.expanded_nodelist_sz = exhaust_info[3]
-            self.expanded_nodelist_origsz = exhaust_info[4]
-            if self.expanded_nodelist_sz is None:
-                # this case may exist if a node has been created (sz/origsz == None) and copied
-                # without being frozen first. (e.g., node absorption during a data model construction)
-                assert self.expanded_nodelist_origsz is None
-                self.expanded_nodelist = []
-            else:
-                self.expanded_nodelist = None
-            self.component_seed = exhaust_info[5]
-            self._perform_first_step = exhaust_info[6]
+        self._reset_state_info(new_info=exhaust_info, nodes_drawn_qty=nodes_drawn_qty)
 
         if preserve_node:
             pass
@@ -2505,10 +2484,6 @@ class NodeInternals_NonTerm(NodeInternals):
             self.customize(self.default_custo)
         else:
             self.customize(custo)
-        if nodes_drawn_qty is None:
-            self._nodes_drawn_qty = {}
-        else:
-            self._nodes_drawn_qty = nodes_drawn_qty
 
     def set_encoder(self, encoder):
         self.encoder = encoder
@@ -2529,20 +2504,12 @@ class NodeInternals_NonTerm(NodeInternals):
 
         self.separator = separator
 
-        tmp_list = ['u>']
+        self.subnodes_order = [1, [['u>', copy.copy(node_list)]]]
+        self.subnodes_order_total_weight = 1
 
-        l = []
-        for e in node_list:
-            l.append([e, 1])
-
-        tmp_list.append(l)
-
-        self.subnodes_csts = [1, [tmp_list]]
-        self.subnodes_csts_total_weight = 1
-
-        for e in node_list:
-            self.subnodes_set.add(e)
-
+        for node in node_list:
+            self.subnodes_set.add(node)
+            self.subnodes_attrs[node] = (1, 1)
 
     def import_subnodes_with_csts(self, wlnode_list, separator=None, preserve_node=False):
         self.reset(preserve_node=preserve_node)
@@ -2550,18 +2517,26 @@ class NodeInternals_NonTerm(NodeInternals):
         self.separator = separator
 
         for weight, lnode_list in split_with(lambda x: isinstance(x, int), wlnode_list):
-            self.subnodes_csts.append(weight)
-            self.subnodes_csts_total_weight += weight
-            
+            self.subnodes_order.append(weight)
+            self.subnodes_order_total_weight += weight
+
             subnode_list = []
             for delim, sublist in split_with(lambda x: isinstance(x, str), lnode_list[0]):
 
+                new_sublist = []
                 for n in sublist:
-                    node, mini, maxi = self._handle_node_desc(n)
+                    node, mini, maxi = self._get_info_from_subnode_description(n)
                     self.subnodes_set.add(node)
-                    # self.subnodes_set.add(n[0])
-                    self.subnodes_minmax[node] = (mini, maxi)
+                    if node in self.subnodes_attrs:
+                        prev_min, prev_max = self.subnodes_attrs[node]
+                        if prev_min != mini or prev_max != maxi:
+                            raise DataModelDefinitionError('Node "{:s}" is used twice in the same ' \
+                                                           'non-terminal node with ' \
+                                                           'different min/max values!'.format(node.name))
+                    self.subnodes_attrs[node] = (mini, maxi)
+                    new_sublist.append(node)
 
+                sublist = new_sublist
                 chunk = []
 
                 if delim[:3] == 'u=+' or delim[:3] == 's=+':
@@ -2579,6 +2554,10 @@ class NodeInternals_NonTerm(NodeInternals):
 
                     if weight_l:
                         new_l = []
+                        if len(weight_l) != len(sublist):
+                            raise DataModelDefinitionError('Wrong number of relative weights ({:d})!'
+                                                           ' Expected: {:d}'.format(len(weight_l),
+                                                                                    len(sublist)))
                         for w, etp in zip(weight_l, sublist):
                             new_l.append(w)
                             new_l.append(etp)
@@ -2595,47 +2574,47 @@ class NodeInternals_NonTerm(NodeInternals):
 
                 subnode_list.append(chunk)
 
-            self.subnodes_csts.append(subnode_list)
+            self.subnodes_order.append(subnode_list)
 
-
-    def import_subnodes_full_format(self, subnodes_csts=None, frozen_node_list=None, internals=None,
+    def import_subnodes_full_format(self, subnodes_order=None, subnodes_attrs=None,
+                                    frozen_node_list=None, internals=None,
                                     nodes_drawn_qty=None, custo=None, exhaust_info=None,
                                     separator=None):
         if internals is not None:
             # This case is only for Node.set_contents() usage
 
-            self.subnodes_csts = internals.subnodes_csts
+            self.subnodes_order = internals.subnodes_order
+            self.subnodes_attrs = internals.subnodes_attrs
             self.frozen_node_list = internals.frozen_node_list
             self.separator =  internals.separator
             self.subnodes_set = internals.subnodes_set
             self.customize(internals.custo)
 
-        elif subnodes_csts is not None:
+        elif subnodes_order is not None:
             # This case is used by self.make_private_subnodes()
 
             # In this case, we can call reset() as self.make_private_subnodes() provide us with
             # the parameters we need.
             self.reset(nodes_drawn_qty=nodes_drawn_qty, custo=custo, exhaust_info=exhaust_info)
 
-            self.subnodes_csts = subnodes_csts
+            self.subnodes_order = subnodes_order
+            self.subnodes_attrs = subnodes_attrs
             self.frozen_node_list = frozen_node_list
             if separator is not None:
                 self.separator = separator
         
-            for weight, lnode_list in split_with(lambda x: isinstance(x, int), self.subnodes_csts):
-                self.subnodes_csts_total_weight += weight
+            for weight, lnode_list in split_with(lambda x: isinstance(x, int), self.subnodes_order):
+                self.subnodes_order_total_weight += weight
                 for delim, sublist in self.__iter_csts(lnode_list[0]):
                     if delim[:3] == 'u=+' or delim[:3] == 's=+':
                         for w, etp in split_with(lambda x: isinstance(x, int), sublist[1]):
                             for n in etp:
-                                node, mini, maxi = self._handle_node_desc(n)
+                                node, mini, maxi = self._get_node_and_attrs_from(n)
                                 self.subnodes_set.add(node)
-                                self.subnodes_minmax[node] = (mini, maxi)
                     else:
                         for n in sublist:
-                            node, mini, maxi = self._handle_node_desc(n)
+                            node, mini, maxi = self._get_node_and_attrs_from(n)
                             self.subnodes_set.add(node)
-                            self.subnodes_minmax[node] = (mini, maxi)
 
         else:
             raise ValueError
@@ -2647,7 +2626,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
         for orig, new in csts_ch:
             for weight, lnode_list in split_with(lambda x: isinstance(x, int),
-                                                 self.subnodes_csts):
+                                                 self.subnodes_order):
 
                 node_list = lnode_list[0]
 
@@ -2678,7 +2657,7 @@ class NodeInternals_NonTerm(NodeInternals):
     def make_private_subnodes(self, node_dico, func_nodes, env, ignore_frozen_state,
                               accept_external_entanglement, entangled_set, delayed_node_internals):
 
-        subnodes_csts = self.get_subnodes_csts_copy(node_dico)
+        subnodes_order, subnodes_attrs = self.get_subnodes_csts_copy(node_dico)
 
         if self.separator is not None:
             new_separator = copy.copy(self.separator)
@@ -2707,7 +2686,8 @@ class NodeInternals_NonTerm(NodeInternals):
                     node_dico[e] = new_e
                 new_fl.append(node_dico[e])
 
-        self.import_subnodes_full_format(subnodes_csts=subnodes_csts, frozen_node_list=new_fl,
+        self.import_subnodes_full_format(subnodes_order=subnodes_order, subnodes_attrs=subnodes_attrs,
+                                         frozen_node_list=new_fl,
                                          nodes_drawn_qty=new_nodes_drawn_qty, custo=self.custo,
                                          exhaust_info=new_exhaust_info, separator=new_separator)
 
@@ -2752,55 +2732,45 @@ class NodeInternals_NonTerm(NodeInternals):
                                                 delayed_node_internals=delayed_node_internals)
 
 
-    def get_subnodes_csts_copy(self, node_dico={}):
+    def get_subnodes_csts_copy(self, node_dico=None):
+        node_dico = {} if node_dico is None else node_dico # node_dico[old_node] --> new_node
         csts_copy = []
-        old2new_node = node_dico
-
-        for weight, lnode_list in split_with(lambda x: isinstance(x, int), \
-                                                self.subnodes_csts):
+        for weight, lnode_list in split_with(lambda x: isinstance(x, int),
+                                             self.subnodes_order):
             csts_copy.append(weight)
             l = []
 
             for delim, sublist in self.__iter_csts(lnode_list[0]):
-                # sublist can be in one of the 2 following forms:                
-                # * [3, [1, [<framework.data_model.Node object at 0x7fc49fc56ad0>, 2], 2, [<framework.data_model.Node object at 0x7fc49fc56510>, 1, 2]]]
-                # * [[<framework.data_model.Node object at 0x7fc49fdb0090>, 1, 3], [<framework.data_model.Node object at 0x7fc49fc56ad0>, 3]]
+                # sublist can be in one of the 2 following forms:
+                # * [3, [1, <framework.data_model.Node object at 0x7fc49fc56ad0>, 2, <framework.data_model.Node object at 0x7fc49fc56510>]]
+                # * [<framework.data_model.Node object at 0x7fc49fdb0090>, <framework.data_model.Node object at 0x7fc49fc56ad0>]
 
                 new_sublist = []
-                if isinstance(sublist[0], list):
-                    for sslist in sublist:
-                        if sslist[0] not in old2new_node:
-                            old2new_node[sslist[0]] = copy.copy(sslist[0])
-                        new_node = old2new_node[sslist[0]]
+                if isinstance(sublist[0], Node):
+                    for node in sublist:
+                        if node not in node_dico:
+                            node_dico[node] = copy.copy(node)
+                        new_node = node_dico[node]
 
                         new_node.internals = copy.copy(new_node.internals)
                         for c in new_node.internals:
                             new_node.internals[c] = copy.copy(new_node.internals[c])
-
-                        if len(sslist) == 2:
-                            new_sublist.append([new_node, sslist[1]])
-                        else:
-                            new_sublist.append([new_node, sslist[1], sslist[2]])
+                        new_sublist.append(new_node)
 
                 elif isinstance(sublist[0], int):
                     new_sublist.append(sublist[0]) # add the total weight
                     new_sslist = []
-                    for sss in sublist[1]:
-                        if isinstance(sss, int):
-                            new_sslist.append(sss) # add the relative weight
-                        else:   # it is a list like [<framework.data_model.Node object at 0x7fc49fc56ad0>, 2]
-                            if sss[0] not in old2new_node:
-                                old2new_node[sss[0]] = copy.copy(sss[0])
-                            new_node = old2new_node[sss[0]]
-                            
+                    for node in sublist[1]:
+                        if isinstance(node, int):  # it is not a node but the weight of the node
+                            new_sslist.append(node) # add the relative weight
+                        else:
+                            if node not in node_dico:
+                                node_dico[node] = copy.copy(node)
+                            new_node = node_dico[node]
                             new_node.internals = copy.copy(new_node.internals)
                             for c in new_node.internals:
                                 new_node.internals[c] = copy.copy(new_node.internals[c])
-
-                            if len(sss) == 2:
-                                new_sslist.append([new_node, sss[1]])
-                            else:
-                                new_sslist.append([new_node, sss[1], sss[2]])
+                            new_sslist.append(new_node)
 
                     new_sublist.append(new_sslist)
                 else:
@@ -2810,7 +2780,12 @@ class NodeInternals_NonTerm(NodeInternals):
 
             csts_copy.append(l)
 
-        return csts_copy
+        new_subnodes_attrs = {}
+        for node, attrs in self.subnodes_attrs.items():
+            new_node = node_dico[node]
+            new_subnodes_attrs[new_node] = copy.copy(attrs)
+
+        return csts_copy, new_subnodes_attrs
 
 
     def get_subnodes_collection(self):
@@ -2854,10 +2829,27 @@ class NodeInternals_NonTerm(NodeInternals):
                 raise ValueError("Node with name '%s' has not been drawn" % name)
 
     def get_subnode_minmax(self, node):
-        if node in self.subnodes_minmax:
-            return self.subnodes_minmax[node]
+        if node in self.subnodes_attrs:
+            return self.subnodes_attrs[node]
         else:
             return None
+
+    def set_subnode_minmax(self, node, min=None, max=None):
+        assert node in self.subnodes_attrs
+
+        if min is not None and max is None:
+            assert min > -2
+            self.subnodes_attrs[node][0] = min
+        elif max is not None and min is None:
+            assert max > -2
+            self.subnodes_attrs[node][1] = max
+        elif min is not None and max is not None:
+            assert min > -2 and max > -2 and (max >= min or max == -1)
+            self.subnodes_attrs[node] = (min, max)
+        else:
+            raise ValueError('No values are provided!')
+
+        self.reset_state(recursive=False, exclude_self=False)
 
     def _get_random_component(self, comp_list, total_weight, check_existence=False):
         r = random.uniform(0, total_weight)
@@ -2866,7 +2858,7 @@ class NodeInternals_NonTerm(NodeInternals):
         for weight, comp in split_with(lambda x: isinstance(x, int), comp_list):
             s += weight
             if check_existence:
-                shall_exist = self._existence_from_node(comp[0][0])
+                shall_exist = self._existence_from_node(self._get_node_from(comp[0]))
                 if shall_exist is not None and not shall_exist:
                     continue
             if s >= r:  # if check_existence is False, we always return here
@@ -2879,7 +2871,7 @@ class NodeInternals_NonTerm(NodeInternals):
         current_comp = None
         for weight, comp in split_with(lambda x: isinstance(x, int), comp_list):
             if check_existence:
-                shall_exist = self._existence_from_node(comp[0][0])
+                shall_exist = self._existence_from_node(self._get_node_from(comp[0]))
                 if shall_exist is not None and not shall_exist:
                     continue
             if weight > current_weight:
@@ -2933,7 +2925,7 @@ class NodeInternals_NonTerm(NodeInternals):
     # To be used only in Finite mode
     def structure_will_change(self):
 
-        crit1 = (len(self.subnodes_csts) // 2) > 1
+        crit1 = (len(self.subnodes_order) // 2) > 1
 
         # assert(self.expanded_nodelist is not None) # only possible during a Node copy
         # \-> this assert is a priori not needed because we force recomputation of 
@@ -2950,23 +2942,49 @@ class NodeInternals_NonTerm(NodeInternals):
         return crit1 or crit2
 
 
-    @staticmethod
-    def _handle_node_desc(node_desc):
-        if len(node_desc) == 3:
-            assert(node_desc[1] > -2 and node_desc[2] > -2)
-            if node_desc[2] == -1 and node_desc[1] >= 0: # infinite case
-                mini = node_desc[1]
+    def _get_node_from(self, node_desc):
+        if isinstance(node_desc, Node):
+            return node_desc
+        else: # node_desc is either (Node, min, max) or (Node, qty)
+            return node_desc[0]
+
+    def _get_node_and_attrs_from(self, node_desc):
+        if isinstance(node_desc, Node):
+            node = node_desc
+            mini, maxi = self.subnodes_attrs[node_desc]
+            if maxi == -1 and mini >= 0: # infinite case
                 # for generation we limit to min+INFINITY_LIMIT
                 maxi = mini + NodeInternals_NonTerm.INFINITY_LIMIT
-            elif node_desc[2] == -1 and node_desc[1] == -1:
+            elif maxi == -1 and mini == -1:
                 mini = maxi = NodeInternals_NonTerm.INFINITY_LIMIT
+        else: # node_desc is either (Node, min, max) or (Node, qty)
+            node = node_desc[0]
+            if len(node_desc) == 3:
+                assert(node_desc[1] > -2 and node_desc[2] > -2)
+                if node_desc[2] == -1 and node_desc[1] >= 0: # infinite case
+                    mini = node_desc[1]
+                    # for generation we limit to min+INFINITY_LIMIT
+                    maxi = mini + NodeInternals_NonTerm.INFINITY_LIMIT
+                elif node_desc[2] == -1 and node_desc[1] == -1:
+                    mini = maxi = NodeInternals_NonTerm.INFINITY_LIMIT
+                else:
+                    mini = node_desc[1]
+                    maxi = node_desc[2]
             else:
-                mini = node_desc[1]
-                maxi = node_desc[2]
+                assert(node_desc[1] > -2)
+                mini = maxi = NodeInternals_NonTerm.INFINITY_LIMIT if node_desc[1] == -1 else node_desc[1]
+
+        return node, mini, maxi
+
+    def _get_info_from_subnode_description(self, node_desc):
+        if len(node_desc) == 3:
+            mini = node_desc[1]
+            maxi = node_desc[2]
+            assert mini > -2 and maxi > -2 and (maxi >= mini or maxi == -1)
         else:
-            assert(node_desc[1] > -2)
-            mini = maxi = NodeInternals_NonTerm.INFINITY_LIMIT if node_desc[1] == -1 else node_desc[1]
-            
+            assert node_desc[1] > -2
+            mini = maxi = node_desc[1]
+
         return node_desc[0], mini, maxi
 
     def _copy_nodelist(self, node_list):
@@ -2980,19 +2998,11 @@ class NodeInternals_NonTerm(NodeInternals):
 
     def _generate_expanded_nodelist(self, node_list):
 
-        # def _pick_qty(mini, maxi):
-        #     # node, mini, maxi = self._handle_node_desc(node_desc)
-        #     if self.is_attr_set(NodeInternals.Determinist):
-        #         nb = (mini + maxi) // 2
-        #     else:
-        #         nb = random.randint(mini, maxi)
-        #     return nb
-
         expanded_node_list = []
         for idx, delim, sublist in self.__iter_csts_verbose(node_list):
             if delim[1] == '>' or delim[1:3] == '=.':
                 for i, node_desc in enumerate(sublist):
-                    node, mini, maxi = self._handle_node_desc(node_desc)
+                    node, mini, maxi = self._get_node_and_attrs_from(node_desc)
                     if mini < maxi:
                         new_nlist = self._copy_nodelist(node_list)
                         new_nlist[idx][1][i] = [node, mini]
@@ -3008,23 +3018,21 @@ class NodeInternals_NonTerm(NodeInternals):
                 new_delim = delim[0] + '>'
                 if sublist[0] > -1:
                     for weight, comp in split_with(lambda x: isinstance(x, int), sublist[1]):
-                        shall_exist = self._existence_from_node(comp[0][0])
+                        node, mini, maxi = self._get_node_and_attrs_from(comp[0])
+                        shall_exist = self._existence_from_node(node)
                         if shall_exist is not None and not shall_exist:
                             continue
-                        node, mini, maxi = self._handle_node_desc(comp[0])
                         new_nlist = self._copy_nodelist(node_list)
                         new_nlist[idx] = [new_delim, [[node, mini, maxi]]]
-                        # new_nlist[idx] = [new_delim, [[node, _pick_qty(mini, maxi)]]]
                         expanded_node_list.insert(0, new_nlist)
                 else:
                     for node_desc in sublist[1]:
-                        shall_exist = self._existence_from_node(node_desc[0])
+                        node, mini, maxi = self._get_node_and_attrs_from(node_desc)
+                        shall_exist = self._existence_from_node(node)
                         if shall_exist is not None and not shall_exist:
                             continue
-                        node, mini, maxi = self._handle_node_desc(node_desc)
                         new_nlist = self._copy_nodelist(node_list)
                         new_nlist[idx] = [new_delim, [[node, mini, maxi]]]
-                        # new_nlist[idx] = [new_delim, [[node, _pick_qty(mini, maxi)]]]
                         expanded_node_list.insert(0, new_nlist)
             else:
                 raise ValueError
@@ -3041,9 +3049,16 @@ class NodeInternals_NonTerm(NodeInternals):
             if obj is not None:
                 obj.synchronize_nodes(node)
 
-        node_attrs = node_desc[1:]
-        # node = node_desc[0]
-        node, mini, maxi = self._handle_node_desc(node_desc)
+        node, mini, maxi = self._get_node_and_attrs_from(node_desc)
+
+        shall_exist = self._existence_from_node(node)
+        if shall_exist is not None:
+            if not shall_exist:
+                if node.env and node.env.delayed_jobs_enabled and lazy_mode:
+                    node.set_attr(NodeInternals.DISABLED)
+                    node.set_private((self, mode, ignore_sep_fstate, ignore_separator))
+                    subnode_list.append(node)
+                return
 
         mini, maxi = self.nodeqty_corrupt_hook(node, mini, maxi)
 
@@ -3055,15 +3070,6 @@ class NodeInternals_NonTerm(NodeInternals):
         qty = self._qty_from_node(node)
         if qty is not None:
             nb = qty
-
-        shall_exist = self._existence_from_node(node)
-        if shall_exist is not None:
-            if not shall_exist:
-                if node.env and node.env.delayed_jobs_enabled and lazy_mode:
-                    node.set_attr(NodeInternals.DISABLED)
-                    node.set_private((self, node_attrs, mode, ignore_sep_fstate, ignore_separator))
-                    subnode_list.append(node)
-                return
 
         to_entangle = set()
 
@@ -3172,11 +3178,11 @@ class NodeInternals_NonTerm(NodeInternals):
                 if self.subcomp_exhausted:
                     self.subcomp_exhausted = False
 
-                    node_list, idx = self._get_next_heavier_component(self.subnodes_csts,
+                    node_list, idx = self._get_next_heavier_component(self.subnodes_order,
                                                                       excluded_idx=self.excluded_components)
                     self.excluded_components.append(idx)
-                    # 'len(self.subnodes_csts)' is always even
-                    if len(self.excluded_components) == len(self.subnodes_csts) // 2:
+                    # 'len(self.subnodes_order)' is always even
+                    if len(self.excluded_components) == len(self.subnodes_order) // 2:
                         # in this case we have exhausted all components
                         # note that self.excluded_components is reset in a lazy way (within unfreeze)
                         self.exhausted = True
@@ -3188,14 +3194,14 @@ class NodeInternals_NonTerm(NodeInternals):
                     if self.subcomp_exhausted:
                         self.subcomp_exhausted = False
 
-                        node_list, idx, self.component_seed = self._get_next_random_component(self.subnodes_csts,
+                        node_list, idx, self.component_seed = self._get_next_random_component(self.subnodes_order,
                                                                                               excluded_idx=self.excluded_components)
                         self.excluded_components.append(idx)
-                        self.exhausted = len(self.excluded_components) == len(self.subnodes_csts) // 2
+                        self.exhausted = len(self.excluded_components) == len(self.subnodes_order) // 2
 
                 else:
-                    node_list = self._get_random_component(self.subnodes_csts,
-                                                           self.subnodes_csts_total_weight)
+                    node_list = self._get_random_component(self.subnodes_order,
+                                                           self.subnodes_order_total_weight)
 
         if not self._perform_first_step:
             self._perform_first_step = True
@@ -3209,10 +3215,10 @@ class NodeInternals_NonTerm(NodeInternals):
                 # avoid memory waste, thus we need to reconstruct
                 # dynamically some part of the state
                 if determinist:
-                    node_list, idx = self._get_next_heavier_component(self.subnodes_csts,
+                    node_list, idx = self._get_next_heavier_component(self.subnodes_order,
                                                                       excluded_idx=self.excluded_components)
                 else:
-                    node_list, idx, self.component_seed = self._get_next_random_component(self.subnodes_csts,
+                    node_list, idx, self.component_seed = self._get_next_random_component(self.subnodes_order,
                                                                                           excluded_idx=self.excluded_components,
                                                                                           seed=self.component_seed)
 
@@ -3251,7 +3257,8 @@ class NodeInternals_NonTerm(NodeInternals):
                             node = self._get_heavier_component(sublist[1], check_existence=True)
                         else:
                             for n in sublist[1]:
-                                shall_exist = self._existence_from_node(n[0])
+                                node, _, _ = self._get_node_and_attrs_from(n)
+                                shall_exist = self._existence_from_node(node)
                                 if shall_exist is None or shall_exist:
                                     node = n
                                     break
@@ -3496,12 +3503,11 @@ class NodeInternals_NonTerm(NodeInternals):
 
     @staticmethod
     def _expand_delayed_nodes(node, node_list, idx, conf, rec):
-        node_internals, node_attrs, mode, ignore_sep_fstate, ignore_separator = node.get_private()
+        node_internals, mode, ignore_sep_fstate, ignore_separator = node.get_private()
         node.set_private(None)
         node.clear_attr(NodeInternals.DISABLED)
-        node_desc = [node] + node_attrs
         expand_list = []
-        node_internals._construct_subnodes(node_desc, expand_list, mode, ignore_sep_fstate,
+        node_internals._construct_subnodes(node, expand_list, mode, ignore_sep_fstate,
                                            ignore_separator, lazy_mode=False)
         if expand_list:
             if node_internals.separator is not None and len(node_list) == idx - 1:
@@ -3567,30 +3573,25 @@ class NodeInternals_NonTerm(NodeInternals):
     def replace_subnode(self, old, new):
         self.subnodes_set.remove(old)
         self.subnodes_set.add(new)
-                        
-        for weight, lnode_list in split_with(lambda x: isinstance(x, int), self.subnodes_csts):
+
+        self.subnodes_attrs[new] = self.subnodes_attrs[old]
+        del self.subnodes_attrs[old]
+
+        for weight, lnode_list in split_with(lambda x: isinstance(x, int), self.subnodes_order):
             for delim, sublist in self.__iter_csts(lnode_list[0]):
                 if delim[:3] == 'u=+' or delim[:3] == 's=+':
                     for w, etp in split_with(lambda x: isinstance(x, int), sublist[1]):
-                        for n in etp:
-                            if n[0] is old:
-                                n[0] = new
+                        for idx, n in enumerate(etp):
+                            if n is old:
+                                etp[idx] = new
                 else:
-                    for e in sublist:
-                        if e[0] == old:
-                            e[0] = new
+                    for idx, n in enumerate(sublist):
+                        if n is old:
+                            sublist[idx] = new
 
-
-    @staticmethod
-    def _parse_node_desc(node_desc):
-        if len(node_desc) == 3:
-            min_node = node_desc[1]
-            max_node = node_desc[2]
-        else:
-            min_node = node_desc[1]
-            max_node = node_desc[1]
-
-        return node_desc[0], min_node, max_node
+    def _parse_node_desc(self, node_desc):
+        mini, maxi = self.subnodes_attrs[node_desc]
+        return node_desc, mini, maxi
 
     def _clone_node(self, base_node, node_no, force_clone=False, ignore_frozen_state=True):
         if node_no > 0 or force_clone:
@@ -3903,7 +3904,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
                         # we only support one postponed node between two nodes
                         st2, off2, sz2, name2 = \
-                            postponed[0].absorb(blob[:off], constraints, conf=conf, pending_postpone_desc=None)
+                            postponed.absorb(blob[:off], constraints, conf=conf, pending_postpone_desc=None)
 
                         if st2 == AbsorbStatus.Reject:
                             postponed = None
@@ -3912,12 +3913,12 @@ class NodeInternals_NonTerm(NodeInternals):
                         elif st2 == AbsorbStatus.Absorbed or st2 == AbsorbStatus.FullyAbsorbed:
                             if DEBUG:
                                 print('\nABSORBED (of postponed): %s, off: %d, consumed_sz: %d, blob: %r ...' \
-                                    % (postponed[0].name, off2, sz2, blob[off2:sz2][:100]))
+                                    % (postponed.name, off2, sz2, blob[off2:sz2][:100]))
 
                             if pending_upper_postpone is not None: # meaning postponed_node_desc is None
-                                pending_postponed_to_send_back = postponed[0]
+                                pending_postponed_to_send_back = postponed
                             else:
-                                postponed_appended = postponed[0]
+                                postponed_appended = postponed
                                 tmp_list.append(postponed_appended)
                             postponed = None
                         else:
@@ -4008,12 +4009,12 @@ class NodeInternals_NonTerm(NodeInternals):
             consumed_size = 0
             tmp_list = []
 
-            node_list, idx = NodeInternals_NonTerm._get_next_heavier_component(self.subnodes_csts,
-                                                                              excluded_idx=abs_excluded_components)
+            node_list, idx = NodeInternals_NonTerm._get_next_heavier_component(self.subnodes_order,
+                                                                               excluded_idx=abs_excluded_components)
 
             abs_excluded_components.append(idx)
-            # 'len(self.subnodes_csts)' is always even
-            if len(abs_excluded_components) == len(self.subnodes_csts) // 2:
+            # 'len(self.subnodes_order)' is always even
+            if len(abs_excluded_components) == len(self.subnodes_order) // 2:
                 # in this case we have exhausted all components
                 abs_exhausted = True
             else:
@@ -4037,7 +4038,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
                     for node_desc in sublist:
                         abort = False
-                        base_node, min_node, max_node = NodeInternals_NonTerm._parse_node_desc(node_desc)
+                        base_node, min_node, max_node = self._parse_node_desc(node_desc)
 
                         if base_node.is_attr_set(NodeInternals.Abs_Postpone):
                             if postponed_node_desc or pending_postpone_desc:
@@ -4100,7 +4101,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                 cpt -= 1
 
                                 node_desc = node_desc_list.pop(0)
-                                base_node, min_node, max_node = NodeInternals_NonTerm._parse_node_desc(node_desc)
+                                base_node, min_node, max_node = self._parse_node_desc(node_desc)
 
                                 # postponed_node_desc is not supported here as it does not make sense
                                 abort, blob, consumed_size, consumed_nb, _ = _try_absorption_with(base_node, min_node, max_node,
@@ -4120,7 +4121,7 @@ class NodeInternals_NonTerm(NodeInternals):
                             l = []
                             qty_list = []
                             for node_desc in node_desc_list:
-                                base_node, min_node, max_node = NodeInternals_NonTerm._parse_node_desc(node_desc)
+                                base_node, min_node, max_node = self._parse_node_desc(node_desc)
                                 l.append([base_node, min_node, False]) # (bn, min, force_clone)
                                 qty_list.append([max_node])
 
@@ -4204,7 +4205,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                 except IndexError:
                                     break
 
-                            base_node, min_node, max_node = NodeInternals_NonTerm._parse_node_desc(node_desc)
+                            base_node, min_node, max_node = self._parse_node_desc(node_desc)
 
                             if base_node.is_attr_set(NodeInternals.Abs_Postpone):
                                 if postponed_node_desc or pending_postpone_desc:
@@ -4342,16 +4343,16 @@ class NodeInternals_NonTerm(NodeInternals):
                         self._perform_first_step = False
 
                     if determinist:
-                        node_list, idx = self._get_next_heavier_component(self.subnodes_csts,
+                        node_list, idx = self._get_next_heavier_component(self.subnodes_order,
                                                                           excluded_idx=self.excluded_components)
                     else:
                         # In this case we don't recover the previous
                         # seed as the node is random and recovering
                         # the seed would make little sense because of
                         # the related overhead
-                        node_list, idx, self.component_seed = self._get_next_random_component(self.subnodes_csts,
-                                                                                        excluded_idx=self.excluded_components,
-                                                                                        seed=self.component_seed)
+                        node_list, idx, self.component_seed = self._get_next_random_component(self.subnodes_order,
+                                                                                              excluded_idx=self.excluded_components,
+                                                                                              seed=self.component_seed)
 
                     fresh_expanded_nodelist = self._generate_expanded_nodelist(node_list)
                     if self.expanded_nodelist is None:
@@ -4453,11 +4454,40 @@ class NodeInternals_NonTerm(NodeInternals):
 
         if not exclude_self:
             self._cleanup_entangled_nodes()
+            self._reset_state_info()
 
-            self.frozen_node_list = None
+    def _reset_state_info(self, new_info=None, nodes_drawn_qty=None):
+        self.frozen_node_list = None
+
+        if new_info is None:
             self.exhausted = False
-            self._nodes_drawn_qty = {}
             self.excluded_components = []
+            self.subcomp_exhausted = True
+            self.expanded_nodelist_sz = None
+            self.expanded_nodelist_origsz = None
+            self.expanded_nodelist = []
+            self.component_seed = None
+            self._perform_first_step = True
+        else:
+            self.exhausted = new_info[0]
+            self.excluded_components = new_info[1]
+            self.subcomp_exhausted = new_info[2]
+            self.expanded_nodelist_sz = new_info[3]
+            self.expanded_nodelist_origsz = new_info[4]
+            if self.expanded_nodelist_sz is None:
+                # this case may exist if a node has been created (sz/origsz == None) and copied
+                # without being frozen first. (e.g., node absorption during a data model construction)
+                assert self.expanded_nodelist_origsz is None
+                self.expanded_nodelist = []
+            else:
+                self.expanded_nodelist = None
+            self.component_seed = new_info[5]
+            self._perform_first_step = new_info[6]
+
+        if nodes_drawn_qty is None:
+            self._nodes_drawn_qty = {}
+        else:
+            self._nodes_drawn_qty = nodes_drawn_qty
 
 
     def reset_fuzz_weight(self, recursive):
@@ -4946,10 +4976,13 @@ class Node(object):
 
             self._delayed_jobs_called = base_node._delayed_jobs_called
 
-            if new_env:
-                self.env = Env() if ignore_frozen_state else copy.copy(base_node.env)
+            if base_node.env is None:
+                self.env = None
             else:
-                self.env = base_node.env
+                if new_env:
+                    self.env = Env() if ignore_frozen_state else copy.copy(base_node.env)
+                else:
+                    self.env = base_node.env
 
             node_dico = self.set_contents(base_node,
                                           copy_dico=copy_dico, ignore_frozen_state=ignore_frozen_state,
@@ -5006,6 +5039,19 @@ class Node(object):
 
         return Node(name, base_node=self, ignore_frozen_state=ignore_frozen_state, new_env=new_env)
 
+
+    def __copy__(self):
+        # This copy is only used internally by NodeInternals_NonTerm.get_subnodes_with_csts()
+        # It does not handle self.internals nor self.entangled_nodes which are copied
+        # in a different way.
+
+        new_node = type(self)(self.name)
+        new_node.__dict__.update(self.__dict__)
+        if self.semantics is not None:
+            new_node.semantics = copy.copy(self.semantics)
+            new_node.semantics.make_private()
+
+        return new_node
 
     def set_contents(self, base_node,
                      copy_dico=None, ignore_frozen_state=False,
@@ -5283,10 +5329,10 @@ class Node(object):
         assert(node is not self)
 
         if self.entangled_nodes is None:
-            self.entangled_nodes = set([self])
+            self.entangled_nodes = {self}
 
         if node.entangled_nodes is None:
-            node.entangled_nodes = set([node])
+            node.entangled_nodes = {node}
 
         self.entangled_nodes = self.entangled_nodes.union(node.entangled_nodes)
         node.entangled_nodes = self.entangled_nodes
@@ -5459,14 +5505,16 @@ class Node(object):
                 e.set_subnodes_basic(wlnode_list=wlnode_list, conf=conf, ignore_entanglement=True, separator=separator)
 
 
-    def set_subnodes_full_format(self, full_list, conf=None, separator=None, preserve_node=True):
+    def set_subnodes_full_format(self, subnodes_order, subnodes_attrs, conf=None, separator=None, preserve_node=True):
         conf = self.__check_conf(conf)
 
         new_internals = NodeInternals_NonTerm()
         if preserve_node:
             new_internals.set_contents_from(self.internals[conf])
         self.internals[conf] = new_internals
-        self.internals[conf].import_subnodes_full_format(subnodes_csts=full_list, separator=separator)
+        self.internals[conf].import_subnodes_full_format(subnodes_order=subnodes_order,
+                                                         subnodes_attrs=subnodes_attrs,
+                                                         separator=separator)
         self._finalize_nonterm_node(conf)
 
 
@@ -6171,7 +6219,7 @@ class Node(object):
                 sep_nb = l[j][0].count('/')
                 if current.depth != sep_nb:
                     # case when the same node is used at different depth
-                    if not hasattr(current, '_seen'):
+                    if '_seen' not in current.__dict__:
                         current._seen = True
                         current.depth = sep_nb
 
@@ -6183,7 +6231,7 @@ class Node(object):
 
             for j in range(i, nodes_nb):
                 current = l[j][1]
-                if hasattr(current, '_seen'):
+                if '_seen' in current.__dict__:
                     del current._seen
 
             for j in range(i+1, nodes_nb):
