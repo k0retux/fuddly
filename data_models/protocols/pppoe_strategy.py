@@ -36,11 +36,10 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', u
     else:
         print('\n\n*** Feedback retrieved')
 
-        for source, fbks in feedback.items():
-            for item in fbks:
+        for source, status, timestamp, data in feedback:
+
                 msg_x = env.dm.get_data(x)
                 msg_x.set_current_conf('ABS', recursive=True)
-                data = item['content']
                 if x == 'padi':
                     mac_dst = b'\xff\xff\xff\xff\xff\xff'
                 elif x == 'padr':

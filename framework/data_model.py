@@ -204,7 +204,8 @@ class Data(object):
             # we freeze the contents before exporting it
             self.node.freeze()
             if do_copy:
-                contents = Node(self.node.name, base_node=self.node, ignore_frozen_state=False)
+                contents = Node(self.node.name, base_node=self.node, ignore_frozen_state=False,
+                                new_env=True)
             else:
                 contents = self.node
         else:
@@ -232,6 +233,13 @@ class Data(object):
             del self._callbacks[hook]
         if hook in self._pending_ops:
             del self._pending_ops[hook]
+
+    def cleanup_all_callbacks(self):
+        for hook in HOOK:
+            if hook in self._callbacks:
+                del self._callbacks[hook]
+            if hook in self._pending_ops:
+                del self._pending_ops[hook]
 
     def run_callbacks(self, feedback=None, hook=HOOK.after_fbk):
         assert isinstance(hook, HOOK)
@@ -5079,8 +5087,7 @@ class Node(object):
             and should not be used for any functional purpose.
 
         Returns:
-          dict: For each subnodes of `base_node` (keys), reference the
-            corresponding subnodes within the new node.
+          dict: For each subnodes of `base_node` (keys), reference the corresponding subnodes within the new node.
         '''
 
         self._post_freeze_handler = base_node._post_freeze_handler

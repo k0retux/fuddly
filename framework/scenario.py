@@ -24,7 +24,7 @@
 import copy
 
 from framework.global_resources import *
-from framework.data_model import Data
+from framework.data_model import Data, Node
 from libs.external_modules import *
 
 class DataProcess(object):
@@ -134,32 +134,20 @@ class Step(object):
 
     def __init__(self, data_desc=None, final=False,
                  fbk_timeout=None, fbk_mode=None,
-                 set_periodic=None, clear_periodic=None, step_desc=None):
+                 set_periodic=None, clear_periodic=None, step_desc=None,
+                 do_action=None):
 
         self.final = final
         self._step_desc = step_desc
         self._transitions = []
+        self._do_action = do_action
 
         if not final:
-            assert data_desc is not None
-            if isinstance(data_desc, (list,tuple)):
-                self._data_desc = data_desc
-            else:
-                self._data_desc = [data_desc]
-            if isinstance(data_desc, str):
-                self._node_name = [data_desc]
-            elif isinstance(data_desc, (list,tuple)):
-                self._node_name = []
-                for d in data_desc:
-                    if isinstance(d, str):
-                        self._node_name.append(d)
-                    else:
-                        self._node_name.append(None)
-            else:
-                self._node_name = [None]
+            self._handle_data_desc(data_desc)
         else:
             self._node_name = [None]
             self._data_desc = [None]
+            self._node = None
 
         self.make_free()
 
@@ -169,7 +157,6 @@ class Step(object):
 
         self._dm = None
         self._scenario_env = None
-        self._node = None
         self._periodic_data = set_periodic
         if clear_periodic:
             self._periodic_data_to_remove = []
@@ -177,6 +164,30 @@ class Step(object):
                 self._periodic_data_to_remove.append(id(p))
         else:
             self._periodic_data_to_remove = None
+
+    def _handle_data_desc(self, data_desc):
+        self._node = None
+        assert data_desc is not None
+        if isinstance(data_desc, list):
+            self._data_desc = data_desc
+        else:
+            self._data_desc = [data_desc]
+
+        for desc in self._data_desc:
+            assert isinstance(desc, (str, Data, DataProcess))
+
+        if isinstance(data_desc, str):
+            self._node_name = [data_desc]
+        elif isinstance(data_desc, list):
+            self._node_name = []
+            for d in data_desc:
+                if isinstance(d, str):
+                    self._node_name.append(d)
+                else:
+                    self._node_name.append(None)
+        else:
+            self._node_name = [None]
+
 
     def set_data_model(self, dm):
         self._dm = dm
@@ -189,6 +200,10 @@ class Step(object):
                         cbk_after_sending=cbk_after_sending,
                         cbk_after_fbk=cbk_after_fbk)
         self._transitions.append(tr)
+
+    def do_action(self):
+        if self._do_action is not None:
+            self._do_action(self, self._scenario_env)
 
     def make_blocked(self):
         self._blocked = True
@@ -251,6 +266,11 @@ class Step(object):
 
     @property
     def node(self):
+        """
+        Provide the node of the step if possible.
+        In the case of a DataProcess, if it has been carried out, then the resulting node is returned,
+        otherwise the seed node is returned if it exists.
+        """
         node_list = []
         update_node = False
         for idx, d in enumerate(self._data_desc):
@@ -260,6 +280,7 @@ class Step(object):
                     # carried out
                     node_list.append(d.outcomes.node)
                 elif d.seed is not None:
+                    # We provide the seed in this case
                     if isinstance(d.seed, str):
                         seed_name = d.seed
                         node = self._dm.get_data(d.seed)
@@ -272,7 +293,9 @@ class Step(object):
                         node_list.append(None)
                 else:
                     node_list.append(None)
-            elif self._node_name[idx] is None:
+            elif isinstance(d, Data):
+                node_list.append(d.node)  # if data is raw, .node is None
+            elif isinstance(d, Data) or self._node_name[idx] is None:
                 # that means that a data creation process has been registered and will be
                 # carried out by the framework through a callback
                 node_list.append(None)
@@ -286,13 +309,32 @@ class Step(object):
 
         return node_list[0] if len(node_list) == 1 else node_list
 
+    @node.setter
+    def node(self, node_list):
+        if isinstance(node_list, list):
+            self._data_desc = node_list
+        if isinstance(node_list, Node):
+            self._data_desc = [node_list]
+        else:
+            raise ValueError
+
     def get_data(self):
         node_list = self.node
-        if node_list is not None and not isinstance(node_list, list):
-            d = Data(node_list)
+        if not isinstance(node_list, list):
+            d_desc = self._data_desc[0]
+            if isinstance(d_desc, Data):
+                d = d_desc
+            elif node_list is not None:
+                d = Data(node_list)
+            else:
+                # in this case a data creation process is provided to the framework through the
+                # callback HOOK.before_sending
+                d = Data('')
         else:
-            # in this case a data creation process is provided to the framework through the
-            # callback HOOK.before_sending
+            # In this case we have multiple data
+            # Practically it means that the creation of these data need to be performed
+            # by data framework callback (CallBackOps.Replace_Data) because
+            # a generator (by which a scenario will be executed) can only provide one data.
             d = Data('')
 
         if self._step_desc is None:
@@ -300,7 +342,6 @@ class Step(object):
                 if isinstance(d_desc, DataProcess):
                     d.add_info(repr(d_desc))
                 elif isinstance(d_desc, Data):
-                    d = d_desc
                     d.add_info('Use provided Data(...)')
                 else:
                     assert isinstance(d_desc, str)
@@ -316,6 +357,8 @@ class Step(object):
 
         if self.is_blocked():
             d.make_blocked()
+        else:
+            d.make_free()
         if self._feedback_timeout is not None:
             d.feedback_timeout = self._feedback_timeout
         if self._feedback_mode is not None:
@@ -326,6 +369,10 @@ class Step(object):
     @property
     def data_desc(self):
         return self._data_desc
+
+    @data_desc.setter
+    def data_desc(self, data_desc):
+        self._handle_data_desc(data_desc)
 
     @property
     def periodic_to_set(self):
@@ -384,7 +431,7 @@ class Step(object):
         new_step = type(self)(data_desc=data_desc_copy, final=self.final,
                               fbk_timeout=self.feedback_timeout, fbk_mode=self.feedback_mode,
                               set_periodic=copy.copy(self._periodic_data),
-                              step_desc=self._step_desc)
+                              step_desc=self._step_desc, do_action=self._do_action)
         new_step._node = None
         new_step._periodic_data_to_remove = new_periodic_to_rm
         new_step._dm = new_dm
@@ -395,16 +442,16 @@ class Step(object):
 
 class FinalStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
-                 set_periodic=None, clear_periodic=None , step_desc=None):
+                 set_periodic=None, clear_periodic=None , step_desc=None, do_action=None):
         Step.__init__(self, final=True)
 
 class NoDataStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
-                 set_periodic=None, clear_periodic=None, step_desc=None):
+                 set_periodic=None, clear_periodic=None, step_desc=None, do_action=None):
         Step.__init__(self, data_desc=Data(''), final=final,
                       fbk_timeout=fbk_timeout, fbk_mode=fbk_mode,
                       set_periodic=set_periodic, clear_periodic=clear_periodic,
-                      step_desc=step_desc)
+                      step_desc=step_desc, do_action=do_action)
         self.make_blocked()
 
     def make_free(self):
@@ -422,6 +469,7 @@ class Transition(object):
             self._callbacks[HOOK.after_sending] = cbk_after_sending
         if cbk_after_fbk:
             self._callbacks[HOOK.after_fbk] = cbk_after_fbk
+        self._callbacks_qty = self._callbacks_pending = len(self._callbacks)
 
     def set_step(self, step):
         self._step = step
@@ -440,6 +488,13 @@ class Transition(object):
 
     def run_callback(self, current_step, feedback=None, hook=HOOK.after_fbk):
         assert isinstance(hook, HOOK)
+
+        if self._callbacks_pending <= 0:
+            # we assume that run_callback() is called only once per hook. Thus when all the callback
+            # has been called, a new call to this method means that we re-evaluate the transition
+            # from the beginning.
+            self._callbacks_pending = self._callbacks_qty
+
         if hook not in self._callbacks:
             return None
 
@@ -449,7 +504,15 @@ class Transition(object):
         else:
             go_on = cbk(self._scenario_env, current_step, self.step)
 
+        self._callbacks_pending -= 1
+
         return go_on
+
+    def has_callback(self):
+        return bool(self._callbacks)
+
+    def has_callback_pending(self):
+        return self._callbacks_pending > 0
 
     def __str__(self):
         desc = ''
@@ -467,6 +530,8 @@ class Transition(object):
         new_transition = type(self)(self._step)
         new_transition._callbacks = new_cbks
         new_transition._scenario_env = None
+        new_transition._callbacks_pending = len(new_cbks)
+        new_transition._callbacks_qty = new_transition._callbacks_pending
         return new_transition
 
 
@@ -474,14 +539,29 @@ class ScenarioEnv(object):
 
     def __init__(self):
         self._dm = None
-
-    def set_data_model(self, dm):
-        self._dm = dm
+        self._target = None
 
     @property
     def dm(self):
         return self._dm
 
+    @dm.setter
+    def dm(self, val):
+        self._dm = val
+
+    @property
+    def target(self):
+        return self._target
+
+    @target.setter
+    def target(self, val):
+        self._target = val
+
+    def __copy__(self):
+        new_env = type(self)()
+        new_env.__dict__.update(self.__dict__)
+        new_env._target = None
+        return new_env
 
 class Scenario(object):
 
@@ -491,13 +571,21 @@ class Scenario(object):
         self._env = ScenarioEnv()
         self._periodic_ids = set()
         self._anchor = anchor
+        self._orig_anchor = anchor
+
+    def reset(self):
+        self._anchor = self._orig_anchor
 
     def set_data_model(self, dm):
         self._dm = dm
-        self._env.set_data_model(dm)
+        self._env.dm = dm
+
+    def set_target(self, target):
+        self._env.target = target
 
     def set_anchor(self, step):
         self._anchor = step
+        self._orig_anchor = self._anchor
 
     def walk_to(self, step):
         step.cleanup()
@@ -515,7 +603,7 @@ class Scenario(object):
     def graph(self, fmt='pdf'):
 
         def graph_creation(init_step, node_list, edge_list):
-            if init_step.final or init_step is self._anchor:
+            if init_step.final or init_step is self._orig_anchor:
                 f.attr('node', fontcolor='white', shape='oval', style='rounded,filled',
                        fillcolor='black')
             else:
@@ -550,7 +638,7 @@ class Scenario(object):
         except:
             print("\n*** ERROR: Unknown format ({!s})! ***".format(fmt))
         else:
-            graph_creation(self._anchor, node_list=[], edge_list=[])
+            graph_creation(self._orig_anchor, node_list=[], edge_list=[])
             f.view()
 
     def __copy__(self):
@@ -577,16 +665,21 @@ class Scenario(object):
 
         orig_dm = self._dm
         orig_env = self._env
-        new_anchor = copy.copy(self._anchor)
-        new_anchor.set_data_model(self._dm)
-        new_anchor.set_scenario_env(orig_env)
-        dico = {self._anchor: new_anchor}
+        if self._anchor is self._orig_anchor:
+            new_anchor = new_orig_anchor = copy.copy(self._anchor)
+        else:
+            new_anchor = copy.copy(self._anchor)
+            new_orig_anchor = copy.copy(self._orig_anchor)
+        new_orig_anchor.set_data_model(orig_dm)
+        new_orig_anchor.set_scenario_env(orig_env)
+        dico = {self._orig_anchor: new_orig_anchor}
         new_sc = type(self)(self.name)
         new_sc._env = copy.copy(orig_env)
         new_sc._dm = orig_dm
         new_sc._periodic_ids = set()  # periodic ids are gathered only during graph_copy()
         new_sc._anchor = new_anchor
+        new_sc._orig_anchor = new_orig_anchor
 
-        graph_copy(new_sc._anchor, dico)
+        graph_copy(new_sc._orig_anchor, dico)
 
         return new_sc

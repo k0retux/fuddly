@@ -342,15 +342,27 @@ class TargetFeedback(object):
 
 class EmptyTarget(Target):
 
-    _feedback_mode = None
-    supported_feedback_mode = []
+    _feedback_mode = Target.FBK_WAIT_FULL_TIME
+    supported_feedback_mode = [Target.FBK_WAIT_FULL_TIME, Target.FBK_WAIT_UNTIL_RECV]
+
+    def __init__(self, enable_feedback=True):
+        Target.__init__(self)
+        self._feedback_enabled = enable_feedback
+        self._sending_time = None
 
     def send_data(self, data, from_fmk=False):
-        pass
+        if self._feedback_enabled:
+            self._sending_time = datetime.datetime.now()
 
     def send_multiple_data(self, data_list, from_fmk=False):
-        pass
+        if self._feedback_enabled:
+            self._sending_time = datetime.datetime.now()
 
+    def is_target_ready_for_new_data(self):
+        if self._feedback_enabled and self._sending_time is not None:
+            return (datetime.datetime.now() - self._sending_time).total_seconds() > self.feedback_timeout
+        else:
+            return True
 
 class TestTarget(Target):
 
@@ -358,6 +370,7 @@ class TestTarget(Target):
     supported_feedback_mode = []
 
     def __init__(self, recover_ratio=100):
+        Target.__init__(self)
         self._cpt = None
         self._recover_ratio = recover_ratio
 
@@ -403,7 +416,7 @@ class NetworkTarget(Target):
                  data_semantics=UNKNOWN_SEMANTIC, server_mode=False, target_address=None, wait_for_client=True,
                  hold_connection=False,
                  mac_src=None, mac_dst=None):
-        '''
+        """
         Args:
           host (str): IP address of the target to connect to, or
             the IP address on which we will wait for target connecting
@@ -443,7 +456,9 @@ class NetworkTarget(Target):
           mac_dst (bytes): Only in conjunction with raw socket. For each data sent through
             this interface, and if this data contain nodes with the semantic ``'mac_dst'``,
             these nodes will be overwritten (through absorption) with this parameter.
-        '''
+        """
+
+        Target.__init__(self)
 
         if not self._is_valid_socket_type(socket_type):
             raise ValueError("Unrecognized socket type")
@@ -1569,6 +1584,7 @@ class PrinterTarget(Target):
     supported_feedback_mode = []
 
     def __init__(self, tmpfile_ext):
+        Target.__init__(self)
         self.__suffix = '{:0>12d}'.format(random.randint(2**16, 2**32))
         self.__feedback = TargetFeedback()
         self.__target_ip = None
@@ -1660,6 +1676,7 @@ class LocalTarget(Target):
     supported_feedback_mode = [Target.FBK_WAIT_UNTIL_RECV]
 
     def __init__(self, tmpfile_ext, target_path=None):
+        Target.__init__(self)
         self.__suffix = '{:0>12d}'.format(random.randint(2**16, 2**32))
         self.__app = None
         self.__pre_args = None
@@ -1819,6 +1836,7 @@ class SIMTarget(Target):
     supported_feedback_mode = [Target.FBK_WAIT_FULL_TIME]
 
     def __init__(self, serial_port, baudrate, pin_code, targeted_tel_num, codec='latin_1'):
+        Target.__init__(self)
         self.serial_port = serial_port
         self.baudrate = baudrate
         self.tel_num = targeted_tel_num

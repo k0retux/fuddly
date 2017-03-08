@@ -674,6 +674,10 @@ class DynGeneratorFromScenario(Generator):
     def graph_scenario(self, fmt):
         self.scenario.graph(fmt=fmt)
 
+    def cleanup(self):
+        self.scenario.reset()
+        self.tr_selected = None
+
     def setup(self, dm, user_input):
         if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
             return False
@@ -682,8 +686,12 @@ class DynGeneratorFromScenario(Generator):
         return True
 
     def generate_data(self, dm, monitor, target):
-        self._go_on = collections.OrderedDict()
+        self.tr_selected = None
+        self.scenario.set_target(target)
         self.step = self.scenario.current_step
+
+        self.step.do_action()
+
         if self.step.final:
             self.need_reset()
             data = fdm.Data()
@@ -692,6 +700,7 @@ class DynGeneratorFromScenario(Generator):
             return data
 
         data = self.step.get_data()
+        data.cleanup_all_callbacks()
 
         data.register_callback(self._callback_dispatcher_before_sending, hook=HOOK.before_sending)
         data.register_callback(self._callback_dispatcher_after_sending, hook=HOOK.after_sending)
@@ -704,9 +713,27 @@ class DynGeneratorFromScenario(Generator):
             cbkops.add_operation(fdm.CallBackOps.Del_PeriodicData, id=periodic_id)
         return cbkops
 
-    def _callback_dispatcher_before_sending(self):
+
+    def __handle_transition_callbacks(self, hook, feedback=None):
         for tr in self.step.transitions:
-            self._go_on[tr] = tr.run_callback(self.step, hook=HOOK.before_sending)
+            if self.tr_selected is None:
+                if tr.run_callback(self.step, feedback=feedback, hook=hook):
+                    self.tr_selected = tr
+            else:
+                break
+
+        if self.tr_selected is None:
+            for tr in self.step.transitions:
+                if not tr.has_callback():
+                    for t in self.step.transitions:
+                        if t.has_callback_pending():
+                            break
+                    else:
+                        self.tr_selected = tr
+
+    def _callback_dispatcher_before_sending(self):
+        self.tr_selected = None
+        self.__handle_transition_callbacks(HOOK.before_sending)
 
         cbkops = fdm.CallBackOps()
         if self.step.has_dataprocess():
@@ -716,35 +743,16 @@ class DynGeneratorFromScenario(Generator):
         return cbkops
 
     def _callback_dispatcher_after_sending(self):
-        for tr in self.step.transitions:
-            go_on = tr.run_callback(self.step, hook=HOOK.after_sending)
-
-            if self._go_on[tr] is None:
-                self._go_on[tr] = go_on
-            elif go_on is None:
-                pass
-            else:
-                # going to the next step (True) is the priority behavior
-                self._go_on[tr] = self._go_on[tr] or go_on
+        if self.tr_selected is not None:
+            _ = self.tr_selected.run_callback(self.step, hook=HOOK.after_sending)
+        else:
+            self.__handle_transition_callbacks(HOOK.after_sending)
 
     def _callback_dispatcher_after_fbk(self, fbk):
-        for tr in self.step.transitions:
-            if tr not in self._go_on:
-                # In the case data sending has been blocked by cbk_after_fbk() (of the current step),
-                # this method will be called while the other _callback* won't. This method is called
-                # just after any potential residual feedback has been retrieved.
-                self._go_on[tr] = None
-
-            go_on = tr.run_callback(self.step, feedback=fbk, hook=HOOK.after_fbk)
-
-            if self._go_on[tr] is None and go_on is None:
-                self._go_on[tr] = True
-            elif self._go_on[tr] is None:
-                self._go_on[tr] = go_on
-            elif go_on is None:
-                pass
-            else:
-                self._go_on[tr] = self._go_on[tr] or go_on
+        if self.tr_selected is not None:
+            _ = self.tr_selected.run_callback(self.step, feedback=fbk, hook=HOOK.after_fbk)
+        else:
+            self.__handle_transition_callbacks(HOOK.after_fbk, feedback=fbk)
 
         cbkops = fdm.CallBackOps()
         for desc in self.step.periodic_to_set:
@@ -754,10 +762,9 @@ class DynGeneratorFromScenario(Generator):
         for periodic_id in self.step.periodic_to_clear:
             cbkops.add_operation(fdm.CallBackOps.Del_PeriodicData, id=periodic_id)
 
-        for tr in self.step.transitions:
-            if self._go_on[tr]:
-                self.scenario.walk_to(tr.step)
-                break
+        if self.tr_selected is not None:
+            self.scenario.walk_to(self.tr_selected.step)
+            self.tr_selected = None
         else:
             # we stay on the current step
             pass

@@ -3494,7 +3494,7 @@ class TestFMK(unittest.TestCase):
         print(fbk)
         self.assertIn(b'You loose!', fbk)
 
-    def test_scenario_infra(self):
+    def test_scenario_infra_01(self):
 
         print('\n*** test scenario SC_NO_REGEN')
 
@@ -3525,3 +3525,23 @@ class TestFMK(unittest.TestCase):
             data_list = fmk.send_data([data])
             if not data_list:
                 raise ValueError
+
+    @unittest.skipIf(not run_long_tests, "Long test case")
+    def test_scenario_infra_02(self):
+
+        fmk.reload_all(tg_num=1)  # to collect feedback from monitoring probes
+
+        data = None
+        prev_data = None
+        now = datetime.datetime.now()
+        for i in range(10):
+            prev_data = data
+            data = fmk.get_data(['SC_EX1'])
+            data_list = fmk.send_data_and_log([data])  # needed to make the scenario progress
+            if not data_list:
+                raise ValueError
+
+        exec_time = (datetime.datetime.now() - now).total_seconds()
+
+        self.assertEqual(prev_data.to_bytes(), data.to_bytes())
+        self.assertGreater(exec_time, 5)

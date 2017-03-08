@@ -125,8 +125,10 @@ Indeed, a callback has to return `True` if it wants the framework to cross the t
 it should return `False`. If no callback is defined the transition is considered to not be
 guarded and thus can be crossed without restriction. Besides, only one transition is chosen at
 each step. It is the first one, by order of registration, that can be activated (at least one
-callback that returns `True`, or no callback at all). Anyway, all the registered callbacks will be
-executed no matter the transition to be selected.
+callback that returns `True`, or no callback at all). It is worth noting that the transitions are
+executed in a minimalistic way, meaning that if a callback return `True`, the associated transition
+will be chosen and no other callback will be executed (except all the callbacks from the
+selected transition) before a next step need to be selected.
 
 Three types of callback can be associated to a transition through the parameters ``cbk_before_sending``,
 ``cbk_after_sending`` and ``cbk_after_fbk`` of the method :meth:`framework.scenario.Step.connect_to`.
@@ -139,9 +141,17 @@ A brief explantion is provided below:
      def callback(scenario_env, current_step, next_step)
 
   The ``current_step`` is the one that is in progress and which is connected to ``next_step`` by
-  the transition containing the current callback. The ``scenario_env`` is an object shared
-  between each step of a scenario. Its attribute ``dm`` is initialized with the currently loaded
-  data model.
+  the transition containing the current callback. The ``scenario_env`` parameter is a reference to the
+  scenario environment :class:`framework.scenario.ScenarioEnv`, which is shared
+  between all the steps and transitions of a scenario.
+
+  .. note:: A scenario environment :class:`framework.scenario.ScenarioEnv` provides some information like
+       an attribute ``dm`` which is initialized with the :class:`framework.data_model_builder.DataModel`
+       related to the scenario; or an attribute ``target`` which is initialized with the current target
+       in use (a subclass of :class:`framework.target.Target`).
+
+       A scenario environment can also be used as a shared memory for all the steps and transitions of a
+       scenario.
 
 ``cbk_after_sending``
   To provide a function that will be executed before the execution of the next step, and just after
@@ -158,23 +168,19 @@ A brief explantion is provided below:
      def callback(scenario_env, current_step, next_step, feedback)
 
   This type of callback takes the additional parameter ``feedback`` filled by the framework with
-  the target and/or probes feedback further to the current step data sending. It is a dictionnary
-  that follows the pattern:
+  the target and/or probes feedback further to the current step data sending. It is an object
+  :class:`framework.database.FeedbackHandler` that provides the handful method
+  :meth:`framework.database.FeedbackHandler.iter_entries` which returns a generator that iterates
+  over:
 
-    .. code-block:: python
-       :linenos:
+    - all the feedback entries associated to a specific feedback ``source`` provided as a
+      parameter---and for each entry the triplet ``(status, timestamp, content)`` is provided;
+    - all the feedback entries if the ``source`` parameter is ``None``---and for each entry the 4-uplet
+      ``(source, status, timestamp, content)`` is provided. Note that for such kind of iteration, the
+      :class:`framework.database.FeedbackHandler` object can also be directly used as
+      an iterator---avoiding a call to :meth:`framework.database.FeedbackHandler.iter_entries`.
 
-        {'feedback source name 1':
-            [ {'timestamp': timestamp_1,
-               'content': content_1,
-               'status': status_code_1 }, ... ]
-         'feedback source name 2':
-            [ {'timestamp': timestamp_2,
-               'content': content_2,
-               'status': status_code_2 }, ... ]
-
-        # and so on...
-        }
+  This object can also be tested as a boolean object, returning False if there is no feedback at all.
 
 Note that a callback can modify a step. For instance, considering an imaginary protocol, and
 after sending a registration request to a network service (initial step), feedback from the target are
@@ -214,7 +220,7 @@ service for instance. This is illustrated in the following example in the lines 
    :linenos:
    :emphasize-lines: 1, 4, 10-11, 18, 19, 25
 
-    def feedback_handler(env, current_step, next_step, feedback):
+    def feedback_callback(env, current_step, next_step, feedback):
         if not feedback:
             # While no feedback is retrieved we stay at this step
             current_step.make_blocked()
@@ -236,7 +242,7 @@ service for instance. This is illustrated in the following example in the lines 
     step4 = Step(DataProcess(process=[('C',None,UI(nb=1)),'tTYPE'], seed='enc'))
 
     step1.connect_to(step2)
-    step2.connect_to(step3, cbk_after_fbk=feedback_handler)
+    step2.connect_to(step3, cbk_after_fbk=feedback_callback)
     step3.connect_to(step4)
     step4.connect_to(FinalStep())
 
@@ -269,7 +275,7 @@ The execution of this scenario will follow the pattern::
     \--> periodic1 ...                                     [periodic1 stopped]
     \--> periodic2 ...                                     [periodic2 stopped]
 
-Finally, the last example illustrates a case where one step is connected to two other steps with
+The last example illustrates a case where one step is connected to two other steps with
 a callback that rules the routing decision.
 
 .. code-block:: python
@@ -300,6 +306,18 @@ The execution of this scenario will follow the pattern::
   anchor --> option1 --> anchor --> option2 --> anchor --> option2 --> ...
 
 
+Finally, if some code need to be executed when a step is reached and before any data is generated
+from it, you can leverage the parameter ``do_action`` of the :class:`framework.scenario.Step` class.
+It has to be provided with a function satisfying the follwoing signature:
+
+.. code-block:: python
+   :linenos:
+
+    def action(step, env)
+
+where ``step`` is a reference to the :class:`framework.scenario.Step` on which the action is
+executed, and ``env`` is a reference to the scenario environment :class:`framework.scenario.ScenarioEnv`.
+
 .. _sc:dataprocess:
 
 Data generation process
@@ -308,7 +326,7 @@ Data generation process
 The data produced by a :class:`framework.scenario.Step` or a :class:`framework.scenario.Periodic`
 is described by a `data descriptor` which can be:
 
-- a python string refering to the name of a registered data from a data model;
+- a python string referring to the name of a registered data from a data model;
 
 - a :class:`framework.data_model.Data`;
 

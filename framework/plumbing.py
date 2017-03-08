@@ -40,7 +40,7 @@ import signal
 
 from libs.external_modules import *
 
-from framework.database import Database
+from framework.database import Database, FeedbackHandler
 from framework.tactics_helpers import *
 from framework.data_model import *
 from framework.data_model_builder import DataModel
@@ -61,11 +61,11 @@ import projects
 from framework.global_resources import *
 from libs.utils import *
 
-sys.path.insert(0, gr.fuddly_data_folder)
-sys.path.insert(0, gr.external_libs_folder)
+sys.path.insert(0, fuddly_data_folder)
+sys.path.insert(0, external_libs_folder)
 
-user_dm_mod = os.path.basename(os.path.normpath(gr.user_data_models_folder))
-user_prj_mod = os.path.basename(os.path.normpath(gr.user_projects_folder))
+user_dm_mod = os.path.basename(os.path.normpath(user_data_models_folder))
+user_prj_mod = os.path.basename(os.path.normpath(user_projects_folder))
 exec('import ' + user_dm_mod)
 exec('import ' + user_prj_mod)
 
@@ -254,6 +254,7 @@ class FmkPlumbing(object):
         ok = self.fmkDB.start()
         if not ok:
             raise InvalidFmkDB("The database {:s} is invalid!".format(self.fmkDB.fmk_db_path))
+        self.feedback_handler = FeedbackHandler(self.fmkDB)
 
         self._fmkDB_insert_dm_and_dmakers('generic', self._generic_tactics)
 
@@ -296,6 +297,10 @@ class FmkPlumbing(object):
 
     def is_ok(self):
         return not self.error
+
+    def flush_errors(self):
+        self.error = False
+        self.fmk_error = []
 
     def __reset_fmk_internals(self, reset_existing_seed=True):
         self.cleanup_all_dmakers(reset_existing_seed)
@@ -345,9 +350,12 @@ class FmkPlumbing(object):
 
     def _is_data_valid(self, data):
         def is_valid(d):
-            if d.raw is None and d.node is None:
+            if d.is_unusable():
+                return True
+            elif d.raw is None and d.node is None:
                 return False
-            return True
+            else:
+                return True
 
         if isinstance(data, Data):
             return is_valid(data)
@@ -962,6 +970,7 @@ class FmkPlumbing(object):
 
 
     def __stop_fmk_plumbing(self):
+        self.flush_errors()
         if self.__is_started():
             if self.is_target_enabled():
                 self.log_target_residual_feedback()
@@ -1389,12 +1398,10 @@ class FmkPlumbing(object):
 
     def __enable_target(self):
         self.__tg_enabled = True
-        self.__send_enabled = True
         self.mon.enable_hooks()
 
     def __disable_target(self):
         self.__tg_enabled = False
-        self.__send_enabled = False
         self.mon.disable_hooks()
 
     @EnforceOrder(always_callable=True)
@@ -1485,7 +1492,7 @@ class FmkPlumbing(object):
         if self._burst_countdown <= 1:
             self._burst_countdown = self._burst
 
-            if self.__send_enabled:
+            if self.__tg_enabled:
                 if self._delay == -1.0:
                     try:
                         signal.signal(signal.SIGINT, sig_int_handler)
@@ -1554,8 +1561,6 @@ class FmkPlumbing(object):
         blocked_data = list(filter(lambda x: x.is_blocked(), data_list))
         data_list = list(filter(lambda x: not x.is_blocked(), data_list))
 
-        self.fmkDB.cleanup_current_state()
-
         user_interrupt = False
         go_on = True
         if self._burst_countdown == self._burst and do_residual_fbk_gathering:
@@ -1563,7 +1568,7 @@ class FmkPlumbing(object):
             # polluting feedback logs of the next emission
             if not blocked_data:
                 fbk_timeout = self.tg.feedback_timeout
-                # we change feedback timeout has the target could use it to determine if it is
+                # we change feedback timeout as the target could use it to determine if it is
                 # ready to accept new data (check_target_readiness). For instance, the NetworkTarget
                 # launch a thread when collect_feedback_without_sending() is called for a duration
                 # of 'feedback_timeout'.
@@ -1660,7 +1665,7 @@ class FmkPlumbing(object):
         for data in data_list:
             try:
                 if hook == HOOK.after_fbk:
-                    data.run_callbacks(feedback=copy.copy(self.fmkDB.last_feedback), hook=hook)
+                    data.run_callbacks(feedback=self.feedback_handler, hook=hook)
                 else:
                     data.run_callbacks(feedback=None, hook=hook)
             except:
@@ -1778,7 +1783,7 @@ class FmkPlumbing(object):
             if orig_data_provided:
                 original_data = [original_data]
         elif isinstance(data_list, list):
-            assert isinstance(original_data, (list, tuple))
+            assert original_data is None or isinstance(original_data, (list, tuple))
         else:
             raise ValueError
 
@@ -1793,6 +1798,11 @@ class FmkPlumbing(object):
         data_list = self.send_data(data_list, add_preamble=True)
         if data_list is None or self._sending_error:
             return False
+
+        # All feedback entries that are available for relevant framework users (scenario
+        # callbacks, operators, ...) are flushed just after sending a new data because it
+        # means the previous feedback entries are obsolete.
+        self.fmkDB.flush_current_feedback()
 
         if len(data_list) > 1:
             # the provided data_list can be changed after having called self.send_data()
@@ -1857,7 +1867,7 @@ class FmkPlumbing(object):
         @data_list: either a list of Data() or a Data()
         '''
 
-        if self.__send_enabled:
+        if self.__tg_enabled:
 
             if not self._is_data_valid(data_list):
                 self.set_error("send_data(): Data has been provided empty --> won't be sent",
@@ -1911,7 +1921,7 @@ class FmkPlumbing(object):
     @EnforceOrder(accepted_states=['S2'])
     def log_data(self, data_list, original_data=None, verbose=False):
 
-        if self.__send_enabled:
+        if self.__tg_enabled:
 
             if not self._is_data_valid(data_list):
                 self.set_error('Data is empty and miss some needed meta-info --> will not be '
@@ -2051,7 +2061,7 @@ class FmkPlumbing(object):
     @EnforceOrder(accepted_states=['S2'])
     def log_target_feedback(self):
         err_detected1, err_detected2 = False, False
-        if self.__send_enabled:
+        if self.__tg_enabled:
             if self._burst > 1:
                 p = "::[ END BURST ]::\n"
             else:
@@ -2070,7 +2080,7 @@ class FmkPlumbing(object):
     @EnforceOrder(accepted_states=['S2'])
     def log_target_residual_feedback(self):
         err_detected1, err_detected2 = False, False
-        if self.__send_enabled:
+        if self.__tg_enabled:
             p = "*** RESIDUAL TARGET FEEDBACK ***"
             e = "********************************"
             try:
@@ -2120,7 +2130,7 @@ class FmkPlumbing(object):
     @EnforceOrder(accepted_states=['S2'])
     def check_target_readiness(self):
 
-        if self.__send_enabled:
+        if self.__tg_enabled:
             t0 = datetime.datetime.now()
 
             # Wait until the target is ready or timeout expired
@@ -2131,7 +2141,7 @@ class FmkPlumbing(object):
                     time.sleep(0.01)
                     now = datetime.datetime.now()
                     if (now - t0).total_seconds() > self._hc_timeout:
-                        # print('\n***DBG: FBK timeout')
+                        print('\n***DBG: FBK timeout')
                         self.lg.log_target_feedback_from(
                             '*** Timeout! The target does not seem to be ready.',
                             now, status_code=-1, source='Fuddly FmK'
@@ -2153,6 +2163,9 @@ class FmkPlumbing(object):
                 signal.signal(signal.SIGINT, signal.SIG_IGN)
 
             return ret
+
+        else:
+            return 0
 
     @EnforceOrder(accepted_states=['S2'])
     def show_data(self, data, verbose=True):
@@ -2538,6 +2551,11 @@ class FmkPlumbing(object):
                 elif data_list is None:
                     self.lg.log_fmk_info("Operator will shutdown because there is no data to send")
                     break
+
+                # All feedback entries that are available for relevant framework users (scenario
+                # callbacks, operators, ...) are flushed just after sending a new data because it
+                # means the previous feedback entries are obsolete.
+                self.fmkDB.flush_current_feedback()
 
                 multiple_data = len(data_list) > 1
 

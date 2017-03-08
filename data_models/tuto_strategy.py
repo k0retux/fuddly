@@ -8,14 +8,21 @@ tactics = Tactics()
 def cbk_transition1(env, current_step, next_step):
     return True
 
-def cbk_transition2(env, current_step, next_step, fbk):
-    if not fbk:
+def cbk_transition2(env, current_step, next_step, feedback):
+    if not feedback:
         print("\n\nNo feedback retrieved. Let's wait for another turn")
         current_step.make_blocked()
         return False
     else:
-        print("\n\nFeedback received from {!s}. Let's go on".format(fbk.keys()))
-        print(repr(fbk.values()))
+        print("\n\nFeedback received from {!s}. Let's go on".format(feedback.sources()))
+        for source, status, timestamp, data in  feedback:
+            if data is not None:
+                data = data[:15]
+            print('*** Feedback entry:\n'
+                  '    source: {:s}\n'
+                  '    status: {:d}\n'
+                  ' timestamp: {!s}\n'
+                  '   content: {!r} ...\n'.format(source, status, timestamp, data))
         current_step.make_free()
         if next_step.node:
             print("*** The next node named '{:s}' will be modified!".format(next_step.node.name))
@@ -36,10 +43,10 @@ periodic1 = Periodic(DataProcess(process=[('C', None, UI(nb=1)), 'tTYPE'], seed=
 periodic2 = Periodic(Data('2nd Periodic (3s)\n'), period=3)
 
 ### SCENARIO 1 ###
-step1 = Step('exist_cond', fbk_timeout=2, set_periodic=[periodic1, periodic2])
-step2 = Step('separator', fbk_timeout=5, clear_periodic=[periodic1])
+step1 = Step('exist_cond', fbk_timeout=1, set_periodic=[periodic1, periodic2])
+step2 = Step('separator', fbk_timeout=2, clear_periodic=[periodic1])
 empty = NoDataStep(clear_periodic=[periodic2])
-step4 = Step('off_gen', fbk_timeout=2, step_desc='overriding the auto-description!')
+step4 = Step('off_gen', fbk_timeout=0, step_desc='overriding the auto-description!')
 
 step1_copy = copy.copy(step1) # for scenario 2
 step2_copy = copy.copy(step2) # for scenario 2
@@ -64,9 +71,12 @@ sc2 = Scenario('ex2')
 sc2.set_anchor(step1_copy)
 
 ### SCENARIO 3 ###
-anchor = Step('exist_cond')
-option1 = Step(Data('Option 1'))
-option2 = Step(Data('Option 2'))
+def action1(step, env):
+    print('\n--> Action 1 executed on step {:d} [desc: {!s}]'.format(id(step), step))
+
+anchor = Step('exist_cond', do_action=action1)
+option1 = Step(Data('Option 1'), step_desc='option 1 description', do_action=action1)
+option2 = Step(Data('Option 2'), do_action=action1)
 
 anchor.connect_to(option1, cbk_after_sending=cbk_transition3)
 anchor.connect_to(option2)
