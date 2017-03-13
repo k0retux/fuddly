@@ -67,12 +67,6 @@ class Target(object):
     _probes = None
     _send_data_lock = threading.Lock()
 
-    def __init__(self):
-        '''
-        To be overloaded if needed
-        '''
-        pass
-
     def set_logger(self, logger):
         self._logger = logger
 

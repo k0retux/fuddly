@@ -75,6 +75,10 @@ class Data(object):
 
         self._history = None
 
+        # Used to provide information on the origin of the Data().
+        # If it comes from a scenario _origin point to the related scenario.
+        self._origin = None
+
         # This attribute is set to True when the Data content has been retrieved from the fmkDB
         self.from_fmkdb = False
 
@@ -274,6 +278,14 @@ class Data(object):
 
     def copy_callback_from(self, data):
         self._callbacks = copy.copy(data._callbacks)
+
+    @property
+    def origin(self):
+        return self._origin
+
+    @origin.setter
+    def origin(self, value):
+        self._origin = value
 
     def __copy__(self):
         new_data = type(self)()

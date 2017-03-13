@@ -1532,7 +1532,17 @@ class FmkPlumbing(object):
     def _do_before_sending_data(self, data_list):
         # Monitor hook function before sending
         self.mon.notify_imminent_data_sending()
-        data_list = self._handle_data_callbacks(data_list, hook=HOOK.before_sending)
+        # Callbacks that triggers before sending a data are executed here
+        data_list = self._handle_data_callbacks(data_list, hook=HOOK.before_sending_step1)
+        # In this step2, we execute data callbacks, but in the case a DataProcess exists,
+        # it will not be resolved if it has already been resolved in step1 (meaning DataProcess.outcomes
+        # is not None).
+        # It allows to make some modification to an already resolved DataProcess
+        # (.outcomes modifications).
+        # This hook is especially used in a Scenario() to implement the parameter
+        # "do_before_sending" of Step()
+        data_list = self._handle_data_callbacks(data_list, hook=HOOK.before_sending_step2,
+                                                resolve_dataprocess=False)
         return data_list
 
     def _do_after_sending_data(self, data_list):
@@ -1607,7 +1617,7 @@ class FmkPlumbing(object):
     def _do_after_dmaker_data_retrieval(self, data):
         self._handle_data_callbacks([data], hook=HOOK.after_dmaker_production)
 
-    def _handle_data_desc(self, data_desc):
+    def _handle_data_desc(self, data_desc, resolve_dataprocess=True):
         if isinstance(data_desc, Data):
             data = data_desc
 
@@ -1631,10 +1641,14 @@ class FmkPlumbing(object):
             else:
                 seed = data_desc.seed
 
-            data = self.get_data(data_desc.process, data_orig=seed)
-            if data is None and (data_desc.next_process() or data_desc.auto_regen):
+            if resolve_dataprocess or data_desc.outcomes is None:
                 data = self.get_data(data_desc.process, data_orig=seed)
-            data_desc.outcomes = data
+                if data is None and (data_desc.next_process() or data_desc.auto_regen):
+                    data = self.get_data(data_desc.process, data_orig=seed)
+                data_desc.outcomes = data
+            else:
+                data = data_desc.outcomes
+
             if data is None:
                 self.set_error(msg='Data creation process has yielded!',
                                code=Error.DPHandOver)
@@ -1659,7 +1673,7 @@ class FmkPlumbing(object):
 
         return data
 
-    def _handle_data_callbacks(self, data_list, hook):
+    def _handle_data_callbacks(self, data_list, hook, resolve_dataprocess=True):
 
         new_data_list = []
         for data in data_list:
@@ -1689,8 +1703,10 @@ class FmkPlumbing(object):
                         new_data = []
                         first_step = True
                         for d_desc in data_desc:
-                            data_tmp = self._handle_data_desc(d_desc)
+                            data_tmp = self._handle_data_desc(d_desc,
+                                                              resolve_dataprocess=resolve_dataprocess)
                             if data_tmp is not None:
+                                data_tmp.origin = data.origin
                                 if first_step:
                                     first_step = False
                                     data_tmp.copy_callback_from(data)
@@ -1715,7 +1731,8 @@ class FmkPlumbing(object):
                             periodic_data = data_desc
                             func = self._send_periodic
                         else:
-                            periodic_data = self._handle_data_desc(data_desc)
+                            periodic_data = self._handle_data_desc(data_desc,
+                                                                   resolve_dataprocess=resolve_dataprocess)
                             func = self.tg.send_data_sync
 
                         if periodic_data is not None:
@@ -2495,9 +2512,9 @@ class FmkPlumbing(object):
                 change_list = []
 
                 instr_list = operation.get_instructions()
-                for instruction, idx in zip(instr_list, range(len(instr_list))):
+                for idx, instruction in enumerate(instr_list):
                     action_list, orig = instruction
-                    
+
                     if action_list is None:
                         data = orig
                     else:

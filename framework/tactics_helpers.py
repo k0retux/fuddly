@@ -690,19 +690,22 @@ class DynGeneratorFromScenario(Generator):
         self.scenario.set_target(target)
         self.step = self.scenario.current_step
 
-        self.step.do_action()
+        self.step.do_before_data_processing()
 
         if self.step.final:
             self.need_reset()
             data = fdm.Data()
             data.register_callback(self._callback_cleanup_periodic, hook=HOOK.after_dmaker_production)
             data.make_unusable()
+            data.origin = self.scenario
             return data
 
         data = self.step.get_data()
+        data.origin = self.scenario
         data.cleanup_all_callbacks()
 
-        data.register_callback(self._callback_dispatcher_before_sending, hook=HOOK.before_sending)
+        data.register_callback(self._callback_dispatcher_before_sending_step1, hook=HOOK.before_sending_step1)
+        data.register_callback(self._callback_dispatcher_before_sending_step2, hook=HOOK.before_sending_step2)
         data.register_callback(self._callback_dispatcher_after_sending, hook=HOOK.after_sending)
         data.register_callback(self._callback_dispatcher_after_fbk, hook=HOOK.after_fbk)
         return data
@@ -731,10 +734,8 @@ class DynGeneratorFromScenario(Generator):
                     else:
                         self.tr_selected = tr
 
-    def _callback_dispatcher_before_sending(self):
-        self.tr_selected = None
-        self.__handle_transition_callbacks(HOOK.before_sending)
-
+    def _callback_dispatcher_before_sending_step1(self):
+        # Any existing DataProcess are resolved thanks to this callback
         cbkops = fdm.CallBackOps()
         if self.step.has_dataprocess():
             cbkops.add_operation(fdm.CallBackOps.Replace_Data,
@@ -742,11 +743,17 @@ class DynGeneratorFromScenario(Generator):
 
         return cbkops
 
+    def _callback_dispatcher_before_sending_step2(self):
+        # Callback called after any data have been processed but not sent yet
+        self.step.do_before_sending()
+        cbkops = fdm.CallBackOps()
+        cbkops.add_operation(fdm.CallBackOps.Replace_Data,
+                             param=self.step.data_desc)
+        return cbkops
+
     def _callback_dispatcher_after_sending(self):
-        if self.tr_selected is not None:
-            _ = self.tr_selected.run_callback(self.step, hook=HOOK.after_sending)
-        else:
-            self.__handle_transition_callbacks(HOOK.after_sending)
+        self.tr_selected = None
+        self.__handle_transition_callbacks(HOOK.after_sending)
 
     def _callback_dispatcher_after_fbk(self, fbk):
         if self.tr_selected is not None:

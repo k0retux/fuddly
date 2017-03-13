@@ -23,6 +23,8 @@ steps can be guarded by different kinds of callbacks that trigger at different m
 the framework sends the data, after sending the data, or after having retrieved any feedback
 from the target or any probes registered to monitor the target).
 
+.. _sc:example:
+
 A First Example
 ===============
 
@@ -110,16 +112,83 @@ If you want to visualize your scenario, you can issue the following command
 
   [fuddly term] >> show_scenario SC_EX1 [FMT]
 
-Finally, note that a step once executed will display a description related to what it did. You
-can override this description by providing the ``step_desc`` parameter of a
-:class:`framework.scenario.Step` constructor with a python string.
 
-Transitions and Callbacks
-=========================
+.. _sc:steps:
+
+Steps
+=====
+
+The main objective of a :class:`framework.scenario.Step` is to command the generation and sending
+of one or multiple data to the target selected in the framework. The data generation depends on
+what has been provided to the parameter ``data_desc`` of a :class:`framework.scenario.Step`. This
+is described in the section :ref:`sc:dataprocess`.
+
+A step can also modify the way the feedback is handled after the data have been emitted by the
+framework. The parameters ``fbk_timeout``, and ``fbk_mode`` (refer to :ref:`targets`) are used
+for such purpose and are applied to the current target (by the framework) when the step is reached.
+
+A step can additionally triggers the execution of periodic tasks that will emit some user-specified
+data (note the execution will trigger after feedback retrieval from the framework). This is done by
+providing a list of :class:`framework.scenario.Periodic`
+to the parameter ``set_periodic``. And, in order to stop previously started periodic tasks,
+the parameter ``clear_periodic`` have to be filled with a list of references on the relevant
+periodic tasks.
+
+.. seealso:: Refer to the section :ref:`sc:example` for practical information on how to use
+  such features.
+
+In addition to the features provided by a step, some user-defined callbacks can be associated to a
+step and executed while the framework is handling the step (that is generating data as specified
+by the step and sending it):
+
+- If some code need to be executed when a step is reached and before any data is processed
+  from it, you can leverage the parameter ``do_before_data_processing`` of the :class:`framework.scenario.Step` class.
+  It has to be provided with a function satisfying the following signature:
+
+      .. code-block:: python
+         :linenos:
+
+          def before_data_generation_cbk(env, step)
+
+  where ``step`` is a reference to the :class:`framework.scenario.Step` on which the action is
+  executed, and ``env`` is a reference to the scenario environment :class:`framework.scenario.ScenarioEnv`.
+
+- And if some code need to be executed within a step after data has been processed and just before
+  its sending, you can leverage the parameter ``do_before_sending`` of the :class:`framework.scenario.Step` class.
+  It has to be provided with a function satisfying the following signature:
+
+      .. code-block:: python
+         :linenos:
+
+         def before_sending_cbk(env, step)
+
+  where the parameters have the same meaning as previously.
+
+Note also that a step once executed will display a description related to what it did. You can override
+this description by providing the ``step_desc`` parameter of a :class:`framework.scenario.Step`
+constructor with a python string.
+
+Finally, some subclasses of :class:`framework.scenario.Step` have been defined to make a scenario description
+easier:
+
+- :class:`framework.scenario.FinalStep`: When such kind of step is reached, it terminates the execution
+  of the scenario. It is equivalent to a ``Step`` with its ``final`` attribute set to ``True``.
+
+- :class:`framework.scenario.NoDataStep`: This kind of step should be used when the purpose is not to
+  generate and send data but only to use other step features (e.g., feedback timeout or mode).
+  Besides, the step callback ``do_before_data_processing`` will still be triggered if some
+  code need to be executed (but ``do_before_sending`` will not). And all the transitions from
+  this step would only trigger their callback ``cbk_after_fbk`` to evaluate their condition.
+
+.. _sc:transitions:
+
+Transitions
+===========
 
 When two steps are connected together thanks to the method :meth:`framework.scenario.Step.connect_to`
-some callbacks can be specified to perform any user-relevant action before crossing the transition
-that links up the two steps, but also to decide if this transition can be crossed.
+some callbacks can be specified to perform any user-relevant action before crossing the
+transition that links up the two steps, but also to decide if this transition can be crossed.
+They act as transition conditions.
 
 Indeed, a callback has to return `True` if it wants the framework to cross the transition, otherwise
 it should return `False`. If no callback is defined the transition is considered to not be
@@ -130,13 +199,13 @@ executed in a minimalistic way, meaning that if a callback return `True`, the as
 will be chosen and no other callback will be executed (except all the callbacks from the
 selected transition) before a next step need to be selected.
 
-Three types of callback can be associated to a transition through the parameters ``cbk_before_sending``,
+Two types of callback can be associated to a transition through the parameters
 ``cbk_after_sending`` and ``cbk_after_fbk`` of the method :meth:`framework.scenario.Step.connect_to`.
-A brief explantion is provided below:
+A brief explanation is provided below:
 
-``cbk_before_sending``
-  To provide a function that will be executed before the execution of the next step, and just before
-  sending the data of the current step. Its signature is as follows::
+``cbk_after_sending``
+  To provide a function that will be executed before the execution of the next step, and just after
+  the sending of the data from the current step. Its signature is as follows::
 
      def callback(scenario_env, current_step, next_step)
 
@@ -152,13 +221,6 @@ A brief explantion is provided below:
 
        A scenario environment can also be used as a shared memory for all the steps and transitions of a
        scenario.
-
-``cbk_after_sending``
-  To provide a function that will be executed before the execution of the next step, and just after
-  the sending of the data from the current step. Its signature is as follows::
-
-     def callback(scenario_env, current_step, next_step)
-
 
 ``cbk_after_fbk``
   To provide a function that will be executed before the execution of the next step, and just after
@@ -305,18 +367,6 @@ The execution of this scenario will follow the pattern::
 
   anchor --> option1 --> anchor --> option2 --> anchor --> option2 --> ...
 
-
-Finally, if some code need to be executed when a step is reached and before any data is generated
-from it, you can leverage the parameter ``do_action`` of the :class:`framework.scenario.Step` class.
-It has to be provided with a function satisfying the follwoing signature:
-
-.. code-block:: python
-   :linenos:
-
-    def action(step, env)
-
-where ``step`` is a reference to the :class:`framework.scenario.Step` on which the action is
-executed, and ``env`` is a reference to the scenario environment :class:`framework.scenario.ScenarioEnv`.
 
 .. _sc:dataprocess:
 

@@ -278,6 +278,7 @@ class Error(object):
 
 class HOOK(Enum):
     after_dmaker_production = 1
-    before_sending = 2
-    after_sending = 3
-    after_fbk = 4
+    before_sending_step1 = 2
+    before_sending_step2 = 3
+    after_sending = 4
+    after_fbk = 5

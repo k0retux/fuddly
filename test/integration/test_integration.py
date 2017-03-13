@@ -3537,11 +3537,31 @@ class TestFMK(unittest.TestCase):
         for i in range(10):
             prev_data = data
             data = fmk.get_data(['SC_EX1'])
-            data_list = fmk.send_data_and_log([data])  # needed to make the scenario progress
-            if not data_list:
+            ok = fmk.send_data_and_log([data])  # needed to make the scenario progress
+            if not ok:
                 raise ValueError
 
         exec_time = (datetime.datetime.now() - now).total_seconds()
 
         self.assertEqual(prev_data.to_bytes(), data.to_bytes())
         self.assertGreater(exec_time, 5)
+
+
+    def test_scenario_infra_03(self):
+        steps = []
+        for i in range(6):
+            data = fmk.get_data(['SC_EX3'])
+            steps.append(data.origin.current_step)
+            ok = fmk.send_data_and_log([data])  # needed to make the scenario progress
+            if not ok:
+                raise ValueError
+
+        for idx, s in enumerate(steps):
+            print('\n[{:d}]-----'.format(idx))
+            print(s)
+            print('-----')
+
+        self.assertEqual(steps[3], steps[5])
+        self.assertNotEqual(steps[5], steps[1])
+        self.assertEqual(steps[2], steps[4])
+        self.assertEqual(steps[0], steps[2])

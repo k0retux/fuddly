@@ -5,10 +5,7 @@ from framework.scenario import *
 
 tactics = Tactics()
 
-def cbk_transition1(env, current_step, next_step):
-    return True
-
-def cbk_transition2(env, current_step, next_step, feedback):
+def cbk_transition1(env, current_step, next_step, feedback):
     if not feedback:
         print("\n\nNo feedback retrieved. Let's wait for another turn")
         current_step.make_blocked()
@@ -31,19 +28,31 @@ def cbk_transition2(env, current_step, next_step, feedback):
             print("*** The next node won't be modified!")
         return True
 
-def cbk_transition3(env, current_step, next_step):
+def cbk_transition2(env, current_step, next_step):
     if hasattr(env, 'switch'):
         return False
     else:
         env.switch = False
         return True
 
+def before_sending_cbk(step, env):
+    print('\n--> Action executed before sending any data on step {:d} [desc: {!s}]'.format(id(step), step))
+    step.node.show()
+    return True
+
+def before_data_processing_cbk(step, env):
+    print('\n--> Action executed before data processing on step {:d} [desc: {!s}]'.format(id(step), step))
+    if step.node is not None:
+        step.node.show()
+    return True
+
 periodic1 = Periodic(DataProcess(process=[('C', None, UI(nb=1)), 'tTYPE'], seed='enc'),
                      period=5)
 periodic2 = Periodic(Data('2nd Periodic (3s)\n'), period=3)
 
 ### SCENARIO 1 ###
-step1 = Step('exist_cond', fbk_timeout=1, set_periodic=[periodic1, periodic2])
+step1 = Step('exist_cond', fbk_timeout=1, set_periodic=[periodic1, periodic2],
+             do_before_sending=before_sending_cbk)
 step2 = Step('separator', fbk_timeout=2, clear_periodic=[periodic1])
 empty = NoDataStep(clear_periodic=[periodic2])
 step4 = Step('off_gen', fbk_timeout=0, step_desc='overriding the auto-description!')
@@ -51,10 +60,10 @@ step4 = Step('off_gen', fbk_timeout=0, step_desc='overriding the auto-descriptio
 step1_copy = copy.copy(step1) # for scenario 2
 step2_copy = copy.copy(step2) # for scenario 2
 
-step1.connect_to(step2, cbk_before_sending=cbk_transition1)
-step2.connect_to(empty, cbk_after_fbk=cbk_transition2)
+step1.connect_to(step2)
+step2.connect_to(empty, cbk_after_fbk=cbk_transition1)
 empty.connect_to(step4)
-step4.connect_to(step1, cbk_after_sending=cbk_transition3)
+step4.connect_to(step1, cbk_after_sending=cbk_transition2)
 
 sc1 = Scenario('ex1')
 sc1.set_anchor(step1)
@@ -63,22 +72,23 @@ sc1.set_anchor(step1)
 step4 = Step(DataProcess(process=['tTYPE#2'], seed='shape'))
 step_final = FinalStep()
 
-step1_copy.connect_to(step2_copy, cbk_before_sending=cbk_transition1)
-step2_copy.connect_to(step4, cbk_after_fbk=cbk_transition2)
+step1_copy.connect_to(step2_copy)
+step2_copy.connect_to(step4, cbk_after_fbk=cbk_transition1)
 step4.connect_to(step_final)
 
 sc2 = Scenario('ex2')
 sc2.set_anchor(step1_copy)
 
 ### SCENARIO 3 ###
-def action1(step, env):
-    print('\n--> Action 1 executed on step {:d} [desc: {!s}]'.format(id(step), step))
+anchor = Step(DataProcess(process=['tTYPE#3'], seed='exist_cond'),
+              do_before_data_processing=before_data_processing_cbk,
+              do_before_sending=before_sending_cbk)
+option1 = Step(Data('Option 1'), step_desc='option 1\ndescription',
+               do_before_data_processing=before_data_processing_cbk)
+option2 = Step(Data('Option 2'),
+               do_before_data_processing=before_data_processing_cbk)
 
-anchor = Step('exist_cond', do_action=action1)
-option1 = Step(Data('Option 1'), step_desc='option 1 description', do_action=action1)
-option2 = Step(Data('Option 2'), do_action=action1)
-
-anchor.connect_to(option1, cbk_after_sending=cbk_transition3)
+anchor.connect_to(option1, cbk_after_sending=cbk_transition2)
 anchor.connect_to(option2)
 option1.connect_to(anchor)
 option2.connect_to(anchor)
@@ -114,9 +124,9 @@ class g_test_callback_01(Generator):
         self.d.register_callback(self.callback_2)
         self.d.register_callback(self.callback_3)
         self.d.register_callback(self.callback_before_sending_1,
-                                 hook=HOOK.before_sending)
+                                 hook=HOOK.before_sending_step1)
         self.d.register_callback(self.callback_before_sending_2,
-                                 hook=HOOK.before_sending)
+                                 hook=HOOK.before_sending_step1)
         return True
 
     def generate_data(self, dm, monitor, target):

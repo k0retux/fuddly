@@ -131,15 +131,15 @@ class Op1(Operator):
 
         self.instr_list = []
         self.instr_list.append([('LANGID', UI(finite=True))])
-        self.instr_list.append([('STR', UI(finite=True)), ('tALT', UI(init=self.init))])
-        self.instr_list.append([('STR#2', UI(finite=True)), ('tALT#2', UI(init=self.init))])
-        self.instr_list.append([('STR#3', UI(finite=True)), ('tALT#3', UI(init=self.init))])
-        self.instr_list.append([('STR#4', UI(finite=True)), ('tALT#4', UI(init=self.init))])
-        self.instr_list.append([('STR#5', UI(finite=True)), ('tALT#5', UI(init=self.init))])
+        self.instr_list.append([('STR', UI(finite=True))])
+        self.instr_list.append([('STR#2', UI(finite=True))])
+        self.instr_list.append([('STR#3', UI(finite=True))])
+        self.instr_list.append([('STR#4', UI(finite=True))])
+        self.instr_list.append([('STR#5', UI(finite=True))])
         if self.mode == 1:
             self.instr_list.append([('DEV', UI(finite=True)), ('tTYPE', UI(init=self.init))])
         elif self.mode == 2:
-            self.instr_list.append([('DEV', ('ALT', None, UI(conf='MS')), UI(finite=True))])
+            self.instr_list.append([('DEV', UI(finite=True)), ('ALT', None, UI(conf='MS'))])
         else:
             self.instr_list.append([('DEV', UI(finite=True))])
 
@@ -147,7 +147,8 @@ class Op1(Operator):
             self.instr_list.append([('CONF', UI(finite=True)), ('ALT', None, UI(conf='BIGCONF')),
                                     ('tTYPE#2', UI(init=self.init, clone_node=False), None)])
         elif self.mode == 2:
-            self.instr_list.append([('MSD_CONF', UI(finite=True)), ('tTYPE#2', UI(init=self.init))])
+            self.instr_list.append([('CONF', UI(finite=True)), ('ALT', None, UI(conf='MSD')),
+                                    ('tTYPE#2', UI(init=self.init))])
         else:
             self.instr_list.append([('CONF', UI(finite=True)), ('tTYPE#2', UI(init=self.init))])
             self.instr_list.append([('CONF#2', UI(finite=True)), ('tTYPE#3', UI(init=self.init))])
