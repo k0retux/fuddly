@@ -140,13 +140,12 @@ data models:
    -=[ Data Models ]=-
 
    [0] mydf
-   [1] example
-   [2] usb
-   [3] zip
-   [4] png
-   [5] pdf
-   [6] jpg
-
+   [1] usb
+   [2] zip
+   [3] png
+   [4] pdf
+   [5] jpg
+    ...
 
 As we select the ``unzip`` program as a target, we may want to
 perform ZIP fuzzing ;) Thus we select this data model by issuing the
@@ -1150,34 +1149,31 @@ the PNG data format:
    png_desc = \
    {'name': 'PNG_model',
     'contents': [
-	{'name': 'sig',
-	 'contents': String(values=[b'\x89PNG\r\n\x1a\n'], size=8)},
-	{'name': 'chunks',
-	 'qty': (2,-1),
-	 'contents': [
-	      {'name': 'len',
-	       'contents': UINT32_be()},
-	      {'name': 'type',
-	       'contents': String(values=['IHDR', 'IEND', 'IDAT', 'PLTE'], size=4)},
-	      {'name': 'data_gen',
-	       'type': MH.Generator,
-	       'contents': lambda x: Node('data', value_type= \
-					  String(size=x[0].get_raw_value())),
-	       'node_args': ['len']},
-	      {'name': 'crc32_gen',
-	       'type': MH.Generator,
-	       'contents': g_crc32,
-	       'node_args': ['type', 'data_gen'],
-	       'clear_attrs': [NodeInternals.Freezable]}
-	 ]}
+       {'name': 'sig',
+        'contents': String(values=[b'\x89PNG\r\n\x1a\n'], size=8)},
+       {'name': 'chunks',
+        'qty': (2,-1),
+        'contents': [
+             {'name': 'len',
+              'contents': UINT32_be()},
+             {'name': 'type',
+              'contents': String(values=['IHDR', 'IEND', 'IDAT', 'PLTE'], size=4)},
+             {'name': 'data_gen',
+              'contents': lambda x: Node('data', value_type= \
+                         String(size=x[0].get_raw_value())),
+              'node_args': ['len']},
+             {'name': 'crc32_gen',
+              'contents': CRC(vt=UINT32_be, clear_attrs=[MH.Attr.Mutable]),
+              'node_args': ['type', 'data_gen']}
+        ]}
     ]}
 
 
 In short, we see that the root node is ``PNG_model``, which is the
 parent of the terminal node ``sig`` representing PNG file signature
 (lines 4-5) and the non-terminal node ``chunks`` representing the
-file's chunks (lines 6-23) [#]_. This latter node describe the PNG
-file structure by defining the chunk contents in lines 9-22---in this very
+file's chunks (lines 6-20) [#]_. This latter node describe the PNG
+file structure by defining the chunk contents in lines 9-19---in this very
 simplistic data model, chunk types are not distinguished, but it can
 easily be expanded---and the number of chunks allowed in
 a PNG file in line 7---from ``2`` to ``-1`` (meaning infinity).
@@ -1304,7 +1300,7 @@ various constructions, and value types.
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 5, 54, 65
+   :emphasize-lines: 5, 53, 64
 
    d1 = \
    {'name': 'TestNode',
@@ -1341,9 +1337,8 @@ various constructions, and value types.
 			'import_from': 'usb',
 			'data_id': 'STR'},
 
-		       {'type': MH.Generator,
-			'contents': lambda x: Node('cts', values=[x[0].to_bytes() \
-                                                                 + x[1].to_bytes()]),
+		       {'contents': lambda x: Node('cts', values=[x[0].to_bytes() \
+                                                          + x[1].to_bytes()]),
 			'name': 'val22',
 			'node_args': [('val21', 2), 'val3']}
 		   ]}]},
@@ -1387,7 +1382,7 @@ At first glance, the data model is composed of three parts: *block 1*
 64-72). Within these blocks, various constructions are used. Below,
 some insights:
 
-line 6, line 22, line 55, line 66
+line 6, line 22, line 54, line 65
   The keyword ``section_type`` allows to choose the order to be
   enforce by a non-terminal node to its children. ``MH.Ordered``
   specifies that the children should be kept strictly in the order of
@@ -1400,7 +1395,7 @@ line 6, line 22, line 55, line 66
   that only one node among the children should be kept at a time---the
   choice is randomly performed except if the parent has the
   ``determinist`` attribute---as per the weight associated to each
-  child node (``weights``, line 56).
+  child node (``weights``, line 55).
 
 lines 10-14
   A terminal node with typed-value contents is defined. It is a
@@ -1423,7 +1418,7 @@ lines 32-34
   a data type from another data model. In this case it is a ``STRING
   Descriptor`` data type from the ``USB`` data model.
 
-lines 36-40
+lines 36-39
   Here is defined a *generator* nodes. It takes two nodes of
   the current graph as parameters, namely: ``(val21, 2)`` and
   ``val3``. It simply create a new node with a value equal to the
@@ -1435,11 +1430,11 @@ lines 36-40
 	    them uniquely---thanks to ``nb``---as illustrated by this generator
 	    node.
 
-lines 46-51
+lines 45-50
   Two alternate configurations of node ``val3`` are specified through
   this pattern.
 
-lines 45
+lines 44
   The keyword ``sync_qty_with`` allows to synchronize the number of
   nodes to generate or to absorb with the one specified by its
   name. In this case it is the node ``val1`` which is defined in lines 10-14.

@@ -3377,7 +3377,7 @@ class TestFMK(unittest.TestCase):
                 act = [dmaker_type, dis]
                 d = fmk.get_data(act)
             if d is not None:
-                fmk.log_data(d)
+                fmk._log_data(d)
                 print("\n---[ Pretty Print ]---\n")
                 d.pretty_print()
                 fmk.cleanup_dmaker(dmaker_type=dmaker_type, reset_existing_seed=True)
@@ -3392,7 +3392,7 @@ class TestFMK(unittest.TestCase):
             if d is None:
                 break
             fmk.new_transfer_preamble()
-            fmk.log_data(d)
+            fmk._log_data(d)
 
         self.assertGreater(i, 2)
 
@@ -3415,7 +3415,7 @@ class TestFMK(unittest.TestCase):
                     print('--> Exiting (need new input)')
                     break
                 fmk.new_transfer_preamble()
-                fmk.log_data(d)
+                fmk._log_data(d)
                 outcomes.append(d.to_bytes())
                 d.show()
                 idx += 1
@@ -3436,7 +3436,7 @@ class TestFMK(unittest.TestCase):
                 print('--> Exiting (need new input)')
                 break
             fmk.new_transfer_preamble()
-            fmk.log_data(d)
+            fmk._log_data(d)
             outcomes.append(d.to_bytes())
             d.show()
             idx += 1
@@ -3458,7 +3458,7 @@ class TestFMK(unittest.TestCase):
                 print('--> Exiting (need new input)')
                 break
             fmk.new_transfer_preamble()
-            fmk.log_data(d)
+            fmk._log_data(d)
             outcomes.append(d.to_bytes())
             d.show()
             idx += 1
@@ -3501,7 +3501,7 @@ class TestFMK(unittest.TestCase):
         base_qty = 0
         for i in range(100):
             data = fmk.get_data(['SC_NO_REGEN'])
-            data_list = fmk.send_data([data])  # needed to make the scenario progress
+            data_list = fmk._send_data([data])  # needed to make the scenario progress
             # send_data_and_log() should be used for more complex scenarios
             # hooking the framework in more places.
             if not data_list:
@@ -3522,7 +3522,7 @@ class TestFMK(unittest.TestCase):
 
         for i in range(base_qty * 3):
             data = fmk.get_data(['SC_AUTO_REGEN'])
-            data_list = fmk.send_data([data])
+            data_list = fmk._send_data([data])
             if not data_list:
                 raise ValueError
 

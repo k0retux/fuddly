@@ -217,7 +217,7 @@ class Error(object):
     # FmkPlumbing DataProcess-handling related code
     DPHandOver = -30  # when a data process yields
 
-    # FmkPlumbing.send_data() code
+    # FmkPlumbing._send_data() code
     NoMoreData = -40
 
     _code_info = {

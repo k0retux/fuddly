@@ -60,8 +60,7 @@ class MyDF_DataModel(DataModel):
                             'import_from': 'usb',
                             'data_id': 'STR'},
                            
-                           {'type': MH.Generator,
-                            'contents': lambda x: Node('cts', values=[x[0].to_bytes() \
+                           {'contents': lambda x: Node('cts', values=[x[0].to_bytes() \
                                                                       + x[1].to_bytes()]),
                             'name': 'val22',
                             'node_args': [('val21', 2), 'val3']}
@@ -241,7 +240,6 @@ class MyDF_DataModel(DataModel):
         {'name': 'len_gen',
          'contents': [
              {'name': 'len',
-              'type': MH.Generator,
               'contents': LEN(UINT32_be),
               'node_args': 'payload',
               'absorb_csts': AbsNoCsts()},
@@ -272,7 +270,6 @@ class MyDF_DataModel(DataModel):
               ]},
 
              {'name': 'len',
-              'type': MH.Generator,
               'contents': OFFSET(use_current_position=False, vt=UINT8),
               'node_args': ['prefix', 'int', 'body']},
          ]}
@@ -293,22 +290,18 @@ class MyDF_DataModel(DataModel):
               ]},
 
              {'name': 'int16_qty',
-              'type': MH.Generator,
               'contents': QTY(node_name='int16', vt=UINT8),
               'node_args': 'integers'},
 
              {'name': 'int32_qty',
-              'type': MH.Generator,
               'contents': QTY(node_name='int32', vt=UINT8),
               'node_args': 'integers'},
 
              {'name': 'tstamp',
-              'type': MH.Generator,
               'contents': TIMESTAMP("%H%M%S"),
               'absorb_csts': AbsCsts(contents=False)},
 
              {'name': 'crc',
-              'type': MH.Generator,
               'contents': CRC(UINT32_be),
               'node_args': ['tstamp', 'int32_qty'],
               'absorb_csts': AbsCsts(contents=False)}

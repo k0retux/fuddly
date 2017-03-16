@@ -197,6 +197,8 @@ class Step(object):
         self._scenario_env = env
 
     def connect_to(self, step, cbk_after_sending=None, cbk_after_fbk=None):
+        if isinstance(self, NoDataStep):
+            assert cbk_after_sending is None
         tr = Transition(step,
                         cbk_after_sending=cbk_after_sending,
                         cbk_after_fbk=cbk_after_fbk)
@@ -428,14 +430,18 @@ class Step(object):
 
         if self._do_before_sending is not None or self._do_before_data_processing is not None:
             if self._do_before_data_processing is None:
-                cbk_before_dataproc_str = '! [1]'
+                cbk_before_dataproc_str = ' x '
             else:
-                cbk_before_dataproc_str = '[1] {:s}'.format(self._do_before_data_processing.__name__)
+                cbk_before_dataproc_str = ' \<-- {:s}()  '.format(self._do_before_data_processing.__name__)
             if self._do_before_sending is None:
-                cbk_before_sending_str = '! [2]'
+                cbk_before_sending_str = ' x '
             else:
-                cbk_before_sending_str = '[2] {:s}'.format(self._do_before_sending.__name__)
-            step_desc = step_desc + '|{{{:s}|{:s}}}'.format(cbk_before_dataproc_str, cbk_before_sending_str)
+                cbk_before_sending_str = ' --\> {:s}() '.format(self._do_before_sending.__name__)
+
+            if not self.is_blocked():
+                step_desc = step_desc + '|{{{:s}|{:s}}}'.format(cbk_before_dataproc_str, cbk_before_sending_str)
+            else:
+                step_desc = step_desc + '|{:s}'.format(cbk_before_dataproc_str)
 
         return step_desc
 
@@ -445,19 +451,16 @@ class Step(object):
     def __copy__(self):
         # Periodic should not be copied, only the list that contains them.
         # Indeed their ids (memory addr) are used for registration and cancellation
-        new_dm = self._dm
         new_periodic_to_rm = copy.copy(self._periodic_data_to_remove)
         new_transitions = copy.copy(self._transitions)
         data_desc_copy = [copy.copy(d) for d in self._data_desc]
         new_step = type(self)(data_desc=data_desc_copy, final=self.final,
                               fbk_timeout=self.feedback_timeout, fbk_mode=self.feedback_mode,
                               set_periodic=copy.copy(self._periodic_data),
-                              step_desc=self._step_desc,
-                              do_before_data_processing=self._do_before_data_processing,
-                              do_before_sending=self._do_before_sending)
-        new_step._node = None
+                              step_desc=self._step_desc)
+        new_step.__dict__.update(self.__dict__)
+        new_step._handle_data_desc(data_desc_copy)
         new_step._periodic_data_to_remove = new_periodic_to_rm
-        new_step._dm = new_dm
         new_step._scenario_env = None  # we ignore the environment, a new one will be provided
         new_step._transitions = new_transitions
         return new_step
@@ -466,13 +469,13 @@ class Step(object):
 class FinalStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
-                 do_before_data_processing=None, do_before_sending=None):
+                 do_before_data_processing=None):
         Step.__init__(self, final=True, do_before_data_processing=do_before_data_processing)
 
 class NoDataStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
-                 do_before_data_processing=None, do_before_sending=None):
+                 do_before_data_processing=None):
         Step.__init__(self, data_desc=Data(''), final=final,
                       fbk_timeout=fbk_timeout, fbk_mode=fbk_mode,
                       set_periodic=set_periodic, clear_periodic=clear_periodic,
@@ -627,21 +630,22 @@ class Scenario(object):
     def graph(self, fmt='pdf'):
 
         def graph_creation(init_step, node_list, edge_list):
-            step_style = 'rounded,dotted' if init_step.is_blocked() else 'rounded,filled'
             if init_step.final or init_step is self._orig_anchor:
-                f.attr('node', fontcolor='white', shape='record', style='rounded,filled',
+                step_style = 'rounded,filled,dotted,bold' if isinstance(init_step, NoDataStep) else 'rounded,filled,bold'
+                f.attr('node', fontcolor='white', shape='record', style=step_style,
                        fillcolor='slategray')
             else:
+                step_style = 'rounded,dotted' if isinstance(init_step, NoDataStep) else 'rounded,filled'
                 f.attr('node', fontcolor='black', shape='record', style=step_style,
                        fillcolor='lightgray')
             f.node(str(id(init_step)), label=init_step.get_description())
             for idx, tr in enumerate(init_step.transitions):
                 if tr.step not in node_list:
-                    step_style = 'rounded,dotted' if tr.step.is_blocked() else 'rounded,filled'
                     if tr.step.final:
-                        f.attr('node', fontcolor='white', shape='record', style=step_style,
+                        f.attr('node', fontcolor='white', shape='record', style='rounded,filled,bold',
                                fillcolor='slategray')
                     else:
+                        step_style = 'rounded,dotted' if isinstance(tr.step, NoDataStep) else 'rounded,filled'
                         f.attr('node', fontcolor='black', shape='record', style=step_style,
                                fillcolor='lightgray')
                     f.node(str(id(tr.step)), label=tr.step.get_description())

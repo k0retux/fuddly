@@ -1812,7 +1812,7 @@ class FmkPlumbing(object):
         if not data_list:
             return True
 
-        data_list = self.send_data(data_list, add_preamble=True)
+        data_list = self._send_data(data_list, add_preamble=True)
         if data_list is None or self._sending_error:
             return False
 
@@ -1822,7 +1822,7 @@ class FmkPlumbing(object):
         self.fmkDB.flush_current_feedback()
 
         if len(data_list) > 1:
-            # the provided data_list can be changed after having called self.send_data()
+            # the provided data_list can be changed after having called self._send_data()
             multiple_data = True
         else:
             multiple_data = False
@@ -1843,11 +1843,11 @@ class FmkPlumbing(object):
             dt.make_recordable()
 
         if multiple_data:
-            self.log_data(data_list, original_data=original_data,
-                          verbose=verbose)
+            self._log_data(data_list, original_data=original_data,
+                           verbose=verbose)
         else:
             orig = original_data[0] if orig_data_provided else None
-            self.log_data(data_list[0], original_data=orig, verbose=verbose)
+            self._log_data(data_list[0], original_data=orig, verbose=verbose)
 
         # When checking target readiness, feedback timeout is taken into account indirectly
         # through the call to Target.is_target_ready_for_new_data()
@@ -1879,7 +1879,7 @@ class FmkPlumbing(object):
 
 
     @EnforceOrder(accepted_states=['S2'])
-    def send_data(self, data_list, add_preamble=False):
+    def _send_data(self, data_list, add_preamble=False):
         '''
         @data_list: either a list of Data() or a Data()
         '''
@@ -1887,7 +1887,7 @@ class FmkPlumbing(object):
         if self.__tg_enabled:
 
             if not self._is_data_valid(data_list):
-                self.set_error("send_data(): Data has been provided empty --> won't be sent",
+                self.set_error("_send_data(): Data has been provided empty --> won't be sent",
                                code=Error.DataInvalid)
                 self.mon.notify_error()
                 return None
@@ -1895,13 +1895,13 @@ class FmkPlumbing(object):
             data_list = self._do_before_sending_data(data_list)
 
             if not data_list:
-                self.set_error("send_data(): No more data to send",
+                self.set_error("_send_data(): No more data to send",
                                code=Error.NoMoreData)
                 self.mon.notify_error()
                 return None
 
             if not self._is_data_valid(data_list):
-                self.set_error("send_data(): Data became empty --> won't be sent",
+                self.set_error("_send_data(): Data became empty --> won't be sent",
                                code=Error.DataInvalid)
                 self.mon.notify_error()
                 return None
@@ -1936,7 +1936,7 @@ class FmkPlumbing(object):
 
 
     @EnforceOrder(accepted_states=['S2'])
-    def log_data(self, data_list, original_data=None, verbose=False):
+    def _log_data(self, data_list, original_data=None, verbose=False):
 
         if self.__tg_enabled:
 
@@ -2561,7 +2561,7 @@ class FmkPlumbing(object):
                 if not data_list:
                     continue
 
-                data_list = self.send_data(data_list, add_preamble=True)
+                data_list = self._send_data(data_list, add_preamble=True)
                 if self._sending_error:
                     self.lg.log_fmk_info("Operator will shutdown because of a sending error")
                     break
@@ -2588,9 +2588,9 @@ class FmkPlumbing(object):
                         self.__register_in_data_bank(None, dt)
 
                 if multiple_data:
-                    self.log_data(data_list, verbose=verbose)
+                    self._log_data(data_list, verbose=verbose)
                 else:
-                    self.log_data(data_list[0], verbose=verbose)
+                    self._log_data(data_list[0], verbose=verbose)
 
                 ret = self.check_target_readiness()
                 # Note: the condition (ret = -1) is supposed to be managed by the operator
