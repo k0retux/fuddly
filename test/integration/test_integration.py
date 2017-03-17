@@ -3531,6 +3531,8 @@ class TestFMK(unittest.TestCase):
 
         fmk.reload_all(tg_num=1)  # to collect feedback from monitoring probes
 
+        print('\n*** Test scenario EX1')
+
         data = None
         prev_data = None
         now = datetime.datetime.now()
@@ -3546,6 +3548,29 @@ class TestFMK(unittest.TestCase):
         self.assertEqual(prev_data.to_bytes(), data.to_bytes())
         self.assertGreater(exec_time, 5)
 
+        print('\n\n*** Test SCENARIO EX2 ***\n\n')
+
+        data = None
+        steps = []
+        for i in range(4):
+            data = fmk.get_data(['SC_EX2'])
+            if i == 3:
+                self.assertTrue(data is None)
+            if data is not None:
+                steps.append(data.origin.current_step)
+                ok = fmk.send_data_and_log([data])  # needed to make the scenario progress
+                if not ok:
+                    raise ValueError
+            if i == 0:
+                self.assertTrue(bool(fmk._task_list))
+
+        for idx, s in enumerate(steps):
+            print('\n[{:d}]-----'.format(idx))
+            print(s)
+            print('-----')
+
+        self.assertNotEqual(steps[-1], steps[-2])
+        self.assertFalse(bool(fmk._task_list))
 
     def test_scenario_infra_03(self):
         steps = []

@@ -115,12 +115,9 @@ class DataProcess(object):
         return self.formatted_str(oneliner=True)
 
     def __copy__(self):
-        new_datap = type(self)(self.process, seed=self.seed, auto_regen=self.auto_regen)
+        new_datap = type(self)(self.process)
+        new_datap.__dict__.update(self.__dict__)
         new_datap._process = copy.copy(self._process)
-        new_datap._process_idx = self._process_idx
-        new_datap._blocked = self._blocked
-        new_datap.feedback_timeout = self.feedback_timeout
-        new_datap.feedback_mode = self.feedback_mode
         return new_datap
 
 
@@ -143,13 +140,7 @@ class Step(object):
         self._do_before_data_processing = do_before_data_processing
         self._do_before_sending = do_before_sending
 
-        if not final:
-            self._handle_data_desc(data_desc)
-        else:
-            self._node_name = [None]
-            self._data_desc = [None]
-            self._node = None
-
+        self._handle_data_desc(data_desc)
         self.make_free()
 
         # need to be set after self._data_desc
@@ -168,6 +159,12 @@ class Step(object):
 
     def _handle_data_desc(self, data_desc):
         self._node = None
+
+        if self.final:
+            self._node_name = [None]
+            self._data_desc = [None]
+            return
+
         assert data_desc is not None
         if isinstance(data_desc, list):
             self._data_desc = data_desc
@@ -175,7 +172,7 @@ class Step(object):
             self._data_desc = [data_desc]
 
         for desc in self._data_desc:
-            assert isinstance(desc, (str, Data, DataProcess))
+            assert isinstance(desc, (str, Data, DataProcess)), '{!r}, class:{:s}'.format(desc, self.__class__.__name__)
 
         if isinstance(data_desc, str):
             self._node_name = [data_desc]
@@ -438,10 +435,10 @@ class Step(object):
             else:
                 cbk_before_sending_str = ' --\> {:s}() '.format(self._do_before_sending.__name__)
 
-            if not self.is_blocked():
-                step_desc = step_desc + '|{{{:s}|{:s}}}'.format(cbk_before_dataproc_str, cbk_before_sending_str)
-            else:
+            if self.is_blocked():
                 step_desc = step_desc + '|{:s}'.format(cbk_before_dataproc_str)
+            else:
+                step_desc = step_desc + '|{{{:s}|{:s}}}'.format(cbk_before_dataproc_str, cbk_before_sending_str)
 
         return step_desc
 
@@ -449,20 +446,16 @@ class Step(object):
         return id(self)
 
     def __copy__(self):
-        # Periodic should not be copied, only the list that contains them.
-        # Indeed their ids (memory addr) are used for registration and cancellation
-        new_periodic_to_rm = copy.copy(self._periodic_data_to_remove)
-        new_transitions = copy.copy(self._transitions)
-        data_desc_copy = [copy.copy(d) for d in self._data_desc]
-        new_step = type(self)(data_desc=data_desc_copy, final=self.final,
-                              fbk_timeout=self.feedback_timeout, fbk_mode=self.feedback_mode,
-                              set_periodic=copy.copy(self._periodic_data),
-                              step_desc=self._step_desc)
+        new_step = type(self)(final=True) # final=True to shorten __init__()
         new_step.__dict__.update(self.__dict__)
+        data_desc_copy = [copy.copy(d) for d in self._data_desc]
         new_step._handle_data_desc(data_desc_copy)
-        new_step._periodic_data_to_remove = new_periodic_to_rm
+        # Periodic should not be copied, only the list that contains them, as
+        # their IDs (memory addr) are used for registration and cancellation
+        new_step._periodic_data = copy.copy(self._periodic_data)
+        new_step._periodic_data_to_remove = copy.copy(self._periodic_data_to_remove)
         new_step._scenario_env = None  # we ignore the environment, a new one will be provided
-        new_step._transitions = new_transitions
+        new_step._transitions = copy.copy(self._transitions)
         return new_step
 
 
@@ -553,12 +546,11 @@ class Transition(object):
         return id(self)
 
     def __copy__(self):
-        new_cbks = copy.copy(self._callbacks)
         new_transition = type(self)(self._step)
-        new_transition._callbacks = new_cbks
-        new_transition._scenario_env = None
-        new_transition._callbacks_pending = len(new_cbks)
+        new_transition.__dict__.update(self.__dict__)
+        new_transition._callbacks = copy.copy(self._callbacks)
         new_transition._callbacks_qty = new_transition._callbacks_pending
+        new_transition._scenario_env = None
         return new_transition
 
 
@@ -597,11 +589,11 @@ class Scenario(object):
         self._dm = None
         self._env = ScenarioEnv()
         self._periodic_ids = set()
+        self._current = anchor
         self._anchor = anchor
-        self._orig_anchor = anchor
 
     def reset(self):
-        self._anchor = self._orig_anchor
+        self._current = self._anchor
 
     def set_data_model(self, dm):
         self._dm = dm
@@ -611,16 +603,16 @@ class Scenario(object):
         self._env.target = target
 
     def set_anchor(self, step):
-        self._anchor = step
-        self._orig_anchor = self._anchor
+        self._current = step
+        self._anchor = self._current
 
     def walk_to(self, step):
         step.cleanup()
-        self._anchor = step
+        self._current = step
 
     @property
     def current_step(self):
-        return self._anchor
+        return self._current
 
     @property
     def periodic_to_clear(self):
@@ -630,7 +622,7 @@ class Scenario(object):
     def graph(self, fmt='pdf'):
 
         def graph_creation(init_step, node_list, edge_list):
-            if init_step.final or init_step is self._orig_anchor:
+            if init_step.final or init_step is self._anchor:
                 step_style = 'rounded,filled,dotted,bold' if isinstance(init_step, NoDataStep) else 'rounded,filled,bold'
                 f.attr('node', fontcolor='white', shape='record', style=step_style,
                        fillcolor='slategray')
@@ -668,7 +660,7 @@ class Scenario(object):
         except:
             print("\n*** ERROR: Unknown format ({!s})! ***".format(fmt))
         else:
-            graph_creation(self._orig_anchor, node_list=[], edge_list=[])
+            graph_creation(self._anchor, node_list=[], edge_list=[])
             f.view()
 
     def __copy__(self):
@@ -693,24 +685,21 @@ class Scenario(object):
                 tr.set_step(new_step)
                 graph_copy(new_step, dico)
 
-
-        orig_dm = self._dm
-        orig_env = self._env
-        if self._anchor is self._orig_anchor:
-            new_anchor = new_orig_anchor = copy.copy(self._anchor)
-        else:
-            new_anchor = copy.copy(self._anchor)
-            new_orig_anchor = copy.copy(self._orig_anchor)
-        new_orig_anchor.set_data_model(orig_dm)
-        dico = {self._orig_anchor: new_orig_anchor}
         new_sc = type(self)(self.name)
-        new_sc._env = copy.copy(orig_env)
-        new_orig_anchor.set_scenario_env(new_sc._env)
-        new_sc._dm = orig_dm
+        new_sc.__dict__.update(self.__dict__)
+        new_sc._env = copy.copy(self._env)
         new_sc._periodic_ids = set()  # periodic ids are gathered only during graph_copy()
+        if self._current is self._anchor:
+            new_current = new_anchor = copy.copy(self._current)
+        else:
+            new_current = copy.copy(self._current)
+            new_anchor = copy.copy(self._anchor)
+        new_anchor.set_data_model(self._dm)
+        new_anchor.set_scenario_env(new_sc._env)
+        new_sc._current = new_current
         new_sc._anchor = new_anchor
-        new_sc._orig_anchor = new_orig_anchor
+        dico = {self._anchor: new_anchor}
 
-        graph_copy(new_sc._orig_anchor, dico)
+        graph_copy(new_sc._anchor, dico)
 
         return new_sc
