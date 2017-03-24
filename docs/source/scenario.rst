@@ -191,7 +191,7 @@ transition that links up the two steps, but also to decide if this transition ca
 They act as transition conditions.
 
 Indeed, a callback has to return `True` if it wants the framework to cross the transition, otherwise
-it should return `False`. If no callback is defined the transition is considered to not be
+it should return `False`. If no callback is defined the transition is considered to be not
 guarded and thus can be crossed without restriction. Besides, only one transition is chosen at
 each step. It is the first one, by order of registration, that can be activated (at least one
 callback that returns `True`, or no callback at all). It is worth noting that the transitions are

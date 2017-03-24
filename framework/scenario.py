@@ -22,10 +22,14 @@
 ################################################################################
 
 import copy
+import subprocess
+import platform
 
 from framework.global_resources import *
-from framework.data_model import Data, Node
+from framework.data import Data
+from framework.data_model import Node
 from libs.external_modules import *
+from libs.utils import find_file, retrieve_app_handler
 
 class DataProcess(object):
     def __init__(self, process, seed=None, auto_regen=False):
@@ -53,6 +57,7 @@ class DataProcess(object):
         """
         self.seed = seed
         self.auto_regen = auto_regen
+        self.auto_regen_cpt = 0
         self.outcomes = None
         self.feedback_timeout = None
         self.feedback_mode = None
@@ -74,9 +79,18 @@ class DataProcess(object):
             self._process_idx += 1
             return True
 
+    def reset(self):
+        self.auto_regen_cpt = 0
+        self.outcomes = None
+        self._process_idx = 0
+
     @property
     def process(self):
         return self._process[self._process_idx]
+
+    @process.setter
+    def process(self, value):
+        self._process[self._process_idx] = value
 
     def make_blocked(self):
         self._blocked = True
@@ -90,24 +104,24 @@ class DataProcess(object):
 
     def formatted_str(self, oneliner=False):
         desc = ''
-        suffix = ', PROCESS: ' if oneliner else '\n'
+        suffix = ', Process=' if oneliner else '\n'
         if isinstance(self.seed, str):
-            desc += 'SEED: ' + self.seed + suffix
+            desc += 'Seed=' + self.seed + suffix
         elif isinstance(self.seed, Data):
-            desc += 'SEED: Data(...)' + suffix
+            desc += 'Seed=Data(...)' + suffix
         else:
             desc += suffix[2:]
 
         for proc in self._process:
             for d in proc:
                 if isinstance(d, (list, tuple)):
-                    desc += '{!s} / '.format(d[0])
+                    desc += '{!s}/'.format(d[0])
                 else:
                     assert isinstance(d, str)
-                    desc += '{!s} / '.format(d)
-            desc = desc[:-3]
-            desc += ' - ' if oneliner else '\n'
-        desc = desc[:-3] if oneliner else desc[:-1]
+                    desc += '{!s}/'.format(d)
+            desc = desc[:-1]
+            desc += ',' if oneliner else '\n'
+        desc = desc[:-1] # if oneliner else desc[:-1]
 
         return desc
 
@@ -118,6 +132,7 @@ class DataProcess(object):
         new_datap = type(self)(self.process)
         new_datap.__dict__.update(self.__dict__)
         new_datap._process = copy.copy(self._process)
+        new_datap.reset()
         return new_datap
 
 
@@ -147,7 +162,6 @@ class Step(object):
         self.feedback_timeout = fbk_timeout
         self.feedback_mode = fbk_mode
 
-        self._dm = None
         self._scenario_env = None
         self._periodic_data = set_periodic
         if clear_periodic:
@@ -186,28 +200,27 @@ class Step(object):
         else:
             self._node_name = [None]
 
-
-    def set_data_model(self, dm):
-        self._dm = dm
-
     def set_scenario_env(self, env):
         self._scenario_env = env
 
-    def connect_to(self, step, cbk_after_sending=None, cbk_after_fbk=None):
+    def connect_to(self, step, cbk_after_sending=None, cbk_after_fbk=None, prepend=False):
         if isinstance(self, NoDataStep):
             assert cbk_after_sending is None
         tr = Transition(step,
                         cbk_after_sending=cbk_after_sending,
                         cbk_after_fbk=cbk_after_fbk)
-        self._transitions.append(tr)
+        if prepend:
+            self._transitions.insert(0, tr)
+        else:
+            self._transitions.append(tr)
 
     def do_before_data_processing(self):
         if self._do_before_data_processing is not None:
-            self._do_before_data_processing(self, self._scenario_env)
+            self._do_before_data_processing(self._scenario_env, self)
 
     def do_before_sending(self):
         if self._do_before_sending is not None:
-            self._do_before_sending(self, self._scenario_env)
+            self._do_before_sending(self._scenario_env, self)
 
     def make_blocked(self):
         self._blocked = True
@@ -287,9 +300,9 @@ class Step(object):
                     # We provide the seed in this case
                     if isinstance(d.seed, str):
                         seed_name = d.seed
-                        node = self._dm.get_data(d.seed)
+                        node = self._scenario_env.dm.get_data(d.seed)
                         d.seed = Data(node)
-                        d.seed.set_initial_dmaker([seed_name.upper(), 'g_'+seed_name, None])
+                        d.seed.generate_info_from_content(origin=self._scenario_env.scenario)
                         node_list.append(node)
                     elif isinstance(d.seed, Data):
                         node_list.append(d.seed.node)  # if data is raw, .node is None
@@ -308,7 +321,7 @@ class Step(object):
                     update_node = True
                     self._node = {}
                 if update_node:
-                    self._node[idx] = self._dm.get_data(self._node_name[idx])
+                    self._node[idx] = self._scenario_env.dm.get_data(self._node_name[idx])
                 node_list.append(self._node[idx])
 
         return node_list[0] if len(node_list) == 1 else node_list
@@ -333,31 +346,35 @@ class Step(object):
             else:
                 # in this case a data creation process is provided to the framework through the
                 # callback HOOK.before_sending_step1
-                d = Data('')
+                d = Data('STEP:POISON_1')
         else:
             # In this case we have multiple data
             # Practically it means that the creation of these data need to be performed
             # by data framework callback (CallBackOps.Replace_Data) because
             # a generator (by which a scenario will be executed) can only provide one data.
-            d = Data('')
+            d = Data('STEP:POISON_1')
 
-        if self._step_desc is None:
-            for idx, d_desc in enumerate(self._data_desc):
-                if isinstance(d_desc, DataProcess):
-                    d.add_info(repr(d_desc))
-                elif isinstance(d_desc, Data):
-                    d.add_info('Use provided Data(...)')
-                else:
-                    assert isinstance(d_desc, str)
-                    d.add_info("Instantiate a node '{!s}' from the model".format(self._node_name[idx]))
-            if self._periodic_data is not None:
-                p_sz = len(self._periodic_data)
-                d.add_info("Set {:d} periodic{:s}".format(p_sz, 's' if p_sz > 1 else ''))
-            if self._periodic_data_to_remove is not None:
-                p_sz = len(self._periodic_data_to_remove)
-                d.add_info("Clear {:d} periodic{:s}".format(p_sz, 's' if p_sz > 1 else ''))
-        else:
-            d.add_info(self._step_desc)
+        if self._step_desc is not None:
+            d.add_info(self._step_desc.replace('\n', ' '))
+
+        for idx, d_desc in enumerate(self._data_desc):
+            if isinstance(d_desc, DataProcess):
+                d.add_info(repr(d_desc))
+            elif isinstance(d_desc, Data):
+                d.add_info('User-provided Data()')
+            else:
+                assert isinstance(d_desc, str)
+                d.add_info("Data Model: '{!s}'"
+                           .format(self._scenario_env.dm.name))
+                d.add_info("Node Name: '{!s}'"
+                           .format(self._node_name[idx]))
+
+        if self._periodic_data is not None:
+            p_sz = len(self._periodic_data)
+            d.add_info("Set {:d} periodic{:s}".format(p_sz, 's' if p_sz > 1 else ''))
+        if self._periodic_data_to_remove is not None:
+            p_sz = len(self._periodic_data_to_remove)
+            d.add_info("Clear {:d} periodic{:s}".format(p_sz, 's' if p_sz > 1 else ''))
 
         if self.is_blocked():
             d.make_blocked()
@@ -490,13 +507,13 @@ class Transition(object):
             self._callbacks[HOOK.after_fbk] = cbk_after_fbk
         self._callbacks_qty = self._callbacks_pending = len(self._callbacks)
 
-    def set_step(self, step):
-        self._step = step
-        self._step.set_scenario_env(self._scenario_env)
-
     @property
     def step(self):
         return self._step
+
+    @step.setter
+    def step(self, value):
+        self._step = value
 
     def set_scenario_env(self, env):
         self._scenario_env = env
@@ -559,6 +576,7 @@ class ScenarioEnv(object):
     def __init__(self):
         self._dm = None
         self._target = None
+        self._scenario = None
 
     @property
     def dm(self):
@@ -576,21 +594,50 @@ class ScenarioEnv(object):
     def target(self, val):
         self._target = val
 
+    @property
+    def scenario(self):
+        return self._scenario
+
+    @scenario.setter
+    def scenario(self, val):
+        self._scenario = val
+
     def __copy__(self):
         new_env = type(self)()
         new_env.__dict__.update(self.__dict__)
         new_env._target = None
+        new_env._scenario = None
         return new_env
+
+
+PLATFORM = platform.system().lower()
+viewer_format = None
+viewer_app = None
+viewer_app_name = None
+viewer_filename = None
 
 class Scenario(object):
 
-    def __init__(self, name, anchor=None):
+    def __init__(self, name, anchor=None, reinit_anchor=None):
         self.name = name
+        self._steps = None
+        self._reinit_steps = None
+        self._transitions = None
+        self._reinit_transitions = None
         self._dm = None
         self._env = ScenarioEnv()
+        self._env.scenario = self
         self._periodic_ids = set()
-        self._current = anchor
-        self._anchor = anchor
+        self._current = None
+        self._anchor = None
+        self._reinit_anchor = None
+        if anchor is not None:
+            self.set_anchor(anchor)
+        if reinit_anchor is not None:
+            self.set_reinit_anchor(reinit_anchor)
+
+    def __str__(self):
+        return "Scenario '{:s}'".format(self.name)
 
     def reset(self):
         self._current = self._anchor
@@ -602,13 +649,80 @@ class Scenario(object):
     def set_target(self, target):
         self._env.target = target
 
-    def set_anchor(self, step):
-        self._current = step
-        self._anchor = self._current
+    def _graph_setup(self, init_step, steps, transitions):
+        for tr in init_step.transitions:
+            transitions.append(tr)
+            if tr.step in steps:
+                continue
+            else:
+                steps.append(tr.step)
+                self._graph_setup(tr.step, steps, transitions)
+
+    def _init_main_properties(self):
+        assert self._anchor is not None
+        self._steps = []
+        self._transitions = []
+        self._graph_setup(self._anchor, self._steps, self._transitions)
+
+    def _init_reinit_seq_properties(self):
+        assert self._reinit_anchor is not None
+        self._reinit_steps = []
+        self._reinit_transitions = []
+        self._graph_setup(self._reinit_anchor, self._reinit_steps, self._reinit_transitions)
+
+    def set_anchor(self, anchor, current=None):
+        if current is not None:
+            self._current = current
+        else:
+            self._current = anchor
+        self._anchor = anchor
+        self._steps = None
+        self._transitions = None
+
+    def set_reinit_anchor(self, reinit_anchor):
+        self._reinit_anchor = reinit_anchor
+        self._reinit_steps = None
+        self._reinit_transitions = None
+
+    @property
+    def env(self):
+        return self._env
+
+    @property
+    def steps(self):
+        if self._steps is None:
+            self._init_main_properties()
+        return copy.copy(self._steps)
+
+    @property
+    def transitions(self):
+        if self._transitions is None:
+            self._init_main_properties()
+        return copy.copy(self._transitions)
+
+    def has_reinit_sequence(self):
+        return self._reinit_anchor is not None
+
+    @property
+    def reinit_steps(self):
+        if self._reinit_steps is None:
+            self._init_reinit_seq_properties()
+        return copy.copy(self._reinit_steps)
+
+    @property
+    def reinit_transitions(self):
+        if self._reinit_transitions is None:
+            self._init_reinit_seq_properties()
+        return copy.copy(self._reinit_transitions)
 
     def walk_to(self, step):
         step.cleanup()
         self._current = step
+
+    def branch_to_reinit(self):
+        assert self._reinit_anchor is not None
+        self._reinit_anchor.cleanup()
+        self._current = self._reinit_anchor
 
     @property
     def current_step(self):
@@ -619,27 +733,71 @@ class Scenario(object):
         for pid in self._periodic_ids:
             yield pid
 
-    def graph(self, fmt='pdf'):
+
+    def _view_linux(self, filepath, graph_filename):
+        """Open filepath in the user's preferred application (linux)."""
+        global viewer_format
+        global viewer_app
+        global viewer_app_name
+
+        if viewer_app_name is None:
+            viewer_app_name = retrieve_app_handler(graph_filename)
+
+        if viewer_app_name is None:
+            print("\n*** WARNING: No built-in viewer found for the format ('{:s}') ***"
+                  .format(viewer_format))
+        else:
+            viewer_app = subprocess.Popen([viewer_app_name, filepath],
+                                               stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    def _view_windows(self, filepath, graph_filename):
+        """Start filepath with its associated application (windows)."""
+        os.startfile(os.path.normpath(filepath))
+
+    def graph(self, fmt='pdf', select_current=False):
+        global viewer_format
+        global viewer_app
+        global viewer_app_name
+        global viewer_filename
+
+        current_color = 'blue'
+        current_fillcolor = 'lightblue'
+        current_fontcolor = 'blue'
+        current_step = self._current if select_current else None
+        if fmt != viewer_format:
+            viewer_format = fmt
+            viewer_app = None
+            viewer_app_name = None
 
         def graph_creation(init_step, node_list, edge_list):
+            step_color = current_color if init_step is current_step else 'black'
             if init_step.final or init_step is self._anchor:
+                step_fillcolor = current_fillcolor if init_step is current_step else 'slategray'
+                step_fontcolor = current_fontcolor if init_step is current_step else 'white'
                 step_style = 'rounded,filled,dotted,bold' if isinstance(init_step, NoDataStep) else 'rounded,filled,bold'
-                f.attr('node', fontcolor='white', shape='record', style=step_style,
-                       fillcolor='slategray')
+                f.attr('node', fontcolor=step_fontcolor, shape='record', style=step_style,
+                       color=step_color, fillcolor=step_fillcolor)
             else:
                 step_style = 'rounded,dotted' if isinstance(init_step, NoDataStep) else 'rounded,filled'
-                f.attr('node', fontcolor='black', shape='record', style=step_style,
-                       fillcolor='lightgray')
+                step_fillcolor = current_fillcolor if init_step is current_step else 'lightgray'
+                step_fontcolor = current_fontcolor if init_step is current_step else 'black'
+                f.attr('node', fontcolor=step_fontcolor, shape='record', style=step_style,
+                       color=step_color, fillcolor=step_fillcolor)
             f.node(str(id(init_step)), label=init_step.get_description())
             for idx, tr in enumerate(init_step.transitions):
                 if tr.step not in node_list:
+                    step_color = current_color if tr.step is current_step else 'black'
                     if tr.step.final:
-                        f.attr('node', fontcolor='white', shape='record', style='rounded,filled,bold',
-                               fillcolor='slategray')
+                        step_fillcolor = current_fillcolor if tr.step is current_step else 'slategray'
+                        step_fontcolor = current_fontcolor if tr.step is current_step else 'white'
+                        f.attr('node', fontcolor=step_fontcolor, shape='record', style='rounded,filled,bold',
+                               fillcolor=step_fillcolor, color=step_color)
                     else:
+                        step_fillcolor = current_fillcolor if tr.step is current_step else 'lightgray'
+                        step_fontcolor = current_fontcolor if tr.step is current_step else 'black'
                         step_style = 'rounded,dotted' if isinstance(tr.step, NoDataStep) else 'rounded,filled'
-                        f.attr('node', fontcolor='black', shape='record', style=step_style,
-                               fillcolor='lightgray')
+                        f.attr('node', fontcolor=step_fontcolor, shape='record', style=step_style,
+                               fillcolor=step_fillcolor, color=step_color)
                     f.node(str(id(tr.step)), label=tr.step.get_description())
                 if id(tr) not in edge_list:
                     f.edge(str(id(init_step)), str(id(tr.step)), label='[{:d}] {!s}'.format(idx+1, tr))
@@ -654,25 +812,35 @@ class Scenario(object):
             print("\n*** ERROR: need python graphviz module to be installed ***")
             return
 
+        graph_filename = os.path.join(workspace_folder, self.name+'.gv')
+
         try:
-            f = graphviz.Digraph(self.name, format=fmt,
-                                 filename=os.path.join(workspace_folder, self.name+'.gv'))
+            f = graphviz.Digraph(self.name, format=fmt, filename=graph_filename)
         except:
-            print("\n*** ERROR: Unknown format ({!s})! ***".format(fmt))
+            print("\n*** ERROR: Unknown format ('{!s}') ***".format(fmt))
         else:
             graph_creation(self._anchor, node_list=[], edge_list=[])
-            f.view()
+
+            rendered = f.render()
+
+            if graph_filename != viewer_filename or viewer_app is None or viewer_app.poll() is not None:
+                viewer_filename = graph_filename
+                view_method = getattr(self, '_view_{:s}'.format(PLATFORM), None)
+                if view_method is None:
+                    raise RuntimeError('{!r} has no built-in viewer support for {!r} '
+                                       'on {!r} platform'.format(self.__class__, fmt, PLATFORM))
+                view_method(rendered, graph_filename+'.'+viewer_format)
 
     def __copy__(self):
 
-        def graph_copy(init_step, dico):
+        def graph_copy(init_step, dico, env):
             new_transitions = [copy.copy(tr) for tr in init_step.transitions]
             init_step.set_transitions(new_transitions)
             for periodic in init_step.periodic_to_set:
                 new_sc._periodic_ids.add(id(periodic))
 
             for tr in init_step.transitions:
-                tr.set_scenario_env(new_sc._env)
+                tr.set_scenario_env(env)
                 if tr.step in dico.values():
                     continue
                 if tr.step in dico:
@@ -680,26 +848,30 @@ class Scenario(object):
                 else:
                     new_step = copy.copy(tr.step)
                     dico[tr.step] = new_step
-                new_step.set_data_model(self._dm)
-                new_step.set_scenario_env(new_sc._env)
-                tr.set_step(new_step)
-                graph_copy(new_step, dico)
+                new_step.set_scenario_env(env)
+                tr.step = new_step
+                graph_copy(new_step, dico, env)
 
         new_sc = type(self)(self.name)
         new_sc.__dict__.update(self.__dict__)
         new_sc._env = copy.copy(self._env)
+        new_sc._env.scenario = new_sc
         new_sc._periodic_ids = set()  # periodic ids are gathered only during graph_copy()
         if self._current is self._anchor:
             new_current = new_anchor = copy.copy(self._current)
         else:
             new_current = copy.copy(self._current)
             new_anchor = copy.copy(self._anchor)
-        new_anchor.set_data_model(self._dm)
         new_anchor.set_scenario_env(new_sc._env)
-        new_sc._current = new_current
-        new_sc._anchor = new_anchor
         dico = {self._anchor: new_anchor}
+        graph_copy(new_anchor, dico, new_sc._env)
+        new_sc.set_anchor(new_anchor, current=new_current)
 
-        graph_copy(new_sc._anchor, dico)
+        if self._reinit_anchor is not None:
+            new_reinit_anchor = copy.copy(self._reinit_anchor)
+            new_reinit_anchor.set_scenario_env(new_sc._env)
+            dico.update({self._reinit_anchor: new_reinit_anchor})
+            graph_copy(new_reinit_anchor, dico, new_sc._env)
+            new_sc.set_reinit_anchor(new_reinit_anchor)
 
         return new_sc

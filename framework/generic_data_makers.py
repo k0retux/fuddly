@@ -25,6 +25,7 @@ import subprocess
 from copy import *
 
 from framework.data_model import *
+from framework.data import *
 from framework.tactics_helpers import *
 from framework.fuzzing_primitives import *
 from framework.basic_primitives import *

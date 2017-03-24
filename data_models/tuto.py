@@ -357,6 +357,10 @@ class MyDF_DataModel(DataModel):
         for_network_tg2 = Node('4tg2', vt=String(values=['FOR_TARGET_2']))
         for_network_tg2.set_semantics(['TG2'])
 
+        for_net_default_tg = Node('4default', vt=String(values=['FOR_DEFAULT_TARGET']))
+
+        basic_intg = Node('intg', vt=UINT16_be(values=[10]))
+
         enc_desc = \
         {'name': 'enc',
          'contents': [
@@ -380,7 +384,6 @@ class MyDF_DataModel(DataModel):
              {'name': 'data2',
               'contents': String(values=['Red', 'Green', 'Blue']) },
          ]}
-
 
 
         example_desc = \
@@ -460,7 +463,8 @@ class MyDF_DataModel(DataModel):
 
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
-                      shape_desc, for_network_tg1, for_network_tg2, enc_desc, example_desc,
+                      shape_desc, for_network_tg1, for_network_tg2, for_net_default_tg, basic_intg,
+                      enc_desc, example_desc,
                       regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc)
 
 

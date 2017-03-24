@@ -34,6 +34,8 @@ from framework.value_types import *
 
 import data_models.example as example
 
+from framework.data_model import *
+from framework.data import *
 from framework.fuzzing_primitives import *
 from framework.plumbing import *
 from framework.data_model_builder import *
@@ -3590,3 +3592,54 @@ class TestFMK(unittest.TestCase):
         self.assertNotEqual(steps[5], steps[1])
         self.assertEqual(steps[2], steps[4])
         self.assertEqual(steps[0], steps[2])
+
+    def test_scenario_infra_04(self):
+
+        def walk_scenario(name, iter_num):
+            print('\n===== run scenario {:s} ======\n'.format(name))
+            steps = []
+            scenario = None
+            for i in range(iter_num):
+                data = fmk.get_data([name])
+                if i == 1:
+                    scenario = data.origin
+                steps.append(data.origin.current_step)
+                ok = fmk.send_data_and_log([data])  # needed to make the scenario progress
+                if not ok:
+                    raise ValueError
+
+            for idx, s in enumerate(steps):
+                print('\n[{:d}]-----'.format(idx))
+                print(s)
+                print('-----')
+
+            return scenario, steps
+
+        scenario, steps = walk_scenario('SC_TEST', 4)
+        print('\n++++ env.cbk_true_cpt={:d} | env.cbk_false_cpt={:d}'
+              .format(scenario.env.cbk_true_cpt, 0))
+        self.assertEqual(steps[0], steps[-1])
+        self.assertEqual(scenario.env.cbk_true_cpt, 2)
+        self.assertEqual(str(steps[-2]), '4TG1')
+
+        scenario, steps = walk_scenario('SC_TEST2', 2)
+        print('\n++++ env.cbk_true_cpt={:d} | env.cbk_false_cpt={:d}'
+              .format(scenario.env.cbk_true_cpt, 0))
+        # self.assertEqual(steps[0], steps[-1])
+        self.assertEqual(scenario.env.cbk_true_cpt, 1)
+        self.assertEqual(str(steps[-1]), '4TG1')
+
+        scenario, steps = walk_scenario('SC_TEST3', 2)
+        print('\n++++ env.cbk_true_cpt={:d} | env.cbk_false_cpt={:d}'
+              .format(scenario.env.cbk_true_cpt, 0))
+        # self.assertEqual(steps[0], steps[-1])
+        self.assertEqual(scenario.env.cbk_true_cpt, 2)
+        self.assertEqual(str(steps[-1]), '4TG1')
+
+        scenario, steps = walk_scenario('SC_TEST4', 2)
+        print('\n++++ env.cbk_true_cpt={:d} | env.cbk_false_cpt={:d}'
+              .format(scenario.env.cbk_true_cpt, scenario.env.cbk_false_cpt))
+        # self.assertEqual(steps[0], steps[-1])
+        self.assertEqual(scenario.env.cbk_true_cpt, 1)
+        self.assertEqual(scenario.env.cbk_false_cpt, 4)
+        self.assertEqual(str(steps[-1]), '4DEFAULT')

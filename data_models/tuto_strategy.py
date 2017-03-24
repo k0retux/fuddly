@@ -2,10 +2,12 @@ from framework.plumbing import *
 from framework.tactics_helpers import *
 from framework.global_resources import *
 from framework.scenario import *
+from framework.data import Data
 
 tactics = Tactics()
 
 def cbk_transition1(env, current_step, next_step, feedback):
+    assert env is not None
     if not feedback:
         print("\n\nNo feedback retrieved. Let's wait for another turn")
         current_step.make_blocked()
@@ -29,18 +31,21 @@ def cbk_transition1(env, current_step, next_step, feedback):
         return True
 
 def cbk_transition2(env, current_step, next_step):
+    assert env is not None
     if hasattr(env, 'switch'):
         return False
     else:
         env.switch = False
         return True
 
-def before_sending_cbk(step, env):
+def before_sending_cbk(env, step):
+    assert env is not None
     print('\n--> Action executed before sending any data on step {:d} [desc: {!s}]'.format(id(step), step))
     step.node.show()
     return True
 
-def before_data_processing_cbk(step, env):
+def before_data_processing_cbk(env, step):
+    assert env is not None
     print('\n--> Action executed before data processing on step {:d} [desc: {!s}]'.format(id(step), step))
     if step.node is not None:
         step.node.show()
@@ -111,8 +116,92 @@ unique_step.connect_to(unique_step)
 sc5 = Scenario('auto_regen')
 sc5.set_anchor(unique_step)
 
-tactics.register_scenarios(sc1, sc2, sc3, sc4, sc5)
+### SCENARIO for testing transition selection ###
 
+def cbk_after_fbk_return_true(env, current_step, next_step, fbk):
+    if not hasattr(env, 'cbk_true_cpt'):
+        env.cbk_true_cpt = 1
+    else:
+        env.cbk_true_cpt += 1
+    # print('\n++ cbk_after_fbk_return_true from step {!s}'.format(current_step))
+    return True
+
+def cbk_after_sending_return_true(env, current_step, next_step):
+    if not hasattr(env, 'cbk_true_cpt'):
+        env.cbk_true_cpt = 1
+    else:
+        env.cbk_true_cpt += 1
+    # print('\n++ cbk_after_sending_return_true from step {!s}'.format(current_step))
+    return True
+
+init_step = NoDataStep(step_desc='init')
+g1_step = Step('intg')
+g11_step = Step('4tg1')
+g12_step = Step('4tg2')
+g13_step = Step('4default')
+final_step = FinalStep()
+
+init_step.connect_to(g1_step)
+g1_step.connect_to(g11_step, cbk_after_fbk=cbk_after_fbk_return_true)
+g1_step.connect_to(g12_step, cbk_after_sending=cbk_after_sending_return_true)
+g1_step.connect_to(g13_step, cbk_after_fbk=cbk_after_fbk_return_true)
+
+g11_step.connect_to(init_step)
+g12_step.connect_to(final_step)
+g13_step.connect_to(final_step)
+
+reinit_step = Step('enc')
+reinit_step.connect_to(init_step)
+
+sc_test = Scenario('test', anchor=init_step, reinit_anchor=reinit_step)
+
+g1_step = Step('intg')
+g11_step = Step('4tg1')
+g12_step = Step('4tg2')
+g13_step = Step('4default')
+g1_step.connect_to(g11_step, cbk_after_fbk=cbk_after_fbk_return_true)
+g1_step.connect_to(g12_step)
+g1_step.connect_to(g13_step, cbk_after_sending=cbk_after_sending_return_true)
+sc_test2 = Scenario('test2', anchor=g1_step)
+
+g1_step = Step('intg')
+g11_step = Step('4tg1')
+g12_step = Step('4tg2')
+g13_step = Step('4default')
+g1_step.connect_to(g11_step, cbk_after_fbk=cbk_after_fbk_return_true)
+g1_step.connect_to(g12_step, cbk_after_sending=cbk_after_sending_return_true,
+                   cbk_after_fbk=cbk_after_fbk_return_true)
+g1_step.connect_to(g13_step, cbk_after_fbk=cbk_after_fbk_return_true)
+sc_test3 = Scenario('test3', anchor=g1_step)
+
+def cbk_after_fbk_return_false(env, current_step, next_step, fbk):
+    if not hasattr(env, 'cbk_false_cpt'):
+        env.cbk_false_cpt = 1
+    else:
+        env.cbk_false_cpt += 1
+    # print('\n++ cbk_after_fbk_return_false from step {!s}'.format(current_step))
+    return False
+
+def cbk_after_sending_return_false(env, current_step, next_step):
+    if not hasattr(env, 'cbk_false_cpt'):
+        env.cbk_false_cpt = 1
+    else:
+        env.cbk_false_cpt += 1
+    # print('\n++ cbk_after_sending_return_false from step {!s}'.format(current_step))
+    return False
+
+g1_step = Step('intg')
+g11_step = Step('4tg1')
+g12_step = Step('4tg2')
+g13_step = Step('4default')
+g1_step.connect_to(g11_step, cbk_after_fbk=cbk_after_fbk_return_false)
+g1_step.connect_to(g12_step, cbk_after_sending=cbk_after_sending_return_false,
+                   cbk_after_fbk=cbk_after_fbk_return_false)
+g1_step.connect_to(g13_step, cbk_after_sending=cbk_after_sending_return_false,
+                   cbk_after_fbk=cbk_after_fbk_return_true)
+sc_test4 = Scenario('test4', anchor=g1_step)
+
+tactics.register_scenarios(sc1, sc2, sc3, sc4, sc5, sc_test, sc_test2, sc_test3, sc_test4)
 
 @generator(tactics, gtype="CBK")
 class g_test_callback_01(Generator):

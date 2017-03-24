@@ -43,7 +43,8 @@ import errno
 from socket import error as socket_error
 
 from libs.external_modules import *
-from framework.data_model import Data, NodeSemanticsCriteria
+from framework.data_model import NodeSemanticsCriteria
+from framework.data import Data
 from framework.value_types import GSMPhoneNum
 from framework.global_resources import *
 

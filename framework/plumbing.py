@@ -43,6 +43,7 @@ from libs.external_modules import *
 from framework.database import Database, FeedbackHandler
 from framework.tactics_helpers import *
 from framework.data_model import *
+from framework.data import *
 from framework.data_model_builder import DataModel
 from framework.target import *
 from framework.logger import *
@@ -1543,6 +1544,8 @@ class FmkPlumbing(object):
         # "do_before_sending" of Step()
         data_list = self._handle_data_callbacks(data_list, hook=HOOK.before_sending_step2,
                                                 resolve_dataprocess=False)
+        data_list = list(filter(lambda x: not x.is_blocked(), data_list))
+
         return data_list
 
     def _do_after_sending_data(self, data_list):
@@ -1617,22 +1620,24 @@ class FmkPlumbing(object):
     def _do_after_dmaker_data_retrieval(self, data):
         self._handle_data_callbacks([data], hook=HOOK.after_dmaker_production)
 
-    def _handle_data_desc(self, data_desc, resolve_dataprocess=True):
+    def _handle_data_desc(self, data_desc, resolve_dataprocess=True, original_data=None):
+
         if isinstance(data_desc, Data):
             data = data_desc
+            data.generate_info_from_content(original_data=original_data)
 
         elif isinstance(data_desc, DataProcess):
             if isinstance(data_desc.seed, str):
                 try:
-                    seed = self.dm.get_data(data_desc.seed)
+                    seed_node = self.dm.get_data(data_desc.seed)
                 except:
                     self.set_error(msg='Cannot create the seed from the '
                                        'name {:s}!'.format(data_desc.seed),
                                    code=Error.UserCodeError)
                     return None
                 else:
-                    seed = Data(seed)
-                    seed.set_initial_dmaker([data_desc.seed.upper(), 'g_'+data_desc.seed, None])
+                    seed = Data(seed_node)
+                    seed.generate_info_from_content(original_data=original_data)
 
             elif data_desc.seed is not None and not isinstance(data_desc.seed, Data):
                 self.set_error(msg='DataProcess object contains an unrecognized seed type!',
@@ -1640,9 +1645,12 @@ class FmkPlumbing(object):
                 return None
             else:
                 seed = data_desc.seed
+                seed.generate_info_from_content(original_data=original_data)
 
             if resolve_dataprocess or data_desc.outcomes is None:
                 data = self.get_data(data_desc.process, data_orig=seed)
+                if data is None and data_desc.auto_regen:
+                    data_desc.auto_regen_cpt += 1
                 if data is None and (data_desc.next_process() or data_desc.auto_regen):
                     data = self.get_data(data_desc.process, data_orig=seed)
                 data_desc.outcomes = data
@@ -1663,13 +1671,15 @@ class FmkPlumbing(object):
                 return None
             else:
                 data = Data(node)
-                data.set_initial_dmaker([data_desc.upper(), 'g_'+data_desc,
-                                         UserInputContainer()])
+                data.generate_info_from_content(original_data=original_data)
         else:
             self.set_error(
                 msg='Data descriptor type is not recognized {!s}!'.format(type(data_desc)),
                 code=Error.UserCodeError)
             return None
+
+        if original_data is not None:
+            data.origin = original_data.origin
 
         return data
 
@@ -1704,9 +1714,9 @@ class FmkPlumbing(object):
                         first_step = True
                         for d_desc in data_desc:
                             data_tmp = self._handle_data_desc(d_desc,
-                                                              resolve_dataprocess=resolve_dataprocess)
+                                                              resolve_dataprocess=resolve_dataprocess,
+                                                              original_data=data)
                             if data_tmp is not None:
-                                data_tmp.origin = data.origin
                                 if first_step:
                                     first_step = False
                                     data_tmp.copy_callback_from(data)
@@ -1732,7 +1742,8 @@ class FmkPlumbing(object):
                             func = self._send_periodic
                         else:
                             periodic_data = self._handle_data_desc(data_desc,
-                                                                   resolve_dataprocess=resolve_dataprocess)
+                                                                   resolve_dataprocess=resolve_dataprocess,
+                                                                   original_data=data)
                             func = self.tg.send_data_sync
 
                         if periodic_data is not None:
@@ -1813,7 +1824,13 @@ class FmkPlumbing(object):
             return True
 
         data_list = self._send_data(data_list, add_preamble=True)
-        if data_list is None or self._sending_error:
+        if data_list is None:
+            # In this case, some data callbacks have triggered to block the emission of
+            # what was in data_list. We go on because this is a normal behavior (especially in the
+            # context of Scenario() execution).
+            return True
+
+        if self._sending_error:
             return False
 
         # All feedback entries that are available for relevant framework users (scenario
@@ -2004,16 +2021,14 @@ class FmkPlumbing(object):
                     else:
                         self.lg.log_orig_data(None)
 
-                    dt.init_read_info()
-
                     for dmaker_type, data_maker_name, user_input in dt_mk_h:
                         num += 1
 
                         if num == 1 and data_id is None:
                             # if data_id is not None then no need to log an initial generator
-                            # because data comes from FMKDB
+                            # because data comes from FMKDB and it has been dealt previously
                             if dmaker_type != gen_type_initial:
-                                self.lg.log_initial_generator(gen_type_initial, gen_name, gen_ui)
+                                self.lg.log_generator_info(gen_type_initial, gen_name, gen_ui, disabled=True)
 
                         self.lg.log_dmaker_step(num)
 
@@ -2039,8 +2054,8 @@ class FmkPlumbing(object):
 
                             self.lg.log_disruptor_info(dmaker_type, data_maker_name, ui)
 
-                        info = dt.read_info(data_maker_name, dmaker_type)
-                        self.lg.log_data_info(info, dmaker_type, data_maker_name)
+                        for info in dt.read_info(dmaker_type, data_maker_name):
+                            self.lg.log_data_info(info, dmaker_type, data_maker_name)
 
                 else:
                     if gen_type_initial is None:
@@ -2050,6 +2065,8 @@ class FmkPlumbing(object):
                                                    None)
                         self.lg.log_data_info(("RAW DATA (data makers not provided)",),
                                               Database.DEFAULT_GTYPE_NAME, Database.DEFAULT_GEN_NAME)
+                    # else:
+                    #     self.lg.log_initial_generator(gen_type_initial, gen_name, gen_ui)
 
                 self.lg.log_data(dt, verbose=verbose)
 
@@ -2306,7 +2323,6 @@ class FmkPlumbing(object):
         data_makers_history = data.get_history()
         if data_makers_history:
             first_pass = True
-            data.init_read_info()
             for dmaker_type, data_maker_name, user_input in data_makers_history:
                 if first_pass:
                     first_pass = False
@@ -2332,9 +2348,10 @@ class FmkPlumbing(object):
                     self.lg.print_console(msg, rgb=Color.SUBINFO)
 
                     self.lg.print_console("|- data info:", rgb=Color.SUBINFO)
-                    data_info = data.read_info(data_maker_name, dmaker_type)
-                    for msg in data_info:
-                        self.lg.print_console('   |_ ' + msg, rgb=Color.SUBINFO)
+
+                    for data_info in data.read_info(dmaker_type, data_maker_name):
+                        for msg in data_info:
+                            self.lg.print_console('   |_ ' + msg, rgb=Color.SUBINFO)
         else:
             init_dmaker = data.get_initial_dmaker()
             if init_dmaker is None:
@@ -2689,7 +2706,15 @@ class FmkPlumbing(object):
 
         if data_orig != None:
             data = copy.copy(data_orig)
-            initial_generator_info = data.get_initial_dmaker()
+            initial_generator_info = data_orig.get_initial_dmaker()
+            # print('\n***')
+            # print(data_orig.get_history(), data_orig.info_list, data_orig.info)
+            data.generate_info_from_content(original_data=data_orig)
+            history = data.get_history()
+            # print(history, data_orig.info_list, data_orig.info)
+            if history:
+                for h_entry in history:
+                    l.append(h_entry)
             first = False
         else:
             # needed because disruptors can take over the data generation
@@ -2985,7 +3010,7 @@ class FmkPlumbing(object):
                     data.add_info(info)
                 shortcut_history = []
 
-            data.bind_info(dmaker_name, dmaker_type)
+            data.bind_info(dmaker_type, dmaker_name)
             l.append((dmaker_type, dmaker_name, user_input))
             first = False
 

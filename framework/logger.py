@@ -28,7 +28,7 @@ import threading
 import itertools
 
 from libs.external_modules import *
-from framework.data_model import Data
+from framework.data import Data
 from framework.global_resources import *
 from framework.database import Database
 from libs.utils import ensure_dir
@@ -520,25 +520,19 @@ class Logger(object):
         msg = "### Step %d:" % num
         self.log_fn(msg, rgb=Color.DMAKERSTEP)
 
-    def log_initial_generator(self, dmaker_type, dmaker_name, dmaker_ui):
-        msgs = []
-        msgs.append("### Initial Generator (currently disabled):")
-        msgs.append(" |- generator type: %s | generator name: %s | User input: %s" % \
-                    (dmaker_type, dmaker_name, dmaker_ui))
-        msgs.append("  ...")
-        for m in msgs:
-            self.log_fn(m, rgb=Color.DISABLED)
-
-    def log_generator_info(self, dmaker_type, name, user_input, data_id=None):
-        msg = '' if data_id is None else " |- retrieved from data id: {:d}\n".format(data_id)
+    def log_generator_info(self, dmaker_type, name, user_input, data_id=None, disabled=False):
+        msg = "### Initial Generator (currently disabled):\n" if disabled else ''
+        msg += '' if data_id is None else " |- retrieved from data id: {:d}\n".format(data_id)
         if user_input:
             msg += " |- generator type: %s | generator name: %s | User input: %s" % \
                   (dmaker_type, name, user_input)
         else:
             msg += " |- generator type: %s | generator name: %s | No user input" % (dmaker_type, name)
-        self._current_dmaker_list.append((dmaker_type, name, user_input))
-        self._current_src_data_id = data_id
-        self.log_fn(msg, rgb=Color.DATAINFO)
+        msg += '\n  ...' if disabled else ''
+        if not disabled:
+            self._current_dmaker_list.append((dmaker_type, name, user_input))
+            self._current_src_data_id = data_id
+        self.log_fn(msg, rgb=Color.DISABLED if disabled else Color.DATAINFO)
 
     def log_disruptor_info(self, dmaker_type, name, user_input):
         if user_input:
