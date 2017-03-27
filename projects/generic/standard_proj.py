@@ -21,11 +21,12 @@
 #
 ################################################################################
 
-from framework.project import *
-from framework.monitor import *
-from framework.operator_helpers import *
+import socket
+
 from framework.plumbing import *
-import framework.global_resources as gr
+from framework.targets.local import LocalTarget
+from framework.targets.network import NetworkTarget
+from framework.targets.printer import PrinterTarget
 
 project = Project()
 project.default_dm = ['mydf','jpg']

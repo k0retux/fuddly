@@ -25,7 +25,7 @@ from framework.tactics_helpers import *
 from framework.scenario import *
 from framework.global_resources import *
 from framework.data_model_builder import MH
-from framework.target import *
+from framework.target_helpers import *
 
 tactics = Tactics()
 

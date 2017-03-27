@@ -57,10 +57,10 @@ framework.generic_data_makers module
     :exclude-members: __dict__, __weakref__
 
 
-framework.target module
------------------------
+framework.target_helpers module
+-------------------------------
 
-.. automodule:: framework.target
+.. automodule:: framework.target_helpers
     :members:
     :undoc-members:
     :show-inheritance:
@@ -68,6 +68,72 @@ framework.target module
     :special-members:
     :exclude-members: __dict__, __weakref__
 
+
+framework.targets module
+------------------------
+
+.. automodule:: framework.targets
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :private-members:
+    :special-members:
+    :exclude-members: __dict__, __weakref__
+
+framework.targets.network module
+--------------------------------
+
+.. automodule:: framework.targets.network
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :private-members:
+    :special-members:
+    :exclude-members: __dict__, __weakref__
+
+framework.targets.local module
+------------------------------
+
+.. automodule:: framework.targets.local
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :private-members:
+    :special-members:
+    :exclude-members: __dict__, __weakref__
+
+framework.targets.sim module
+----------------------------
+
+.. automodule:: framework.targets.sim
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :private-members:
+    :special-members:
+    :exclude-members: __dict__, __weakref__
+
+framework.targets.printer module
+--------------------------------
+
+.. automodule:: framework.targets.printer
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :private-members:
+    :special-members:
+    :exclude-members: __dict__, __weakref__
+
+framework.targets.debug module
+------------------------------
+
+.. automodule:: framework.targets.debug
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :private-members:
+    :special-members:
+    :exclude-members: __dict__, __weakref__
 
 framework.project module
 ------------------------

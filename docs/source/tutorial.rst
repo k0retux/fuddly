@@ -121,7 +121,7 @@ experiment without a real target. But let's say you want to fuzz the
    In order to define new targets, look at :ref:`targets-def`.
 
 .. seealso::   
-   ``Target`` (\ :class:`framework.target.Target`) configuration cannot
+   ``Target`` (\ :class:`framework.target_helpers.Target`) configuration cannot
    be changed dynamically within ``Fuddly Shell``. But you can do it
    through any python interpreter, by directly manipulating the
    related ``Target`` object. Look at :ref:`fuddly-advanced`.
@@ -2014,7 +2014,7 @@ show the beginning of ``generic/standard_proj.py``:
 
    from framework.project import *
    from framework.monitor import *
-   from framework.operator_helper import *
+   from framework.operator_helpers import *
    from framework.plumbing import *
    import framework.global_resources as gr
 
@@ -2066,7 +2066,7 @@ command ``run_project`` in the ``fuddly`` shell or by using the
 method :meth:`framework.plumbing.FmkPlumbing.run_project()` through any
 ``python`` interpreter.
 
-.. note:: An :class:`framework.target.EmptyTarget` is automatically
+.. note:: An :class:`framework.target_helpers.EmptyTarget` is automatically
           added by ``fuddly`` to any project, for dry runs. So it does
           not matter if you don't define a target at the beginning.
 
@@ -2083,9 +2083,9 @@ the project file.
 Within the tutorial project (``projects/tuto_proj.py``), multiple
 targets have been defined:
 
-- three different :class:`framework.target.LocalTarget` for interacting with local programs;
-- a :class:`framework.target.PrinterTarget` to communicate with a CUPS server;
-- and finally a :class:`framework.target.NetworkTarget` that is setup
+- three different :class:`framework.targets.local.LocalTarget` for interacting with local programs;
+- a :class:`framework.targets.printer.PrinterTarget` to communicate with a CUPS server;
+- and finally a :class:`framework.targets.network.NetworkTarget` that is setup
   with two interfaces from which data can be sent to (and feedback
   retrieved from), plus an additional feedback source.
 
@@ -2113,15 +2113,15 @@ In order to play with the routing you can use the specific data ``4TG1`` and
              targets that you can use directly or inherit from.
 
 If you need to implement your own ``Target`` you have at least to
-inherit from :class:`framework.target.Target` and overload the method
-:meth:`framework.target.Target.send_data()` which is called by
+inherit from :class:`framework.target_helpers.Target` and overload the method
+:meth:`framework.target_helpers.Target.send_data()` which is called by
 ``fuddly`` each time data is sent to the target. Additionally,
-implementing :meth:`framework.target.Target.send_multiple_data()`
+implementing :meth:`framework.target_helpers.Target.send_multiple_data()`
 enables to send various data simultaneously to the target. If we take
 the previous ``NetworkTarget`` example, all the registered interfaces can be
 stimulated at once through this method.
 
-.. seealso:: Other methods of :class:`framework.target.Target` are
+.. seealso:: Other methods of :class:`framework.target_helpers.Target` are
              defined to be overloaded. Look at their descriptions to
              learn more about what can be customized.
 
@@ -2345,7 +2345,7 @@ Probes are special objects that have to implement the method
 :meth:`framework.monitor.Probe.main()` which is called either continuously
 (the basic *probe*) or after a specific event in the sending process (the *blocking
 probes*). In order to be started, they have to be first associated to one or more
-:class:`framework.target.Target` of the project. Then, when such a target is started,
+:class:`framework.target_helpers.Target` of the project. Then, when such a target is started,
 ``fuddly`` take care of running the probes.
 
 Probes are executed independently from each other (they run within their own thread). They
@@ -2428,7 +2428,7 @@ handle status as expected. Status rules are described below:
 
     1. logging feedback from the probes as well as the status they return to facilitate further
        investigation;
-    2. trying to recover the target, by calling :meth:`framework.target.Target.recover_target`.
+    2. trying to recover the target, by calling :meth:`framework.target_helpers.Target.recover_target`.
 
 To quickly retrieve the data that negatively impacted a target and which
 have been recorded within the FmkDB (refer to :ref:`logger-def`) you can
@@ -2438,7 +2438,7 @@ status has been recorded, coming either from:
 
 - a probe;
 - an operator (more about that in what follows);
-- or the :class:`framework.target.Target` itself (refer to the error status
+- or the :class:`framework.target_helpers.Target` itself (refer to the error status
   that are transmitted by the generic targets---:ref:`targets`).
 
 

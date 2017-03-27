@@ -1,8 +1,6 @@
 [NEW FEATURES]
 
-- Add support for automatic creation of Generators that play around scenarios
 - Add GDB/PIN/QEMU probes/managers
-- Add support for evolutionary fuzzing
 - Add FmkDB visualization tools
 - Add support for automatic adaptation of fuzz test cases depending on
   specific Target meta-data (HW architecture, programming language, ...)

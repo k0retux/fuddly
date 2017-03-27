@@ -23,14 +23,10 @@
 
 import time
 
-from framework.project import *
-from framework.monitor import *
-from framework.operator_helpers import *
 from framework.plumbing import *
-from framework.target import *
+from framework.target_helpers import *
 from framework.logger import *
 from framework.data_model import *
-from framework.fuzzing_primitives import *
 
 project = Project()
 project.default_dm = 'usb'

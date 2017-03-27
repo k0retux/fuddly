@@ -40,19 +40,22 @@ import signal
 
 from libs.external_modules import *
 
-from framework.database import Database, FeedbackHandler
-from framework.tactics_helpers import *
 from framework.data_model import *
 from framework.data import *
 from framework.data_model_builder import DataModel
-from framework.target import *
+from framework.database import FeedbackHandler
+from framework.error_handling import *
+from framework.evolutionary_helpers import EvolutionaryScenariosFactory
 from framework.logger import *
 from framework.monitor import *
 from framework.operator_helpers import *
 from framework.project import *
-from framework.error_handling import *
 from framework.scenario import *
-from framework.evolutionary_helpers import EvolutionaryScenariosFactory
+from framework.tactics_helpers import *
+from framework.target_helpers import *
+from framework.targets.local import LocalTarget
+from framework.targets.printer import PrinterTarget
+from libs.utils import *
 
 import framework.generic_data_makers
 
@@ -613,9 +616,9 @@ class FmkPlumbing(object):
                     eval('reload(' + prefix + name + ')')
                     eval('reload(' + prefix + name + '_strategy' + ')')
                 else:
-                    exec('import imp')
-                    eval('imp.reload(' + prefix + name + ')')
-                    eval('imp.reload(' + prefix + name + '_strategy' + ')')
+                    exec('import importlib')
+                    eval('importlib.reload(' + prefix + name + ')')
+                    eval('importlib.reload(' + prefix + name + '_strategy' + ')')
             else:
                 exec('import ' + prefix + name)
                 exec('import ' + prefix + name + '_strategy')
@@ -759,8 +762,8 @@ class FmkPlumbing(object):
                 if sys.version_info[0] == 2:
                     eval('reload(' + prefix + name + '_proj' + ')')
                 else:
-                    exec('import imp')
-                    eval('imp.reload(' + prefix + name + '_proj' + ')')
+                    exec('import importlib')
+                    eval('importlib.reload(' + prefix + name + '_proj' + ')')
             else:
                 exec('import ' + prefix + name + '_proj')
         except:
