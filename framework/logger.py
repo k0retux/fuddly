@@ -34,49 +34,6 @@ from framework.database import Database
 from libs.utils import ensure_dir
 import framework.global_resources as gr
 
-import data_models
-
-
-class Stats:
-    def __init__(self, generic_generators):
-        self.reset()
-        self.gen = generic_generators
-
-    def reset(self):
-        self.__stats = {}
-        self.__dt_state = {}
-
-    def inc_stat(self, generator_type, generator_name, user_inputs):
-
-        if generator_type is None:
-            return
-
-        dt_full = generator_type
-
-        if dt_full not in self.__stats:
-            self.__stats[dt_full] = {}
-            self.__stats[dt_full]['total'] = 0
-            self.__stats[dt_full]['bygen'] = {}
-
-        self.__stats[dt_full]['total'] += 1
-
-        if generator_name not in self.__stats[dt_full]['bygen']:
-            self.__stats[dt_full]['bygen'][generator_name] = 0
-
-        self.__stats[dt_full]['bygen'][generator_name] += 1
-
-    def get_formated_stats(self):
-        stats = ""
-        for generator_type, val in self.__stats.items():
-            stats += "Generator Type '%s'\n" % generator_type
-            stats += "  |_ total number of generated data: %d\n" % val['total']
-            for gen, nb in val['bygen'].items():
-                stats += "  |_ number of generated data by '%s': %d\n" % (gen, nb)
-            stats += '\n'
-
-        return stats
-
-
 class Logger(object):
     '''
     The Logger is used for keeping the history of the communication
@@ -204,8 +161,6 @@ class Logger(object):
 
         if self._fd:
             self._fd.close()
-
-        self.log_stats()
 
         self._reset_current_state()
         self.last_data_id = None
@@ -689,16 +644,6 @@ class Logger(object):
         msg = "\n/!\\ ERROR: %s /!\\\n" % err_msg
         self.log_fn(msg, rgb=Color.ERROR)
         self.fmkDB.insert_fmk_info(self.last_data_id, msg, now, error=True)
-
-    def set_stats(self, stats):
-        self.stats = stats
-
-    def log_stats(self):
-        if self._enable_file_logging:
-            fd = open(logs_folder + self.now + '_' + self.name + '_stats', 'w+')
-            stats = self.stats.get_formated_stats()
-            fd.write(stats + '\n')
-            fd.close()
 
     def print_console(self, msg, nl_before=True, nl_after=False, rgb=None, style=None,
                       raw_limit=None, limit_output=True):

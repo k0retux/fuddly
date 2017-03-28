@@ -49,6 +49,16 @@ class Tactics(object):
         self.generators = {}
         self.disruptor_clones = {}
         self.generator_clones = {}
+        self._fmkops = None
+
+    def set_exportable_fmk_ops(self, fmkops):
+        self._fmkops = fmkops
+        for dtype in self.generator_types:
+            for name, attrs in self.get_generators_list(dtype).items():
+                attrs['obj'].set_exportable_fmk_ops(fmkops)
+        for dtype in self.disruptor_types:
+            for name, attrs in self.get_disruptors_list(dtype).items():
+                attrs['obj'].set_exportable_fmk_ops(fmkops)
 
     def register_scenarios(self, *scenarios):
         for sc in scenarios:
@@ -91,11 +101,14 @@ class Tactics(object):
     def register_new_disruptor(self, name, obj, weight, dmaker_type, valid=False):
         self.__register_new_data_maker(self.disruptors, name, obj,
                                     weight, dmaker_type, valid)
+        if self._fmkops:
+            obj.set_exportable_fmk_ops(self._fmkops)
 
     def register_new_generator(self, name, obj, weight, dmaker_type, valid=False):
         self.__register_new_data_maker(self.generators, name, obj,
                                     weight, dmaker_type, valid)
-
+        if self._fmkops:
+            obj.set_exportable_fmk_ops(self._fmkops)
 
     def __clone_dmaker(self, dmaker, dmaker_clones, dmaker_type, new_dmaker_type, dmaker_name=None, register_func=None):
         if dmaker_type not in dmaker:
@@ -159,12 +172,13 @@ class Tactics(object):
         self.__clear_dmaker_clones(self.disruptors, self.disruptor_clones)
         self.disruptor_clones = {}
 
-    def get_disruptors(self):
-        return self.disruptors
+    @property
+    def generator_types(self):
+        return self.generators.keys()
 
-    def get_generators(self):
-        return self.generators
-
+    @property
+    def disruptor_types(self):
+        return self.disruptors.keys()
 
     def get_disruptors_list(self, dmaker_type):
         try:
@@ -524,6 +538,10 @@ class Generator(object):
             DataMakerAttr.HandOver: False,
             DataMakerAttr.SetupRequired: True
             }
+        self._fmkops = None
+
+    def set_exportable_fmk_ops(self, fmkops):
+        self._fmkops = fmkops
 
     def set_attr(self, name):
         if name not in self.__attrs:
@@ -564,13 +582,13 @@ class Generator(object):
         # sys.stdout.write("\n__ cleanup generator '%s' __" % self.__class__.__name__)
         self.set_attr(DataMakerAttr.Active)
         self.set_attr(DataMakerAttr.SetupRequired)
-        self.cleanup()
+        self.cleanup(self._fmkops)
 
 
     def need_reset(self):
         # sys.stdout.write("\n__ generator need reset '%s' __" % self.__class__.__name__)
         self.set_attr(DataMakerAttr.SetupRequired)
-        self.cleanup()
+        self.cleanup(self._fmkops)
 
     def setup(self, dm, user_input):
         '''
@@ -579,7 +597,7 @@ class Generator(object):
         '''
         return True
 
-    def cleanup(self):
+    def cleanup(self, fmkops):
         '''
         --> Specific code
         '''
@@ -637,17 +655,31 @@ class dyn_generator_from_scenario(type):
 
 class DynGeneratorFromScenario(Generator):
     scenario = None
-    _gen_args_desc = {
-        'graph': ('Display the scenario and highlight the current step each time the generator '
-                  'is called', False, bool),
-        'graph_format': ('Format to be used for displaying the scenario (e.g., xdot, pdf, png)',
-                         'xdot', str),
-        'stutter': ('Generate scenarios that stutter, meaning that data-sending steps would be '
-                    'triggered many times.', False, bool),
-        'stutter_max': ('How many times a step may stutter?', 2, int),
-        'data_fuzz': ('Create new scenarios to fuzz steps that generate data. One scenario is '
-                      'created for each such step.', False, bool)
-    }
+    _gen_args_desc = collections.OrderedDict([
+        ('graph', ('Display the scenario and highlight the current step each time the generator '
+                  'is called.', False, bool)),
+        ('graph_format', ('Format to be used for displaying the scenario (e.g., xdot, pdf, png).',
+                         'xdot', str)),
+        ('stutter', ('Generate scenarios that stutter, meaning that data-sending steps would be '
+                    'triggered many times.', False, bool)),
+        ('stutter_max', ('How many times a step may stutter?', 2, int)),
+        ('data_fuzz', ('Create new scenarios to fuzz steps that generate data. One scenario is '
+                      'created for each such step.', False, bool)),
+        ('cond_fuzz', ('Create new scenarios for each step of the original scenario where transition '
+                      'conditions are inverted and any timeout conditions removed (i.e., set to 0 second). '
+                      'One scenario is created for each such step. [compatible with ignore_timing]',
+                      False, bool)),
+        ('ignore_timing', ('Create new scenarios for each step of the original scenario where '
+                          'any timeout conditions are removed (i.e., set to 0 second). '
+                          'One scenario is created for each such step. [compatible with cond_fuzz]',
+                          False, bool)),
+        ('reset', ("If set, scenarios created by 'data_fuzz', 'cond_fuzz', or 'ignore_timing' "
+                   "will reinitialize the scenario after each corruption case, without waiting for "
+                   "the normal continuation of the scenario.", True, bool)),
+        ('init', ("Used in combination with 'data_fuzz', 'cond_fuzz', or 'ignore_timing'. Make "
+                  "the generator begin with the Nth corrupted scenario (where N is provided "
+                  "through this parameter).", 0, int))
+        ])
     _args_desc = {}
 
     @property
@@ -663,8 +695,10 @@ class DynGeneratorFromScenario(Generator):
     def graph_scenario(self, fmt, select_current=False):
         self.scenario.graph(fmt=fmt, select_current=select_current)
 
-    def cleanup(self):
+    def cleanup(self, fmkops):
         self._cleanup_walking_attrs()
+        for periodic_id in self.scenario.periodic_to_clear:
+            fmkops.unregister_task(periodic_id, ign_error=True)
 
     def _cleanup_walking_attrs(self):
         self.tr_selected = None
@@ -676,6 +710,15 @@ class DynGeneratorFromScenario(Generator):
             return False
         self.__class__.scenario.set_data_model(dm)
         self.scenario = copy.copy(self.__class__.scenario)
+
+        assert (self.data_fuzz and not (self.cond_fuzz or self.ignore_timing)) or not self.data_fuzz
+
+        # internal attributes used for scenario alteration
+        self._alteration_just_performed = False
+        self._current_fuzzed_step = None
+        self._ign_final = False
+
+        # internal attributes for data_fuzz
         self._data_fuzz_change_step = False
 
         if self.stutter:
@@ -685,11 +728,17 @@ class DynGeneratorFromScenario(Generator):
             for step in self._scenario_steps:
                 step.connect_to(step, prepend=True, cbk_after_sending=self._stutter_cbk)
 
-        if self.data_fuzz:
-            self._step_num = 0
-            if not self._alter_data_step():
-                self.scenario.set_anchor(sc.FinalStep())
-                self.scenario.reset()
+        elif self.data_fuzz:
+            self._step_num = self.init
+            self._ign_final = self._alter_data_step()
+            if not self._ign_final:
+                self.scenario.current_step.final = True
+
+        elif self.cond_fuzz or self.ignore_timing:
+            self._step_num = self.init
+            self._ign_final = self._alter_transition_conditions()
+            if not self._ign_final:
+                self.scenario.current_step.final = True
 
         return True
 
@@ -702,6 +751,7 @@ class DynGeneratorFromScenario(Generator):
             return True
 
     def _alter_data_step(self):
+        self._alteration_just_performed = True
         self._scenario_steps = filter(lambda x: not x.is_blocked(), self.scenario.steps)
         self._scenario_steps = list(filter(lambda x: not x.final, self._scenario_steps))
         if self._step_num >= len(self._scenario_steps):
@@ -728,17 +778,15 @@ class DynGeneratorFromScenario(Generator):
                                 auto_regen=True)
             data_desc[0] = dp
             step.data_desc = data_desc
-        if self.scenario.has_reinit_sequence():
-            reinit_step = self.scenario._reinit_anchor
-        else:
-            reinit_step = self.scenario._anchor
-        step.connect_to(reinit_step, prepend=True)
+        if self.reset:
+            self.scenario.branch_to_reinit(step)
         self._prev_func = step._do_before_sending
-        step._do_before_sending = self._check_fuzz_completion_cbk
+        step._do_before_sending = self._check_data_fuzz_completion_cbk
+        self._current_fuzzed_step = step
 
         return True
 
-    def _check_fuzz_completion_cbk(self, env, step):
+    def _check_data_fuzz_completion_cbk(self, env, step):
         # print('\n+++ check fuzz completion')
         if self._prev_func is not None:
             self._prev_func(env, step)
@@ -748,36 +796,97 @@ class DynGeneratorFromScenario(Generator):
             data_desc.auto_regen_cpt = 0
             self._data_fuzz_change_step = True
             step.make_blocked()
+            step._do_before_sending = self._prev_func
+
+    def _alter_transition_conditions(self):
+        self._alteration_just_performed = True
+        self._scenario_steps = []
+        for step in self.scenario.steps:
+            if self.ignore_timing and step.feedback_timeout is not None:
+                self._scenario_steps.append(step)
+                continue
+            if self.cond_fuzz:
+                tr = next(step.transitions, None)
+                if tr is not None and tr.has_callback():
+                    self._scenario_steps.append(step)
+
+        if self._step_num >= len(self._scenario_steps):
+            return False
+
+        self._current_fuzzed_step = self._scenario_steps[self._step_num]
+        for tr in self._current_fuzzed_step.transitions:
+            if self.reset \
+                    and tr.step is not self._current_fuzzed_step \
+                    and tr.step is not self.scenario.anchor:
+                self.scenario.branch_to_reinit(tr.step, prepend=True)
+            if self.cond_fuzz:
+                tr.invert_conditions()
+            if tr.step.final:
+                tr.make_uncrossable()
+
+        if self.reset and self._current_fuzzed_step is not self.scenario.anchor:
+            self.scenario.branch_to_reinit(self._current_fuzzed_step, prepend=False)
+        if self.ignore_timing and self._current_fuzzed_step.feedback_timeout is not None:
+            self._current_fuzzed_step.feedback_timeout = 0
+
+        return True
 
     def generate_data(self, dm, monitor, target):
         self._cleanup_walking_attrs()
 
-        if self.data_fuzz and self._data_fuzz_change_step:
-            self._data_fuzz_change_step = False
-            self.scenario = copy.copy(self.__class__.scenario)
-            self._step_num += 1
-            if not self._alter_data_step():
-                self.scenario.current_step.final = True
+        if self.data_fuzz:
+            if not self._alteration_just_performed:
+                if self.scenario.current_step is self.scenario.anchor \
+                        and self._data_fuzz_change_step:
+                    self._data_fuzz_change_step = False
+                    self.scenario = copy.copy(self.__class__.scenario)
+                    self._step_num += 1
+                    self._ign_final = self._alter_data_step()
+                    if not self._ign_final:
+                        self.scenario.current_step.final = True
+                elif self._data_fuzz_change_step:
+                    self.scenario.walk_to_reinit() # because _callback_dispatcher_after_fbk() won't be called
+            else:
+                self._alteration_just_performed = False
+
+        elif self.cond_fuzz or self.ignore_timing:
+            if not self._alteration_just_performed:
+                if self.scenario.current_step is self.scenario.anchor:
+                    self.scenario = copy.copy(self.__class__.scenario)
+                    self._step_num += 1
+                    self._ign_final = self._alter_transition_conditions()
+                    if not self._ign_final:
+                        self.scenario.current_step.final = True
+            else:
+                self._alteration_just_performed = False
 
         self.scenario.set_target(target)
         self.step = self.scenario.current_step
 
+        self.step.do_before_data_processing()
+
         if self.graph:
             self.graph_scenario(self.graph_format, select_current=True)
 
-        self.step.do_before_data_processing()
-
         if self.step.final:
-            self.need_reset()
-            data = Data()
-            data.register_callback(self._callback_cleanup_periodic, hook=HOOK.after_dmaker_production)
-            data.make_unusable()
-            data.origin = self.scenario
-            return data
+            if self._ign_final:
+                self.scenario.walk_to_reinit()
+                self.step = self.scenario.current_step
+            else:
+                self.need_reset()
+                data = Data()
+                data.register_callback(self._callback_cleanup_periodic, hook=HOOK.after_dmaker_production)
+                data.make_unusable()
+                data.origin = self.scenario
+                return data
 
         data = self.step.get_data()
         data.origin = self.scenario
         data.cleanup_all_callbacks()
+
+        if self.cond_fuzz or self.ignore_timing or self.data_fuzz:
+            data.add_info("Current fuzzed step: '{:s}'"
+                          .format(str(self._current_fuzzed_step).replace('\n', ' ')))
 
         data.register_callback(self._callback_dispatcher_before_sending_step1, hook=HOOK.before_sending_step1)
         data.register_callback(self._callback_dispatcher_before_sending_step2, hook=HOOK.before_sending_step2)
@@ -804,7 +913,7 @@ class DynGeneratorFromScenario(Generator):
         if self.tr_selected is None:
             for idx, tr in enumerate(self.step.transitions):
                 if self.tr_selected is None:
-                    if not tr.has_callback():
+                    if not tr.has_callback() and tr.is_crossable():
                         self.tr_selected = tr
                         self.tr_selected_idx = idx
                         break
@@ -873,6 +982,10 @@ class Disruptor(object):
             DataMakerAttr.HandOver: False,
             DataMakerAttr.SetupRequired: True
             }
+        self._fmkops = None
+
+    def set_exportable_fmk_ops(self, fmkops):
+        self._fmkops = fmkops
 
     def disrupt_data(self, dm, target, prev_data):
         raise NotImplementedError
@@ -884,7 +997,7 @@ class Disruptor(object):
         '''
         return True
 
-    def cleanup(self):
+    def cleanup(self, fmkops):
         '''
         --> Specific code
         '''
@@ -929,7 +1042,7 @@ class Disruptor(object):
         # sys.stdout.write("\n__ cleanup disruptor '%s' __" % self.__class__.__name__)
         self.set_attr(DataMakerAttr.SetupRequired)
         self.set_attr(DataMakerAttr.Active)
-        self.cleanup()
+        self.cleanup(self._fmkops)
 
 
 
@@ -943,6 +1056,10 @@ class StatefulDisruptor(object):
             DataMakerAttr.SetupRequired: True,
             DataMakerAttr.NeedSeed: True
             }
+        self._fmkops = None
+
+    def set_exportable_fmk_ops(self, fmkops):
+        self._fmkops = fmkops
 
     def set_seed(self, prev_data):
         raise NotImplementedError
@@ -959,7 +1076,7 @@ class StatefulDisruptor(object):
         self.set_attr(DataMakerAttr.HandOver)
         self.set_attr(DataMakerAttr.SetupRequired)
         self.set_attr(DataMakerAttr.NeedSeed)
-        self.cleanup()
+        self.cleanup(self._fmkops)
 
     def setup(self, dm, user_input):
         '''
@@ -968,7 +1085,7 @@ class StatefulDisruptor(object):
         '''
         return True
 
-    def cleanup(self):
+    def cleanup(self, fmkops):
         '''
         --> Specific code
         '''
@@ -1012,7 +1129,7 @@ class StatefulDisruptor(object):
         self.set_attr(DataMakerAttr.SetupRequired)
         self.set_attr(DataMakerAttr.NeedSeed)
         self.set_attr(DataMakerAttr.Active)
-        self.cleanup()
+        self.cleanup(self._fmkops)
 
     def _set_seed(self, prev_data):
         if self.is_attr_set(DataMakerAttr.NeedSeed):

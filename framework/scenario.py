@@ -92,6 +92,10 @@ class DataProcess(object):
     def process(self, value):
         self._process[self._process_idx] = value
 
+    @property
+    def process_qty(self):
+        return len(self._process)
+
     def make_blocked(self):
         self._blocked = True
         if self.outcomes is not None:
@@ -457,6 +461,9 @@ class Step(object):
             else:
                 step_desc = step_desc + '|{{{:s}|{:s}}}'.format(cbk_before_dataproc_str, cbk_before_sending_str)
 
+        if self.feedback_timeout is not None:
+            step_desc = '{:s}\\n{!s}s|'.format('wait', self.feedback_timeout) + step_desc
+
         return step_desc
 
     def __hash__(self):
@@ -507,6 +514,9 @@ class Transition(object):
             self._callbacks[HOOK.after_fbk] = cbk_after_fbk
         self._callbacks_qty = self._callbacks_pending = len(self._callbacks)
 
+        self._invert_conditions = False
+        self._crossable = True
+
     @property
     def step(self):
         return self._step
@@ -543,13 +553,25 @@ class Transition(object):
 
         self._callbacks_pending -= 1
 
-        return go_on
+        if not self._crossable:
+            return False
+
+        return not go_on if self._invert_conditions else go_on
 
     def has_callback(self):
         return bool(self._callbacks)
 
     def has_callback_pending(self):
         return self._callbacks_pending > 0
+
+    def invert_conditions(self):
+        self._invert_conditions = not self._invert_conditions
+
+    def make_uncrossable(self):
+        self._crossable = False
+
+    def is_crossable(self):
+        return self._crossable
 
     def __str__(self):
         desc = ''
@@ -700,9 +722,6 @@ class Scenario(object):
             self._init_main_properties()
         return copy.copy(self._transitions)
 
-    def has_reinit_sequence(self):
-        return self._reinit_anchor is not None
-
     @property
     def reinit_steps(self):
         if self._reinit_steps is None:
@@ -719,14 +738,27 @@ class Scenario(object):
         step.cleanup()
         self._current = step
 
-    def branch_to_reinit(self):
-        assert self._reinit_anchor is not None
-        self._reinit_anchor.cleanup()
-        self._current = self._reinit_anchor
+    def branch_to_reinit(self, step, prepend=True):
+        if self._reinit_anchor is None:
+            step.connect_to(self._anchor, prepend=prepend)
+        else:
+            step.connect_to(self._reinit_anchor, prepend=prepend)
+
+    def walk_to_reinit(self):
+        if self._reinit_anchor is None:
+            self._anchor.cleanup()
+            self._current = self._anchor
+        else:
+            self._reinit_anchor.cleanup()
+            self._current = self._reinit_anchor
 
     @property
     def current_step(self):
         return self._current
+
+    @property
+    def anchor(self):
+        return self._anchor
 
     @property
     def periodic_to_clear(self):

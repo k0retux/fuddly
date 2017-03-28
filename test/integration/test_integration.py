@@ -3363,7 +3363,7 @@ class TestFMK(unittest.TestCase):
         dmaker_type = 'TESTNODE'
         # fmk.cleanup_dmaker(dmaker_type=dmaker_type, reset_existing_seed=True)
 
-        gen_disruptors = fmk._generic_tactics.get_disruptors().keys()
+        gen_disruptors = fmk._generic_tactics.disruptor_types
         print('\n-=[ GENERIC DISRUPTORS ]=-\n')
         print(gen_disruptors)
 

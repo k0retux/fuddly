@@ -45,7 +45,7 @@ tactics = Tactics()
 
 @generator(tactics, gtype='POPULATION', weight=1,
            gen_args=GENERIC_ARGS,
-           args={'population': ('the population to iterate over', None, Population)})
+           args={'population': ('The population to iterate over.', None, Population)})
 class g_population(Generator):
     """ Walk through the given population """
     def setup(self, dm, user_input):
@@ -94,13 +94,13 @@ def truncate_info(info, max_size=60):
 
 @disruptor(tactics, dtype="tWALK", weight=1,
            gen_args = GENERIC_ARGS,
-           args={'path': ('graph path regexp to select nodes on which' \
-                          ' the disruptor should apply', None, str),
-                 'order': ('when set to True, the walking order is strictly guided ' \
+           args={'path': ('Graph path regexp to select nodes on which' \
+                          ' the disruptor should apply.', None, str),
+                 'order': ('When set to True, the walking order is strictly guided ' \
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
-                           'in the data model) is used for ordering', True, bool),
-                 'nt_only': ('walk through non-terminal nodes only', False, bool),
-                 'fix_all': ('for each produced data, reevaluate the constraints on the whole graph',
+                           'in the data model) is used for ordering.', True, bool),
+                 'nt_only': ('Walk through non-terminal nodes only.', False, bool),
+                 'fix_all': ('For each produced data, reevaluate the constraints on the whole graph.',
                              True, bool)})
 class sd_iter_over_data(StatefulDisruptor):
     '''
@@ -156,20 +156,20 @@ class sd_iter_over_data(StatefulDisruptor):
 
 @disruptor(tactics, dtype="tTYPE", weight=1,
            gen_args = GENERIC_ARGS,
-           args={'path': ('graph path regexp to select nodes on which' \
-                          ' the disruptor should apply', None, str),
-                 'order': ('when set to True, the fuzzing order is strictly guided ' \
+           args={'path': ('Graph path regexp to select nodes on which' \
+                          ' the disruptor should apply.', None, str),
+                 'order': ('When set to True, the fuzzing order is strictly guided ' \
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
-                           'in the data model) is used for ordering', True, bool),
-                 'deep': ('when set to True, if a node structure has changed, the modelwalker ' \
-                          'will reset its walk through the children nodes', True, bool),
-                 'ign_sep': ('when set to True, non-terminal separators will be ignored ' \
+                           'in the data model) is used for ordering.', True, bool),
+                 'deep': ('When set to True, if a node structure has changed, the modelwalker ' \
+                          'will reset its walk through the children nodes.', True, bool),
+                 'ign_sep': ('When set to True, non-terminal separators will be ignored ' \
                           'if any are defined.', False, bool),
-                 'fix_all': ('for each produced data, reevaluate the constraints on the whole graph',
+                 'fix_all': ('For each produced data, reevaluate the constraints on the whole graph.',
                              False, bool),
-                 'fix': ("limit constraints fixing to the nodes related to the currently fuzzed one"
-                         " (only implemented for 'sync_size_with' and 'sync_enc_size_with')", True, bool),
-                 'fuzz_mag': ('order of magnitude for maximum size of some fuzzing test cases.',
+                 'fix': ("Limit constraints fixing to the nodes related to the currently fuzzed one"
+                         " (only implemented for 'sync_size_with' and 'sync_enc_size_with').", True, bool),
+                 'fuzz_mag': ('Order of magnitude for maximum size of some fuzzing test cases.',
                               1.0, float)})
 class sd_fuzz_typed_nodes(StatefulDisruptor):
     '''
@@ -247,8 +247,8 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
 
 @disruptor(tactics, dtype="tALT", weight=1,
            gen_args = GENERIC_ARGS,
-           args={'conf': ("change the configuration, with the one provided (by name), of " \
-                          "all subnodes fetched by @path, one-by-one. [default value is set " \
+           args={'conf': ("Change the configuration, with the one provided (by name), of " \
+                          "all nodes reachable from the root, one-by-one. [default value is set " \
                           "dynamically with the first-found existing alternate configuration]",
                           None, (str,list,tuple))})
 class sd_switch_to_alternate_conf(StatefulDisruptor):
@@ -337,13 +337,13 @@ class sd_switch_to_alternate_conf(StatefulDisruptor):
 
 @disruptor(tactics, dtype="tSEP", weight=1,
            gen_args = GENERIC_ARGS,
-           args={'path': ('graph path regexp to select nodes on which' \
-                          ' the disruptor should apply', None, str),
-                 'order': ('when set to True, the fuzzing order is strictly guided ' \
+           args={'path': ('Graph path regexp to select nodes on which' \
+                          ' the disruptor should apply.', None, str),
+                 'order': ('When set to True, the fuzzing order is strictly guided ' \
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
-                           'in the data model) is used for ordering', True, bool),
-                 'deep': ('when set to True, if a node structure has changed, the modelwalker ' \
-                          'will reset its walk through the children nodes', True, bool)})
+                           'in the data model) is used for ordering.', True, bool),
+                 'deep': ('When set to True, if a node structure has changed, the modelwalker ' \
+                          'will reset its walk through the children nodes.', True, bool)})
 class sd_fuzz_separator_nodes(StatefulDisruptor):
     '''
     Perform alterations on separators (one at a time). Each time a
@@ -419,11 +419,11 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
 
 
 @disruptor(tactics, dtype="tSTRUCT", weight=1,
-           gen_args={'init': ('make the model walker ignore all the steps until the provided one', 1, int),
-                     'max_steps': ('maximum number of steps (-1 means until the end)', -1, int) },
-           args={'path': ('graph path regexp to select nodes on which' \
-                          ' the disruptor should apply', None, str),
-                 'deep': ('if True, enable corruption of minimum and maxium amount of non-terminal nodes',
+           gen_args={'init': ('Make the model walker ignore all the steps until the provided one.', 1, int),
+                     'max_steps': ('Maximum number of steps (-1 means until the end).', -1, int) },
+           args={'path': ('Graph path regexp to select nodes on which' \
+                          ' the disruptor should apply.', None, str),
+                 'deep': ('If True, enable corruption of minimum and maxium amount of non-terminal nodes.',
                           False, bool) })
 class sd_struct_constraints(StatefulDisruptor):
     '''
@@ -636,8 +636,8 @@ class SwapperDisruptor(StatefulDisruptor):
 
 @disruptor(tactics, dtype="tCROSS", weight=1,
            gen_args=GENERIC_ARGS,
-           args={'node': ('node to crossover with', None, Node),
-                 'percentage_to_share': ('percentage of the base node to share', 0.50, float)})
+           args={'node': ('Node to crossover with.', None, Node),
+                 'percentage_to_share': ('Percentage of the base node to share.', 0.50, float)})
 class sd_crossover(SwapperDisruptor):
     """
     Makes two graphs share a certain percentages of their leaf nodes in order to produce two children
@@ -737,7 +737,7 @@ class sd_crossover(SwapperDisruptor):
 
 @disruptor(tactics, dtype="tCOMB", weight=1,
            gen_args=GENERIC_ARGS,
-           args={'node': ('node to combine with', None, Node)})
+           args={'node': ('Node to combine with.', None, Node)})
 class sd_combine(SwapperDisruptor):
     """
     Merge two nodes by swapping some roots' children
@@ -788,12 +788,12 @@ class sd_combine(SwapperDisruptor):
 
 
 @disruptor(tactics, dtype="EXT", weight=1,
-           args={'cmd': ('the command', None, (list,tuple,str)),
-                 'file_mode': ('if True the data will be provided through ' \
+           args={'cmd': ('The external command the execute.', None, (list,tuple,str)),
+                 'file_mode': ('If True the data will be provided through ' \
                                'a file to the external program, otherwise it ' \
-                               'will be provided on the command line directly', True, bool),
-                 'path': ('graph path regexp to select nodes on which ' \
-                          'the disruptor should apply', None, str)})
+                               'will be provided on the command line directly.', True, bool),
+                 'path': ('Graph path regexp to select nodes on which ' \
+                          'the disruptor should apply.', None, str)})
 class d_call_external_program(Disruptor):
     '''
     Call an external program to deal with the data.
@@ -871,8 +871,8 @@ class d_call_external_program(Disruptor):
 
 
 @disruptor(tactics, dtype="STRUCT", weight=1,
-           args={'path': ('graph path regexp to select nodes on which ' \
-                          'the disruptor should apply', None, str)})
+           args={'path': ('Graph path regexp to select nodes on which ' \
+                          'the disruptor should apply.', None, str)})
 class d_fuzz_model_structure(Disruptor):
     '''
     Disrupt the data model structure (replace ordered sections by
@@ -891,13 +891,13 @@ class d_fuzz_model_structure(Disruptor):
 
 
 @disruptor(tactics, dtype="ALT", weight=1,
-           args={'conf': ("change the configuration, with the one provided (by name), of " \
+           args={'conf': ("Change the configuration, with the one provided (by name), of " \
                           "all subnodes fetched by @path, one-by-one. [default value is set " \
                           "dynamically with the first-found existing alternate configuration]",
                           None, str),
-                 'path': ('graph path regexp to select nodes on which ' \
-                          'the disruptor should apply', None, str),
-                 'recursive': ('does the reachable nodes from the selected ' \
+                 'path': ('Graph path regexp to select nodes on which ' \
+                          'the disruptor should apply.', None, str),
+                 'recursive': ('Does the reachable nodes from the selected ' \
                                'ones need also to be changed?', True, bool)})
 class d_switch_to_alternate_conf(Disruptor):
     '''
@@ -957,9 +957,9 @@ class d_switch_to_alternate_conf(Disruptor):
 
 
 @disruptor(tactics, dtype="SIZE", weight=4,
-           args={'sz': ("truncate the data (or part of the data) to the provided size", 10, int),
-                 'path': ('graph path regexp to select nodes on which ' \
-                          'the disruptor should apply', None, str)})
+           args={'sz': ("Truncate the data (or part of the data) to the provided size.", 10, int),
+                 'path': ('Graph path regexp to select nodes on which ' \
+                          'the disruptor should apply.', None, str)})
 class d_max_size(Disruptor):
     '''
     Truncate the data (or part of the data) to the provided size.
@@ -1018,11 +1018,11 @@ class d_max_size(Disruptor):
 
 
 @disruptor(tactics, dtype="C", weight=4,
-           args={'nb': ('apply corruption on @nb Nodes fetched randomly within the data model', 2, int),
-                 'path': ('graph path regexp to select nodes on which ' \
-                          'the disruptor should apply', None, str),
-                 'new_val': ('if provided change the selected byte with the new one', None, str),
-                 'ascii': ('enforce all outputs to be ascii 7bits', False, bool)})
+           args={'nb': ('Apply corruption on @nb Nodes fetched randomly within the data model.', 2, int),
+                 'path': ('Graph path regexp to select nodes on which ' \
+                          'the disruptor should apply.', None, str),
+                 'new_val': ('If provided change the selected byte with the new one.', None, str),
+                 'ascii': ('Enforce all outputs to be ascii 7bits.', False, bool)})
 class d_corrupt_node_bits(Disruptor):
     '''
     Corrupt bits on some nodes of the data model.
@@ -1080,9 +1080,9 @@ class d_corrupt_node_bits(Disruptor):
 
 
 @disruptor(tactics, dtype="Cp", weight=4,
-           args={'idx': ('byte index to be corrupted (from 1 to data length)', 1, int),
-                 'new_val': ('if provided change the selected byte with the new one', None, str),
-                 'ascii': ('enforce all outputs to be ascii 7bits', False, bool)})
+           args={'idx': ('Byte index to be corrupted (from 1 to data length).', 1, int),
+                 'new_val': ('If provided change the selected byte with the new one.', None, str),
+                 'ascii': ('Enforce all outputs to be ascii 7bits.', False, bool)})
 class d_corrupt_bits_by_position(Disruptor):
     '''
     Corrupt bit at a specific byte.
@@ -1109,11 +1109,11 @@ class d_corrupt_bits_by_position(Disruptor):
 
 
 @disruptor(tactics, dtype="FIX", weight=4,
-           args={'path': ('graph path regexp to select nodes on which ' \
-                          'the disruptor should apply', None, str),
-                 'clone_node': ('if True the dmaker will always return a copy ' \
-                                'of the node. (for stateless diruptors dealing with ' \
-                                'big data it can be usefull to it to False)', False, bool)})
+           args={'path': ('Graph path regexp to select nodes on which ' \
+                          'the disruptor should apply.', None, str),
+                 'clone_node': ('If True the dmaker will always return a copy ' \
+                                'of the node. (For stateless diruptors dealing with ' \
+                                'big data it can be usefull to it to False.)', False, bool)})
 class d_fix_constraints(Disruptor):
     '''
     Fix data constraints.
@@ -1159,12 +1159,12 @@ class d_fix_constraints(Disruptor):
 
 
 @disruptor(tactics, dtype="NEXT", weight=4,
-           args={'path': ('graph path regexp to select nodes on which ' \
-                          'the disruptor should apply', None, str),
-                 'recursive': ('apply the disruptor recursively', True, str),
-                 'clone_node': ('if True the dmaker will always return a copy ' \
+           args={'path': ('Graph path regexp to select nodes on which ' \
+                          'the disruptor should apply.', None, str),
+                 'recursive': ('Apply the disruptor recursively.', True, str),
+                 'clone_node': ('If True the dmaker will always return a copy ' \
                                 'of the node. (for stateless diruptors dealing with ' \
-                                'big data it can be usefull to it to False)', False, bool)})
+                                'big data it can be usefull to it to False).', False, bool)})
 class d_next_node_content(Disruptor):
     '''
     Move to the next content of the nodes from input data or from only
@@ -1208,13 +1208,13 @@ class d_next_node_content(Disruptor):
 
 
 @disruptor(tactics, dtype="MOD", weight=4,
-           args={'path': ('graph path regexp to select nodes on which ' \
-                          'the disruptor should apply', None, str),
-                 'value': ('the new value to inject within the data', '', str),
-                 'constraints': ('constraints for the absorption of the new value', AbsNoCsts(), AbsCsts),
-                 'clone_node': ('if True the dmaker will always return a copy ' \
-                                'of the node. (for stateless diruptors dealing with ' \
-                                'big data it can be usefull to it to False)', False, bool)})
+           args={'path': ('Graph path regexp to select nodes on which ' \
+                          'the disruptor should apply.', None, str),
+                 'value': ('The new value to inject within the data.', '', str),
+                 'constraints': ('Constraints for the absorption of the new value.', AbsNoCsts(), AbsCsts),
+                 'clone_node': ('If True the dmaker will always return a copy ' \
+                                'of the node. (For stateless diruptors dealing with ' \
+                                'big data it can be usefull to it to False.)', False, bool)})
 class d_modify_nodes(Disruptor):
     '''
     Change the content of the nodes specified by the regexp path with
