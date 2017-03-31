@@ -4197,12 +4197,16 @@ class FmkShell(cmd.Cmd):
                 if not cont:
                     break
 
-            return
+            return True
 
         def do_loop_cosmetics():
-            # type () -> None
+            # type () -> bool
 
             """ do_send_loop cosmetics, buffer stdout before sending payloads.
+
+            Returns:
+                The loop exited early by returning False if the return value is
+                False here, hence do_send_loop shall returns False in this case.
             """
 
             # add an attribute to check import's health
@@ -4454,13 +4458,18 @@ class FmkShell(cmd.Cmd):
                     if not cont:
                         break
                 buffer_output(force=True)
+            return True
 
         # TODO: make cosmetics optional
         cosmetics = True
         if not cosmetics:
-            do_loop()
+            ret = do_loop()
         else:
-            do_loop_cosmetics()
+            ret = do_loop_cosmetics()
+
+        # handle do_loop{_cosmetics,} return value
+        if not ret:
+            return False
 
         self.__error = False
         return False
