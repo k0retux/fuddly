@@ -57,7 +57,7 @@ class example_02(Generator):
 
     def generate_data(self, dm, monitor, target):
         exported_node = Node(self.tux.name, base_node=self.tux)
-        dm.set_new_env(exported_node)
+        dm.update_node_env(exported_node)
         return Data(exported_node)
 
 
@@ -81,7 +81,7 @@ class t_fuzz_tve_01(Disruptor):
 
     def disrupt_data(self, dm, target, prev_data):
 
-        val = b"NEW_" + rand_string(mini=5, maxi=10, str_set='XYZRVW').encode('latin-1')
+        val = b"NEW_" + rand_string(min=5, max=10, str_set='XYZRVW').encode('latin-1')
 
         if prev_data.node:
             prev_data.node.get_node_by_path('TVE.*EVT1$').set_frozen_value(val)

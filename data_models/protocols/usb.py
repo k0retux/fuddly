@@ -142,12 +142,12 @@ class USB_DataModel(DataModel):
                   {'name': ('bDescType', 2),
                    'contents': UINT8(values=[USB_DEFS.DT_INTERFACE])},
                   {'name': 'bInterfaceNum',
-                   'contents': UINT8(mini=0, maxi=10)},
+                   'contents': UINT8(min=0, max=10)},
                   {'name': 'bAlternateSetting',
                    'contents': UINT8(values=[0, 1, 2, 3, 4])},
                   {'name': 'bNumEndpoints',
                    # 'random': True,
-                   'contents': UINT8(mini=1, maxi=8, default=4),
+                   'contents': UINT8(min=1, max=8, default=4),
                    'alt': [
                        {'conf': 'MSD',
                         'contents': UINT8(values=[2])}
@@ -221,7 +221,7 @@ class USB_DataModel(DataModel):
                         'contents': UINT8(values=[1])}
                    ]},
                   {'name': 'bConfValue',
-                   'contents': UINT8(mini=1, maxi=50)},
+                   'contents': UINT8(min=1, max=50)},
                   {'name': 'iConf',
                    'contents': UINT8(values=[USB_DEFS.STRINGID_CONFIG])},
                   {'name': 'bmAttributes',

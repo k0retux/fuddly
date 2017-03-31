@@ -1,7 +1,7 @@
-.. _scenario-desc:
+.. _scenario-infra:
 
-Scenario Description
-********************
+Scenario Infrastructure
+***********************
 
 Overview
 ========
@@ -10,23 +10,33 @@ The `Scenario Infrastructure` enables you to describe protocols which are based 
 described in a data model. You can do whatever you want, either by following a standard
 or playing around it.
 
-Once a `scenario` has been defined and registered, ``Fuddly`` will automatically create a specific
-`Generator` that comply to what you described.
+Once a `scenario` has been defined and registered (refer to :ref:`scenario-desc`),
+``Fuddly`` will automatically create a specific `Generator` that comply to what you described.
 
 .. note:: The ``Fuddly`` shell command ``show_dmaker_types`` displays all the data maker,
   `Generators` and `Disruptors`. The Generators which are backed by a scenario are prefixed by
   ``SC_``.
 
 A `scenario` is a state-machine. Its description follows an oriented graph where the nodes, called
-`steps`, define the data to be sent to the target. The transitions that interconnect these
-steps can be guarded by different kinds of callbacks that trigger at different moment (before
-the framework sends the data, after sending the data, or after having retrieved any feedback
-from the target or any probes registered to monitor the target).
+`steps`, define the data to be sent to the target. The transitions that interconnect these steps
+can be guarded by different kinds of callbacks that trigger at different moment (e.g., after
+sending the data, or after having retrieved any feedback from the target or any probes registered
+to monitor the target).
+
+Finally, once a scenario has been described, some automatic alterations can be performed on it.
+It is especially useful in the case of protocol fuzzing to assess the robustness of the target
+regarding protocol sequencing, timing, and so on. This is described in the section :ref:`scenario-fuzz`.
+
+
+.. _scenario-desc:
+
+Scenario Description
+====================
 
 .. _sc:example:
 
 A First Example
-===============
+---------------
 
 Let's begin with a simple example that interconnect 3 steps in a loop without any callback.
 
@@ -102,21 +112,45 @@ The execution of this scenario will follow the pattern::
 You can play with this scenario by loading the ``tuto`` project with the third ``Target`` which expects
 a client listening on a TCP socket bound to the port 12345::
 
-  [fuddly term] >> run_project tuto 3
-  [fuddly term] >> send_loop 10 SC_EX1
+  [fuddly term]>> run_project tuto 3
+  [fuddly term]>> send_loop 10 SC_EX1
 
-  [another term] # nc -k -l 12345
+  [another term]# nc -k -l 12345
 
 If you want to visualize your scenario, you can issue the following command
 (``[FMT]`` is optional and can be ``xdot``, ``pdf``, ``png``, ...)::
 
-  [fuddly term] >> show_scenario SC_EX1 [FMT]
+  [fuddly term]>> show_scenario SC_EX1 [FMT]
+
+If you want to monitor the current step of the scenario each time you trigger the generator that runs
+through it, you have to set the generic parameter ``graph`` to ``True``. Then, each time you trigger
+the generator the current step will be shown in blue::
+
+  [fuddly term]>> send SC_EX1<graph=True:graph_format=xdot>
+
+.. figure::  images/sc_ex1_step1.png
+    :align:   center
+    :scale: 100%
+
+Then after another call::
+
+  [fuddly term]>> send SC_EX1<graph=True:graph_format=xdot>
+
+.. figure::  images/sc_ex1_step2.png
+    :align:   center
+    :scale: 100%
+
+
+.. note:: All available parameters can be consulted by issuing the following command
+   (like any data generators)::
+
+      [fuddly term]>> show_generators SC_EX1
 
 
 .. _sc:steps:
 
 Steps
-=====
+-----
 
 The main objective of a :class:`framework.scenario.Step` is to command the generation and sending
 of one or multiple data to the target selected in the framework. The data generation depends on
@@ -183,7 +217,7 @@ easier:
 .. _sc:transitions:
 
 Transitions
-===========
+-----------
 
 When two steps are connected together thanks to the method :meth:`framework.scenario.Step.connect_to`
 some callbacks can be specified to perform any user-relevant action before crossing the
@@ -371,7 +405,7 @@ The execution of this scenario will follow the pattern::
 .. _sc:dataprocess:
 
 Data generation process
-=======================
+-----------------------
 
 The data produced by a :class:`framework.scenario.Step` or a :class:`framework.scenario.Periodic`
 is described by a `data descriptor` which can be:
@@ -425,3 +459,212 @@ Finally, it is possible for a ``Step`` to describe multiple data to send at once
 meaning the framework will be ordered to use :meth:`framework.target.Target.send_multiple_data`
 (refer to :ref:`targets-def`). For that purpose, you have to provide the ``Step`` constructor with
 a list of `data descriptors` (instead of one).
+
+
+.. _scenario-fuzz:
+
+Scenario Fuzzing
+================
+
+Overview
+--------
+
+``Fuddly`` implements different approaches to assess the robustness of a target with respect to
+its protocol handling, assuming a :class:`framework.scenario.Scenario` has been defined to
+describe the protocol:
+
+1. **Invert the transition conditions**: For each scenario step having guarded transitions, a
+new scenario is created where transition conditions are inverted.
+(Refer to :ref:`sc:cond-fuzz`.)
+
+2. **Ignore the scenario timing constraints**: For each scenario step enforcing a timing constraint, a
+new scenario is created where any timeout conditions are removed (i.e., set to 0 second).
+(Refer to :ref:`sc:ign-timing`.)
+
+3. **Fuzz the data sent by the scenario**: For each scenario step that generates data, a
+new scenario is created where the data generated by the step is fuzzed.
+(Refer to :ref:`sc:data-fuzz`.)
+
+4. **Make the protocol stutter**: Generate scenarios that stutter, meaning that data-sending steps
+would be triggered many times.
+(Refer to :ref:`sc:stutter`.)
+
+.. note::
+  The implemented approaches 1 and 2 can be used together, but they cannot be used in conjunction
+  with the approach 3.
+
+Fuzzing by Example
+------------------
+
+To illustrate the implemented fuzzing approaches let's take the following scenario representing
+an imaginary protocol.
+
+.. figure::  images/sc_basic.png
+    :align:   center
+    :scale: 100%
+
+.. note::
+    It is described by the following code snippet extracted from ``data_models/tuto_strategy.py``:
+
+    .. code-block:: python
+       :linenos:
+
+        init = NoDataStep(step_desc='init', do_before_data_processing=init_action)
+        request = Step(Data(Node('request', vt=UINT8(values=[1, 2, 3]))),
+                       fbk_timeout=2)
+        case1 = Step(Data(Node('case 1', vt=String(values=['CASE 1']))),
+                     fbk_timeout=1)
+        case2 = Step(Data(Node('case 2', vt=String(values=['CASE 2']))),
+                     fbk_timeout=0.5,
+                     do_before_data_processing=before_data_generation,
+                     do_before_sending=before_sending)
+        final_step = FinalStep()
+        option1 = Step(Data(Node('option 1', vt=SINT16_be(values=[10,15]))))
+        option2 = Step(Data(Node('option 2', vt=UINT8(min=3, max=9))))
+
+        init.connect_to(request)
+        request.connect_to(case1, cbk_after_fbk=cbk_after_fbk_return_true)
+        request.connect_to(case2, cbk_after_fbk=cbk_after_fbk_return_false)
+        case1.connect_to(option1, cbk_after_fbk=cbk_after_fbk_return_true)
+        case1.connect_to(option2, cbk_after_fbk=cbk_after_fbk_return_false)
+        case2.connect_to(final_step)
+        option1.connect_to(final_step)
+        option2.connect_to(final_step)
+
+        reinit = Step(Data(Node('reinit', vt=String(values=['REINIT']))))
+        reinit.connect_to(init)
+
+        sc_test_basic = Scenario('BASIC', anchor=init, reinit_anchor=reinit)
+
+    Note the scenario does not depends on a data model definition, because it defines itself the data
+    to send.
+
+
+.. _sc:cond-fuzz:
+
+Invert Transition Conditions
+++++++++++++++++++++++++++++
+
+If you want to invert the transition conditions of this scenario on a step-by-step basis (meaning
+that each step where transitions can be inverted will trigger the generation of a scenario altering
+the step while the other steps will remain genuine), you can issue the following command::
+
+   [fuddly term]>> send SC_BASIC<cond_fuzz=True>
+
+And if you want to display the scenario in ``xdot`` while running through it issue the following
+command instead::
+
+   [fuddly term]>> send SC_BASIC<cond_fuzz=True:graph=True:graph_format=xdot>
+
+The result will be that the following scenario---altered version of the original one---will begin
+to run:
+
+.. figure::  images/sc_basic_cond_fuzz_tc1.png
+    :align:   center
+    :scale: 100%
+
+This picture represents the state of the scenario after three calls to the generator ``SC_BASIC``
+(where the current step is depicted in blue). Note that the first step that has been selected by
+``fuddly`` for altering its transition is the ``request`` step (because the
+sole transition of the ``init`` step is not guarded). This alteration means that the conditions that
+guard the transitions of this step are inverted in order to alter the protocol logic. Practically, it
+means in our example that the ``case 2`` is chosen instead of the ``case 1`` because the transition condition
+that returns ``False`` on the original scenario, returns ``True`` in the altered one.
+
+Note also that by default, after the alteration outcomes have been triggered (in this case after the
+``case 2`` step has run), then a reinitialization sequence is initiated, in order to continue with the
+next altered scenario case. The reinitialisation sequence is by default a simple connection
+to the anchor of the scenario. But if the scenario has been provided with
+a reinitialization sequence (through the ``reinit_anchor`` parameter of :class:`framework.scenario.Scenario`),
+this will be used instead. Our scenario example provide such reinitialization sequence
+(line 23-24 of the previous code snippet) and the picture depicts the use of it (all steps that
+follow the corrupted one are connected to it as well as the corrupted one in last resort if
+no transition can be crossed).
+
+But if you don't want ``fuddly`` to perform a reinitialization after each alteration case, you simply
+have to set the generator parameter ``reset`` to ``False``. In this case, the next alteration
+will trigger whenever the scenario will cross again the initial step (i.e., the scenario
+anchor), but only if it cross it (which may never happen depending on the scenario).
+
+The following picture depicts the next altered scenario that will be instantiated if we continue
+to run through the generator ``SC_BASIC`` (which has been configured with the option ``cond_fuzz``).
+
+.. note:: If you want to change the parameters of the generator while it is not exhausted, you need
+   to reset it manually by issuing the following command::
+
+    >> reset_dmaker SC_BASIC
+
+   For more details refer to :ref:`tuto:reset-dmaker`
+
+
+.. figure::  images/sc_basic_cond_fuzz_tc2.png
+    :align:   center
+    :scale: 100%
+
+In this next altered scenario, the transition conditions of the ``request`` step are no more inverted.
+Thus, we have selected the ``case 1`` step has stated by the original scenario. But then, we choose
+the ``option 2`` step instead of the ``option 1`` because we inverted the conditions of the
+``case 1`` step outgoing transitions.
+
+.. note:: In some cases, some altered scenario cases may not terminate depending on the
+  original scenario and the interaction with the evaluated target. To overcome such situation,
+  you can stop a scenario whenever you want and then choose the next altered scenario case manually
+  through the ``init`` parameter.
+
+
+.. _sc:ign-timing:
+
+Ignore Timing Constraints
++++++++++++++++++++++++++
+
+This approach follow the same pattern than (and is compatible with) the approach :ref:`sc:cond-fuzz`,
+(meaning that each step to be altered will trigger the generation of a scenario altering that step while
+the other steps will remain genuine).
+But instead of inverting the transition conditions, it generates cases that ignore timing constraints.
+To launch such alterations you can issue the following command:
+
+   [fuddly term]>> send SC_BASIC<ignore_timing=True>
+
+.. _sc:data-fuzz:
+
+Fuzz the Data Sent by the Scenario
+++++++++++++++++++++++++++++++++++
+
+If you want to fuzz the data generated by the example scenario on a step-by-step basis, you can
+issue the following command ::
+
+   [fuddly term]>> send SC_BASIC<data_fuzz=True>
+
+.. figure::  images/sc_basic_data_fuzz_tc1.png
+    :align:   center
+    :scale: 100%
+
+This approach follow the same pattern than the approach :ref:`sc:cond-fuzz` (meaning that each step
+to be altered will trigger the generation of a scenario altering that step while the other steps
+will remain genuine).
+The figure depicts the third call to the generator where the scenario run through
+the ``request`` step, but, contrary to the original scenario, some disruptors has been added, namely ``tTYPE``
+and ``tSTRUCT`` (refer to :ref:`dis:generic-disruptors` for more information on them). Thus, instead
+of sending the correct ``request`` data, an altered version (handled firstly by ``tTYPE``) will be sent.
+The scenario will then go back to the ``init`` step by taking the reinitialization path,
+in order to send the next altered
+data that ``tTYPE`` can produce with the ``request`` input. This loop will continue until the ``tTYPE``
+disruptor exhausts, then the ``tSTRUCT`` disruptor will take over until exhaustion. And finally,
+when all the alteration cases with the ``request`` step will be performed, the next altered scenario will
+be created. The following picture illustrate this case:
+
+.. figure::  images/sc_basic_data_fuzz_tc2.png
+    :align:   center
+    :scale: 100%
+
+.. _sc:stutter:
+
+Make the protocol stutter
++++++++++++++++++++++++++
+
+If you want to make stutter the data-sending steps of the example scenario you can
+issue the following command ::
+
+   [fuddly term]>> send SC_BASIC<stutter=True>
+
+You can also use the parameter ``stutter_max`` to specify the number of times a step have to stutter.

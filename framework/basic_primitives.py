@@ -28,11 +28,11 @@ import array
 
 from framework.global_resources import convert_to_internal_repr
 
-def rand_string(size=None, mini=1, maxi=10, str_set=string.printable):
+def rand_string(size=None, min=1, max=10, str_set=string.printable):
 
     out = ""
     if size is None:
-        size = random.randint(mini, maxi)
+        size = random.randint(min, max)
     while len(out) < size:
         val = random.choice(str_set)
         out += val
@@ -89,6 +89,6 @@ if __name__ == "__main__":
 
     for i in range(4):
         print(rand_string(10))
-        print(rand_string(mini=15, maxi=30))
+        print(rand_string(min=15, max=30))
         print(rand_string())
-        print(rand_string(mini=15, maxi=30, str_set='RXVZ'))
+        print(rand_string(min=15, max=30, str_set='RXVZ'))

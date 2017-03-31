@@ -73,7 +73,7 @@ class MyDF_DataModel(DataModel):
                        {'conf': 'alt1',
                         'contents': SINT8(values=[1,4,8])},
                        {'conf': 'alt2',
-                        'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
+                        'contents': UINT16_be(min=0xeeee, max=0xff56),
                         'determinist': True}]}
               ]},
              
@@ -407,12 +407,12 @@ class MyDF_DataModel(DataModel):
                  {'name': 'data2',
                   'qty': (1,3),
                   'semantics': ['sem1', 'sem2'],
-                  'contents': UINT16_be(mini=10, maxi=0xa0ff),
+                  'contents': UINT16_be(min=10, max=0xa0ff),
                   'alt': [
                        {'conf': 'alt1',
                         'contents': SINT8(values=[1,4,8])},
                        {'conf': 'alt2',
-                        'contents': UINT16_be(mini=0xeeee, maxi=0xff56)} ]},
+                        'contents': UINT16_be(min=0xeeee, max=0xff56)} ]},
 
                  {'name': 'data3',
                   'semantics': ['sem2'],

@@ -24,7 +24,7 @@
 import collections
 
 from framework.global_resources import *
-from framework.data_model import Node
+from framework.data_model import Node, Env
 from framework.database import Database
 
 class Data(object):
@@ -85,7 +85,10 @@ class Data(object):
 
     def update_from_node(self, node):
         self.node = node
-        self._dm = node.env.get_data_model()
+        if node.env is None:
+            node.set_env(Env())
+        else:
+            self._dm = node.env.get_data_model()
 
     def get_data_model(self):
         return self._dm
@@ -141,10 +144,18 @@ class Data(object):
             if original_data.origin is not None:
                 self.add_info("Data instantiated from: {!s}".format(original_data.origin))
             if original_data.info:
-                for _, info_bundle in original_data.info.items():
+                info_bundle_to_remove = []
+                for key, info_bundle in original_data.info.items():
+                    # if key == (dmaker_type, dmaker_name):
+                    #     continue
+                    info_bundle_to_remove.append(key)
                     for chunk in info_bundle:
                         for info in chunk:
-                            self.add_info(info)
+                            if not self.info_exists(dmaker_type, dmaker_name, info):
+                                self.add_info(info)
+                for key in info_bundle_to_remove:
+                    self.remove_info_from(*key)
+
         elif origin is not None:
             self.add_info("Data instantiated from: {!s}".format(origin))
         else:
@@ -177,6 +188,15 @@ class Data(object):
             self.info[key] = [self.info_list]
 
         self.info_list = []
+
+    def info_exists(self, dmaker_type, data_maker_name, info):
+        if info in self.info_list:
+            return True
+
+        return False
+
+    def has_info(self):
+        return bool(self.info)
 
     def remove_info_from(self, dmaker_type, data_maker_name):
         key = (dmaker_type, data_maker_name)
@@ -312,7 +332,8 @@ class Data(object):
 
         if self.node is not None:
             e = Node(self.node.name, base_node=self.node, ignore_frozen_state=False, new_env=True)
-            new_data._dm.set_new_env(e)
+            if new_data._dm is not None:
+                new_data._dm.update_node_env(e)
             new_data.update_from_node(e)
         return new_data
 

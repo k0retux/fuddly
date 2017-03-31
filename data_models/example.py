@@ -65,7 +65,7 @@ class Example_DataModel(DataModel):
         ku.set_values(value_type=String(values=tux_subparts_4, codec='utf8'), conf='ALT')
         
         idx = Node('IDX')
-        idx.set_values(value_type=SINT16_be(mini=4,maxi=40))
+        idx.set_values(value_type=SINT16_be(min=4,max=40))
 
         tx.set_subnodes_basic([tx_h, idx, ku_h, ku, kv_h, kv])
         tx_cpy = tx.get_clone('TX_cpy')
@@ -154,7 +154,7 @@ class Example_DataModel(DataModel):
         evt1.set_fuzz_weight(10)
 
         evt2 = Node('EVT2')
-        evt2.set_values(value_type=UINT16_le(mini=50, maxi=2**16-1))
+        evt2.set_values(value_type=UINT16_le(min=50, max=2**16-1))
         # evt2.set_values(value_type=UINT16_le())
         evt2.set_fuzz_weight(9)
 
@@ -382,7 +382,7 @@ class Example_DataModel(DataModel):
                         {'conf': 'alt1',
                          'contents': SINT8(values=[1,4,8])},
                         {'conf': 'alt2',
-                         'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
+                         'contents': UINT16_be(min=0xeeee, max=0xff56),
                          'determinist': True}]}
                ]},
 

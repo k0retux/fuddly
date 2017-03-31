@@ -2995,7 +2995,7 @@ class TestHLAPI(unittest.TestCase):
                                 {'conf': 'alt1',
                                  'contents': SINT8(values=[1, 4, 8])},
                                 {'conf': 'alt2',
-                                 'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
+                                 'contents': UINT16_be(min=0xeeee, max=0xff56),
                                  'determinist': True}]}
                        ]},
 

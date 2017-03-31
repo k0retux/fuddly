@@ -302,15 +302,25 @@ For each one of these generators, some parameters are associated:
 
 To send in a loop, five ZIP archives generated from the data model in
 a deterministic way---that is by walking through the data model---you
-can use the following command:
-
-.. code-block:: none
+can use the following command::
 
    >> send_loop 5 ZIP<determinist=True> tWALK
 
-We use for this example, the generic disruptor ``tWALK`` whose purpose
-is to simply walk through the data model.  Note that disruptors are
+We use for this example, the generic stateful disruptor ``tWALK`` whose purpose
+is to simply walk through the data model. Note that disruptors are
 chainable, each one consuming what comes from the left.
+
+.. seealso:: Refer to :ref:`tuto:dmaker-chain` for details on data makers chains.
+
+Note that if you want to send data indefinitely until the generator exhausts (in our case ``ZIP``)
+or a stateful disruptor (in our case ``tWALK``) of the chain exhausts you should use ``-1`` as
+the number of iteration. In our case it means issuing the following command::
+
+   >> send_loop -1 ZIP<determinist=True> tWALK
+
+And if you want to stop the execution before the normal termination (which could never happen if
+the ``finite`` parameter has not been set), then you have to issue a ``SIGINT`` signal to ``fuddly`` via
+``Ctrl-C`` for instance.
 
 .. note::
    Each data you send and all the related information (the way the data has been built,
@@ -686,12 +696,14 @@ maximum; in our case it will stop at the 50 :sup:`th` run because of
 ``tTYPE``.
 
 
+.. _tuto:reset-dmaker:
+
 Resetting & Cloning Disruptors
 ++++++++++++++++++++++++++++++
 
 Whether you want to use generators or disruptors that you previously
-use in a *data maker chain*, you would certainly need to reset it or
-clone it. Indeed, every data maker has an internal sequencing state,
+used in a *data maker chain*, you would certainly need to reset it or
+to clone it. Indeed, every data maker has an internal sequencing state,
 that remember if it has been disabled (and for generators it also
 keeps the *seeds*). Thus, if you want to reuse it, one way is to reset
 it by issuing the following command::
@@ -701,6 +713,9 @@ it by issuing the following command::
 where ``<dmaker_type>`` is the data maker to reset, for instance:
 ``ZIP_00``, ``tTYPE``, ...
 
+You can also reset all the data makers at once by issuing the following command::
+
+  >> reset_all_dmakers
 
 .. note:: You can also choose to cleanup a *Generator* without resetting the
    specifics of the previously produced data, that is, preserving the *seed* that
@@ -1350,7 +1365,7 @@ various constructions, and value types.
 		   {'conf': 'alt1',
 		    'contents': SINT8(values=[1,4,8])},
 		   {'conf': 'alt2',
-		    'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
+		    'contents': UINT16_be(min=0xeeee, max=0xff56),
 		    'determinist': True}]}
 	  ]},
 
@@ -1743,7 +1758,7 @@ Describing Protocols Ruling a Data Model
 Two compementary options are provided by the framework:
 
 - The `Scenario Infrastructure` that enables you to have access to automatically-created
-  `Generators` that comply to the protocols you described. Refer to :ref:`scenario-desc`.
+  `Generators` that comply to the protocols you described. Refer to :ref:`scenario-infra`.
 
 - The definition of `Virtual Operators`. refer to :ref:`tuto:operator`
 
@@ -2213,7 +2228,7 @@ process.
 
 .. seealso::
   To implement the protocol logic you should leverage the `Scenario Infrastructure`.
-  Refer to :ref:`scenario-desc`.
+  Refer to :ref:`scenario-infra`.
 
   If ever the `Scenario Infrastructure` does not satisfy your need, using a full-fledged
   state machine library such as `toysm <https://github.com/willakat/toysm>`_ should do.

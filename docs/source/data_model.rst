@@ -96,7 +96,7 @@ alt
      'alt': [ {'conf': 'config_n1',
 	       'contents': SINT8(values=[1,4,8])},
 	      {'conf': 'config_n2',
-	       'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
+	       'contents': UINT16_be(min=0xeeee, max=0xff56),
 	       'determinist': True} ]
 
 
@@ -613,10 +613,10 @@ following parameters:
   List of the integers that are considered valid for the node backed
   by this *Integer object*. The default value is the first element of the list.
 
-``mini`` [optional, default value: **None**]
+``min`` [optional, default value: **None**]
   Minimum valid value for the node backed by this *Integer object*.
 
-``maxi`` [optional, default value: **None**]
+``max`` [optional, default value: **None**]
   Maximum valid value for the node backed by this *Integer object*.
 
 ``default`` [optional, default value: **None**]
@@ -1459,7 +1459,7 @@ be used only for absorption:
 	  'node_args': 'payload',
 	  'alt': [
 	      {'conf': 'ABS',
-	       'contents': UINT32_be(maxi=100)} ]},
+	       'contents': UINT32_be(max=100)} ]},
 
 	 {'name': 'payload',
 	  'contents': String(min_sz=10, max_sz=100, determinist=False)},
@@ -1702,7 +1702,7 @@ Here are some rules to respect:
   declares a list of values. ``( )`` can be used to delimit a portion of
   the regular expression that need to be translated into a terminal node on its own.
 
-.. note:: If each item in a list of values are integers an :class:`framework.value_types.INT_Str` will
+.. note:: If each item in a list of values are integers an :class:`framework.value_types.INT_str` will
    be created instead of a :class:`framework.value_types.String`.
 
 - ``(``, ``)``, ``[``, ``]``, ``?``, ``*``, ``+``, ``{``, ``}``, ``|``, ``\``, ``-``, ``.`` are the only
@@ -1737,7 +1737,7 @@ Example 1: The basics.
                  {'name': 'HTTP_version_3',
                   'contents': String(alphabet="0123456789", size=1)},
                  {'name': 'HTTP_version_4', 'contents': String(values=["."])},
-                 {'name': 'HTTP_version_5', 'contents': INT_Str(mini=0, maxi=9)} ]}
+                 {'name': 'HTTP_version_5', 'contents': INT_str(min=0, max=9)} ]}
 
 
 Example 2: Introducing choices. (Refer to :ref:`dm:nt-keywords`)
@@ -1751,7 +1751,7 @@ Example 2: Introducing choices. (Refer to :ref:`dm:nt-keywords`)
    classic = {'name': 'something',
               'shape_type': MH.Pick,
               'contents': [
-                 {'name':'something_1', 'contents':INT_Str(values=[333, 444])},
+                 {'name':'something_1', 'contents':INT_str(values=[333, 444])},
                  {'name':'something_2', 'contents':String(values=["foo", "bar"])},
                  {'name':'something_3', 'contents':String(alphabet="0123456789",size=1)},
                  {'name':'something_4', 'contents':String(alphabet="th|is", size=1)}

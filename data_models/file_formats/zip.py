@@ -106,7 +106,7 @@ class ZIP_DataModel(DataModel):
                                   # 'clear_attrs': [MH.Attr.Freezable],
                                   'alt': [
                                       {'conf': 'ABS',
-                                       'contents': UINT32_le(maxi=2**10)}
+                                       'contents': UINT32_le(max=2**10)}
                                   ]},
                                  {'name': 'compressed_size',
                                   'type': MH.Generator,
@@ -115,15 +115,15 @@ class ZIP_DataModel(DataModel):
                                   'node_args': 'data',
                                   'alt': [
                                       {'conf': 'ABS',
-                                       'contents': UINT32_le(maxi=2**10)}
+                                       'contents': UINT32_le(max=2**10)}
                                   ]},
                                  {'name': 'uncompressed_size',
-                                  'contents': UINT32_le(maxi=2**10)}
+                                  'contents': UINT32_le(max=2**10)}
                              ]},
                             {'name': 'file_name_length',
-                             'contents': UINT16_le(maxi=2**10)},
+                             'contents': UINT16_le(max=2**10)},
                             {'name': 'extra_field_length',
-                             'contents': UINT16_le(maxi=2**10)},
+                             'contents': UINT16_le(max=2**10)},
                             {'name': 'file_name',
                              'type': MH.Generator,
                              'clear_attrs': [MH.Attr.Freezable],
@@ -175,7 +175,7 @@ class ZIP_DataModel(DataModel):
                         'absorb_csts': AbsFullCsts(),
                         'clear_attrs': [MH.Attr.Mutable]},
                        {'name': 'extra_enc_field_len',
-                        'contents': UINT32_le(maxi=2**5)},
+                        'contents': UINT32_le(max=2**5)},
                        {'name': 'extra_enc_field',
                         'type': MH.Generator,
                         'contents': lambda x: Node('cts', value_type=\
@@ -214,7 +214,7 @@ class ZIP_DataModel(DataModel):
                         'contents': COPY_VALUE(path='header/extra_field_length', depth=1),
                         'node_args': 'file_list'},
                        {'name': 'file_comment_length',
-                        'contents': UINT16_le(maxi=2**10)},
+                        'contents': UINT16_le(max=2**10)},
                        {'name': 'disk_number_start',
                         'contents': UINT16_le()},
                        {'name': 'internal_file_attr',
@@ -320,7 +320,7 @@ class ZIP_DataModel(DataModel):
                    'qty': (0,1),
                    'contents': [
                        {'name': 'ZIP_comment_len',
-                        'contents': UINT32_le(maxi=2**10)},
+                        'contents': UINT32_le(max=2**10)},
                        {'name': 'ZIP_comment',
                         'contents': lambda x: Node('cts', value_type=\
                                                    String(size=x.get_raw_value())),

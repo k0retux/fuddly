@@ -3,6 +3,7 @@ from framework.tactics_helpers import *
 from framework.global_resources import *
 from framework.scenario import *
 from framework.data import Data
+from framework.value_types import *
 
 tactics = Tactics()
 
@@ -116,7 +117,7 @@ unique_step.connect_to(unique_step)
 sc5 = Scenario('auto_regen')
 sc5.set_anchor(unique_step)
 
-### SCENARIO for testing transition selection ###
+### SCENARIO to test transition selection ###
 
 def cbk_after_fbk_return_true(env, current_step, next_step, fbk):
     if not hasattr(env, 'cbk_true_cpt'):
@@ -201,7 +202,49 @@ g1_step.connect_to(g13_step, cbk_after_sending=cbk_after_sending_return_false,
                    cbk_after_fbk=cbk_after_fbk_return_true)
 sc_test4 = Scenario('test4', anchor=g1_step)
 
-tactics.register_scenarios(sc1, sc2, sc3, sc4, sc5, sc_test, sc_test2, sc_test3, sc_test4)
+# SCENARIO to test fuzzing features
+
+def init_action(env, step):
+    print('\n+++ initialize')
+    return
+
+def before_data_generation(env, step):
+    print('\n+++ case 2: before data generation')
+    return
+
+def before_sending(env, step):
+    print('\n+++ case 2: before sending')
+    return
+
+init = NoDataStep(step_desc='init', do_before_data_processing=init_action)
+request = Step(Data(Node('request', vt=UINT8(values=[1, 2, 3]))),
+               fbk_timeout=2)
+case1 = Step(Data(Node('case 1', vt=String(values=['CASE 1']))),
+             fbk_timeout=1)
+case2 = Step(Data(Node('case 2', vt=String(values=['CASE 2']))),
+             fbk_timeout=0.5,
+             do_before_data_processing=before_data_generation,
+             do_before_sending=before_sending)
+final_step = FinalStep()
+option1 = Step(Data(Node('option 1', vt=SINT16_be(values=[10,15]))))
+option2 = Step(Data(Node('option 2', vt=UINT8(min=3, max=9))))
+
+init.connect_to(request)
+request.connect_to(case1, cbk_after_fbk=cbk_after_fbk_return_true)
+request.connect_to(case2, cbk_after_fbk=cbk_after_fbk_return_false)
+case1.connect_to(option1, cbk_after_fbk=cbk_after_fbk_return_true)
+case1.connect_to(option2, cbk_after_fbk=cbk_after_fbk_return_false)
+case2.connect_to(final_step)
+option1.connect_to(final_step)
+option2.connect_to(final_step)
+
+reinit = Step(Data(Node('reinit', vt=String(values=['REINIT']))))
+reinit.connect_to(init)
+
+sc_test_basic = Scenario('BASIC', anchor=init, reinit_anchor=reinit)
+
+tactics.register_scenarios(sc1, sc2, sc3, sc4, sc5, sc_test, sc_test2, sc_test3, sc_test4,
+                           sc_test_basic)
 
 @generator(tactics, gtype="CBK")
 class g_test_callback_01(Generator):

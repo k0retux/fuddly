@@ -1623,7 +1623,7 @@ class DataModel(object):
 
             self.register_nodes(node)
 
-    def set_new_env(self, node):
+    def update_node_env(self, node):
         env = Env()
         env.set_data_model(self)
         node.set_env(env)

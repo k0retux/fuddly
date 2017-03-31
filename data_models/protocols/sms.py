@@ -185,7 +185,7 @@ class SMS_DataModel(DataModel):
                   {'name': 'UDHL',
                    'contents': UINT8(values=[2])},
                   {'name': 'IEIa', # 0x70 = command packet identifier
-                   'contents': UINT8(values=[0x70], mini=0x70, maxi=0x7F)},
+                   'contents': UINT8(values=[0x70], min=0x70, max=0x7F)},
                   {'name': 'IEDLa',
                    'contents': UINT8(values=[0])},
                   {'name': 'CPL',  # command packet length

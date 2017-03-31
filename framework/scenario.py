@@ -112,7 +112,8 @@ class DataProcess(object):
         if isinstance(self.seed, str):
             desc += 'Seed=' + self.seed + suffix
         elif isinstance(self.seed, Data):
-            desc += 'Seed=Data(...)' + suffix
+            seed_str = self.seed.node.name if self.seed.node is not None else 'Data(...)'
+            desc += 'Seed={:s}'.format(seed_str) + suffix
         else:
             desc += suffix[2:]
 
@@ -358,27 +359,28 @@ class Step(object):
             # a generator (by which a scenario will be executed) can only provide one data.
             d = Data('STEP:POISON_1')
 
-        if self._step_desc is not None:
-            d.add_info(self._step_desc.replace('\n', ' '))
+        if not d.has_info():
+            if self._step_desc is not None:
+                d.add_info(self._step_desc.replace('\n', ' '))
 
-        for idx, d_desc in enumerate(self._data_desc):
-            if isinstance(d_desc, DataProcess):
-                d.add_info(repr(d_desc))
-            elif isinstance(d_desc, Data):
-                d.add_info('User-provided Data()')
-            else:
-                assert isinstance(d_desc, str)
-                d.add_info("Data Model: '{!s}'"
-                           .format(self._scenario_env.dm.name))
-                d.add_info("Node Name: '{!s}'"
-                           .format(self._node_name[idx]))
+            for idx, d_desc in enumerate(self._data_desc):
+                if isinstance(d_desc, DataProcess):
+                    d.add_info(repr(d_desc))
+                elif isinstance(d_desc, Data):
+                    d.add_info('User-provided Data()')
+                else:
+                    assert isinstance(d_desc, str)
+                    d.add_info("Data Model: '{!s}'"
+                               .format(self._scenario_env.dm.name))
+                    d.add_info("Node Name: '{!s}'"
+                               .format(self._node_name[idx]))
 
-        if self._periodic_data is not None:
-            p_sz = len(self._periodic_data)
-            d.add_info("Set {:d} periodic{:s}".format(p_sz, 's' if p_sz > 1 else ''))
-        if self._periodic_data_to_remove is not None:
-            p_sz = len(self._periodic_data_to_remove)
-            d.add_info("Clear {:d} periodic{:s}".format(p_sz, 's' if p_sz > 1 else ''))
+            if self._periodic_data is not None:
+                p_sz = len(self._periodic_data)
+                d.add_info("Set {:d} periodic{:s}".format(p_sz, 's' if p_sz > 1 else ''))
+            if self._periodic_data_to_remove is not None:
+                p_sz = len(self._periodic_data_to_remove)
+                d.add_info("Clear {:d} periodic{:s}".format(p_sz, 's' if p_sz > 1 else ''))
 
         if self.is_blocked():
             d.make_blocked()
@@ -431,7 +433,7 @@ class Step(object):
                     if self.__class__.__name__ != 'Step':
                         step_desc += '[' + self.__class__.__name__ + ']'
                     else:
-                        step_desc += 'Data(...)'
+                        step_desc += d.node.name if d.node is not None else 'Data(...)'
                 elif isinstance(d, str):
                     step_desc += "{:s}".format(self._node_name[idx].upper())
                 else:
