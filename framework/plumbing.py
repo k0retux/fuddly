@@ -4210,7 +4210,8 @@ class FmkShell(cmd.Cmd):
             """
 
             # add an attribute to check import's health
-            if not hasattr(self, 'do_send_loop_import_error'):
+            attr = getattr(self, 'do_send_loop_import_error', None)
+            if attr is None:
                 setattr(self, 'do_send_loop_import_error', False)
                 try:
                     import curses, io, contextlib, os, termios
