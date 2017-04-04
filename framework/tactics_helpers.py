@@ -669,9 +669,11 @@ class DynGeneratorFromScenario(Generator):
                            'created where any timeout conditions are removed (i.e., set to 0 second). '
                            '[compatible with cond_fuzz]',
                           False, bool)),
-        ('stutter', ('Generate scenarios that stutter, meaning that data-sending steps would be '
-                    'triggered many times.', False, bool)),
-        ('stutter_max', ('How many times a step may stutter?', 2, int)),
+        ('stutter', ("For each scenario step that generates data, a new scenario is created where "
+                     "the step is altered to stutter 'stutter_max' times, meaning that data-sending "
+                     "steps would be triggered 'stutter_max' times.",
+                     False, bool)),
+        ('stutter_max', ("The number of times a step will stutter [to be used with 'stutter']", 2, int)),
         ('reset', ("If set, scenarios created by 'data_fuzz', 'cond_fuzz', or 'ignore_timing' "
                    "will reinitialize the scenario after each corruption case, without waiting for "
                    "the normal continuation of the scenario.", True, bool)),
@@ -711,23 +713,23 @@ class DynGeneratorFromScenario(Generator):
         self.scenario = copy.copy(self.__class__.scenario)
 
         assert (self.data_fuzz and not (self.cond_fuzz or self.ignore_timing)) or not self.data_fuzz
+        assert not self.stutter or (self.stutter and not (self.cond_fuzz or self.ignore_timing or self.data_fuzz))
 
         # internal attributes used for scenario alteration
-        self._alteration_just_performed = False
         self._current_fuzzed_step = None
         self._ign_final = False
-
-        # internal attributes for data_fuzz
-        self._data_fuzz_change_step = False
+        self._alteration_just_performed = False
 
         if self.stutter:
-            self._scenario_steps = filter(lambda x: not x.is_blocked(), self.scenario.steps)
-            self._scenario_steps = filter(lambda x: not x.final, self._scenario_steps)
+            self._step_stutter_complete = False
             self._stutter_cpt = 0
-            for step in self._scenario_steps:
-                step.connect_to(step, prepend=True, cbk_after_sending=self._stutter_cbk)
+            self._step_num = self.init
+            self._ign_final = self._make_step_stutter()
+            if not self._ign_final:
+                self.scenario.current_step.final = True
 
         elif self.data_fuzz:
+            self._data_fuzz_change_step = False
             self._step_num = self.init
             self._ign_final = self._alter_data_step()
             if not self._ign_final:
@@ -744,10 +746,26 @@ class DynGeneratorFromScenario(Generator):
     def _stutter_cbk(self, env, current_step, next_step):
         self._stutter_cpt += 1
         if self._stutter_cpt > self.stutter_max:
-            self._stutter_cpt = 0
+            self._step_stutter_complete = True
             return False
         else:
             return True
+
+    def _make_step_stutter(self):
+        self._alteration_just_performed = True
+        self._scenario_steps = filter(lambda x: not x.is_blocked(), self.scenario.steps)
+        self._scenario_steps = list(filter(lambda x: not x.final, self._scenario_steps))
+        if self._step_num >= len(self._scenario_steps):
+            return False
+
+        self._current_fuzzed_step = self._scenario_steps[self._step_num]
+        self._stutter_cpt = 0
+        if self.reset:
+            self.scenario.branch_to_reinit(self._current_fuzzed_step)
+        self._current_fuzzed_step.connect_to(self._current_fuzzed_step,
+                                             prepend=True, cbk_after_sending=self._stutter_cbk)
+
+        return True
 
     def _alter_data_step(self):
         self._alteration_just_performed = True
@@ -856,6 +874,19 @@ class DynGeneratorFromScenario(Generator):
                     self.scenario = copy.copy(self.__class__.scenario)
                     self._step_num += 1
                     self._ign_final = self._alter_transition_conditions()
+                    if not self._ign_final:
+                        self.scenario.current_step.final = True
+            else:
+                self._alteration_just_performed = False
+
+        elif self.stutter:
+            if not self._alteration_just_performed:
+                if self._step_stutter_complete \
+                        and self.scenario.current_step is self.scenario.anchor:
+                    self._step_stutter_complete = False
+                    self.scenario = copy.copy(self.__class__.scenario)
+                    self._step_num += 1
+                    self._ign_final = self._make_step_stutter()
                     if not self._ign_final:
                         self.scenario.current_step.final = True
             else:
