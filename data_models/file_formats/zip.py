@@ -21,16 +21,12 @@
 #
 ################################################################################
 
-import sys
+import zlib
 
 from framework.data_model import *
-from framework.value_types import *
-from framework.data_model_builder import *
 from framework.global_resources import *
+from framework.value_types import *
 
-import zlib
-import crcmod
-import struct
 
 class ZIP_DataModel(DataModel):
 
@@ -338,12 +334,12 @@ class ZIP_DataModel(DataModel):
         ]}
 
 
-        mb = ModelBuilder(delayed_jobs=True)
+        mb = NodeBuilder(delayed_jobs=True)
         self.pkzip = mb.create_graph_from_desc(zip_desc)
 
         self.zip_dict = self.import_file_contents(extension='zip')
 
-        self.register_nodes(self.pkzip, *self.zip_dict.values())
+        self.register(self.pkzip, *self.zip_dict.values())
 
 
 data_model = ZIP_DataModel()

@@ -29,7 +29,7 @@ import time
 
 import serial
 
-from framework.data_model import NodeSemanticsCriteria
+from framework.node import Node, NodeSemanticsCriteria
 from framework.target_helpers import Target
 from framework.value_types import GSMPhoneNum
 from libs.external_modules import serial_module, Color
@@ -108,8 +108,8 @@ class SIMTarget(Target):
         return feedback
 
     def send_data(self, data, from_fmk=False):
-        if data.node:
-            node_list = data.node[NodeSemanticsCriteria(mandatory_criteria=['tel num'])]
+        if isinstance(data.content, Node):
+            node_list = data.content[NodeSemanticsCriteria(mandatory_criteria=['tel num'])]
             if node_list and len(node_list)==1:
                 node_list[0].set_values(value_type=GSMPhoneNum(values=[self.tel_num]))
             else:

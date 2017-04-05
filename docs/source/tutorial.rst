@@ -237,7 +237,7 @@ which will invoke the ``unzip`` program with a ZIP file:
    ...
    >> 
 
-Note that a :class:`framework.data_model_builder.DataModel` can define any number of data
+Note that a :class:`framework.data_model.DataModel` can define any number of data
 types---to model for instance the various atoms within a data format,
 or to represent some specific use cases, ...
 
@@ -939,13 +939,13 @@ Here under some basic commands to start with:
    fmk.reload_all(tg_num=0)
 
    # Show a list of the registered data type within the data model
-   fmk.show_dm_data_identifiers()
+   fmk.show_atom_identifiers()
    # Or
-   list(fmk.dm.data_identifiers())
+   list(fmk.dm.atom_identifiers())
    
    # Get an instance of the modeled data ZIP_00 which is made from the
    # absorption of an existing ZIP archive within ~/fuddly_data/imported_data/zip/
-   dt = fmk.dm.get_data('ZIP_00')
+   dt = fmk.dm.get_atom('ZIP_00')
 
    # Display the raw contents of the first generated element of the data type `dt`
    # Its the flatten version of calling .get_value() on it. Note that doing so will
@@ -1223,9 +1223,9 @@ is a simple skeleton for ``mydf.py``:
    :linenos:
    :emphasize-lines: 5, 8, 17
 
-   from framework.data_model import *
+   from framework.node import *
    from framework.value_types import *
-   from framework.data_model_builder import *
+   from framework.data_model import *
 
    class MyDF_DataModel(DataModel):
 
@@ -1252,20 +1252,20 @@ is a simple skeleton for ``mydf.py``:
           (:ref:`tuto:start-fuzzshell`).
 
 In this skeleton, you can notice that you have to define a class that
-inherits from the :class:`framework.data_model_builder.DataModel` class,
+inherits from the :class:`framework.data_model.DataModel` class,
 as seen in line 5. The definition of the data types of a data format
 will be written in python within the method
-:meth:`framework.data_model_builder.DataModel.build_data_model()`.  In
+:meth:`framework.data_model.DataModel.build_data_model()`.  In
 the previous listing, the data types are represented by ``d1``, ``d2``
 and ``d3``. Once defined, they should be registered within the data
 model, by calling
-:func:`framework.data_model_builder.DataModel.register()` on them.
+:func:`framework.data_model.DataModel.register()` on them.
 
 .. note:: If you want to import data samples complying to your data
           model:
 	  
 	  - First, you have to overwrite the method
-            :meth:`framework.data_model_builder.DataModel.absorb` in
+            :meth:`framework.data_model.DataModel.absorb` in
             order to perform the operations for absorbing the samples
             (refer to :ref:`tuto:dm-absorption`). This method is
             called for each file found in ``~/fuddly_data/imported_data/mydf/``, and
@@ -1273,9 +1273,9 @@ model, by calling
 
 	  - Then, you have to perform the import manually within the
             method
-            :meth:`framework.data_model_builder.DataModel.build_data_model()`
+            :meth:`framework.data_model.DataModel.build_data_model()`
             by calling the method
-            :meth:`framework.data_model_builder.DataModel.import_file_contents()`
+            :meth:`framework.data_model.DataModel.import_file_contents()`
             which returns a dictionary with every imported data samples.
 
 	  The following code illustrates that:
@@ -1457,7 +1457,7 @@ lines 44
 
 
 To register such a description within the data model ``MyDF`` you can
-directly use :func:`framework.data_model_builder.DataModel.register()`
+directly use :func:`framework.data_model.DataModel.register()`
 as seen in the previous example. But if you want to access afterwards
 to the defined nodes, you can also transform this description to a
 graph, before registering it, like this:
@@ -1465,8 +1465,8 @@ graph, before registering it, like this:
 .. code-block:: python
    :linenos:
 
-   mb = ModelBuilder(self)
-   root_node = mb.create_graph_from_desc(d1)
+   nb = NodeBuilder(self)
+   root_node = nb.create_graph_from_desc(d1)
 
 You could then access to all the registered nodes tided up in the
 specific dictionary ``mb.node_dico``, whether you want to perform
@@ -1527,8 +1527,8 @@ match the imaginary TestNode data model we just described in section
 
    fmk.run_project(name="tuto")
 
-   data_gen = fmk.dm.get_data('TestNode')    # first instance of TestNode data model
-   data_abs = fmk.dm.get_data('TestNode')  # second instance of TestNode data model
+   data_gen = fmk.dm.get_atom('TestNode')    # first instance of TestNode data model
+   data_abs = fmk.dm.get_atom('TestNode')  # second instance of TestNode data model
 
    raw_data = data_gen.to_bytes()
    print(raw_data)
@@ -1586,7 +1586,7 @@ requirements.
 
 By default, when you perform an absorption, every data model
 constraints will be enforce. If you want to free some ones, you need
-to provide a :class:`framework.data_model.AbsCsts` object---specifying the constraints you
+to provide a :class:`framework.node.AbsCsts` object---specifying the constraints you
 want---when calling the method ``.absorb()``.
 
 Currently, there is four kinds of constraints:
@@ -1612,8 +1612,8 @@ Currently, there is four kinds of constraints:
   ``exists_if_not`` attribute.
 
 
-There is also the shortcuts :class:`framework.data_model.AbsNoCsts` and
-:class:`framework.data_model.AbsFullCsts` which respectively set no
+There is also the shortcuts :class:`framework.node.AbsNoCsts` and
+:class:`framework.node.AbsFullCsts` which respectively set no
 constraints, or all constraints. Thus, if you want to only respect
 ``size`` and ``struct`` constraints, you can provide the object
 ``AbsNoCsts(size=True,struct=True)`` to the ``.absorb()`` method, like
@@ -1625,7 +1625,7 @@ what follows:
 
 In some cases, it could also be useful to only set absorption
 constraints to some nodes. To do so, you can call the method
-:func:`framework.data_model.Node.enforce_absorb_constraints()` on the
+:func:`framework.node.Node.enforce_absorb_constraints()` on the
 related nodes with your chosen constraints. You can also add a
 specific field ``absorb_csts`` (refer to :ref:`dm:keywords` and
 :ref:`dm:patterns`) within a data model description to reach the same
@@ -1830,23 +1830,23 @@ following code block illustrates such kind of disruptor:
    class disruptor_name(StatefulDisruptor):
 
       def set_seed(self, prev_data):
-          self.seed_node = prev_data.node
+          self.seed_node = prev_data.content
 
       def disrupt_data(self, dm, target, data):
           new_node = do_some_modification(self.seed_node)
-	  if new_node is None:
-	      data.make_unusable()
-	      self.handover()
-	  else:
-              data.update_from_node(new_node)
-	      data.add_info('description of the modification')
+          if new_node is None:
+              data.make_unusable()
+              self.handover()
+          else:
+              data.update_from(new_node)
+              data.add_info('description of the modification')
 
-	  return data
+      return data
 
 .. note:: Remark the call to the method
-   :meth:`framework.data_model.Data.update_from_node` (line 13). Such
+   :meth:`framework.data.Data.update_from` (line 13). Such
    construction comes from the fact ``fuddly`` uses a data-model
-   independent *container* (:class:`framework.data_model.Data`) for
+   independent *container* (:class:`framework.data.Data`) for
    passing modeled data from one sub-system to another. This container
    is also used, for logging purpose, to register the sequence of
    modifications performed on the data (especially the disruptor
@@ -1954,8 +1954,8 @@ except the legitimate one. After
 :meth:`framework.fuzzing_primitives.SeparatorDisruption.consume_node` is
 called, the model walker will iterate over each defined shapes for
 this node (by issuing continuously
-:meth:`framework.data_model.Node.get_value()` then
-:meth:`framework.data_model.Node.unfreeze()`) until exhaustion or after
+:meth:`framework.node.Node.get_value()` then
+:meth:`framework.node.Node.unfreeze()`) until exhaustion or after
 a predefined limit.
 
 .. note:: Saving and restoring the consumed nodes is performed
@@ -1989,15 +1989,15 @@ like this (which is a simpler version of the generic disruptor
    class disruptor_name(StatefulDisruptor):
 
        def set_seed(self, prev_data):
-           prev_data.node.get_value()
+           prev_data.content.get_value()
 
            ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Separator])
            sep_list = set(map(lambda x: x.to_bytes(),
-                              prev_data.node.get_reachable_nodes(internals_criteria=ic)))
+                              prev_data.content.get_reachable_nodes(internals_criteria=ic)))
            sep_list = list(sep_list)
 
            self.consumer = SeparatorDisruption()
-           self.walker = iter(ModelWalker(prev_data.node, self.consumer))
+           self.walker = iter(ModelWalker(prev_data.content, self.consumer))
 
        def disrupt_data(self, dm, target, data):
            try:
@@ -2007,7 +2007,7 @@ like this (which is a simpler version of the generic disruptor
                self.handover()
                return data
 
-           data.update_from_node(rnode)
+           data.update_from(rnode)
 
            return data
 
@@ -2336,7 +2336,7 @@ the following section :ref:`tuto:probes`.
             to :class:`framework.plumbing.ExportableFMKOps`.
 
 	  - ``dm``: a reference to the current
-            :class:`framework.data_model_builder.DataModel`.
+            :class:`framework.data_model.DataModel`.
 
 	  - ``monitor``: a reference to the monitor subsystem, in
             order to start/stop probes and get status from them.

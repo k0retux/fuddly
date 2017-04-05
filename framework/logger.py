@@ -94,8 +94,8 @@ class Logger(object):
             else:
                 data = x
             self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)
-            if verbose and issubclass(x.__class__, Data) and x.node is not None:
-                x.pretty_print()
+            if verbose and issubclass(x.__class__, Data):
+                x.show()
 
             return data
 
@@ -139,8 +139,8 @@ class Logger(object):
                 try:
                     self._fd.write(data)
                     self._fd.write('\n')
-                    if verbose and issubclass(x.__class__, Data) and x.node is not None:
-                        x.pretty_print(log_func=self._fd.write)
+                    if verbose and issubclass(x.__class__, Data):
+                        x.show(log_func=self._fd.write)
                     self._fd.flush()
                 except ValueError:
                     self.print_console('\n*** ERROR: The log file has been closed.' \

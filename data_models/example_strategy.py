@@ -28,7 +28,7 @@ from copy import *
 
 from framework.plumbing import *
 
-from framework.data_model import *
+from framework.node import *
 from framework.tactics_helpers import *
 from framework.fuzzing_primitives import *
 from framework.basic_primitives import *
@@ -39,7 +39,7 @@ tactics = Tactics()
 class example_02(Generator):
 
     def setup(self, dm, user_input):
-        self.tux = dm.get_data('TUX')
+        self.tux = dm.get_atom('TUX')
         self.tux_h = self.tux.get_node_by_path('TUX/h$')
         self.tx = self.tux.get_node_by_path('TUX/TX$')
         self.tc = self.tux.get_node_by_path('TUX/TC$')
@@ -57,7 +57,7 @@ class example_02(Generator):
 
     def generate_data(self, dm, monitor, target):
         exported_node = Node(self.tux.name, base_node=self.tux)
-        dm.update_node_env(exported_node)
+        dm.update_atom(exported_node)
         return Data(exported_node)
 
 
@@ -66,14 +66,14 @@ class example_02(Generator):
 class g_typed_value_example_01(Generator):
 
     def generate_data(self, dm, monitor, target):
-        return Data(dm.get_data('TVE'))
+        return Data(dm.get_atom('TVE'))
 
 
 @generator(tactics, gtype="TVE_w", weight=10)
 class g_typed_value_example_02(Generator):
 
     def generate_data(self, dm, monitor, target):
-        return Data(dm.get_data('TVE'))
+        return Data(dm.get_atom('TVE'))
 
 
 @disruptor(tactics, dtype="TVE/basic", weight=4)
@@ -83,8 +83,9 @@ class t_fuzz_tve_01(Disruptor):
 
         val = b"NEW_" + rand_string(min=5, max=10, str_set='XYZRVW').encode('latin-1')
 
-        if prev_data.node:
-            prev_data.node.get_node_by_path('TVE.*EVT1$').set_frozen_value(val)
+        prev_content = prev_data.content
+        if isinstance(prev_content, Node):
+            prev_content.get_node_by_path('TVE.*EVT1$').set_frozen_value(val)
 
         else:
             print('DONT_PROCESS_THIS_KIND_OF_DATA')

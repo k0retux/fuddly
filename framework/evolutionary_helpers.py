@@ -106,7 +106,8 @@ class DefaultIndividual(Individual):
         data = self._fmk.get_data([('C', None, UI(nb=nb))], data_orig=Data(self.node))
         if data is None:
             raise PopulationError
-        self.node = data.node
+        assert isinstance(data.content, Node)
+        self.node = data.content
 
 
 class DefaultPopulation(Population):
@@ -140,7 +141,7 @@ class DefaultPopulation(Population):
             data = self._fmk.get_data([self.MODEL])
             if data is None:
                 raise PopulationError
-            node = data.node
+            node = data.content
             node.make_random(recursive=True)
             node.freeze()
             self._individuals.append(DefaultIndividual(self._fmk, node))
@@ -191,7 +192,7 @@ class DefaultPopulation(Population):
                 if data is None or data.is_unusable():
                     break
                 else:
-                    self._individuals.append(DefaultIndividual(self._fmk, data.node))
+                    self._individuals.append(DefaultIndividual(self._fmk, data.content))
 
             i += 2
 

@@ -23,6 +23,6 @@
 
 __all__ = []
 
-from test.unit.test_data_model import *
-from test.unit.test_data_model_helpers import *
+from test.unit.test_node import *
+from test.unit.test_node_builder import *
 from test.unit.test_monitor import *

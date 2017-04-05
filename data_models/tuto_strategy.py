@@ -24,9 +24,9 @@ def cbk_transition1(env, current_step, next_step, feedback):
                   ' timestamp: {!s}\n'
                   '   content: {!r} ...\n'.format(source, status, timestamp, data))
         current_step.make_free()
-        if next_step.node:
-            print("*** The next node named '{:s}' will be modified!".format(next_step.node.name))
-            next_step.node['.*/prefix.?'] = '*MODIFIED*'
+        if next_step.content:
+            print("*** The next node named '{:s}' will be modified!".format(next_step.content.name))
+            next_step.content['.*/prefix.?'] = '*MODIFIED*'
         else:
             print("*** The next node won't be modified!")
         return True
@@ -42,14 +42,14 @@ def cbk_transition2(env, current_step, next_step):
 def before_sending_cbk(env, step):
     assert env is not None
     print('\n--> Action executed before sending any data on step {:d} [desc: {!s}]'.format(id(step), step))
-    step.node.show()
+    step.content.show()
     return True
 
 def before_data_processing_cbk(env, step):
     assert env is not None
     print('\n--> Action executed before data processing on step {:d} [desc: {!s}]'.format(id(step), step))
-    if step.node is not None:
-        step.node.show()
+    if step.content is not None:
+        step.content.show()
     return True
 
 periodic1 = Periodic(DataProcess(process=[('C', None, UI(nb=1)), 'tTYPE'], seed='enc'),
@@ -263,10 +263,10 @@ class g_test_callback_01(Generator):
 
     def generate_data(self, dm, monitor, target):
         if self.fbk:
-            self.d.update_from_str_or_bytes(self.fbk)
+            self.d.update_from(self.fbk)
         else:
-            node = dm.get_data('off_gen')
-            self.d.update_from_node(node)
+            node = dm.get_atom('off_gen')
+            self.d.update_from(node)
         return self.d
 
     def callback_1(self, feedback):

@@ -23,7 +23,7 @@
 
 from framework.data_model import *
 from framework.value_types import *
-from framework.data_model_builder import *
+
 
 class PPPOE_DataModel(DataModel):
 
@@ -123,7 +123,7 @@ class PPPOE_DataModel(DataModel):
               ]}
          ]}
 
-        mb = ModelBuilder(delayed_jobs=True, add_env=False)
+        mb = NodeBuilder(delayed_jobs=True, add_env=False)
         tag_node = mb.create_graph_from_desc(tag_desc)
 
         tag_service_name = tag_node.get_clone('tag_sn')
@@ -256,7 +256,7 @@ class PPPOE_DataModel(DataModel):
               'mutable': False},
          ]}
 
-        mb = ModelBuilder(delayed_jobs=True, add_env=False)
+        mb = NodeBuilder(delayed_jobs=True, add_env=False)
         pppoe_msg = mb.create_graph_from_desc(pppoe_desc)
         # pppoe_msg.make_random(recursive=True)
 

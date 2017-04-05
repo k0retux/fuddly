@@ -29,18 +29,15 @@ import collections
 from functools import partial
 
 from framework.data import *
-from framework.data_model_builder import modelwalker_inputs_handling_helper, GENERIC_ARGS
 from framework.global_resources import *
 import framework.scenario as sc
 
 DEBUG = False
 
-
 XT_NAME_LIST_K = 1
 XT_CLS_LIST_K = 2
 XT_WEIGHT_K = 3
 XT_VALID_CLS_LIST_K = 4
-
 
 class Tactics(object):
 
@@ -458,9 +455,9 @@ def _handle_user_inputs(dmaker, ui):
             else:
                 setattr(dmaker, k, ui_val)
 
-    if dmaker._gen_args_desc and \
-       issubclass(dmaker.__class__, (Disruptor, StatefulDisruptor)) and \
-       dmaker._gen_args_desc == GENERIC_ARGS:
+    if dmaker._gen_args_desc \
+            and issubclass(dmaker.__class__, (Disruptor, StatefulDisruptor)) \
+            and dmaker._gen_args_desc == GENERIC_ARGS:
         modelwalker_inputs_handling_helper(dmaker, generic_ui)
 
     if specific_ui is None:
@@ -518,6 +515,28 @@ class UserInputContainer(object):
     def __repr__(self):
         return str(self)
 
+################################
+# ModelWalker Helper Functions #
+################################
+
+GENERIC_ARGS = {
+    'init': ('make the model walker ignore all the steps until the provided one', 1, int),
+    'max_steps': ('maximum number of steps (-1 means until the end)', -1, int),
+    'runs_per_node': ('maximum number of test cases for a single node (-1 means until the end)', -1, int),
+    'clone_node': ('if True the dmaker will always return a copy ' \
+                   'of the node. (for stateless diruptors dealing with ' \
+                   'big data it can be usefull to it to False)', True, bool)
+}
+
+def modelwalker_inputs_handling_helper(dmaker, user_generic_input):
+    assert(dmaker.runs_per_node > 0 or dmaker.runs_per_node == -1)
+
+    if dmaker.runs_per_node == -1:
+        dmaker.max_runs_per_node = -1
+        dmaker.min_runs_per_node = -1
+    else:
+        dmaker.max_runs_per_node = dmaker.runs_per_node + 3
+        dmaker.min_runs_per_node = max(dmaker.runs_per_node - 2, 1)
 
 ### Generator & Disruptor
 
@@ -633,16 +652,16 @@ class DynGenerator(Generator):
         return True
 
     def generate_data(self, dm, monitor, target):
-        node = dm.get_data(self.data_id)
+        atom = dm.get_atom(self.data_id)
+        if isinstance(atom, Node):
+            if self.finite:
+                atom.make_finite(all_conf=True, recursive=True)
+            if self.determinist:
+                atom.make_determinist(all_conf=True, recursive=True)
+            if self.random:
+                atom.make_random(all_conf=True, recursive=True)
 
-        if self.finite:
-            node.make_finite(all_conf=True, recursive=True)
-        if self.determinist:
-            node.make_determinist(all_conf=True, recursive=True)
-        if self.random:
-            node.make_random(all_conf=True, recursive=True)
-
-        return Data(node)
+        return Data(atom)
 
 
 class dyn_generator_from_scenario(type):
@@ -777,7 +796,7 @@ class DynGeneratorFromScenario(Generator):
         step = self._scenario_steps[self._step_num]
         data_desc = step.data_desc
         if isinstance(data_desc[0], str) \
-                or (isinstance(data_desc[0], Data) and data_desc[0].node is not None):
+                or (isinstance(data_desc[0], Data) and data_desc[0].content is not None):
             dp = sc.DataProcess(process=['tTYPE#{:d}'.format(self._step_num)], seed=data_desc[0],
                                 auto_regen=True)
             dp.append_new_process([('tSTRUCT#{:d}'.format(self._step_num), UI(init=1), UI(deep=True))])

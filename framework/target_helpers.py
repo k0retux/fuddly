@@ -98,7 +98,7 @@ class Target(object):
           from_fmk (bool): set to True if the call was performed by the framework itself,
             otherwise the call comes from user-code (e.g., from a `probe` or an `operator`)
           data (Data): data container that embeds generally a
-            modeled data accessible through `data.node`. However if the
+            modeled data accessible through `data.content`. However if the
             latter is None, it only embeds the raw data.
         '''
         raise NotImplementedError

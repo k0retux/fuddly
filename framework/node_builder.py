@@ -1,66 +1,18 @@
-
-################################################################################
-#
-#  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
-#
-################################################################################
-#
-#  This file is part of fuddly.
-#
-#  fuddly is free software: you can redistribute it and/or modify
-#  it under the terms of the GNU General Public License as published by
-#  the Free Software Foundation, either version 3 of the License, or
-#  (at your option) any later version.
-#
-#  fuddly is distributed in the hope that it will be useful,
-#  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#  GNU General Public License for more details.
-#
-#  You should have received a copy of the GNU General Public License
-#  along with fuddly. If not, see <http://www.gnu.org/licenses/>
-#
-################################################################################
-
-from framework.data_model import *
-from framework.data import *
-from framework.dmhelpers.generic import *
-
-import framework.value_types as fvt
-from framework.value_types import VT
-import framework.global_resources as gr
-
-from libs.external_modules import *
-
-import traceback
-import datetime
+import inspect
+import string
+import sys
 import six
 
-################################
-# ModelWalker Helper Functions #
-################################
+from framework.dmhelpers.generic import MH
+from framework.error_handling import DataModelDefinitionError, CharsetError, \
+    InitialStateNotFoundError, QuantificationError, StructureError, InconvertibilityError, \
+    EscapeError, InvalidRangeError, EmptyAlphabetError
+from framework.node import Node, NodeInternals_Empty, GenFuncCusto, NonTermCusto, FuncCusto, \
+    NodeSemantics, SyncScope, SyncQtyFromObj, SyncSizeObj, NodeCondition, SyncExistenceObj, Env
 
-GENERIC_ARGS = {
-    'init': ('make the model walker ignore all the steps until the provided one', 1, int),
-    'max_steps': ('maximum number of steps (-1 means until the end)', -1, int),
-    'runs_per_node': ('maximum number of test cases for a single node (-1 means until the end)', -1, int),
-    'clone_node': ('if True the dmaker will always return a copy ' \
-                   'of the node. (for stateless diruptors dealing with ' \
-                   'big data it can be usefull to it to False)', True, bool)
-}
+import framework.value_types as fvt
 
-def modelwalker_inputs_handling_helper(dmaker, user_generic_input):
-    assert(dmaker.runs_per_node > 0 or dmaker.runs_per_node == -1)
-
-    if dmaker.runs_per_node == -1:
-        dmaker.max_runs_per_node = -1
-        dmaker.min_runs_per_node = -1
-    else:
-        dmaker.max_runs_per_node = dmaker.runs_per_node + 3
-        dmaker.min_runs_per_node = max(dmaker.runs_per_node - 2, 1)
-
-
-class ModelBuilder(object):
+class NodeBuilder(object):
 
     HIGH_PRIO = 1
     MEDIUM_PRIO = 2
@@ -80,7 +32,7 @@ class ModelBuilder(object):
         # Typed-node description keys
         'specific_fuzzy_vals',
         # Import description keys
-        'import_from', 'data_id',        
+        'import_from', 'data_id',
         # node properties description keys
         'determinist', 'random', 'finite', 'infinite', 'mutable',
         'clear_attrs', 'set_attrs',
@@ -129,7 +81,7 @@ class ModelBuilder(object):
         self.sorted_todo = {}
         self.node_dico = {}
         self.empty_node = Node('EMPTY')
-        
+
         n = self._create_graph_from_desc(desc, None)
 
         if self._add_env_to_the_node:
@@ -216,10 +168,10 @@ class ModelBuilder(object):
 
         exp = desc.get('import_from', None)
         if exp is not None:
-            assert self.dm is not None, "ModelBuilder should be initialized with the current data model!"
+            assert self.dm is not None, "NodeBuilder should be initialized with the current data model!"
             data_id = desc.get('data_id', None)
             assert data_id is not None, "Missing field: 'data_id' (to be used with 'import_from' field)"
-            nd = self.dm.get_external_node(dm_name=exp, data_id=data_id, name=name)
+            nd = self.dm.get_external_atom(dm_name=exp, data_id=data_id, name=name)
             assert nd is not None, "The requested data ID '{:s}' does not exist!".format(data_id)
             self.node_dico[(name, ident)] = nd
             return nd
@@ -412,7 +364,7 @@ class ModelBuilder(object):
 
 
     def _create_nodes_from_shape(self, shapes, parent_node, shape_type=MH.Ordered, dup_mode=MH.Copy):
-        
+
         def _handle_section(nodes_desc, sh):
             for n in nodes_desc:
                 if isinstance(n, (list,tuple)) and (len(n) == 2 or len(n) == 3):
@@ -477,7 +429,7 @@ class ModelBuilder(object):
 
         contents = desc.get('contents')
 
-        if issubclass(contents.__class__, VT):
+        if issubclass(contents.__class__, fvt.VT):
             if hasattr(contents, 'usable') and contents.usable == False:
                 raise ValueError("ERROR: {:s} is not usable! (use a subclass of it)".format(repr(contents)))
             n.set_values(value_type=contents, conf=conf)
@@ -565,7 +517,7 @@ class ModelBuilder(object):
             node.make_determinist(conf=conf)
         param = desc.get('random', None)
         if param is not None:
-            node.make_random(conf=conf)     
+            node.make_random(conf=conf)
         param = desc.get('finite', None)
         if param is not None:
             node.make_finite(conf=conf)
@@ -763,12 +715,9 @@ class ModelBuilder(object):
         node = self.node_dico[ref]
         if isinstance(node.cc, NodeInternals_Empty):
             raise ValueError("Node ({:s}, {!s}) is Empty!".format(ref[0], ref[1]))
-               
+
         return node
 
-
-
-### Helpers for RegExp-based Node ###
 
 class State(object):
     """
@@ -816,6 +765,7 @@ class State(object):
         """
         raise NotImplementedError
 
+
 class StateMachine(State):
     """
     Represent states that contain other states.
@@ -851,13 +801,16 @@ class StateMachine(State):
 
         self._run(context)
 
+
 def register(cls):
     cls.INITIAL = False
     return cls
 
+
 def initial(cls):
     cls.INITIAL = True
     return cls
+
 
 class RegexParser(StateMachine):
 
@@ -1470,214 +1423,3 @@ class RegexParser(StateMachine):
                 non_terminal += [1, [MH.Copy + MH.Ordered] + nodes]
 
         return non_terminal
-
-
-#### Data Model Abstraction
-
-class DataModel(object):
-    ''' The abstraction of a data model.
-    '''
-
-    file_extension = 'bin'
-    name = None
-
-    def __init__(self):
-        self.__dm_hashtable = {}
-        self.__built = False
-        self.__confs = set()
-
-
-    def merge_with(self, data_model):
-        for k, v in data_model.__dm_hashtable.items():
-            if k in self.__dm_hashtable:
-                raise ValueError("the data ID {:s} exists already".format(k))
-            else:
-                self.__dm_hashtable[k] = v
-
-        self.__confs = self.__confs.union(data_model.__confs)
-
-        
-    def pre_build(self):
-        '''
-        This method is called when a data model is loaded.
-        It is executed before build_data_model().
-        To be implemented by the user.
-        '''
-        pass
-
-
-    def build_data_model(self):
-        '''
-        This method is called when a data model is loaded.
-        It is called only the first time the data model is loaded.
-        To be implemented by the user.
-        '''
-        pass
-
-    def load_data_model(self, dm_db):
-        self.pre_build()
-        if not self.__built:
-            self.__dm_db = dm_db
-            self.build_data_model()
-            self.__built = True
-
-    def cleanup(self):
-        pass
-
-
-    def absorb(self, data, idx):
-        '''
-        If your data model is able to absorb raw data, do it here.  This
-        function is called for each files (with the right extension)
-        present in imported_data/<data_model_name>.
-        '''
-        return data
-
-    def get_external_node(self, dm_name, data_id, name=None):
-        dm = self.__dm_db[dm_name]
-        dm.load_data_model(self.__dm_db)
-        try:
-            node = dm.get_data(data_id, name=name)
-        except ValueError:
-            return None
-
-        return node
-
-
-    def show(self):
-        print(colorize(FontStyle.BOLD + '\n-=[ Data Types ]=-\n', rgb=Color.INFO))
-        idx = 0
-        for data_key in self.__dm_hashtable:
-            print(colorize('[%d] ' % idx + data_key, rgb=Color.SUBINFO))
-            idx += 1
-
-    def get_data(self, hash_key, name=None):
-        if hash_key in self.__dm_hashtable:
-            nm = hash_key if name is None else name
-            node = Node(nm, base_node=self.__dm_hashtable[hash_key], ignore_frozen_state=False,
-                        new_env=True)
-            return node
-        else:
-            raise ValueError('Requested data does not exist!')
-
-
-    def data_identifiers(self):
-        hkeys = sorted(self.__dm_hashtable.keys())
-        for k in hkeys:
-            yield k
-
-
-    def get_available_confs(self):
-        return sorted(self.__confs)
-
-    def register(self, *node_or_desc_list):
-        for n in node_or_desc_list:
-            if isinstance(n, Node):
-                self.register_nodes(n)
-            else:
-                self.register_descriptors(n)
-
-
-    def register_nodes(self, *node_list):
-        '''Enable to registers the nodes that will be part of the data
-        model. At least one node should be registered within
-        :func:`DataModel.build_data_model()` to represent the data
-        format. But several nodes can be registered in order, for instance, to
-        represent the various component of a protocol/standard/...
-        '''
-        if not node_list:
-            msg = "\n*** WARNING: nothing to register for " \
-                  "the data model '{nm:s}'!"\
-                  "\n   [probable reason: {fdata:s}/imported_data/{nm:s}/ not " \
-                  "populated with sample files]".format(nm=self.name, fdata=gr.fuddly_data_folder)
-            raise UserWarning(msg)
-
-        for e in node_list:
-            if e is None:
-                continue
-            if e.env is None:
-                env = Env()
-                env.set_data_model(self)
-                e.set_env(env)
-            else:
-                e.env.set_data_model(self)
-
-            self.__dm_hashtable[e.name] = e
-
-            self.__confs = self.__confs.union(e.gather_alt_confs())
-
-
-    def register_descriptors(self, *desc_list):
-        for desc in desc_list:
-            mb = ModelBuilder(dm=self)
-            desc_name = 'Unreadable Name'
-            try:
-                desc_name = desc['name']
-                node = mb.create_graph_from_desc(desc)
-            except:
-                print('-'*60)
-                traceback.print_exc(file=sys.stdout)
-                print('-'*60)
-                msg = "*** ERROR: problem encountered with the '{desc:s}' descriptor!".format(desc=desc_name)
-                raise UserWarning(msg)
-
-            self.register_nodes(node)
-
-    def update_node_env(self, node):
-        env = Env()
-        env.set_data_model(self)
-        node.set_env(env)
-
-
-    def import_file_contents(self, extension=None, absorber=None,
-                             subdir=None, path=None, filename=None):
-
-        if absorber is None:
-            absorber = self.absorb
-
-        if extension is None:
-            extension = self.file_extension
-        if path is None:
-            path = self.get_import_directory_path(subdir=subdir)
-
-        r_file = re.compile(".*\." + extension + "$")
-        def is_good_file_by_ext(fname):
-            return bool(r_file.match(fname))
-
-        def is_good_file_by_fname(fname):
-            return filename == fname
-
-        files = []
-        for (dirpath, dirnames, filenames) in os.walk(path):
-            files.extend(filenames)
-            break
-
-        if filename is None:
-            files = list(filter(is_good_file_by_ext, files))
-        else:
-            files = list(filter(is_good_file_by_fname, files))
-        msgs = {}
-        idx = 0
-
-        for name in files:
-            with open(os.path.join(path, name), 'rb') as f:
-                buff = f.read()
-                d_abs = absorber(buff, idx)
-                if d_abs is not None:
-                    msgs[name] = d_abs
-            idx +=1
-
-        return msgs
-
-    def get_import_directory_path(self, subdir=None):
-        if subdir is None:
-            subdir = self.name
-        if subdir is None:
-            path = gr.imported_data_folder
-        else:
-            path = os.path.join(gr.imported_data_folder, subdir)
-
-        if not os.path.exists(path):
-            os.makedirs(path)
-
-        return path

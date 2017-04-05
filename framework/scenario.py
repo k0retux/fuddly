@@ -27,7 +27,7 @@ import platform
 
 from framework.global_resources import *
 from framework.data import Data
-from framework.data_model import Node
+from framework.node import Node
 from libs.external_modules import *
 from libs.utils import find_file, retrieve_app_handler
 
@@ -112,7 +112,7 @@ class DataProcess(object):
         if isinstance(self.seed, str):
             desc += 'Seed=' + self.seed + suffix
         elif isinstance(self.seed, Data):
-            seed_str = self.seed.node.name if self.seed.node is not None else 'Data(...)'
+            seed_str = self.seed.content.name if isinstance(self.seed.content, Node) else 'Data(...)'
             desc += 'Seed={:s}'.format(seed_str) + suffix
         else:
             desc += suffix[2:]
@@ -177,7 +177,7 @@ class Step(object):
             self._periodic_data_to_remove = None
 
     def _handle_data_desc(self, data_desc):
-        self._node = None
+        self._atom = None
 
         if self.final:
             self._node_name = [None]
@@ -287,61 +287,63 @@ class Step(object):
             yield tr
 
     @property
-    def node(self):
+    def content(self):
         """
-        Provide the node of the step if possible.
-        In the case of a DataProcess, if it has been carried out, then the resulting node is returned,
-        otherwise the seed node is returned if it exists.
+        Provide the atom of the step if possible.
+        In the case of a DataProcess, if it has been carried out, then the resulting atom is returned,
+        otherwise the seed atom is returned if it exists.
+        
+        Provide an atom list if the step contain multiple atom
         """
-        node_list = []
+        atom_list = []
         update_node = False
         for idx, d in enumerate(self._data_desc):
             if isinstance(d, DataProcess):
-                if d.outcomes is not None and d.outcomes.node:
+                if d.outcomes is not None and d.outcomes.content:
                     # that means that a data creation process has been registered and it has been
                     # carried out
-                    node_list.append(d.outcomes.node)
+                    atom_list.append(d.outcomes.content)
                 elif d.seed is not None:
                     # We provide the seed in this case
                     if isinstance(d.seed, str):
                         seed_name = d.seed
-                        node = self._scenario_env.dm.get_data(d.seed)
-                        d.seed = Data(node)
+                        atom = self._scenario_env.dm.get_atom(d.seed)
+                        d.seed = Data(atom)
                         d.seed.generate_info_from_content(origin=self._scenario_env.scenario)
-                        node_list.append(node)
+                        atom_list.append(atom)
                     elif isinstance(d.seed, Data):
-                        node_list.append(d.seed.node)  # if data is raw, .node is None
+                        atom_list.append(d.seed.content if isinstance(d.seed.content, Node) else None)
                     else:
-                        node_list.append(None)
+                        atom_list.append(None)
                 else:
-                    node_list.append(None)
+                    atom_list.append(None)
             elif isinstance(d, Data):
-                node_list.append(d.node)  # if data is raw, .node is None
+                atom_list.append(d.content if isinstance(d.content, Node) else None)
             elif isinstance(d, Data) or self._node_name[idx] is None:
                 # that means that a data creation process has been registered and will be
                 # carried out by the framework through a callback
-                node_list.append(None)
+                atom_list.append(None)
             else:
-                if self._node is None:
+                if self._atom is None:
                     update_node = True
-                    self._node = {}
+                    self._atom = {}
                 if update_node:
-                    self._node[idx] = self._scenario_env.dm.get_data(self._node_name[idx])
-                node_list.append(self._node[idx])
+                    self._atom[idx] = self._scenario_env.dm.get_atom(self._node_name[idx])
+                atom_list.append(self._atom[idx])
 
-        return node_list[0] if len(node_list) == 1 else node_list
+        return atom_list[0] if len(atom_list) == 1 else atom_list
 
-    @node.setter
-    def node(self, node_list):
-        if isinstance(node_list, list):
-            self._data_desc = node_list
-        if isinstance(node_list, Node):
-            self._data_desc = [node_list]
+    @content.setter
+    def content(self, atom_list):
+        if isinstance(atom_list, list):
+            self._data_desc = atom_list
+        if isinstance(atom_list, Node):
+            self._data_desc = [atom_list]
         else:
             raise ValueError
 
     def get_data(self):
-        node_list = self.node
+        node_list = self.content
         if not isinstance(node_list, list):
             d_desc = self._data_desc[0]
             if isinstance(d_desc, Data):
@@ -433,7 +435,7 @@ class Step(object):
                     if self.__class__.__name__ != 'Step':
                         step_desc += '[' + self.__class__.__name__ + ']'
                     else:
-                        step_desc += d.node.name if d.node is not None else 'Data(...)'
+                        step_desc += d.content.name if isinstance(d.content, Node) else 'Data(...)'
                 elif isinstance(d, str):
                     step_desc += "{:s}".format(self._node_name[idx].upper())
                 else:

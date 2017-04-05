@@ -35,9 +35,8 @@ import uuid
 from _socket import error as socket_error
 
 from framework.data import Data
-from framework.data_model import NodeSemanticsCriteria
+from framework.node import Node, NodeSemanticsCriteria
 from framework.target_helpers import Target, TargetFeedback, TargetStuck
-
 
 class NetworkTarget(Target):
     '''Generic target class for interacting with a network resource. Can
@@ -582,12 +581,12 @@ class NetworkTarget(Target):
                     self._feedback.add_fbk_from(self._INTERNALS_ID, err_msg, status=-1)
 
     def _get_data_semantic_key(self, data):
-        if data.node is None:
-            if data.raw is None:
+        if not isinstance(data.content, Node):
+            if data.is_empty():
                 print('\n*** ERROR: Empty data has been received!')
             return self.UNKNOWN_SEMANTIC
 
-        semantics = data.node.get_semantics()
+        semantics = data.content.get_semantics()
         if semantics is not None:
             matching_crit = semantics.what_match_from(self.known_semantics)
         else:
@@ -1141,21 +1140,21 @@ class NetworkTarget(Target):
             data_list = [data_list]
 
         for data in data_list:
-            if data.node is None:
+            if not isinstance(data.content, Node):
                 continue
-            data.node.freeze()
+            data.content.freeze()
             host, port, socket_type, _ = self._get_net_info_from(data)
             if socket_type[1] == socket.SOCK_RAW:
                 mac_src = self._mac_src[(host,port)]
                 mac_dst = self._mac_dst[(host,port)]
                 if mac_src is not None:
                     try:
-                        data.node[self._mac_src_semantic] = mac_src
+                        data.content[self._mac_src_semantic] = mac_src
                     except ValueError:
                         self._logger.log_comment('WARNING: Unable to set the MAC SOURCE on the packet')
                 if mac_dst is not None:
                     try:
-                        data.node[self._mac_dst_semantic] = mac_dst
+                        data.content[self._mac_dst_semantic] = mac_dst
                     except ValueError:
                         self._logger.log_comment('WARNING: Unable to set the MAC DESTINATION on the packet')
 

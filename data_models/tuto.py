@@ -3,9 +3,9 @@ sys.path.append('.')
 
 from framework.plumbing import *
 
-from framework.data_model import *
+from framework.node import *
 from framework.value_types import *
-from framework.data_model_builder import *
+from framework.data_model import *
 from framework.encoders import *
 import framework.dmhelpers.xml as xml
 

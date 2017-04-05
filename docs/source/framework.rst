@@ -21,10 +21,21 @@ framework.data_model module
     :exclude-members: __dict__, __weakref__
     :show-inheritance:
 
-framework.data_model_builder module
------------------------------------
+framework.node module
+---------------------
 
-.. automodule:: framework.data_model_builder
+.. automodule:: framework.node
+    :members:
+    :undoc-members:
+    :private-members:
+    :special-members:
+    :exclude-members: __dict__, __weakref__
+    :show-inheritance:
+
+framework.node_builder module
+-----------------------------
+
+.. automodule:: framework.node_builder
     :members:
     :undoc-members:
     :private-members:

@@ -21,12 +21,9 @@
 #
 ################################################################################
 
-import sys
-
 from framework.data_model import *
-from framework.value_types import *
-from framework.data_model_builder import *
 from framework.global_resources import *
+from framework.value_types import *
 
 
 class PNG_DataModel(DataModel):
@@ -121,12 +118,12 @@ class PNG_DataModel(DataModel):
          ]}
 
 
-        mb = ModelBuilder()
+        mb = NodeBuilder()
         self.png = mb.create_graph_from_desc(png_desc)
 
         self.png_dict = self.import_file_contents(extension='png')
        
-        self.register_nodes(*self.png_dict.values())
+        self.register(*self.png_dict.values())
 
 
 data_model = PNG_DataModel()

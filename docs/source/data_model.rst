@@ -7,7 +7,7 @@ Data Model Keywords
 ===================
 
 This section describe the *keywords* that you could use within the
-frame of the :class:`framework.data_model_builder.ModelBuilder`
+frame of the :class:`framework.node_builder.NodeBuilder`
 infrastructure. This infrastructure enables you to describe a data
 format in a JSON-like fashion, and will automatically translate this
 description to ``fuddly``'s internal data representation.
@@ -19,7 +19,7 @@ Generic Description Keywords
 name
   Within ``fuddly``'s data model every node has a name that should be
   unique only within its siblings. But when it comes to use the
-  :class:`framework.data_model_builder.ModelBuilder` infrastructure to
+  :class:`framework.node_builder.NodeBuilder` infrastructure to
   describe your data format, if you want to use the same name in a
   data model description, you have to add an extra key to keep it
   unique within the description, and thus allowing you to refer to
@@ -46,7 +46,7 @@ contents
     terminal node
   - a python ``function`` (or everything with a ``__call__`` method)
     will be considered as a generator.
-  - a :class:`framework.data_model.Node` will be used as a baseline for
+  - a :class:`framework.node.Node` will be used as a baseline for
     the description. If no additional keyword is provided, the provided node
     will be used as is. Otherwise, the additional keywords will be used to complement the
     description. Note that the *keyword* ``name`` should not be provided as it will be
@@ -66,7 +66,7 @@ qty
   Note ``-1`` means infinity. It makes only sense for absorption
   operation (refer to :ref:`tuto:dm-absorption`), because for data
   generation, a strict limit
-  (:const:`framework.data_model.NodeInternals_NonTerm.INFINITY_LIMIT`)
+  (:const:`framework.node.NodeInternals_NonTerm.INFINITY_LIMIT`)
   is set to avoid getting unintended too big data. If you intend to
   get such kind of data, specify explicitly the maximum, or use a
   disruptor to do so (:ref:`tuto:disruptors`).
@@ -77,7 +77,7 @@ clone
   reference.
 
 type
-  Used only by the :class:`framework.data_model_builder.ModelBuilder`
+  Used only by the :class:`framework.node_builder.NodeBuilder`
   infrastructure if there is an ambiguity to determine the node
   type. This attributes accept the following values:
 
@@ -107,7 +107,7 @@ conf
 evolution_func
   This attribute allows to provide a function that will be used in the case the described node is
   instantiated more than once by a containing non-terminal node further to a
-  :meth:`framework.data_model.Node.freeze` operation (refer to the ``qty`` keyword).
+  :meth:`framework.node.Node.freeze` operation (refer to the ``qty`` keyword).
   The function will be called on every node instance (but the first one) before this node
   incorporate the frozen form of the non-terminal. Besides, the node returned by the function will
   be used as the base node for the next instantiation (which makes node evolution easier).
@@ -158,7 +158,7 @@ custo_set, custo_clear
 
   - ``MH.Custo.Gen.ForwardConfChange``: By default, this mode is *enabled*.
     If enabled, a
-    call to :meth:`framework.data_model.Node.set_current_conf()` will be
+    call to :meth:`framework.node.Node.set_current_conf()` will be
     called on the generated node (default behavior).
   - ``MH.Custo.Gen.CloneExtNodeArgs``: By default, this mode is *disabled*.
     If enabled, during a cloning operation (e.g., full copy
@@ -171,11 +171,11 @@ custo_set, custo_clear
     still belonging to the full data.
   - ``MH.Custo.Gen.ResetOnUnfreeze``: By default, this mode is *enabled*.
     If enabled, a
-    call to :meth:`framework.data_model.Node.unfreeze()` on the node will
+    call to :meth:`framework.node.Node.unfreeze()` on the node will
     provoke the reset of the *generator* itself, meaning that the next
     time its value will be asked for, it will be recomputed (default
     behaviour). If unset, a call to the method
-    :meth:`framework.data_model.Node.unfreeze()` will provoke the call of
+    :meth:`framework.node.Node.unfreeze()` will provoke the call of
     this method on the already existing generated node (and if it
     didn't exist by this time it would have been computed first).
   - ``MH.Custo.Gen.TriggerLast``: By default, this mode is *disabled*.
@@ -341,7 +341,7 @@ unique
 encoder
   If specified, an encoder instance should be provided. The *encoding* will be applied
   transparently when the binary value of the non terminal node will be retrieved
-  (:meth:`framework.data_model.Node.to_bytes`). Additionally, during an absorption
+  (:meth:`framework.node.Node.to_bytes`). Additionally, during an absorption
   (refer to :ref:`tuto:dm-absorption`), the *decoding* will also be performed automatically.
 
   Several generic encoders are defined within ``framework/encoders.py``. But if they
@@ -365,7 +365,7 @@ node_args
 
 other_args
   List of parameters (which are not a
-  :class:`framework.data_model.Node`) to be provided to a *generator*
+  :class:`framework.node.Node`) to be provided to a *generator*
   node or a *function* node.
 
 provide_helpers
@@ -373,7 +373,7 @@ provide_helpers
   the user-defined function (last parameter) of the *generator* node
   or the *function* node. Otherwise, this object won't be passed
   (default behavior). This object is an instance of the class
-  :class:`framework.data_model.DynNode_Helpers`, which enable the
+  :class:`framework.node.DynNode_Helpers`, which enable the
   user-defined function to have some insight on the current structure
   of the modeled data.
 
@@ -421,8 +421,8 @@ set_attrs
 
   - ``MH.Attr.Freezable``: If set, the node will be freezable (default
     behavior), which means that once the node has provided a value
-    (through for instance :meth:`framework.data_model.Node.to_bytes()`),
-    the method :meth:`framework.data_model.Node.unfreeze()` need to be
+    (through for instance :meth:`framework.node.Node.to_bytes()`),
+    the method :meth:`framework.node.Node.unfreeze()` need to be
     called on it to get new values, otherwise it won't change. If
     unset, the node will always be recomputed. Can be useful for
     *function* node, if it needs to be recomputed each time a
@@ -459,7 +459,7 @@ set_attrs
             generated node.
 
   .. seealso:: The attributes are defined within
-               :class:`framework.data_model.NodeInternals`.
+               :class:`framework.node.NodeInternals`.
 
 clear_attrs
   List of attributes to clear on the node. The current attributes are
@@ -565,7 +565,7 @@ exists_if_not
 post_freeze
   To be filled with a function. If specified, the function will be
   called just after the node has been frozen. It takes the node
-  internals as argument (:class:`framework.data_model.NodeInternals`).
+  internals as argument (:class:`framework.node.NodeInternals`).
 
 specific_fuzzy_vals
   Usable for *typed-nodes* only. This keyword allows to specify a list of additional values to
@@ -1066,7 +1066,7 @@ modules are presented hereunder:
 
 
   .. note::``uuid.uuid1()`` is used to avoid node name collisions with the formalism of
-    :class:`framework.data_model_builder.ModelBuilder`.
+    :class:`framework.node_builder.NodeBuilder`.
 
 .. _dm:patterns:
 
@@ -1242,7 +1242,7 @@ From this data model you could get a data like that:
 .. note:: You can also perform specific *separator mutation* within a
           disruptor (refer to :ref:`tuto:disruptors`), as separator nodes have
           the specific attribute
-          :const:`framework.data_model.NodeInternals.Separator` set.
+          :const:`framework.node.NodeInternals.Separator` set.
 
 
 .. _dm:pattern:existence-cond:
@@ -1253,7 +1253,7 @@ How to Describe a Data Format Whose Parts Change Depending on Some Fields
 The example below shows how to define a data format based on *opcodes*
 and *sub-opcodes* which change the form of the data itself. We use for
 that purpose the keyword ``exists_if`` with some subclasses of
-:class:`framework.data_model.NodeCondition` and node references.
+:class:`framework.node.NodeCondition` and node references.
 
 .. note:: The keyword ``exists_if`` can directly take a node
           reference. In such case, the condition is the existence of
@@ -1380,12 +1380,12 @@ character string in our case.
      ]}
 
 Note the *generator* is just a specific kind of node
-(:class:`framework.data_model.NodeInternals_GenFunc`) that embeds a
-function that returns a node (:class:`framework.data_model.Node`). In
+(:class:`framework.node.NodeInternals_GenFunc`) that embeds a
+function that returns a node (:class:`framework.node.Node`). In
 the previous description, the function is provided through the keyword
 ``contents``, and it's a simple lambda function taking a node as
 parameter, on which is called
-:meth:`framework.data_model.Node.to_bytes()` to get its bytes
+:meth:`framework.node.Node.to_bytes()` to get its bytes
 representation and then the ``len()`` function. The result is used for
 defining a terminal node of type
 :class:`framework.value_types.UINT32_be` (refer to section :ref:`vt:integer`).
@@ -1654,13 +1654,13 @@ To perform that operation you can write the following python code:
    :emphasize-lines: 10, 12
 
    from framework.plumbing import *
-   from framework.data_model import AbsorbStatus
+   from framework.node import AbsorbStatus
 
    raw_data = b'Plop\x8c\xd6/\x06x\x9cc\raHe(f(aPd\x00\x00\x0bv\x01\xc7Blue'
 
    fmk = FmkPlumbing()
    fmk.run_project(name="tuto")
-   enc_dm = fmk.dm.get_data('enc')
+   enc_dm = fmk.dm.get_atom('enc')
 
    status, off, size, name = enc_dm.absorb(raw_data, constraints=AbsFullCsts())
    if status == AbsorbStatus.FullyAbsorbed:

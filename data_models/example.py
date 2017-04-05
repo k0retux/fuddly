@@ -24,17 +24,12 @@
 ################################################################################
 
 import sys
-import copy
-import re
-import functools
 
 sys.path.append('.')
 
 from framework.data_model import *
-from framework.data_model_builder import *
 from framework.value_types import *
 
-from framework.fuzzing_primitives import *
 from framework.basic_primitives import *
 
 class Example_DataModel(DataModel):
@@ -398,10 +393,10 @@ class Example_DataModel(DataModel):
                ]}
          ]}
 
-        mb = ModelBuilder(dm=self)
+        mb = NodeBuilder(dm=self)
         test_node = mb.create_graph_from_desc(test_node_desc)
 
-        self.register_nodes(node_ex1, tux, typed_node, e_nonterm, e_simple,
+        self.register(node_ex1, tux, typed_node, e_nonterm, e_simple,
                             val1_middle, middle, test_node)
 
 

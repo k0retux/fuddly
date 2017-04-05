@@ -18,9 +18,9 @@ To guide you over what is possible to perform, let's consider the following data
 .. code-block:: python
    :linenos:
 
-    from framework.data_model import *
+    from framework.node import *
     from framework.value_types import *
-    from framework.data_model_builder import *
+    from framework.node_builder import *
 
      example_desc = \
      {'name': 'ex',
@@ -65,35 +65,35 @@ To guide you over what is possible to perform, let's consider the following data
 
 
 This is what we call a data descriptor. It cannot be used directly, it should first be
-transformed to ``fuddly`` internal representation based on :class:`framework.data_model.Node`.
+transformed to ``fuddly`` internal representation based on :class:`framework.node.Node`.
 The code below shows how to perform that:
 
 .. code-block:: python
    :linenos:
 
-    mb = ModelBuilder()
-    rnode = mb.create_graph_from_desc(example_desc)
+    nb = NodeBuilder()
+    rnode = nb.create_graph_from_desc(example_desc)
     rnode.set_env(Env())
 
 
 ``fuddly`` models data as directed acyclic graphs whose terminal
 nodes describe the different parts of a data format (refer to :ref:`data-model`). In order to
 enable elaborated manipulations it also creates a specific object to share between all the nodes
-some common information related to the graph: the :class:`framework.data_model.Env` object. You should
+some common information related to the graph: the :class:`framework.node.Env` object. You should
 note that we create this *environment* object and setup the root node with it. Actually it
 provides all the nodes of the graph with this environment. From now on it is possible to access
 the environment from any node, and ``fuddly`` is now able to deal with this graph.
 
-.. note:: The method :meth:`framework.data_model_builder.ModelBuilder.create_graph_from_desc` return a
-   :class:`framework.data_model.Node` which is the root of the graph.
+.. note:: The method :meth:`framework.node_builder.NodeBuilder.create_graph_from_desc` return a
+   :class:`framework.node.Node` which is the root of the graph.
 
-.. note:: When you instantiate a data from a model through
-   :meth:`framework.data_model_builder.DataModel.get_data` as illustrated in :ref:`fuddly-advanced`,
+.. note:: When you instantiate a modeled data from a model through
+   :meth:`framework.data_model.DataModel.get_atom` as illustrated in :ref:`fuddly-advanced`,
    the environment object is created for you. Likewise, when you register a data descriptor through
-   :meth:`framework.data_model_builder.DataModel.register` (refer to :ref:`dm:mydf`), no need to worry
+   :meth:`framework.data_model.DataModel.register` (refer to :ref:`dm:mydf`), no need to worry
    about the environment.
 
-.. note:: The :class:`framework.data_model_builder.ModelBuilder` object which is used to create a
+.. note:: The :class:`framework.node_builder.NodeBuilder` object which is used to create a
    graph from a data descriptor is bound to the graph and should not be used for creating another
    graph. It contains some information on the created graph such as a dictionary of all its
    nodes ``mb.node_dico``.
@@ -106,17 +106,17 @@ Generate Data a.k.a. Freeze a Graph
 
 If you want to get a data from the graph you have to freeze it first as it represents many
 different potential data at once (actually it acts like a template). To do so, just call the method
-:meth:`framework.data_model.Node.freeze` on the root node. It will provide you with a nested set of
+:meth:`framework.node.Node.freeze` on the root node. It will provide you with a nested set of
 lists containing the frozen value for each node selected within the graph to provide you with a data.
 
 What is way more interesting in the general case is obtaining a byte string of the data. For
-this you just have to call :meth:`framework.data_model.Node.to_bytes` on the root node which will
+this you just have to call :meth:`framework.node.Node.to_bytes` on the root node which will
 first freeze the graph and then flatten the nested list automatically to provide you with
 the byte string.
 
 If you want to get another data from the graph you should first unfreeze it because otherwise any
 further call to the previous methods will give you the same value. To do that you can call the
-method :meth:`framework.data_model.Node.unfreeze`. You will then be able to get a new data by
+method :meth:`framework.node.Node.unfreeze`. You will then be able to get a new data by
 freezing it again. Actually doing so will produce the next data by cycling over the possible
 node values (described in the graph) in a random or a determinist way (refer to :ref:`dmanip:prop`).
 If you look at getting data from the graph by walking over each of its nodes independently then
@@ -130,7 +130,7 @@ parameter.
 You may want to unfreeze the graph without changing its state, just because you performed some
 modifications locally and want it to be taken into account when getting a new data from the graph.
 (refer to :ref:`dmanip:conf` for a usage example). For that purpose, you may use the
-``dont_change_state`` parameter of :meth:`framework.data_model.Node.unfreeze` which allows
+``dont_change_state`` parameter of :meth:`framework.node.Node.unfreeze` which allows
 to unfreeze without cycling.
 
 Another option you may want is to unfreeze only the constraints of your graph which based on
@@ -139,7 +139,7 @@ To do so, set the ``reevaluate_constraints`` parameter to ``True``.
 
 To cycle over the possible node values or shapes (for non terminal nodes) a state is kept.
 This state is normally reset automatically when the node is exhausted in order to cycle again.
-can be reset thanks to the method :meth:`framework.data_model.Node.reset_state`. In
+can be reset thanks to the method :meth:`framework.node.Node.reset_state`. In
 addition to resetting the node state it also unfreezes it.
 
 .. note:: When a cycle over the possible node values or shapes is terminated, a notification is
@@ -149,7 +149,7 @@ addition to resetting the node state it also unfreezes it.
    the generation of duplicated data.
 
 Finally if you want to unfreeze all the node configurations (refer to :ref:`dmanip:conf`) at
-once, you should call the method :meth:`framework.data_model.Node.unfreeze_all`.
+once, you should call the method :meth:`framework.node.Node.unfreeze_all`.
 
 
 .. _dmanip:node:
@@ -160,35 +160,35 @@ Create Nodes with Low-Level Primitives
 Instead of using the high-level API for describing a graph you can create it by using ``fuddly``
 low-level primitives. Generally, you don't need to go through that, but for specific
 complex situations it could provide you with what you need. To create a graph or a single node,
-you always have to instantiate the class :class:`framework.data_model.Node` which enables you to set
+you always have to instantiate the class :class:`framework.node.Node` which enables you to set
 the type of content for the main node configuration (refer to :ref:`dmanip:conf`).
 
 Depending on the content type the constructor will call the following methods to do the
 job:
 
-- :meth:`framework.data_model.Node.set_values`: for *typed-value* nodes.
-- :meth:`framework.data_model.Node.set_subnodes_basic`: for *non-terminal* nodes without specifying a
+- :meth:`framework.node.Node.set_values`: for *typed-value* nodes.
+- :meth:`framework.node.Node.set_subnodes_basic`: for *non-terminal* nodes without specifying a
   grammar.
-- :meth:`framework.data_model.Node.set_subnodes_with_csts`: for *non-terminal* nodes constrained by
+- :meth:`framework.node.Node.set_subnodes_with_csts`: for *non-terminal* nodes constrained by
   a grammar.
-- :meth:`framework.data_model.Node.set_generator_func`: for *generator* nodes.
-- :meth:`framework.data_model.Node.set_func`: for *function* nodes.
+- :meth:`framework.node.Node.set_generator_func`: for *generator* nodes.
+- :meth:`framework.node.Node.set_func`: for *function* nodes.
 
 
 .. note::
-   Methods specific to the node content (:class:`framework.data_model.NodeInternals`) can be
+   Methods specific to the node content (:class:`framework.node.NodeInternals`) can be
    called directly on the node itself and it will be *forwarded* to the content (if the method name
-   does not match one the :class:`framework.data_model.Node` class).
+   does not match one the :class:`framework.node.Node` class).
 
 .. seealso::
    If you want to learn more about the specific operations that can be performed on each kind of
-   content (whose base class is :class:`framework.data_model.NodeInternals`), refer to the related
+   content (whose base class is :class:`framework.node.NodeInternals`), refer to the related
    class, namely:
 
-   - :class:`framework.data_model.NodeInternals_TypedValue`
-   - :class:`framework.data_model.NodeInternals_NonTerm`
-   - :class:`framework.data_model.NodeInternals_GenFunc`
-   - :class:`framework.data_model.NodeInternals_Func`
+   - :class:`framework.node.NodeInternals_TypedValue`
+   - :class:`framework.node.NodeInternals_NonTerm`
+   - :class:`framework.node.NodeInternals_GenFunc`
+   - :class:`framework.node.NodeInternals_Func`
 
 
 
@@ -197,7 +197,7 @@ Cloning a Node
 
 A graph or any node within can be cloned in order to be used anywhere else independently from the
 original node. To perform such an operation you should use
-:meth:`framework.data_model.Node.get_clone` like in the following example:
+:meth:`framework.node.Node.get_clone` like in the following example:
 
 .. code-block:: python
    :linenos:
@@ -216,7 +216,7 @@ parameter the node to copy:
 
 When you clone a node you may want to keep its current state or ignore it (that is, cloning
 an unfrozen graph as if it was reset). For doing so, you have to use the parameter
-``ignore_frozen_state`` of the method :meth:`framework.data_model.Node.get_clone`. By default it is
+``ignore_frozen_state`` of the method :meth:`framework.node.Node.get_clone`. By default it is
 set to ``False`` which means that the state is preserved during the cloning process.
 
 
@@ -224,7 +224,7 @@ Display a Frozen Graph
 ----------------------
 
 If you want to display a frozen graph (representing one data) in ASCII-art you have to call the
-method :meth:`framework.data_model.Node.show` on it. For instance the following::
+method :meth:`framework.node.Node.show` on it. For instance the following::
 
     rnode.show()
 
@@ -241,8 +241,8 @@ The Node Environment
 The environment which should normally be the same for all the nodes of a same graph are handled
 by the following methods:
 
-- :meth:`framework.data_model.Node.set_env`
-- :meth:`framework.data_model.Node.get_env`
+- :meth:`framework.node.Node.set_env`
+- :meth:`framework.node.Node.get_env`
 
 
 .. _dmanip:search:
@@ -253,7 +253,7 @@ Search for Nodes in a Graph
 Searching a graph for specific nodes can be performed in basically two ways. Depending on the
 criteria based on which you want to perform the search, you should use:
 
-- :meth:`framework.data_model.Node.get_node_by_path`: will retrieve the first node that match the
+- :meth:`framework.node.Node.get_node_by_path`: will retrieve the first node that match the
   *graph path*---you provide as a parameter---from the node on which the method is called (or
   ``None`` if nothing is found). The syntax defined to represent paths is similar to the one of
   filesystem paths. Each path are represented by a python string, where node names are
@@ -266,13 +266,13 @@ criteria based on which you want to perform the search, you should use:
   matching a path regexp you should use the following method.
 
 
-- :meth:`framework.data_model.Node.get_reachable_nodes`: It is the more flexible primitive that
+- :meth:`framework.node.Node.get_reachable_nodes`: It is the more flexible primitive that
   enables to perform a search based on syntactic and/or semantic criteria. It can take several
   optional parameters to define your search like a *graph path* regexp. Unlike the previous method
   it always returns a list, either filled with the nodes that has been found or with nothing.
   You can use other kinds of criteria to be passed through the following parameters:
 
-  + ``internals_criteria``: To be provided with a :class:`framework.data_model.NodeInternalsCriteria`
+  + ``internals_criteria``: To be provided with a :class:`framework.node.NodeInternalsCriteria`
     object. This object enable you to describe the syntactic properties you look for, such as:
 
      - The node kind (refer to :ref:`dmanip:prop`) and/or subkind (for a typed terminal node, a
@@ -281,10 +281,10 @@ criteria based on which you want to perform the search, you should use:
      - The node attributes (refer to :ref:`dmanip:prop`)
 
      - The node constraints such as: *existence* or *quantity synchronization*. Usable
-       constraints are defined by :class:`framework.data_model.SyncScope`.
+       constraints are defined by :class:`framework.node.SyncScope`.
 
 
-  + ``semantics_criteria``: To be provided with a :class:`framework.data_model.NodeSemanticCriteria`
+  + ``semantics_criteria``: To be provided with a :class:`framework.node.NodeSemanticCriteria`
     object. This object enable you to describe the semantic properties you look for. They are
     currently limited to a list of python strings.
 
@@ -298,14 +298,14 @@ criteria based on which you want to perform the search, you should use:
      :linenos:
 
      from framework.plumbing import *
-     from framework.data_model import *
+     from framework.node import *
      from framework.value_types import *
 
      fmk = FmkPlumbing()
      fmk.run_project(name='tuto')
 
      data = fmk.get_data(['EX'])    # Return a Data container on the data model example
-     data.node.freeze()
+     data.content.freeze()
 
      ic = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
                                 node_kinds=[NodeInternals_TypedValue],
@@ -314,20 +314,20 @@ criteria based on which you want to perform the search, you should use:
 
      sc = NodeSemanticsCriteria(mandatory_criteria=['sem1', 'sem2'])
 
-     data.node.get_reachable_nodes(internals_criteria=ic, semantics_criteria=sc,
+     data.content.get_reachable_nodes(internals_criteria=ic, semantics_criteria=sc,
                                    owned_conf='alt2')
 
   Obviously, you don't need all these criteria for retrieving such node. It's only for
   exercise.
 
   .. note:: For abstracting away the data model from the rest of the framework, ``fuddly`` uses the
-     specific class :meth:`framework.data_model.Data` which acts as a data container.
+     specific class :meth:`framework.data.Data` which acts as a data container.
 
 
 The Node Dictionary Interface
 =============================
 
-The :class:`framework.data_model.Node` implements the dictionary interface, which means the
+The :class:`framework.node.Node` implements the dictionary interface, which means the
 following operation are possible on a node:
 
 .. code-block:: python
@@ -342,7 +342,7 @@ As a ``key``, you can provide:
 - A *path regexp* (where the node on which the method is called is considered as the root) to the
   node you want to reach. If multiple nodes match the path regexp, the first one will be returned
   (or ``None`` if the path match nothing). It is equivalent to calling
-  :meth:`framework.data_model.Node.get_node_by_path` on the node and providing the parameter
+  :meth:`framework.node.Node.get_node_by_path` on the node and providing the parameter
   ``path_regexp`` with your path.
 
   The following python code snippet illustrate the access to the node named ``len`` to
@@ -357,15 +357,15 @@ As a ``key``, you can provide:
       rnode.get_node_by_path('ex/data_group/len').to_bytes()
 
 
-- A :class:`framework.data_model.NodeInternalsCriteria` that match the internal
+- A :class:`framework.node.NodeInternalsCriteria` that match the internal
   attributes of interest of the nodes you want to retrieve and which are reachable from the
-  current node. It is equivalent to calling :meth:`framework.data_model.Node.get_reachable_nodes`
+  current node. It is equivalent to calling :meth:`framework.node.Node.get_reachable_nodes`
   on the node and providing the parameter ``internals_criteria`` with your criteria object. A
   list will always be returned, either empty or containing the nodes of interest.
 
-- A :class:`framework.data_model.NodeSemanticsCriteria` that match the internal
+- A :class:`framework.node.NodeSemanticsCriteria` that match the internal
   attributes of interest of the nodes you want to retrieve and which are reachable from the
-  current node. It is equivalent to calling :meth:`framework.data_model.Node.get_reachable_nodes`
+  current node. It is equivalent to calling :meth:`framework.node.Node.get_reachable_nodes`
   on the node and providing the parameter ``semantics_criteria`` with the criteria object. A list
   will always be returned, either empty or containing the nodes of interest.
 
@@ -375,19 +375,19 @@ As a ``key``, you can provide:
 
 As a ``value``, you can provide:
 
-- A :class:`framework.data_model.Node`: In this case the method
-  :meth:`framework.data_model.Node.set_contents` will be called on the node with the *node* as
+- A :class:`framework.node.Node`: In this case the method
+  :meth:`framework.node.Node.set_contents` will be called on the node with the *node* as
   parameter.
 
-- A :class:`framework.data_model.NodeSemantics`: In this case the method
-  :meth:`framework.data_model.Node.set_semantics` will be called on the node with the *semantics* as
+- A :class:`framework.node.NodeSemantics`: In this case the method
+  :meth:`framework.node.Node.set_semantics` will be called on the node with the *semantics* as
   parameter.
 
 - A python integer: In this case the method :meth:`framework.value_types.INT.set_raw_values` of the
   *INT* object embedded in the targeted node will be called with the *integer* as parameter.
   (Have to be only used with typed-value nodes embedding an ``INT``.)
 
-- A byte string: In this case the method :meth:`framework.data_model.Node.absorb` will be called
+- A byte string: In this case the method :meth:`framework.node.Node.absorb` will be called
   on the node with the *byte string* as parameter.
 
 
@@ -401,8 +401,8 @@ You can change the content of a specific node by absorbing a new content (refer 
 :ref:`dmanip:abs`).
 
 You can also temporarily change the node value of a terminal node (until the next time
-:meth:`framework.data_model.Node.unfreeze` is called on it) with the method
-:meth:`framework.data_model.Node.set_frozen_value` (refer to :ref:`dmanip:freeze`).
+:meth:`framework.node.Node.unfreeze` is called on it) with the method
+:meth:`framework.node.Node.set_frozen_value` (refer to :ref:`dmanip:freeze`).
 
 But if you want to make some more disruptive change and change a terminal
 node to a non-terminal node for instance, you have two options.
@@ -429,11 +429,11 @@ it if you like ;).
     fmk = FmkPlumbing()
     fmk.run_project(name='tuto')
 
-    usb_str = fmk.dm.get_external_node(dm_name='usb', data_id='STR')
+    usb_str = fmk.dm.get_external_atom(dm_name='usb', data_id='STR')
 
     data = fmk.get_data(['EX'])      # Return a Data container on the data model example
 
-    data.node['ex/data0'] = usb_str  # Perform the substitution
+    data.content['ex/data0'] = usb_str  # Perform the substitution
 
     data.show()                      # Data.show() will call .show() on the embedded node
 
@@ -459,56 +459,56 @@ The following methods enable you to retrieve the kind of content of the node. Th
 for the current configuration (refer to :ref:`dmanip:conf`) if the ``conf`` parameter is not
 provided:
 
-+ :meth:`framework.data_model.Node.is_nonterm`
-+ :meth:`framework.data_model.Node.is_typed_value`
-+ :meth:`framework.data_model.Node.is_genfunc`
-+ :meth:`framework.data_model.Node.is_func`
++ :meth:`framework.node.Node.is_nonterm`
++ :meth:`framework.node.Node.is_typed_value`
++ :meth:`framework.node.Node.is_genfunc`
++ :meth:`framework.node.Node.is_func`
 
 
 Checking if a node is frozen (refer to :ref:`dmanip:freeze`) can be done thanks to the method:
 
-+ :meth:`framework.data_model.Node.is_frozen`
++ :meth:`framework.node.Node.is_frozen`
 
 The following methods enable you to change specific node properties or attributes:
 
 + Methods related to the keyword ``fuzz_weight`` described in the section :ref:`dm:keywords`:
 
-   - :meth:`framework.data_model.Node.set_fuzz_weight`
-   - :meth:`framework.data_model.Node.get_fuzz_weight`
+   - :meth:`framework.node.Node.set_fuzz_weight`
+   - :meth:`framework.node.Node.get_fuzz_weight`
 
 + Methods related to the keywords ``determinist``, ``random``, ``finite`` and ``infinite``
   described in the section :ref:`dm:keywords`:
 
-   - :meth:`framework.data_model.Node.make_determinist`
-   - :meth:`framework.data_model.Node.make_random`
-   - :meth:`framework.data_model.Node.make_finite`
-   - :meth:`framework.data_model.Node.make_infinite`
+   - :meth:`framework.node.Node.make_determinist`
+   - :meth:`framework.node.Node.make_random`
+   - :meth:`framework.node.Node.make_finite`
+   - :meth:`framework.node.Node.make_infinite`
 
 + Methods to deal with node attributes and related to the keywords ``set_attrs`` and
   ``clear_attrs`` described in the section :ref:`dm:keywords`:
 
-   - :meth:`framework.data_model.Node.set_attr`
-   - :meth:`framework.data_model.Node.clear_attr`
-   - :meth:`framework.data_model.Node.is_attr_set`
+   - :meth:`framework.node.Node.set_attr`
+   - :meth:`framework.node.Node.clear_attr`
+   - :meth:`framework.node.Node.is_attr_set`
 
 You can test the compliance of a node with syntactic and/or semantic criteria with the method
-:meth:`framework.data_model.Node.compliant_with`. Refer to the section :ref:`dmanip:search` to
+:meth:`framework.node.Node.compliant_with`. Refer to the section :ref:`dmanip:search` to
 learn how to specify criteria.
 
 Any object can be added to a node as a private attribute. The private object should support the
 ``__copy__`` interface. To set and retrieve a private object the following methods are provided:
 
-- :meth:`framework.data_model.Node.set_private`
-- :meth:`framework.data_model.Node.get_private`
+- :meth:`framework.node.Node.set_private`
+- :meth:`framework.node.Node.get_private`
 
 
 Node semantics can be defined to view the data model in a specific way, which boils down to
 be able to search for nodes based on semantic criteria (refer to :ref:`dmanip:search`).
 To set semantics on nodes or to retrieve them the following methods have to be used:
 
-- :meth:`framework.data_model.Node.set_semantics`: Take a list of strings (that capture the
-  semantic) or a :class:`framework.data_model.NodeSemantics`
-- :meth:`framework.data_model.Node.get_semantics`: Returns a :class:`framework.data_model.NodeSemantics`
+- :meth:`framework.node.Node.set_semantics`: Take a list of strings (that capture the
+  semantic) or a :class:`framework.node.NodeSemantics`
+- :meth:`framework.node.Node.get_semantics`: Returns a :class:`framework.node.NodeSemantics`
 
 
 
@@ -526,15 +526,15 @@ then a receptacle for an arbitrary number of *configurations*.
 
 Configuration management is based on the following methods:
 
-- :meth:`framework.data_model.Node.add_conf`: To add a new configuration.
-- :meth:`framework.data_model.Node.remove_conf`: To remove a configuration based on its name.
-- :meth:`framework.data_model.Node.is_conf_existing`: To check a configuration existence based on
+- :meth:`framework.node.Node.add_conf`: To add a new configuration.
+- :meth:`framework.node.Node.remove_conf`: To remove a configuration based on its name.
+- :meth:`framework.node.Node.is_conf_existing`: To check a configuration existence based on
   its name.
-- :meth:`framework.data_model.Node.set_current_conf`: To change the current configuration of a node
+- :meth:`framework.node.Node.set_current_conf`: To change the current configuration of a node
   with the one whose the name is provided as a parameter.
-- :meth:`framework.data_model.Node.get_current_conf`: To retrieve the name of the current node
+- :meth:`framework.node.Node.get_current_conf`: To retrieve the name of the current node
   configuration.
-- :meth:`framework.data_model.Node.gather_alt_confs`: to gather all configuration names defined in
+- :meth:`framework.node.Node.gather_alt_confs`: to gather all configuration names defined in
   the subgraph where the root is the node on which the method is called.
 
 In what follows, we illustrate some node configuration change based on our data model example
@@ -568,12 +568,12 @@ methods used for setting the content of a node (refer to :ref:`dmanip:node`) are
 aware*.
 
 .. note::
-   If you need to access to the node internals (:attr:`framework.data_model.NodeInternals`) the
+   If you need to access to the node internals (:attr:`framework.node.NodeInternals`) the
    following attributes are provided:
 
-   - :attr:`framework.data_model.Node.cc`: to access to the node internals of the current
+   - :attr:`framework.node.Node.cc`: to access to the node internals of the current
      configuration.
-   - :attr:`framework.data_model.Node.c`: dictionary to access to the node internals of
+   - :attr:`framework.node.Node.c`: dictionary to access to the node internals of
      any configuration based on their name.
 
 
@@ -585,9 +585,9 @@ handling various corruption types easily. This infrastructure is especially used
 generic disruptor ``tSTRUCT`` (refer to :ref:`dis:generic-disruptors`).
 This infrastructure is based on the following primitives:
 
-- :meth:`framework.data_model.Env.add_node_to_corrupt`
+- :meth:`framework.node.Env.add_node_to_corrupt`
 
-- :meth:`framework.data_model.Env.remove_node_to_corrupt`
+- :meth:`framework.node.Env.remove_node_to_corrupt`
 
 The typical way to perform a corruption with this infrastructure is illustrated in what follows.
 This example performs a corruption that changes from the model the allowed amount for a specific
@@ -612,9 +612,9 @@ altered data model (because we change the grammar that constrains the data gener
 
 The corruption operations currently defined are:
 
-- :attr:`framework.data_model.Node.CORRUPT_NODE_QTY`
-- :attr:`framework.data_model.Node.CORRUPT_QTY_SYNC`
-- :attr:`framework.data_model.Node.CORRUPT_EXIST_COND`
+- :attr:`framework.node.Node.CORRUPT_NODE_QTY`
+- :attr:`framework.node.Node.CORRUPT_QTY_SYNC`
+- :attr:`framework.node.Node.CORRUPT_EXIST_COND`
 
 
 .. _dmanip:abs:
@@ -625,19 +625,19 @@ Byte String Absorption
 This feature is described in the tutorial. Refer to :ref:`tuto:dm-absorption` to learn about it.
 The methods which are involved in this process are:
 
-- :meth:`framework.data_model.Node.absorb`
-- :meth:`framework.data_model.Node.set_absorb_helper`
-- :meth:`framework.data_model.Node.enforce_absorb_constraints`
+- :meth:`framework.node.Node.absorb`
+- :meth:`framework.node.Node.set_absorb_helper`
+- :meth:`framework.node.Node.enforce_absorb_constraints`
 
 
 
 Miscellaneous Primitives
 ========================
 
-- :meth:`framework.data_model.Node.get_path_from`: if it exists, return the first path to this
+- :meth:`framework.node.Node.get_path_from`: if it exists, return the first path to this
   node from the node provided as parameter; otherwise return None.
 
-- :meth:`framework.data_model.Node.get_all_paths_from`: similar as the previous method, except it
+- :meth:`framework.node.Node.get_all_paths_from`: similar as the previous method, except it
   returns a list of all the possible paths.
 
 

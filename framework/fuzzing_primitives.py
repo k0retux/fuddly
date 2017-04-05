@@ -30,7 +30,7 @@ import re
 sys.path.append('.')
 
 import framework.value_types as vtype
-import framework.data_model as dm
+import framework.node as dm
 
 from framework.basic_primitives import *
 from libs.external_modules import *

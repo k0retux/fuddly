@@ -24,17 +24,187 @@
 import collections
 
 from framework.global_resources import *
-from framework.data_model import Node, Env
+from framework.node import Node, Env
 from framework.database import Database
+
+class DataBackend(object):
+
+    def __init__(self, content=None):
+        self._dm = None
+        if content is not None:
+            self.update_from(content)
+
+    def update_from(self, obj):
+        raise NotImplementedError
+
+    @property
+    def content(self):
+        raise NotImplementedError
+
+    @property
+    def data_model(self):
+        return self._dm
+
+    @data_model.setter
+    def data_model(self, val):
+        self._dm = val
+
+    @property
+    def data_maker_type(self):
+        raise NotImplementedError
+
+    @property
+    def data_maker_name(self):
+        raise NotImplementedError
+
+    def to_str(self):
+        raise NotImplementedError
+
+    def to_bytes(self):
+        raise NotImplementedError
+
+    def show(self, raw_limit=200, log_func=lambda x: x):
+        raise NotImplementedError
+
+    def get_content(self, do_copy=False, materialize=True):
+        raise NotImplementedError
+
+    def get_length(self):
+        raise NotImplementedError
+
+
+class NodeBackend(DataBackend):
+
+    def update_from(self, obj):
+        self._node = obj
+        if obj.env is None:
+            obj.set_env(Env())
+        else:
+            self._dm = obj.env.get_data_model()
+
+    @property
+    def content(self):
+        return self._node
+
+    @property
+    def data_maker_type(self):
+        return self._node.name.upper()
+
+    @property
+    def data_maker_name(self):
+        return 'g_'+self._node.name
+
+    def to_str(self):
+        return self._node.to_str()
+
+    def to_bytes(self):
+        return self._node.to_bytes()
+
+    def show(self, raw_limit=200, log_func=lambda x: x):
+        self._node.show(raw_limit=raw_limit, log_func=log_func)
+
+    def get_content(self, do_copy=False, materialize=True):
+        if materialize:
+            # we freeze the content before exporting it
+            self._node.freeze()
+
+        if do_copy:
+            content = Node(self._node.name, base_node=self._node, ignore_frozen_state=False,
+                           new_env=True)
+        else:
+            content = self._node
+
+        return content
+
+    def get_length(self):
+        return len(self._node.to_bytes())
+
+    def __copy__(self):
+        new_databackend = type(self)()
+        new_databackend.__dict__.update(self.__dict__)
+        n = Node(self._node.name, base_node=self._node, ignore_frozen_state=False, new_env=True)
+        if new_databackend._dm is not None:
+            new_databackend._dm.update_atom(n)
+        new_databackend.update_from(n)
+        return new_databackend
+
+
+class RawBackend(DataBackend):
+
+    def update_from(self, obj):
+        self._content = convert_to_internal_repr(obj)
+
+    @property
+    def content(self):
+        return self._content
+
+    @property
+    def data_maker_type(self):
+        return Database.DEFAULT_GTYPE_NAME
+
+    @property
+    def data_maker_name(self):
+        return Database.DEFAULT_GEN_NAME
+
+    def to_str(self):
+        return unconvert_from_internal_repr(self._content)
+
+    def to_bytes(self):
+        return self._content
+
+    def show(self, raw_limit=200, log_func=lambda x: x):
+        print(self._content)
+
+    def get_content(self, do_copy=False, materialize=True):
+        return copy.copy(self._content) if do_copy else self._content
+
+    def get_length(self):
+        return len(self._content)
+
+
+class EmptyBackend(DataBackend):
+
+    @property
+    def content(self):
+        return None
+
+    @property
+    def data_model(self):
+        return None
+
+    @data_model.setter
+    def data_model(self, val):
+        raise NotImplementedError
+
+    @property
+    def data_maker_type(self):
+        return None
+
+    @property
+    def data_maker_name(self):
+        return None
+
+    def to_str(self):
+        return 'Empty Backend'
+
+    def to_bytes(self):
+        return b'Empty Backend'
+
+    def get_content(self, do_copy=False, materialize=True):
+        return None
+
+    def get_length(self):
+        return 0
+
 
 class Data(object):
 
+    _empty_data_backend = EmptyBackend()
+
     def __init__(self, data=None):
-        self.node = None
-        self.raw = None
+        self._backend = None
 
         self._type = None
-        self._dm = None
         self._data_id = None
         self._recordable = False
         self._unusable = False
@@ -60,12 +230,18 @@ class Data(object):
         self.from_fmkdb = False
 
         if data is None:
-            return
-
-        if isinstance(data, Node):
-            self.update_from_node(data)
+            self._backend = self._empty_data_backend
+        elif isinstance(data, Node):
+            self._backend = NodeBackend(data)
         else:
-            self.update_from_str_or_bytes(data)
+            self._backend = RawBackend(data)
+
+    @property
+    def content(self):
+        return self._backend.content
+
+    def is_empty(self):
+        return isinstance(self._backend, EmptyBackend)
 
     def set_data_id(self, data_id):
         self._data_id = data_id
@@ -79,35 +255,23 @@ class Data(object):
     def get_initial_dmaker(self):
         return self._type
 
-    def update_from_str_or_bytes(self, data_str):
-        self.raw = convert_to_internal_repr(data_str)
-        self.node = None
-
-    def update_from_node(self, node):
-        self.node = node
-        if node.env is None:
-            node.set_env(Env())
+    def update_from(self, obj):
+        if isinstance(obj, Node):
+            self._backend = NodeBackend(obj)
         else:
-            self._dm = node.env.get_data_model()
+            self._backend = RawBackend(obj)
 
     def get_data_model(self):
-        return self._dm
+        return self._backend.data_model
 
     def set_data_model(self, dm):
-        self._dm = dm
+        self._backend.data_model = dm
 
     def to_bytes(self):
-        if self.node:
-            val = self.node.to_bytes()
-            self.raw = val
-        return self.raw
+        return self._backend.to_bytes()
 
     def to_str(self):
-        if self.node:
-            val = self.node.to_str()
-            return val
-        else:
-            return unconvert_from_internal_repr(self.raw)
+        return self._backend.to_str()
 
     def make_blocked(self):
         self._blocked = True
@@ -133,12 +297,8 @@ class Data(object):
         return self._recordable
 
     def generate_info_from_content(self, original_data=None, origin=None, additional_info=None):
-        if self.node is None:
-            dmaker_type = Database.DEFAULT_GTYPE_NAME
-            dmaker_name = Database.DEFAULT_GEN_NAME
-        else:
-            dmaker_type = self.node.name.upper()
-            dmaker_name = 'g_'+self.node.name
+        dmaker_type = self._backend.data_maker_type
+        dmaker_name = self._backend.data_maker_name
 
         if original_data is not None:
             if original_data.origin is not None:
@@ -146,8 +306,6 @@ class Data(object):
             if original_data.info:
                 info_bundle_to_remove = []
                 for key, info_bundle in original_data.info.items():
-                    # if key == (dmaker_type, dmaker_name):
-                    #     continue
                     info_bundle_to_remove.append(key)
                     for chunk in info_bundle:
                         for info in chunk:
@@ -223,33 +381,13 @@ class Data(object):
         return self._history
 
     def get_length(self):
-        if self.node:
-            self.raw = self.node.to_bytes()
-        return len(self.raw)
+        return self._backend.get_length()
 
-    def materialize(self):
-        if self.node is not None:
-            self.node.freeze()
-
-    def get_contents(self, do_copy=False):
-        if self.node is not None:
-            # we freeze the contents before exporting it
-            self.node.freeze()
-            if do_copy:
-                contents = Node(self.node.name, base_node=self.node, ignore_frozen_state=False,
-                                new_env=True)
-            else:
-                contents = self.node
-        else:
-             contents = copy.copy(self.raw) if do_copy else self.raw
-
-        return contents
+    def get_content(self, do_copy=False):
+        return self._backend.get_content(do_copy=do_copy)
 
     def show(self, raw_limit=200, log_func=lambda x: x):
-        if self.node is not None:
-            self.node.show(raw_limit=raw_limit, log_func=log_func)
-        else:
-            print(self.raw)
+        self._backend.show(raw_limit=raw_limit, log_func=log_func)
 
     pretty_print = show
 
@@ -329,12 +467,7 @@ class Data(object):
                 # ncbk = copy.copy(cbk)
                 new_data._callbacks[hook][id(cbk)] = cbk
         new_data._pending_ops = {}  # we do not copy pending_ops
-
-        if self.node is not None:
-            e = Node(self.node.name, base_node=self.node, ignore_frozen_state=False, new_env=True)
-            if new_data._dm is not None:
-                new_data._dm.update_node_env(e)
-            new_data.update_from_node(e)
+        new_data._backend = copy.copy(self._backend)
         return new_data
 
     def __str__(self):

@@ -1,4 +1,4 @@
-from framework.data_model import *
+from framework.node import *
 from framework.dmhelpers.generic import *
 import framework.value_types as fvt
 import framework.global_resources as gr

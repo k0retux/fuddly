@@ -249,7 +249,7 @@ A brief explanation is provided below:
   between all the steps and transitions of a scenario.
 
   .. note:: A scenario environment :class:`framework.scenario.ScenarioEnv` provides some information like
-       an attribute ``dm`` which is initialized with the :class:`framework.data_model_builder.DataModel`
+       an attribute ``dm`` which is initialized with the :class:`framework.data_model.DataModel`
        related to the scenario; or an attribute ``target`` which is initialized with the current target
        in use (a subclass of :class:`framework.target.Target`).
 
@@ -284,15 +284,15 @@ provided to the callbacks registered on the next transitions. These callbacks co
 for an identifier within the feedback and then update the next step to make it sending
 a message with the right identifier.
 
-A step has a property ``node`` that provides the root node (:class:`framework.data_model.Node`)
+A step has a property ``node`` that provides the root node (:class:`framework.node.Node`)
 of the modeled data it contains or `None` if the data associated to the step is a raw data
 (like ``Data('raw data')``). Any callback can then alter the ``node`` of a step in order to update it
 with usefull information. In our example, the ``node`` is updated with the identifier (refer to
 line 10-11 of the following code snippet).
 
-.. note:: Accessing to ``next_step.node`` from a callback will provide `None` in the case the next
-   step include a raw data. In the case it includes a ``DataProcess``, ``next_step.node`` will
-   provide the :class:`framework.data_model.Node` corresponding to the ``DataProcess``'s ``seed`` or
+.. note:: Accessing to ``next_step.content`` from a callback will provide `None` in the case the next
+   step include a raw data. In the case it includes a ``DataProcess``, ``next_step.content`` will
+   provide the :class:`framework.node.Node` corresponding to the ``DataProcess``'s ``seed`` or
    ``None`` (if no seed is available or the seed is raw data). In the latter case, the data process would
    not have been carried out at the time of the callback execution, hence the ``None`` value.
    (Refer to the section :ref:`sc:dataprocess`)
@@ -325,8 +325,8 @@ service for instance. This is illustrated in the following example in the lines 
             # Extract info from feedback and add an attribute to the scenario env
             env.identifier = handle_fbk(feedback)
             current_step.make_free()
-            if next_step.node:
-                next_step.node['off_gen/prefix'] = env.identifier
+            if next_step.content:
+                next_step.content['off_gen/prefix'] = env.identifier
             return True
 
     periodic1 = Periodic(Data('1st Periodic (5s)\n'), period=5)
@@ -412,7 +412,7 @@ is described by a `data descriptor` which can be:
 
 - a python string referring to the name of a registered data from a data model;
 
-- a :class:`framework.data_model.Data`;
+- a :class:`framework.data.Data`;
 
 - a :class:`framework.scenario.DataProcess`.
 

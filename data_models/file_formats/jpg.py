@@ -22,9 +22,9 @@
 ################################################################################
 
 from framework.data_model import *
-from framework.data_model_builder import *
-from framework.value_types import *
 from framework.global_resources import *
+from framework.node_builder import NodeBuilder
+from framework.value_types import *
 
 markers = {
     'SOF': {0: 0xFFC0,
@@ -169,7 +169,7 @@ class JPG_DataModel(DataModel):
               'absorb_csts': AbsNoCsts()}
          ]}
 
-        mb = ModelBuilder(delayed_jobs=True)
+        mb = NodeBuilder(delayed_jobs=True)
         self.jpg = mb.create_graph_from_desc(jpg_desc)
 
         self.jpg_dict = self.import_file_contents(extension='jpg')

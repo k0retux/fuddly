@@ -25,7 +25,7 @@ import unittest
 import ddt
 from test import mock
 
-from framework.data_model import *
+from framework.node import *
 
 @ddt.ddt
 class TestBitFieldCondition(unittest.TestCase):

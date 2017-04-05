@@ -40,9 +40,9 @@ import signal
 
 from libs.external_modules import *
 
-from framework.data_model import *
+from framework.node import *
 from framework.data import *
-from framework.data_model_builder import DataModel
+from framework.data_model import DataModel
 from framework.database import FeedbackHandler
 from framework.error_handling import *
 from framework.evolutionary_helpers import EvolutionaryScenariosFactory
@@ -357,7 +357,7 @@ class FmkPlumbing(object):
         def is_valid(d):
             if d.is_unusable():
                 return True
-            elif d.raw is None and d.node is None:
+            elif d.is_empty():
                 return False
             else:
                 return True
@@ -909,7 +909,7 @@ class FmkPlumbing(object):
             if not self.__dyngenerators_created[self.dm]:
                 self.__dyngenerators_created[self.dm] = True
                 self.__dynamic_generator_ids[self.dm] = []
-                for di in self.dm.data_identifiers():
+                for di in self.dm.atom_identifiers():
                     dmaker_type = di.upper()
                     gen_cls_name = 'g_' + di.lower()
                     dyn_generator.data_id = di
@@ -1615,7 +1615,7 @@ class FmkPlumbing(object):
         elif isinstance(data_desc, DataProcess):
             if isinstance(data_desc.seed, str):
                 try:
-                    seed_node = self.dm.get_data(data_desc.seed)
+                    seed_node = self.dm.get_atom(data_desc.seed)
                 except:
                     self.set_error(msg='Cannot create the seed from the '
                                        'name {:s}!'.format(data_desc.seed),
@@ -1660,7 +1660,7 @@ class FmkPlumbing(object):
 
         elif isinstance(data_desc, str):
             try:
-                node = self.dm.get_data(data_desc)
+                node = self.dm.get_atom(data_desc)
             except:
                 self.set_error(msg='Cannot retrieved a data called {:s}!'.format(data_desc),
                                code=Error.UserCodeError)
@@ -2188,11 +2188,8 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def show_data(self, data, verbose=True):
-        if not data.node:
-            return
-
-        self.lg.print_console('-=[ Data Paths ]=-\n', rgb=Color.INFO, style=FontStyle.BOLD)
-        data.node.show(raw_limit=400)
+        self.lg.print_console('-=[ Data Visualization ]=-\n', rgb=Color.INFO, style=FontStyle.BOLD)
+        data.show(raw_limit=400)
         self.lg.print_console('\n\n', nl_before=False)
 
     @EnforceOrder(accepted_states=['S2'])
@@ -2222,10 +2219,10 @@ class FmkPlumbing(object):
             self.set_error(err_msg, code=Error.FmkWarning)
 
     @EnforceOrder(accepted_states=['S2'])
-    def show_dm_data_identifiers(self):
+    def show_atom_identifiers(self):
 
-        self.lg.print_console('-=[ Data IDs of the current data model ]=-', nl_after=True, rgb=Color.INFO, style=FontStyle.BOLD)
-        for k in self.dm.data_identifiers():
+        self.lg.print_console('-=[ Atom IDs of the current data model ]=-', nl_after=True, rgb=Color.INFO, style=FontStyle.BOLD)
+        for k in self.dm.atom_identifiers():
             self.lg.print_console(k, rgb=Color.SUBINFO)
         self.lg.print_console('\n\n', nl_before=False)
 
@@ -2888,14 +2885,13 @@ class FmkPlumbing(object):
                     invalid_data = False
                     if isinstance(dmaker_obj, Generator):
                         if dmaker_obj.produced_seed is not None:
-                            data = Data(dmaker_obj.produced_seed.get_contents(do_copy=True))
+                            data = Data(dmaker_obj.produced_seed.get_content(do_copy=True))
                         else:
                             data = dmaker_obj.generate_data(self.dm, self.mon,
                                                             self.tg)
                             if save_seed and dmaker_obj.produced_seed is None:
                                 # Usefull to replay from the beginning a modelwalking sequence
-                                data.materialize()
-                                dmaker_obj.produced_seed = Data(data.get_contents(do_copy=True))
+                                dmaker_obj.produced_seed = Data(data.get_content(do_copy=True))
                         invalid_data = not self._is_data_valid(data)
                     elif isinstance(dmaker_obj, Disruptor):
                         if not self._is_data_valid(data):
@@ -3795,14 +3791,11 @@ class FmkShell(cmd.Cmd):
         return False
 
 
-    def do_show_data_identifiers(self, line):
+    def do_show_atoms(self, line):
         '''
-        Provide the Data IDs of the data types available in the current data model.
-
-        Note: these IDs are used as parameters by generic
-        generators/disruptors for dealing with specific data types.
+        Provide the Atoms of the current data model.
         '''
-        self.fz.show_dm_data_identifiers()
+        self.fz.show_atom_identifiers()
         return False
 
 

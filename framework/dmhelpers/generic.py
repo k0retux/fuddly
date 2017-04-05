@@ -1,4 +1,4 @@
-from framework.data_model import *
+from framework.node import *
 
 import datetime
 

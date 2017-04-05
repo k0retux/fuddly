@@ -21,10 +21,8 @@
 #
 ################################################################################
 
-import sys
-
 from framework.data_model import *
-from framework.data_model_builder import *
+from framework.node_builder import NodeBuilder
 from framework.value_types import *
 
 
@@ -122,7 +120,7 @@ class USB_DataModel(DataModel):
                    'contents': UINT8(values=[0])}]}
          ]}
 
-        mb = ModelBuilder(add_env=False)
+        mb = NodeBuilder(add_env=False)
         ep_node = mb.create_graph_from_desc(ep_desc)
 
         msd_ep_bulkin = ep_node.get_clone('EP_BLKIN')
@@ -197,7 +195,7 @@ class USB_DataModel(DataModel):
               ]}
          ]}
 
-        mb = ModelBuilder(add_env=False)
+        mb = NodeBuilder(add_env=False)
         intf_node = mb.create_graph_from_desc(interface_desc)
 
         conf_desc = \
