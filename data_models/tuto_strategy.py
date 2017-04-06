@@ -2,52 +2,74 @@ from framework.plumbing import *
 from framework.tactics_helpers import *
 from framework.global_resources import *
 from framework.scenario import *
+from framework.data import Data
+from framework.value_types import *
 
 tactics = Tactics()
 
-def cbk_transition1(env, current_step, next_step):
-    return True
-
-def cbk_transition2(env, current_step, next_step, fbk):
-    if not fbk:
+def cbk_transition1(env, current_step, next_step, feedback):
+    assert env is not None
+    if not feedback:
         print("\n\nNo feedback retrieved. Let's wait for another turn")
         current_step.make_blocked()
         return False
     else:
-        print("\n\nFeedback received from {!s}. Let's go on".format(fbk.keys()))
-        print(repr(fbk.values()))
+        print("\n\nFeedback received from {!s}. Let's go on".format(feedback.sources()))
+        for source, status, timestamp, data in  feedback:
+            if data is not None:
+                data = data[:15]
+            print('*** Feedback entry:\n'
+                  '    source: {:s}\n'
+                  '    status: {:d}\n'
+                  ' timestamp: {!s}\n'
+                  '   content: {!r} ...\n'.format(source, status, timestamp, data))
         current_step.make_free()
-        if next_step.node:
-            print("*** The next node named '{:s}' will be modified!".format(next_step.node.name))
-            next_step.node['.*/prefix.?'] = '*MODIFIED*'
+        if next_step.content:
+            print("*** The next node named '{:s}' will be modified!".format(next_step.content.name))
+            next_step.content['.*/prefix.?'] = '*MODIFIED*'
         else:
             print("*** The next node won't be modified!")
         return True
 
-def cbk_transition3(env, current_step, next_step):
+def cbk_transition2(env, current_step, next_step):
+    assert env is not None
     if hasattr(env, 'switch'):
         return False
     else:
         env.switch = False
         return True
 
+def before_sending_cbk(env, step):
+    assert env is not None
+    print('\n--> Action executed before sending any data on step {:d} [desc: {!s}]'.format(id(step), step))
+    step.content.show()
+    return True
+
+def before_data_processing_cbk(env, step):
+    assert env is not None
+    print('\n--> Action executed before data processing on step {:d} [desc: {!s}]'.format(id(step), step))
+    if step.content is not None:
+        step.content.show()
+    return True
+
 periodic1 = Periodic(DataProcess(process=[('C', None, UI(nb=1)), 'tTYPE'], seed='enc'),
                      period=5)
 periodic2 = Periodic(Data('2nd Periodic (3s)\n'), period=3)
 
 ### SCENARIO 1 ###
-step1 = Step('exist_cond', fbk_timeout=2, set_periodic=[periodic1, periodic2])
-step2 = Step('separator', fbk_timeout=5, clear_periodic=[periodic1])
+step1 = Step('exist_cond', fbk_timeout=1, set_periodic=[periodic1, periodic2],
+             do_before_sending=before_sending_cbk)
+step2 = Step('separator', fbk_timeout=2, clear_periodic=[periodic1])
 empty = NoDataStep(clear_periodic=[periodic2])
-step4 = Step('off_gen', fbk_timeout=2, step_desc='overriding the auto-description!')
+step4 = Step('off_gen', fbk_timeout=0, step_desc='overriding the auto-description!')
 
 step1_copy = copy.copy(step1) # for scenario 2
 step2_copy = copy.copy(step2) # for scenario 2
 
-step1.connect_to(step2, cbk_before_sending=cbk_transition1)
-step2.connect_to(empty, cbk_after_fbk=cbk_transition2)
+step1.connect_to(step2)
+step2.connect_to(empty, cbk_after_fbk=cbk_transition1)
 empty.connect_to(step4)
-step4.connect_to(step1, cbk_after_sending=cbk_transition3)
+step4.connect_to(step1, cbk_after_sending=cbk_transition2)
 
 sc1 = Scenario('ex1')
 sc1.set_anchor(step1)
@@ -56,19 +78,23 @@ sc1.set_anchor(step1)
 step4 = Step(DataProcess(process=['tTYPE#2'], seed='shape'))
 step_final = FinalStep()
 
-step1_copy.connect_to(step2_copy, cbk_before_sending=cbk_transition1)
-step2_copy.connect_to(step4, cbk_after_fbk=cbk_transition2)
+step1_copy.connect_to(step2_copy)
+step2_copy.connect_to(step4, cbk_after_fbk=cbk_transition1)
 step4.connect_to(step_final)
 
 sc2 = Scenario('ex2')
 sc2.set_anchor(step1_copy)
 
 ### SCENARIO 3 ###
-anchor = Step('exist_cond')
-option1 = Step(Data('Option 1'))
-option2 = Step(Data('Option 2'))
+anchor = Step(DataProcess(process=['tTYPE#3'], seed='exist_cond'),
+              do_before_data_processing=before_data_processing_cbk,
+              do_before_sending=before_sending_cbk)
+option1 = Step(Data('Option 1'), step_desc='option 1\ndescription',
+               do_before_data_processing=before_data_processing_cbk)
+option2 = Step(Data('Option 2'),
+               do_before_data_processing=before_data_processing_cbk)
 
-anchor.connect_to(option1, cbk_after_sending=cbk_transition3)
+anchor.connect_to(option1, cbk_after_sending=cbk_transition2)
 anchor.connect_to(option2)
 option1.connect_to(anchor)
 option2.connect_to(anchor)
@@ -91,8 +117,134 @@ unique_step.connect_to(unique_step)
 sc5 = Scenario('auto_regen')
 sc5.set_anchor(unique_step)
 
-tactics.register_scenarios(sc1, sc2, sc3, sc4, sc5)
+### SCENARIO to test transition selection ###
 
+def cbk_after_fbk_return_true(env, current_step, next_step, fbk):
+    if not hasattr(env, 'cbk_true_cpt'):
+        env.cbk_true_cpt = 1
+    else:
+        env.cbk_true_cpt += 1
+    # print('\n++ cbk_after_fbk_return_true from step {!s}'.format(current_step))
+    return True
+
+def cbk_after_sending_return_true(env, current_step, next_step):
+    if not hasattr(env, 'cbk_true_cpt'):
+        env.cbk_true_cpt = 1
+    else:
+        env.cbk_true_cpt += 1
+    # print('\n++ cbk_after_sending_return_true from step {!s}'.format(current_step))
+    return True
+
+init_step = NoDataStep(step_desc='init')
+g1_step = Step('intg')
+g11_step = Step('4tg1')
+g12_step = Step('4tg2')
+g13_step = Step('4default')
+final_step = FinalStep()
+
+init_step.connect_to(g1_step)
+g1_step.connect_to(g11_step, cbk_after_fbk=cbk_after_fbk_return_true)
+g1_step.connect_to(g12_step, cbk_after_sending=cbk_after_sending_return_true)
+g1_step.connect_to(g13_step, cbk_after_fbk=cbk_after_fbk_return_true)
+
+g11_step.connect_to(init_step)
+g12_step.connect_to(final_step)
+g13_step.connect_to(final_step)
+
+reinit_step = Step('enc')
+reinit_step.connect_to(init_step)
+
+sc_test = Scenario('test', anchor=init_step, reinit_anchor=reinit_step)
+
+g1_step = Step('intg')
+g11_step = Step('4tg1')
+g12_step = Step('4tg2')
+g13_step = Step('4default')
+g1_step.connect_to(g11_step, cbk_after_fbk=cbk_after_fbk_return_true)
+g1_step.connect_to(g12_step)
+g1_step.connect_to(g13_step, cbk_after_sending=cbk_after_sending_return_true)
+sc_test2 = Scenario('test2', anchor=g1_step)
+
+g1_step = Step('intg')
+g11_step = Step('4tg1')
+g12_step = Step('4tg2')
+g13_step = Step('4default')
+g1_step.connect_to(g11_step, cbk_after_fbk=cbk_after_fbk_return_true)
+g1_step.connect_to(g12_step, cbk_after_sending=cbk_after_sending_return_true,
+                   cbk_after_fbk=cbk_after_fbk_return_true)
+g1_step.connect_to(g13_step, cbk_after_fbk=cbk_after_fbk_return_true)
+sc_test3 = Scenario('test3', anchor=g1_step)
+
+def cbk_after_fbk_return_false(env, current_step, next_step, fbk):
+    if not hasattr(env, 'cbk_false_cpt'):
+        env.cbk_false_cpt = 1
+    else:
+        env.cbk_false_cpt += 1
+    # print('\n++ cbk_after_fbk_return_false from step {!s}'.format(current_step))
+    return False
+
+def cbk_after_sending_return_false(env, current_step, next_step):
+    if not hasattr(env, 'cbk_false_cpt'):
+        env.cbk_false_cpt = 1
+    else:
+        env.cbk_false_cpt += 1
+    # print('\n++ cbk_after_sending_return_false from step {!s}'.format(current_step))
+    return False
+
+g1_step = Step('intg')
+g11_step = Step('4tg1')
+g12_step = Step('4tg2')
+g13_step = Step('4default')
+g1_step.connect_to(g11_step, cbk_after_fbk=cbk_after_fbk_return_false)
+g1_step.connect_to(g12_step, cbk_after_sending=cbk_after_sending_return_false,
+                   cbk_after_fbk=cbk_after_fbk_return_false)
+g1_step.connect_to(g13_step, cbk_after_sending=cbk_after_sending_return_false,
+                   cbk_after_fbk=cbk_after_fbk_return_true)
+sc_test4 = Scenario('test4', anchor=g1_step)
+
+# SCENARIO to test fuzzing features
+
+def init_action(env, step):
+    print('\n+++ initialize')
+    return
+
+def before_data_generation(env, step):
+    print('\n+++ case 2: before data generation')
+    return
+
+def before_sending(env, step):
+    print('\n+++ case 2: before sending')
+    return
+
+init = NoDataStep(step_desc='init', do_before_data_processing=init_action)
+request = Step(Data(Node('request', vt=UINT8(values=[1, 2, 3]))),
+               fbk_timeout=2)
+case1 = Step(Data(Node('case 1', vt=String(values=['CASE 1']))),
+             fbk_timeout=1)
+case2 = Step(Data(Node('case 2', vt=String(values=['CASE 2']))),
+             fbk_timeout=0.5,
+             do_before_data_processing=before_data_generation,
+             do_before_sending=before_sending)
+final_step = FinalStep()
+option1 = Step(Data(Node('option 1', vt=SINT16_be(values=[10,15]))))
+option2 = Step(Data(Node('option 2', vt=UINT8(min=3, max=9))))
+
+init.connect_to(request)
+request.connect_to(case1, cbk_after_fbk=cbk_after_fbk_return_true)
+request.connect_to(case2, cbk_after_fbk=cbk_after_fbk_return_false)
+case1.connect_to(option1, cbk_after_fbk=cbk_after_fbk_return_true)
+case1.connect_to(option2, cbk_after_fbk=cbk_after_fbk_return_false)
+case2.connect_to(final_step)
+option1.connect_to(final_step)
+option2.connect_to(final_step)
+
+reinit = Step(Data(Node('reinit', vt=String(values=['REINIT']))))
+reinit.connect_to(init)
+
+sc_test_basic = Scenario('BASIC', anchor=init, reinit_anchor=reinit)
+
+tactics.register_scenarios(sc1, sc2, sc3, sc4, sc5, sc_test, sc_test2, sc_test3, sc_test4,
+                           sc_test_basic)
 
 @generator(tactics, gtype="CBK")
 class g_test_callback_01(Generator):
@@ -104,17 +256,17 @@ class g_test_callback_01(Generator):
         self.d.register_callback(self.callback_2)
         self.d.register_callback(self.callback_3)
         self.d.register_callback(self.callback_before_sending_1,
-                                 hook=HOOK.before_sending)
+                                 hook=HOOK.before_sending_step1)
         self.d.register_callback(self.callback_before_sending_2,
-                                 hook=HOOK.before_sending)
+                                 hook=HOOK.before_sending_step1)
         return True
 
     def generate_data(self, dm, monitor, target):
         if self.fbk:
-            self.d.update_from_str_or_bytes(self.fbk)
+            self.d.update_from(self.fbk)
         else:
-            node = dm.get_data('off_gen')
-            self.d.update_from_node(node)
+            node = dm.get_atom('off_gen')
+            self.d.update_from(node)
         return self.d
 
     def callback_1(self, feedback):

@@ -35,7 +35,7 @@ class ProbeUserTest(unittest.TestCase):
     def setUp(self):
         """Initialisation des tests."""
 
-        self.timeout = 2
+        self.timeout = 5
 
         self.probe = Probe()
         self.probe.main = mock.Mock()
@@ -61,6 +61,8 @@ class ProbeUserTest(unittest.TestCase):
     def test_started_is_alive(self):
         self.probe_user.start(self.dm, self.target, self.logger)
         self.assertTrue(self.probe_user.is_alive())
+        self.probe_user.stop()
+        self.probe_user.join(self.timeout)
 
     def test_stopped_is_alive(self):
         self.probe_user.start(self.dm, self.target, self.logger)
@@ -71,6 +73,8 @@ class ProbeUserTest(unittest.TestCase):
     def test_multiple_starts(self):
         self.probe_user.start(self.dm, self.target, self.logger)
         self.assertRaises(RuntimeError, self.probe_user.start, self.dm, self.target, self.logger)
+        self.probe_user.stop()
+        self.probe_user.join(self.timeout)
 
     def test_start_and_stop(self):
         self.probe_user.start(self.dm, self.target, self.logger)
@@ -81,7 +85,7 @@ class ProbeUserTest(unittest.TestCase):
 
     def test_main(self):
         test_period = 0.5
-        delta = 0.005
+        delta = 0.01
         self.probe_user.set_probe_delay(0.05)
 
         print("***** test period:                       " + str(test_period))

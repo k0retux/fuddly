@@ -21,16 +21,12 @@
 #
 ################################################################################
 
-import sys
+import zlib
 
 from framework.data_model import *
-from framework.value_types import *
-from framework.data_model_helpers import *
 from framework.global_resources import *
+from framework.value_types import *
 
-import zlib
-import crcmod
-import struct
 
 class ZIP_DataModel(DataModel):
 
@@ -101,12 +97,12 @@ class ZIP_DataModel(DataModel):
                                  {'name': 'last_mod_date',
                                   'contents': UINT16_le()},
                                  {'name': 'crc32',
-                                  'contents': MH.CRC(vt=UINT32_le, clear_attrs=[MH.Attr.Mutable]),
+                                  'contents': CRC(vt=UINT32_le, clear_attrs=[MH.Attr.Mutable]),
                                   'node_args': 'data',
                                   # 'clear_attrs': [MH.Attr.Freezable],
                                   'alt': [
                                       {'conf': 'ABS',
-                                       'contents': UINT32_le(maxi=2**10)}
+                                       'contents': UINT32_le(max=2**10)}
                                   ]},
                                  {'name': 'compressed_size',
                                   'type': MH.Generator,
@@ -115,15 +111,15 @@ class ZIP_DataModel(DataModel):
                                   'node_args': 'data',
                                   'alt': [
                                       {'conf': 'ABS',
-                                       'contents': UINT32_le(maxi=2**10)}
+                                       'contents': UINT32_le(max=2**10)}
                                   ]},
                                  {'name': 'uncompressed_size',
-                                  'contents': UINT32_le(maxi=2**10)}
+                                  'contents': UINT32_le(max=2**10)}
                              ]},
                             {'name': 'file_name_length',
-                             'contents': UINT16_le(maxi=2**10)},
+                             'contents': UINT16_le(max=2**10)},
                             {'name': 'extra_field_length',
-                             'contents': UINT16_le(maxi=2**10)},
+                             'contents': UINT16_le(max=2**10)},
                             {'name': 'file_name',
                              'type': MH.Generator,
                              'clear_attrs': [MH.Attr.Freezable],
@@ -175,7 +171,7 @@ class ZIP_DataModel(DataModel):
                         'absorb_csts': AbsFullCsts(),
                         'clear_attrs': [MH.Attr.Mutable]},
                        {'name': 'extra_enc_field_len',
-                        'contents': UINT32_le(maxi=2**5)},
+                        'contents': UINT32_le(max=2**5)},
                        {'name': 'extra_enc_field',
                         'type': MH.Generator,
                         'contents': lambda x: Node('cts', value_type=\
@@ -204,17 +200,17 @@ class ZIP_DataModel(DataModel):
                        {'name': 'version_made_by',
                         'contents': UINT16_le()},
                        {'name': ('common_attrs', 2),
-                        'contents': MH.COPY_VALUE(path='header/common_attrs$', depth=1),
+                        'contents': COPY_VALUE(path='header/common_attrs$', depth=1),
                         'node_args': 'file_list',
                         'clear_attrs': [MH.Attr.Mutable]},
                        {'name': ('file_name_length', 2),
-                        'contents': MH.COPY_VALUE(path='header/file_name_length', depth=1),
+                        'contents': COPY_VALUE(path='header/file_name_length', depth=1),
                         'node_args': 'file_list'},
                        {'name': ('extra_field_length', 2),
-                        'contents': MH.COPY_VALUE(path='header/extra_field_length', depth=1),
+                        'contents': COPY_VALUE(path='header/extra_field_length', depth=1),
                         'node_args': 'file_list'},
                        {'name': 'file_comment_length',
-                        'contents': UINT16_le(maxi=2**10)},
+                        'contents': UINT16_le(max=2**10)},
                        {'name': 'disk_number_start',
                         'contents': UINT16_le()},
                        {'name': 'internal_file_attr',
@@ -224,10 +220,10 @@ class ZIP_DataModel(DataModel):
                        {'name': 'file_hdr_off',
                         'fuzz_weight': 10,
                         # 'custo_set': MH.Custo.Gen.ResetOnUnfreeze,
-                        'contents': MH.OFFSET(vt=UINT32_le),
+                        'contents': OFFSET(vt=UINT32_le),
                         'node_args': ['start_padding', 'file_list']},
                        {'name': ('file_name', 2),
-                        'contents': MH.COPY_VALUE(path='header/file_name/cts$', depth=1),
+                        'contents': COPY_VALUE(path='header/file_name/cts$', depth=1),
                         'node_args': 'file_list',
                         'alt': [
                             {'conf': 'ABS',
@@ -235,7 +231,7 @@ class ZIP_DataModel(DataModel):
                                                         String(size=x.cc.generated_node.get_raw_value())),
                              'node_args': ('file_name_length', 2)} ]},
                        {'name': ('extra_field', 2),
-                        'contents': MH.COPY_VALUE(path='header/extra_field/cts$', depth=1),
+                        'contents': COPY_VALUE(path='header/extra_field/cts$', depth=1),
                         'node_args': 'file_list',
                         'alt': [
                             {'conf': 'ABS',
@@ -320,7 +316,7 @@ class ZIP_DataModel(DataModel):
                    'qty': (0,1),
                    'contents': [
                        {'name': 'ZIP_comment_len',
-                        'contents': UINT32_le(maxi=2**10)},
+                        'contents': UINT32_le(max=2**10)},
                        {'name': 'ZIP_comment',
                         'contents': lambda x: Node('cts', value_type=\
                                                    String(size=x.get_raw_value())),
@@ -338,12 +334,12 @@ class ZIP_DataModel(DataModel):
         ]}
 
 
-        mh = ModelHelper(delayed_jobs=True)
-        self.pkzip = mh.create_graph_from_desc(zip_desc)
+        mb = NodeBuilder(delayed_jobs=True)
+        self.pkzip = mb.create_graph_from_desc(zip_desc)
 
         self.zip_dict = self.import_file_contents(extension='zip')
 
-        self.register_nodes(self.pkzip, *self.zip_dict.values())
+        self.register(self.pkzip, *self.zip_dict.values())
 
 
 data_model = ZIP_DataModel()

@@ -1,6 +1,588 @@
 Data Modeling
 *************
 
+.. _dm:keywords:
+
+Data Model Keywords
+===================
+
+This section describe the *keywords* that you could use within the
+frame of the :class:`framework.node_builder.NodeBuilder`
+infrastructure. This infrastructure enables you to describe a data
+format in a JSON-like fashion, and will automatically translate this
+description to ``fuddly``'s internal data representation.
+
+
+Generic Description Keywords
+----------------------------
+
+name
+  Within ``fuddly``'s data model every node has a name that should be
+  unique only within its siblings. But when it comes to use the
+  :class:`framework.node_builder.NodeBuilder` infrastructure to
+  describe your data format, if you want to use the same name in a
+  data model description, you have to add an extra key to keep it
+  unique within the description, and thus allowing you to refer to
+  this node anywhere in the description. The following example result
+  in giving the same name to different nodes::
+    
+    'my_name'
+    ('my_name', 2)
+    ('my_name', 'of the command')
+
+  These names serve as *node references* during data description.
+
+  .. note:: The character ``/`` is reserved and shall not be used in a *name*.
+
+contents
+  Every node description has at least a ``name`` and a ``contents``
+  attributes (except if you refer to an already existing node, and in
+  this case you have to use only the name attribute with the targeted
+  node reference). The type of the node you describe will directly
+  depends on what you provide in this field:
+
+  - a python ``list`` will be considered as a non-terminal node;
+  - a *Value Type* (refer to :ref:`vt:value-types`) will define a
+    terminal node
+  - a python ``function`` (or everything with a ``__call__`` method)
+    will be considered as a generator.
+  - a :class:`framework.node.Node` will be used as a baseline for
+    the description. If no additional keyword is provided, the provided node
+    will be used as is. Otherwise, the additional keywords will be used to complement the
+    description. Note that the *keyword* ``name`` should not be provided as it will be
+    picked from the provided node.
+  - a python ``regular expression`` will represent a node that is
+    terminal or non-terminal but only contains terminal ones
+    (refer to :ref:`dm:pattern:regex`).
+
+  Note that for defining a *function node* and not a generator node,
+  you have to state the type attribute to ``MH.Leaf``.
+
+qty
+  Specify the amount of nodes to generate from the description, or a
+  tuple ``(min, max)`` specifying the minimum (which can be 0) and the
+  maximum of node instances you want ``fuddly`` to generate.
+
+  Note ``-1`` means infinity. It makes only sense for absorption
+  operation (refer to :ref:`tuto:dm-absorption`), because for data
+  generation, a strict limit
+  (:const:`framework.node.NodeInternals_NonTerm.INFINITY_LIMIT`)
+  is set to avoid getting unintended too big data. If you intend to
+  get such kind of data, specify explicitly the maximum, or use a
+  disruptor to do so (:ref:`tuto:disruptors`).
+
+
+clone
+  Allows to make a full copy of an existing node by providing its
+  reference.
+
+type
+  Used only by the :class:`framework.node_builder.NodeBuilder`
+  infrastructure if there is an ambiguity to determine the node
+  type. This attributes accept the following values:
+
+  - ``MH.Leaf``: to specify a terminal node, either a *value type* or a
+    *function*.
+  - ``MH.NonTerminal``: to specify a *non terminal* node.
+  - ``MH.Generator``: to specify a *generator* node.
+
+
+alt
+  Allows to specify alternative contents, by providing a list of
+  descriptors like here under:
+
+  .. code-block:: python
+
+     'alt': [ {'conf': 'config_n1',
+	       'contents': SINT8(values=[1,4,8])},
+	      {'conf': 'config_n2',
+	       'contents': UINT16_be(min=0xeeee, max=0xff56),
+	       'determinist': True} ]
+
+
+conf
+  Used within the scope of the description of an alternative
+  configuration. It set the name of the alternative configuration.
+
+evolution_func
+  This attribute allows to provide a function that will be used in the case the described node is
+  instantiated more than once by a containing non-terminal node further to a
+  :meth:`framework.node.Node.freeze` operation (refer to the ``qty`` keyword).
+  The function will be called on every node instance (but the first one) before this node
+  incorporate the frozen form of the non-terminal. Besides, the node returned by the function will
+  be used as the base node for the next instantiation (which makes node evolution easier).
+  The function shall have the following signature::
+
+     func_name( Node ) --> Node
+
+custo_set, custo_clear
+  These attributes are used to customize the behavior of the described node.
+  ``custo_set`` is to enable some behavior modes, whereas ``custo_clear`` allows to
+  disable them. What is expected is either a single mode or a list of modes.
+  The available modes depend on the kind of node.
+
+  For non-terminal node, the customizable behavior modes are:
+
+  - ``MH.Custo.NTerm.MutableClone``: By default, this mode is *enabled*.
+    When enabled, it means that for child nodes which can be instantiated many times
+    (refer to ``qty`` attribute), all instances will be set as *mutable*.
+    If it is disabled, when a child node is instantiated more
+    than once, only the first instance is set *mutable*, the others
+    have this attribute cleared to prevent generic disruptors from
+    altering them. This mode aims at limiting the number of test
+    cases, by pruning what is assumed to be redundant.
+  - ``MH.Custo.NTerm.FrozenCopy``: By default, this mode is *enabled*.
+    When enabled, it means that for child nodes which can be instantiated many times
+    (refer to ``qty`` attribute), the instantiation process will make a frozen copy
+    of the node, meaning that it will be the exact copy of the original one at
+    the time of the copy. If disabled, the instantiation process will ignore the frozen
+    state, and thus will release all the constraints.
+
+    .. note::
+		Note that if the node is not frozen
+		at the time of the copy, this customization won't have any effect. The main interest is
+		in conjunction with the *disruptors* (like ``tTYPE``, ``tWALK``, ...) which are based on the
+		``ModelWalker`` infrastructure  (refer to :ref:`tuto:modelwalker`). Indeed, this infrastructure
+		releases constraints on non-terminal nodes before providing a new model instance. Releasing
+		constraints triggers child nodes reconstruction for each non-terminal. And as the terminal
+		children will be frozen at that time, the reconstruction will take into account this
+		customization mode.
+
+  - ``MH.Custo.NTerm.CollapsePadding``: By default, this mode is *disabled*.
+    When enabled, every time two adjacent BitFields (within its scope) are found, they
+    will be merged in order to remove any padding in between. This is done
+    "recursively" until any inner padding is removed. (Note this customization is currently
+    only supported for *generation* purpose and not for *absorption*.)
+
+  For *generator* node, the customizable behavior modes are:
+
+  - ``MH.Custo.Gen.ForwardConfChange``: By default, this mode is *enabled*.
+    If enabled, a
+    call to :meth:`framework.node.Node.set_current_conf()` will be
+    called on the generated node (default behavior).
+  - ``MH.Custo.Gen.CloneExtNodeArgs``: By default, this mode is *disabled*.
+    If enabled, during a cloning operation (e.g., full copy
+    of the modeled data containing this node) if the node parameters do
+    not belong to the graph representing the data, they will be cloned (full
+    copy). Otherwise, they will just be referenced (default
+    behavior). Rationale for default behavior: When a *generator* or
+    *function* node is duplicated within a non terminal node, the node
+    parameters may be unknown to it, thus considered as external, while
+    still belonging to the full data.
+  - ``MH.Custo.Gen.ResetOnUnfreeze``: By default, this mode is *enabled*.
+    If enabled, a
+    call to :meth:`framework.node.Node.unfreeze()` on the node will
+    provoke the reset of the *generator* itself, meaning that the next
+    time its value will be asked for, it will be recomputed (default
+    behaviour). If unset, a call to the method
+    :meth:`framework.node.Node.unfreeze()` will provoke the call of
+    this method on the already existing generated node (and if it
+    didn't exist by this time it would have been computed first).
+  - ``MH.Custo.Gen.TriggerLast``: By default, this mode is *disabled*.
+    If enabled, the triggering of a generator is postpone until everything else has
+    been resolved. It is especially
+    useful when you describe a generator that use a node with an
+    existence condition and that this condition cannot be resolved at
+    the time the generator would normally trigger (which is
+    when it is reached while walking through the graph).
+
+  For *function* node, the customizable behaviors mode are:
+
+  - ``MH.Custo.Func.FrozenArgs``: By default, this mode is *enabled*.
+    When enabled, the node parameters are frozen before being provided to
+    the *function* node. If disabled, the node parameters are directly provided to
+    the *function* node (without being frozen first).
+  - ``MH.Custo.Func.CloneExtNodeArgs``: By default, this mode is *disabled*.
+    Refer to the description of the corresponding *generator node* mode.
+
+
+.. _dm:nt-keywords:
+
+Keywords to Describe Non Terminal Node
+--------------------------------------
+
+shape_type
+  Allows to choose the order to be enforce by a non-terminal node to
+  its children. ``MH.Ordered`` specifies that the children should be
+  kept strictly in the order of the description. ``MH.Random``
+  specifies there is no order to enforce between any *node descriptor*
+  (which can expand to several nodes), except if the parent node has the
+  ``determinist`` attribute. ``MH.FullyRandom`` specifies there is no
+  order to enforce between every single nodes. ``MH.Pick`` specifies
+  that only one node among the children should be kept at a time---the
+  choice is randomly performed except if the parent has the
+  ``determinist`` attribute---as per the weight associated to each
+  child node.
+
+weight
+  Used within the scope of a shape description for a non-terminal
+  node. A non-terminal node can organize all its child nodes in
+  various way by describing different shapes. Each shape has a weight
+  which is used either---when the non-terminal node is random---as a
+  way to determine the chance that ``fuddly`` we use it during the data
+  generation process, or as a mean to order the shape---when the node
+  is put in determinist mode. Let's look at the example here under:
+
+  .. code-block:: python
+
+        {'name': 'test',
+         'contents': [
+
+	      # SHAPE 1
+	      {'weight': 20,
+	       'contents': [
+		   {'section_type': MH.Random,
+		    'contents': [
+			{'contents': String(max_sz=10),
+			 'name': 'val1',
+			 'qty': (1, 5)},
+			 
+	       ...
+
+	      # SHAPE 2
+	      {'weight': 10,
+	       'contents': [
+		   {'section_type': MH.FullyRandom,
+		    'contents': [
+			{'name': 'val1'},
+
+	       ...
+
+  .. note:: A *shape description* is composed of the two attributes
+	    ``weight`` and ``contents``.
+
+
+
+section_type
+  Similar to ``shape_type`` keyword. But only valid for describing a
+  section within a non-terminal node, and limited to this section. The
+  following example illustrates that:
+
+  .. code-block:: python
+
+     {'name': 'test',
+      'shape_type': MH.Random
+      'contents': [
+      
+	     {'name': 'val1',
+	      'contents': String(values=['OK', 'KO']),
+	      'qty': (0, 5)},
+
+             {'section_type': MH.Ordered,
+              'contents': [
+
+		     {'name': 'val2',
+		      'contents': UINT16_be(values=[10, 20, 30])},
+
+		     {'name': 'val3',
+		      'contents': String(min_sz=2, max_sz=10, alphabet='XYZ')},
+
+		     {'name': 'val4',
+		      'contents': UINT32_le(values=[0xDEAD, 0xBEEF])},
+
+	      ]}
+
+	     {'name': 'val5',
+	      'contents': String(values=['OPEN', 'CLOSE']),
+	      'qty': 3}
+     ]}
+
+
+duplicate_mode
+  Modify the behavior of the instantiating procedure when a child node
+  is instantiated more than once. This can be set to:
+  
+  - ``MH.Copy``: A new instance corresponds to a full copy operation.
+  - ``MH.ZeroCopy``: A new instance corresponds to a new reference of
+    the child node.
+
+
+weights
+  To be used optionally in the frame of a non-terminal node along with
+  a ``MH.Pick`` type. If used this attribute shall contains an integer
+  tuple describing the weight for each one of the subsequent nodes to
+  be picked. Can be used within a section description, or directly in
+  the non-terminal nodes, if it has a ``MH.Pick`` type.
+
+separator
+  When specified, the non-terminal will add a separator between each
+  one of its children. This attribute has to be filled with a
+  *separator descriptor* such as what is illustrated below:
+
+  .. code-block:: python
+
+     'separator': {'contents': {'name': 'sep',
+				'contents': String(values=['\n'])},
+		   'prefix': False,
+		   'suffix': False,
+		   'unique': True},
+
+  The keys ``prefix``, ``suffix`` and ``unique`` are optional. They are
+  described below.
+
+  .. seealso:: Refer to :ref:`dm:pattern:separator` for an example using
+	       separators.
+
+
+prefix
+  Used optionally within a *separator descriptor*. If set to ``True``,
+  a separator will be placed just before the first child.
+
+suffix
+  Used optionally within a *separator descriptor*. If set to ``True``,
+  a separator will be placed just after the last child.
+
+unique
+  Used optionally within a *separator descriptor*. If set to ``True``,
+  the inserted separators will be independent from each other (full
+  node copy). Otherwise, the separators will be references to a
+  unique node (zero copy).
+
+encoder
+  If specified, an encoder instance should be provided. The *encoding* will be applied
+  transparently when the binary value of the non terminal node will be retrieved
+  (:meth:`framework.node.Node.to_bytes`). Additionally, during an absorption
+  (refer to :ref:`tuto:dm-absorption`), the *decoding* will also be performed automatically.
+
+  Several generic encoders are defined within ``framework/encoders.py``. But if they
+  don't match your need, you can define your own encoder by inheriting from
+  :class:`framework.encoders.Encoder` and implementing its interface.
+
+
+  .. seealso:: Refer to :ref:`dm:pattern:encoder` for an example on how to use this keyword.
+
+  .. note:: Depending on your needs, you could also choose to implement a disruptor
+     to perform your encoding (refer to :ref:`tuto:disruptors`).
+
+
+Keywords to Describe Generator Node
+-----------------------------------
+
+
+node_args
+  List of node parameters to be provided to a *generator* node or a
+  *function* node.
+
+other_args
+  List of parameters (which are not a
+  :class:`framework.node.Node`) to be provided to a *generator*
+  node or a *function* node.
+
+provide_helpers
+  (Optional) If set to `True`, a special object will be provided to
+  the user-defined function (last parameter) of the *generator* node
+  or the *function* node. Otherwise, this object won't be passed
+  (default behavior). This object is an instance of the class
+  :class:`framework.node.DynNode_Helpers`, which enable the
+  user-defined function to have some insight on the current structure
+  of the modeled data.
+
+trigger_last
+  This keyword is a shortcut for the related node customization mode.
+  Refer to ``custo_set`` and ``custo_clear``.
+
+Keywords to Import External Data Description
+--------------------------------------------
+
+import_from
+  Name of the data model to import a data description from.
+
+data_id
+  Name of the data description to import.
+
+
+.. _dm:node_prop_keywords:
+
+Keywords to Describe Node Properties
+------------------------------------
+
+determinist
+  Make the node behave in a deterministic way.
+
+random
+  Make the node behave in a random way.
+
+finite
+  Make the node *finite*, meaning that it will exhaust at some point
+  (meaning that it has cycled over all its possible values or shapes)
+  When the situation occurs, a notification is posted in the node
+  environment (refer to :ref:`data-manip`)
+
+infinite
+  Make the node *infinite*, meaning that it will always provide values.
+
+mutable
+  Make the node mutable. It is a shortcut for the node attribute
+  ``MH.Attr.Mutable``.
+
+set_attrs
+  List of attributes to set on the node. The current generic
+  attributes are:
+
+  - ``MH.Attr.Freezable``: If set, the node will be freezable (default
+    behavior), which means that once the node has provided a value
+    (through for instance :meth:`framework.node.Node.to_bytes()`),
+    the method :meth:`framework.node.Node.unfreeze()` need to be
+    called on it to get new values, otherwise it won't change. If
+    unset, the node will always be recomputed. Can be useful for
+    *function* node, if it needs to be recomputed each time a
+    modification has been performed on its associated graph (e.g., CRC
+    function).
+  - ``MH.Attr.Mutable``: If set, generic disruptors will consider the
+    node as being mutable, meaning that it can be altered (default
+    behavior). Otherwise, it will be ignored.
+  - ``MH.Attr.Determinist``: This attribute can be set directly
+    through the keywords ``determinist`` or ``random``. Refer to them
+    for details. By default, it is set.
+  - ``MH.Attr.Finite``: If set, a node will provide a finite number of
+    values and then will notify it has exhausted. Otherwise,
+    exhaustion will never be notified (default behavior).
+  - ``MH.Attr.Abs_Postpone``: Used to postpone absorption by the
+    node. Refer to :ref:`tuto:dm-absorption` for more information on
+    that topic.
+  - ``MH.Attr.Separator``: Used to distinguish a separator. Some
+    disruptors can leverage this attribute to perform their
+    alteration.
+
+  .. note::
+     Most of the generic stateful disruptors will recursively
+     set the attributes ``MH.Attr.Determinist`` and ``MH.Attr.Finite``
+     on the provided data before performing any alteration.
+
+  .. note:: *Generator* node will transfer the generic attributes to
+            the generated node, except for ``MH.Attr.Freezable``, and
+            ``MH.Attr.Mutable`` which are used to change the
+            *generator* behavior. (If such attributes need to be set
+            or cleared on the generated node, it has to be done
+            directly on it and not on its generator.) Specific
+            attributes related to generators won't be passed to the
+            generated node.
+
+  .. seealso:: The attributes are defined within
+               :class:`framework.node.NodeInternals`.
+
+clear_attrs
+  List of attributes to clear on the node. The current attributes are
+  the same than for the ``set_attrs`` keyword.
+
+absorb_csts
+  Used to specify some absorption constraints on the node. Refer to
+  :ref:`tuto:dm-absorption` for more information on that topic.
+
+absorb_helper
+  Used to specify an absorption helper function for the node. Refer to
+  :ref:`tuto:dm-absorption` for more information on that topic.
+
+semantics
+  Used to specify semantics to the node, by way of a list of
+  meaningful strings. Nodes can be searched for and selected based on
+  semantics. Refer to :ref:`data-manip` for more information on that
+  topic.
+
+fuzz_weight
+  Used by some stateful disruptors to order their test cases. The
+  heavier the weight, the higher the priority of handling the node.
+
+sync_qty_with
+  Allow to synchronize the number of node instances to generate or to
+  absorb with the one specified by reference.
+
+qty_from
+  Allow to synchronize the number of node instances to generate or to
+  absorb with the *value* of the one specified by reference. You can also specify
+  an optional *base quantity* that will be added to the retrieved value. In this case, you
+  shall provide a ``list``/``tuple`` with first the node reference then the *base quantity*.
+
+  This keyword is the counterpart of the *generator template* :class:`framework.dmhelpers.generic.QTY`.
+  It is preferable to this *generator* when the node from which the quantity is retrieved
+  is already resolved at retrieval time. In this case *generation* and *absorption* operations
+  will be handled transparently.
+
+sync_size_with, sync_enc_size_with
+  Allow to synchronize the length of the described node (the one where this keyword is used)
+  with the *value* of the node specified by reference (which should be an
+  :class:`framework.value_types.INT`-based typed-node). These keywords are useful for size-variable
+  node types. They are currently supported for typed-nodes which are
+  :class:`framework.value_types.String`-based with or without an encoding.
+  Non-terminal nodes are not supported (for absorption).
+  The distinction between ``sync_size_with`` and ``sync_enc_size_with`` is that the synchronization
+  will be performed:
+
+  - either with respect to the length of the data retrieved from the node in a
+    *decoded* form. *Decoded* means that it is agnostic to the *codec* specified
+    (e.g., ``utf-8``, ``latin-1``, ...) in the ``String``, and also, for ``Encoded-String``
+    (e.g., :class:`framework.value_types.GZIP`, ...) , that it is agnostic to any
+    :class:`framework.encoders.Encoder` the ``String`` is wrapped with;
+
+  - or with respect to the length of the encoded form of the data.
+
+  Generation and absorption deal with these keywords differently, in order to achieve the expected
+  behavior. For generation, the synchronization goes from the described node to the referenced node
+  (meaning that the data is first pulled from the size-variable node, then the referenced node is
+  set with the length of the pulled data). Whereas for the absorption it goes the other way around.
+
+  Note also that you can provide an optional *base size* that will be added to the length
+  before synchronization in the case of generation, and removed from the length in the case
+  of absorption. In this case, you shall provide a ``list``/``tuple`` with first the node reference
+  then the *base size*.
+
+  These keywords are the counterpart of the *generator template* :class:`framework.dmhelpers.generic.LEN`.
+  They are preferable to this *generator* (when the size-variable node is not a non-terminal),
+  because *generation* and *absorption* operations will be handled transparently thanks to them.
+
+exists_if
+  Enable to determine the existence of this node based on a given
+  condition.
+
+  .. seealso:: Refer to :ref:`dm:pattern:existence-cond` for how to use existence
+	       conditions.
+
+exists_if/and, exists_if/or
+    Extend the ``exists_if`` keyword by allowing to specify a list or a tuple
+    of conditions. The operator ``and`` (respectively ``or``) will be used to generate
+    the desired behaviour.
+
+
+    .. code-block:: python
+
+        {'name': 'test',
+         'contents': [
+            {'name': 'opcode',
+             'contents': String(values=['A3', 'A2'])},
+            {'name': 'subopcode',
+             'contents': BitField(subfield_sizes=[15,2,4],
+                                  subfield_values=[[500], [1,2], [5,6,12]])},
+            {'name': 'and_condition',
+             'exists_if/and': [(RawCondition('A2'), 'opcode'),
+                               (BitFieldCondition(sf=2, val=[5]), 'subopcode')],
+             'contents': String(values=['and_condition_true'])}
+         ]}
+
+exists_if_not
+  Enable to determine the existence of this node based on the
+  non-existence of another one.
+
+post_freeze
+  To be filled with a function. If specified, the function will be
+  called just after the node has been frozen. It takes the node
+  internals as argument (:class:`framework.node.NodeInternals`).
+
+specific_fuzzy_vals
+  Usable for *typed-nodes* only. This keyword allows to specify a list of additional values to
+  be leveraged by the *disruptor* ``tTYPE`` (:ref:`dis:ttype`) while dealing with the related node.
+  These additional values are added to the test cases planned by the *disruptor* (if not already
+  planned).
+
+charset
+  Used in the context of a `regular expression` ``contents``. It enables to specify the charset
+  that will be considered for interpreting the regular expression and for creating the related
+  nodes. Accepted attributes are:
+
+  - ``MH.Charset.ASCII``
+  - ``MH.Charset.ASCII_EXT`` (default)
+  - ``MH.Charset.UNICODE``
+
+
 .. _vt:value-types:
 
 Value Types
@@ -31,10 +613,10 @@ following parameters:
   List of the integers that are considered valid for the node backed
   by this *Integer object*. The default value is the first element of the list.
 
-``mini`` [optional, default value: **None**]
+``min`` [optional, default value: **None**]
   Minimum valid value for the node backed by this *Integer object*.
 
-``maxi`` [optional, default value: **None**]
+``max`` [optional, default value: **None**]
   Maximum valid value for the node backed by this *Integer object*.
 
 ``default`` [optional, default value: **None**]
@@ -315,630 +897,176 @@ the first example. We additionally specify the parameter
              - :func:`framework.value_types.VT_Alt.enable_fuzz_mode` (used currently by the disruptor ``tTYPE``)
 
 
+Helpers
+=======
+
 .. _dm:generators:
 
 Generator Node Templates
-========================
+------------------------
 
-Here under the currently implemented *generator templates* (they are
-all defined as static methods of
-:class:`framework.data_model_helpers.MH`):
+Hereunder are presented the currently available *generator-node* templates (which are defined
+in :mod:`framework.dmhelpers.generic`):
 
-:meth:`framework.data_model_helpers.MH.LEN()`
+:meth:`framework.dmhelpers.generic.LEN()`
       Return a *generator* that returns the length of a node parameter.
 
-:meth:`framework.data_model_helpers.MH.QTY()`
+:meth:`framework.dmhelpers.generic.QTY()`
       Return a *generator* that returns the quantity of child node
       instances (referenced by name) of the node parameter provided to
       the *generator*.
 
-:meth:`framework.data_model_helpers.MH.TIMESTAMP()`
+:meth:`framework.dmhelpers.generic.TIMESTAMP()`
       Return a *generator* that returns the current time (in a String node).
 
-:meth:`framework.data_model_helpers.MH.CRC()`
+:meth:`framework.dmhelpers.generic.CRC()`
       Return a *generator* that returns the CRC (in the chosen type) of
       all the node parameters.
 
-:meth:`framework.data_model_helpers.MH.WRAP()`
+:meth:`framework.dmhelpers.generic.WRAP()`
       Return a *generator* that returns the result (in the chosen
       type) of the provided function applied on the concatenation of
       all the node parameters.
 
-:meth:`framework.data_model_helpers.MH.CYCLE()`
+:meth:`framework.dmhelpers.generic.CYCLE()`
       Return a *generator* that iterates other the provided value list
       and returns at each step a node corresponding to the
       current value.
 
-:meth:`framework.data_model_helpers.MH.OFFSET()`
+:meth:`framework.dmhelpers.generic.OFFSET()`
       Return a *generator* that computes the offset of a child node
       within its parent node.
 
-:meth:`framework.data_model_helpers.MH.COPY_VALUE()`
+:meth:`framework.dmhelpers.generic.COPY_VALUE()`
       Return a *generator* that retrieves the value of another node,
       and then return a `vt` node with this value.
 
 
-.. _dm:keywords:
+.. _dm:builders:
 
-Data Model Keywords
-===================
+Block Builders
+--------------
 
-This section describe the *keywords* that you could use within the
-frame of the :class:`framework.data_model_helpers.ModelHelper`
-infrastructure. This infrastructure enables you to describe a data
-format in a JSON-like fashion, and will automatically translate this
-description to ``fuddly``'s internal data representation.
+As well as :ref:`dm:generators`, helpers of another kind are defined within the framework to make
+easier the modeling of some data formats. Basically, it is a bank of block builders that you
+can use to simplify the process of modeling if they match your needs.
 
+These helpers are provided within :mod:`framework.dmhelpers`. The currently available helper
+modules are presented hereunder:
 
-Generic Description Keywords
-----------------------------
+:mod:`framework.dmhelpers.xml`
+  provides helpers for modeling XML tags (:meth:`framework.dmhelpers.xml.tag_builder`). Note the
+  helpers provide you with a precise data model which enables you to fuzz at XML level as well as
+  at content level or to only focus on the content.
 
-name
-  Within ``fuddly``'s data model every node has a name that should be
-  unique only within its siblings. But when it comes to use the
-  :class:`framework.data_model_helpers.ModelHelper` infrastructure to
-  describe your data format, if you want to use the same name in a
-  data model description, you have to add an extra key to keep it
-  unique within the description, and thus allowing you to refer to
-  this node anywhere in the description. The following example result
-  in giving the same name to different nodes::
-    
-    'my_name'
-    ('my_name', 2)
-    ('my_name', 'of the command')
-
-  These names serve as *node references* during data description.
-
-  .. note:: The character ``/`` is reserved and shall not be used in a *name*.
-
-contents
-  Every node description has at least a ``name`` and a ``contents``
-  attributes (except if you refer to an already existing node, and in
-  this case you have to use only the name attribute with the targeted
-  node reference). The type of the node you describe will directly
-  depends on what you provide in this field:
-
-  - a python ``list`` will be considered as a non-terminal node;
-  - a *Value Type* (refer to :ref:`vt:value-types`) will define a
-    terminal node
-  - a python ``function`` (or everything with a ``__call__`` method)
-    will be considered as a generator.
-  - a :class:`framework.data_model.Node` will be used as a baseline for
-    the description. If no additional keyword is provided, the provided node
-    will be used as is. Otherwise, the additional keywords will be used to complement the
-    description. Note that the *keyword* ``name`` should not be provided as it will be
-    picked from the provided node.
-  - a python ``regular expression`` will represent a node that is
-    terminal or non-terminal but only contains terminal ones
-    (refer to :ref:`dm:pattern:regex`).
-
-  Note that for defining a *function node* and not a generator node,
-  you have to state the type attribute to ``MH.Leaf``.
-
-qty
-  Specify the amount of nodes to generate from the description, or a
-  tuple ``(min, max)`` specifying the minimum (which can be 0) and the
-  maximum of node instances you want ``fuddly`` to generate.
-
-  Note ``-1`` means infinity. It makes only sense for absorption
-  operation (refer to :ref:`tuto:dm-absorption`), because for data
-  generation, a strict limit
-  (:const:`framework.data_model.NodeInternals_NonTerm.INFINITY_LIMIT`)
-  is set to avoid getting unintended too big data. If you intend to
-  get such kind of data, specify explicitly the maximum, or use a
-  disruptor to do so (:ref:`tuto:disruptors`).
-
-
-clone
-  Allows to make a full copy of an existing node by providing its
-  reference.
-
-type
-  Used only by the :class:`framework.data_model_helpers.ModelHelper`
-  infrastructure if there is an ambiguity to determine the node
-  type. This attributes accept the following values:
-
-  - ``MH.Leaf``: to specify a terminal node, either a *value type* or a
-    *function*.
-  - ``MH.NonTerminal``: to specify a *non terminal* node.
-  - ``MH.Generator``: to specify a *generator* node.
-
-
-alt
-  Allows to specify alternative contents, by providing a list of
-  descriptors like here under:
+  For example, the following call:
 
   .. code-block:: python
+    :linenos:
 
-     'alt': [ {'conf': 'config_n1',
-	       'contents': SINT8(values=[1,4,8])},
-	      {'conf': 'config_n2',
-	       'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
-	       'determinist': True} ]
+     import framework.dmhelpers.xml as xml
 
+     xml_desc = \
+     xml.tag_builder('C1', params={'p1':'a', 'p2': ['foo', 'bar'], 'p3': 'c'},
+                     struct_mutable=False, tag_name_mutable=True, determinist=False,
+                     contents= \
+                     {'name': 'elt-content',
+                      'contents': UINT16_be(values=[60,70,80])}, node_name='xml_sample')
 
-conf
-  Used within the scope of the description of an alternative
-  configuration. It set the name of the alternative configuration.
-
-evolution_func
-  This attribute allows to provide a function that will be used in the case the described node is
-  instantiated more than once by a containing non-terminal node further to a
-  :meth:`framework.data_model.Node.freeze` operation (refer to the ``qty`` keyword).
-  The function will be called on every node instance (but the first one) before this node
-  incorporate the frozen form of the non-terminal. Besides, the node returned by the function will
-  be used as the base node for the next instantiation (which makes node evolution easier).
-  The function shall have the following signature::
-
-     func_name( Node ) --> Node
-
-custo_set, custo_clear
-  These attributes are used to customize the behavior of the described node.
-  ``custo_set`` is to enable some behavior modes, whereas ``custo_clear`` allows to
-  disable them. What is expected is either a single mode or a list of modes.
-  The available modes depend on the kind of node.
-
-  For non-terminal node, the customizable behavior modes are:
-
-  - ``MH.Custo.NTerm.MutableClone``: By default, this mode is *enabled*.
-    When enabled, it means that for child nodes which can be instantiated many times
-    (refer to ``qty`` attribute), all instances will be set as *mutable*.
-    If it is disabled, when a child node is instantiated more
-    than once, only the first instance is set *mutable*, the others
-    have this attribute cleared to prevent generic disruptors from
-    altering them. This mode aims at limiting the number of test
-    cases, by pruning what is assumed to be redundant.
-  - ``MH.Custo.NTerm.FrozenCopy``: By default, this mode is *enabled*.
-    When enabled, it means that for child nodes which can be instantiated many times
-    (refer to ``qty`` attribute), the instantiation process will make a frozen copy
-    of the node, meaning that it will be the exact copy of the original one at
-    the time of the copy. If disabled, the instantiation process will ignore the frozen
-    state, and thus will release all the constraints.
-
-    .. note::
-		Note that if the node is not frozen
-		at the time of the copy, this customization won't have any effect. The main interest is
-		in conjunction with the *disruptors* (like ``tTYPE``, ``tWALK``, ...) which are based on the
-		``ModelWalker`` infrastructure  (refer to :ref:`tuto:modelwalker`). Indeed, this infrastructure
-		releases constraints on non-terminal nodes before providing a new model instance. Releasing
-		constraints triggers child nodes reconstruction for each non-terminal. And as the terminal
-		children will be frozen at that time, the reconstruction will take into account this
-		customization mode.
-
-  - ``MH.Custo.NTerm.CollapsePadding``: By default, this mode is *disabled*.
-    When enabled, every time two adjacent BitFields (within its scope) are found, they
-    will be merged in order to remove any padding in between. This is done
-    "recursively" until any inner padding is removed. (Note this customization is currently
-    only supported for *generation* purpose and not for *absorption*.)
-
-  For *generator* node, the customizable behavior modes are:
-
-  - ``MH.Custo.Gen.ForwardConfChange``: By default, this mode is *enabled*.
-    If enabled, a
-    call to :meth:`framework.data_model.Node.set_current_conf()` will be
-    called on the generated node (default behavior).
-  - ``MH.Custo.Gen.CloneExtNodeArgs``: By default, this mode is *disabled*.
-    If enabled, during a cloning operation (e.g., full copy
-    of the modeled data containing this node) if the node parameters do
-    not belong to the graph representing the data, they will be cloned (full
-    copy). Otherwise, they will just be referenced (default
-    behavior). Rationale for default behavior: When a *generator* or
-    *function* node is duplicated within a non terminal node, the node
-    parameters may be unknown to it, thus considered as external, while
-    still belonging to the full data.
-  - ``MH.Custo.Gen.ResetOnUnfreeze``: By default, this mode is *enabled*.
-    If enabled, a
-    call to :meth:`framework.data_model.Node.unfreeze()` on the node will
-    provoke the reset of the *generator* itself, meaning that the next
-    time its value will be asked for, it will be recomputed (default
-    behaviour). If unset, a call to the method
-    :meth:`framework.data_model.Node.unfreeze()` will provoke the call of
-    this method on the already existing generated node (and if it
-    didn't exist by this time it would have been computed first).
-  - ``MH.Custo.Gen.TriggerLast``: By default, this mode is *disabled*.
-    If enabled, the triggering of a generator is postpone until everything else has
-    been resolved. It is especially
-    useful when you describe a generator that use a node with an
-    existence condition and that this condition cannot be resolved at
-    the time the generator would normally trigger (which is
-    when it is reached while walking through the graph).
-
-  For *function* node, the customizable behaviors mode are:
-
-  - ``MH.Custo.Func.FrozenArgs``: By default, this mode is *enabled*.
-    When enabled, the node parameters are frozen before being provided to
-    the *function* node. If disabled, the node parameters are directly provided to
-    the *function* node (without being frozen first).
-  - ``MH.Custo.Func.CloneExtNodeArgs``: By default, this mode is *disabled*.
-    Refer to the description of the corresponding *generator node* mode.
-
-
-.. _dm:nt-keywords:
-
-Keywords to Describe Non Terminal Node
---------------------------------------
-
-shape_type
-  Allows to choose the order to be enforce by a non-terminal node to
-  its children. ``MH.Ordered`` specifies that the children should be
-  kept strictly in the order of the description. ``MH.Random``
-  specifies there is no order to enforce between any *node descriptor*
-  (which can expand to several nodes), except if the parent node has the
-  ``determinist`` attribute. ``MH.FullyRandom`` specifies there is no
-  order to enforce between every single nodes. ``MH.Pick`` specifies
-  that only one node among the children should be kept at a time---the
-  choice is randomly performed except if the parent has the
-  ``determinist`` attribute---as per the weight associated to each
-  child node.
-
-weight
-  Used within the scope of a shape description for a non-terminal
-  node. A non-terminal node can organize all its child nodes in
-  various way by describing different shapes. Each shape has a weight
-  which is used either---when the non-terminal node is random---as a
-  way to determine the chance that ``fuddly`` we use it during the data
-  generation process, or as a mean to order the shape---when the node
-  is put in determinist mode. Let's look at the example here under:
+  will result in the following detailed data model:
 
   .. code-block:: python
+    :linenos:
+    :emphasize-lines: 9, 31, 41, 51, 69-70, 72
 
-        {'name': 'test',
-         'contents': [
+    xml_desc = \
+    {'name': 'xml_sample',
+     'separator': {'contents': {'name': ('nl', uuid.uuid1()),
+                                'contents': String(values=['\n'], max_sz=100,
+                                                   absorb_regexp='[\r\n|\n]+', codec='latin-1'),
+                                'absorb_csts': AbsNoCsts(regexp=True)},
+                   'prefix': False, 'suffix': False, 'unique': False},
+     'contents': [
+         {'name': ('start-tag', uuid.uuid1()),
+          'contents': [
+              {'name': 'prefix',
+               'contents': String(values=['<'], codec='latin-1'),
+               'mutable': False, 'set_attrs': MH.Attr.Separator},
 
-	      # SHAPE 1
-	      {'weight': 20,
-	       'contents': [
-		   {'section_type': MH.Random,
-		    'contents': [
-			{'contents': String(max_sz=10),
-			 'name': 'val1',
-			 'qty': (1, 5)},
-			 
-	       ...
+              {'name': ('content', uuid.uuid1()),
+               'random': True,
+               'separator': {'contents': {'name': ('spc', uuid.uuid1()),
+                                          'contents': String(values=[' '], max_sz=100,
+                                                                 absorb_regexp='\s+', codec='latin-1'),
+                                          'mutable': False,
+                                          'absorb_csts': AbsNoCsts(size=True, regexp=True)},
+                             'prefix': False, 'suffix': False, 'unique': False},
+               'contents': [
 
-	      # SHAPE 2
-	      {'weight': 10,
-	       'contents': [
-		   {'section_type': MH.FullyRandom,
-		    'contents': [
-			{'name': 'val1'},
+                   {'name': ('tag_name', uuid.uuid1()),
+                    'contents': String(values=['C1'], codec='latin-1'),
+                    'mutable': True},
 
-	       ...
+                   {'section_type': MH.FullyRandom,
+                    'contents': [
+                       {'name': ('attr1', uuid.uuid1()),
+                        'contents': [
+                            {'name': ('key', 1...), 'contents': String(values=['p1'], codec='latin-1')},
+                            {'name': ('eq', 1...), 'contents': String(values=['='], codec='latin-1'),
+                             'set_attrs': MH.Attr.Separator, 'mutable': False},
+                            {'name': ('sep', 1...), 'contents': String(values=['"'], codec='latin-1'),
+                             'set_attrs': MH.Attr.Separator, 'mutable': False},
+                            {'name': ('val', 1...), 'contents': String(values=['a'], codec='latin-1')},
+                            {'name': ('sep', 1...)},
+                        ]},
+                       {'name': ('attr2', uuid.uuid1()),
+                        'contents': [
+                            {'name': ('key', 2...), 'contents': String(values=['p2'], codec='latin-1')},
+                            {'name': ('eq', 2...), 'contents': String(values=['='], codec='latin-1'),
+                             'set_attrs': MH.Attr.Separator, 'mutable': False},
+                            {'name': ('sep', 2...), 'contents': String(values=['"'], codec='latin-1'),
+                             'set_attrs': MH.Attr.Separator, 'mutable': False},
+                            {'name': ('val', 2...), 'contents': String(values=['foo', 'bar'], codec='latin-1')},
+                            {'name': ('sep', 2...)},
+                        ]},
+                       {'name': ('attr3', uuid.uuid1()),
+                        'contents': [
+                            {'name': ('key', 3...), 'contents': String(values=['p3'], codec='latin-1')},
+                            {'name': ('eq', 3...), 'contents': String(values=['='], codec='latin-1'),
+                             'set_attrs': MH.Attr.Separator, 'mutable': False},
+                            {'name': ('sep', 3...), 'contents': String(values=['"'], codec='latin-1'),
+                             'set_attrs': MH.Attr.Separator, 'mutable': False},
+                            {'name': ('val', 3...), 'contents': String(values=['c'], codec='latin-1')},
+                            {'name': ('sep', 3...)},
+                        ]}
+                    ]}
+               ]},
 
-  .. note:: A *shape description* is composed of the two attributes
-	    ``weight`` and ``contents``.
+              {'name': ('suffix', uuid.uuid1()),
+               'contents': String(values=['>'], codec='latin-1'),
+               'mutable': False, 'set_attrs': MH.Attr.Separator}
+          ]},
 
+         {'name': 'elt-content',
+          'contents': UINT16_be(values=[60,70,80])},
 
-
-section_type
-  Similar to ``shape_type`` keyword. But only valid for describing a
-  section within a non-terminal node, and limited to this section. The
-  following example illustrates that:
-
-  .. code-block:: python
-
-     {'name': 'test',
-      'shape_type': MH.Random
-      'contents': [
-      
-	     {'name': 'val1',
-	      'contents': String(values=['OK', 'KO']),
-	      'qty': (0, 5)},
-
-             {'section_type': MH.Ordered,
-              'contents': [
-
-		     {'name': 'val2',
-		      'contents': UINT16_be(values=[10, 20, 30])},
-
-		     {'name': 'val3',
-		      'contents': String(min_sz=2, max_sz=10, alphabet='XYZ')},
-
-		     {'name': 'val4',
-		      'contents': UINT32_le(values=[0xDEAD, 0xBEEF])},
-
-	      ]}
-
-	     {'name': 'val5',
-	      'contents': String(values=['OPEN', 'CLOSE']),
-	      'qty': 3}
+         {'name': ('end-tag', uuid.uuid1()),
+          'contents': [
+             {'name': ('prefix', uuid.uuid1()),
+              'contents': String(values=['</'], codec='latin-1'),
+              'mutable': False, 'set_attrs': MH.Attr.Separator},
+             {'name': ('content', uuid.uuid1()),
+              'contents': String(values=['C1'], codec='latin-1'),
+              'mutable': True},
+             {'name': ('suffix', uuid.uuid1()),
+              'contents': String(values=['>'], codec='latin-1'),
+              'mutable': False, 'set_attrs': MH.Attr.Separator},
+          ]}
      ]}
 
 
-duplicate_mode
-  Modify the behavior of the instantiating procedure when a child node
-  is instantiated more than once. This can be set to:
-  
-  - ``MH.Copy``: A new instance corresponds to a full copy operation.
-  - ``MH.ZeroCopy``: A new instance corresponds to a new reference of
-    the child node.
-
-
-weights
-  To be used optionally in the frame of a non-terminal node along with
-  a ``MH.Pick`` type. If used this attribute shall contains an integer
-  tuple describing the weight for each one of the subsequent nodes to
-  be picked. Can be used within a section description, or directly in
-  the non-terminal nodes, if it has a ``MH.Pick`` type.
-
-separator
-  When specified, the non-terminal will add a separator between each
-  one of its children. This attribute has to be filled with a
-  *separator descriptor* such as what is illustrated below:
-
-  .. code-block:: python
-
-     'separator': {'contents': {'name': 'sep',
-				'contents': String(values=['\n'])},
-		   'prefix': False,
-		   'suffix': False,
-		   'unique': True},
-
-  The keys ``prefix``, ``suffix`` and ``unique`` are optional. They are
-  described below.
-
-  .. seealso:: Refer to :ref:`dm:pattern:separator` for an example using
-	       separators.
-
-
-prefix
-  Used optionally within a *separator descriptor*. If set to ``True``,
-  a separator will be placed just before the first child.
-
-suffix
-  Used optionally within a *separator descriptor*. If set to ``True``,
-  a separator will be placed just after the last child.
-
-unique
-  Used optionally within a *separator descriptor*. If set to ``True``,
-  the inserted separators will be independent from each other (full
-  node copy). Otherwise, the separators will be references to a
-  unique node (zero copy).
-
-encoder
-  If specified, an encoder instance should be provided. The *encoding* will be applied
-  transparently when the binary value of the non terminal node will be retrieved
-  (:meth:`framework.data_model.Node.to_bytes`). Additionally, during an absorption
-  (refer to :ref:`tuto:dm-absorption`), the *decoding* will also be performed automatically.
-
-  Several generic encoders are defined within ``framework/encoders.py``. But if they
-  don't match your need, you can define your own encoder by inheriting from
-  :class:`framework.encoders.Encoder` and implementing its interface.
-
-
-  .. seealso:: Refer to :ref:`dm:pattern:encoder` for an example on how to use this keyword.
-
-  .. note:: Depending on your needs, you could also choose to implement a disruptor
-     to perform your encoding (refer to :ref:`tuto:disruptors`).
-
-
-Keywords to Describe Generator Node
------------------------------------
-
-
-node_args
-  List of node parameters to be provided to a *generator* node or a
-  *function* node.
-
-other_args
-  List of parameters (which are not a
-  :class:`framework.data_model.Node`) to be provided to a *generator*
-  node or a *function* node.
-
-provide_helpers
-  (Optional) If set to `True`, a special object will be provided to
-  the user-defined function (last parameter) of the *generator* node
-  or the *function* node. Otherwise, this object won't be passed
-  (default behavior). This object is an instance of the class
-  :class:`framework.data_model.DynNode_Helpers`, which enable the
-  user-defined function to have some insight on the current structure
-  of the modeled data.
-
-trigger_last
-  This keyword is a shortcut for the related node customization mode.
-  Refer to ``custo_set`` and ``custo_clear``.
-
-Keywords to Import External Data Description
---------------------------------------------
-
-import_from
-  Name of the data model to import a data description from.
-
-data_id
-  Name of the data description to import.
-
-
-.. _dm:node_prop_keywords:
-
-Keywords to Describe Node Properties
-------------------------------------
-
-determinist
-  Make the node behave in a deterministic way.
-
-random
-  Make the node behave in a random way.
-
-finite
-  Make the node *finite*, meaning that it will exhaust at some point
-  (meaning that it has cycled over all its possible values or shapes)
-  When the situation occurs, a notification is posted in the node
-  environment (refer to :ref:`data-manip`)
-
-infinite
-  Make the node *infinite*, meaning that it will always provide values.
-
-mutable
-  Make the node mutable. It is a shortcut for the node attribute
-  ``MH.Attr.Mutable``.
-
-set_attrs
-  List of attributes to set on the node. The current generic
-  attributes are:
-
-  - ``MH.Attr.Freezable``: If set, the node will be freezable (default
-    behavior), which means that once the node has provided a value
-    (through for instance :meth:`framework.data_model.Node.to_bytes()`),
-    the method :meth:`framework.data_model.Node.unfreeze()` need to be
-    called on it to get new values, otherwise it won't change. If
-    unset, the node will always be recomputed. Can be useful for
-    *function* node, if it needs to be recomputed each time a
-    modification has been performed on its associated graph (e.g., CRC
-    function).
-  - ``MH.Attr.Mutable``: If set, generic disruptors will consider the
-    node as being mutable, meaning that it can be altered (default
-    behavior). Otherwise, it will be ignored.
-  - ``MH.Attr.Determinist``: This attribute can be set directly
-    through the keywords ``determinist`` or ``random``. Refer to them
-    for details. By default, it is set.
-  - ``MH.Attr.Finite``: If set, a node will provide a finite number of
-    values and then will notify it has exhausted. Otherwise,
-    exhaustion will never be notified (default behavior).
-  - ``MH.Attr.Abs_Postpone``: Used to postpone absorption by the
-    node. Refer to :ref:`tuto:dm-absorption` for more information on
-    that topic.
-  - ``MH.Attr.Separator``: Used to distinguish a separator. Some
-    disruptors can leverage this attribute to perform their
-    alteration.
-
-  .. note::
-     Most of the generic stateful disruptors will recursively
-     set the attributes ``MH.Attr.Determinist`` and ``MH.Attr.Finite``
-     on the provided data before performing any alteration.
-
-  .. note:: *Generator* node will transfer the generic attributes to
-            the generated node, except for ``MH.Attr.Freezable``, and
-            ``MH.Attr.Mutable`` which are used to change the
-            *generator* behavior. (If such attributes need to be set
-            or cleared on the generated node, it has to be done
-            directly on it and not on its generator.) Specific
-            attributes related to generators won't be passed to the
-            generated node.
-
-  .. seealso:: The attributes are defined within
-               :class:`framework.data_model.NodeInternals`.
-
-clear_attrs
-  List of attributes to clear on the node. The current attributes are
-  the same than for the ``set_attrs`` keyword.
-
-absorb_csts
-  Used to specify some absorption constraints on the node. Refer to
-  :ref:`tuto:dm-absorption` for more information on that topic.
-
-absorb_helper
-  Used to specify an absorption helper function for the node. Refer to
-  :ref:`tuto:dm-absorption` for more information on that topic.
-
-semantics
-  Used to specify semantics to the node, by way of a list of
-  meaningful strings. Nodes can be searched for and selected based on
-  semantics. Refer to :ref:`data-manip` for more information on that
-  topic.
-
-fuzz_weight
-  Used by some stateful disruptors to order their test cases. The
-  heavier the weight, the higher the priority of handling the node.
-
-sync_qty_with
-  Allow to synchronize the number of node instances to generate or to
-  absorb with the one specified by reference.
-
-qty_from
-  Allow to synchronize the number of node instances to generate or to
-  absorb with the *value* of the one specified by reference. You can also specify
-  an optional *base quantity* that will be added to the retrieved value. In this case, you
-  shall provide a ``list``/``tuple`` with first the node reference then the *base quantity*.
-
-  This keyword is the counterpart of the *generator template* :class:`framework.data_model_helpers.MH.QTY`.
-  It is preferable to this *generator* when the node from which the quantity is retrieved
-  is already resolved at retrieval time. In this case *generation* and *absorption* operations
-  will be handled transparently.
-
-sync_size_with, sync_enc_size_with
-  Allow to synchronize the length of the described node (the one where this keyword is used)
-  with the *value* of the node specified by reference (which should be an
-  :class:`framework.value_types.INT`-based typed-node). These keywords are useful for size-variable
-  node types. They are currently supported for typed-nodes which are
-  :class:`framework.value_types.String`-based with or without an encoding.
-  Non-terminal nodes are not supported (for absorption).
-  The distinction between ``sync_size_with`` and ``sync_enc_size_with`` is that the synchronization
-  will be performed:
-
-  - either with respect to the length of the data retrieved from the node in a
-    *decoded* form. *Decoded* means that it is agnostic to the *codec* specified
-    (e.g., ``utf-8``, ``latin-1``, ...) in the ``String``, and also, for ``Encoded-String``
-    (e.g., :class:`framework.value_types.GZIP`, ...) , that it is agnostic to any
-    :class:`framework.encoders.Encoder` the ``String`` is wrapped with;
-
-  - or with respect to the length of the encoded form of the data.
-
-  Generation and absorption deal with these keywords differently, in order to achieve the expected
-  behavior. For generation, the synchronization goes from the described node to the referenced node
-  (meaning that the data is first pulled from the size-variable node, then the referenced node is
-  set with the length of the pulled data). Whereas for the absorption it goes the other way around.
-
-  Note also that you can provide an optional *base size* that will be added to the length
-  before synchronization in the case of generation, and removed from the length in the case
-  of absorption. In this case, you shall provide a ``list``/``tuple`` with first the node reference
-  then the *base size*.
-
-  These keywords are the counterpart of the *generator template* :class:`framework.data_model_helpers.MH.LEN`.
-  They are preferable to this *generator* (when the size-variable node is not a non-terminal),
-  because *generation* and *absorption* operations will be handled transparently thanks to them.
-
-exists_if
-  Enable to determine the existence of this node based on a given
-  condition.
-
-  .. seealso:: Refer to :ref:`dm:pattern:existence-cond` for how to use existence
-	       conditions.
-
-exists_if/and, exists_if/or
-    Extend the ``exists_if`` keyword by allowing to specify a list or a tuple
-    of conditions. The operator ``and`` (respectively ``or``) will be used to generate
-    the desired behaviour.
-
-
-    .. code-block:: python
-
-        {'name': 'test',
-         'contents': [
-            {'name': 'opcode',
-             'contents': String(values=['A3', 'A2'])},
-            {'name': 'subopcode',
-             'contents': BitField(subfield_sizes=[15,2,4],
-                                  subfield_values=[[500], [1,2], [5,6,12]])},
-            {'name': 'and_condition',
-             'exists_if/and': [(RawCondition('A2'), 'opcode'),
-                               (BitFieldCondition(sf=2, val=[5]), 'subopcode')],
-             'contents': String(values=['and_condition_true'])}
-         ]}
-
-exists_if_not
-  Enable to determine the existence of this node based on the
-  non-existence of another one.
-
-post_freeze
-  To be filled with a function. If specified, the function will be
-  called just after the node has been frozen. It takes the node
-  internals as argument (:class:`framework.data_model.NodeInternals`).
-
-specific_fuzzy_vals
-  Usable for *typed-nodes* only. This keyword allows to specify a list of additional values to
-  be leveraged by the *disruptor* ``tTYPE`` (:ref:`dis:ttype`) while dealing with the related node.
-  These additional values are added to the test cases planned by the *disruptor* (if not already
-  planned).
-
-charset
-  Used in the context of a `regular expression` ``contents``. It enables to specify the charset
-  that will be considered for interpreting the regular expression and for creating the related
-  nodes. Accepted attributes are:
-
-  - ``MH.Charset.ASCII``
-  - ``MH.Charset.ASCII_EXT`` (default)
-  - ``MH.Charset.UNICODE``
-
+  .. note::``uuid.uuid1()`` is used to avoid node name collisions with the formalism of
+    :class:`framework.node_builder.NodeBuilder`.
 
 .. _dm:patterns:
 
@@ -1114,7 +1242,7 @@ From this data model you could get a data like that:
 .. note:: You can also perform specific *separator mutation* within a
           disruptor (refer to :ref:`tuto:disruptors`), as separator nodes have
           the specific attribute
-          :const:`framework.data_model.NodeInternals.Separator` set.
+          :const:`framework.node.NodeInternals.Separator` set.
 
 
 .. _dm:pattern:existence-cond:
@@ -1125,7 +1253,7 @@ How to Describe a Data Format Whose Parts Change Depending on Some Fields
 The example below shows how to define a data format based on *opcodes*
 and *sub-opcodes* which change the form of the data itself. We use for
 that purpose the keyword ``exists_if`` with some subclasses of
-:class:`framework.data_model.NodeCondition` and node references.
+:class:`framework.node.NodeCondition` and node references.
 
 .. note:: The keyword ``exists_if`` can directly take a node
           reference. In such case, the condition is the existence of
@@ -1238,12 +1366,11 @@ character string in our case.
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 5-6
+   :emphasize-lines: 4-5
 
     {'name': 'len_gen',
      'contents': [
 	 {'name': 'len',
-	  'type': MH.Generator,
 	  'contents': lambda x: Node('cts', value_type= \
                                      UINT32_be(values=[len(x.to_bytes())])),
 	  'node_args': 'payload'},
@@ -1253,34 +1380,33 @@ character string in our case.
      ]}
 
 Note the *generator* is just a specific kind of node
-(:class:`framework.data_model.NodeInternals_GenFunc`) that embeds a
-function that returns a node (:class:`framework.data_model.Node`). In
+(:class:`framework.node.NodeInternals_GenFunc`) that embeds a
+function that returns a node (:class:`framework.node.Node`). In
 the previous description, the function is provided through the keyword
 ``contents``, and it's a simple lambda function taking a node as
 parameter, on which is called
-:meth:`framework.data_model.Node.to_bytes()` to get its bytes
+:meth:`framework.node.Node.to_bytes()` to get its bytes
 representation and then the ``len()`` function. The result is used for
 defining a terminal node of type
 :class:`framework.value_types.UINT32_be` (refer to section :ref:`vt:integer`).
 
 This use case can be described by using the specific *generator
-template* :meth:`framework.data_model_helpers.MH.LEN()` which will basically
+template* :meth:`framework.dmhelpers.generic.LEN()` which will basically
 return the previous lambda function. The following example makes use
 of it.
 
 .. note:: Generator templates are defined as static methods of
-          :class:`framework.data_model_helpers.MH`. They make the description
+          :class:`framework.dmhelpers.generic.MH`. They make the description
           of some generic use cases simpler.
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 5
+   :emphasize-lines: 4
 
     {'name': 'len_gen',
      'contents': [
 	 {'name': 'len',
-	  'type': MH.Generator,
-	  'contents': MH.LEN(UINT32_be),
+	  'contents': LEN(UINT32_be),
 	  'node_args': 'payload'},
 
 	 {'name': 'payload',
@@ -1305,13 +1431,12 @@ constraints for this node, as shown in the following example:
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 7
+   :emphasize-lines: 6
 
     {'name': 'len_gen',
      'contents': [
 	 {'name': 'len',
-	  'type': MH.Generator,
-	  'contents': MH.LEN(UINT32_be),
+	  'contents': LEN(UINT32_be),
 	  'node_args': 'payload',
 	  'absorb_csts': AbsNoCsts()  # or more accurately AbsCsts(contents=False)
 	  },
@@ -1325,17 +1450,16 @@ be used only for absorption:
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 7-9
+   :emphasize-lines: 6-8
 
     {'name': 'len_gen',
      'contents': [
 	 {'name': 'len',
-	  'type': MH.Generator,
-	  'contents': MH.LEN(UINT32_be),
+	  'contents': LEN(UINT32_be),
 	  'node_args': 'payload',
 	  'alt': [
 	      {'conf': 'ABS',
-	       'contents': UINT32_be(maxi=100)} ]},
+	       'contents': UINT32_be(max=100)} ]},
 
 	 {'name': 'payload',
 	  'contents': String(min_sz=10, max_sz=100, determinist=False)},
@@ -1352,13 +1476,13 @@ for more complex situation.
 
 Finally, let's take the following example that illustrates other
 *generator templates*, namely
-:meth:`framework.data_model_helpers.MH.QTY()`,
-:meth:`framework.data_model_helpers.MH.CRC()` and
-:meth:`framework.data_model_helpers.MH.TIMESTAMP()`.
+:meth:`framework.dmhelpers.generic.QTY()`,
+:meth:`framework.dmhelpers.generic.CRC()` and
+:meth:`framework.dmhelpers.generic.TIMESTAMP()`.
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 16, 21, 26, 31
+   :emphasize-lines: 15, 19, 23, 27
 
     {'name': 'misc_gen',
      'contents': [
@@ -1374,23 +1498,19 @@ Finally, let's take the following example that illustrates other
 	  ]},
 
 	 {'name': 'int16_qty',
-	  'type': MH.Generator,
-	  'contents': MH.QTY(node_name='int16', vt=UINT8),
+	  'contents': QTY(node_name='int16', vt=UINT8),
 	  'node_args': 'integers'},
 
 	 {'name': 'int32_qty',
-	  'type': MH.Generator,
-	  'contents': MH.QTY(node_name='int32', vt=UINT8),
+	  'contents': QTY(node_name='int32', vt=UINT8),
 	  'node_args': 'integers'},
 
 	 {'name': 'tstamp',
-	  'type': MH.Generator,
-	  'contents': MH.TIMESTAMP("%H%M%S"),
+	  'contents': TIMESTAMP("%H%M%S"),
 	  'absorb_csts': AbsCsts(contents=False)},
 
 	 {'name': 'crc',
-	  'type': MH.Generator,
-	  'contents': MH.CRC(UINT32_be),
+	  'contents': CRC(UINT32_be),
 	  'node_args': ['tstamp', 'int32_qty'],
 	  'absorb_csts': AbsCsts(contents=False)}
      ]}
@@ -1477,9 +1597,8 @@ The non-terminal node named ``enc`` (lines 9-19) has the attribute ``encoder``
 (refer to :ref:`dm:keywords`) which means that it will be encoded following the scheme of the
 specified encoder. In this case it is the :class:`framework.encoders.GZIP_Enc` with a level
 of compression of 6. Within this node is also defined a typed node (lines 17-18) named
-``data1`` which is encoded in *UTF16 little endian* thanks to the type
-:class:`framework.value_types.UTF16_LE` (which inherit from :class:`framework.value_types.String`)
-that leverages the encoder :class:`framework.encoders.UTF16LE_Enc`.
+``data1`` which is encoded in *UTF16 little endian* through the parameter ``codec``
+of :class:`framework.value_types.String`.
 
 Note also the parameter ``after_encoding=False`` (lines 6 and 14), which is supported by every
 relevant generator node templates (refer to :ref:`dm:generators`) and enable them to act either
@@ -1494,7 +1613,7 @@ on the encoded form or the decoded form of their node parameters.
          {'name': 'data0',
           'contents': String(values=['Plip', 'Plop']) },
          {'name': 'crc',
-          'contents': MH.CRC(vt=UINT32_be, after_encoding=False),
+          'contents': CRC(vt=UINT32_be, after_encoding=False),
           'node_args': ['enc_data', 'data2'],
           'absorb_csts': AbsFullCsts(contents=False) },
          {'name': 'enc_data',
@@ -1502,11 +1621,11 @@ on the encoded form or the decoded form of their node parameters.
           'set_attrs': [NodeInternals.Abs_Postpone],
           'contents': [
              {'name': 'len',
-              'contents': MH.LEN(vt=UINT8, after_encoding=False),
+              'contents': LEN(vt=UINT8, after_encoding=False),
               'node_args': 'data1',
               'absorb_csts': AbsFullCsts(contents=False)},
              {'name': 'data1',
-              'contents': UTF16_LE(values=['Test!', 'Hello World!']) },
+              'contents': String(values=['Test!', 'Hello World!'], codec='utf-16-le') },
           ]},
          {'name': 'data2',
           'contents': String(values=['Red', 'Green', 'Blue']) }
@@ -1519,8 +1638,8 @@ perform on any data parts will be done *before* any encoding takes place.
 If you want to perform some fuzzing on the encoding scheme itself you will have first to
 describe its format. Then it boils down to run some generic disruptors on them or some of your own.
 However, note that some value types that support encoding (refer to :ref:`vt:value-types`) embed
-specific test cases on the encoding scheme (which is the case of
-:class:`framework.value_types.UTF16_LE` for instance).
+specific test cases on the encoding scheme (which is the case for ``utf-16-le``-encoded strings
+for instance).
 
 Finally, absorption (refer to :ref:`tuto:dm-absorption`) is also supported when encoding is used
 within your data description. For instance, the following data will be absorbed by the previous
@@ -1535,13 +1654,13 @@ To perform that operation you can write the following python code:
    :emphasize-lines: 10, 12
 
    from framework.plumbing import *
-   from framework.data_model import AbsorbStatus
+   from framework.node import AbsorbStatus
 
    raw_data = b'Plop\x8c\xd6/\x06x\x9cc\raHe(f(aPd\x00\x00\x0bv\x01\xc7Blue'
 
    fmk = FmkPlumbing()
    fmk.run_project(name="tuto")
-   enc_dm = fmk.dm.get_data('enc')
+   enc_dm = fmk.dm.get_atom('enc')
 
    status, off, size, name = enc_dm.absorb(raw_data, constraints=AbsFullCsts())
    if status == AbsorbStatus.FullyAbsorbed:
@@ -1583,7 +1702,7 @@ Here are some rules to respect:
   declares a list of values. ``( )`` can be used to delimit a portion of
   the regular expression that need to be translated into a terminal node on its own.
 
-.. note:: If each item in a list of values are integers an :class:`framework.value_types.INT_Str` will
+.. note:: If each item in a list of values are integers an :class:`framework.value_types.INT_str` will
    be created instead of a :class:`framework.value_types.String`.
 
 - ``(``, ``)``, ``[``, ``]``, ``?``, ``*``, ``+``, ``{``, ``}``, ``|``, ``\``, ``-``, ``.`` are the only
@@ -1618,7 +1737,7 @@ Example 1: The basics.
                  {'name': 'HTTP_version_3',
                   'contents': String(alphabet="0123456789", size=1)},
                  {'name': 'HTTP_version_4', 'contents': String(values=["."])},
-                 {'name': 'HTTP_version_5', 'contents': INT_Str(mini=0, maxi=9)} ]}
+                 {'name': 'HTTP_version_5', 'contents': INT_str(min=0, max=9)} ]}
 
 
 Example 2: Introducing choices. (Refer to :ref:`dm:nt-keywords`)
@@ -1632,7 +1751,7 @@ Example 2: Introducing choices. (Refer to :ref:`dm:nt-keywords`)
    classic = {'name': 'something',
               'shape_type': MH.Pick,
               'contents': [
-                 {'name':'something_1', 'contents':INT_Str(values=[333, 444])},
+                 {'name':'something_1', 'contents':INT_str(values=[333, 444])},
                  {'name':'something_2', 'contents':String(values=["foo", "bar"])},
                  {'name':'something_3', 'contents':String(alphabet="0123456789",size=1)},
                  {'name':'something_4', 'contents':String(alphabet="th|is", size=1)}
@@ -1649,19 +1768,19 @@ Example 3: Using shapes. (Refer to :ref:`dm:patterns`)
    # is equivalent to
    classic = {'name': 'something',
               'contents': [
-                 {'weights': 1,
+                 {'weight': 1,
                   'contents': [
                      {'name': 'something_1', 'contents': String(values=['this'])},
                      {'name': 'something_2', 'contents': String(alphabet='0123456789')},
                      {'name': 'something_3', 'contents': String(values=['is'])},
                   ]},
 
-                 {'weights': 1,
+                 {'weight': 1,
                   'contents': [
                      {'name': 'something_4', 'contents': String(values=['a'])},
                   ]},
 
-                 {'weights': 1,
+                 {'weight': 1,
                   'contents': [
                      {'name': 'something_5', 'contents': String(values=['digit'])},
                      {'name': 'something_6', 'contents': String(alphabet='!')},

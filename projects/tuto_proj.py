@@ -21,11 +21,11 @@
 #
 ################################################################################
 
-from framework.project import *
-from framework.monitor import *
-from framework.operator_helpers import *
+import socket
+
 from framework.plumbing import *
-import framework.global_resources as gr
+from framework.targets.debug import TestTarget
+from framework.targets.network import NetworkTarget
 
 project = Project()
 project.default_dm = 'mydf'

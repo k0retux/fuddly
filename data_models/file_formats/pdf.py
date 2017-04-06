@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 ################################################################################
 #
 #  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
@@ -35,8 +33,8 @@ import zlib
 sys.path.append('.')
 
 from framework.plumbing import *
+from framework.node import *
 from framework.data_model import *
-from framework.data_model_helpers import *
 from framework.value_types import *
 from framework.fuzzing_primitives import *
 from framework.basic_primitives import *
@@ -155,12 +153,12 @@ class PDFObj(object):
         else:
             sign = Node('sign', values=['+','-'])
 
-        int_part = Node('int_part', value_type=INT_str(mini=int_m, maxi=int_M, determinist=False))
+        int_part = Node('int_part', value_type=INT_str(min=int_m, max=int_M, determinist=False))
         int_part.add_conf('ALT')
         int_part.set_values(value_type=INT_str(values=[20000000]), conf='ALT')
 
         dot = Node('dot', values=['.'])
-        val = Node('val', value_type=INT_str(mini=dec_m, maxi=dec_M, determinist=False))
+        val = Node('val', value_type=INT_str(min=dec_m, max=dec_M, determinist=False))
         end = Node('float_part', subnodes=[dot, val])
 
         e = Node(name)
@@ -197,7 +195,7 @@ class PDFObj(object):
         prefix.set_values(['#', '//'], conf='ALT')
         prefix.set_semantics(NodeSemantics(['delim']))
 
-        valid_names = [rand_string(mini=1, maxi=30, str_set=PDFObj.alphabet) for x in range(20)]
+        valid_names = [rand_string(min=1, max=30, str_set=PDFObj.alphabet) for x in range(20)]
         invalid_names = ['A'*128, # max name length = 127 bytes
                          '#41'*128,
                          'A'*126 + '\\',
@@ -234,7 +232,7 @@ class PDFObj(object):
         e_suffix.make_determinist(conf='ALT')
         e_suffix.set_semantics(NodeSemantics(['delim']))
 
-        valid_strings = [rand_string(mini=1, maxi=50) for x in range(20)]
+        valid_strings = [rand_string(min=1, max=50) for x in range(20)]
         invalid_strings = ['',
                            'A'*2**16, # valid strings have 65535 max chars
                            '1AAAA\\666\\777',
@@ -1177,7 +1175,7 @@ class PDF_DataModel(DataModel):
                
         PDFObj.external_pdf_objs = gather_pdf_objects()
 
-        e_jpg = self.get_external_node(dm_name='jpg', data_id='jpg_00')
+        e_jpg = self.get_external_atom(dm_name='jpg', data_id='jpg_00')
 
         PDFObj.jpg_node = e_jpg
 
@@ -1205,7 +1203,7 @@ class PDF_DataModel(DataModel):
                                               pdfobj_type=PDFObj.t_obj_pdfbomb,
                                               catalog_type=PDFObj.t_ctg_flat))
 
-        self.register_nodes(*e_pdf_nodes)
+        self.register(*e_pdf_nodes)
 
 
 
@@ -1298,7 +1296,7 @@ if __name__ == "__main__":
 
     print("\n[ PDF generation ]\n")
 
-    pdf = dm.get_data('PDF_basic')
+    pdf = dm.get_atom('PDF_basic')
 
     val = pdf.to_bytes()
     val2 = pdf.to_bytes()
@@ -1327,13 +1325,13 @@ if __name__ == "__main__":
     pdf.set_current_conf('MAIN', root_regexp='PDF.*leaf_0-0$')
 
     pdf_buff = {}
-    for e_id in dm.data_identifiers():
+    for e_id in dm.atom_identifiers():
         if e_id == 'PDF_bomb':
             continue
 
         print('DEBUG: ', e_id)
 
-        pdf = dm.get_data(e_id)
+        pdf = dm.get_atom(e_id)
         pdf_buff[e_id] = pdf.to_bytes()
 
         with open(gr.workspace_folder + e_id + '.pdf', 'wb') as f:

@@ -22,6 +22,8 @@
 ################################################################################
 
 import os
+import subprocess
+import re
 
 def ensure_dir(f):
     d = os.path.dirname(f)
@@ -47,3 +49,27 @@ def chunk_lines(string, length):
     if chk_list:
         chk_list[-1] = (chk_list[-1])[:-1]
     return chk_list
+
+def find_file(filename, root_path):
+    for (dirpath, dirnames, filenames) in os.walk(root_path):
+        if filename in filenames:
+            return dirpath + os.sep + filename
+    else:
+        return None
+
+def retrieve_app_handler(filename):
+    mimetype = subprocess.check_output(['xdg-mime', 'query', 'filetype', filename])[:-1]
+    desktop_file = subprocess.check_output(['xdg-mime', 'query', 'default', mimetype])[:-1]
+
+    file_path = find_file(desktop_file.decode(), root_path='~/.local/share/applications/')
+    if file_path is None:
+        file_path = find_file(desktop_file.decode(), root_path='/usr/share/applications/')
+
+    if file_path is None:
+        return None
+
+    with open(file_path, 'r') as f:
+        buff = f.read()
+        result = re.search("Exec=(.*)", buff)
+        app_name = result.group(1).split()[0]
+    return app_name

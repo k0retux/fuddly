@@ -36,6 +36,13 @@ import re
 import zlib
 import codecs
 
+if sys.version_info[0] > 2:
+    # python3
+    import builtins
+else:
+    # python2.7
+    import __builtin__ as builtins
+
 import six
 from six import with_metaclass
 
@@ -67,8 +74,10 @@ class VT(object):
         Native: '='
         }
 
-    def __init__(self, endian=BigEndian):
-        self.endian = self.enc2struct[endian]
+    endian = None
+
+    # def __init__(self, endian=BigEndian):
+    #     self.endian = self.enc2struct[endian]
 
     def make_private(self, forget_current_state):
         pass
@@ -866,7 +875,7 @@ class String(VT_Alt):
                 nb_vals = 0
                 retry_cpt = 0
                 while nb_vals < NB_VALS_MAX and retry_cpt < 5:
-                    val = bp.rand_string(mini=self.min_sz+1, maxi=self.max_sz-1, str_set=alpbt)
+                    val = bp.rand_string(min=self.min_sz+1, max=self.max_sz-1, str_set=alpbt)
                     if self._check_compliance(self._str2bytes(val), force_max_enc_sz=force_max_enc_sz,
                                               force_min_enc_sz=force_min_enc_sz):
                         nb_vals += 1
@@ -1038,6 +1047,8 @@ class INT(VT):
     '''
     Base class to be inherited and not used directly
     '''
+    usable = False
+
     mini = None
     maxi = None
     cformat = None
@@ -1052,13 +1063,17 @@ class INT(VT):
                           # and that mini is not specified by the user
 
 
-    def __init__(self, values=None, mini=None, maxi=None, default=None, determinist=True,
+    def __init__(self, values=None, min=None, max=None, default=None, determinist=True,
                  force_mode=False):
         self.idx = 0
         self.determinist = determinist
         self.exhausted = False
         self.drawn_val = None
         self.default = None
+
+        if not self.usable:
+            raise DataModelDefinitionError("ERROR: {!r} is not usable! (use a subclass of it)"
+                                           .format(self.__class__))
 
         if values:
             assert default is None
@@ -1079,16 +1094,16 @@ class INT(VT):
             self.values_copy = list(self.values)
 
         else:
-            if mini is not None and maxi is not None:
-                assert maxi >= mini
+            if min is not None and max is not None:
+                assert max >= min
 
-            if mini is not None and maxi is not None and abs(maxi - mini) < 200:
-                self.values = list(range(mini, maxi + 1))
+            if min is not None and max is not None and abs(max - min) < 200:
+                self.values = list(range(min, max + 1))
                 # we keep min/max information as it may be valuable for fuzzing
-                self.mini = self.mini_gen = mini
-                self.maxi = self.maxi_gen = maxi
+                self.mini = self.mini_gen = min
+                self.maxi = self.maxi_gen = max
                 if default is not None:
-                    assert mini <= default <= maxi
+                    assert min <= default <= max
                     self.values.remove(default)
                     self.values.insert(0, default)
                     # Once inserted at this place, its position is preserved, especially with reset_state()
@@ -1099,26 +1114,26 @@ class INT(VT):
                 self.values = None
                 self.values_copy = None
                 if self.mini is not None:
-                    self.mini = max(mini, self.mini) if mini is not None else self.mini
+                    self.mini = builtins.max(min, self.mini) if min is not None else self.mini
                     self.mini_gen = self.mini
                 else:
                     # case where no size constraints exist (e.g., INT_str)
-                    if mini is None:
+                    if min is None:
                         self.mini = None
                         self.mini_gen = INT.GEN_MIN_INT
                     else:
-                        self.mini = self.mini_gen = mini
+                        self.mini = self.mini_gen = min
 
                 if self.maxi is not None:
-                    self.maxi = min(maxi, self.maxi) if maxi is not None else self.maxi
+                    self.maxi = builtins.min(max, self.maxi) if max is not None else self.maxi
                     self.maxi_gen = self.maxi
                 else:
                     # case where no size constraints exist (e.g., INT_str)
-                    if maxi is None:
+                    if max is None:
                         self.maxi = None
                         self.maxi_gen = INT.GEN_MAX_INT
                     else:
-                        self.maxi = self.maxi_gen = maxi
+                        self.maxi = self.maxi_gen = max
 
                 if default is not None:
                     assert self.mini_gen <= default <= self.maxi_gen
@@ -1613,9 +1628,9 @@ class BitField(VT_Alt):
         if self.subfield_vals[idx] is None:
             mini, maxi = self.subfield_extrems[idx]
             if val < mini:
-                self.subfield_extrems[idx][0] = mini = min(mini, val)
+                self.subfield_extrems[idx][0] = mini = builtins.min(mini, val)
             elif val > maxi:
-                self.subfield_extrems[idx][1] = max(maxi, val)
+                self.subfield_extrems[idx][1] = builtins.max(maxi, val)
             self.idx_inuse[idx] = self.idx[idx] = val - mini
         else:
             # Note that the case "self.idx[idx]==1" has not to be
@@ -1714,7 +1729,7 @@ class BitField(VT_Alt):
                         assert(mini != maxi)
                         self.subfield_extrems.append([mini, maxi])
                     else:
-                        s = '*** ERROR: min({:d}) / max({:d}) values are out of range!'.format(mini, maxi)
+                        s = '*** ERROR: builtins.min({:d}) / builtins.max({:d}) values are out of range!'.format(mini, maxi)
                         raise ValueError(s)
                     self.subfield_vals.append(None)
                 else:
@@ -1876,7 +1891,7 @@ class BitField(VT_Alt):
 
             # we substract 1 because after a get_value() call idx is incremented in advance
             # max is needed because self.idx[0] is equal to 0 in this case
-            curr_idx = max(self.idx[idx]-1, 0)
+            curr_idx = builtins.max(self.idx[idx]-1, 0)
 
             curr_values = self.subfield_vals[idx]
             if curr_values is not None:
@@ -1913,8 +1928,8 @@ class BitField(VT_Alt):
 
             if curr_values is not None:
                 orig_set = set(curr_values)
-                max_oset = max(orig_set)
-                min_oset = min(orig_set)
+                max_oset = builtins.max(orig_set)
+                min_oset = builtins.min(orig_set)
                 if min_oset != max_oset:
                     diff_sorted = sorted(set(range(min_oset, max_oset+1)) - orig_set)
                     if diff_sorted:
@@ -2075,8 +2090,8 @@ class BitField(VT_Alt):
         first_pass = True
         limits = self.subfield_limits[:-1]
         limits.insert(0, 0)
-        for lim, sz, values, extrems, i in zip(limits, self.subfield_sizes, self.subfield_vals, self.subfield_extrems,
-                                             range(len(self.subfield_limits))):
+        for lim, sz, values, extrems, i in zip(limits, self.subfield_sizes, self.subfield_vals,
+                                               self.subfield_extrems, range(len(self.subfield_limits))):
 
             val = (orig_val >> lim) & ((1<<sz)-1)
 
@@ -2086,8 +2101,8 @@ class BitField(VT_Alt):
                     raise ValueError("Value for subfield number {:d} does not match the constraints!".format(i+1))
                 self.idx[i] = val - mini
                 if not constraints[AbsCsts.Contents]: # update extremums if necessary
-                    extrems[0] = min(extrems[0], val)
-                    extrems[1] = max(extrems[1], val)
+                    extrems[0] = builtins.min(extrems[0], val)
+                    extrems[1] = builtins.max(extrems[1], val)
             else:
                 if constraints[AbsCsts.Contents] and val not in values:
                     raise ValueError("Value for subfield number {:d} does not match the constraints!".format(i+1))
@@ -2173,11 +2188,11 @@ class BitField(VT_Alt):
                             cursor = 0
                         else:
                             if i > self.current_idx and self.subfield_defaults[i] is None:
-                                # Note on the use of max(): in the
+                                # Note on the use of builtins.max(): in the
                                 # case of values, idx is always > 1,
                                 # whereas when it is extrems, idx can
                                 # be 0.
-                                cursor = max(self.idx[i] - 1, 0)
+                                cursor = builtins.max(self.idx[i] - 1, 0)
                             else:
                                 cursor = self.idx[i]
                     self.idx_inuse[i] = cursor
@@ -2479,7 +2494,7 @@ if __name__ == "__main__":
         print('\n***** [ %s ] *****\n' % k)
 
         if issubclass(v, INT_str):
-            obj[k] = v(mini=1, maxi=10)
+            obj[k] = v(min=1, max=10)
         else:
             obj[k] = v()
         obj[k].get_value()
@@ -2506,7 +2521,7 @@ if __name__ == "__main__":
         print('\n********\n')
 
         try:
-            obj[k] = v(mini=0, maxi=2**7-1, determinist=False)
+            obj[k] = v(min=0, max=2**7-1, determinist=False)
         except TypeError:
             print(v().__class__)
             obj[k] = v()

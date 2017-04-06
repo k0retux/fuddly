@@ -31,7 +31,7 @@ import framework
 from libs.utils import ensure_dir, ensure_file
 
 
-fuddly_version = '0.25.2'
+fuddly_version = '0.26'
 
 framework_folder = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 # framework_folder = os.path.dirname(framework.__file__)
@@ -102,6 +102,20 @@ def unconvert_from_internal_repr(val):
         except:
             val = val.decode('latin-1')
     return val
+
+def is_string_compatible(val):
+    if isinstance(val, list):
+        for v in val:
+            if not is_string_compatible(v):
+                return False
+        else:
+            return True
+    elif sys.version_info[0] > 2:
+        return isinstance(val, (str, bytes))
+    elif isinstance(val, (unicode, str)):  # only for python2
+        return True
+    else:
+        return False
 
 ### Exports for Node Absorption ###
 
@@ -203,7 +217,7 @@ class Error(object):
     # FmkPlumbing DataProcess-handling related code
     DPHandOver = -30  # when a data process yields
 
-    # FmkPlumbing.send_data() code
+    # FmkPlumbing._send_data() code
     NoMoreData = -40
 
     _code_info = {
@@ -264,6 +278,7 @@ class Error(object):
 
 class HOOK(Enum):
     after_dmaker_production = 1
-    before_sending = 2
-    after_sending = 3
-    after_fbk = 4
+    before_sending_step1 = 2
+    before_sending_step2 = 3
+    after_sending = 4
+    after_fbk = 5

@@ -30,7 +30,7 @@ import binascii
 from framework.global_resources import *
 
 class Encoder(object):
-    def __init__(self, encoding_arg):
+    def __init__(self, encoding_arg=None):
         self._encoding_arg = encoding_arg
         self.reset()
 
@@ -212,3 +212,19 @@ class GSMPhoneNum_Enc(Encoder):
             dec = dec[:-1]
         return zone+dec
 
+class BitReverse_Enc(Encoder):
+
+    def _reverse_bits(self, x, nb_bits=8):
+        """ Reverse bits order of x """
+        return sum(1<<(nb_bits-1-i) for i in range(nb_bits) if x>>i&1)
+
+    def encode(self, val):
+        sz = len(val)
+        byte_list = struct.unpack('B'*sz, val)
+        rev_list = b''
+        for b in byte_list[::-1]:
+            rev_list += struct.pack('B', self._reverse_bits(b))
+        return rev_list
+
+    def decode(self, val):
+        return self.encode(val)

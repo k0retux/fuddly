@@ -15,7 +15,7 @@ and let ``fuddly`` recalculate every constraints for you.
 .. code-block:: python
    :linenos:
 
-    abszip = dm.get_data('ZIP')
+    abszip = dm.get_atom('ZIP')
     abszip.set_current_conf('ABS', recursive=True)
     abszip.absorb(zip_buff, constraints=AbsNoCsts(size=True,struct=True)
 

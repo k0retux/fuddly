@@ -1,7 +1,8 @@
-from framework.data_model_helpers import *
+from framework.node_builder import *
 import framework.value_types as vt
 import unittest
 import ddt
+import six
 from test import mock
 
 ASCII_EXT = ''.join([(chr if sys.version_info[0] == 2 else six.unichr)(i) for i in range(0, 0xFF + 1)])

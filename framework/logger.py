@@ -28,54 +28,11 @@ import threading
 import itertools
 
 from libs.external_modules import *
-from framework.data_model import Data
+from framework.data import Data
 from framework.global_resources import *
 from framework.database import Database
 from libs.utils import ensure_dir
 import framework.global_resources as gr
-
-import data_models
-
-
-class Stats:
-    def __init__(self, generic_generators):
-        self.reset()
-        self.gen = generic_generators
-
-    def reset(self):
-        self.__stats = {}
-        self.__dt_state = {}
-
-    def inc_stat(self, generator_type, generator_name, user_inputs):
-
-        if generator_type is None:
-            return
-
-        dt_full = generator_type
-
-        if dt_full not in self.__stats:
-            self.__stats[dt_full] = {}
-            self.__stats[dt_full]['total'] = 0
-            self.__stats[dt_full]['bygen'] = {}
-
-        self.__stats[dt_full]['total'] += 1
-
-        if generator_name not in self.__stats[dt_full]['bygen']:
-            self.__stats[dt_full]['bygen'][generator_name] = 0
-
-        self.__stats[dt_full]['bygen'][generator_name] += 1
-
-    def get_formated_stats(self):
-        stats = ""
-        for generator_type, val in self.__stats.items():
-            stats += "Generator Type '%s'\n" % generator_type
-            stats += "  |_ total number of generated data: %d\n" % val['total']
-            for gen, nb in val['bygen'].items():
-                stats += "  |_ number of generated data by '%s': %d\n" % (gen, nb)
-            stats += '\n'
-
-        return stats
-
 
 class Logger(object):
     '''
@@ -137,8 +94,8 @@ class Logger(object):
             else:
                 data = x
             self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)
-            if verbose and issubclass(x.__class__, Data) and x.node is not None:
-                x.pretty_print()
+            if verbose and issubclass(x.__class__, Data):
+                x.show()
 
             return data
 
@@ -182,8 +139,8 @@ class Logger(object):
                 try:
                     self._fd.write(data)
                     self._fd.write('\n')
-                    if verbose and issubclass(x.__class__, Data) and x.node is not None:
-                        x.pretty_print(log_func=self._fd.write)
+                    if verbose and issubclass(x.__class__, Data):
+                        x.show(log_func=self._fd.write)
                     self._fd.flush()
                 except ValueError:
                     self.print_console('\n*** ERROR: The log file has been closed.' \
@@ -205,8 +162,6 @@ class Logger(object):
         if self._fd:
             self._fd.close()
 
-        self.log_stats()
-
         self._reset_current_state()
         self.last_data_id = None
         self.last_data_recordable = None
@@ -223,6 +178,7 @@ class Logger(object):
         self._current_dmaker_list= []
         self._current_dmaker_info = {}
         self._current_src_data_id = None
+        self._current_fmk_info = []
 
     def commit_log_entry(self, group_id, prj_name, tg_name):
         if self._current_data is not None:  # that means data will be recorded
@@ -266,6 +222,8 @@ class Logger(object):
                                         self._current_src_data_id,
                                         str(user_input), info)
 
+            for msg, now in self._current_fmk_info:
+                self.fmkDB.insert_fmk_info(self.last_data_id, msg, now)
 
             self._reset_current_state()
 
@@ -276,7 +234,7 @@ class Logger(object):
 
 
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO,
-                     data_id=None, do_record=True):
+                     data_id=None, do_record=True, delay_recording=False):
         now = datetime.datetime.now()
 
         p = '\n' if nl_before else ''
@@ -286,7 +244,10 @@ class Logger(object):
         self.log_fn(msg, rgb=rgb)
         data_id = self.last_data_id if data_id is None else data_id
         if do_record:
-            self.fmkDB.insert_fmk_info(data_id, msg, now)
+            if not delay_recording:
+                self.fmkDB.insert_fmk_info(data_id, info, now)
+            else:
+                self._current_fmk_info.append((info, now))
 
     def collect_target_feedback(self, fbk, status_code=None):
         """
@@ -514,25 +475,19 @@ class Logger(object):
         msg = "### Step %d:" % num
         self.log_fn(msg, rgb=Color.DMAKERSTEP)
 
-    def log_initial_generator(self, dmaker_type, dmaker_name, dmaker_ui):
-        msgs = []
-        msgs.append("### Initial Generator (currently disabled):")
-        msgs.append(" |- generator type: %s | generator name: %s | User input: %s" % \
-                    (dmaker_type, dmaker_name, dmaker_ui))
-        msgs.append("  ...")
-        for m in msgs:
-            self.log_fn(m, rgb=Color.DISABLED)
-
-    def log_generator_info(self, dmaker_type, name, user_input, data_id=None):
-        msg = '' if data_id is None else " |- retrieved from data id: {:d}\n".format(data_id)
+    def log_generator_info(self, dmaker_type, name, user_input, data_id=None, disabled=False):
+        msg = "### Initial Generator (currently disabled):\n" if disabled else ''
+        msg += '' if data_id is None else " |- retrieved from data id: {:d}\n".format(data_id)
         if user_input:
             msg += " |- generator type: %s | generator name: %s | User input: %s" % \
                   (dmaker_type, name, user_input)
         else:
             msg += " |- generator type: %s | generator name: %s | No user input" % (dmaker_type, name)
-        self._current_dmaker_list.append((dmaker_type, name, user_input))
-        self._current_src_data_id = data_id
-        self.log_fn(msg, rgb=Color.DATAINFO)
+        msg += '\n  ...' if disabled else ''
+        if not disabled:
+            self._current_dmaker_list.append((dmaker_type, name, user_input))
+            self._current_src_data_id = data_id
+        self.log_fn(msg, rgb=Color.DISABLED if disabled else Color.DATAINFO)
 
     def log_disruptor_info(self, dmaker_type, name, user_input):
         if user_input:
@@ -689,16 +644,6 @@ class Logger(object):
         msg = "\n/!\\ ERROR: %s /!\\\n" % err_msg
         self.log_fn(msg, rgb=Color.ERROR)
         self.fmkDB.insert_fmk_info(self.last_data_id, msg, now, error=True)
-
-    def set_stats(self, stats):
-        self.stats = stats
-
-    def log_stats(self):
-        if self._enable_file_logging:
-            fd = open(logs_folder + self.now + '_' + self.name + '_stats', 'w+')
-            stats = self.stats.get_formated_stats()
-            fd.write(stats + '\n')
-            fd.close()
 
     def print_console(self, msg, nl_before=True, nl_after=False, rgb=None, style=None,
                       raw_limit=None, limit_output=True):

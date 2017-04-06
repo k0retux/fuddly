@@ -1,3 +1,26 @@
+################################################################################
+#
+#  Copyright 2016 Eric Lacombe <eric.lacombe@security-labs.org>
+#
+################################################################################
+#
+#  This file is part of fuddly.
+#
+#  fuddly is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  fuddly is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with fuddly. If not, see <http://www.gnu.org/licenses/>
+#
+################################################################################
+
 import sys
 import os
 import re
@@ -27,6 +50,58 @@ def regexp_bin(expr, item):
     return robj is not None
 
 
+class FeedbackHandler(object):
+
+    def __init__(self, database):
+        """
+        Args:
+            database (Database): database to be associated with
+        """
+        self.db = database
+
+    def __iter__(self):
+        for item in self.db.iter_last_feedback_entries():
+            yield item
+
+    def iter_entries(self, source=None):
+        """
+        Iterate over feedback entries that are related to the last data which has been sent by
+        the framework.
+
+        Args:
+            source ('str'): name of the feedback source to consider
+
+        Returns:
+            python generator: A generator that iterates over all the requested feedback entries and provides for each:
+
+                - the triplet: (status, timestamp, content) if `source` is associated to a
+                  specific feedback source
+                - the 4-uplet: (source, status, timestamp, content) if `source` is `None`
+
+        """
+        for item in self.db.iter_last_feedback_entries(source=source):
+            yield item
+
+    def sources(self):
+        """
+        Return a list of the feedback source names related to the last data which has been sent by
+        the framework.
+
+        Returns:
+            list: feedback sources
+
+        """
+        return self.db.last_feedback.keys()
+
+    # for python2 compatibility
+    def __nonzero__(self):
+        return bool(self.db.last_feedback)
+
+    # for python3 compatibility
+    def __bool__(self):
+        return bool(self.db.last_feedback)
+
+
 class Database(object):
 
     DDL_fname = 'fmk_db.sql'
@@ -49,7 +124,6 @@ class Database(object):
         self.enabled = False
 
         self.last_feedback = {}
-        self.last_data_id = None
 
         self._data_id = None
 
@@ -231,7 +305,7 @@ class Database(object):
     def disable(self):
         self.enabled = False
 
-    def cleanup_current_state(self):
+    def flush_current_feedback(self):
         self.last_feedback = {}
 
     def execute_sql_statement(self, sql_stmt, params=None):
@@ -264,8 +338,6 @@ class Database(object):
 
     def insert_data(self, dtype, dm_name, raw_data, sz, sent_date, ack_date,
                     target_name, prj_name, group_id=None):
-
-        self.cleanup_current_state()
 
         if not self.enabled:
             return None
@@ -306,10 +378,6 @@ class Database(object):
 
     def insert_feedback(self, data_id, source, timestamp, content, status_code=None):
 
-        if data_id != self.last_data_id:
-            self.last_data_id = data_id
-            self.last_feedback = {}
-
         if source not in self.last_feedback:
             self.last_feedback[source] = []
 
@@ -333,6 +401,20 @@ class Database(object):
         err_msg = 'while inserting a value into table FEEDBACK!'
         self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
 
+    def iter_last_feedback_entries(self, source=None):
+        if source is None:
+            for source, fbks in self.last_feedback.items():
+                for item in fbks:
+                    status = item['status']
+                    ts = item['timestamp']
+                    content = item['content']
+                    yield source, status, ts, content
+        else:
+            for item in self.last_feedback[source]:
+                status = item['status']
+                ts = item['timestamp']
+                content = item['content']
+                yield status, ts, content
 
     def insert_comment(self, data_id, content, date):
         if not self.enabled:

@@ -23,7 +23,7 @@
 
 from framework.data_model import *
 from framework.value_types import *
-from framework.data_model_helpers import *
+
 
 class PPPOE_DataModel(DataModel):
 
@@ -123,8 +123,8 @@ class PPPOE_DataModel(DataModel):
               ]}
          ]}
 
-        mh = ModelHelper(delayed_jobs=True, add_env=False)
-        tag_node = mh.create_graph_from_desc(tag_desc)
+        mb = NodeBuilder(delayed_jobs=True, add_env=False)
+        tag_node = mb.create_graph_from_desc(tag_desc)
 
         tag_service_name = tag_node.get_clone('tag_sn')
         tag_service_name['.*/type'].set_values(value_type=UINT16_be(values=[0x0101]))
@@ -168,7 +168,7 @@ class PPPOE_DataModel(DataModel):
              {'name': 'session_id',
               'contents': UINT16_be()},
              {'name': 'length',
-              'contents': MH.LEN(vt=UINT16_be),
+              'contents': LEN(vt=UINT16_be),
               'node_args': 'payload',
               'alt': [
                   {'conf': 'ABS',
@@ -256,8 +256,8 @@ class PPPOE_DataModel(DataModel):
               'mutable': False},
          ]}
 
-        mh = ModelHelper(delayed_jobs=True, add_env=False)
-        pppoe_msg = mh.create_graph_from_desc(pppoe_desc)
+        mb = NodeBuilder(delayed_jobs=True, add_env=False)
+        pppoe_msg = mb.create_graph_from_desc(pppoe_desc)
         # pppoe_msg.make_random(recursive=True)
 
         padi = pppoe_msg.get_clone('padi')

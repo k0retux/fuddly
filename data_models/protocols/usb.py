@@ -21,10 +21,8 @@
 #
 ################################################################################
 
-import sys
-
 from framework.data_model import *
-from framework.data_model_helpers import *
+from framework.node_builder import NodeBuilder
 from framework.value_types import *
 
 
@@ -122,8 +120,8 @@ class USB_DataModel(DataModel):
                    'contents': UINT8(values=[0])}]}
          ]}
 
-        mh = ModelHelper(add_env=False)
-        ep_node = mh.create_graph_from_desc(ep_desc)
+        mb = NodeBuilder(add_env=False)
+        ep_node = mb.create_graph_from_desc(ep_desc)
 
         msd_ep_bulkin = ep_node.get_clone('EP_BLKIN')
         msd_ep_bulkin.set_current_conf('MSD', recursive=True)
@@ -142,12 +140,12 @@ class USB_DataModel(DataModel):
                   {'name': ('bDescType', 2),
                    'contents': UINT8(values=[USB_DEFS.DT_INTERFACE])},
                   {'name': 'bInterfaceNum',
-                   'contents': UINT8(mini=0, maxi=10)},
+                   'contents': UINT8(min=0, max=10)},
                   {'name': 'bAlternateSetting',
                    'contents': UINT8(values=[0, 1, 2, 3, 4])},
                   {'name': 'bNumEndpoints',
                    # 'random': True,
-                   'contents': UINT8(mini=1, maxi=8, default=4),
+                   'contents': UINT8(min=1, max=8, default=4),
                    'alt': [
                        {'conf': 'MSD',
                         'contents': UINT8(values=[2])}
@@ -197,8 +195,8 @@ class USB_DataModel(DataModel):
               ]}
          ]}
 
-        mh = ModelHelper(add_env=False)
-        intf_node = mh.create_graph_from_desc(interface_desc)
+        mb = NodeBuilder(add_env=False)
+        intf_node = mb.create_graph_from_desc(interface_desc)
 
         conf_desc = \
         {'name': 'CONF',
@@ -211,17 +209,17 @@ class USB_DataModel(DataModel):
                   {'name': 'bDescType',
                    'contents': UINT8(values=[USB_DEFS.DT_CONFIGURATION])},
                   {'name': 'wTotalLength',
-                   'contents': MH.LEN(vt=UINT16_le, base_len=9),
+                   'contents': LEN(vt=UINT16_le, base_len=9),
                    'node_args': 'Intf_Group'},
                   {'name': 'bNumInterfaces',
-                   'contents': MH.QTY('Interface', vt=UINT8),
+                   'contents': QTY('Interface', vt=UINT8),
                    'node_args': 'Intf_Group',
                    'alt': [
                        {'conf': 'MSD',
                         'contents': UINT8(values=[1])}
                    ]},
                   {'name': 'bConfValue',
-                   'contents': UINT8(mini=1, maxi=50)},
+                   'contents': UINT8(min=1, max=50)},
                   {'name': 'iConf',
                    'contents': UINT8(values=[USB_DEFS.STRINGID_CONFIG])},
                   {'name': 'bmAttributes',
@@ -301,7 +299,7 @@ class USB_DataModel(DataModel):
          'semantics': 'LANGID_DESC',
          'contents': [
              {'name': 'bLength',
-              'contents': MH.LEN(vt=UINT8,base_len=2),
+              'contents': LEN(vt=UINT8,base_len=2),
               'node_args': 'contents'},
              {'name': 'bDescType',
               'contents': UINT8(values=[USB_DEFS.DT_STRING])},

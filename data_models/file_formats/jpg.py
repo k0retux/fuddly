@@ -22,9 +22,9 @@
 ################################################################################
 
 from framework.data_model import *
-from framework.data_model_helpers import *
-from framework.value_types import *
 from framework.global_resources import *
+from framework.node_builder import NodeBuilder
+from framework.value_types import *
 
 markers = {
     'SOF': {0: 0xFFC0,
@@ -86,7 +86,7 @@ class JPG_DataModel(DataModel):
                   {'name': 'F_marker',
                    'contents': UINT16_be(values=[m for m in markers['SOF'].values()])},
                   {'name': 'Lf',
-                   'contents': MH.LEN(vt=UINT16_be, base_len=8),
+                   'contents': LEN(vt=UINT16_be, base_len=8),
                    'node_args': 'F_CompGroup',
                    'alt': [
                        {'conf': 'ABS',
@@ -95,12 +95,12 @@ class JPG_DataModel(DataModel):
                   {'name': 'P',
                    'contents': UINT8(values=[8,12])},
                   {'name': 'Y',
-                   'contents': UINT16_be(maxi=65535),
+                   'contents': UINT16_be(max=65535),
                    'specific_fuzzy_vals': [65500]},
                   {'name': 'X',
-                   'contents': UINT16_be(mini=1, maxi=65535)},
+                   'contents': UINT16_be(min=1, max=65535)},
                   {'name': 'Nf',
-                   'contents': UINT8(mini=1, maxi=255)},
+                   'contents': UINT8(min=1, max=255)},
                   {'name': 'F_CompGroup',
                    'custo_clear': MH.Custo.NTerm.MutableClone,
                    'contents': [
@@ -108,13 +108,13 @@ class JPG_DataModel(DataModel):
                         'qty_from': 'Nf',
                         'contents': [
                            {'name': 'Cf',
-                            'contents': UINT8(mini=0, maxi=255)},
+                            'contents': UINT8(min=0, max=255)},
                            {'name': 'H&V',
                             'contents': BitField(subfield_sizes=[4,4], endian=VT.BigEndian,
                                                  subfield_val_extremums=[[1,4], [1,4]],
                                                  subfield_descs=['H sampling', 'V sampling'])},
                            {'name': 'Tq',
-                            'contents': UINT8(mini=0, maxi=3)},
+                            'contents': UINT8(min=0, max=3)},
                        ]}
                    ]},
               ]},
@@ -131,14 +131,14 @@ class JPG_DataModel(DataModel):
                   {'name': 'S_marker',
                    'contents': UINT16_be(values=[markers['SOS']])},
                   {'name': 'Ls',
-                   'contents': MH.LEN(vt=UINT16_be, base_len=6),
+                   'contents': LEN(vt=UINT16_be, base_len=6),
                    'node_args': 'S_CompGroup',
                    'alt': [
                        {'conf': 'ABS',
                         'contents': UINT16_be()}
                    ]},
                   {'name': 'Ns',
-                   'contents': UINT8(mini=1, maxi=4)},
+                   'contents': UINT8(min=1, max=4)},
                   {'name': 'S_CompGroup',
                    'custo_clear': MH.Custo.NTerm.MutableClone,
                    'contents': [
@@ -154,9 +154,9 @@ class JPG_DataModel(DataModel):
                         ]}
                    ]},
                   {'name': 'Ss',
-                   'contents': UINT8(mini=0, maxi=63)},
+                   'contents': UINT8(min=0, max=63)},
                   {'name': 'Se',
-                   'contents': UINT8(mini=0, maxi=63)},
+                   'contents': UINT8(min=0, max=63)},
                   {'name': 'Ah&Al',
                    'contents': BitField(subfield_sizes=[4, 4], endian=VT.BigEndian,
                                         subfield_val_extremums=[[0, 13], [0, 13]],
@@ -169,8 +169,8 @@ class JPG_DataModel(DataModel):
               'absorb_csts': AbsNoCsts()}
          ]}
 
-        mh = ModelHelper(delayed_jobs=True)
-        self.jpg = mh.create_graph_from_desc(jpg_desc)
+        mb = NodeBuilder(delayed_jobs=True)
+        self.jpg = mb.create_graph_from_desc(jpg_desc)
 
         self.jpg_dict = self.import_file_contents(extension='jpg')
         self.register(self.jpg, *self.jpg_dict.values())

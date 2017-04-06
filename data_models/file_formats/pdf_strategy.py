@@ -21,7 +21,7 @@
 #
 ################################################################################
 
-from framework.data_model import Data
+from framework.data import Data
 from framework.tactics_helpers import *
 
 tactics = Tactics()
@@ -29,23 +29,23 @@ tactics = Tactics()
 @generator(tactics, gtype="PDF_loop", weight=2)
 class g_pdf_loop01(Generator):
     def generate_data(self, dm, monitor, target):
-        return Data(dm.get_data('PDF_pagetree_loop'))
+        return Data(dm.get_atom('PDF_pagetree_loop'))
 
 @generator(tactics, gtype="PDF_loop", weight=2)
 class g_pdf_loop02(Generator):
     def generate_data(self, dm, monitor, target):
-        return Data(dm.get_data('PDF_page_loop'))
+        return Data(dm.get_atom('PDF_page_loop'))
 
 @generator(tactics, gtype="PDF_loop", weight=2)
 class g_pdf_loop03(Generator):
     def generate_data(self, dm, monitor, target):
-        return Data(dm.get_data('PDF_xref_loop'))
+        return Data(dm.get_atom('PDF_xref_loop'))
 
 @generator(tactics, gtype="PDF_bigpage", weight=2)
 class g_pdf_bomb02(Generator):
 
     def setup(self, dm, user_input):
-        self.pdf = dm.get_data('PDF_basic')
+        self.pdf = dm.get_atom('PDF_basic')
         self.pdf.to_bytes()
 
         return True

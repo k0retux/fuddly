@@ -26,19 +26,18 @@ from __future__ import print_function
 import random
 import copy
 import collections
+from functools import partial
 
-import framework.data_model as fdm
-from framework.data_model_helpers import modelwalker_inputs_handling_helper, GENERIC_ARGS
+from framework.data import *
 from framework.global_resources import *
+import framework.scenario as sc
 
 DEBUG = False
-
 
 XT_NAME_LIST_K = 1
 XT_CLS_LIST_K = 2
 XT_WEIGHT_K = 3
 XT_VALID_CLS_LIST_K = 4
-
 
 class Tactics(object):
 
@@ -47,6 +46,16 @@ class Tactics(object):
         self.generators = {}
         self.disruptor_clones = {}
         self.generator_clones = {}
+        self._fmkops = None
+
+    def set_exportable_fmk_ops(self, fmkops):
+        self._fmkops = fmkops
+        for dtype in self.generator_types:
+            for name, attrs in self.get_generators_list(dtype).items():
+                attrs['obj'].set_exportable_fmk_ops(fmkops)
+        for dtype in self.disruptor_types:
+            for name, attrs in self.get_disruptors_list(dtype).items():
+                attrs['obj'].set_exportable_fmk_ops(fmkops)
 
     def register_scenarios(self, *scenarios):
         for sc in scenarios:
@@ -89,11 +98,14 @@ class Tactics(object):
     def register_new_disruptor(self, name, obj, weight, dmaker_type, valid=False):
         self.__register_new_data_maker(self.disruptors, name, obj,
                                     weight, dmaker_type, valid)
+        if self._fmkops:
+            obj.set_exportable_fmk_ops(self._fmkops)
 
     def register_new_generator(self, name, obj, weight, dmaker_type, valid=False):
         self.__register_new_data_maker(self.generators, name, obj,
                                     weight, dmaker_type, valid)
-
+        if self._fmkops:
+            obj.set_exportable_fmk_ops(self._fmkops)
 
     def __clone_dmaker(self, dmaker, dmaker_clones, dmaker_type, new_dmaker_type, dmaker_name=None, register_func=None):
         if dmaker_type not in dmaker:
@@ -157,12 +169,13 @@ class Tactics(object):
         self.__clear_dmaker_clones(self.disruptors, self.disruptor_clones)
         self.disruptor_clones = {}
 
-    def get_disruptors(self):
-        return self.disruptors
+    @property
+    def generator_types(self):
+        return self.generators.keys()
 
-    def get_generators(self):
-        return self.generators
-
+    @property
+    def disruptor_types(self):
+        return self.disruptors.keys()
 
     def get_disruptors_list(self, dmaker_type):
         try:
@@ -442,9 +455,9 @@ def _handle_user_inputs(dmaker, ui):
             else:
                 setattr(dmaker, k, ui_val)
 
-    if dmaker._gen_args_desc and \
-       issubclass(dmaker.__class__, (Disruptor, StatefulDisruptor)) and \
-       dmaker._gen_args_desc == GENERIC_ARGS:
+    if dmaker._gen_args_desc \
+            and issubclass(dmaker.__class__, (Disruptor, StatefulDisruptor)) \
+            and dmaker._gen_args_desc == GENERIC_ARGS:
         modelwalker_inputs_handling_helper(dmaker, generic_ui)
 
     if specific_ui is None:
@@ -458,7 +471,7 @@ def _handle_user_inputs(dmaker, ui):
             if isinstance(arg_type, tuple):
                 assert(type(ui_val) in arg_type or ui_val is None)
             elif isinstance(arg_type, type):
-                assert(type(ui_val) == arg_type or ui_val is None)
+                assert(type(ui_val) == arg_type or issubclass(type(ui_val), arg_type) or ui_val is None)
             else:
                 raise ValueError
             if ui_val is None:
@@ -502,6 +515,28 @@ class UserInputContainer(object):
     def __repr__(self):
         return str(self)
 
+################################
+# ModelWalker Helper Functions #
+################################
+
+GENERIC_ARGS = {
+    'init': ('make the model walker ignore all the steps until the provided one', 1, int),
+    'max_steps': ('maximum number of steps (-1 means until the end)', -1, int),
+    'runs_per_node': ('maximum number of test cases for a single node (-1 means until the end)', -1, int),
+    'clone_node': ('if True the dmaker will always return a copy ' \
+                   'of the node. (for stateless diruptors dealing with ' \
+                   'big data it can be usefull to it to False)', True, bool)
+}
+
+def modelwalker_inputs_handling_helper(dmaker, user_generic_input):
+    assert(dmaker.runs_per_node > 0 or dmaker.runs_per_node == -1)
+
+    if dmaker.runs_per_node == -1:
+        dmaker.max_runs_per_node = -1
+        dmaker.min_runs_per_node = -1
+    else:
+        dmaker.max_runs_per_node = dmaker.runs_per_node + 3
+        dmaker.min_runs_per_node = max(dmaker.runs_per_node - 2, 1)
 
 ### Generator & Disruptor
 
@@ -522,6 +557,10 @@ class Generator(object):
             DataMakerAttr.HandOver: False,
             DataMakerAttr.SetupRequired: True
             }
+        self._fmkops = None
+
+    def set_exportable_fmk_ops(self, fmkops):
+        self._fmkops = fmkops
 
     def set_attr(self, name):
         if name not in self.__attrs:
@@ -562,13 +601,13 @@ class Generator(object):
         # sys.stdout.write("\n__ cleanup generator '%s' __" % self.__class__.__name__)
         self.set_attr(DataMakerAttr.Active)
         self.set_attr(DataMakerAttr.SetupRequired)
-        self.cleanup()
+        self.cleanup(self._fmkops)
 
 
     def need_reset(self):
         # sys.stdout.write("\n__ generator need reset '%s' __" % self.__class__.__name__)
         self.set_attr(DataMakerAttr.SetupRequired)
-        self.cleanup()
+        self.cleanup(self._fmkops)
 
     def setup(self, dm, user_input):
         '''
@@ -577,7 +616,7 @@ class Generator(object):
         '''
         return True
 
-    def cleanup(self):
+    def cleanup(self, fmkops):
         '''
         --> Specific code
         '''
@@ -607,58 +646,60 @@ class DynGenerator(Generator):
     _args_desc = {}
 
     def setup(self, dm, user_input):
-
-        if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
-            return False
-
-        generic_ui = user_input.get_generic()
-
-        if generic_ui is None:
-            self.make_finite = False
-            self.make_determinist = False
-            self.make_random = False
-        else:
-            val = generic_ui.finite
-            assert(type(val) == bool or val is None)
-            self.make_finite = False if val is None else val
-
-            val = generic_ui.determinist
-            assert(type(val) == bool or val is None)
-            self.make_determinist = False if val is None else val
-
-            val = generic_ui.random
-            assert(type(val) == bool or val is None)
-            self.make_random = False if val is None else val
-
-        if self.make_determinist or self.make_random:
-            assert(self.make_random != self.make_determinist)
+        if self.determinist or self.random:
+            assert(self.random != self.determinist)
 
         return True
 
     def generate_data(self, dm, monitor, target):
-        node = dm.get_data(self.data_id)
+        atom = dm.get_atom(self.data_id)
+        if isinstance(atom, Node):
+            if self.finite:
+                atom.make_finite(all_conf=True, recursive=True)
+            if self.determinist:
+                atom.make_determinist(all_conf=True, recursive=True)
+            if self.random:
+                atom.make_random(all_conf=True, recursive=True)
 
-        if self.make_finite:
-            node.make_finite(all_conf=True, recursive=True)
-        if self.make_determinist:
-            node.make_determinist(all_conf=True, recursive=True)
-        if self.make_random:
-            node.make_random(all_conf=True, recursive=True)
-
-        return fdm.Data(node)
+        return Data(atom)
 
 
 class dyn_generator_from_scenario(type):
     scenario = None
     def __init__(cls, name, bases, attrs):
-        attrs['_gen_args_desc'] = DynGenerator._gen_args_desc
-        attrs['_args_desc'] = DynGenerator._args_desc
+        attrs['_gen_args_desc'] = DynGeneratorFromScenario._gen_args_desc
+        attrs['_args_desc'] = DynGeneratorFromScenario._args_desc
         type.__init__(cls, name, bases, attrs)
         cls.scenario = dyn_generator_from_scenario.scenario
 
 class DynGeneratorFromScenario(Generator):
     scenario = None
-    _gen_args_desc = {}
+    _gen_args_desc = collections.OrderedDict([
+        ('graph', ('Display the scenario and highlight the current step each time the generator '
+                  'is called.', False, bool)),
+        ('graph_format', ('Format to be used for displaying the scenario (e.g., xdot, pdf, png).',
+                         'xdot', str)),
+        ('data_fuzz', ('For each scenario step that generates data, a new scenario is created '
+                       'where the data generated by the step is fuzzed.', False, bool)),
+        ('cond_fuzz', ('For each scenario step having guarded transitions, a new scenario is '
+                       'created where transition conditions are inverted. [compatible with ignore_timing]',
+                       False, bool)),
+        ('ignore_timing', ('For each scenario step enforcing a timing constraint, a new scenario is '
+                           'created where any timeout conditions are removed (i.e., set to 0 second). '
+                           '[compatible with cond_fuzz]',
+                          False, bool)),
+        ('stutter', ("For each scenario step that generates data, a new scenario is created where "
+                     "the step is altered to stutter 'stutter_max' times, meaning that data-sending "
+                     "steps would be triggered 'stutter_max' times.",
+                     False, bool)),
+        ('stutter_max', ("The number of times a step will stutter [to be used with 'stutter']", 2, int)),
+        ('reset', ("If set, scenarios created by 'data_fuzz', 'cond_fuzz', or 'ignore_timing' "
+                   "will reinitialize the scenario after each corruption case, without waiting for "
+                   "the normal continuation of the scenario.", True, bool)),
+        ('init', ("Used in combination with 'data_fuzz', 'cond_fuzz', or 'ignore_timing'. Make "
+                  "the generator begin with the Nth corrupted scenario (where N is provided "
+                  "through this parameter).", 0, int))
+        ])
     _args_desc = {}
 
     @property
@@ -671,96 +712,314 @@ class DynGeneratorFromScenario(Generator):
         # mechanism
         pass
 
-    def graph_scenario(self, fmt):
-        self.scenario.graph(fmt=fmt)
+    def graph_scenario(self, fmt, select_current=False):
+        self.scenario.graph(fmt=fmt, select_current=select_current)
+
+    def cleanup(self, fmkops):
+        self._cleanup_walking_attrs()
+        for periodic_id in self.scenario.periodic_to_clear:
+            fmkops.unregister_task(periodic_id, ign_error=True)
+
+    def _cleanup_walking_attrs(self):
+        self.tr_selected = None
+        self.pending_tr_eval = []
+        self.tr_selected_idx = -1
 
     def setup(self, dm, user_input):
         if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
             return False
         self.__class__.scenario.set_data_model(dm)
         self.scenario = copy.copy(self.__class__.scenario)
+
+        assert (self.data_fuzz and not (self.cond_fuzz or self.ignore_timing)) or not self.data_fuzz
+        assert not self.stutter or (self.stutter and not (self.cond_fuzz or self.ignore_timing or self.data_fuzz))
+
+        # internal attributes used for scenario alteration
+        self._current_fuzzed_step = None
+        self._ign_final = False
+        self._alteration_just_performed = False
+
+        if self.stutter:
+            self._step_stutter_complete = False
+            self._stutter_cpt = 0
+            self._step_num = self.init
+            self._ign_final = self._make_step_stutter()
+            if not self._ign_final:
+                self.scenario.current_step.final = True
+
+        elif self.data_fuzz:
+            self._data_fuzz_change_step = False
+            self._step_num = self.init
+            self._ign_final = self._alter_data_step()
+            if not self._ign_final:
+                self.scenario.current_step.final = True
+
+        elif self.cond_fuzz or self.ignore_timing:
+            self._step_num = self.init
+            self._ign_final = self._alter_transition_conditions()
+            if not self._ign_final:
+                self.scenario.current_step.final = True
+
+        return True
+
+    def _stutter_cbk(self, env, current_step, next_step):
+        self._stutter_cpt += 1
+        if self._stutter_cpt > self.stutter_max:
+            self._step_stutter_complete = True
+            return False
+        else:
+            return True
+
+    def _make_step_stutter(self):
+        self._alteration_just_performed = True
+        self._scenario_steps = filter(lambda x: not x.is_blocked(), self.scenario.steps)
+        self._scenario_steps = list(filter(lambda x: not x.final, self._scenario_steps))
+        if self._step_num >= len(self._scenario_steps):
+            return False
+
+        self._current_fuzzed_step = self._scenario_steps[self._step_num]
+        self._stutter_cpt = 0
+        if self.reset:
+            self.scenario.branch_to_reinit(self._current_fuzzed_step)
+        self._current_fuzzed_step.connect_to(self._current_fuzzed_step,
+                                             prepend=True, cbk_after_sending=self._stutter_cbk)
+
+        return True
+
+    def _alter_data_step(self):
+        self._alteration_just_performed = True
+        self._scenario_steps = filter(lambda x: not x.is_blocked(), self.scenario.steps)
+        self._scenario_steps = list(filter(lambda x: not x.final, self._scenario_steps))
+        if self._step_num >= len(self._scenario_steps):
+            return False
+
+        step = self._scenario_steps[self._step_num]
+        data_desc = step.data_desc
+        if isinstance(data_desc[0], str) \
+                or (isinstance(data_desc[0], Data) and data_desc[0].content is not None):
+            dp = sc.DataProcess(process=['tTYPE#{:d}'.format(self._step_num)], seed=data_desc[0],
+                                auto_regen=True)
+            dp.append_new_process([('tSTRUCT#{:d}'.format(self._step_num), UI(init=1), UI(deep=True))])
+            data_desc[0] = dp
+            step.data_desc = data_desc
+        elif isinstance(data_desc[0], sc.DataProcess):
+            proc = copy.copy(data_desc[0].process)
+            proc2 = copy.copy(data_desc[0].process)
+            proc.append('tTYPE#{:d}'.format(self._step_num))
+            data_desc[0].process = proc
+            proc2.append(('tSTRUCT#{:d}'.format(self._step_num), UI(init=1), UI(deep=True)))
+            data_desc[0].append_new_process(proc2)
+            data_desc[0].auto_regen = True
+        elif isinstance(data_desc[0], Data):
+            dp = sc.DataProcess(process=['C#{:d}'.format(self._step_num)], seed=data_desc[0],
+                                auto_regen=True)
+            data_desc[0] = dp
+            step.data_desc = data_desc
+        if self.reset:
+            self.scenario.branch_to_reinit(step)
+        self._prev_func = step._do_before_sending
+        step._do_before_sending = self._check_data_fuzz_completion_cbk
+        self._current_fuzzed_step = step
+
+        return True
+
+    def _check_data_fuzz_completion_cbk(self, env, step):
+        # print('\n+++ check fuzz completion')
+        if self._prev_func is not None:
+            self._prev_func(env, step)
+        data_desc = step.data_desc[0]
+        assert isinstance(data_desc, sc.DataProcess)
+        if data_desc.auto_regen_cpt > 0:
+            data_desc.auto_regen_cpt = 0
+            self._data_fuzz_change_step = True
+            step.make_blocked()
+            step._do_before_sending = self._prev_func
+
+    def _alter_transition_conditions(self):
+        self._alteration_just_performed = True
+        self._scenario_steps = []
+        for step in self.scenario.steps:
+            if self.ignore_timing and step.feedback_timeout is not None \
+                    and step.feedback_timeout > 0:
+                self._scenario_steps.append(step)
+                continue
+            if self.cond_fuzz:
+                tr = next(step.transitions, None)
+                if tr is not None and tr.has_callback():
+                    self._scenario_steps.append(step)
+
+        if self._step_num >= len(self._scenario_steps):
+            return False
+
+        self._current_fuzzed_step = self._scenario_steps[self._step_num]
+        for tr in self._current_fuzzed_step.transitions:
+            if self.reset \
+                    and tr.step is not self._current_fuzzed_step \
+                    and tr.step is not self.scenario.anchor:
+                self.scenario.branch_to_reinit(tr.step, prepend=True)
+            if self.cond_fuzz:
+                tr.invert_conditions()
+            if tr.step.final:
+                tr.make_uncrossable()
+
+        if self.reset and self._current_fuzzed_step is not self.scenario.anchor:
+            self.scenario.branch_to_reinit(self._current_fuzzed_step, prepend=False)
+        if self.ignore_timing and self._current_fuzzed_step.feedback_timeout is not None:
+            self._current_fuzzed_step.feedback_timeout = 0
+
         return True
 
     def generate_data(self, dm, monitor, target):
-        self._go_on = collections.OrderedDict()
+        self._cleanup_walking_attrs()
+
+        if self.data_fuzz:
+            if not self._alteration_just_performed:
+                if self.scenario.current_step is self.scenario.anchor \
+                        and self._data_fuzz_change_step:
+                    self._data_fuzz_change_step = False
+                    self.scenario = copy.copy(self.__class__.scenario)
+                    self._step_num += 1
+                    self._ign_final = self._alter_data_step()
+                    if not self._ign_final:
+                        self.scenario.current_step.final = True
+                elif self._data_fuzz_change_step:
+                    self.scenario.walk_to_reinit() # because _callback_dispatcher_after_fbk() won't be called
+            else:
+                self._alteration_just_performed = False
+
+        elif self.cond_fuzz or self.ignore_timing:
+            if not self._alteration_just_performed:
+                if self.scenario.current_step is self.scenario.anchor:
+                    self.scenario = copy.copy(self.__class__.scenario)
+                    self._step_num += 1
+                    self._ign_final = self._alter_transition_conditions()
+                    if not self._ign_final:
+                        self.scenario.current_step.final = True
+            else:
+                self._alteration_just_performed = False
+
+        elif self.stutter:
+            if not self._alteration_just_performed:
+                if self._step_stutter_complete \
+                        and self.scenario.current_step is self.scenario.anchor:
+                    self._step_stutter_complete = False
+                    self.scenario = copy.copy(self.__class__.scenario)
+                    self._step_num += 1
+                    self._ign_final = self._make_step_stutter()
+                    if not self._ign_final:
+                        self.scenario.current_step.final = True
+            else:
+                self._alteration_just_performed = False
+
+        self.scenario.set_target(target)
         self.step = self.scenario.current_step
+
+        self.step.do_before_data_processing()
+
+        if self.graph:
+            self.graph_scenario(self.graph_format, select_current=True)
+
         if self.step.final:
-            self.need_reset()
-            data = fdm.Data()
-            data.register_callback(self._callback_cleanup_periodic, hook=HOOK.after_dmaker_production)
-            data.make_unusable()
-            return data
+            if self._ign_final:
+                self.scenario.walk_to_reinit()
+                self.step = self.scenario.current_step
+            else:
+                self.need_reset()
+                data = Data()
+                data.register_callback(self._callback_cleanup_periodic, hook=HOOK.after_dmaker_production)
+                data.make_unusable()
+                data.origin = self.scenario
+                return data
 
         data = self.step.get_data()
+        data.origin = self.scenario
+        data.cleanup_all_callbacks()
 
-        data.register_callback(self._callback_dispatcher_before_sending, hook=HOOK.before_sending)
+        if self.cond_fuzz or self.ignore_timing or self.data_fuzz:
+            data.add_info("Current fuzzed step: '{:s}'"
+                          .format(str(self._current_fuzzed_step).replace('\n', ' ')))
+
+        data.register_callback(self._callback_dispatcher_before_sending_step1, hook=HOOK.before_sending_step1)
+        data.register_callback(self._callback_dispatcher_before_sending_step2, hook=HOOK.before_sending_step2)
         data.register_callback(self._callback_dispatcher_after_sending, hook=HOOK.after_sending)
         data.register_callback(self._callback_dispatcher_after_fbk, hook=HOOK.after_fbk)
         return data
 
     def _callback_cleanup_periodic(self):
-        cbkops = fdm.CallBackOps()
+        cbkops = CallBackOps()
         for periodic_id in self.scenario.periodic_to_clear:
-            cbkops.add_operation(fdm.CallBackOps.Del_PeriodicData, id=periodic_id)
+            cbkops.add_operation(CallBackOps.Del_PeriodicData, id=periodic_id)
         return cbkops
 
-    def _callback_dispatcher_before_sending(self):
-        for tr in self.step.transitions:
-            self._go_on[tr] = tr.run_callback(self.step, hook=HOOK.before_sending)
 
-        cbkops = fdm.CallBackOps()
+    def __handle_transition_callbacks(self, hook, feedback=None):
+        for idx, tr in self.pending_tr_eval:
+            if tr.run_callback(self.step, feedback=feedback, hook=hook):
+                self.tr_selected = tr
+                self.tr_selected_idx = idx
+                break
+
+        self.pending_tr_eval = []
+
+        if self.tr_selected is None:
+            for idx, tr in enumerate(self.step.transitions):
+                if self.tr_selected is None:
+                    if not tr.has_callback() and tr.is_crossable():
+                        self.tr_selected = tr
+                        self.tr_selected_idx = idx
+                        break
+                    elif tr.run_callback(self.step, feedback=feedback, hook=hook):
+                        self.tr_selected = tr
+                        self.tr_selected_idx = idx
+                        break
+                else:
+                    break
+
+        for idx, tr in enumerate(self.step.transitions):
+            if tr.has_callback_pending() and idx <= self.tr_selected_idx:
+                self.pending_tr_eval.append((idx, tr))
+
+    def _callback_dispatcher_before_sending_step1(self):
+        # Any existing DataProcess are resolved thanks to this callback
+        cbkops = CallBackOps()
         if self.step.has_dataprocess():
-            cbkops.add_operation(fdm.CallBackOps.Replace_Data,
+            cbkops.add_operation(CallBackOps.Replace_Data,
                                  param=self.step.data_desc)
 
         return cbkops
 
-    def _callback_dispatcher_after_sending(self):
-        for tr in self.step.transitions:
-            go_on = tr.run_callback(self.step, hook=HOOK.after_sending)
+    def _callback_dispatcher_before_sending_step2(self):
+        # Callback called after any data have been processed but not sent yet
+        self.step.do_before_sending()
+        cbkops = CallBackOps()
+        cbkops.add_operation(CallBackOps.Replace_Data,
+                             param=self.step.data_desc)
+        return cbkops
 
-            if self._go_on[tr] is None:
-                self._go_on[tr] = go_on
-            elif go_on is None:
-                pass
-            else:
-                # going to the next step (True) is the priority behavior
-                self._go_on[tr] = self._go_on[tr] or go_on
+    def _callback_dispatcher_after_sending(self):
+        self.__handle_transition_callbacks(HOOK.after_sending)
 
     def _callback_dispatcher_after_fbk(self, fbk):
-        for tr in self.step.transitions:
-            if tr not in self._go_on:
-                # In the case data sending has been blocked by cbk_after_fbk() (of the current step),
-                # this method will be called while the other _callback* won't. This method is called
-                # just after any potential residual feedback has been retrieved.
-                self._go_on[tr] = None
+        """This callback is always called by the framework"""
 
-            go_on = tr.run_callback(self.step, feedback=fbk, hook=HOOK.after_fbk)
+        self.__handle_transition_callbacks(HOOK.after_fbk, feedback=fbk)
 
-            if self._go_on[tr] is None and go_on is None:
-                self._go_on[tr] = True
-            elif self._go_on[tr] is None:
-                self._go_on[tr] = go_on
-            elif go_on is None:
-                pass
-            else:
-                self._go_on[tr] = self._go_on[tr] or go_on
-
-        cbkops = fdm.CallBackOps()
+        cbkops = CallBackOps()
         for desc in self.step.periodic_to_set:
-            cbkops.add_operation(fdm.CallBackOps.Add_PeriodicData, id=id(desc),
+            cbkops.add_operation(CallBackOps.Add_PeriodicData, id=id(desc),
                                  param=desc.data, period=desc.period)
 
         for periodic_id in self.step.periodic_to_clear:
-            cbkops.add_operation(fdm.CallBackOps.Del_PeriodicData, id=periodic_id)
+            cbkops.add_operation(CallBackOps.Del_PeriodicData, id=periodic_id)
 
-        for tr in self.step.transitions:
-            if self._go_on[tr]:
-                self.scenario.walk_to(tr.step)
-                break
+        if self.tr_selected is not None:
+            self.scenario.walk_to(self.tr_selected.step)
         else:
             # we stay on the current step
             pass
+
+        # In case the same Data is used again without going through self.generate_data()
+        self._cleanup_walking_attrs()
 
         return cbkops
 
@@ -774,6 +1033,10 @@ class Disruptor(object):
             DataMakerAttr.HandOver: False,
             DataMakerAttr.SetupRequired: True
             }
+        self._fmkops = None
+
+    def set_exportable_fmk_ops(self, fmkops):
+        self._fmkops = fmkops
 
     def disrupt_data(self, dm, target, prev_data):
         raise NotImplementedError
@@ -785,7 +1048,7 @@ class Disruptor(object):
         '''
         return True
 
-    def cleanup(self):
+    def cleanup(self, fmkops):
         '''
         --> Specific code
         '''
@@ -830,7 +1093,7 @@ class Disruptor(object):
         # sys.stdout.write("\n__ cleanup disruptor '%s' __" % self.__class__.__name__)
         self.set_attr(DataMakerAttr.SetupRequired)
         self.set_attr(DataMakerAttr.Active)
-        self.cleanup()
+        self.cleanup(self._fmkops)
 
 
 
@@ -844,6 +1107,10 @@ class StatefulDisruptor(object):
             DataMakerAttr.SetupRequired: True,
             DataMakerAttr.NeedSeed: True
             }
+        self._fmkops = None
+
+    def set_exportable_fmk_ops(self, fmkops):
+        self._fmkops = fmkops
 
     def set_seed(self, prev_data):
         raise NotImplementedError
@@ -860,7 +1127,7 @@ class StatefulDisruptor(object):
         self.set_attr(DataMakerAttr.HandOver)
         self.set_attr(DataMakerAttr.SetupRequired)
         self.set_attr(DataMakerAttr.NeedSeed)
-        self.cleanup()
+        self.cleanup(self._fmkops)
 
     def setup(self, dm, user_input):
         '''
@@ -869,7 +1136,7 @@ class StatefulDisruptor(object):
         '''
         return True
 
-    def cleanup(self):
+    def cleanup(self, fmkops):
         '''
         --> Specific code
         '''
@@ -913,7 +1180,7 @@ class StatefulDisruptor(object):
         self.set_attr(DataMakerAttr.SetupRequired)
         self.set_attr(DataMakerAttr.NeedSeed)
         self.set_attr(DataMakerAttr.Active)
-        self.cleanup()
+        self.cleanup(self._fmkops)
 
     def _set_seed(self, prev_data):
         if self.is_attr_set(DataMakerAttr.NeedSeed):
@@ -930,20 +1197,11 @@ def disruptor(st, dtype, weight=1, valid=False, gen_args={}, args={}):
         for k in gen_args:
             if k in args.keys():
                 raise ValueError("Specific parameter '{:s}' is in conflict with a generic parameter!".format(k))
-        # create generic attributes
-        for k, v in gen_args.items():
-            desc, default, arg_type = v
-            setattr(disruptor_cls, k, default)
-        # create specific attributes
-        for k, v in args.items():
-            desc, default, arg_type = v
-            setattr(disruptor_cls, k, default)
         # register an object of this class
         disruptor = disruptor_cls()
         if issubclass(disruptor_cls, StatefulDisruptor):
             disruptor.set_attr(DataMakerAttr.Controller)
         st.register_new_disruptor(disruptor.__class__.__name__, disruptor, weight, dtype, valid)
-        # st.print_disruptor(dtype, disruptor.__class__.__name__)
 
         return disruptor_cls
 
@@ -958,18 +1216,9 @@ def generator(st, gtype, weight=1, valid=False, gen_args={}, args={}):
         for k in gen_args:
             if k in args.keys():
                 raise ValueError("Specific parameter '{:s}' is in conflict with a generic parameter!".format(k))
-        # create generic attributes
-        for k, v in gen_args.items():
-            desc, default, arg_type = v
-            setattr(generator_cls, k, default)
-        # create specific attributes
-        for k, v in args.items():
-            desc, default, arg_type = v
-            setattr(generator_cls, k, default)
         # register an object of this class
         gen = generator_cls()
         st.register_new_generator(gen.__class__.__name__, gen, weight, gtype, valid)
-        # st.print_generator(gtype, gen.__class__.__name__)
 
         return generator_cls
 

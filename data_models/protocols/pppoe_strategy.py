@@ -24,8 +24,8 @@
 from framework.tactics_helpers import *
 from framework.scenario import *
 from framework.global_resources import *
-from framework.data_model_helpers import MH
-from framework.target import *
+from framework.data_model import MH
+from framework.target_helpers import *
 
 tactics = Tactics()
 
@@ -36,16 +36,15 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', u
     else:
         print('\n\n*** Feedback retrieved')
 
-        for source, fbks in feedback.items():
-            for item in fbks:
-                msg_x = env.dm.get_data(x)
+        for source, status, timestamp, data in feedback:
+
+                msg_x = env.dm.get_atom(x)
                 msg_x.set_current_conf('ABS', recursive=True)
-                data = item['content']
                 if x == 'padi':
                     mac_dst = b'\xff\xff\xff\xff\xff\xff'
                 elif x == 'padr':
-                    if current_step.node is not None:
-                        mac_src = current_step.node['.*/mac_src']
+                    if current_step.content is not None:
+                        mac_src = current_step.content['.*/mac_src']
                         env.mac_src = mac_src
                     else:
                         mac_src = env.mac_src
@@ -81,11 +80,11 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', u
                         t_fix_pppoe_msg_fields.host_uniq = host_uniq
 
                     if update:  # we update the seed of the data process
-                        next_step.node.freeze()
+                        next_step.content.freeze()
                         try:
-                            next_step.node['.*/tag_sn/value/v101'] = service_name
-                            next_step.node['.*/tag_sn$'].unfreeze(recursive=True, reevaluate_constraints=True)
-                            next_step.node['.*/tag_sn$'].freeze()
+                            next_step.content['.*/tag_sn/value/v101'] = service_name
+                            next_step.content['.*/tag_sn$'].unfreeze(recursive=True, reevaluate_constraints=True)
+                            next_step.content['.*/tag_sn$'].freeze()
                         except:
                             pass
 
@@ -118,7 +117,7 @@ class t_fix_pppoe_msg_fields(Disruptor):
     host_uniq = None
 
     def disrupt_data(self, dm, target, prev_data):
-        n = prev_data.node
+        n = prev_data.content
         error_msg = '\n*** The node has no path to: {:s}. Thus, ignore it.\n'\
                     '    (probable reason: the node has been fuzzed in a way that makes the' \
                     'path unavailable)'

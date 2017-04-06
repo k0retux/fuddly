@@ -121,7 +121,7 @@ experiment without a real target. But let's say you want to fuzz the
    In order to define new targets, look at :ref:`targets-def`.
 
 .. seealso::   
-   ``Target`` (\ :class:`framework.target.Target`) configuration cannot
+   ``Target`` (\ :class:`framework.target_helpers.Target`) configuration cannot
    be changed dynamically within ``Fuddly Shell``. But you can do it
    through any python interpreter, by directly manipulating the
    related ``Target`` object. Look at :ref:`fuddly-advanced`.
@@ -140,13 +140,12 @@ data models:
    -=[ Data Models ]=-
 
    [0] mydf
-   [1] example
-   [2] usb
-   [3] zip
-   [4] png
-   [5] pdf
-   [6] jpg
-
+   [1] usb
+   [2] zip
+   [3] png
+   [4] pdf
+   [5] jpg
+    ...
 
 As we select the ``unzip`` program as a target, we may want to
 perform ZIP fuzzing ;) Thus we select this data model by issuing the
@@ -238,7 +237,7 @@ which will invoke the ``unzip`` program with a ZIP file:
    ...
    >> 
 
-Note that a :class:`framework.data_model_helpers.DataModel` can define any number of data
+Note that a :class:`framework.data_model.DataModel` can define any number of data
 types---to model for instance the various atoms within a data format,
 or to represent some specific use cases, ...
 
@@ -303,15 +302,25 @@ For each one of these generators, some parameters are associated:
 
 To send in a loop, five ZIP archives generated from the data model in
 a deterministic way---that is by walking through the data model---you
-can use the following command:
-
-.. code-block:: none
+can use the following command::
 
    >> send_loop 5 ZIP<determinist=True> tWALK
 
-We use for this example, the generic disruptor ``tWALK`` whose purpose
-is to simply walk through the data model.  Note that disruptors are
+We use for this example, the generic stateful disruptor ``tWALK`` whose purpose
+is to simply walk through the data model. Note that disruptors are
 chainable, each one consuming what comes from the left.
+
+.. seealso:: Refer to :ref:`tuto:dmaker-chain` for details on data makers chains.
+
+Note that if you want to send data indefinitely until the generator exhausts (in our case ``ZIP``)
+or a stateful disruptor (in our case ``tWALK``) of the chain exhausts you should use ``-1`` as
+the number of iteration. In our case it means issuing the following command::
+
+   >> send_loop -1 ZIP<determinist=True> tWALK
+
+And if you want to stop the execution before the normal termination (which could never happen if
+the ``finite`` parameter has not been set), then you have to issue a ``SIGINT`` signal to ``fuddly`` via
+``Ctrl-C`` for instance.
 
 .. note::
    Each data you send and all the related information (the way the data has been built,
@@ -687,12 +696,14 @@ maximum; in our case it will stop at the 50 :sup:`th` run because of
 ``tTYPE``.
 
 
+.. _tuto:reset-dmaker:
+
 Resetting & Cloning Disruptors
 ++++++++++++++++++++++++++++++
 
 Whether you want to use generators or disruptors that you previously
-use in a *data maker chain*, you would certainly need to reset it or
-clone it. Indeed, every data maker has an internal sequencing state,
+used in a *data maker chain*, you would certainly need to reset it or
+to clone it. Indeed, every data maker has an internal sequencing state,
 that remember if it has been disabled (and for generators it also
 keeps the *seeds*). Thus, if you want to reuse it, one way is to reset
 it by issuing the following command::
@@ -702,6 +713,9 @@ it by issuing the following command::
 where ``<dmaker_type>`` is the data maker to reset, for instance:
 ``ZIP_00``, ``tTYPE``, ...
 
+You can also reset all the data makers at once by issuing the following command::
+
+  >> reset_all_dmakers
 
 .. note:: You can also choose to cleanup a *Generator* without resetting the
    specifics of the previously produced data, that is, preserving the *seed* that
@@ -925,13 +939,13 @@ Here under some basic commands to start with:
    fmk.reload_all(tg_num=0)
 
    # Show a list of the registered data type within the data model
-   fmk.show_dm_data_identifiers()
+   fmk.show_atom_identifiers()
    # Or
-   list(fmk.dm.data_identifiers())
+   list(fmk.dm.atom_identifiers())
    
    # Get an instance of the modeled data ZIP_00 which is made from the
    # absorption of an existing ZIP archive within ~/fuddly_data/imported_data/zip/
-   dt = fmk.dm.get_data('ZIP_00')
+   dt = fmk.dm.get_atom('ZIP_00')
 
    # Display the raw contents of the first generated element of the data type `dt`
    # Its the flatten version of calling .get_value() on it. Note that doing so will
@@ -1150,34 +1164,31 @@ the PNG data format:
    png_desc = \
    {'name': 'PNG_model',
     'contents': [
-	{'name': 'sig',
-	 'contents': String(values=[b'\x89PNG\r\n\x1a\n'], size=8)},
-	{'name': 'chunks',
-	 'qty': (2,-1),
-	 'contents': [
-	      {'name': 'len',
-	       'contents': UINT32_be()},
-	      {'name': 'type',
-	       'contents': String(values=['IHDR', 'IEND', 'IDAT', 'PLTE'], size=4)},
-	      {'name': 'data_gen',
-	       'type': MH.Generator,
-	       'contents': lambda x: Node('data', value_type= \
-					  String(size=x[0].get_raw_value())),
-	       'node_args': ['len']},
-	      {'name': 'crc32_gen',
-	       'type': MH.Generator,
-	       'contents': g_crc32,
-	       'node_args': ['type', 'data_gen'],
-	       'clear_attrs': [NodeInternals.Freezable]}
-	 ]}
+       {'name': 'sig',
+        'contents': String(values=[b'\x89PNG\r\n\x1a\n'], size=8)},
+       {'name': 'chunks',
+        'qty': (2,-1),
+        'contents': [
+             {'name': 'len',
+              'contents': UINT32_be()},
+             {'name': 'type',
+              'contents': String(values=['IHDR', 'IEND', 'IDAT', 'PLTE'], size=4)},
+             {'name': 'data_gen',
+              'contents': lambda x: Node('data', value_type= \
+                         String(size=x[0].get_raw_value())),
+              'node_args': ['len']},
+             {'name': 'crc32_gen',
+              'contents': CRC(vt=UINT32_be, clear_attrs=[MH.Attr.Mutable]),
+              'node_args': ['type', 'data_gen']}
+        ]}
     ]}
 
 
 In short, we see that the root node is ``PNG_model``, which is the
 parent of the terminal node ``sig`` representing PNG file signature
 (lines 4-5) and the non-terminal node ``chunks`` representing the
-file's chunks (lines 6-23) [#]_. This latter node describe the PNG
-file structure by defining the chunk contents in lines 9-22---in this very
+file's chunks (lines 6-20) [#]_. This latter node describe the PNG
+file structure by defining the chunk contents in lines 9-19---in this very
 simplistic data model, chunk types are not distinguished, but it can
 easily be expanded---and the number of chunks allowed in
 a PNG file in line 7---from ``2`` to ``-1`` (meaning infinity).
@@ -1212,9 +1223,9 @@ is a simple skeleton for ``mydf.py``:
    :linenos:
    :emphasize-lines: 5, 8, 17
 
-   from framework.data_model import *
+   from framework.node import *
    from framework.value_types import *
-   from framework.data_model_helpers import *
+   from framework.data_model import *
 
    class MyDF_DataModel(DataModel):
 
@@ -1241,20 +1252,20 @@ is a simple skeleton for ``mydf.py``:
           (:ref:`tuto:start-fuzzshell`).
 
 In this skeleton, you can notice that you have to define a class that
-inherits from the :class:`framework.data_model_helpers.DataModel` class,
+inherits from the :class:`framework.data_model.DataModel` class,
 as seen in line 5. The definition of the data types of a data format
 will be written in python within the method
-:meth:`framework.data_model_helpers.DataModel.build_data_model()`.  In
+:meth:`framework.data_model.DataModel.build_data_model()`.  In
 the previous listing, the data types are represented by ``d1``, ``d2``
 and ``d3``. Once defined, they should be registered within the data
 model, by calling
-:func:`framework.data_model_helpers.DataModel.register()` on them.
+:func:`framework.data_model.DataModel.register()` on them.
 
 .. note:: If you want to import data samples complying to your data
           model:
 	  
 	  - First, you have to overwrite the method
-            :meth:`framework.data_model_helpers.DataModel.absorb` in
+            :meth:`framework.data_model.DataModel.absorb` in
             order to perform the operations for absorbing the samples
             (refer to :ref:`tuto:dm-absorption`). This method is
             called for each file found in ``~/fuddly_data/imported_data/mydf/``, and
@@ -1262,9 +1273,9 @@ model, by calling
 
 	  - Then, you have to perform the import manually within the
             method
-            :meth:`framework.data_model_helpers.DataModel.build_data_model()`
+            :meth:`framework.data_model.DataModel.build_data_model()`
             by calling the method
-            :meth:`framework.data_model_helpers.DataModel.import_file_contents()`
+            :meth:`framework.data_model.DataModel.import_file_contents()`
             which returns a dictionary with every imported data samples.
 
 	  The following code illustrates that:
@@ -1304,7 +1315,7 @@ various constructions, and value types.
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 5, 54, 65
+   :emphasize-lines: 5, 53, 64
 
    d1 = \
    {'name': 'TestNode',
@@ -1341,9 +1352,8 @@ various constructions, and value types.
 			'import_from': 'usb',
 			'data_id': 'STR'},
 
-		       {'type': MH.Generator,
-			'contents': lambda x: Node('cts', values=[x[0].to_bytes() \
-                                                                 + x[1].to_bytes()]),
+		       {'contents': lambda x: Node('cts', values=[x[0].to_bytes() \
+                                                          + x[1].to_bytes()]),
 			'name': 'val22',
 			'node_args': [('val21', 2), 'val3']}
 		   ]}]},
@@ -1355,7 +1365,7 @@ various constructions, and value types.
 		   {'conf': 'alt1',
 		    'contents': SINT8(values=[1,4,8])},
 		   {'conf': 'alt2',
-		    'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
+		    'contents': UINT16_be(min=0xeeee, max=0xff56),
 		    'determinist': True}]}
 	  ]},
 
@@ -1387,7 +1397,7 @@ At first glance, the data model is composed of three parts: *block 1*
 64-72). Within these blocks, various constructions are used. Below,
 some insights:
 
-line 6, line 22, line 55, line 66
+line 6, line 22, line 54, line 65
   The keyword ``section_type`` allows to choose the order to be
   enforce by a non-terminal node to its children. ``MH.Ordered``
   specifies that the children should be kept strictly in the order of
@@ -1400,7 +1410,7 @@ line 6, line 22, line 55, line 66
   that only one node among the children should be kept at a time---the
   choice is randomly performed except if the parent has the
   ``determinist`` attribute---as per the weight associated to each
-  child node (``weights``, line 56).
+  child node (``weights``, line 55).
 
 lines 10-14
   A terminal node with typed-value contents is defined. It is a
@@ -1423,7 +1433,7 @@ lines 32-34
   a data type from another data model. In this case it is a ``STRING
   Descriptor`` data type from the ``USB`` data model.
 
-lines 36-40
+lines 36-39
   Here is defined a *generator* nodes. It takes two nodes of
   the current graph as parameters, namely: ``(val21, 2)`` and
   ``val3``. It simply create a new node with a value equal to the
@@ -1435,11 +1445,11 @@ lines 36-40
 	    them uniquely---thanks to ``nb``---as illustrated by this generator
 	    node.
 
-lines 46-51
+lines 45-50
   Two alternate configurations of node ``val3`` are specified through
   this pattern.
 
-lines 45
+lines 44
   The keyword ``sync_qty_with`` allows to synchronize the number of
   nodes to generate or to absorb with the one specified by its
   name. In this case it is the node ``val1`` which is defined in lines 10-14.
@@ -1447,7 +1457,7 @@ lines 45
 
 
 To register such a description within the data model ``MyDF`` you can
-directly use :func:`framework.data_model_helpers.DataModel.register()`
+directly use :func:`framework.data_model.DataModel.register()`
 as seen in the previous example. But if you want to access afterwards
 to the defined nodes, you can also transform this description to a
 graph, before registering it, like this:
@@ -1455,13 +1465,16 @@ graph, before registering it, like this:
 .. code-block:: python
    :linenos:
 
-   mh = ModelHelper(self)
-   root_node = mh.create_graph_from_desc(d1)
+   nb = NodeBuilder(self)
+   root_node = nb.create_graph_from_desc(d1)
 
 You could then access to all the registered nodes tided up in the
-specific dictionary ``mh.node_dico``, whether you want to perform
+specific dictionary ``mb.node_dico``, whether you want to perform
 extra operation on them.
 
+.. seealso:: In order to make easier the modeling of data formats, some helpers are provided,
+  namely: some *generator*-node templates (refer to :ref:`dm:generators`) and some block builders
+  (refer to :ref:`dm:builders`).
 
 --------------
 
@@ -1514,8 +1527,8 @@ match the imaginary TestNode data model we just described in section
 
    fmk.run_project(name="tuto")
 
-   data_gen = fmk.dm.get_data('TestNode')    # first instance of TestNode data model
-   data_abs = fmk.dm.get_data('TestNode')  # second instance of TestNode data model
+   data_gen = fmk.dm.get_atom('TestNode')    # first instance of TestNode data model
+   data_abs = fmk.dm.get_atom('TestNode')  # second instance of TestNode data model
 
    raw_data = data_gen.to_bytes()
    print(raw_data)
@@ -1573,7 +1586,7 @@ requirements.
 
 By default, when you perform an absorption, every data model
 constraints will be enforce. If you want to free some ones, you need
-to provide a :class:`framework.data_model.AbsCsts` object---specifying the constraints you
+to provide a :class:`framework.node.AbsCsts` object---specifying the constraints you
 want---when calling the method ``.absorb()``.
 
 Currently, there is four kinds of constraints:
@@ -1599,8 +1612,8 @@ Currently, there is four kinds of constraints:
   ``exists_if_not`` attribute.
 
 
-There is also the shortcuts :class:`framework.data_model.AbsNoCsts` and
-:class:`framework.data_model.AbsFullCsts` which respectively set no
+There is also the shortcuts :class:`framework.node.AbsNoCsts` and
+:class:`framework.node.AbsFullCsts` which respectively set no
 constraints, or all constraints. Thus, if you want to only respect
 ``size`` and ``struct`` constraints, you can provide the object
 ``AbsNoCsts(size=True,struct=True)`` to the ``.absorb()`` method, like
@@ -1612,7 +1625,7 @@ what follows:
 
 In some cases, it could also be useful to only set absorption
 constraints to some nodes. To do so, you can call the method
-:func:`framework.data_model.Node.enforce_absorb_constraints()` on the
+:func:`framework.node.Node.enforce_absorb_constraints()` on the
 related nodes with your chosen constraints. You can also add a
 specific field ``absorb_csts`` (refer to :ref:`dm:keywords` and
 :ref:`dm:patterns`) within a data model description to reach the same
@@ -1745,7 +1758,7 @@ Describing Protocols Ruling a Data Model
 Two compementary options are provided by the framework:
 
 - The `Scenario Infrastructure` that enables you to have access to automatically-created
-  `Generators` that comply to the protocols you described. Refer to :ref:`scenario-desc`.
+  `Generators` that comply to the protocols you described. Refer to :ref:`scenario-infra`.
 
 - The definition of `Virtual Operators`. refer to :ref:`tuto:operator`
 
@@ -1817,23 +1830,23 @@ following code block illustrates such kind of disruptor:
    class disruptor_name(StatefulDisruptor):
 
       def set_seed(self, prev_data):
-          self.seed_node = prev_data.node
+          self.seed_node = prev_data.content
 
       def disrupt_data(self, dm, target, data):
           new_node = do_some_modification(self.seed_node)
-	  if new_node is None:
-	      data.make_unusable()
-	      self.handover()
-	  else:
-              data.update_from_node(new_node)
-	      data.add_info('description of the modification')
+          if new_node is None:
+              data.make_unusable()
+              self.handover()
+          else:
+              data.update_from(new_node)
+              data.add_info('description of the modification')
 
-	  return data
+      return data
 
 .. note:: Remark the call to the method
-   :meth:`framework.data_model.Data.update_from_node` (line 13). Such
+   :meth:`framework.data.Data.update_from` (line 13). Such
    construction comes from the fact ``fuddly`` uses a data-model
-   independent *container* (:class:`framework.data_model.Data`) for
+   independent *container* (:class:`framework.data.Data`) for
    passing modeled data from one sub-system to another. This container
    is also used, for logging purpose, to register the sequence of
    modifications performed on the data (especially the disruptor
@@ -1941,8 +1954,8 @@ except the legitimate one. After
 :meth:`framework.fuzzing_primitives.SeparatorDisruption.consume_node` is
 called, the model walker will iterate over each defined shapes for
 this node (by issuing continuously
-:meth:`framework.data_model.Node.get_value()` then
-:meth:`framework.data_model.Node.unfreeze()`) until exhaustion or after
+:meth:`framework.node.Node.get_value()` then
+:meth:`framework.node.Node.unfreeze()`) until exhaustion or after
 a predefined limit.
 
 .. note:: Saving and restoring the consumed nodes is performed
@@ -1976,15 +1989,15 @@ like this (which is a simpler version of the generic disruptor
    class disruptor_name(StatefulDisruptor):
 
        def set_seed(self, prev_data):
-           prev_data.node.get_value()
+           prev_data.content.get_value()
 
            ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Separator])
            sep_list = set(map(lambda x: x.to_bytes(),
-                              prev_data.node.get_reachable_nodes(internals_criteria=ic)))
+                              prev_data.content.get_reachable_nodes(internals_criteria=ic)))
            sep_list = list(sep_list)
 
            self.consumer = SeparatorDisruption()
-           self.walker = iter(ModelWalker(prev_data.node, self.consumer))
+           self.walker = iter(ModelWalker(prev_data.content, self.consumer))
 
        def disrupt_data(self, dm, target, data):
            try:
@@ -1994,7 +2007,7 @@ like this (which is a simpler version of the generic disruptor
                self.handover()
                return data
 
-           data.update_from_node(rnode)
+           data.update_from(rnode)
 
            return data
 
@@ -2016,7 +2029,7 @@ show the beginning of ``generic/standard_proj.py``:
 
    from framework.project import *
    from framework.monitor import *
-   from framework.operator_helper import *
+   from framework.operator_helpers import *
    from framework.plumbing import *
    import framework.global_resources as gr
 
@@ -2068,7 +2081,7 @@ command ``run_project`` in the ``fuddly`` shell or by using the
 method :meth:`framework.plumbing.FmkPlumbing.run_project()` through any
 ``python`` interpreter.
 
-.. note:: An :class:`framework.target.EmptyTarget` is automatically
+.. note:: An :class:`framework.target_helpers.EmptyTarget` is automatically
           added by ``fuddly`` to any project, for dry runs. So it does
           not matter if you don't define a target at the beginning.
 
@@ -2085,9 +2098,9 @@ the project file.
 Within the tutorial project (``projects/tuto_proj.py``), multiple
 targets have been defined:
 
-- three different :class:`framework.target.LocalTarget` for interacting with local programs;
-- a :class:`framework.target.PrinterTarget` to communicate with a CUPS server;
-- and finally a :class:`framework.target.NetworkTarget` that is setup
+- three different :class:`framework.targets.local.LocalTarget` for interacting with local programs;
+- a :class:`framework.targets.printer.PrinterTarget` to communicate with a CUPS server;
+- and finally a :class:`framework.targets.network.NetworkTarget` that is setup
   with two interfaces from which data can be sent to (and feedback
   retrieved from), plus an additional feedback source.
 
@@ -2115,15 +2128,15 @@ In order to play with the routing you can use the specific data ``4TG1`` and
              targets that you can use directly or inherit from.
 
 If you need to implement your own ``Target`` you have at least to
-inherit from :class:`framework.target.Target` and overload the method
-:meth:`framework.target.Target.send_data()` which is called by
+inherit from :class:`framework.target_helpers.Target` and overload the method
+:meth:`framework.target_helpers.Target.send_data()` which is called by
 ``fuddly`` each time data is sent to the target. Additionally,
-implementing :meth:`framework.target.Target.send_multiple_data()`
+implementing :meth:`framework.target_helpers.Target.send_multiple_data()`
 enables to send various data simultaneously to the target. If we take
 the previous ``NetworkTarget`` example, all the registered interfaces can be
 stimulated at once through this method.
 
-.. seealso:: Other methods of :class:`framework.target.Target` are
+.. seealso:: Other methods of :class:`framework.target_helpers.Target` are
              defined to be overloaded. Look at their descriptions to
              learn more about what can be customized.
 
@@ -2215,7 +2228,7 @@ process.
 
 .. seealso::
   To implement the protocol logic you should leverage the `Scenario Infrastructure`.
-  Refer to :ref:`scenario-desc`.
+  Refer to :ref:`scenario-infra`.
 
   If ever the `Scenario Infrastructure` does not satisfy your need, using a full-fledged
   state machine library such as `toysm <https://github.com/willakat/toysm>`_ should do.
@@ -2323,7 +2336,7 @@ the following section :ref:`tuto:probes`.
             to :class:`framework.plumbing.ExportableFMKOps`.
 
 	  - ``dm``: a reference to the current
-            :class:`framework.data_model_helpers.DataModel`.
+            :class:`framework.data_model.DataModel`.
 
 	  - ``monitor``: a reference to the monitor subsystem, in
             order to start/stop probes and get status from them.
@@ -2347,7 +2360,7 @@ Probes are special objects that have to implement the method
 :meth:`framework.monitor.Probe.main()` which is called either continuously
 (the basic *probe*) or after a specific event in the sending process (the *blocking
 probes*). In order to be started, they have to be first associated to one or more
-:class:`framework.target.Target` of the project. Then, when such a target is started,
+:class:`framework.target_helpers.Target` of the project. Then, when such a target is started,
 ``fuddly`` take care of running the probes.
 
 Probes are executed independently from each other (they run within their own thread). They
@@ -2430,7 +2443,7 @@ handle status as expected. Status rules are described below:
 
     1. logging feedback from the probes as well as the status they return to facilitate further
        investigation;
-    2. trying to recover the target, by calling :meth:`framework.target.Target.recover_target`.
+    2. trying to recover the target, by calling :meth:`framework.target_helpers.Target.recover_target`.
 
 To quickly retrieve the data that negatively impacted a target and which
 have been recorded within the FmkDB (refer to :ref:`logger-def`) you can
@@ -2440,7 +2453,7 @@ status has been recorded, coming either from:
 
 - a probe;
 - an operator (more about that in what follows);
-- or the :class:`framework.target.Target` itself (refer to the error status
+- or the :class:`framework.target_helpers.Target` itself (refer to the error status
   that are transmitted by the generic targets---:ref:`targets`).
 
 

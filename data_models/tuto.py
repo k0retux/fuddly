@@ -3,10 +3,11 @@ sys.path.append('.')
 
 from framework.plumbing import *
 
-from framework.data_model import *
+from framework.node import *
 from framework.value_types import *
-from framework.data_model_helpers import *
+from framework.data_model import *
 from framework.encoders import *
+import framework.dmhelpers.xml as xml
 
 class MyDF_DataModel(DataModel):
 
@@ -59,8 +60,7 @@ class MyDF_DataModel(DataModel):
                             'import_from': 'usb',
                             'data_id': 'STR'},
                            
-                           {'type': MH.Generator,
-                            'contents': lambda x: Node('cts', values=[x[0].to_bytes() \
+                           {'contents': lambda x: Node('cts', values=[x[0].to_bytes() \
                                                                       + x[1].to_bytes()]),
                             'name': 'val22',
                             'node_args': [('val21', 2), 'val3']}
@@ -73,7 +73,7 @@ class MyDF_DataModel(DataModel):
                        {'conf': 'alt1',
                         'contents': SINT8(values=[1,4,8])},
                        {'conf': 'alt2',
-                        'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
+                        'contents': UINT16_be(min=0xeeee, max=0xff56),
                         'determinist': True}]}
               ]},
              
@@ -240,8 +240,7 @@ class MyDF_DataModel(DataModel):
         {'name': 'len_gen',
          'contents': [
              {'name': 'len',
-              'type': MH.Generator,
-              'contents': MH.LEN(UINT32_be),
+              'contents': LEN(UINT32_be),
               'node_args': 'payload',
               'absorb_csts': AbsNoCsts()},
 
@@ -271,8 +270,7 @@ class MyDF_DataModel(DataModel):
               ]},
 
              {'name': 'len',
-              'type': MH.Generator,
-              'contents': MH.OFFSET(use_current_position=False, vt=UINT8),
+              'contents': OFFSET(use_current_position=False, vt=UINT8),
               'node_args': ['prefix', 'int', 'body']},
          ]}
 
@@ -292,23 +290,19 @@ class MyDF_DataModel(DataModel):
               ]},
 
              {'name': 'int16_qty',
-              'type': MH.Generator,
-              'contents': MH.QTY(node_name='int16', vt=UINT8),
+              'contents': QTY(node_name='int16', vt=UINT8),
               'node_args': 'integers'},
 
              {'name': 'int32_qty',
-              'type': MH.Generator,
-              'contents': MH.QTY(node_name='int32', vt=UINT8),
+              'contents': QTY(node_name='int32', vt=UINT8),
               'node_args': 'integers'},
 
              {'name': 'tstamp',
-              'type': MH.Generator,
-              'contents': MH.TIMESTAMP("%H%M%S"),
+              'contents': TIMESTAMP("%H%M%S"),
               'absorb_csts': AbsCsts(contents=False)},
 
              {'name': 'crc',
-              'type': MH.Generator,
-              'contents': MH.CRC(UINT32_be),
+              'contents': CRC(UINT32_be),
               'node_args': ['tstamp', 'int32_qty'],
               'absorb_csts': AbsCsts(contents=False)}
 
@@ -363,13 +357,17 @@ class MyDF_DataModel(DataModel):
         for_network_tg2 = Node('4tg2', vt=String(values=['FOR_TARGET_2']))
         for_network_tg2.set_semantics(['TG2'])
 
+        for_net_default_tg = Node('4default', vt=String(values=['FOR_DEFAULT_TARGET']))
+
+        basic_intg = Node('intg', vt=UINT16_be(values=[10]))
+
         enc_desc = \
         {'name': 'enc',
          'contents': [
              {'name': 'data0',
               'contents': String(values=['Plip', 'Plop']) },
              {'name': 'crc',
-              'contents': MH.CRC(vt=UINT32_be, after_encoding=False),
+              'contents': CRC(vt=UINT32_be, after_encoding=False),
               'node_args': ['enc_data', 'data2'],
               'absorb_csts': AbsFullCsts(contents=False) },
              {'name': 'enc_data',
@@ -377,7 +375,7 @@ class MyDF_DataModel(DataModel):
               'set_attrs': [NodeInternals.Abs_Postpone],
               'contents': [
                  {'name': 'len',
-                  'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                  'contents': LEN(vt=UINT8, after_encoding=False),
                   'node_args': 'data1',
                   'absorb_csts': AbsFullCsts(contents=False)},
                  {'name': 'data1',
@@ -386,7 +384,6 @@ class MyDF_DataModel(DataModel):
              {'name': 'data2',
               'contents': String(values=['Red', 'Green', 'Blue']) },
          ]}
-
 
 
         example_desc = \
@@ -400,7 +397,7 @@ class MyDF_DataModel(DataModel):
 
                  {'name': 'len',
                   'mutable': False,
-                  'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                  'contents': LEN(vt=UINT8, after_encoding=False),
                   'node_args': 'data1',
                   'absorb_csts': AbsFullCsts(contents=False)},
 
@@ -410,12 +407,12 @@ class MyDF_DataModel(DataModel):
                  {'name': 'data2',
                   'qty': (1,3),
                   'semantics': ['sem1', 'sem2'],
-                  'contents': UINT16_be(mini=10, maxi=0xa0ff),
+                  'contents': UINT16_be(min=10, max=0xa0ff),
                   'alt': [
                        {'conf': 'alt1',
                         'contents': SINT8(values=[1,4,8])},
                        {'conf': 'alt2',
-                        'contents': UINT16_be(mini=0xeeee, maxi=0xff56)} ]},
+                        'contents': UINT16_be(min=0xeeee, max=0xff56)} ]},
 
                  {'name': 'data3',
                   'semantics': ['sem2'],
@@ -434,10 +431,41 @@ class MyDF_DataModel(DataModel):
                       'contents': '(333|444)|(foo|bar)|\d|[th|is]'}
 
 
+        xml1_desc = xml.tag_builder('A1', params={'p1':'a', 'p2': ['foo', 'bar'], 'p3': 'c'},
+                                    contents=['foo', 'bar'], node_name='xml1')
+
+        xml2_desc = xml.tag_builder('B1', params={'p1':'a', 'p2': ['foo', 'bar'], 'p3': 'c'},
+                                    contents=Node('intg',vt=UINT32_be(values=[1,2,3])),
+                                    node_name='xml2')
+
+        xml3_desc = xml.tag_builder('C1', params={'p1':'a', 'p2': ['foo', 'bar'], 'p3': 'c'},
+                     contents= \
+                         {'name': 'intg',
+                          'contents': UINT16_be(values=[60,70,80])}, node_name='xml3')
+
+        xml4_desc = \
+            {'name': 'xml4',
+             'contents': [
+                 {'name': 'inside_cpy',
+                  'clone': 'i2'},
+                 xml.tag_builder('D1', params={'p1':'a', 'p2': ['foo', 'bar'], 'p3': 'c'},
+                                 contents= \
+                                     {'name': 'inside',
+                                      'contents': [
+                                          {'name': 'i1',
+                                           'clone': 'outside'},
+                                          {'name': 'i2',
+                                           'contents': String(values=['FOO', 'BAR'])}
+                                      ]} ),
+                 {'name': 'outside',
+                  'contents': UINT16_be(values=[30,40,50])},
+             ] }
+
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
-                      shape_desc, for_network_tg1, for_network_tg2, enc_desc, example_desc,
-                      regex_desc)
+                      shape_desc, for_network_tg1, for_network_tg2, for_net_default_tg, basic_intg,
+                      enc_desc, example_desc,
+                      regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc)
 
 
 data_model = MyDF_DataModel()

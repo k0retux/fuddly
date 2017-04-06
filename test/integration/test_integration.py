@@ -26,6 +26,7 @@ from __future__ import print_function
 
 import sys
 import unittest
+
 import ddt
 
 sys.path.append('.')
@@ -36,7 +37,7 @@ import data_models.example as example
 
 from framework.fuzzing_primitives import *
 from framework.plumbing import *
-from framework.data_model_helpers import *
+from framework.data_model import *
 from framework.encoders import *
 
 
@@ -73,7 +74,7 @@ class TestBasics(unittest.TestCase):
 
         # print('\n### TEST 0: generate one EX1 ###')
         #
-        node_ex1 = dm.get_data('EX1')
+        node_ex1 = dm.get_atom('EX1')
 
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
@@ -136,7 +137,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n### TEST 3: generate 4 identical TUX (with last one flatten) ###')
 
-        tux = dm.get_data('TUX')
+        tux = dm.get_atom('TUX')
 
         val1 = tux.get_value()
         print(val1)
@@ -166,7 +167,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 5.1: get_node_by_path() with exact path')
 
-        tux2 = dm.get_data('TUX')
+        tux2 = dm.get_atom('TUX')
 
         print('* Shall return None:')
         val1 = tux2.get_node_by_path(path='EX1')
@@ -196,14 +197,14 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 5.4: call get_reachable_nodes()')
 
-        node_ex1 = dm.get_data('EX1')
+        node_ex1 = dm.get_atom('EX1')
         l = node_ex1.get_reachable_nodes(path_regexp='TUX')
         for i in l:
             print(i.get_path_from(node_ex1))
 
         print('\n')
 
-        node_ex1 = dm.get_data('EX1')
+        node_ex1 = dm.get_atom('EX1')
         l = node_ex1.get_reachable_nodes(path_regexp='T[XC]/KU')
         for i in l:
             print(i.get_path_from(node_ex1))
@@ -276,7 +277,7 @@ class TestBasics(unittest.TestCase):
 
         print('> l1:')
 
-        tux2 = dm.get_data('TUX')
+        tux2 = dm.get_atom('TUX')
         # attr = Elt_Attributes(defaults=False)
         # attr.conform_to_nonterm_node()
 
@@ -293,11 +294,11 @@ class TestBasics(unittest.TestCase):
         for e in l1:
             print(e.get_path_from(tux2))
             e.cc.change_subnodes_csts([('*', 'u=.')])
-            csts1 = e.cc.get_subnodes_csts_copy()
+            csts1, _ = e.cc.get_subnodes_csts_copy()
             print(csts1)
 
             e.cc.change_subnodes_csts([('*', 'u=.'), ('u=.', 'u>')])
-            csts2 = e.cc.get_subnodes_csts_copy()
+            csts2, _ = e.cc.get_subnodes_csts_copy()
             print(csts2)
 
             print('\n')
@@ -320,19 +321,19 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 7.3:')
 
-        tux = dm.get_data('TUX')
+        tux = dm.get_atom('TUX')
         l1 = tux.get_reachable_nodes(internals_criteria=crit)
         c_l1 = []
         for e in l1:
-            orig = e.cc.get_subnodes_csts_copy()
+            order, attrs = e.cc.get_subnodes_csts_copy()
 
             e.cc.change_subnodes_csts([('u=.', 'u>'), ('u>', 'u=.')])
-            csts1 = e.cc.get_subnodes_csts_copy()
+            csts1, _ = e.cc.get_subnodes_csts_copy()
             print(csts1)
             print('\n')
             c_l1.append(csts1)
 
-            e.set_subnodes_full_format(orig)
+            e.set_subnodes_full_format(order, attrs)
 
         l2 = tux.get_reachable_nodes(internals_criteria=crit)
         c_l2 = []
@@ -340,7 +341,7 @@ class TestBasics(unittest.TestCase):
             orig = e.cc.get_subnodes_csts_copy()
 
             e.cc.change_subnodes_csts([('u>', 'u=.'), ('u=.', 'u>')])
-            csts2 = e.cc.get_subnodes_csts_copy()
+            csts2, _ = e.cc.get_subnodes_csts_copy()
             print(csts2)
             print('\n')
             c_l2.append(csts2)
@@ -378,7 +379,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n### TEST 8: set_current_conf()')
 
-        node_ex1 = dm.get_data('EX1')
+        node_ex1 = dm.get_atom('EX1')
 
         print('\n*** test 8.0:')
 
@@ -437,7 +438,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n***** test 8.2.0: subparts:')
 
-        node_ex1 = dm.get_data('EX1')
+        node_ex1 = dm.get_atom('EX1')
 
         res2 = True
 
@@ -466,9 +467,9 @@ class TestBasics(unittest.TestCase):
             res2 = False
         print(msg)
 
-        node_ex1 = dm.get_data('EX1')
+        node_ex1 = dm.get_atom('EX1')
 
-        node_ex1.set_current_conf('ALT', root_regexp='TC/KV')
+        node_ex1.set_current_conf('ALT', root_regexp='(TC)|(TC_.*)/KV')
         node_ex1.set_current_conf('ALT', root_regexp='TUX$')
 
         node_ex1.unfreeze_all()
@@ -490,7 +491,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 8.3:')
 
-        node_ex1 = dm.get_data('EX1')
+        node_ex1 = dm.get_atom('EX1')
 
         res3 = True
         l = sorted(node_ex1.get_nodes_names(conf='ALT'))
@@ -513,7 +514,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 8.5:')
 
-        node_ex1 = dm.get_data('EX1')
+        node_ex1 = dm.get_atom('EX1')
 
         res5 = True
         node_ex1.unfreeze_all()
@@ -530,7 +531,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 8.6:')
 
-        node_ex1 = dm.get_data('EX1')
+        node_ex1 = dm.get_atom('EX1')
 
         # attr3 = Elt_Attributes(defaults=False)
         # attr3.conform_to_nonterm_node()
@@ -548,7 +549,7 @@ class TestBasics(unittest.TestCase):
         for e in l:
             print(e.get_path_from(tux2))
 
-        if len(l) == 2:
+        if len(l) == 4:
             res6 = True
         else:
             res6 = False
@@ -561,7 +562,7 @@ class TestBasics(unittest.TestCase):
         print('\n### TEST 9: test the constraint type: =+(w1,w2,...)\n' \
               '--> can be False in really rare case')
 
-        node_ex1 = dm.get_data('EX1')
+        node_ex1 = dm.get_atom('EX1')
 
         res = True
         for i in range(20):
@@ -578,7 +579,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 10.1: fuzz_data_tree()')
 
-        node_ex1 = dm.get_data('EX1')
+        node_ex1 = dm.get_atom('EX1')
         fuzz_data_tree(node_ex1)
         node_ex1.get_value()
 
@@ -586,7 +587,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 11.1: value type Node')
 
-        node_ex1 = dm.get_data('EX1')
+        node_ex1 = dm.get_atom('EX1')
 
         res1 = True
         msg = node_ex1.to_bytes(conf='ALT')
@@ -618,14 +619,14 @@ class TestBasics(unittest.TestCase):
         for e in l:
             print(e.get_path_from(node_ex1))
 
-        if len(l) == 4:
+        if len(l) == 10:
             res2 = True
         else:
             res2 = False
 
         print('\n*** test 11.2: func type Node')
 
-        node_ex1 = dm.get_data('EX1')
+        node_ex1 = dm.get_atom('EX1')
 
         res3 = True
         msg = node_ex1.to_bytes(conf='ALT')
@@ -648,14 +649,11 @@ class TestBasics(unittest.TestCase):
         print(res1, res2, res3)
         results['test11'] = res1 and res2 and res3
 
-        # raise ValueError
-
-
         print('\n### TEST 12: get_all_path() test')
 
         print('\n*** test 12.1:')
 
-        node_ex1 = dm.get_data('EX1')
+        node_ex1 = dm.get_atom('EX1')
         for i in node_ex1.iter_paths(only_paths=True):
             print(i)
 
@@ -676,7 +674,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 13.1:')
 
-        tux = dm.get_data('TUX')
+        tux = dm.get_atom('TUX')
 
         crit = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
                                      node_kinds=[NodeInternals_TypedValue])
@@ -705,7 +703,7 @@ class TestBasics(unittest.TestCase):
             e.set_values(value_type=c())
 
         res1 = False
-        if len(l1) == 13:
+        if len(l1) == 29:
             res1 = True
 
         print('\n> after changing types:')
@@ -729,7 +727,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 13.2:')
 
-        evt = dm.get_data('TVE')
+        evt = dm.get_atom('TVE')
         l = evt.get_reachable_nodes(internals_criteria=crit)
 
         print('\n> part1:\n')
@@ -786,27 +784,6 @@ class TestBasics(unittest.TestCase):
         print(res1, res2)
         results['test13'] = res1 and res2
 
-        print('\n*** test 14: test Proxy Node')
-
-        res1 = False
-
-        blend = dm.get_data('BLEND')
-        msg = blend.to_bytes()
-        print('Blend Node starts with:')
-        print(msg[:300] + b' ...')
-        print('\nAnd ends with:')
-        print(b'... ' + msg[len(msg) - 300:len(msg)])
-
-        print("\n--> Call unfreeze()")
-        blend.unfreeze()
-
-        msg2 = blend.to_bytes()
-
-        print('\nBlend Node starts with:')
-        print(msg2[:300] + b' ...')
-        print('\nAnd ends with:')
-        print(b'... ' + msg2[len(msg2) - 300:len(msg2)])
-
         print('\n### SUMMARY ###')
 
         for k, v in results.items():
@@ -848,7 +825,7 @@ class TestMisc(unittest.TestCase):
         '''
         unfreeze(dont_change_state)
         '''
-        simple = self.dm.get_data('Simple')
+        simple = self.dm.get_atom('Simple')
 
         simple.make_determinist(recursive=True)
         for i in range(15):
@@ -867,7 +844,7 @@ class TestMisc(unittest.TestCase):
         self.assertTrue(res1)
 
     def test_TypedNode_1(self):
-        evt = dm.get_data('TVE')
+        evt = dm.get_atom('TVE')
         evt.get_value()
 
         print('=======[ PATHS ]========')
@@ -896,7 +873,7 @@ class TestMisc(unittest.TestCase):
 
         print('')
 
-        evt = dm.get_data('TVE')
+        evt = dm.get_atom('TVE')
         evt.make_finite(all_conf=True, recursive=True)
         evt.make_determinist(all_conf=True, recursive=True)
         evt.show()
@@ -947,7 +924,7 @@ class TestMisc(unittest.TestCase):
         Value Node make_random()/make_determinist()
         TODO: NEED assertion
         '''
-        evt = dm.get_data('TVE')
+        evt = dm.get_atom('TVE')
 
         for i in range(10):
             evt.unfreeze()
@@ -974,7 +951,7 @@ class TestMisc(unittest.TestCase):
 
         print('\n -=[ determinist & finite (loop count: %d) ]=- \n' % loop_count)
 
-        nt = dm.get_data('NonTerm')
+        nt = dm.get_atom('NonTerm')
         nt.make_finite(all_conf=True, recursive=True)
         nt.make_determinist(all_conf=True, recursive=True)
         nb = self._loop_nodes(nt, loop_count, criteria_func=crit_func)
@@ -983,21 +960,21 @@ class TestMisc(unittest.TestCase):
 
         print('\n -=[ determinist & infinite (loop count: %d) ]=- \n' % loop_count)
 
-        nt = dm.get_data('NonTerm')
+        nt = dm.get_atom('NonTerm')
         nt.make_infinite(all_conf=True, recursive=True)
         nt.make_determinist(all_conf=True, recursive=True)
         self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
         print('\n -=[ random & infinite (loop count: %d) ]=- \n' % loop_count)
 
-        nt = dm.get_data('NonTerm')
+        nt = dm.get_atom('NonTerm')
         # nt.make_infinite(all_conf=True, recursive=True)
         nt.make_random(all_conf=True, recursive=True)
         self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
         print('\n -=[ random & finite (loop count: %d) ]=- \n' % loop_count)
 
-        nt = dm.get_data('NonTerm')
+        nt = dm.get_atom('NonTerm')
         nt.make_finite(all_conf=True, recursive=True)
         nt.make_random(all_conf=True, recursive=True)
         nb = self._loop_nodes(nt, loop_count, criteria_func=crit_func)
@@ -1422,7 +1399,7 @@ class TestMisc(unittest.TestCase):
 
         print('\n****\n')
 
-        v = dm.get_data('V1_middle')
+        v = dm.get_atom('V1_middle')
         v.make_finite()
 
         e = Node('NT')
@@ -1439,7 +1416,7 @@ class TestMisc(unittest.TestCase):
 
         print('\n****\n')
 
-        e = dm.get_data('Middle_NT')
+        e = dm.get_atom('Middle_NT')
         e.make_finite(all_conf=True, recursive=True)
         e.make_determinist(all_conf=True, recursive=True)
         self._loop_nodes(e, loop_count, criteria_func=lambda x: x.name == 'Middle_NT')
@@ -1455,7 +1432,7 @@ class TestModelWalker(unittest.TestCase):
         pass
 
     def test_NodeConsumerStub_1(self):
-        nt = self.dm.get_data('Simple')
+        nt = self.dm.get_atom('Simple')
         default_consumer = NodeConsumerStub()
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
                                                                     max_steps=200):
@@ -1463,7 +1440,7 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 49)
 
     def test_NodeConsumerStub_2(self):
-        nt = self.dm.get_data('Simple')
+        nt = self.dm.get_atom('Simple')
         default_consumer = NodeConsumerStub(max_runs_per_node=-1, min_runs_per_node=2)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
                                                                     max_steps=200):
@@ -1471,7 +1448,7 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 35)
 
     def test_BasicVisitor(self):
-        nt = self.dm.get_data('Simple')
+        nt = self.dm.get_atom('Simple')
         default_consumer = BasicVisitor(respect_order=True)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
                                                                     max_steps=200):
@@ -1479,7 +1456,7 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 37)
 
         print('***')
-        nt = self.dm.get_data('Simple')
+        nt = self.dm.get_atom('Simple')
         default_consumer = BasicVisitor(respect_order=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
                                                                     max_steps=200):
@@ -1489,7 +1466,7 @@ class TestModelWalker(unittest.TestCase):
     def test_NonTermVisitor(self):
         print('***')
         idx = 0
-        simple = self.dm.get_data('Simple')
+        simple = self.dm.get_atom('Simple')
         nonterm_consumer = NonTermVisitor(respect_order=True)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True,
                                                                     max_steps=20):
@@ -1498,7 +1475,7 @@ class TestModelWalker(unittest.TestCase):
 
         print('***')
         idx = 0
-        simple = self.dm.get_data('Simple')
+        simple = self.dm.get_atom('Simple')
         nonterm_consumer = NonTermVisitor(respect_order=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True,
                                                                     max_steps=20):
@@ -1517,7 +1494,7 @@ class TestModelWalker(unittest.TestCase):
         ]
 
         idx = 0
-        data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')
+        data = fmk.dm.get_external_atom(dm_name='mydf', data_id='shape')
         nonterm_consumer = NonTermVisitor(respect_order=True)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True,
                                                                     max_steps=50):
@@ -1527,7 +1504,7 @@ class TestModelWalker(unittest.TestCase):
 
         print('***')
         idx = 0
-        data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')
+        data = fmk.dm.get_external_atom(dm_name='mydf', data_id='shape')
         nonterm_consumer = NonTermVisitor(respect_order=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True,
                                                                     max_steps=50):
@@ -1537,7 +1514,7 @@ class TestModelWalker(unittest.TestCase):
         print('***')
 
     def test_basics(self):
-        # data = fmk.dm.get_external_node(dm_name='mydf', data_id='shape')
+        # data = fmk.dm.get_external_atom(dm_name='mydf', data_id='shape')
         shape_desc = \
             {'name': 'shape',
              'custo_set': MH.Custo.NTerm.FrozenCopy,
@@ -1579,8 +1556,8 @@ class TestModelWalker(unittest.TestCase):
                   ]}
              ]}
 
-        mh = ModelHelper(delayed_jobs=True)
-        data = mh.create_graph_from_desc(shape_desc)
+        mb = NodeBuilder(delayed_jobs=True)
+        data = mb.create_graph_from_desc(shape_desc)
         bv_data = data.get_clone()
         nt_data = data.get_clone()
 
@@ -1725,7 +1702,7 @@ class TestModelWalker(unittest.TestCase):
 
 
     def test_TypedNodeDisruption_1(self):
-        nt = self.dm.get_data('Simple')
+        nt = self.dm.get_atom('Simple')
         tn_consumer = TypedNodeDisruption()
         ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         tn_consumer.set_node_interest(internals_criteria=ic)
@@ -1735,7 +1712,7 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 27)
 
     def test_TypedNodeDisruption_2(self):
-        nt = self.dm.get_data('Simple')
+        nt = self.dm.get_atom('Simple')
         tn_consumer = TypedNodeDisruption(max_runs_per_node=3, min_runs_per_node=3)
         ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         tn_consumer.set_node_interest(internals_criteria=ic)
@@ -1749,7 +1726,7 @@ class TestModelWalker(unittest.TestCase):
         Test case similar to test_TermNodeDisruption_1() but with more
         powerfull TypedNodeDisruption.
         '''
-        nt = self.dm.get_data('Simple')
+        nt = self.dm.get_atom('Simple')
         tn_consumer = TypedNodeDisruption(max_runs_per_node=1)
         # ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         # tn_consumer.set_node_interest(internals_criteria=ic)
@@ -1763,7 +1740,7 @@ class TestModelWalker(unittest.TestCase):
         Test case similar to test_TermNodeDisruption_1() but with more
         powerfull TypedNodeDisruption.
         '''
-        data = fmk.dm.get_external_node(dm_name='sms', data_id='smscmd')
+        data = fmk.dm.get_external_atom(dm_name='sms', data_id='smscmd')
         data.freeze()
         data.show()
 
@@ -1800,7 +1777,7 @@ class TestModelWalker(unittest.TestCase):
             self.assertEqual(rnode['smscmd/TP-DCS'].to_bytes(), corrupt_table[idx])
 
     def test_AltConfConsumer_1(self):
-        simple = self.dm.get_data('Simple')
+        simple = self.dm.get_atom('Simple')
         consumer = AltConfConsumer(max_runs_per_node=-1, min_runs_per_node=-1)
         consumer.set_node_interest(owned_confs=['ALT'])
 
@@ -1810,7 +1787,7 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 15)
 
     def test_AltConfConsumer_2(self):
-        simple = self.dm.get_data('Simple')
+        simple = self.dm.get_atom('Simple')
         consumer = AltConfConsumer(max_runs_per_node=2, min_runs_per_node=1)
         consumer.set_node_interest(owned_confs=['ALT'])
 
@@ -1820,7 +1797,7 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 8)
 
     def test_AltConfConsumer_3(self):
-        simple = self.dm.get_data('Simple')
+        simple = self.dm.get_atom('Simple')
         consumer = AltConfConsumer(max_runs_per_node=-1, min_runs_per_node=-1)
         consumer.set_node_interest(owned_confs=['ALT', 'ALT_2'])
 
@@ -1830,7 +1807,7 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 24)
 
     def test_AltConfConsumer_4(self):
-        simple = self.dm.get_data('Simple')
+        simple = self.dm.get_atom('Simple')
         consumer = AltConfConsumer(max_runs_per_node=-1, min_runs_per_node=-1)
         consumer.set_node_interest(owned_confs=['ALT_2', 'ALT'])
 
@@ -1840,7 +1817,10 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 24)
 
     def test_JPG(self):
-        nt = self.dm.get_data('jpg')
+        dm = fmk.get_data_model_by_name('jpg')
+        dm.build_data_model()
+
+        nt = dm.get_atom('jpg')
         tn_consumer = TypedNodeDisruption()
 
         walker = iter(ModelWalker(nt, tn_consumer, make_determinist=True))
@@ -1859,7 +1839,7 @@ class TestModelWalker(unittest.TestCase):
         dm_usb = fmk.get_data_model_by_name('usb')
         dm_usb.build_data_model()
 
-        data = dm_usb.get_data('CONF')
+        data = dm_usb.get_atom('CONF')
         consumer = TypedNodeDisruption()
         consumer.need_reset_when_structure_change = True
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, consumer, make_determinist=True,
@@ -1920,8 +1900,8 @@ class TestNodeFeatures(unittest.TestCase):
               ]}
         ]}
 
-        mh = ModelHelper(delayed_jobs=True)
-        d = mh.create_graph_from_desc(tag_desc)
+        mb = NodeBuilder(delayed_jobs=True)
+        d = mb.create_graph_from_desc(tag_desc)
         d.make_determinist(recursive=True)
         d2 = d.get_clone()
         d3 = d.get_clone()
@@ -2060,8 +2040,8 @@ class TestNodeFeatures(unittest.TestCase):
              ]}
 
         for i in range(5):
-            mh = ModelHelper()
-            node = mh.create_graph_from_desc(test_desc)
+            mb = NodeBuilder()
+            node = mb.create_graph_from_desc(test_desc)
             node_abs = Node('test_abs', base_node=node)
 
             node.set_env(Env())
@@ -2100,12 +2080,15 @@ class TestNodeFeatures(unittest.TestCase):
 
         nint_1 = Node('nint1', value_type=UINT16_le(values=[0xabcd, 0xe2e1]))
         nint_1.set_absorb_helper(nint_1_helper)
+        nint_1_cpy = nint_1.get_clone('nint1_cpy')
 
         nint_1_alt = Node('nint1_alt', value_type=UINT16_le(values=[0xabff, 0xe2ff]))
         nint_1_alt.set_absorb_helper(nint_1_alt_helper)
+        nint_1_alt_cpy = nint_1_alt.get_clone('nint1_alt_cpy')
 
         nint_2 = Node('nint2', value_type=UINT8(values=[0xf, 0xff, 0xee]))
         nint_3 = Node('nint3', value_type=UINT16_be(values=[0xeffe, 0xc1c2, 0x8899]))
+        nint_3_cpy = nint_3.get_clone('nint3_cpy')
 
         nstr_1 = Node('cool', value_type=String(values=['TBD1'], size=4, codec='ascii'))
         nstr_1.enforce_absorb_constraints(AbsNoCsts(regexp=True))
@@ -2119,7 +2102,7 @@ class TestNodeFeatures(unittest.TestCase):
         middle1.set_subnodes_with_csts([
             3, ['u>', [nint_1_alt, 2]],
             2, ['u>', [nint_1, 1, 10], [nint_2, 2], [nstr_1, 1], [nint_3, 2], [nstr_2, 1]],
-            1, ['u>', [nint_1_alt, 1], [nint_3, 1], 'u=+', [nstr_2, 1], [nint_1, 2], 'u>', [nstr_1, 1],
+            1, ['u>', [nint_1_alt_cpy, 1], [nint_3_cpy, 1], 'u=+', [nstr_2, 1], [nint_1_cpy, 2], 'u>', [nstr_1, 1],
                 'u=.', [nint_50, 1], [nint_51, 1], [nstr_50, 2, 3]]
         ])
 
@@ -2212,8 +2195,8 @@ class TestNodeFeatures(unittest.TestCase):
 
     def test_show(self):
 
-        a = fmk.dm.get_external_node(dm_name='usb', data_id='DEV')
-        b = fmk.dm.get_external_node(dm_name='png', data_id='PNG_00')
+        a = fmk.dm.get_external_atom(dm_name='usb', data_id='DEV')
+        b = fmk.dm.get_external_atom(dm_name='png', data_id='PNG_00')
 
         a.show(raw_limit=400)
         b.show(raw_limit=400)
@@ -2228,10 +2211,10 @@ class TestNodeFeatures(unittest.TestCase):
         ''' Test existence condition for generation and absorption
         '''
 
-        d = fmk.dm.get_external_node(dm_name='mydf', data_id='exist_cond')
+        d = fmk.dm.get_external_atom(dm_name='mydf', data_id='exist_cond')
 
         for i in range(10):
-            d_abs = fmk.dm.get_external_node(dm_name='mydf', data_id='exist_cond')
+            d_abs = fmk.dm.get_external_atom(dm_name='mydf', data_id='exist_cond')
 
             d.show()
             raw_data = d.to_bytes()
@@ -2308,8 +2291,8 @@ class TestNodeFeatures(unittest.TestCase):
 
              ]}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(cond_desc)
+        mb = NodeBuilder()
+        node = mb.create_graph_from_desc(cond_desc)
 
         print('***')
         raw = node.to_bytes()
@@ -2364,14 +2347,14 @@ class TestNodeFeatures(unittest.TestCase):
                            {'name': ('key', 2),
                             'contents': String(values=['name='])},
                            {'name': 'param',
-                            'contents': MH.CYCLE(['NOTSUP1', 'Date', 'Time', 'NOTSUP2', 'NOTSUP3', 'Location'],
+                            'contents': CYCLE(['NOTSUP1', 'Date', 'Time', 'NOTSUP2', 'NOTSUP3', 'Location'],
                                                  depth=2)}
                        ]}
                   ]}
              ]}
 
-        mh = ModelHelper(delayed_jobs=True)
-        node = mh.create_graph_from_desc(gen_exist_desc)
+        mb = NodeBuilder(delayed_jobs=True)
+        node = mb.create_graph_from_desc(gen_exist_desc)
 
         print('***')
         raw = node.to_bytes()
@@ -2431,8 +2414,8 @@ class TestNodeFeatures(unittest.TestCase):
                   ]},
              ]}
 
-        mh = ModelHelper(delayed_jobs=True)
-        node = mh.create_graph_from_desc(pick_cond_desc)
+        mb = NodeBuilder(delayed_jobs=True)
+        node = mb.create_graph_from_desc(pick_cond_desc)
 
         print('***')
         raw = node.to_bytes()
@@ -2475,8 +2458,8 @@ class TestNodeFeatures(unittest.TestCase):
                   ]}
              ]}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(padding_desc)
+        mb = NodeBuilder()
+        node = mb.create_graph_from_desc(padding_desc)
 
         print('***')
         raw = node.to_bytes()
@@ -2491,7 +2474,7 @@ class TestNodeFeatures(unittest.TestCase):
 
     def test_search_primitive(self):
 
-        data = fmk.dm.get_external_node(dm_name='mydf', data_id='exist_cond')
+        data = fmk.dm.get_external_atom(dm_name='mydf', data_id='exist_cond')
         data.freeze()
         data.unfreeze()
         data.freeze()
@@ -2546,8 +2529,8 @@ class TestNode_NonTerm(unittest.TestCase):
                   'qty': (2, -1)},
              ]}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(infinity_desc)
+        mb = NodeBuilder()
+        node = mb.create_graph_from_desc(infinity_desc)
         node_abs = Node('infinity_abs', base_node=node)
         node_abs2 = Node('infinity_abs', base_node=node)
 
@@ -2634,8 +2617,8 @@ class TestNode_NonTerm(unittest.TestCase):
                   ]}
              ]}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(test_desc)
+        mb = NodeBuilder()
+        node = mb.create_graph_from_desc(test_desc)
         node.set_env(Env())
 
         for i in range(5):
@@ -2670,7 +2653,7 @@ class TestNode_NonTerm(unittest.TestCase):
                  {'name': 'data0',
                   'contents': String(values=['Plip', 'Plop'])},
                  {'name': 'crc',
-                  'contents': MH.CRC(vt=UINT32_be, after_encoding=False),
+                  'contents': CRC(vt=UINT32_be, after_encoding=False),
                   'node_args': ['enc_data', 'data2'],
                   'absorb_csts': AbsFullCsts(contents=False)},
                  {'name': 'enc_data',
@@ -2678,7 +2661,7 @@ class TestNode_NonTerm(unittest.TestCase):
                   'set_attrs': NodeInternals.Abs_Postpone,
                   'contents': [
                       {'name': 'len',
-                       'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                       'contents': LEN(vt=UINT8, after_encoding=False),
                        'node_args': 'data1',
                        'absorb_csts': AbsFullCsts(contents=False)},
                       {'name': 'data1',
@@ -2688,8 +2671,8 @@ class TestNode_NonTerm(unittest.TestCase):
                   'contents': String(values=['Red', 'Green', 'Blue'])},
              ]}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(enc_desc)
+        mb = NodeBuilder()
+        node = mb.create_graph_from_desc(enc_desc)
         node.set_env(Env())
 
         node_abs = Node('abs', base_node=node, new_env=True)
@@ -2740,8 +2723,8 @@ class TestNode_TypedValue(unittest.TestCase):
                   'contents': String(values=['END'])},
              ]}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(alpha_desc)
+        mb = NodeBuilder()
+        node = mb.create_graph_from_desc(alpha_desc)
         node.set_env(Env())
 
         node_abs = Node('alpha_abs', base_node=node)
@@ -2806,7 +2789,7 @@ class TestNode_TypedValue(unittest.TestCase):
             {'name': 'enc',
              'contents': [
                  {'name': 'len',
-                  'contents': MH.LEN(vt=UINT8, after_encoding=False),
+                  'contents': LEN(vt=UINT8, after_encoding=False),
                   'node_args': 'user_data',
                   'absorb_csts': AbsFullCsts(contents=False)},
                  {'name': 'user_data',
@@ -2815,8 +2798,8 @@ class TestNode_TypedValue(unittest.TestCase):
                   'contents': GZIP(values=data, encoding_arg=6)}
              ]}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(enc_desc)
+        mb = NodeBuilder()
+        node = mb.create_graph_from_desc(enc_desc)
         node.set_env(Env())
 
         node_abs = Node('enc_abs', base_node=node, new_env=True)
@@ -2927,8 +2910,8 @@ class TestNode_TypedValue(unittest.TestCase):
                   'absorb_csts': AbsNoCsts()},
              ]}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(enc_desc)
+        mb = NodeBuilder()
+        node = mb.create_graph_from_desc(enc_desc)
         node.set_env(Env())
 
         node_abs = Node('enc_abs', base_node=node, new_env=True)
@@ -3011,7 +2994,7 @@ class TestHLAPI(unittest.TestCase):
                                 {'conf': 'alt1',
                                  'contents': SINT8(values=[1, 4, 8])},
                                 {'conf': 'alt2',
-                                 'contents': UINT16_be(mini=0xeeee, maxi=0xff56),
+                                 'contents': UINT16_be(min=0xeeee, max=0xff56),
                                  'determinist': True}]}
                        ]},
 
@@ -3027,8 +3010,8 @@ class TestHLAPI(unittest.TestCase):
                   ]}
              ]}
 
-        mh = ModelHelper(fmk.dm)
-        node = mh.create_graph_from_desc(a)
+        mb = NodeBuilder(fmk.dm)
+        node = mb.create_graph_from_desc(a)
 
         node.set_env(Env())
         node.show()
@@ -3046,8 +3029,8 @@ class TestHLAPI(unittest.TestCase):
         node.set_current_conf('alt2', recursive=True)
         node.show()
 
-        print('\nNode Dictionnary (size: {:d}):\n'.format(len(mh.node_dico)))
-        for name, node in mh.node_dico.items():
+        print('\nNode Dictionnary (size: {:d}):\n'.format(len(mb.node_dico)))
+        for name, node in mb.node_dico.items():
             print(name, ': ', repr(node), node.c)
 
 
@@ -3060,7 +3043,7 @@ class TestDataModel(unittest.TestCase):
         pass
 
     def test_data_container(self):
-        node = fmk.dm.get_external_node(dm_name='mydf', data_id='exist_cond')
+        node = fmk.dm.get_external_atom(dm_name='mydf', data_id='exist_cond')
         data = copy.copy(Data(node))
         data = copy.copy(Data('TEST'))
 
@@ -3076,9 +3059,9 @@ class TestDataModel(unittest.TestCase):
                 continue
 
             print("Test '%s' Data Model" % dm.name)
-            for data_id in dm.data_identifiers():
+            for data_id in dm.atom_identifiers():
                 print("Try to get '%s'" % data_id)
-                data = dm.get_data(data_id)
+                data = dm.get_atom(data_id)
                 data.get_value()
                 # data.show(raw_limit=200)
                 print('Success!')
@@ -3088,7 +3071,7 @@ class TestDataModel(unittest.TestCase):
         dm.load_data_model(fmk._name2dm)
 
         for i in range(5):
-            d = dm.get_data('off_gen')
+            d = dm.get_atom('off_gen')
             d.show()
             raw = d.to_bytes()
             print(raw)
@@ -3109,7 +3092,7 @@ class TestDataModel(unittest.TestCase):
         dm = fmk.get_data_model_by_name('usb')
         dm.build_data_model()
 
-        msd_conf = dm.get_data('CONF')
+        msd_conf = dm.get_atom('CONF')
         msd_conf.set_current_conf('MSD', recursive=True)
         msd_conf.show()
 
@@ -3178,10 +3161,10 @@ class TestDataModel(unittest.TestCase):
         loop_cpt = 5
 
         for data_id in data_id_list:
-            d = dm.get_data(data_id)
+            d = dm.get_atom(data_id)
 
             for i in range(loop_cpt):
-                d_abs = dm.get_data(data_id)
+                d_abs = dm.get_atom(data_id)
                 d_abs.set_current_conf('ABS', recursive=True)
 
                 d.show()
@@ -3221,7 +3204,7 @@ class TestDataModel(unittest.TestCase):
         abszip.set_current_conf('ABS', recursive=True)
 
         # We generate a ZIP file from the model only (no real ZIP file)
-        zip_buff = dm.get_data('ZIP').to_bytes()
+        zip_buff = dm.get_atom('ZIP').to_bytes()
         lg = len(zip_buff)
 
         # dm.pkzip.show(raw_limit=400)
@@ -3325,12 +3308,12 @@ class TestDataModelHelpers(unittest.TestCase):
         HTTP_version_regex = \
             {'name': regex_node_name, 'contents': "(HTTP)(/)(0|1|2|3|4|5|6|7|8|9)(\.)(0|1|2|3|4|5|6|7|8|9)"}
 
-        mh = ModelHelper()
-        node_classic = mh.create_graph_from_desc(HTTP_version_classic)
+        mb = NodeBuilder()
+        node_classic = mb.create_graph_from_desc(HTTP_version_classic)
         node_classic.make_determinist(recursive=True)
 
-        mh = ModelHelper()
-        node_regex = mh.create_graph_from_desc(HTTP_version_regex)
+        mb = NodeBuilder()
+        node_regex = mb.create_graph_from_desc(HTTP_version_regex)
         node_regex.make_determinist(recursive=True)
 
         node_regex.show()
@@ -3345,13 +3328,13 @@ class TestDataModelHelpers(unittest.TestCase):
     def test_regex_shape(self, regexp, shapes):
         revisited_HTTP_version = {'name': 'HTTP_version_classic', 'contents': regexp}
 
-        mh = ModelHelper()
-        node = mh.create_graph_from_desc(revisited_HTTP_version)
+        mb = NodeBuilder()
+        node = mb.create_graph_from_desc(revisited_HTTP_version)
 
         excluded_idx = []
 
         while True:
-            node_list, idx = node.cc._get_next_heavier_component(node.subnodes_csts, excluded_idx=excluded_idx)
+            node_list, idx = node.cc._get_next_heavier_component(node.subnodes_order, excluded_idx=excluded_idx)
             if len(node_list) == 0:
                 break
             excluded_idx.append(idx)
@@ -3379,11 +3362,14 @@ class TestFMK(unittest.TestCase):
         dmaker_type = 'TESTNODE'
         # fmk.cleanup_dmaker(dmaker_type=dmaker_type, reset_existing_seed=True)
 
-        gen_disruptors = fmk._generic_tactics.get_disruptors().keys()
+        gen_disruptors = fmk._generic_tactics.disruptor_types
         print('\n-=[ GENERIC DISRUPTORS ]=-\n')
         print(gen_disruptors)
 
         for dis in gen_disruptors:
+            if dis in ['tCROSS']:
+                continue
+
             print("\n\n---[ Tested Disruptor %r ]---" % dis)
             if dis == 'EXT':
                 act = [dmaker_type, (dis, None, UI(cmd='/bin/cat', file_mode=True))]
@@ -3392,7 +3378,7 @@ class TestFMK(unittest.TestCase):
                 act = [dmaker_type, dis]
                 d = fmk.get_data(act)
             if d is not None:
-                fmk.log_data(d)
+                fmk._log_data(d)
                 print("\n---[ Pretty Print ]---\n")
                 d.pretty_print()
                 fmk.cleanup_dmaker(dmaker_type=dmaker_type, reset_existing_seed=True)
@@ -3407,7 +3393,7 @@ class TestFMK(unittest.TestCase):
             if d is None:
                 break
             fmk.new_transfer_preamble()
-            fmk.log_data(d)
+            fmk._log_data(d)
 
         self.assertGreater(i, 2)
 
@@ -3430,7 +3416,7 @@ class TestFMK(unittest.TestCase):
                     print('--> Exiting (need new input)')
                     break
                 fmk.new_transfer_preamble()
-                fmk.log_data(d)
+                fmk._log_data(d)
                 outcomes.append(d.to_bytes())
                 d.show()
                 idx += 1
@@ -3451,7 +3437,7 @@ class TestFMK(unittest.TestCase):
                 print('--> Exiting (need new input)')
                 break
             fmk.new_transfer_preamble()
-            fmk.log_data(d)
+            fmk._log_data(d)
             outcomes.append(d.to_bytes())
             d.show()
             idx += 1
@@ -3473,7 +3459,7 @@ class TestFMK(unittest.TestCase):
                 print('--> Exiting (need new input)')
                 break
             fmk.new_transfer_preamble()
-            fmk.log_data(d)
+            fmk._log_data(d)
             outcomes.append(d.to_bytes())
             d.show()
             idx += 1
@@ -3509,14 +3495,14 @@ class TestFMK(unittest.TestCase):
         print(fbk)
         self.assertIn(b'You loose!', fbk)
 
-    def test_scenario_infra(self):
+    def test_scenario_infra_01(self):
 
         print('\n*** test scenario SC_NO_REGEN')
 
         base_qty = 0
         for i in range(100):
             data = fmk.get_data(['SC_NO_REGEN'])
-            data_list = fmk.send_data([data])  # needed to make the scenario progress
+            data_list = fmk._send_data([data])  # needed to make the scenario progress
             # send_data_and_log() should be used for more complex scenarios
             # hooking the framework in more places.
             if not data_list:
@@ -3537,6 +3523,122 @@ class TestFMK(unittest.TestCase):
 
         for i in range(base_qty * 3):
             data = fmk.get_data(['SC_AUTO_REGEN'])
-            data_list = fmk.send_data([data])
+            data_list = fmk._send_data([data])
             if not data_list:
                 raise ValueError
+
+    @unittest.skipIf(not run_long_tests, "Long test case")
+    def test_scenario_infra_02(self):
+
+        fmk.reload_all(tg_num=1)  # to collect feedback from monitoring probes
+
+        print('\n*** Test scenario EX1')
+
+        data = None
+        prev_data = None
+        now = datetime.datetime.now()
+        for i in range(10):
+            prev_data = data
+            data = fmk.get_data(['SC_EX1'])
+            ok = fmk.send_data_and_log([data])  # needed to make the scenario progress
+            if not ok:
+                raise ValueError
+
+        exec_time = (datetime.datetime.now() - now).total_seconds()
+
+        self.assertEqual(prev_data.to_bytes(), data.to_bytes())
+        self.assertGreater(exec_time, 5)
+
+        print('\n\n*** Test SCENARIO EX2 ***\n\n')
+
+        data = None
+        steps = []
+        for i in range(4):
+            data = fmk.get_data(['SC_EX2'])
+            if i == 3:
+                self.assertTrue(data is None)
+            if data is not None:
+                steps.append(data.origin.current_step)
+                ok = fmk.send_data_and_log([data])  # needed to make the scenario progress
+                if not ok:
+                    raise ValueError
+            if i == 0:
+                self.assertTrue(bool(fmk._task_list))
+
+        for idx, s in enumerate(steps):
+            print('\n[{:d}]-----'.format(idx))
+            print(s)
+            print('-----')
+
+        self.assertNotEqual(steps[-1], steps[-2])
+        self.assertFalse(bool(fmk._task_list))
+
+    def test_scenario_infra_03(self):
+        steps = []
+        for i in range(6):
+            data = fmk.get_data(['SC_EX3'])
+            steps.append(data.origin.current_step)
+            ok = fmk.send_data_and_log([data])  # needed to make the scenario progress
+            if not ok:
+                raise ValueError
+
+        for idx, s in enumerate(steps):
+            print('\n[{:d}]-----'.format(idx))
+            print(s)
+            print('-----')
+
+        self.assertEqual(steps[3], steps[5])
+        self.assertNotEqual(steps[5], steps[1])
+        self.assertEqual(steps[2], steps[4])
+        self.assertEqual(steps[0], steps[2])
+
+    def test_scenario_infra_04(self):
+
+        def walk_scenario(name, iter_num):
+            print('\n===== run scenario {:s} ======\n'.format(name))
+            steps = []
+            scenario = None
+            for i in range(iter_num):
+                data = fmk.get_data([name])
+                if i == 1:
+                    scenario = data.origin
+                steps.append(data.origin.current_step)
+                ok = fmk.send_data_and_log([data])  # needed to make the scenario progress
+                if not ok:
+                    raise ValueError
+
+            for idx, s in enumerate(steps):
+                print('\n[{:d}]-----'.format(idx))
+                print(s)
+                print('-----')
+
+            return scenario, steps
+
+        scenario, steps = walk_scenario('SC_TEST', 4)
+        print('\n++++ env.cbk_true_cpt={:d} | env.cbk_false_cpt={:d}'
+              .format(scenario.env.cbk_true_cpt, 0))
+        self.assertEqual(steps[0], steps[-1])
+        self.assertEqual(scenario.env.cbk_true_cpt, 2)
+        self.assertEqual(str(steps[-2]), '4TG1')
+
+        scenario, steps = walk_scenario('SC_TEST2', 2)
+        print('\n++++ env.cbk_true_cpt={:d} | env.cbk_false_cpt={:d}'
+              .format(scenario.env.cbk_true_cpt, 0))
+        # self.assertEqual(steps[0], steps[-1])
+        self.assertEqual(scenario.env.cbk_true_cpt, 1)
+        self.assertEqual(str(steps[-1]), '4TG1')
+
+        scenario, steps = walk_scenario('SC_TEST3', 2)
+        print('\n++++ env.cbk_true_cpt={:d} | env.cbk_false_cpt={:d}'
+              .format(scenario.env.cbk_true_cpt, 0))
+        # self.assertEqual(steps[0], steps[-1])
+        self.assertEqual(scenario.env.cbk_true_cpt, 2)
+        self.assertEqual(str(steps[-1]), '4TG1')
+
+        scenario, steps = walk_scenario('SC_TEST4', 2)
+        print('\n++++ env.cbk_true_cpt={:d} | env.cbk_false_cpt={:d}'
+              .format(scenario.env.cbk_true_cpt, scenario.env.cbk_false_cpt))
+        # self.assertEqual(steps[0], steps[-1])
+        self.assertEqual(scenario.env.cbk_true_cpt, 1)
+        self.assertEqual(scenario.env.cbk_false_cpt, 4)
+        self.assertEqual(str(steps[-1]), '4DEFAULT')

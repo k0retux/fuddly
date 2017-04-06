@@ -23,14 +23,10 @@
 
 import time
 
-from framework.project import *
-from framework.monitor import *
-from framework.operator_helpers import *
 from framework.plumbing import *
-from framework.target import *
+from framework.target_helpers import *
 from framework.logger import *
-from framework.data_model import *
-from framework.fuzzing_primitives import *
+from framework.node import *
 
 project = Project()
 project.default_dm = 'usb'
@@ -67,13 +63,13 @@ class Pandaboard(Target):
         conf_desc = []
 
         for d in data_list:
-            if d.node.semantics.match(NodeSemanticsCriteria(mandatory_criteria=['DEV_DESC'])):
+            if d.content.semantics.match(NodeSemanticsCriteria(mandatory_criteria=['DEV_DESC'])):
                 dev_desc = d.to_bytes()
-            elif d.node.semantics.match(NodeSemanticsCriteria(mandatory_criteria=['CONF_DESC'])):
+            elif d.content.semantics.match(NodeSemanticsCriteria(mandatory_criteria=['CONF_DESC'])):
                 conf_desc.append(d.to_bytes())
-            elif d.node.semantics.match(NodeSemanticsCriteria(mandatory_criteria=['LANGID_DESC'])):
+            elif d.content.semantics.match(NodeSemanticsCriteria(mandatory_criteria=['LANGID_DESC'])):
                 stringdict[0] = (d.to_bytes(), False)
-            elif d.node.semantics.match(NodeSemanticsCriteria(mandatory_criteria=['STRING_DESC'])):
+            elif d.content.semantics.match(NodeSemanticsCriteria(mandatory_criteria=['STRING_DESC'])):
                 stringdict[idx] = (d.to_bytes(), False)
                 idx += 1
 
@@ -93,11 +89,11 @@ class Pandaboard(Target):
 
 
     def send_data(self, data, from_fmk=False):
-        e = data.node
+        n = data.content
 
-        if e.semantics.match(NodeSemanticsCriteria(mandatory_criteria=['DEV_DESC'])):
+        if n.semantics.match(NodeSemanticsCriteria(mandatory_criteria=['DEV_DESC'])):
             self.cnx.root.connect(dev_desc_str=data.to_bytes())
-        elif e.semantics.match(NodeSemanticsCriteria(mandatory_criteria=['CONF_DESC'])):
+        elif n.semantics.match(NodeSemanticsCriteria(mandatory_criteria=['CONF_DESC'])):
             self.cnx.root.connect(conf_desc_str_list=[data.to_bytes()])
 
 
@@ -131,15 +127,15 @@ class Op1(Operator):
 
         self.instr_list = []
         self.instr_list.append([('LANGID', UI(finite=True))])
-        self.instr_list.append([('STR', UI(finite=True)), ('tALT', UI(init=self.init))])
-        self.instr_list.append([('STR#2', UI(finite=True)), ('tALT#2', UI(init=self.init))])
-        self.instr_list.append([('STR#3', UI(finite=True)), ('tALT#3', UI(init=self.init))])
-        self.instr_list.append([('STR#4', UI(finite=True)), ('tALT#4', UI(init=self.init))])
-        self.instr_list.append([('STR#5', UI(finite=True)), ('tALT#5', UI(init=self.init))])
+        self.instr_list.append([('STR', UI(finite=True))])
+        self.instr_list.append([('STR#2', UI(finite=True))])
+        self.instr_list.append([('STR#3', UI(finite=True))])
+        self.instr_list.append([('STR#4', UI(finite=True))])
+        self.instr_list.append([('STR#5', UI(finite=True))])
         if self.mode == 1:
             self.instr_list.append([('DEV', UI(finite=True)), ('tTYPE', UI(init=self.init))])
         elif self.mode == 2:
-            self.instr_list.append([('DEV', ('ALT', None, UI(conf='MS')), UI(finite=True))])
+            self.instr_list.append([('DEV', UI(finite=True)), ('ALT', None, UI(conf='MS'))])
         else:
             self.instr_list.append([('DEV', UI(finite=True))])
 
@@ -147,7 +143,8 @@ class Op1(Operator):
             self.instr_list.append([('CONF', UI(finite=True)), ('ALT', None, UI(conf='BIGCONF')),
                                     ('tTYPE#2', UI(init=self.init, clone_node=False), None)])
         elif self.mode == 2:
-            self.instr_list.append([('MSD_CONF', UI(finite=True)), ('tTYPE#2', UI(init=self.init))])
+            self.instr_list.append([('CONF', UI(finite=True)), ('ALT', None, UI(conf='MSD')),
+                                    ('tTYPE#2', UI(init=self.init))])
         else:
             self.instr_list.append([('CONF', UI(finite=True)), ('tTYPE#2', UI(init=self.init))])
             self.instr_list.append([('CONF#2', UI(finite=True)), ('tTYPE#3', UI(init=self.init))])

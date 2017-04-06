@@ -114,7 +114,7 @@ try:
     import crcmod
 except ImportError:
     crcmod_module = False
-    print('WARNING [FMK]: python(3)-crcmod module is not installed, the MH.CRC()' \
+    print('WARNING [FMK]: python(3)-crcmod module is not installed, the CRC()' \
           ' generator template will not be available!')
 
 ssh_module = True

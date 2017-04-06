@@ -138,28 +138,28 @@ Parameters:
   .. code-block:: none
 
        generic args:
-	 |_ clone_node
-	 |      | desc: if True the dmaker will always return a copy of the node. (for
-	 |      |       stateless diruptors dealing with big data it can be usefull
-	 |      |       to it to False)
-	 |      | default: True [type: bool]
-	 |_ init
-	 |      | desc: make the model walker ignore all the steps until the provided
-	 |      |       one
-	 |      | default: 1 [type: int]
-	 |_ max_steps
-	 |      | desc: maximum number of steps (-1 means until the end)
-	 |      | default: -1 [type: int]
-	 |_ runs_per_node
-	 |      | desc: maximum number of test cases for a single node (-1 means until
-	 |      |       the end)
-	 |      | default: -1 [type: int]
+         |_ clone_node
+         |      | desc: if True the dmaker will always return a copy of the node. (for
+         |      |       stateless diruptors dealing with big data it can be usefull
+         |      |       to it to False)
+         |      | default: True [type: bool]
+         |_ init
+         |      | desc: make the model walker ignore all the steps until the provided
+         |      |       one
+         |      | default: 1 [type: int]
+         |_ max_steps
+         |      | desc: maximum number of steps (-1 means until the end)
+         |      | default: -1 [type: int]
+         |_ runs_per_node
+         |      | desc: maximum number of test cases for a single node (-1 means until
+         |      |       the end)
+         |      | default: -1 [type: int]
        specific args:
-	 |_ conf
-	 |      | desc: change the configuration, with the one provided (by name), of
-	 |      |       all subnodes fetched by @path, one-by-one. [default value is
-	 |      |       set dynamically with the first-found existing alternate configuration]
-	 |      | default: None [type: str, list, tuple]
+         |_ conf
+         |      | desc: Change the configuration, with the one provided (by name), of
+         |      |       all nodes reachable from the root, one-by-one. [default value
+         |      |       is set dynamically with the first-found existing alternate configuration]
+         |      | default: None [type: str, list, tuple]
 
 
 tSEP - Alteration of Separator Node

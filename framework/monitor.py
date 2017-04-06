@@ -57,7 +57,7 @@ class ProbeUser(object):
     def stop(self):
         self._stop_event.set()
 
-    def join(self, timeout):
+    def join(self, timeout=None):
         if self.is_alive():
             self._thread.join(ProbeUser.timeout if timeout is None else timeout)
 

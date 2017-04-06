@@ -1,4 +1,3 @@
-
 ################################################################################
 #
 #  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
@@ -22,575 +21,21 @@
 #
 ################################################################################
 
-from framework.data_model import *
-import framework.value_types as fvt
-from framework.value_types import VT
-import framework.global_resources as gr
-
-from libs.external_modules import *
-
-import traceback
-import datetime
+import inspect
+import string
+import sys
 import six
 
-################################
-# ModelWalker Helper Functions #
-################################
-
-GENERIC_ARGS = {
-    'init': ('make the model walker ignore all the steps until the provided one', 1, int),
-    'max_steps': ('maximum number of steps (-1 means until the end)', -1, int),
-    'runs_per_node': ('maximum number of test cases for a single node (-1 means until the end)', -1, int),
-    'clone_node': ('if True the dmaker will always return a copy ' \
-                   'of the node. (for stateless diruptors dealing with ' \
-                   'big data it can be usefull to it to False)', True, bool)
-}
-
-def modelwalker_inputs_handling_helper(dmaker, user_generic_input):
-    assert(dmaker.runs_per_node > 0 or dmaker.runs_per_node == -1)
-
-    if dmaker.runs_per_node == -1:
-        dmaker.max_runs_per_node = -1
-        dmaker.min_runs_per_node = -1
-    else:
-        dmaker.max_runs_per_node = dmaker.runs_per_node + 3
-        dmaker.min_runs_per_node = max(dmaker.runs_per_node - 2, 1)
-
-
-#####################
-# Data Model Helper #
-#####################
-
-class MH(object):
-    '''Define constants and generator templates for data
-    model description.
-    '''
-
-    #################
-    ### Node Type ###
-    #################
-
-    NonTerminal = 1
-    Generator = 2
-    Leaf = 3
-    Regex = 5
-
-    RawNode = 4  # if a Node() is provided
-
-    ##################################
-    ### Non-Terminal Node Specific ###
-    ##################################
-
-    # shape_type & section_type attribute
-    Ordered = '>'
-    Random = '=..'
-    FullyRandom = '=.'
-    Pick = '=+'
-
-    # duplicate_mode attribute
-    Copy = 'u'
-    ZeroCopy = 's'
-
-
-    ##############################
-    ### Regex Parser Specific ####
-    ##############################
-
-    class Charset:
-        ASCII = 1
-        ASCII_EXT = 2
-        UNICODE = 3
-
-    ##########################
-    ### Node Customization ###
-    ##########################
-
-    class Custo:
-        # NonTerminal node custo
-        class NTerm:
-            MutableClone = NonTermCusto.MutableClone
-            FrozenCopy = NonTermCusto.FrozenCopy
-            CollapsePadding = NonTermCusto.CollapsePadding
-
-        # Generator node (leaf) custo
-        class Gen:
-            ForwardConfChange = GenFuncCusto.ForwardConfChange
-            CloneExtNodeArgs = GenFuncCusto.CloneExtNodeArgs
-            ResetOnUnfreeze = GenFuncCusto.ResetOnUnfreeze
-            TriggerLast = GenFuncCusto.TriggerLast
-
-        # Function node (leaf) custo
-        class Func:
-            FrozenArgs = FuncCusto.FrozenArgs
-            CloneExtNodeArgs = FuncCusto.CloneExtNodeArgs
-
-
-    #######################
-    ### Node Attributes ###
-    #######################
-
-    class Attr:
-        Freezable = NodeInternals.Freezable
-        Mutable = NodeInternals.Mutable
-        Determinist = NodeInternals.Determinist
-        Finite = NodeInternals.Finite
-        Abs_Postpone = NodeInternals.Abs_Postpone
-
-        Separator = NodeInternals.Separator
-
-        LOCKED = NodeInternals.LOCKED
-        DEBUG = NodeInternals.DEBUG
-
-    ###########################
-    ### Generator Templates ###
-    ###########################
-
-    @staticmethod
-    def LEN(vt=fvt.INT_str, base_len=0,
-            set_attrs=[], clear_attrs=[], after_encoding=True, freezable=False):
-        '''
-        Return a *generator* that returns the length of a node parameter.
-
-        Args:
-          vt (type): value type used for node generation (refer to :mod:`framework.value_types`).
-          base_len (int): this base length will be added to the computed length.
-          set_attrs (list): attributes that will be set on the generated node.
-          clear_attrs (list): attributes that will be cleared on the generated node.
-          after_encoding (bool): if False compute the length before any encoding. Can be
-            set to False only if node arguments support encoding.
-          freezable (bool): If ``False`` make the generator unfreezable in order to always provide
-            the right value. (Note that tTYPE will still be able to corrupt the generator.)
-        '''
-        class Length(object):
-            unfreezable = not freezable
-
-            def __init__(self, vt, set_attrs, clear_attrs):
-                self.vt = vt
-                self.set_attrs = set_attrs
-                self.clear_attrs = clear_attrs
-
-            def __call__(self, node):
-                blob = node.to_bytes() if after_encoding else node.get_raw_value()
-                n = Node('cts', value_type=self.vt(values=[len(blob)+base_len], force_mode=True))
-                n.set_semantics(NodeSemantics(['len']))
-                MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
-                return n
-
-        vt = MH._validate_int_vt(vt)
-        return Length(vt, set_attrs, clear_attrs)
-
-    @staticmethod
-    def QTY(node_name, vt=fvt.INT_str,
-            set_attrs=[], clear_attrs=[], freezable=False):
-        '''Return a *generator* that returns the quantity of child node instances (referenced
-        by name) of the node parameter provided to the *generator*.
-
-        Args:
-          vt (type): value type used for node generation (refer to :mod:`framework.value_types`)
-          node_name (str): name of the child node whose instance amount will be returned
-            by the generator
-          set_attrs (list): attributes that will be set on the generated node.
-          clear_attrs (list): attributes that will be cleared on the generated node.
-          freezable (bool): If ``False`` make the generator unfreezable in order to always provide
-            the right value. (Note that tTYPE will still be able to corrupt the generator.)
-        '''
-        class Qty(object):
-            unfreezable = not freezable
-
-            def __init__(self, node_name, vt, set_attrs, clear_attrs):
-                self.node_name = node_name
-                self.vt = vt
-                self.set_attrs = set_attrs
-                self.clear_attrs = clear_attrs
-
-            def __call__(self, node):
-                nb = node.cc.get_drawn_node_qty(self.node_name)
-                n = Node('cts', value_type=self.vt(values=[nb], force_mode=True))
-                n.set_semantics(NodeSemantics(['qty']))
-                MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
-                return n
-
-        vt = MH._validate_int_vt(vt)
-        return Qty(node_name, vt, set_attrs, clear_attrs)
-
-    @staticmethod
-    def TIMESTAMP(time_format="%H%M%S", utc=False,
-                  set_attrs=[], clear_attrs=[]):
-        '''
-        Return a *generator* that returns the current time (in a String node).
-
-        Args:
-          time_format (str): time format to be used by the generator.
-          set_attrs (list): attributes that will be set on the generated node.
-          clear_attrs (list): attributes that will be cleared on the generated node.
-        '''
-        def timestamp(time_format, utc, set_attrs, clear_attrs):
-            if utc:
-                now = datetime.datetime.utcnow()
-            else:
-                now = datetime.datetime.now()
-            ts = now.strftime(time_format)
-            n = Node('cts', value_type=fvt.String(values=[ts], size=len(ts)))
-            n.set_semantics(NodeSemantics(['timestamp']))
-            MH._handle_attrs(n, set_attrs, clear_attrs)
-            return n
-        
-        return functools.partial(timestamp, time_format, utc, set_attrs, clear_attrs)
-
-    @staticmethod
-    def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=True,
-            set_attrs=[], clear_attrs=[], after_encoding=True, freezable=False):
-        '''Return a *generator* that returns the CRC (in the chosen type) of
-        all the node parameters. (Default CRC is PKZIP CRC32)
-
-        Args:
-          vt (type): value type used for node generation (refer to :mod:`framework.value_types`)
-          poly (int): CRC polynom
-          init_crc (int): initial value used to start the CRC calculation.
-          xor_out (int): final value to XOR with the calculated CRC value.
-          rev (bool): bit reversed algorithm when `True`.
-          set_attrs (list): attributes that will be set on the generated node.
-          clear_attrs (list): attributes that will be cleared on the generated node.
-          after_encoding (bool): if False compute the CRC before any encoding. Can be
-            set to False only if node arguments support encoding.
-          freezable (bool): if ``False`` make the generator unfreezable in order to always provide
-            the right value. (Note that tTYPE will still be able to corrupt the generator.)
-        '''
-        class Crc(object):
-            unfreezable = not freezable
-
-            def __init__(self, vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs):
-                self.vt = vt
-                self.poly = poly
-                self.init_crc = init_crc
-                self.xor_out = xor_out
-                self.rev = rev
-                self.set_attrs = set_attrs
-                self.clear_attrs = clear_attrs
-
-            def __call__(self, nodes):
-                crc_func = crcmod.mkCrcFun(self.poly, initCrc=self.init_crc,
-                                           xorOut=self.xor_out, rev=self.rev)
-                if isinstance(nodes, Node):
-                    s = nodes.to_bytes() if after_encoding else nodes.get_raw_value()
-                else:
-                    if issubclass(nodes.__class__, NodeAbstraction):
-                        nodes = nodes.get_concrete_nodes()
-                    elif not isinstance(nodes, (tuple, list)):
-                        raise TypeError("Contents of 'nodes' parameter is incorrect!")
-                    s = b''
-                    for n in nodes:
-                        blob = n.to_bytes() if after_encoding else n.get_raw_value()
-                        s += blob
-
-                result = crc_func(s)
-
-                n = Node('cts', value_type=self.vt(values=[result], force_mode=True))
-                n.set_semantics(NodeSemantics(['crc']))
-                MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
-                return n
-
-        if not crcmod_module:
-            raise NotImplementedError('the CRC template has been disabled because python-crcmod module is not installed!')
-
-        vt = MH._validate_int_vt(vt)
-        return Crc(vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs)
-
-
-    @staticmethod
-    def WRAP(func, vt=fvt.String,
-             set_attrs=[], clear_attrs=[], after_encoding=True, freezable=False):
-        '''Return a *generator* that returns the result (in the chosen type)
-        of the provided function applied on the concatenation of all
-        the node parameters.
-
-        Args:
-          func (function): function applied on the concatenation
-          vt (type): value type used for node generation (refer to :mod:`framework.value_types`)
-          set_attrs (list): attributes that will be set on the generated node.
-          clear_attrs (list): attributes that will be cleared on the generated node.
-          after_encoding (bool): if False, execute `func` on node arguments before any encoding.
-            Can be set to False only if node arguments support encoding.
-          freezable (bool): If ``False`` make the generator unfreezable in order to always provide
-            the right value. (Note that tTYPE will still be able to corrupt the generator.)
-        '''
-        class WrapFunc(object):
-            unfreezable = not freezable
-
-            def __init__(self, vt, func, set_attrs, clear_attrs):
-                self.vt = vt
-                self.func = func
-                self.set_attrs = set_attrs
-                self.clear_attrs = clear_attrs
-
-            def __call__(self, nodes):
-                if isinstance(nodes, Node):
-                    s = nodes.to_bytes() if after_encoding else nodes.get_raw_value()
-                else:
-                    if issubclass(nodes.__class__, NodeAbstraction):
-                        nodes = nodes.get_concrete_nodes()
-                    elif not isinstance(nodes, (tuple, list)):
-                        raise TypeError("Contents of 'nodes' parameter is incorrect!")
-                    s = b''
-                    for n in nodes:
-                        blob = n.to_bytes() if after_encoding else n.get_raw_value()
-                        s += blob
-
-                result = self.func(s)
-
-                if issubclass(self.vt, fvt.String):
-                    result = convert_to_internal_repr(result)
-                else:
-                    assert isinstance(result, int)
-
-                if issubclass(vt, fvt.INT):
-                    vt_obj = self.vt(values=[result], force_mode=True)
-                else:
-                    vt_obj = self.vt(values=[result])
-                n = Node('cts', value_type=vt_obj)
-                MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
-                return n
-
-        vt = MH._validate_vt(vt)
-        return WrapFunc(vt, func, set_attrs, clear_attrs)
-
-
-    @staticmethod
-    def CYCLE(vals, depth=1, vt=fvt.String,
-              set_attrs=[], clear_attrs=[]):
-        '''Return a *generator* that iterates other the provided value list
-        and returns at each step a `vt` node corresponding to the
-        current value.
-
-        Args:
-          vals (list): the value list to iterate on.
-          depth (int): depth of our nth-ancestor used as a reference to iterate. By default,
-            it is the parent node. Thus, in this case, depending on the drawn quantity
-            of parent nodes, the position within the grand-parent determines the index
-            of the value to use in the provided list, modulo the quantity.
-          vt (type): value type used for node generation (refer to :mod:`framework.value_types`).
-          set_attrs (list): attributes that will be set on the generated node.
-          clear_attrs (list): attributes that will be cleared on the generated node.
-        '''
-        class Cycle(object):
-            provide_helpers = True
-            
-            def __init__(self, vals, depth, vt, set_attrs, clear_attrs):
-                self.vals = vals
-                self.vals_sz = len(vals)
-                self.vt = vt
-                self.depth = depth
-                self.set_attrs = set_attrs
-                self.clear_attrs = clear_attrs
-
-            def __call__(self, helper):
-                info = helper.graph_info
-                # print('INFO: ', info)
-                try:
-                    clone_info, name = info[self.depth]
-                    idx, total = clone_info
-                except:
-                    idx = 0
-                idx = idx % self.vals_sz
-                if issubclass(self.vt, fvt.INT):
-                    vtype = self.vt(values=[self.vals[idx]])
-                elif issubclass(self.vt, fvt.String):
-                    vtype = self.vt(values=[self.vals[idx]])
-                else:
-                    raise NotImplementedError('Value type not supported')
-
-                n = Node('cts', value_type=vtype)
-                MH._handle_attrs(n, set_attrs, clear_attrs)
-                return n
-
-        assert(not issubclass(vt, fvt.BitField))
-        return Cycle(vals, depth, vt, set_attrs, clear_attrs)
-
-
-    @staticmethod
-    def OFFSET(use_current_position=True, depth=1, vt=fvt.INT_str,
-               set_attrs=[], clear_attrs=[], after_encoding=True, freezable=False):
-        '''Return a *generator* that computes the offset of a child node
-        within its parent node.
-
-        If `use_current_position` is `True`, the child node is
-        selected automatically, based on our current index within our
-        own parent node (or the nth-ancestor, depending on the
-        parameter `depth`). Otherwise, the child node has to be
-        provided in the node parameters just before its parent node.
-
-        Besides, if there are N node parameters, the first N-1 (or N-2
-        if `use_current_position` is False) nodes are used for adding
-        a fixed amount (the length of their concatenated values) to
-        the offset (determined thanks to the node in the last position
-        of the node parameters).
-
-        The generator returns the result wrapped in a `vt` node.
-
-        Args:
-          use_current_position (bool): automate the computation of the child node position
-          depth (int): depth of our nth-ancestor used as a reference to compute automatically
-            the targeted child node position. Only relevant if `use_current_position` is True.
-          vt (type): value type used for node generation (refer to :mod:`framework.value_types`).
-          set_attrs (list): attributes that will be set on the generated node.
-          clear_attrs (list): attributes that will be cleared on the generated node.
-          after_encoding (bool): if False compute the fixed amount part of the offset before
-            any encoding. Can be set to False only if node arguments support encoding.
-          freezable (bool): If ``False`` make the generator unfreezable in order to always provide
-            the right value. (Note that tTYPE will still be able to corrupt the generator.)
-        '''
-        class Offset(object):
-            provide_helpers = True
-            unfreezable = not freezable
-            
-            def __init__(self, use_current_position, depth, vt, set_attrs, clear_attrs):
-                self.vt = vt
-                self.use_current_position = use_current_position
-                self.depth = depth
-                self.set_attrs = set_attrs
-                self.clear_attrs = clear_attrs
-
-            def __call__(self, nodes, helper):
-                if self.use_current_position:
-                    info = helper.graph_info
-                    try:
-                        clone_info, name = info[self.depth]
-                        idx, total = clone_info
-                    except:
-                        idx = 0
-
-                if isinstance(nodes, Node):
-                    assert(self.use_current_position)
-                    base = 0
-                    off = nodes.get_subnode_off(idx)
-                else:
-                    if issubclass(nodes.__class__, NodeAbstraction):
-                        nodes = nodes.get_concrete_nodes()
-                    elif not isinstance(nodes, (tuple, list)):
-                        raise TypeError("Contents of 'nodes' parameter is incorrect!")
-
-                    if not self.use_current_position:
-                        child = nodes[-2]
-                        parent = nodes[-1]
-                        parent.get_value()
-                        idx = parent.get_subnode_idx(child)
-
-                    s = b''
-                    end = -1 if self.use_current_position else -2
-                    for n in nodes[:end]:
-                        blob = n.to_bytes() if after_encoding else n.get_raw_value()
-                        s += blob
-                    base = len(s)
-                    off = nodes[-1].get_subnode_off(idx)
-
-                n = Node('cts_off', value_type=self.vt(values=[base+off], force_mode=True))
-                MH._handle_attrs(n, set_attrs, clear_attrs)
-                return n
-
-        vt = MH._validate_int_vt(vt)
-        return Offset(use_current_position, depth, vt, set_attrs, clear_attrs)
-
-
-    @staticmethod
-    def COPY_VALUE(path, depth=None, vt=None,
-                   set_attrs=[], clear_attrs=[], after_encoding=True):
-        '''Return a *generator* that retrieves the value of another node, and
-        then return a `vt` node with this value. The other node is
-        selected:
-
-        - either directly by following the provided relative `path` from
-          the given generator-parameter node.
-
-        - or indirectly (if `depth` is provided) where a *base* node is
-          first selected automatically, based on our current index
-          within our own parent node (or the nth-ancestor, depending
-          on the parameter `depth`), and then the targeted node is selected
-          by following the provided relative `path` from the *base* node.
-
-        Args:
-          path (str): relative path to the node whose value will be picked.
-          depth (int): depth of our nth-ancestor used as a reference to compute automatically
-            the targeted base node position.
-          vt (type): value type used for node generation (refer to :mod:`framework.value_types`).
-          set_attrs (list): attributes that will be set on the generated node.
-          clear_attrs (list): attributes that will be cleared on the generated node.
-          after_encoding (bool): if False, copy the raw value, otherwise the encoded one. Can be
-            set to False only if node arguments support encoding.
-        '''
-        class CopyValue(object):
-            provide_helpers = True
-            
-            def __init__(self, path, depth, vt, set_attrs, clear_attrs):
-                self.vt = vt
-                self.path = path
-                self.depth = depth
-                self.set_attrs = set_attrs
-                self.clear_attrs = clear_attrs
-
-            def __call__(self, node, helper):
-                if self.depth is not None:
-                    info = helper.graph_info
-                    # print('INFO: ', info)
-                    try:
-                        clone_info, name = info[self.depth]
-                        idx, total = clone_info
-                    except:
-                        # print('\n*** WARNING[Pick Generator]: incorrect depth ({:d})!\n' \
-                        #       '  (Normal behavior if used during absorption.)'.format(self.depth))
-                        idx = 0
-                    base_node = node.get_subnode(idx)
-                else:
-                    base_node = node
-
-                tg_node = base_node[self.path]
-
-                if tg_node.is_nonterm():
-                    n = Node('cts', base_node=tg_node, ignore_frozen_state=False)
-                else:
-                    blob = tg_node.to_bytes() if after_encoding else tg_node.get_raw_value()
-
-                    if self.vt is None:
-                        assert(tg_node.is_typed_value() and not tg_node.is_typed_value(subkind=fvt.BitField))
-                        self.vt = tg_node.get_current_subkind()
-
-                    if issubclass(self.vt, fvt.INT):
-                        vtype = self.vt(values=[tg_node.get_raw_value()])
-                    elif issubclass(self.vt, fvt.String):
-                        vtype = self.vt(values=[blob])
-                    else:
-                        raise NotImplementedError('Value type not supported')
-                    n = Node('cts', value_type=vtype)
-
-                n.set_semantics(NodeSemantics(['clone']))
-                MH._handle_attrs(n, set_attrs, clear_attrs)
-                return n
-
-
-        assert(vt is None or not issubclass(vt, fvt.BitField))
-        return CopyValue(path, depth, vt, set_attrs, clear_attrs)
-
-
-    @staticmethod
-    def _validate_int_vt(vt):
-        if not issubclass(vt, fvt.INT):
-            raise DataModelDefinitionError("The value type requested is not supported! (expect a subclass of INT)")
-        return vt
-
-    @staticmethod
-    def _validate_vt(vt):
-        if not issubclass(vt, fvt.INT) and not issubclass(vt, fvt.String):
-            raise DataModelDefinitionError("The value type requested is not supported!")
-        return vt
-
-    @staticmethod
-    def _handle_attrs(n, set_attrs, clear_attrs):
-        for sa in set_attrs:
-            n.set_attr(sa)
-        for ca in clear_attrs:
-            n.clear_attr(ca)
-
-
-class ModelHelper(object):
+from framework.dmhelpers.generic import MH
+from framework.error_handling import DataModelDefinitionError, CharsetError, \
+    InitialStateNotFoundError, QuantificationError, StructureError, InconvertibilityError, \
+    EscapeError, InvalidRangeError, EmptyAlphabetError
+from framework.node import Node, NodeInternals_Empty, GenFuncCusto, NonTermCusto, FuncCusto, \
+    NodeSemantics, SyncScope, SyncQtyFromObj, SyncSizeObj, NodeCondition, SyncExistenceObj, Env
+
+import framework.value_types as fvt
+
+class NodeBuilder(object):
 
     HIGH_PRIO = 1
     MEDIUM_PRIO = 2
@@ -610,7 +55,7 @@ class ModelHelper(object):
         # Typed-node description keys
         'specific_fuzzy_vals',
         # Import description keys
-        'import_from', 'data_id',        
+        'import_from', 'data_id',
         # node properties description keys
         'determinist', 'random', 'finite', 'infinite', 'mutable',
         'clear_attrs', 'set_attrs',
@@ -659,7 +104,7 @@ class ModelHelper(object):
         self.sorted_todo = {}
         self.node_dico = {}
         self.empty_node = Node('EMPTY')
-        
+
         n = self._create_graph_from_desc(desc, None)
 
         if self._add_env_to_the_node:
@@ -746,10 +191,10 @@ class ModelHelper(object):
 
         exp = desc.get('import_from', None)
         if exp is not None:
-            assert self.dm is not None, "ModelHelper should be initialized with the current data model!"
+            assert self.dm is not None, "NodeBuilder should be initialized with the current data model!"
             data_id = desc.get('data_id', None)
             assert data_id is not None, "Missing field: 'data_id' (to be used with 'import_from' field)"
-            nd = self.dm.get_external_node(dm_name=exp, data_id=data_id, name=name)
+            nd = self.dm.get_external_atom(dm_name=exp, data_id=data_id, name=name)
             assert nd is not None, "The requested data ID '{:s}' does not exist!".format(data_id)
             self.node_dico[(name, ident)] = nd
             return nd
@@ -822,13 +267,27 @@ class ModelHelper(object):
             n.set_generator_func(contents, func_arg=other_args,
                                  provide_helpers=provide_helpers, conf=conf)
 
-            if hasattr(contents, 'unfreezable') and contents.unfreezable:
-                n.clear_attr(MH.Attr.Freezable, conf=conf)
+            if hasattr(contents, 'unfreezable'):
+                if contents.unfreezable:
+                    n.clear_attr(MH.Attr.Freezable, conf=conf)
+                else:
+                    n.set_attr(MH.Attr.Freezable, conf=conf)
+
+            if hasattr(contents, 'deterministic'):
+                if contents.deterministic:
+                    n.set_attr(MH.Attr.Determinist, conf=conf)
+                else:
+                    n.clear_attr(MH.Attr.Determinist, conf=conf)
 
             if node_args is not None:
                 # node_args interpretation is postponed after all nodes has been created
-                self._register_todo(n, self._complete_generator, args=(node_args, conf), unpack_args=True,
-                                    prio=self.HIGH_PRIO)
+                if isinstance(node_args, dict):
+                    self._register_todo(n, self._complete_generator_from_desc, args=(node_args, conf), unpack_args=True,
+                                        prio=self.HIGH_PRIO)
+
+                else:
+                    self._register_todo(n, self._complete_generator, args=(node_args, conf), unpack_args=True,
+                                        prio=self.HIGH_PRIO)
         else:
             raise ValueError("*** ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
@@ -928,7 +387,7 @@ class ModelHelper(object):
 
 
     def _create_nodes_from_shape(self, shapes, parent_node, shape_type=MH.Ordered, dup_mode=MH.Copy):
-        
+
         def _handle_section(nodes_desc, sh):
             for n in nodes_desc:
                 if isinstance(n, (list,tuple)) and (len(n) == 2 or len(n) == 3):
@@ -993,7 +452,7 @@ class ModelHelper(object):
 
         contents = desc.get('contents')
 
-        if issubclass(contents.__class__, VT):
+        if issubclass(contents.__class__, fvt.VT):
             if hasattr(contents, 'usable') and contents.usable == False:
                 raise ValueError("ERROR: {:s} is not usable! (use a subclass of it)".format(repr(contents)))
             n.set_values(value_type=contents, conf=conf)
@@ -1081,7 +540,7 @@ class ModelHelper(object):
             node.make_determinist(conf=conf)
         param = desc.get('random', None)
         if param is not None:
-            node.make_random(conf=conf)     
+            node.make_random(conf=conf)
         param = desc.get('finite', None)
         if param is not None:
             node.make_finite(conf=conf)
@@ -1261,6 +720,11 @@ class ModelHelper(object):
         internals = node.cc if conf is None else node.c[conf]
         internals.set_generator_func_arg(generator_node_arg=func_args)
 
+    def _complete_generator_from_desc(self, node, args, conf):
+        node_args = self._create_graph_from_desc(args, None)
+        internals = node.cc if conf is None else node.c[conf]
+        internals.set_generator_func_arg(generator_node_arg=node_args)
+
     def _set_env(self, node, args):
         env = Env()
         env.delayed_jobs_enabled = self.delayed_jobs
@@ -1274,12 +738,9 @@ class ModelHelper(object):
         node = self.node_dico[ref]
         if isinstance(node.cc, NodeInternals_Empty):
             raise ValueError("Node ({:s}, {!s}) is Empty!".format(ref[0], ref[1]))
-               
+
         return node
 
-
-
-### Helpers for RegExp-based Node ###
 
 class State(object):
     """
@@ -1327,6 +788,7 @@ class State(object):
         """
         raise NotImplementedError
 
+
 class StateMachine(State):
     """
     Represent states that contain other states.
@@ -1362,13 +824,16 @@ class StateMachine(State):
 
         self._run(context)
 
+
 def register(cls):
     cls.INITIAL = False
     return cls
 
+
 def initial(cls):
     cls.INITIAL = True
     return cls
+
 
 class RegexParser(StateMachine):
 
@@ -1981,214 +1446,3 @@ class RegexParser(StateMachine):
                 non_terminal += [1, [MH.Copy + MH.Ordered] + nodes]
 
         return non_terminal
-
-
-#### Data Model Abstraction
-
-class DataModel(object):
-    ''' The abstraction of a data model.
-    '''
-
-    file_extension = 'bin'
-    name = None
-
-    def __init__(self):
-        self.__dm_hashtable = {}
-        self.__built = False
-        self.__confs = set()
-
-
-    def merge_with(self, data_model):
-        for k, v in data_model.__dm_hashtable.items():
-            if k in self.__dm_hashtable:
-                raise ValueError("the data ID {:s} exists already".format(k))
-            else:
-                self.__dm_hashtable[k] = v
-
-        self.__confs = self.__confs.union(data_model.__confs)
-
-        
-    def pre_build(self):
-        '''
-        This method is called when a data model is loaded.
-        It is executed before build_data_model().
-        To be implemented by the user.
-        '''
-        pass
-
-
-    def build_data_model(self):
-        '''
-        This method is called when a data model is loaded.
-        It is called only the first time the data model is loaded.
-        To be implemented by the user.
-        '''
-        pass
-
-    def load_data_model(self, dm_db):
-        self.pre_build()
-        if not self.__built:
-            self.__dm_db = dm_db
-            self.build_data_model()
-            self.__built = True
-
-    def cleanup(self):
-        pass
-
-
-    def absorb(self, data, idx):
-        '''
-        If your data model is able to absorb raw data, do it here.  This
-        function is called for each files (with the right extension)
-        present in imported_data/<data_model_name>.
-        '''
-        return data
-
-    def get_external_node(self, dm_name, data_id, name=None):
-        dm = self.__dm_db[dm_name]
-        dm.load_data_model(self.__dm_db)
-        try:
-            node = dm.get_data(data_id, name=name)
-        except ValueError:
-            return None
-
-        return node
-
-
-    def show(self):
-        print(colorize(FontStyle.BOLD + '\n-=[ Data Types ]=-\n', rgb=Color.INFO))
-        idx = 0
-        for data_key in self.__dm_hashtable:
-            print(colorize('[%d] ' % idx + data_key, rgb=Color.SUBINFO))
-            idx += 1
-
-    def get_data(self, hash_key, name=None):
-        if hash_key in self.__dm_hashtable:
-            nm = hash_key if name is None else name
-            node = Node(nm, base_node=self.__dm_hashtable[hash_key], ignore_frozen_state=False,
-                        new_env=True)
-            return node
-        else:
-            raise ValueError('Requested data does not exist!')
-
-
-    def data_identifiers(self):
-        hkeys = sorted(self.__dm_hashtable.keys())
-        for k in hkeys:
-            yield k
-
-
-    def get_available_confs(self):
-        return sorted(self.__confs)
-
-    def register(self, *node_or_desc_list):
-        for n in node_or_desc_list:
-            if isinstance(n, Node):
-                self.register_nodes(n)
-            else:
-                self.register_descriptors(n)
-
-
-    def register_nodes(self, *node_list):
-        '''Enable to registers the nodes that will be part of the data
-        model. At least one node should be registered within
-        :func:`DataModel.build_data_model()` to represent the data
-        format. But several nodes can be registered in order, for instance, to
-        represent the various component of a protocol/standard/...
-        '''
-        if not node_list:
-            msg = "\n*** WARNING: nothing to register for " \
-                  "the data model '{nm:s}'!"\
-                  "\n   [probable reason: {fdata:s}/imported_data/{nm:s}/ not " \
-                  "populated with sample files]".format(nm=self.name, fdata=gr.fuddly_data_folder)
-            raise UserWarning(msg)
-
-        for e in node_list:
-            if e is None:
-                continue
-            if e.env is None:
-                env = Env()
-                env.set_data_model(self)
-                e.set_env(env)
-            else:
-                e.env.set_data_model(self)
-
-            self.__dm_hashtable[e.name] = e
-
-            self.__confs = self.__confs.union(e.gather_alt_confs())
-
-
-    def register_descriptors(self, *desc_list):
-        for desc in desc_list:
-            mh = ModelHelper(dm=self)
-            desc_name = 'Unreadable Name'
-            try:
-                desc_name = desc['name']
-                node = mh.create_graph_from_desc(desc)
-            except:
-                print('-'*60)
-                traceback.print_exc(file=sys.stdout)
-                print('-'*60)
-                msg = "*** ERROR: problem encountered with the '{desc:s}' descriptor!".format(desc=desc_name)
-                raise UserWarning(msg)
-
-            self.register_nodes(node)
-
-    def set_new_env(self, node):
-        env = Env()
-        env.set_data_model(self)
-        node.set_env(env)
-
-
-    def import_file_contents(self, extension=None, absorber=None,
-                             subdir=None, path=None, filename=None):
-
-        if absorber is None:
-            absorber = self.absorb
-
-        if extension is None:
-            extension = self.file_extension
-        if path is None:
-            path = self.get_import_directory_path(subdir=subdir)
-
-        r_file = re.compile(".*\." + extension + "$")
-        def is_good_file_by_ext(fname):
-            return bool(r_file.match(fname))
-
-        def is_good_file_by_fname(fname):
-            return filename == fname
-
-        files = []
-        for (dirpath, dirnames, filenames) in os.walk(path):
-            files.extend(filenames)
-            break
-
-        if filename is None:
-            files = list(filter(is_good_file_by_ext, files))
-        else:
-            files = list(filter(is_good_file_by_fname, files))
-        msgs = {}
-        idx = 0
-
-        for name in files:
-            with open(os.path.join(path, name), 'rb') as f:
-                buff = f.read()
-                d_abs = absorber(buff, idx)
-                if d_abs is not None:
-                    msgs[name] = d_abs
-            idx +=1
-
-        return msgs
-
-    def get_import_directory_path(self, subdir=None):
-        if subdir is None:
-            subdir = self.name
-        if subdir is None:
-            path = gr.imported_data_folder
-        else:
-            path = os.path.join(gr.imported_data_folder, subdir)
-
-        if not os.path.exists(path):
-            os.makedirs(path)
-
-        return path
