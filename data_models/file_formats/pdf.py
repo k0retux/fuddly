@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 ################################################################################
 #
 #  Copyright 2014-2016 Eric Lacombe <eric.lacombe@security-labs.org>
