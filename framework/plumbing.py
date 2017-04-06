@@ -55,6 +55,7 @@ from framework.tactics_helpers import *
 from framework.target_helpers import *
 from framework.targets.local import LocalTarget
 from framework.targets.printer import PrinterTarget
+from framework.config import config, config_dot_proxy
 from libs.utils import *
 
 import framework.generic_data_makers
@@ -255,6 +256,8 @@ class FmkPlumbing(object):
         self._task_list = {}
         self._task_list_lock = threading.Lock()
 
+        self.config = config(self)
+
         self.fmkDB = Database()
         ok = self.fmkDB.start()
         if not ok:
@@ -311,8 +314,8 @@ class FmkPlumbing(object):
         self.cleanup_all_dmakers(reset_existing_seed)
         # Warning: fuzz delay is not set to 0 by default in order to have a time frame
         # where SIGINT is accepted from user
-        self.set_fuzz_delay(0.01)
-        self.set_fuzz_burst(1)
+        self.set_fuzz_delay(self.config.default.fuzz.delay)
+        self.set_fuzz_burst(self.config.default.fuzz.burst)
         self._recompute_health_check_timeout(self.tg.feedback_timeout, self.tg.sending_delay)
 
     def _recompute_health_check_timeout(self, base_timeout, sending_delay, do_show=True):
@@ -3396,12 +3399,11 @@ class FmkShell(cmd.Cmd):
     def __init__(self, title, fmk_plumbing, completekey='tab', stdin=None, stdout=None):
         cmd.Cmd.__init__(self, completekey, stdin, stdout)
         self.fz = fmk_plumbing
-        self.prompt = '>> '
         self.intro = colorize(FontStyle.BOLD + "\n-=[ %s ]=- (with Fuddly FmK %s)\n" % (title, fuddly_version), rgb=Color.TITLE)
 
         self.__allowed_cmd = re.compile(
             '^quit$|^show_projects$|^show_data_models$|^load_project|^load_data_model|^set_target|^show_targets$|^launch$' \
-            '|^run_project|^display_color_theme$|^help'
+            '|^run_project|^config|^display_color_theme$|^help'
             )
 
         self.dmaker_name_re = re.compile('([#\-\w]+)(.*)', re.S)
@@ -3409,6 +3411,9 @@ class FmkShell(cmd.Cmd):
         self.input_gen_arg_re = re.compile('<(.*)>(.*)', re.S)
         self.input_spe_arg_re = re.compile('\((.*)\)', re.S)
         self.input_arg_re = re.compile('(.*)=(.*)', re.S)
+
+        self.config = config(self)
+        self.prompt = self.config.prompt + ' '
 
         self.__error = False
         self.__error_msg = ''
@@ -3429,6 +3434,8 @@ class FmkShell(cmd.Cmd):
 
 
     def postcmd(self, stop, line):
+        self.prompt = self.config.prompt + ' '
+
         if self._quit_shell:
             self._quit_shell = False
             msg = colorize(FontStyle.BOLD + "\nReally Quit? [Y/n]", rgb=Color.WARNING)
@@ -3518,6 +3525,150 @@ class FmkShell(cmd.Cmd):
         '''Display the color theme'''
         self.fz.display_color_theme()
 
+        return False
+
+    def complete_config(self, text, line, bgidx, endix, target=None):
+        init = False
+        if target is None:
+            target = self.fz.config
+            init = True
+
+        try:
+            args = line.split()
+            if args[-1] == text:
+                args.pop()
+            if init and len(args) == 1 and args[0] == 'config':
+                comp = (['shell']
+                        + target.parser.options('global')
+                        + target.parser.sections())
+                if text != '':
+                    comp = [i for i in comp if i.startswith(text)]
+                comp = [i.replace('.', ' ') for i in comp if (
+                    i[-4:] != '.doc' and i != 'config_name' and i != 'global')]
+                return comp
+            if len(args) == 1 and isinstance(target, config):
+                comp = (target.parser.options('global')
+                        + target.parser.sections())
+                if text != '':
+                    comp = [i for i in comp if i.startswith(text)]
+                comp = [i.replace('.', ' ') for i in comp if (
+                    i[-4:] != '.doc' and i != 'config_name' and i != 'global')]
+                return comp
+            if len(args) > 1 and args[1] == 'shell':
+                return self.complete_config(
+                        text,
+                        ' '.join(args[1:] + [text]),
+                        0,
+                        0,
+                        self.config)
+            if len(args) > 1 and target.parser.has_section(args[1]):
+                return self.complete_config(
+                        text,
+                        ' '.join(args[1:] + [text]),
+                        0,
+                        0,
+                        getattr(target, args[1]))
+            comp = target.parser.options('global')
+            comp = [i for i in comp if i.startswith(args[-1] + '.')]
+            comp = [i[len(args[-1]) + 1:] for i in comp if (
+                i[-4:] != '.doc' and i != 'config_name' and i != 'global')]
+            if text != '':
+                comp = [i for i in comp if i.startswith(text)]
+            return comp
+        except:
+            return []
+
+    def do_config(self, line, target=None):
+        '''Get and set miscellaneous options
+
+        Usage:
+         - config
+               List all configuration options available.
+         - config [name [subname...]]
+               Get value associated with <name>.
+         - config [name [subname...]] value
+               Set value associated with <name>.
+        '''
+        self.__error = True
+
+        level = self.config.config.indent.level
+        indent = self.config.config.indent.width
+        middle = self.config.config.middle
+
+        if target is None:
+            target = self.fz.config
+
+        args = line.split()
+        if len(args) == 0:
+            print(target.help(None, level, indent, middle))
+            if target == self.fz.config:
+                print(" > 'config shell' for more options")
+            self.__error = False
+            return False
+        elif len(args) == 1:
+            if args[0] == 'shell':
+                self.__error = False
+                return self.do_config('', self.config)
+
+            print(target.help(args[0], level, indent, middle))
+            self.__error = False
+            return False
+        if args[0] == 'shell':
+            self.__error = False
+            return self.do_config(' '.join(args[1:]), self.config)
+
+        section = args[0]
+        try:
+            attr = getattr(target, section)
+        except:
+            self.__error_msg = "'{}' is not a valid config key"
+            self.__error_msg = self.__error_msg.format(section)
+            return False
+
+        if isinstance(attr, config):
+            self.__error = False
+            return self.do_config(' '.join(args[1:]), attr)
+
+        if len(args) == 2:
+            if isinstance(attr, config_dot_proxy):
+                self.__error = False
+                key = '.'.join(args)
+                print(target.help(key, level, indent, middle))
+                self.__error = False
+                return False
+
+            try:
+                setattr(target, args[0], args[1])
+            except AttributeError as e:
+                self.__error_msg = 'config: ' + str(e)
+                return False
+
+            print(target.help(args[0], level, indent, middle))
+            self.__error = False
+            return False
+
+        if isinstance(attr, config_dot_proxy):
+            key = '.'.join(args[:-1])
+            try:
+                attr = getattr(target, key)
+            except:
+                self.__error_msg = (
+                        "'{}' is not a valid config key"
+                        ).format(key)
+                return False
+
+            try:
+                setattr(target, key, args[-1])
+            except AttributeError as e:
+                self.__error_msg = 'config: ' + str(e)
+                return False
+
+            print(target.help(key, level, indent, middle))
+            self.__error = False
+            return False
+
+        self.__error_msg = "'{}' do not have subkeys"
+        self.__error_msg = self.__error_msg.format(args[0])
         return False
 
     def do_load_data_model(self, line):
@@ -4209,6 +4360,9 @@ class FmkShell(cmd.Cmd):
                 False here, hence do_send_loop shall returns False in this case.
             """
 
+            batch_mode = self.config.send_loop.cosmetics.batch_mode
+            prompt_height = self.config.send_loop.cosmetics.prompt_height
+
             # add an attribute to check import's health
             attr = getattr(self, 'do_send_loop_import_error', None)
             if attr is None:
@@ -4269,7 +4423,7 @@ class FmkShell(cmd.Cmd):
             cvvis = curses.tigetstr("cvvis")
 
             def get_size(
-                    cutby=(0, 3), # type: Tuple[int, int]
+                    cutby=(0, prompt_height), # type: Tuple[int, int]
                     refresh=True  # type: bool
                     ):
                 # type: (...) -> Tuple[int, int]
@@ -4416,7 +4570,7 @@ class FmkShell(cmd.Cmd):
                     # no need to duplicate it with unnecessary buffering.
                     #
                     if not force:
-                        pad = b'\n' * (height - nblines + 3)
+                        pad = b'\n' * (height - nblines + prompt_height)
                         stdout.write(cup + payload * 2 + pad)
                     else:
                         stdout.write(cup + payload)
@@ -4447,7 +4601,7 @@ class FmkShell(cmd.Cmd):
             # main loop, similar to do_loop
             with buffer_stdout():
                 cpt = 0
-                batch_mode = (max_loop == -1)
+                batch_mode = (max_loop == -1) and batch_mode
                 while cpt < max_loop or max_loop == -1:
                     buffer_output(batch=batch_mode)
                     cpt += 1
@@ -4461,8 +4615,7 @@ class FmkShell(cmd.Cmd):
                 buffer_output(force=True)
             return True
 
-        # TODO: make cosmetics optional
-        cosmetics = True
+        cosmetics = self.config.send_loop.cosmetics.enabled
         if not cosmetics:
             ret = do_loop()
         else:
