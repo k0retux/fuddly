@@ -4360,8 +4360,8 @@ class FmkShell(cmd.Cmd):
                 False here, hence do_send_loop shall returns False in this case.
             """
 
-            batch_mode = self.config.send_loop.cosmetics.batch_mode
-            prompt_height = self.config.send_loop.cosmetics.prompt_height
+            batch_mode = self.config.send_loop.aligned_options.batch_mode
+            prompt_height = self.config.send_loop.aligned_options.prompt_height
 
             # add an attribute to check import's health
             attr = getattr(self, 'do_send_loop_import_error', None)
@@ -4615,7 +4615,7 @@ class FmkShell(cmd.Cmd):
                 buffer_output(force=True)
             return True
 
-        cosmetics = self.config.send_loop.cosmetics.enabled
+        cosmetics = self.config.send_loop.aligned
         if not cosmetics:
             ret = do_loop()
         else:

@@ -85,16 +85,17 @@ indent.level: 0
                     used to display the helpers.
 
 [send_loop]
-cosmetics.enabled: True
-cosmetics.batch_mode: False
-cosmetics.prompt_height: 3
+aligned: True
+aligned_options.batch_mode: False
+aligned_options.prompt_height: 3
 
 ;;  [send_loop.doc]
 ;;  self: Configuration applicable to the 'send_loop' command.
-;;  cosmetics.enabled: Enable aligned display while sending data payloads.
-;;  cosmetics.batch_mode: Enable fitting multiple payloads onscreen
+;;
+;;  aligned: Enable aligned display while sending data payloads.
+;;  aligned_options.batch_mode: Enable fitting multiple payloads onscreen
                      (when using 'send_loop -1 <generator>').
-;;  cosmetics.prompt_height: Estimation of prompt's height.
+;;  aligned_options.prompt_height: Estimation of prompt's height.
 
 ''')
 
