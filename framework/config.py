@@ -30,6 +30,8 @@ try:
 except:
     import ConfigParser as configparser
 
+reserved = {'config_name', 'parser', 'help', 'write'}
+
 class default:
     def __init__(self):
         self.configs = {}
@@ -174,7 +176,6 @@ class config_dot_proxy(object):
 class config(object):
 
     class __private:
-        reserved = {'config_name', 'parser', 'help', 'write'}
 
         @staticmethod
         def check_type(name, attr, value):
@@ -268,7 +269,7 @@ class config(object):
                         self.parser.add_section(section)
 
                     for option in flat_parser.options(section):
-                        if option in private.reserved:
+                        if option in reserved:
                             continue
                         subvalue = flat_parser.get(section, option)
                         self.parser.set(section, option, subvalue)
@@ -286,7 +287,7 @@ class config(object):
                     continue
 
                 for option in attr_parser.options(section):
-                    if option in private.reserved:
+                    if option in reserved:
                         continue
 
                     self.parser.remove_option(section, option)
@@ -345,7 +346,7 @@ class config(object):
             for section in self.parser.sections():
                 if section == 'global':
                     for option in self.parser.options(section):
-                        if option in private.reserved:
+                        if option in reserved:
                             continue
 
                         msg += get_help_attr(
@@ -403,7 +404,7 @@ class config(object):
             get_help_attr = private.__get_help_attr.__func__
             get_help_format = private.__get_help_format
 
-            if name in private.reserved:
+            if name in reserved:
                 return get_help_format(
                         name + ': <reserved>',
                         '(implementation details, reserved)',
