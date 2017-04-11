@@ -99,6 +99,46 @@ aligned_options.prompt_height: 3
 
 ''')
 
+def config_getattribute(that, name):
+    private = object.__getattribute__(that, '_config__private')
+    if name == 'help':
+        def get_help(name=None, level=0, indent=4, middle=40):
+            msg = private.get_help.__func__(
+                    that,
+                    name,
+                    level,
+                    indent,
+                    middle
+                    )
+            try:
+                return str(msg)
+            except:
+                return msg
+        return get_help
+
+    if name == 'write':
+        def write(stream=sys.stdout):
+            return private.write.__func__(that, stream)
+        return write
+
+    try:
+        attr = object.__getattribute__(that, name)
+        try:
+            attr = private.check_type(name, attr, attr)
+        except:
+            pass
+    except:
+        attr = None
+
+    if attr is None or '__' in name[:2] or '_config__' in name[:9]:
+        msg = "'config' instance for '{}' has no key nor section '{}'"
+        if not name == 'config_name':
+            raise AttributeError(msg.format(that.config_name, name))
+        else:
+            raise AttributeError(msg.format('error', name))
+
+    return attr
+
 class config_dot_proxy(object):
     def __init__(self, config, prefix):
         object.__setattr__(self, 'parent', config)
@@ -117,52 +157,10 @@ class config_dot_proxy(object):
         prefix = object.__getattribute__(self, 'prefix')
         return setattr(parent, prefix + '.' + name, value)
 
-
-
 class config(object):
 
     class __private:
         reserved = {'config_name', 'parser', 'help', 'write'}
-
-        def config_getattribute(self, name):
-            private = object.__getattribute__(self, '_config__private')
-            if name == 'help':
-                def get_help(name=None, level=0, indent=4, middle=40):
-                    msg = private.get_help.__func__(
-                            self,
-                            name,
-                            level,
-                            indent,
-                            middle
-                            )
-                    try:
-                        return str(msg)
-                    except:
-                        return msg
-                return get_help
-
-            if name == 'write':
-                def write(stream=sys.stdout):
-                    return private.write.__func__(self, stream)
-                return write
-
-            try:
-                attr = object.__getattribute__(self, name)
-                try:
-                    attr = private.check_type(name, attr, attr)
-                except:
-                    pass
-            except:
-                attr = None
-
-            if attr is None or '__' in name[:2] or '_config__' in name[:9]:
-                msg = "'config' instance for '{}' has no key nor section '{}'"
-                if not name == 'config_name':
-                    raise AttributeError(msg.format(self.config_name, name))
-                else:
-                    raise AttributeError(msg.format('error', name))
-
-            return attr
 
         @staticmethod
         def check_type(name, attr, value):
@@ -598,7 +596,7 @@ class config(object):
         except:
             return object.__getattribute__(self, name)
 
-        config_get = private.config_getattribute.__func__
+        config_get = config_getattribute
         return config_get(self, name)
 
     def __setattr__(self, name, value):
