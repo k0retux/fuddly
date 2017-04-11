@@ -57,10 +57,10 @@ class default:
         return self.__unindent.sub('', multiline)
 
     def add(self, name, doc):
-        try:
-            doc = unicode(doc)
-        except:
+        if sys.version_info[0] > 2:
             pass
+        else:
+            doc = unicode(doc)
 
         self.configs[name] = self._unindent(doc)
 

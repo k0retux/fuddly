@@ -4419,8 +4419,13 @@ class FmkShell(cmd.Cmd):
             # (if we reached this point, imports shall succeed)
             import curses, io, contextlib, os, termios
 
-            #: io.BytesIO: the buffer that will replace the standard output
-            stream = io.BytesIO()
+            if sys.version_info[0] > 2:
+                #: io.TextIOWrapper: the buffer that will replace the standard output
+                stream = io.TextIOWrapper(io.BytesIO(), sys.stdout.encoding)
+            else:
+                #: io.BytesIO: the buffer that will replace the standard output
+                stream = io.BytesIO()
+
             stdout = sys.stdout #: (backuped value of the standard output)
 
             #: int: count how much payloads have been send since the last flush
@@ -4525,7 +4530,12 @@ class FmkShell(cmd.Cmd):
                 """
 
                 nblines = 0
-                payload = stream.getvalue()
+                if sys.version_info[0] > 2:
+                    stream.seek(0)
+                    payload = stream.buffer.read()
+                else:
+                    payload = stream.getvalue()
+
                 lines = payload.splitlines()
                 for line in lines:
                     length = len(line)
@@ -4543,7 +4553,10 @@ class FmkShell(cmd.Cmd):
                 flags = termios.tcgetattr(fd)
                 flags[3] = flags[3] & ~termios.ECHO
                 termios.tcsetattr(fd, termios.TCSADRAIN, flags)
-                stdout.write(civis)
+                if sys.version_info[0] > 2:
+                    stdout.buffer.write(civis)
+                else:
+                    stdout.write(civis)
 
             # (hide the cursor before moving it)
             buffer_noecho()
@@ -4559,7 +4572,10 @@ class FmkShell(cmd.Cmd):
                 flags = termios.tcgetattr(fd)
                 flags[3] = flags[3] | termios.ECHO
                 termios.tcsetattr(fd, termios.TCSADRAIN, flags)
-                stdout.write(cvvis + ed)
+                if sys.version_info[0] > 2:
+                    stdout.buffer.write(cvvis + ed)
+                else:
+                    stdout.write(cvvis + ed)
 
             def buffer_output(
                     batch=False, # type: bool
@@ -4596,7 +4612,12 @@ class FmkShell(cmd.Cmd):
                         ):
 
                     # use `el` term capabilitie to wipe endlines as we display
-                    payload = stream.getvalue().replace(b'\n', el + b'\n')
+                    if sys.version_info[0] > 2:
+                        stream.seek(0)
+                        payload = stream.buffer.read()
+                    else:
+                        payload = stream.getvalue()
+                    payload = payload.replace(b'\n', el + b'\n')
 
                     # if not force (continuous display), we erase the first
                     # payload (to have a log entry without disturbing scrolling
@@ -4607,12 +4628,21 @@ class FmkShell(cmd.Cmd):
                     #
                     if not force:
                         pad = b'\n' * (height - nblines + prompt_height)
-                        stdout.write(cup + payload * 2 + pad)
+                        padded_payload = cup + payload * 2 + pad
                     else:
-                        stdout.write(cup + payload)
+                        padded_payload = cup + payload
+
+                    if sys.version_info[0] > 2:
+                        stdout.buffer.write(padded_payload)
+                    else:
+                        stdout.write(padded_payload)
 
                     # empty the buffer, reset the payload counter
-                    stream.__init__()
+                    if sys.version_info[0] > 2:
+                        stream.__init__(io.BytesIO())
+                    else:
+                        stream.__init__()
+
                     stream.countp = 0
 
                 # if it is the last payload, reenable echo-ing.
