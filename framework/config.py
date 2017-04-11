@@ -99,6 +99,20 @@ aligned_options.prompt_height: 3
 
 ''')
 
+
+def config_write(that, stream=sys.stdout):
+
+    that_dict = object.__getattribute__(that, '__dict__')
+    subconfigs = []
+    for item in that_dict.items():
+        if isinstance(item, config):
+            subconfigs.append(item)
+
+    for name, subconfig in subconfigs:
+        setattr(that, name, subconfig)
+
+    return that.parser.write(stream)
+
 def config_getattribute(that, name):
     private = object.__getattribute__(that, '_config__private')
     if name == 'help':
@@ -117,9 +131,9 @@ def config_getattribute(that, name):
         return get_help
 
     if name == 'write':
-        def write(stream=sys.stdout):
-            return private.write.__func__(that, stream)
-        return write
+        def write_proxy(stream=sys.stdout):
+            return config_write(that, stream)
+        return write_proxy
 
     try:
         attr = object.__getattribute__(that, name)
@@ -319,19 +333,6 @@ class config(object):
                                 value)
 
             return parser
-
-        def write(self, stream=sys.stdout):
-
-            self_dict = object.__getattribute__(self, '__dict__')
-            subconfigs = []
-            for item in self_dict.items():
-                if isinstance(item, config):
-                    subconfigs.append(item)
-
-            for name, subconfig in subconfigs:
-                setattr(self, name, subconfig)
-
-            return self.parser.write(stream)
 
         def get_help(self, name=None, level=0, indent=4, middle=40):
             private = getattr(config, '_config__private')
