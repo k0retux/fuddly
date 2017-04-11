@@ -207,6 +207,38 @@ def sectionize(that):
 
     return parser
 
+def get_help(that, name=None, level=0, indent=4, middle=40):
+    private = getattr(config, '_config__private')
+    get_help_attr = private._private__get_help_attr.__func__
+    if not name is None:
+        return get_help_attr(that, name, level, indent, middle)
+
+    msg = ''
+    resection = re.compile(r'^[^.]*$')
+    for section in that.parser.sections():
+        if section == 'global':
+            for option in that.parser.options(section):
+                if option in reserved:
+                    continue
+
+                msg += get_help_attr(
+                        that,
+                        option,
+                        level,
+                        indent,
+                        middle)
+        elif resection.match(section):
+            msg += get_help_attr(
+                    that,
+                    section,
+                    level,
+                    indent,
+                    middle)
+        else:
+            pass
+
+    return msg
+
 def config_setattr(that, name, value):
     private = object.__getattribute__(that, '_config__private')
 
@@ -274,8 +306,8 @@ def config_setattr(that, name, value):
 def config_getattribute(that, name):
     private = object.__getattribute__(that, '_config__private')
     if name == 'help':
-        def get_help(name=None, level=0, indent=4, middle=40):
-            msg = private.get_help.__func__(
+        def get_help_proxy(name=None, level=0, indent=4, middle=40):
+            msg = get_help(
                     that,
                     name,
                     level,
@@ -286,7 +318,7 @@ def config_getattribute(that, name):
                 return str(msg)
             except:
                 return msg
-        return get_help
+        return get_help_proxy
 
     if name == 'write':
         def write_proxy(stream=sys.stdout):
@@ -333,38 +365,6 @@ class config(object):
 
     class __private:
 
-        def get_help(self, name=None, level=0, indent=4, middle=40):
-            private = getattr(config, '_config__private')
-            get_help_attr = private.__get_help_attr.__func__
-            if not name is None:
-                return get_help_attr(self, name, level, indent, middle)
-
-            msg = ''
-            resection = re.compile(r'^[^.]*$')
-            for section in self.parser.sections():
-                if section == 'global':
-                    for option in self.parser.options(section):
-                        if option in reserved:
-                            continue
-
-                        msg += get_help_attr(
-                                self,
-                                option,
-                                level,
-                                indent,
-                                middle)
-                elif resection.match(section):
-                    msg += get_help_attr(
-                            self,
-                            section,
-                            level,
-                            indent,
-                            middle)
-                else:
-                    pass
-
-            return msg
-
         @staticmethod
         def __get_help_format(line, doc, level, indent, middle):
             if doc is None or len(doc) < 1:
@@ -398,7 +398,6 @@ class config(object):
 
         def __get_help_attr(self, name, level=0, indent=4, middle=40):
             private = getattr(config, '_config__private')
-            get_help = private.get_help.__func__
             get_help_attr = private.__get_help_attr.__func__
             get_help_format = private.__get_help_format
 
