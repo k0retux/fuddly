@@ -170,6 +170,107 @@ def config_write(that, stream=sys.stdout):
 
     return that.parser.write(stream)
 
+def sectionize(that):
+    try:
+        name = unicode(that.config_name)
+    except:
+        name = that.config_name
+
+    parser = configparser.SafeConfigParser()
+    resection = re.compile(r'^([^.]*)\.?(.*)')
+    for section in that.parser.sections():
+        match = resection.match(section)
+        if not match:
+            raise RuntimeError(
+                    "unable to match '{}'".format(section)
+                    + ' section name')
+
+        if len(match.group(2)) > 0:
+            target = name + '.' + match.group(2)
+        else:
+            target = name
+
+        if not parser.has_section(target):
+            parser.add_section(target)
+
+        if match.group(1) == 'global':
+            for option in that.parser.options(section):
+                value = that.parser.get(section, option)
+                parser.set(target, option, value)
+        else:
+            for option in that.parser.options(section):
+                value = that.parser.get(section, option)
+                parser.set(
+                        target,
+                        match.group(1) + '.' + option,
+                        value)
+
+    return parser
+
+def config_setattr(that, name, value):
+    private = object.__getattribute__(that, '_config__private')
+
+    try:
+        attr = object.__getattribute__(that, name)
+    except:
+        attr = None
+
+    if not isinstance(value, config):
+        if isinstance(value, config_dot_proxy):
+            raise RuntimeError(
+                    "'{}' (config_dot_proxy)".format(name)
+                    + ' can not be used as value.')
+
+        if not attr is None:
+            value = check_type(name, attr, value)
+
+        if '.' in name:
+            prefixes = name.split('.')
+            for i in range(1, len(prefixes)):
+                prefix = '.'.join(prefixes[:-1 * i])
+                proxy = config_dot_proxy(that, prefix)
+                object.__setattr__(that, prefix, proxy)
+
+        strvalue = str(value)
+        that.parser.set('global', name, strvalue)
+        return object.__setattr__(that, name, value)
+
+    if attr is None:
+        flat_parser = sectionize(value)
+        for section in flat_parser.sections():
+            if not that.parser.has_section(section):
+                that.parser.add_section(section)
+
+            for option in flat_parser.options(section):
+                if option in reserved:
+                    continue
+                subvalue = flat_parser.get(section, option)
+                that.parser.set(section, option, subvalue)
+
+        return object.__setattr__(that, name, value)
+
+    if not isinstance(attr, config):
+        raise AttributeError(
+                "unable to replace key '{}'".format(name)
+                + ' by a section')
+
+    attr_parser = sectionize(attr)
+    for section in attr_parser.sections():
+        if not that.parser.has_section(section):
+            continue
+
+        for option in attr_parser.options(section):
+            if option in reserved:
+                continue
+
+            that.parser.remove_option(section, option)
+
+        if len(that.parser.options(section)) < 1:
+            that.parser.remove_section(section)
+
+    object.__setattr__(that, name, None)
+    return that.__setattr__(name, value)
+
 def config_getattribute(that, name):
     private = object.__getattribute__(that, '_config__private')
     if name == 'help':
@@ -231,107 +332,6 @@ class config_dot_proxy(object):
 class config(object):
 
     class __private:
-
-        def config_setattr(self, name, value):
-            private = object.__getattribute__(self, '_config__private')
-
-            try:
-                attr = object.__getattribute__(self, name)
-            except:
-                attr = None
-
-            if not isinstance(value, config):
-                if isinstance(value, config_dot_proxy):
-                    raise RuntimeError(
-                            "'{}' (config_dot_proxy)".format(name)
-                            + ' can not be used as value.')
-
-                if not attr is None:
-                    value = check_type(name, attr, value)
-
-                if '.' in name:
-                    prefixes = name.split('.')
-                    for i in range(1, len(prefixes)):
-                        prefix = '.'.join(prefixes[:-1 * i])
-                        proxy = config_dot_proxy(self, prefix)
-                        object.__setattr__(self, prefix, proxy)
-
-                strvalue = str(value)
-                self.parser.set('global', name, strvalue)
-                return object.__setattr__(self, name, value)
-
-            if attr is None:
-                flat_parser = private.sectionize.__func__(value)
-                for section in flat_parser.sections():
-                    if not self.parser.has_section(section):
-                        self.parser.add_section(section)
-
-                    for option in flat_parser.options(section):
-                        if option in reserved:
-                            continue
-                        subvalue = flat_parser.get(section, option)
-                        self.parser.set(section, option, subvalue)
-
-                return object.__setattr__(self, name, value)
-
-            if not isinstance(attr, config):
-                raise AttributeError(
-                        "unable to replace key '{}'".format(name)
-                        + ' by a section')
-
-            attr_parser = private.sectionize.__func__(attr)
-            for section in attr_parser.sections():
-                if not self.parser.has_section(section):
-                    continue
-
-                for option in attr_parser.options(section):
-                    if option in reserved:
-                        continue
-
-                    self.parser.remove_option(section, option)
-
-                if len(self.parser.options(section)) < 1:
-                    self.parser.remove_section(section)
-
-            object.__setattr__(self, name, None)
-            return self.__setattr__(name, value)
-
-        def sectionize(self):
-            try:
-                name = unicode(self.config_name)
-            except:
-                name = self.config_name
-
-            parser = configparser.SafeConfigParser()
-            resection = re.compile(r'^([^.]*)\.?(.*)')
-            for section in self.parser.sections():
-                match = resection.match(section)
-                if not match:
-                    raise RuntimeError(
-                            "unable to match '{}'".format(section)
-                            + ' section name')
-
-                if len(match.group(2)) > 0:
-                    target = name + '.' + match.group(2)
-                else:
-                    target = name
-
-                if not parser.has_section(target):
-                    parser.add_section(target)
-
-                if match.group(1) == 'global':
-                    for option in self.parser.options(section):
-                        value = self.parser.get(section, option)
-                        parser.set(target, option, value)
-                else:
-                    for option in self.parser.options(section):
-                        value = self.parser.get(section, option)
-                        parser.set(
-                                target,
-                                match.group(1) + '.' + option,
-                                value)
-
-            return parser
 
         def get_help(self, name=None, level=0, indent=4, middle=40):
             private = getattr(config, '_config__private')
@@ -606,5 +606,5 @@ class config(object):
         except:
             return object.__setattr__(self, name, value)
 
-        config_set = private.config_setattr.__func__
+        config_set = config_setattr
         return config_set(self, name, value)
