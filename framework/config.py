@@ -101,6 +101,61 @@ aligned_options.prompt_height: 3
 
 ''')
 
+def check_type(name, attr, value):
+    original = value
+
+    try:
+        attr = str(attr)
+    except Exception as e:
+        raise AttributeError(
+                "unable to cast key's value "
+                + "'{}' into a string".format(name)
+                + ': ' + str(e))
+
+    try:
+        value = str(value)
+    except Exception as e:
+        raise AttributeError(
+                ("unable to cast '{}' "
+                    + "for key '{}' into a string"
+                ).format(value, name)
+                + ': ' + str(e))
+
+    booleans = [u'True', u'False']
+    if attr in booleans:
+        test = (attr == u'True')
+    else:
+        test = None
+    if not test is None:
+        if value in booleans:
+            return (value == u'True')
+        else:
+            raise AttributeError(
+                    "key '{}' expects a boolean".format(name))
+
+    try:
+        test = int(attr)
+    except:
+        test = None
+    if not test is None:
+        try:
+            return int(value)
+        except:
+            raise AttributeError(
+                    "key '{}' expects an integer".format(name))
+
+    try:
+        test = float(attr)
+    except:
+        test = None
+    if not test is None:
+        try:
+            return float(value)
+        except:
+            raise AttributeError(
+                    "key '{}' expects a float".format(name))
+
+    return original
 
 def config_write(that, stream=sys.stdout):
 
@@ -140,7 +195,7 @@ def config_getattribute(that, name):
     try:
         attr = object.__getattribute__(that, name)
         try:
-            attr = private.check_type(name, attr, attr)
+            attr = check_type(name, attr, attr)
         except:
             pass
     except:
@@ -177,63 +232,6 @@ class config(object):
 
     class __private:
 
-        @staticmethod
-        def check_type(name, attr, value):
-            original = value
-
-            try:
-                attr = str(attr)
-            except Exception as e:
-                raise AttributeError(
-                        "unable to cast key's value "
-                        + "'{}' into a string".format(name)
-                        + ': ' + str(e))
-
-            try:
-                value = str(value)
-            except Exception as e:
-                raise AttributeError(
-                        ("unable to cast '{}' "
-                            + "for key '{}' into a string"
-                        ).format(value, name)
-                        + ': ' + str(e))
-
-            booleans = [u'True', u'False']
-            if attr in booleans:
-                test = (attr == u'True')
-            else:
-                test = None
-            if not test is None:
-                if value in booleans:
-                    return (value == u'True')
-                else:
-                    raise AttributeError(
-                            "key '{}' expects a boolean".format(name))
-
-            try:
-                test = int(attr)
-            except:
-                test = None
-            if not test is None:
-                try:
-                    return int(value)
-                except:
-                    raise AttributeError(
-                            "key '{}' expects an integer".format(name))
-
-            try:
-                test = float(attr)
-            except:
-                test = None
-            if not test is None:
-                try:
-                    return float(value)
-                except:
-                    raise AttributeError(
-                            "key '{}' expects a float".format(name))
-
-            return original
-
         def config_setattr(self, name, value):
             private = object.__getattribute__(self, '_config__private')
 
@@ -249,7 +247,7 @@ class config(object):
                             + ' can not be used as value.')
 
                 if not attr is None:
-                    value = private.check_type(name, attr, value)
+                    value = check_type(name, attr, value)
 
                 if '.' in name:
                     prefixes = name.split('.')
