@@ -55,6 +55,7 @@ from framework.tactics_helpers import *
 from framework.target_helpers import *
 from framework.targets.local import LocalTarget
 from framework.targets.printer import PrinterTarget
+from framework.cosmetics import aligned_stdout, restore_stdout, try_flush
 from framework.config import config, config_dot_proxy
 from libs.utils import *
 
@@ -345,19 +346,7 @@ class FmkPlumbing(object):
         if sys.stdout == sys.__stdout__:
             return
 
-        wrapper = sys.stdout
-        sys.stdout = sys.__stdout__
-
-        try:
-            wrapper.handler(force=True)
-        except:
-            pass
-
-        try:
-            wrapper.restore()
-        except:
-            pass
-
+        restore_stdout()
 
     def _handle_user_code_exception(self, msg='', context=None):
         self._handle_no_stdout_exception()
@@ -4365,7 +4354,16 @@ class FmkShell(cmd.Cmd):
             self.__error_msg = "Syntax Error!"
             return False
 
-        def do_loop():
+        conf = self.config.send_loop.aligned_options
+        kwargs = {
+                    'enabled': self.config.send_loop.aligned,
+                    'page_head': r'^[^=]+====. [^ ]+ .==. [^=]+={9,}.{4}$',
+                    'batch_mode': (max_loop == -1) and conf.batch_mode,
+                    'hide_cursor': conf.hide_cursor,
+                    'prompt_height': conf.prompt_height
+                    }
+
+        with aligned_stdout(**kwargs):
             # for i in range(nb):
             cpt = 0
             while cpt < max_loop or max_loop == -1:
@@ -4376,283 +4374,6 @@ class FmkShell(cmd.Cmd):
                 cont = self.fz.send_data_and_log(data)
                 if not cont:
                     break
-
-            return True
-
-        def do_loop_cosmetics():
-            # type () -> bool
-
-            """ do_send_loop cosmetics, buffer stdout before sending payloads.
-
-            Returns:
-                The loop exited early by returning False if the return value is
-                False here, hence do_send_loop shall returns False in this case.
-            """
-
-            batch_mode = self.config.send_loop.aligned_options.batch_mode
-            prompt_height = self.config.send_loop.aligned_options.prompt_height
-
-            # add an attribute to check import's health
-            attr = getattr(self, 'do_send_loop_import_error', None)
-            if attr is None:
-                setattr(self, 'do_send_loop_import_error', False)
-                try:
-                    import curses, io, contextlib, os, termios
-                except ImportError as e:
-                    print("\n\n!! " + e + "\n  "
-                            + "   (cosmetics require curses & POSIX tty)"
-                            + "\n\n")
-                    self.do_send_loop_import_error = True
-
-            # (if we have failed to import something)
-            if self.do_send_loop_import_error:
-                do_loop()
-                return
-
-            # (if we reached this point, imports shall succeed)
-            import curses, io, contextlib, os, termios
-
-            #: io.BytesIO: the buffer that will replace the standard output
-            stream = io.BytesIO()
-            stdout = sys.stdout #: (backuped value of the standard output)
-
-            #: int: count how much payloads have been send since the last flush
-            stream.countp = 0
-
-            def setup_term():
-                # type: () -> None
-
-                """ do_send_loop cosmetics, handle curses vs readline issues
-
-                See `issue 2675`__ for further informations, enables resizing
-                the terminal.
-
-                __ https://bugs.python.org/issue2675
-
-                """
-
-                try:
-                    # unset env's LINES and COLUMNS to trigger a size update
-                    os.unsetenv('LINES')
-                    os.unsetenv('COLUMNS')
-
-                    # curses's setupterm with the real output (sys.__stdout__)
-                    curses.setupterm(fd=sys.__stdout__.fileno())
-                except:
-                    pass
-
-            # !! call curses's setupterm at least one time for tiget{str, num}
-            setup_term()
-
-            # retrieve common terminal capabilities
-            el = curses.tigetstr("el")
-            ed = curses.tigetstr("ed")
-            cup = curses.tparm(curses.tigetstr("cup"), 0, 0)
-            civis = curses.tigetstr("civis")
-            cvvis = curses.tigetstr("cvvis")
-
-            def get_size(
-                    cutby=(0, prompt_height), # type: Tuple[int, int]
-                    refresh=True  # type: bool
-                    ):
-                # type: (...) -> Tuple[int, int]
-
-                """ do_send_loop cosmetics, return the terminal size as a tuple
-
-                Args:
-                    refresh (bool): Try to refresh the terminal's size,
-                        required if you use readline.
-                    cutby (Tuple[int, int]):
-                        Cut the terminal size by an offset, the first integer
-                        of the tuple correspond to the width, the second to the
-                        height of the terminal.
-
-                Returns:
-                    The (width, height) tuple corresponding to the terminal's
-                    size (reduced slightly by the :literal:`cutby` argument).
-                    The minimal value for the width or the height is 1.
-                """
-
-                # handle readline/curses interactions
-                if refresh:
-                    setup_term()
-
-                # retrieve the terminal's size:
-                #  - if refresh, initiate a curses window for an updated size,
-                #  - else, retrieve it via a numeric capability.
-                #
-                if refresh:
-                    height, width = curses.initscr().getmaxyx()
-                    curses.endwin()
-                else:
-                    height = curses.tigetnum("lines")
-                    width = curses.tigetnum("cols")
-
-                # now *cut* the terminal by the specified offset
-                width -= cutby[0]
-                height -= cutby[1]
-
-                # handle negative values
-                if width < 2:
-                    width = 1
-                if height < 2:
-                    height = 1
-
-                # return the tuple
-                return (width, height)
-
-            def estimate_nblines(
-                    width         # type: int
-                    ):
-                # type: (...) -> int
-
-                """ do_send_loop cosmetics, return the estimated number of lines
-
-                Args:
-                    width (int): width of the terminal, used to calculate lines
-                        wrapping in the buffer.
-
-                Returns:
-                    The estimated number of lines that the payload will take on
-                    screen.
-                """
-
-                nblines = 0
-                payload = stream.getvalue()
-                lines = payload.splitlines()
-                for line in lines:
-                    length = len(line)
-                    nblines += length // width + 1
-                return nblines + 1
-
-            def buffer_noecho():
-                # type: () -> None
-
-                """ do_send_loop cosmetics, disable echo mode for the tty
-                """
-
-                # (!! we use POSIX tty, as we do not use full curses)
-                fd = stdout.fileno()
-                flags = termios.tcgetattr(fd)
-                flags[3] = flags[3] & ~termios.ECHO
-                termios.tcsetattr(fd, termios.TCSADRAIN, flags)
-                stdout.write(civis)
-
-            # (hide the cursor before moving it)
-            buffer_noecho()
-
-            def buffer_echo():
-                # type: () -> None
-
-                """ do_send_loop cosmetics, reenable echo mode for the tty
-                """
-
-                # (!! we use POSIX tty, as we do not use full curses)
-                fd = stdout.fileno()
-                flags = termios.tcgetattr(fd)
-                flags[3] = flags[3] | termios.ECHO
-                termios.tcsetattr(fd, termios.TCSADRAIN, flags)
-                stdout.write(cvvis + ed)
-
-            def buffer_output(
-                    batch=False, # type: bool
-                    force=False  # type: bool
-                    ):
-                # type: (...) -> None
-
-                """ do_send_loop cosmetics, display the buffer on screen
-
-                Args:
-                    batch (bool): try to put as much as possilbe text on screen
-                    force (bool): force the buffer to output its content
-                """
-
-                # retrieve the terminal size
-                width, height = get_size()
- 
-                # flush the buffer, then estimate the number of lines
-                stream.flush()
-                nblines = estimate_nblines(width)
-
-                # batch mode needs to estimate payloads size (skipped if force)
-                if (not force) or batch:
-                    if stream.countp > 0:
-                        avg_size_per_payload = nblines // stream.countp
-                    else:
-                        avg_size_per_payload = nblines
-                    stream.countp += 1
-
-                # (if force, or non-batch, or sufficient output, display it)
-                if (force
-                        or (not batch)
-                        or nblines + avg_size_per_payload > height
-                        ):
-
-                    # use `el` term capabilitie to wipe endlines as we display
-                    payload = stream.getvalue().replace(b'\n', el + b'\n')
-
-                    # if not force (continuous display), we erase the first
-                    # payload (to have a log entry without disturbing scrolling
-                    # nor getting a blinking terminal), then we display the
-                    # payload a second time (in order to see it on screen), else
-                    # (force == True), then we have the last payload to display,
-                    # no need to duplicate it with unnecessary buffering.
-                    #
-                    if not force:
-                        pad = b'\n' * (height - nblines + prompt_height)
-                        stdout.write(cup + payload * 2 + pad)
-                    else:
-                        stdout.write(cup + payload)
-
-                    # empty the buffer, reset the payload counter
-                    stream.__init__()
-                    stream.countp = 0
-
-                # if it is the last payload, reenable echo-ing.
-                if force:
-                    buffer_echo()
-
-                # (provide callbacks for tracebacks handling)
-                stream.handler = buffer_output
-                stream.restore = buffer_echo
-
-            @contextlib.contextmanager
-            def buffer_stdout():
-                # type: () -> None
-
-                """ do_send_loop cosmetics, contextualize stdout's wrapper
-                """
-
-                sys.stdout = stream
-                yield
-                sys.stdout = stdout
-
-            # main loop, similar to do_loop
-            with buffer_stdout():
-                cpt = 0
-                batch_mode = (max_loop == -1) and batch_mode
-                while cpt < max_loop or max_loop == -1:
-                    buffer_output(batch=batch_mode)
-                    cpt += 1
-                    data = self.fz.get_data(t, valid_gen=valid_gen, save_seed=use_existing_seed)
-                    if data is None:
-                        buffer_output(force=True)
-                        return False
-                    cont = self.fz.send_data_and_log(data)
-                    if not cont:
-                        break
-                buffer_output(force=True)
-            return True
-
-        cosmetics = self.config.send_loop.aligned
-        if not cosmetics:
-            ret = do_loop()
-        else:
-            ret = do_loop_cosmetics()
-
-        # handle do_loop{_cosmetics,} return value
-        if not ret:
-            return False
 
         self.__error = False
         return False
@@ -4709,12 +4430,22 @@ class FmkShell(cmd.Cmd):
 
         action = [((t[0], args[2]), t[1])]
 
-        for i in range(nb):
-            data = self.fz.get_data(action)
-            if data is None:
-                return False
+        conf = self.config.send_loop.aligned_options
+        kwargs = {
+                    'enabled': self.config.send_loop.aligned,
+                    'page_head': r'^[^=]+====. [^ ]+ .==. [^=]+={9,}.{4}$',
+                    'batch_mode': False,
+                    'hide_cursor': conf.hide_cursor,
+                    'prompt_height': conf.prompt_height
+                    }
 
-            self.fz.send_data_and_log(data)
+        with aligned_stdout(**kwargs):
+            for i in range(nb):
+                data = self.fz.get_data(action)
+                if data is None:
+                    return False
+
+                self.fz.send_data_and_log(data)
 
         self.__error = False
         return False
