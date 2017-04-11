@@ -3621,8 +3621,8 @@ class FmkShell(cmd.Cmd):
         try:
             attr = getattr(target, section)
         except:
-            self.__error_msg = "'{}' is not a valid config key"
-            self.__error_msg = self.__error_msg.format(section)
+            self.__error_msg = (
+                    "'{}' is not a valid config key".format(section))
             return False
 
         if isinstance(attr, config):
@@ -3653,8 +3653,7 @@ class FmkShell(cmd.Cmd):
                 attr = getattr(target, key)
             except:
                 self.__error_msg = (
-                        "'{}' is not a valid config key"
-                        ).format(key)
+                        "'{}' is not a valid config key".format(key))
                 return False
 
             try:
@@ -3667,8 +3666,8 @@ class FmkShell(cmd.Cmd):
             self.__error = False
             return False
 
-        self.__error_msg = "'{}' do not have subkeys"
-        self.__error_msg = self.__error_msg.format(args[0])
+        self.__error_msg = (
+                "'{}' do not have subkeys".format(args[0]))
         return False
 
     def do_load_data_model(self, line):

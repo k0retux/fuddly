@@ -171,16 +171,19 @@ class config(object):
             try:
                 attr = str(attr)
             except Exception as e:
-                msg = "unable to cast key's value '{}' into a string"
-                msg = msg.format(name) + ': ' + str(e)
-                raise AttributeError(msg)
+                raise AttributeError(
+                        "unable to cast key's value "
+                        + "'{}' into a string".format(name)
+                        + ': ' + str(e))
 
             try:
                 value = str(value)
             except Exception as e:
-                msg = "unable to cast '{}' for key '{}' into a string"
-                msg = msg.format(value, name) + ': ' + str(e)
-                raise AttributeError(msg)
+                raise AttributeError(
+                        ("unable to cast '{}' "
+                            + "for key '{}' into a string"
+                        ).format(value, name)
+                        + ': ' + str(e))
 
             booleans = [u'True', u'False']
             if attr in booleans:
@@ -191,8 +194,8 @@ class config(object):
                 if value in booleans:
                     return (value == u'True')
                 else:
-                    msg = "key '{}' expects a boolean"
-                    raise AttributeError(msg.format(name))
+                    raise AttributeError(
+                            "key '{}' expects a boolean".format(name))
 
             try:
                 test = int(attr)
@@ -202,8 +205,8 @@ class config(object):
                 try:
                     return int(value)
                 except:
-                    msg = "key '{}' expects an integer"
-                    raise AttributeError(msg.format(name))
+                    raise AttributeError(
+                            "key '{}' expects an integer".format(name))
 
             try:
                 test = float(attr)
@@ -213,8 +216,8 @@ class config(object):
                 try:
                     return float(value)
                 except:
-                    msg = "key '{}' expects a float"
-                    raise AttributeError(msg.format(name))
+                    raise AttributeError(
+                            "key '{}' expects a float".format(name))
 
             return original
 
@@ -228,8 +231,9 @@ class config(object):
 
             if not isinstance(value, config):
                 if isinstance(value, config_dot_proxy):
-                    msg = "'{}' (config_dot_proxy) can not be used as value."
-                    raise RuntimeError(msg.format(name))
+                    raise RuntimeError(
+                            "'{}' (config_dot_proxy)".format(name)
+                            + ' can not be used as value.')
 
                 if not attr is None:
                     value = private.check_type(name, attr, value)
@@ -260,8 +264,9 @@ class config(object):
                 return object.__setattr__(self, name, value)
 
             if not isinstance(attr, config):
-                msg = "unable to replace key '{}' by a section"
-                raise AttributeError(msg,format(name))
+                raise AttributeError(
+                        "unable to replace key '{}'".format(name)
+                        + ' by a section')
 
             attr_parser = private.sectionize.__func__(attr)
             for section in attr_parser.sections():
@@ -291,8 +296,9 @@ class config(object):
             for section in self.parser.sections():
                 match = resection.match(section)
                 if not match:
-                    msg = "unable to match '{}' section name"
-                    raise RuntimeError(msg.format(section))
+                    raise RuntimeError(
+                            "unable to match '{}'".format(section)
+                            + ' section name')
 
                 if len(match.group(2)) > 0:
                     target = name + '.' + match.group(2)
@@ -504,22 +510,25 @@ class config(object):
                 self.parser.readfp(stream, 'default_' + name)
 
             if not self.parser.has_section('global'):
-                msg = "default config '{}' has no '{}' section"
-                raise AttributeError(msg.format(name, 'global'))
+                raise AttributeError(
+                        ("default config '{}' has no '{}' section"
+                        ).format(name, 'global'))
 
             try:
                 self.parser.get('global', 'config_name')
             except:
-                msg = "default config '{}' has no '{}' key"
-                raise AttributeError(msg.format(name, 'config_name'))
+                raise AttributeError(
+                        ("default config '{}' has no '{}' key"
+                        ).format(name, 'config_name'))
 
             resection = re.compile(r'^([^.]*)(\..*)?')
             for section in self.parser.sections():
 
                 match = resection.match(section)
                 if not match:
-                    msg = "unable to match '{}' section name"
-                    raise RuntimeError(msg.format(section))
+                    raise RuntimeError(
+                            ("unable to match '{}' section name"
+                            ).format(section))
 
                 if not section == 'global':
                     if match.group(2) and len(match.group(2)) == 0:
@@ -552,11 +561,11 @@ class config(object):
                     value = self.parser.get(section, option)
                     if section == 'global':
                         if self.parser.has_section(option):
-                            msg = "default config '{}' has global '{}' which "
-                            msg += "overrides '{}' section"
                             raise AttributeError(
-                                    msg.format(name, option, option)
-                                    )
+                                    ("default config '{}' "
+                                        + "has global '{}' which "
+                                        + "overrides '{}' section"
+                                    ).format(name, option, option))
                         setattr(self, option, value)
                     else:
                         if match.group(2) and len(match.group(2)) > 0:
