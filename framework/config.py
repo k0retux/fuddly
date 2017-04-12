@@ -237,9 +237,87 @@ def get_help_format(line, doc, level, indent, middle):
                 msg += '\n'
     return msg
 
+def get_help_attr(that, name, level=0, indent=4, middle=40):
+    private = getattr(config, '_config__private')
+
+    if name in reserved:
+        return get_help_format(
+                name + ': <reserved>',
+                '(implementation details, reserved)',
+                level,
+                indent,
+                middle
+                )
+
+    dot_section = re.compile(r'^[^.]+\.[^.]+$')
+    if dot_section.match(name) and that.parser.has_section(name):
+            return get_help_format(
+                    name + ': <reserved>',
+                    '(special section, reserved)',
+                    level,
+                    indent,
+                    middle
+                    )
+
+    if that.parser.has_section(name):
+        try:
+            doc = that.parser.get(name + '.doc', 'that')
+        except:
+            doc = None
+
+        msg = '\n'
+        msg += get_help_format(
+            name + ':',
+            doc,
+            level,
+            indent,
+            middle
+            )
+
+        return (msg
+            + get_help(
+                getattr(that, name),
+                level=level + 1,
+                indent=indent,
+                middle=middle))
+
+    try:
+        doc = that.parser.get('global.doc', name)
+    except:
+        doc = None
+
+    try:
+        try:
+            value = str(that.parser.get('global', name))
+        except:
+            value = that.parser.get('global', name)
+    except:
+        kdict = object.__getattribute__(that, '__dict__')
+        keys = [key for key in kdict]
+        if name in keys and isinstance(kdict[name], config_dot_proxy):
+            msg = name + ': (subkeys)\n'
+            keys = [key for key in keys if key.startswith(name + '.')]
+            for key in sorted(keys):
+                msg += get_help_attr(
+                        that,
+                        key,
+                        level + 1,
+                        indent,
+                        middle)
+            return msg
+        else:
+            value = '<undefined>'
+
+    return get_help_format(
+        name + ': ' + value,
+        doc,
+        level,
+        indent,
+        middle
+        )
+
 def get_help(that, name=None, level=0, indent=4, middle=40):
     private = getattr(config, '_config__private')
-    get_help_attr = private._private__get_help_attr.__func__
     if not name is None:
         return get_help_attr(that, name, level, indent, middle)
 
@@ -394,86 +472,7 @@ class config_dot_proxy(object):
 class config(object):
 
     class __private:
-
-        def __get_help_attr(self, name, level=0, indent=4, middle=40):
-            private = getattr(config, '_config__private')
-            get_help_attr = private.__get_help_attr.__func__
-
-            if name in reserved:
-                return get_help_format(
-                        name + ': <reserved>',
-                        '(implementation details, reserved)',
-                        level,
-                        indent,
-                        middle
-                        )
-
-            dot_section = re.compile(r'^[^.]+\.[^.]+$')
-            if dot_section.match(name) and self.parser.has_section(name):
-                    return get_help_format(
-                            name + ': <reserved>',
-                            '(special section, reserved)',
-                            level,
-                            indent,
-                            middle
-                            )
-
-            if self.parser.has_section(name):
-                try:
-                    doc = self.parser.get(name + '.doc', 'self')
-                except:
-                    doc = None
-
-                msg = '\n'
-                msg += get_help_format(
-                    name + ':',
-                    doc,
-                    level,
-                    indent,
-                    middle
-                    )
-
-                return (msg
-                    + get_help(
-                        getattr(self, name),
-                        level=level + 1,
-                        indent=indent,
-                        middle=middle))
-
-            try:
-                doc = self.parser.get('global.doc', name)
-            except:
-                doc = None
-
-            try:
-                try:
-                    value = str(self.parser.get('global', name))
-                except:
-                    value = self.parser.get('global', name)
-            except:
-                kdict = object.__getattribute__(self, '__dict__')
-                keys = [key for key in kdict]
-                if name in keys and isinstance(kdict[name], config_dot_proxy):
-                    msg = name + ': (subkeys)\n'
-                    keys = [key for key in keys if key.startswith(name + '.')]
-                    for key in sorted(keys):
-                        msg += get_help_attr(
-                                self,
-                                key,
-                                level + 1,
-                                indent,
-                                middle)
-                    return msg
-                else:
-                    value = '<undefined>'
-
-            return get_help_format(
-                name + ': ' + value,
-                doc,
-                level,
-                indent,
-                middle
-                )
+        pass
 
     def __init__(self, parent):
 
