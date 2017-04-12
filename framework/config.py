@@ -1,8 +1,8 @@
-################################################################################
+##############################################################################
 #
 #  Copyright 2017 Matthieu Daumas <matthieu@daumas.me>
 #
-################################################################################
+##############################################################################
 #
 #  This file is part of fuddly.
 #
@@ -19,24 +19,27 @@
 #  You should have received a copy of the GNU General Public License
 #  along with fuddly. If not, see <http://www.gnu.org/licenses/>
 #
-################################################################################
+##############################################################################
 
 
-
-import io, re, sys
+import io
+import re
+import sys
 
 try:
     import configparser
-except:
+except BaseException:
     import ConfigParser as configparser
 
 reserved = {'config_name', 'parser', 'help', 'write'}
+
 
 class default:
     def __init__(self):
         self.configs = {}
 
     __unindent = re.compile(r'^;;\s\s*', re.MULTILINE)
+
     def _unindent(self, multiline):
         return self.__unindent.sub('', multiline)
 
@@ -47,10 +50,12 @@ class default:
             doc = unicode(doc)
 
         self.configs[name] = self._unindent(doc)
+
+
 default = default()
 
 default.add(
-'FmkPlumbing', u'''
+    'FmkPlumbing', u'''
 [global]
 config_name: FmkPlumbing
 
@@ -66,7 +71,7 @@ fuzz.burst = 1
 ''')
 
 default.add(
-'FmkShell', u'''
+    'FmkShell', u'''
 [global]
 config_name: FmkShell
 prompt: >>
@@ -101,6 +106,7 @@ aligned_options.prompt_height: 3
 
 ''')
 
+
 def check_type(name, attr, value):
     original = value
 
@@ -108,54 +114,55 @@ def check_type(name, attr, value):
         attr = str(attr)
     except Exception as e:
         raise AttributeError(
-                "unable to cast key's value "
-                + "'{}' into a string".format(name)
-                + ': ' + str(e))
+            "unable to cast key's value " +
+            "'{}' into a string".format(name) +
+            ': ' + str(e))
 
     try:
         value = str(value)
     except Exception as e:
         raise AttributeError(
-                ("unable to cast '{}' "
-                    + "for key '{}' into a string"
-                ).format(value, name)
-                + ': ' + str(e))
+            ("unable to cast '{}' " +
+             "for key '{}' into a string"
+             ).format(value, name) +
+            ': ' + str(e))
 
     booleans = [u'True', u'False']
     if attr in booleans:
         test = (attr == u'True')
     else:
         test = None
-    if not test is None:
+    if test is not None:
         if value in booleans:
             return (value == u'True')
         else:
             raise AttributeError(
-                    "key '{}' expects a boolean".format(name))
+                "key '{}' expects a boolean".format(name))
 
     try:
         test = int(attr)
-    except:
+    except BaseException:
         test = None
-    if not test is None:
+    if test is not None:
         try:
             return int(value)
-        except:
+        except BaseException:
             raise AttributeError(
-                    "key '{}' expects an integer".format(name))
+                "key '{}' expects an integer".format(name))
 
     try:
         test = float(attr)
-    except:
+    except BaseException:
         test = None
-    if not test is None:
+    if test is not None:
         try:
             return float(value)
-        except:
+        except BaseException:
             raise AttributeError(
-                    "key '{}' expects a float".format(name))
+                "key '{}' expects a float".format(name))
 
     return original
+
 
 def config_write(that, stream=sys.stdout):
 
@@ -170,10 +177,11 @@ def config_write(that, stream=sys.stdout):
 
     return that.parser.write(stream)
 
+
 def sectionize(that):
     try:
         name = unicode(that.config_name)
-    except:
+    except BaseException:
         name = that.config_name
 
     parser = configparser.SafeConfigParser()
@@ -182,8 +190,8 @@ def sectionize(that):
         match = resection.match(section)
         if not match:
             raise RuntimeError(
-                    "unable to match '{}'".format(section)
-                    + ' section name')
+                "unable to match '{}'".format(section) +
+                ' section name')
 
         if len(match.group(2)) > 0:
             target = name + '.' + match.group(2)
@@ -201,11 +209,12 @@ def sectionize(that):
             for option in that.parser.options(section):
                 value = that.parser.get(section, option)
                 parser.set(
-                        target,
-                        match.group(1) + '.' + option,
-                        value)
+                    target,
+                    match.group(1) + '.' + option,
+                    value)
 
     return parser
+
 
 def get_help_format(line, doc, level, indent, middle):
     if doc is None or len(doc) < 1:
@@ -213,7 +222,7 @@ def get_help_format(line, doc, level, indent, middle):
 
     try:
         line = str(line)
-    except:
+    except BaseException:
         pass
 
     msg = ''
@@ -237,85 +246,72 @@ def get_help_format(line, doc, level, indent, middle):
                 msg += '\n'
     return msg
 
+
 def get_help_attr(that, name, level=0, indent=4, middle=40):
     if name in reserved:
         return get_help_format(
-                name + ': <reserved>',
-                '(implementation details, reserved)',
-                level,
-                indent,
-                middle
-                )
+            name + ': <reserved>',
+            '(implementation details, reserved)',
+            level,
+            indent,
+            middle)
 
     dot_section = re.compile(r'^[^.]+\.[^.]+$')
     if dot_section.match(name) and that.parser.has_section(name):
-            return get_help_format(
-                    name + ': <reserved>',
-                    '(special section, reserved)',
-                    level,
-                    indent,
-                    middle
-                    )
+        return get_help_format(
+            name + ': <reserved>',
+            '(special section, reserved)',
+            level,
+            indent,
+            middle)
 
     if that.parser.has_section(name):
         try:
             doc = that.parser.get(name + '.doc', 'that')
-        except:
+        except BaseException:
             doc = None
 
         msg = '\n'
-        msg += get_help_format(
-            name + ':',
-            doc,
-            level,
-            indent,
-            middle
-            )
-
-        return (msg
-            + get_help(
-                getattr(that, name),
-                level=level + 1,
-                indent=indent,
-                middle=middle))
+        msg += get_help_format(name + ':', doc, level, indent, middle)
+        return (
+            msg +
+            get_help(
+                getattr(
+                    that,
+                    name),
+                None,
+                level +
+                1,
+                indent,
+                middle))
 
     try:
         doc = that.parser.get('global.doc', name)
-    except:
+    except BaseException:
         doc = None
 
     try:
         try:
             value = str(that.parser.get('global', name))
-        except:
+        except BaseException:
             value = that.parser.get('global', name)
-    except:
+    except BaseException:
         kdict = object.__getattribute__(that, '__dict__')
         keys = [key for key in kdict]
         if name in keys and isinstance(kdict[name], config_dot_proxy):
             msg = name + ': (subkeys)\n'
             keys = [key for key in keys if key.startswith(name + '.')]
             for key in sorted(keys):
-                msg += get_help_attr(
-                        that,
-                        key,
-                        level + 1,
-                        indent,
-                        middle)
+                msg += get_help_attr(that, key, level + 1, indent, middle)
             return msg
         else:
             value = '<undefined>'
 
-    return get_help_format(
-        name + ': ' + value,
-        doc,
-        level,
-        indent,
-        middle
-        )
+    return get_help_format(name + ': ' + value, doc, level, indent, middle)
+
 
 def get_help(that, name=None, level=0, indent=4, middle=40):
-    if not name is None:
+    if name is not None:
         return get_help_attr(that, name, level, indent, middle)
 
     msg = ''
@@ -325,38 +321,29 @@ def get_help(that, name=None, level=0, indent=4, middle=40):
             for option in that.parser.options(section):
                 if option in reserved:
                     continue
-
-                msg += get_help_attr(
-                        that,
-                        option,
-                        level,
-                        indent,
-                        middle)
+                else:
+                    msg += get_help_attr(that, option, level, indent, middle)
         elif resection.match(section):
-            msg += get_help_attr(
-                    that,
-                    section,
-                    level,
-                    indent,
-                    middle)
+            msg += get_help_attr(that, section, level, indent, middle)
         else:
             pass
 
     return msg
 
+
 def config_setattr(that, name, value):
     try:
         attr = object.__getattribute__(that, name)
-    except:
+    except BaseException:
         attr = None
 
     if not isinstance(value, config):
         if isinstance(value, config_dot_proxy):
             raise RuntimeError(
-                    "'{}' (config_dot_proxy)".format(name)
-                    + ' can not be used as value.')
+                "'{}' (config_dot_proxy)".format(name) +
+                ' can not be used as value.')
 
-        if not attr is None:
+        if attr is not None:
             value = check_type(name, attr, value)
 
         if '.' in name:
@@ -386,8 +373,8 @@ def config_setattr(that, name, value):
 
     if not isinstance(attr, config):
         raise AttributeError(
-                "unable to replace key '{}'".format(name)
-                + ' by a section')
+            "unable to replace key '{}'".format(name) +
+            ' by a section')
 
     attr_parser = sectionize(attr)
     for section in attr_parser.sections():
@@ -406,19 +393,14 @@ def config_setattr(that, name, value):
     object.__setattr__(that, name, None)
     return that.__setattr__(name, value)
 
+
 def config_getattribute(that, name):
     if name == 'help':
         def get_help_proxy(name=None, level=0, indent=4, middle=40):
-            msg = get_help(
-                    that,
-                    name,
-                    level,
-                    indent,
-                    middle
-                    )
+            msg = get_help(that, name, level, indent, middle)
             try:
                 return str(msg)
-            except:
+            except BaseException:
                 return msg
         return get_help_proxy
 
@@ -431,9 +413,9 @@ def config_getattribute(that, name):
         attr = object.__getattribute__(that, name)
         try:
             attr = check_type(name, attr, attr)
-        except:
+        except BaseException:
             pass
-    except:
+    except BaseException:
         attr = None
 
     if attr is None or '__' in name[:2] or '_config__' in name[:9]:
@@ -445,6 +427,7 @@ def config_getattribute(that, name):
 
     return attr
 
+
 class config_dot_proxy(object):
     def __init__(self, config, prefix):
         object.__setattr__(self, 'parent', config)
@@ -455,7 +438,7 @@ class config_dot_proxy(object):
         prefix = object.__getattribute__(self, 'prefix')
         try:
             return getattr(parent, prefix + '.' + name)
-        except:
+        except BaseException:
             return config_dot_proxy(self, name)
 
     def __setattr__(self, name, value):
@@ -463,30 +446,29 @@ class config_dot_proxy(object):
         prefix = object.__getattribute__(self, 'prefix')
         return setattr(parent, prefix + '.' + name, value)
 
+
 class config(object):
 
     def __init__(self, parent):
         object.__setattr__(
-                self,
-                'parser',
-                configparser.SafeConfigParser()
-                )
+            self,
+            'parser',
+            configparser.SafeConfigParser())
 
         if isinstance(parent, str):
             name = parent
         else:
             try:
                 name = parent.__class__.__name__
-            except:
-                name = parent.__name__ # (no parent.__class__.__name__)
+            except BaseException:
+                name = parent.__name__  # (no parent.__class__.__name__)
 
         if name in default.configs:
             try:
                 self.parser.read_string(
-                        default.configs[name],
-                        'default_' + name
-                        )
-            except:
+                    default.configs[name],
+                    'default_' + name)
+            except BaseException:
                 stream = io.StringIO()
                 stream.write(default.configs[name])
                 stream.seek(0)
@@ -494,15 +476,15 @@ class config(object):
 
             if not self.parser.has_section('global'):
                 raise AttributeError(
-                        ("default config '{}' has no '{}' section"
-                        ).format(name, 'global'))
+                    ("default config '{}' has no '{}' section"
+                     ).format(name, 'global'))
 
             try:
                 self.parser.get('global', 'config_name')
-            except:
+            except BaseException:
                 raise AttributeError(
-                        ("default config '{}' has no '{}' key"
-                        ).format(name, 'config_name'))
+                    ("default config '{}' has no '{}' key"
+                     ).format(name, 'config_name'))
 
             resection = re.compile(r'^([^.]*)(\..*)?')
             for section in self.parser.sections():
@@ -510,8 +492,8 @@ class config(object):
                 match = resection.match(section)
                 if not match:
                     raise RuntimeError(
-                            ("unable to match '{}' section name"
-                            ).format(section))
+                        ("unable to match '{}' section name"
+                         ).format(section))
 
                 if not section == 'global':
                     if match.group(2) and len(match.group(2)) == 0:
@@ -519,25 +501,21 @@ class config(object):
                     else:
                         try:
                             subconfig = object.__getattribute__(
-                                    self,
-                                    match.group(1)
-                                    )
-                        except:
+                                self,
+                                match.group(1))
+                        except BaseException:
                             setattr(
-                                    self,
-                                    match.group(1),
-                                    config(match.group(1))
-                                    )
+                                self,
+                                match.group(1),
+                                config(match.group(1)))
                             subconfig = object.__getattribute__(
-                                    self,
-                                    match.group(1)
-                                    )
+                                self,
+                                match.group(1))
 
                         try:
                             subconfig.parser.add_section(
-                                    'global' + match.group(2)
-                                    )
-                        except:
+                                'global' + match.group(2))
+                        except BaseException:
                             pass
 
                 for option in self.parser.options(section):
@@ -545,33 +523,30 @@ class config(object):
                     if section == 'global':
                         if self.parser.has_section(option):
                             raise AttributeError(
-                                    ("default config '{}' "
-                                        + "has global '{}' which "
-                                        + "overrides '{}' section"
-                                    ).format(name, option, option))
+                                ("default config '{}' " +
+                                 "has global '{}' which " +
+                                 "overrides '{}' section"
+                                 ).format(name, option, option))
                         setattr(self, option, value)
                     else:
                         if match.group(2) and len(match.group(2)) > 0:
                             subconfig = object.__getattribute__(
-                                    self,
-                                    match.group(1)
-                                    )
+                                self,
+                                match.group(1))
                             subconfig.parser.set(
                                 'global' + match.group(2),
                                 option,
-                                value
-                                )
+                                value)
                         else:
                             subconfig = object.__getattribute__(self, section)
                             setattr(subconfig, option, value)
-
 
         if not self.parser.has_section('global'):
             self.parser.add_section('global')
 
         try:
             object.__getattribute__(self, 'config_name')
-        except:
+        except BaseException:
             self.config_name = 'global'
 
     def __getattribute__(self, name):
