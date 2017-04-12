@@ -238,8 +238,6 @@ def get_help_format(line, doc, level, indent, middle):
     return msg
 
 def get_help_attr(that, name, level=0, indent=4, middle=40):
-    private = getattr(config, '_config__private')
-
     if name in reserved:
         return get_help_format(
                 name + ': <reserved>',
@@ -317,7 +315,6 @@ def get_help_attr(that, name, level=0, indent=4, middle=40):
         )
 
 def get_help(that, name=None, level=0, indent=4, middle=40):
-    private = getattr(config, '_config__private')
     if not name is None:
         return get_help_attr(that, name, level, indent, middle)
 
@@ -348,8 +345,6 @@ def get_help(that, name=None, level=0, indent=4, middle=40):
     return msg
 
 def config_setattr(that, name, value):
-    private = object.__getattribute__(that, '_config__private')
-
     try:
         attr = object.__getattribute__(that, name)
     except:
@@ -412,7 +407,6 @@ def config_setattr(that, name, value):
     return that.__setattr__(name, value)
 
 def config_getattribute(that, name):
-    private = object.__getattribute__(that, '_config__private')
     if name == 'help':
         def get_help_proxy(name=None, level=0, indent=4, middle=40):
             msg = get_help(
@@ -471,12 +465,7 @@ class config_dot_proxy(object):
 
 class config(object):
 
-    class __private:
-        pass
-
     def __init__(self, parent):
-
-        object.__setattr__(self, '_config__private', config.__private())
         object.__setattr__(
                 self,
                 'parser',
@@ -586,21 +575,9 @@ class config(object):
             self.config_name = 'global'
 
     def __getattribute__(self, name):
-
-        try:
-            private = object.__getattribute__(self, '_config__private')
-        except:
-            return object.__getattribute__(self, name)
-
         config_get = config_getattribute
         return config_get(self, name)
 
     def __setattr__(self, name, value):
-
-        try:
-            private = object.__getattribute__(self, '_config__private')
-        except:
-            return object.__setattr__(self, name, value)
-
         config_set = config_setattr
         return config_set(self, name, value)
