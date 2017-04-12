@@ -207,6 +207,36 @@ def sectionize(that):
 
     return parser
 
+def get_help_format(line, doc, level, indent, middle):
+    if doc is None or len(doc) < 1:
+        doc = '\n'
+
+    try:
+        line = str(line)
+    except:
+        pass
+
+    msg = ''
+    space = ' '
+    lines = line.splitlines(True)
+    for line in lines:
+        line = level * indent * space + line
+        msg += line
+
+        fst = True
+        docs = doc.splitlines(True)
+        for doc in docs:
+            if fst:
+                size = middle - len(line)
+                msg += size * space + doc
+                fst = False
+            else:
+                msg += middle * space + doc
+
+            if not ('\n' in doc):
+                msg += '\n'
+    return msg
+
 def get_help(that, name=None, level=0, indent=4, middle=40):
     private = getattr(config, '_config__private')
     get_help_attr = private._private__get_help_attr.__func__
@@ -365,41 +395,9 @@ class config(object):
 
     class __private:
 
-        @staticmethod
-        def __get_help_format(line, doc, level, indent, middle):
-            if doc is None or len(doc) < 1:
-                doc = '\n'
-
-            try:
-                line = str(line)
-            except:
-                pass
-
-            msg = ''
-            space = ' '
-            lines = line.splitlines(True)
-            for line in lines:
-                line = level * indent * space + line
-                msg += line
-
-                fst = True
-                docs = doc.splitlines(True)
-                for doc in docs:
-                    if fst:
-                        size = middle - len(line)
-                        msg += size * space + doc
-                        fst = False
-                    else:
-                        msg += middle * space + doc
-
-                    if not ('\n' in doc):
-                        msg += '\n'
-            return msg
-
         def __get_help_attr(self, name, level=0, indent=4, middle=40):
             private = getattr(config, '_config__private')
             get_help_attr = private.__get_help_attr.__func__
-            get_help_format = private.__get_help_format
 
             if name in reserved:
                 return get_help_format(
