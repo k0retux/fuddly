@@ -35,6 +35,7 @@
 #
 
 import io
+import os
 import re
 import sys
 
@@ -44,6 +45,7 @@ except BaseException:
     import ConfigParser as configparser
 
 reserved = {'config_name', 'parser', 'help', 'write', 'global'}
+verbose = True
 
 class default:
     def __init__(self):
@@ -460,7 +462,8 @@ class config_dot_proxy(object):
 
 class config(object):
 
-    def __init__(self, parent):
+    def __init__(self, parent, path=['.'], ext=['.ini', '.conf', '.cfg']):
+
         object.__setattr__(
             self,
             'parser',
@@ -474,16 +477,49 @@ class config(object):
             except BaseException:
                 name = parent.__name__  # (no parent.__class__.__name__)
 
-        if name in default.configs:
-            try:
+        loaded = False
+        for pdir in path:
+            if not os.path.isdir(pdir):
+                continue
+            for pext in ext:
+                filename = os.path.join(pdir, name + pext)
+                if not os.path.isfile(filename):
+                    continue
+
+                try:
+                    if verbose:
+                        sys.stderr.write('Loading {}...\n'.format(filename))
+                    with open(filename, 'r') as cfile:
+                        if sys.version_info[0] > 2:
+                            self.parser.read_file(cfile, source=filename)
+                        else:
+                            self.parser.readfp(cfile, filename=filename)
+                    loaded = True
+                except BaseException as e:
+                    if verbose:
+                        sys.stderr.write(
+                            'Warning: Unable to load {}: '.format(filename)
+                            + str(e) + '\n')
+                    continue
+
+        if loaded or name in default.configs:
+            if not loaded and sys.version_info[0] > 2:
+                if verbose:
+                    sys.stderr.write(
+                        'Loading default config for {}...\n'.format(name))
                 self.parser.read_string(
                     default.configs[name],
                     'default_' + name)
-            except BaseException:
+                loaded = True
+            elif not loaded:
+                if verbose:
+                    sys.stderr.write(
+                        'Loading default config for {}...\n'.format(name))
                 stream = io.StringIO()
                 stream.write(default.configs[name])
                 stream.seek(0)
                 self.parser.readfp(stream, 'default_' + name)
+                loaded = True
 
             if not self.parser.has_section('global'):
                 raise AttributeError(
@@ -551,6 +587,9 @@ class config(object):
                         else:
                             subconfig = object.__getattribute__(self, section)
                             setattr(subconfig, option, value)
+
+        if not loaded and verbose:
+            sys.stderr.write("Creating a new config for {}...\n".format(name))
 
         if not self.parser.has_section('global'):
             self.parser.add_section('global')
