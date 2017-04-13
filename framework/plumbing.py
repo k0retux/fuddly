@@ -256,7 +256,14 @@ class FmkPlumbing(object):
         self._task_list = {}
         self._task_list_lock = threading.Lock()
 
-        self.config = config(self)
+        self.config = config(self, path=[config_folder])
+        def save_config():
+            filename=os.path.join(
+                    config_folder,
+                    self.config.config_name + '.ini')
+            with open(filename, 'w') as cfile:
+                self.config.write(cfile)
+        atexit.register(save_config)
 
         self.fmkDB = Database()
         ok = self.fmkDB.start()
@@ -3412,7 +3419,15 @@ class FmkShell(cmd.Cmd):
         self.input_spe_arg_re = re.compile('\((.*)\)', re.S)
         self.input_arg_re = re.compile('(.*)=(.*)', re.S)
 
-        self.config = config(self)
+        self.config = config(self, path=[config_folder])
+        def save_config():
+            filename=os.path.join(
+                    config_folder,
+                    self.config.config_name + '.ini')
+            with open(filename, 'w') as cfile:
+                self.config.write(cfile)
+        atexit.register(save_config)
+
         self.prompt = self.config.prompt + ' '
         self.available_configs = {
                 "framework": self.fz.config,
