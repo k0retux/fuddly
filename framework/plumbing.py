@@ -3414,6 +3414,9 @@ class FmkShell(cmd.Cmd):
 
         self.config = config(self)
         self.prompt = self.config.prompt + ' '
+        self.available_configs = {
+                "framework": self.fz.config,
+                "shell": self.config}
 
         self.__error = False
         self.__error_msg = ''
@@ -3530,53 +3533,67 @@ class FmkShell(cmd.Cmd):
     def complete_config(self, text, line, bgidx, endix, target=None):
         init = False
         if target is None:
-            target = self.fz.config
             init = True
 
-        try:
-            args = line.split()
-            if args[-1] == text:
-                args.pop()
-            if init and len(args) == 1 and args[0] == 'config':
-                comp = (['shell']
-                        + target.parser.options('global')
-                        + target.parser.sections())
+        args = line.split()
+        if args[-1] == text:
+            args.pop()
+        if init:
+            if len(args) == 1:
+                comp = [k for k in self.available_configs.keys()]
                 if text != '':
                     comp = [i for i in comp if i.startswith(text)]
-                comp = [i.replace('.', ' ') for i in comp if (
-                    i[-4:] != '.doc' and i != 'config_name' and i != 'global')]
                 return comp
-            if len(args) == 1 and isinstance(target, config):
-                comp = (target.parser.options('global')
-                        + target.parser.sections())
+
+            try:
                 if text != '':
-                    comp = [i for i in comp if i.startswith(text)]
-                comp = [i.replace('.', ' ') for i in comp if (
-                    i[-4:] != '.doc' and i != 'config_name' and i != 'global')]
-                return comp
-            if len(args) > 1 and args[1] == 'shell':
-                return self.complete_config(
-                        text,
-                        ' '.join(args[1:] + [text]),
-                        0,
-                        0,
-                        self.config)
-            if len(args) > 1 and target.parser.has_section(args[1]):
-                return self.complete_config(
-                        text,
-                        ' '.join(args[1:] + [text]),
-                        0,
-                        0,
-                        getattr(target, args[1]))
-            comp = target.parser.options('global')
-            comp = [i for i in comp if i.startswith(args[-1] + '.')]
-            comp = [i[len(args[-1]) + 1:] for i in comp if (
-                i[-4:] != '.doc' and i != 'config_name' and i != 'global')]
+                    return self.complete_config(
+                            text,
+                            ' '.join(['config'] + args[2:] + [text]),
+                            0,
+                            0,
+                            self.available_configs[args[1]])
+                else:
+                    return self.complete_config(
+                            '',
+                            ' '.join(['config'] + args[2:]),
+                            0,
+                            0,
+                            self.available_configs[args[1]])
+            except KeyError:
+                pass
+
+            return []
+
+        if len(args) == 1 and isinstance(target, config):
+            comp = (target.parser.options('global')
+                    + target.parser.sections())
             if text != '':
                 comp = [i for i in comp if i.startswith(text)]
+            comp = [i.replace('.', ' ') for i in comp if (
+                i[-4:] != '.doc' and i != 'config_name' and i != 'global')]
             return comp
-        except:
-            return []
+        if len(args) > 1 and args[1] == 'shell':
+            return self.complete_config(
+                    text,
+                    ' '.join(args[1:] + [text]),
+                    0,
+                    0,
+                    self.config)
+        if len(args) > 1 and target.parser.has_section(args[1]):
+            return self.complete_config(
+                    text,
+                    ' '.join(args[1:] + [text]),
+                    0,
+                    0,
+                    getattr(target, args[1]))
+        comp = target.parser.options('global')
+        comp = [i for i in comp if i.startswith(args[-1] + '.')]
+        comp = [i[len(args[-1]) + 1:] for i in comp if (
+            i[-4:] != '.doc' and i != 'config_name' and i != 'global')]
+        if text != '':
+            comp = [i for i in comp if i.startswith(text)]
+        return comp
 
     def do_config(self, line, target=None):
         '''Get and set miscellaneous options
@@ -3595,27 +3612,32 @@ class FmkShell(cmd.Cmd):
         indent = self.config.config.indent.width
         middle = self.config.config.middle
 
-        if target is None:
-            target = self.fz.config
-
         args = line.split()
+        if target is None:
+            if len(args) == 0:
+                print('Available configurations:')
+                for target in self.available_configs:
+                    print(' - {}'.format(target))
+                print('\n\t > Type "config <name>" to display documentation.')
+                self.__error = False
+                return False
+            else:
+                try:
+                    target = self.available_configs[args[0]]
+                    self.__error = False
+                    return self.do_config(' '.join(args[1:]), target)
+                except KeyError as e:
+                    print('Unknown config "{}": '.format(args[0]) + str(e))
+                return True
+
         if len(args) == 0:
             print(target.help(None, level, indent, middle))
-            if target == self.fz.config:
-                print(" > 'config shell' for more options")
             self.__error = False
             return False
         elif len(args) == 1:
-            if args[0] == 'shell':
-                self.__error = False
-                return self.do_config('', self.config)
-
             print(target.help(args[0], level, indent, middle))
             self.__error = False
             return False
-        if args[0] == 'shell':
-            self.__error = False
-            return self.do_config(' '.join(args[1:]), self.config)
 
         section = args[0]
         try:
