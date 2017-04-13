@@ -22,6 +22,18 @@
 ##############################################################################
 
 
+# TODO: dump the whole code
+# TODO: rewrite a proper module without configparser, nor "textual" backend
+# TODO: write a backend to write config objects to files
+# TODO: document it
+#
+# Features:
+# - configparser-enabled (sic)
+# - transparent access to the config keys
+# - inline documentation of the config keys
+# - recursive pattern/mergeable configs
+#
+
 import io
 import re
 import sys
