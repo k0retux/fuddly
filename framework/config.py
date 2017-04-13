@@ -31,8 +31,7 @@ try:
 except BaseException:
     import ConfigParser as configparser
 
-reserved = {'config_name', 'parser', 'help', 'write'}
-
+reserved = {'config_name', 'parser', 'help', 'write', 'global'}
 
 class default:
     def __init__(self):
