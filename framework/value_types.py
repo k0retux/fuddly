@@ -1849,7 +1849,10 @@ class BitField(VT_Alt):
 
         if self.padding_size != 0:
             if self.padding == 1:
-                pad = '1'*self.padding_size
+                # in the case the padding has been modified, following an absorption,
+                # to something not standard because of AbsCsts.Contents == False,
+                # we use the altered padding which has been stored in self.padding_one
+                pad = bin(self.padding_one[self.padding_size])[2:]
             else:
                 pad = '0'*self.padding_size
             if self.lsb_padding:
@@ -2026,6 +2029,20 @@ class BitField(VT_Alt):
 
 
     def _read_value_from(self, blob, size, endian, constraints):
+        """
+        Used by .do_absorb().
+        side effect: may change self.padding_one dictionary.
+        """
+        def recompute_padding(masked_val, mask):
+            if masked_val != mask and masked_val != 0:
+                self.padding = 1
+                self.padding_one = copy.copy(self.padding_one)
+                self.padding_one[self.padding_size] = masked_val
+            elif masked_val == mask and self.padding == 0:
+                self.padding = 1
+            elif masked_val == 0 and self.padding == 1:
+                self.padding = 0
+
         values = list(struct.unpack('B'*size, blob))
 
         if endian == VT.BigEndian:
@@ -2035,19 +2052,25 @@ class BitField(VT_Alt):
 
         if self.padding_size != 0:
             if self.lsb_padding:
+                mask = self.padding_one[self.padding_size]
                 if constraints[AbsCsts.Contents]:
-                    mask = self.padding_one[self.padding_size]
                     if self.padding == 1 and values[0] & mask != mask:
                         raise ValueError('contents not valid! (padding should be 1s)')
-                    elif self.padding == 0 and values[0] & self.padding_one[self.padding_size] != 0:
+                    elif self.padding == 0 and values[0] & mask != 0:
                         raise ValueError('contents not valid! (padding should be 0s)')
+                else:
+                    masked_val = values[0] & mask
+                    recompute_padding(masked_val, mask)
             else:
+                mask = self.padding_one[self.padding_size]<<(8-self.padding_size)
                 if constraints[AbsCsts.Contents]:
-                    mask = self.padding_one[self.padding_size]<<(8-self.padding_size)
                     if self.padding == 1 and values[-1] & mask != mask:
                         raise ValueError('contents not valid! (padding should be 1s)')
                     elif self.padding == 0 and values[-1] & mask != 0:
                         raise ValueError('contents not valid! (padding should be 0s)')
+                else:
+                    masked_val = values[-1] & mask
+                    recompute_padding(masked_val, mask)
 
         values_sz = len(values)
         result = 0
@@ -2079,6 +2102,8 @@ class BitField(VT_Alt):
         self.orig_idx = copy.deepcopy(self.idx)
         self.orig_subfield_vals = copy.deepcopy(self.subfield_vals)
         self.orig_drawn_val = self.drawn_val
+        self.orig_padding = self.padding
+        self.padding_one = self.__class__.padding_one
 
         self.reset_state()
 
@@ -2123,6 +2148,8 @@ class BitField(VT_Alt):
             self.idx = self.orig_idx
             self.subfield_vals = self.orig_subfield_vals
             self.drawn_val = self.orig_drawn_val
+            self.padding = self.orig_padding
+            self.padding_one = self.__class__.padding_one
 
     def do_cleanup_absorb(self):
         '''
@@ -2132,6 +2159,7 @@ class BitField(VT_Alt):
             del self.orig_idx
             del self.orig_subfield_vals
             del self.orig_drawn_val
+            del self.orig_padding
 
     def get_value(self):
         '''
