@@ -1282,13 +1282,48 @@ class TestMisc(unittest.TestCase):
 
         print('*** after extension')
 
-        bf.unfreeze()
+        bf.reset_state()
         bf.value_type.extend_right(vt2)
         bf.show()
 
+        extended_val = 3151759922
+        extended_bytes = b'\xbb\xdc\n2'
+
         vt = bf.value_type
         self.assertEqual(vt.subfield_limits, [3, 8, 15, 19, 22, 26, 30, 32])
-        # self.assertEqual(vt.subfield_limits, [3, 8, 16, 20, 23, 27, 31, 33])
+        self.assertEqual(vt.get_current_raw_val(), extended_val)
+        self.assertEqual(vt.get_current_value(), extended_bytes)
+
+        print('\n -=[ .extend_left() method ]=- \n')
+
+        # vt3 == vt2
+        vt3 = BitField(subfield_sizes=[4, 3, 4, 4, 2],
+                       subfield_values=[None, [3, 5], [15], [14], [2]],
+                       subfield_val_extremums=[[8, 12], None, None, None, None],
+                       padding=0, lsb_padding=False, endian=VT.BigEndian)
+        bf2 = Node('BF', vt=vt3)
+        bf2.make_determinist(all_conf=True, recursive=True)
+        bf2.set_env(Env())
+
+        print('*** before extension')
+        bf2.show()
+
+        # vt4 == vt1
+        vt4 = BitField(subfield_sizes=[3, 5, 7],
+                       subfield_values=[[2, 1], None, [10, 120]],
+                       subfield_val_extremums=[None, [6, 15], None],
+                       padding=0, lsb_padding=True, endian=VT.BigEndian)
+
+        print('*** after extension')
+
+        bf2.reset_state()
+        bf2.value_type.extend_left(vt4)
+        bf2.show()
+
+        self.assertEqual(bf2.value_type.subfield_limits, [3, 8, 15, 19, 22, 26, 30, 32])
+        self.assertEqual(bf2.value_type.get_current_raw_val(), extended_val)
+        self.assertEqual(bf2.value_type.get_current_value(), extended_bytes)
+
         print('\n -=[ .set_subfield() .get_subfield() methods ]=- \n')
 
         vt.set_subfield(idx=3, val=5)
@@ -1748,13 +1783,13 @@ class TestModelWalker(unittest.TestCase):
         # self.assertEqual(data['smscmd/TP-DCS'].to_bytes(), b'\xF6')
 
         corrupt_table = {
-            1: b'\xF7',
-            2: b'\xF4',
-            3: b'\xF5',
-            4: b'\xF2',
-            5: b'\xFE',
-            6: b'\x00',
-            7: b'\xE0'
+            1: b'\x06',
+            2: b'\xE6',
+            3: b'\x16',
+            4: b'\xF7',
+            5: b'\xF4',
+            6: b'\xF5',
+            7: b'\xF2'
         }
 
         tn_consumer = TypedNodeDisruption(max_runs_per_node=1)
@@ -1771,8 +1806,6 @@ class TestModelWalker(unittest.TestCase):
                                                         bin(struct.unpack('B', consumed_node.to_bytes())[0])))
             print('result: {!s} ({!s})'.format(binascii.b2a_hex(rnode['smscmd/TP-DCS$'].to_bytes()),
                                                bin(struct.unpack('B', rnode['smscmd/TP-DCS$'].to_bytes())[0])))
-            rnode.unfreeze(recursive=True, reevaluate_constraints=True)
-            rnode.freeze()
             rnode['smscmd/TP-DCS$'].show()
             self.assertEqual(rnode['smscmd/TP-DCS'].to_bytes(), corrupt_table[idx])
 
@@ -2432,30 +2465,31 @@ class TestNodeFeatures(unittest.TestCase):
              'shape_type': MH.Ordered,
              'custo_set': MH.Custo.NTerm.CollapsePadding,
              'contents': [
-                 {'name': 'part1',
+                 {'name': 'sublevel',
+                  'contents': [
+                      {'name': 'part2_msb',
+                       'exists_if': (BitFieldCondition(sf=0, val=[1]), 'part1_lsb'),
+                       'contents': BitField(subfield_sizes=[2, 2], endian=VT.BigEndian,
+                                            subfield_values=[[3], [3]])
+                       },
+                      {'name': 'part2_middle',
+                       'exists_if': (BitFieldCondition(sf=0, val=[1]), 'part1_lsb'),
+                       'contents': BitField(subfield_sizes=[2, 2, 1], endian=VT.BigEndian,
+                                            subfield_values=[[1, 2], [3], [0]])
+                       },
+                      {'name': 'part2_KO',
+                       'exists_if': (BitFieldCondition(sf=0, val=[2]), 'part1_lsb'),
+                       'contents': BitField(subfield_sizes=[2, 2], endian=VT.BigEndian,
+                                            subfield_values=[[1], [1]])
+                       }
+                  ]},
+                 {'name': 'part1_lsb',
                   'determinist': True,
                   'contents': BitField(subfield_sizes=[3, 1], padding=0, endian=VT.BigEndian,
                                        subfield_values=[None, [1]],
                                        subfield_val_extremums=[[1, 3], None])
                   },
-                 {'name': 'sublevel',
-                  'contents': [
-                      {'name': 'part2_o1',
-                       'exists_if': (BitFieldCondition(sf=0, val=[1]), 'part1'),
-                       'contents': BitField(subfield_sizes=[2, 2, 1], endian=VT.BigEndian,
-                                            subfield_values=[[1, 2], [3], [0]])
-                       },
-                      {'name': 'part2_o2',
-                       'exists_if': (BitFieldCondition(sf=0, val=[1]), 'part1'),
-                       'contents': BitField(subfield_sizes=[2, 2], endian=VT.BigEndian,
-                                            subfield_values=[[3], [3]])
-                       },
-                      {'name': 'part2_KO',
-                       'exists_if': (BitFieldCondition(sf=0, val=[2]), 'part1'),
-                       'contents': BitField(subfield_sizes=[2, 2], endian=VT.BigEndian,
-                                            subfield_values=[[1], [1]])
-                       }
-                  ]}
+
              ]}
 
         mb = NodeBuilder()
@@ -2469,8 +2503,127 @@ class TestNodeFeatures(unittest.TestCase):
               len(raw))
 
         result = b'\xf6\xc8'
+        self.assertEqual(result, raw)
+
+
+        abs_test_desc = \
+            {'name': 'test',
+             'contents': [
+                 {'name': 'prefix',
+                  'contents': String(values=['prefix'])},
+                 {'name': 'TP-DCS',  # Data Coding Scheme (refer to GSM 03.38)
+                  'custo_set': MH.Custo.NTerm.CollapsePadding,
+                  'contents': [
+                      {'name': '8-bit',
+                       'determinist': True,
+                       'contents': BitField(subfield_sizes=[8], endian=VT.BigEndian,
+                                            subfield_values=[
+                                                [0xAA]],
+                                            ) },
+                      {'name': 'msb',
+                       'determinist': True,
+                       'contents': BitField(subfield_sizes=[4], endian=VT.BigEndian,
+                                            subfield_values=[
+                                                [0b1111,0b1101,0b1100,0b0000]],
+                                            ) },
+                      {'name': 'lsb1',
+                       'determinist': True,
+                       'exists_if': (BitFieldCondition(sf=0, val=[0b1111]), 'msb'),
+                       'contents': BitField(subfield_sizes=[2,1,1,8], endian=VT.BigEndian,
+                                            subfield_values=[[0b10,0b11,0b00,0b01],
+                                                                [1,0],
+                                                                [0],[0xFE]]
+                                            ) },
+                      {'name': 'lsb2',
+                       'determinist': True,
+                       'exists_if': (BitFieldCondition(sf=0, val=[0b1101,0b1100]), 'msb'),
+                       'contents': BitField(subfield_sizes=[2,1,1], endian=VT.BigEndian,
+                                            subfield_values=[[0b10,0b11,0b00,0b01],
+                                                                [0],
+                                                                [0,1]]
+                                            ) },
+                      {'name': 'lsb31',
+                       'determinist': True,
+                       'exists_if': (BitFieldCondition(sf=0, val=[0]), 'msb'),
+                       'contents': BitField(subfield_sizes=[3], endian=VT.BigEndian,
+                                            subfield_values=[
+                                                [0,4]
+                                            ]
+                                            ) },
+
+                      {'name': 'lsb32',
+                       'determinist': True,
+                       'exists_if': (BitFieldCondition(sf=0, val=[0]), 'msb'),
+                       'contents': BitField(subfield_sizes=[8], endian=VT.BigEndian,
+                                            subfield_values=[
+                                                [0,0x5c]
+                                            ]
+                                            ) },
+
+                      {'name': 'lsb33',
+                       'determinist': True,
+                       'exists_if': (BitFieldCondition(sf=0, val=[0]), 'msb'),
+                       'contents': BitField(subfield_sizes=[1], endian=VT.BigEndian,
+                                            subfield_values=[
+                                                [0,1]
+                                            ]
+                                            ) },
+                 ]},
+                {'name': 'suffix',
+                 'contents': String(values=['suffix'])}
+             ]}
+
+        mb = NodeBuilder()
+        node = mb.create_graph_from_desc(abs_test_desc)
+        node_abs = node.get_clone()
+
+        raw = node.to_bytes()
+        node.show()  # part2_KO should not be displayed
+        print(raw, binascii.b2a_hex(raw),
+              list(map(lambda x: bin(x), struct.unpack('>' + 'B' * len(raw), raw))),
+              len(raw))
+
+        result = b'prefix\xaa\xff\xe6suffix'
+        self.assertEqual(result, raw)
+
+        print('\n*** Absorption test ***')
+
+        result = b'prefix\xaa\xff\xe2suffix'
+        abs_result = node_abs.absorb(result)
+        print('\n--> Absorption status: {!r}\n'.format(abs_result))
+        self.assertEqual(abs_result[0], AbsorbStatus.FullyAbsorbed)
+        raw = node_abs.to_bytes()
+        node_abs.show()  # part2_KO should not be displayed
+        print(raw, binascii.b2a_hex(raw),
+              list(map(lambda x: bin(x), struct.unpack('>' + 'B' * len(raw), raw))),
+              len(raw))
 
         self.assertEqual(result, raw)
+
+        result = b'prefix\xaa\xdasuffix'
+        abs_result = node_abs.absorb(result)
+        print('\n--> Absorption status: {!r}\n'.format(abs_result))
+        self.assertEqual(abs_result[0], AbsorbStatus.FullyAbsorbed)
+        raw = node_abs.to_bytes()
+        node_abs.show()  # part2_KO should not be displayed
+        print(raw, binascii.b2a_hex(raw),
+              list(map(lambda x: bin(x), struct.unpack('>' + 'B' * len(raw), raw))),
+              len(raw))
+
+        self.assertEqual(result, raw)
+
+        result = b'prefix\xaa\x08\xb9suffix'
+        abs_result = node_abs.absorb(result)
+        print('\n--> Absorption status: {!r}\n'.format(abs_result))
+        self.assertEqual(abs_result[0], AbsorbStatus.FullyAbsorbed)
+        raw = node_abs.to_bytes()
+        node_abs.show()  # part2_KO should not be displayed
+        print(raw, binascii.b2a_hex(raw),
+              list(map(lambda x: bin(x), struct.unpack('>' + 'B' * len(raw), raw))),
+              len(raw))
+
+        self.assertEqual(result, raw)
+
 
     def test_search_primitive(self):
 

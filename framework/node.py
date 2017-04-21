@@ -34,6 +34,8 @@ import binascii
 import collections
 import traceback
 import uuid
+import struct
+import math
 
 from enum import Enum
 
@@ -3084,11 +3086,11 @@ class NodeInternals_NonTerm(NodeInternals):
                                 new_item1vt.make_private(forget_current_state=False)
                                 new_item2vt = copy.copy(item2.get_value_type())
                                 new_item2vt.make_private(forget_current_state=False)
-                                new_item1vt.extend_right(new_item2vt)
+                                new_item1vt.extend_left(new_item2vt)
                                 new_item.import_value_type(new_item1vt)
                                 new_item.frozen_node = new_item.get_value_type().get_current_value()
                                 if i > 0:
-                                    new_list = list_to_enc[:i-1]
+                                    new_list = list_to_enc[:i]
                                     new_list.append(new_item)
                                     if i < list_sz-2:
                                         new_list += list_to_enc[i+2:]
@@ -3730,22 +3732,122 @@ class NodeInternals_NonTerm(NodeInternals):
 
             postponed_node_desc = None
             first_pass = True
+
+            if self.custo.collapse_padding_mode:
+                consumed_bits = 0
+                byte_aligned = None
+
             # Iterate over all sub-components of the component node_list
             for delim, sublist in self.__iter_csts(node_list):
 
                 if delim[1] == '>':
 
-                    for node_desc in sublist:
+                    for idx, node_desc in enumerate(sublist):
                         abort = False
                         base_node, min_node, max_node = self._parse_node_desc(node_desc)
 
-                        if base_node.is_attr_set(NodeInternals.Abs_Postpone):
+                        if self.custo.collapse_padding_mode:
+
+                            vt = base_node.get_value_type()
+                            if not isinstance(vt, fvt.BitField) \
+                                    or min_node != 1 \
+                                    or max_node != 1 \
+                                    or self.separator is not None \
+                                    or postponed_node_desc:
+                                raise DataModelDefinitionError('Pattern not supported for absorption')
+
+                            if not vt.lsb_padding or vt.endian != fvt.VT.BigEndian:
+                                raise DataModelDefinitionError('Bitfield option not supported for '
+                                                               'absorption with CollapsePadding custo')
+
+                            bytelen = vt.byte_length
+                            if vt.padding_size != 0 or consumed_bits != 0:
+                                last_idx = consumed_size+(bytelen-1)
+
+                                if consumed_bits != 0:
+                                    byte_aligned = consumed_bits + vt.padding_size == 8
+
+                                    bits_to_be_consumed = consumed_bits + vt.bit_length
+                                    last_idx = consumed_size + int(math.ceil(bits_to_be_consumed/8.0))
+
+                                    partial_blob = blob[consumed_size:last_idx]
+                                    if partial_blob != b'':
+                                        nb_bytes = len(partial_blob)
+                                        values = list(struct.unpack('B'*nb_bytes, partial_blob))
+                                        result = 0
+                                        for i, v in enumerate(values[::-1]):  # big endian
+                                            if i == len(values)-1:
+                                                v = v & fvt.BitField.padding_one[8 - consumed_bits]
+                                            result += v<<(i*8)
+
+                                        bits_to_consume = consumed_bits+vt.bit_length
+                                        mask_size = int(math.ceil(bits_to_consume/8.0))*8-bits_to_consume
+
+                                        if not byte_aligned:
+                                            if vt.padding == 0:
+                                                result = result >> mask_size << mask_size
+                                            else:
+                                                result |= fvt.BitField.padding_one[mask_size]
+
+                                        result <<= consumed_bits
+                                        if vt.padding == 1:
+                                            result |= fvt.BitField.padding_one[consumed_bits]
+
+                                        l = []
+                                        for i in range(nb_bytes-1, -1, -1): # big-endian
+                                            bval = result // (1 << i*8)
+                                            result = result % (1 << i*8)  # remainder
+                                            l.append(bval)
+                                        if sys.version_info[0] > 2:
+                                            partial_blob = struct.pack('{:d}s'.format(nb_bytes), bytes(l))
+                                        else:
+                                            partial_blob = struct.pack('{:d}s'.format(nb_bytes), str(bytearray(l)))
+                                else:
+                                    partial_blob = blob[consumed_size:last_idx]
+                                    last_byte = blob[last_idx:last_idx+1]
+                                    if last_byte != b'':
+                                        val = struct.unpack('B', last_byte)[0]
+                                        if vt.padding == 0:
+                                            val = val >> vt.padding_size << vt.padding_size
+                                        else:
+                                            val |= fvt.BitField.padding_one[vt.padding_size]
+                                        partial_blob += struct.pack('B', val)
+                                        byte_aligned = False
+                                    else:
+                                        byte_aligned = True
+                            else:
+                                partial_blob = blob[consumed_size:consumed_size+bytelen]
+                                byte_aligned = True
+
+                            abort, remaining_blob, consumed_size, consumed_nb, postponed_sent_back = \
+                                _try_absorption_with(base_node, 1, 1,
+                                                     partial_blob, consumed_size,
+                                                     None,
+                                                     pending_upper_postpone=pending_postpone_desc)
+
+                            if partial_blob == b'' and abort is not None:
+                                abort = True
+                                break
+
+                            elif abort is not None and not abort:
+                                consumed_bits = consumed_bits + vt.bit_length
+                                consumed_bits = 0 if consumed_bits == 8 else consumed_bits%8
+
+                                # if vt is byte-aligned, then the consumed_size is correct
+                                if vt.padding_size != 0 and consumed_bits > 0:
+                                    consumed_size -= 1
+
+                                if idx == len(sublist) - 1:
+                                    blob = blob[consumed_size:]
+
+                        elif base_node.is_attr_set(NodeInternals.Abs_Postpone):
                             if postponed_node_desc or pending_postpone_desc:
                                 raise ValueError("\n*** ERROR: Only one node at a time can have its "
                                                  "absorption delayed [current:{!s}]"
                                                  .format(postponed_node_desc))
                             postponed_node_desc = node_desc
                             continue
+
                         else:
                             # pending_upper_postpone = pending_postpone_desc
                             abort, blob, consumed_size, consumed_nb, postponed_sent_back = \
@@ -3754,21 +3856,20 @@ class NodeInternals_NonTerm(NodeInternals):
                                                      postponed_node_desc,
                                                      pending_upper_postpone=pending_postpone_desc)
 
-                            # In this case max_node is 0
-                            if abort is None:
-                                continue
+                        # In this case max_node is 0
+                        if abort is None:
+                            continue
 
-                            # if _try_absorption_with() return a
-                            # tuple, then the postponed node is
-                            # handled (either because absorption
-                            # succeeded or because it didn't work and
-                            # we need to abort and try another high
-                            # level component)
-                            if postponed_sent_back is not None:
-                                postponed_to_send_back = postponed_sent_back
-                            postponed_node_desc = None
-                            pending_postpone_desc = None
-                            # pending_upper_postpone = None
+                        # if _try_absorption_with() return a
+                        # tuple, then the postponed node is
+                        # handled (either because absorption
+                        # succeeded or because it didn't work and
+                        # we need to abort and try another high
+                        # level component)
+                        if postponed_sent_back is not None:
+                            postponed_to_send_back = postponed_sent_back
+                        postponed_node_desc = None
+                        pending_postpone_desc = None
 
                         if abort:
                             break

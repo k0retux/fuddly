@@ -26,7 +26,7 @@ import subprocess
 import re
 
 def ensure_dir(f):
-    d = os.path.dirname(f)
+    d = os.path.dirname(f + os.sep)
     if not os.path.exists(d):
         os.makedirs(d)
 

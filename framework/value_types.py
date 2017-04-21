@@ -1544,7 +1544,7 @@ class BitField(VT_Alt):
     def init_specific(self, subfield_limits=None, subfield_sizes=None,
                       subfield_values=None, subfield_val_extremums=None,
                       padding=0, lsb_padding=True,
-                      endian=VT.LittleEndian, determinist=True,
+                      endian=VT.BigEndian, determinist=True,
                       subfield_descs=None, defaults=None):
 
         self.drawn_val = None
@@ -1744,7 +1744,16 @@ class BitField(VT_Alt):
             self.subfield_fuzzy_vals.append(None)
             prev_lim = lim
 
-    def extend_right(self, bitfield):
+
+    @property
+    def bit_length(self):
+        return self.size
+
+    @property
+    def byte_length(self):
+        return self.nb_bytes
+
+    def extend(self, bitfield, rightside=True):
 
         if self.drawn_val is None:
             self.get_current_value()
@@ -1777,17 +1786,23 @@ class BitField(VT_Alt):
         else:
             term2 = bitfield.drawn_val
 
-        self.drawn_val = (term2 << self.size) + term1
+        if rightside:
+            self.drawn_val = (term2 << self.size) + term1
+        else:
+            self.drawn_val = (term1 << bitfield.size) + term2
         sz_mod = (self.size + bitfield.size) % 8
         new_padding_sz = 8 - sz_mod if sz_mod != 0 else 0
 
         if self.lsb_padding:
             self.drawn_val <<= new_padding_sz
 
-
         self.current_val_update_pending = False
-        self.idx += bitfield.idx
-        self.idx_inuse += bitfield.idx_inuse
+        if rightside:
+            self.idx += bitfield.idx
+            self.idx_inuse += bitfield.idx_inuse
+        else:
+            self.idx = bitfield.idx + self.idx
+            self.idx_inuse = bitfield.idx_inuse + self.idx_inuse
 
         if self.subfield_descs is not None or bitfield.subfield_descs is not None:
             if self.subfield_descs is None and bitfield.subfield_descs is not None:
@@ -1795,18 +1810,35 @@ class BitField(VT_Alt):
                 desc_extension = bitfield.subfield_descs
             elif self.subfield_descs is not None and bitfield.subfield_descs is None:
                 desc_extension = [None for i in bitfield.subfield_limits]
-            self.subfield_descs += desc_extension
-        
-        self.subfield_sizes += bitfield.subfield_sizes
-        self.subfield_vals += bitfield.subfield_vals
-        self.subfield_extrems += bitfield.subfield_extrems
-        self.subfield_defaults += bitfield.subfield_defaults
+            if rightside:
+                self.subfield_descs += desc_extension
+            else:
+                self.subfield_descs = desc_extension + self.subfield_descs
 
-        for l in bitfield.subfield_limits:
-            self.subfield_limits.append(self.size + l)
+        if rightside:
+            self.subfield_sizes += bitfield.subfield_sizes
+            self.subfield_vals += bitfield.subfield_vals
+            self.subfield_extrems += bitfield.subfield_extrems
+            self.subfield_defaults += bitfield.subfield_defaults
 
-        self.subfield_fuzzy_vals += bitfield.subfield_fuzzy_vals
-            
+            for l in bitfield.subfield_limits:
+                self.subfield_limits.append(self.size + l)
+
+            self.subfield_fuzzy_vals += bitfield.subfield_fuzzy_vals
+
+        else:
+            self.subfield_sizes = bitfield.subfield_sizes + self.subfield_sizes
+            self.subfield_vals = bitfield.subfield_vals + self.subfield_vals
+            self.subfield_extrems = bitfield.subfield_extrems + self.subfield_extrems
+            self.subfield_defaults = bitfield.subfield_defaults + self.subfield_defaults
+
+            supp_limits = []
+            for l in self.subfield_limits:
+                supp_limits.append(bitfield.size + l)
+            self.subfield_limits = bitfield.subfield_limits + supp_limits
+
+            self.subfield_fuzzy_vals = bitfield.subfield_fuzzy_vals + self.subfield_fuzzy_vals
+
         self.size = self.subfield_limits[-1]
         self.nb_bytes = int(math.ceil(self.size / 8.0))
 
@@ -1815,6 +1847,11 @@ class BitField(VT_Alt):
         else:
             self.padding_size = 8 - (self.size % 8)
 
+    def extend_right(self, bitfield):
+        self.extend(bitfield, rightside=True)
+
+    def extend_left(self, bitfield):
+        self.extend(bitfield, rightside=False)
 
     def set_size_from_constraints(self, size=None, encoded_size=None):
         raise DataModelDefinitionError

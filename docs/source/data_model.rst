@@ -149,10 +149,19 @@ custo_set, custo_clear
 		customization mode.
 
   - ``MH.Custo.NTerm.CollapsePadding``: By default, this mode is *disabled*.
-    When enabled, every time two adjacent BitFields (within its scope) are found, they
+    When enabled, every time two adjacent ``BitField`` 's (within its scope) are found, they
     will be merged in order to remove any padding in between. This is done
-    "recursively" until any inner padding is removed. (Note this customization is currently
-    only supported for *generation* purpose and not for *absorption*.)
+    "recursively" until any inner padding is removed.
+
+    .. note::
+      To be compatible with an *absorption* operation, the non-terminal set with this
+      customization should comply with the following requirements:
+
+      - It shall only contains ``BitField`` 's (which implies that no *separators* shall be used)
+      - The ``lsb_padding`` parameter shall be set to ``True`` on every related ``BitField`` 's.
+      - The ``endian`` parameter shall be set to ``VT.BigEndian`` on every related ``BitField`` 's.
+      - the ``qty`` keyword should not be used on the children except if it is equal to ``1``,
+        or ``(1,1)``.
 
   For *generator* node, the customizable behavior modes are:
 
