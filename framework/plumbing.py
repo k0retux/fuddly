@@ -774,7 +774,6 @@ class FmkPlumbing(object):
                 print(colorize("*** Problem during reload of '%s_proj.py' ***" % (name), rgb=Color.ERROR))
             else:
                 print(colorize("*** Problem during import of '%s_proj.py' ***" % (name), rgb=Color.ERROR))
-            print(prefix)
             print('-'*60)
             traceback.print_exc(file=sys.stdout)
             print('-'*60)

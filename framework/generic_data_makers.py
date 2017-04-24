@@ -1074,15 +1074,18 @@ class d_corrupt_node_bits(Disruptor):
                 if self.new_val is None:
                     if val != b'':
                         val = corrupt_bits(val, n=1, ascii=self.ascii)
-                        prev_data.add_info('corrupt data: {!s}'.format(truncate_info(val)))
+                        prev_data.add_info('corrupted data: {!s}'.format(truncate_info(val)))
                     else:
                         prev_data.add_info('Nothing to corrupt!')
                 else:
                     val = self.new_val
-                    prev_data.add_info('corrupt data: {!s}'.format(truncate_info(val)))
+                    prev_data.add_info('corrupted data: {!s}'.format(truncate_info(val)))
 
-                i.set_values(values=[val])
-                i.get_value()
+                status, _, _, _ = i.absorb(val, constraints=AbsNoCsts())
+                if status != AbsorbStatus.FullyAbsorbed:
+                    prev_data.add_info('data absorption failure, fallback to node replacement')
+                    i.set_values(values=[val])
+                i.freeze()
 
             ret = prev_data
 
