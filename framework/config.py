@@ -101,7 +101,7 @@ indent.level: 0
                     used to display the helpers.
 
 [send_loop]
-aligned: True
+aligned: False
 aligned_options.batch_mode: False
 aligned_options.hide_cursor: True
 aligned_options.prompt_height: 3

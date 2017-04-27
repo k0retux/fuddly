@@ -28,6 +28,18 @@ import os
 import re
 import sys
 
+# TOFIX: In some edge-cases, tracebacks emitted by usercode are not properly
+#        displayed on screen and are wiped out the history. Using 'script'
+#        shell command shows that the culprit is displayed, but the ANSI code
+#        '\x1b[2J' and an unspecified issue in the code clear the screen.
+#
+#        Debugging shows that the ANSI code is caused by curses (emitted by the
+#        C-code of libncurses), but the removal of curses as a dependency won't
+#        fix the problem.
+#
+#        Hence, the functionnality is provided as-is and desactivated by
+#        default until all tracebacks are properly displayed on screen.
+
 #: bool: internals, check for an ImportError for curses & termios
 import_error = False
 try:
