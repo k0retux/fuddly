@@ -69,11 +69,11 @@ default.add('FmkPlumbing', u'''
 [global]
 config_name: FmkPlumbing
 
-[default]
+[defvalues]
 fuzz.delay = 0.01
 fuzz.burst = 1
 
-;;  [default.doc]
+;;  [defvalues.doc]
 ;;  self: (default values used when the framework resets)
 ;;  fuzz.delay: Default value (> 0) for fuzz_delay
 ;;  fuzz.burst: Default value (>= 1)for fuzz_burst
@@ -197,7 +197,7 @@ def config_write(that, stream=sys.stdout):
     that_dict = object.__getattribute__(that, '__dict__')
     subconfigs = []
     for item in that_dict.items():
-        if isinstance(item, config):
+        if isinstance(item[1], config):
             subconfigs.append(item)
 
     for name, subconfig in subconfigs:
@@ -206,9 +206,12 @@ def config_write(that, stream=sys.stdout):
     return that.parser.write(stream)
 
 
-def sectionize(that):
+def sectionize(that, parent):
     if sys.version_info[0] > 2:
         unicode = str
+    if parent is not None:
+        that.config_name = parent
+
     try:
         name = unicode(that.config_name)
     except BaseException:
@@ -368,7 +371,7 @@ def config_setattr(that, name, value):
         return object.__setattr__(that, name, value)
 
     if attr is None:
-        flat_parser = sectionize(value)
+        flat_parser = sectionize(value, name)
         for section in flat_parser.sections():
             if not that.parser.has_section(section):
                 that.parser.add_section(section)
@@ -385,7 +388,7 @@ def config_setattr(that, name, value):
         raise AttributeError("unable to replace key '{}'".format(name) +
                              ' by a section')
 
-    attr_parser = sectionize(attr)
+    attr_parser = sectionize(attr, name)
     for section in attr_parser.sections():
         if not that.parser.has_section(section):
             continue
@@ -400,7 +403,7 @@ def config_setattr(that, name, value):
             that.parser.remove_section(section)
 
     object.__setattr__(that, name, None)
-    return that.__setattr__(name, value)
+    return setattr(that, name, value)
 
 
 def config_getattribute(that, name):

@@ -322,8 +322,8 @@ class FmkPlumbing(object):
         self.cleanup_all_dmakers(reset_existing_seed)
         # Warning: fuzz delay is not set to 0 by default in order to have a time frame
         # where SIGINT is accepted from user
-        self.set_fuzz_delay(self.config.default.fuzz.delay)
-        self.set_fuzz_burst(self.config.default.fuzz.burst)
+        self.set_fuzz_delay(self.config.defvalues.fuzz.delay)
+        self.set_fuzz_burst(self.config.defvalues.fuzz.burst)
         self._recompute_health_check_timeout(self.tg.feedback_timeout, self.tg.sending_delay)
 
     def _recompute_health_check_timeout(self, base_timeout, sending_delay, do_show=True):
