@@ -342,15 +342,7 @@ class FmkPlumbing(object):
         else:
             self.set_health_check_timeout(max(10,sending_delay), do_show=do_show)
 
-    def _handle_no_stdout_exception(self):
-        if sys.stdout == sys.__stdout__:
-            return
-
-        restore_stdout()
-
     def _handle_user_code_exception(self, msg='', context=None):
-        self._handle_no_stdout_exception()
-
         self.set_error(msg, code=Error.UserCodeError, context=context)
         if hasattr(self, 'lg'):
             self.lg.log_error("Exception in user code detected! Outcomes " \
@@ -362,8 +354,6 @@ class FmkPlumbing(object):
         print('-'*60)
 
     def _handle_fmk_exception(self, cause=''):
-        self._handle_no_stdout_exception()
-
         self.set_error(cause, code=Error.UserCodeError)
         if hasattr(self, 'lg'):
             self.lg.log_error("Not handled exception detected! Outcomes " \
