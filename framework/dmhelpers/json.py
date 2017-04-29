@@ -33,7 +33,7 @@ def json_builder(tag_name, params=None, node_name=None, codec='latin-1',
     Helper for modeling an JSON structure.
 
     Args:
-      tag_name (str): name of the XML tag.
+      tag_name (str): name of the JSON tag.
       params (dict): the JSON structure to be converted to a fuddly structure
       node_name (str): name of the node to be created.
       codec (str): codec to be used for generating the JSON structure.
