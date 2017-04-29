@@ -42,7 +42,7 @@ def json_builder(tag_name, params=None, node_name=None, codec='latin-1',
       struct_mutable (bool): if ``False`` the JSON structure "will not" be mutable, meaning
         that each node related to the structure will have its ``Mutable`` attribute cleared.
       determinist (bool): if ``False``, the attribute order could change from one retrieved
-        data to another.k
+        data to another.
 
     Returns:
       dict: Node-description of the JSON structure.
