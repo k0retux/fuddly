@@ -3741,8 +3741,9 @@ class NodeInternals_NonTerm(NodeInternals):
 
                         if base_node.is_attr_set(NodeInternals.Abs_Postpone):
                             if postponed_node_desc or pending_postpone_desc:
-                                raise ValueError("\nERROR: Only one node at a time (current:%s) delaying" \
-                                                 " its dissection is supported!" % postponed_node_desc)
+                                raise ValueError("\n*** ERROR: Only one node at a time can have its "
+                                                 "absorption delayed [current:{!s}]"
+                                                 .format(postponed_node_desc))
                             postponed_node_desc = node_desc
                             continue
                         else:

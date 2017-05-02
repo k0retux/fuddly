@@ -87,8 +87,8 @@ Reference:
   :class:`framework.monitor.ProbePID`
 
 Description:
-  This generic probe enables you to monitor a process PID through an
-  SSH connection.
+  This generic probe enables you to monitor any modification of a process PID,
+  by specifying its name through the parameter ``process_name``.
 
 ProbeMem
 --------
