@@ -53,31 +53,65 @@ def json_builder(tag_name, params=None, node_name=None, codec='latin-1',
         cts = []
         idx = 1
         for k, v in params.items():
-            #assert gr.is_string_compatible(v) #TODO need to update this
-            v = v if isinstance(v, list) else [v]
             sep_id = uuid.uuid1() # The separator for the " in the key param.  e.g., "<key>"
-            
-            subType = False
-            for subV in range(len(v)):
-                
-                # If the type of v is a dictionary, build a sub JSON structure for it.
-                if type(v[subV]) == type({}):
-                    v[subV] = json_builder(tag_name + "_" + str(idx), v[subV])
-                    subType = True
 
-            vVal = fvt.String(values=v, codec=codec) if not subType else v
+            params = [
+                {'name': ('sep', sep_id), 'contents' : fvt.String(values=['"'], codec=codec),
+                 'set_attrs': MH.Attr.Separator, 'mutable': struct_mutable},
+                {'name': ('key', uuid.uuid1()), 'contents' : fvt.String(values=[k], codec=codec)},
+                {'name': ('sep', sep_id)},
+                {'name': ('col', uuid.uuid1()), 'contents' : fvt.String(values=[':'], codec=codec),
+                 'set_attrs': MH.Attr.Separator, 'mutable': struct_mutable} ]
+
+            if isinstance(v, list):
+                modeled_v = []
+                val_id = uuid.uuid1()
+                for subidx, value in enumerate(v):
+                    assert not isinstance(value, list)
+                    if isinstance(value, dict):
+                        # If the type of v is a dictionary, build a sub JSON structure for it.
+                        modeled_v.append(json_builder(tag_name + "_" + str(idx)+str(subidx), params=value))
+                    else:
+                        checked_value = value if gr.is_string_compatible(value) else str(value)
+                        modeled_v.append( 
+                            {'name': ('val'+str(subidx), val_id),
+                             'contents': [
+                                 {'name': ('sep', sep_id)},
+                                 {'name': ('cts', uuid.uuid1()),
+                                  'contents': fvt.String(values=[checked_value], codec=codec)},
+                                 {'name': ('sep', sep_id)} ]}
+                        )
+
+                attr_value = \
+                    {'name': ('cts', uuid.uuid1()),
+                     'contents': modeled_v,
+                     'separator': {'contents': {'name': ('comma', uuid.uuid1()),
+                                                'contents': fvt.String(values=[','], max_sz=100,
+                                                                       absorb_regexp='\s*,\s*', codec=codec),
+                                                'mutable': struct_mutable,
+                                                'absorb_csts': AbsNoCsts(size=True, regexp=True)},
+                                   'prefix': False, 'suffix': False, 'unique': False} }
+
+                params.append({'name': ('attr_val'+str(idx), uuid.uuid1()),
+                               'contents': [
+                                   {'contents': fvt.String(values=['['], codec=codec),
+                                    'mutable': struct_mutable, 'name': 'prefix'+str(idx)},
+                                   attr_value,
+                                   {'contents': fvt.String(values=[']'], codec=codec),
+                                    'mutable': struct_mutable, 'name': 'suffix'+str(idx)} ]})
+
+            elif isinstance(v, dict):
+                params.append(json_builder(tag_name + "_" + str(idx), params=v))
+
+            elif gr.is_string_compatible(v):
+                params += [ {'name': ('sep', sep_id)},
+                            {'name': ('val', uuid.uuid1()), 'contents': fvt.String(values=[v], codec=codec)},
+                            {'name': ('sep', sep_id)} ]
+            else:
+                raise DataModelDefinitionError
             
             cts.append({'name': ('attr'+str(idx), uuid.uuid1()),
-                        'contents': [
-                            {'name': ('sep', sep_id), 'contents' : fvt.String(values=['"'], codec=codec)},
-                            {'name': ('key', uuid.uuid1()), 'contents' : fvt.String(values=[k], codec=codec)},
-                            {'name': ('sep', sep_id)},
-                            {'name': ('col', uuid.uuid1()), 'contents' : fvt.String(values=[':'], codec=codec),
-                               'set_attrs': MH.Attr.Separator, 'mutable': struct_mutable},
-                            {'name': ('val', uuid.uuid1()), 'contents': vVal},
-                            {'name': ('com', uuid.uuid1()), 'contents': fvt.String(values=[','], codec=codec),
-                                'set_attrs': MH.Attr.Separator, 'mutable': struct_mutable},
-                        ]})
+                        'contents': params})
             idx += 1
 
         if not determinist:
@@ -85,28 +119,23 @@ def json_builder(tag_name, params=None, node_name=None, codec='latin-1',
         else:
             params_desc = {'section_type': MH.Ordered, 'contents': cts}
     else:
-        params_desc = None
+        raise DataModelDefinitionError
 
     tag_start_open_desc = \
         {'name': ('prefix', uuid.uuid1()),
          'contents': fvt.String(values=['{'], codec=codec),
          'mutable': struct_mutable, 'set_attrs': MH.Attr.Separator}
 
-    tag_cts = []
-
-    if params_desc is not None:
-        tag_cts.append(params_desc)
-
     tag_start_cts_desc = \
         {'name': ('contents', uuid.uuid1()),
          'random': not determinist,
-         'separator': {'contents': {'name': ('spc', uuid.uuid1()),
-                                    'contents': fvt.String(values=[' '], max_sz=100,
-                                                           absorb_regexp='\s+', codec=codec),
+         'separator': {'contents': {'name': ('comma', uuid.uuid1()),
+                                    'contents': fvt.String(values=[','], max_sz=100,
+                                                           absorb_regexp='\s*,\s*', codec=codec),
                                     'mutable': struct_mutable,
                                     'absorb_csts': AbsNoCsts(size=True, regexp=True)},
                        'prefix': False, 'suffix': False, 'unique': False},
-         'contents': tag_cts}
+         'contents': [params_desc]}
 
     tag_start_close_desc = \
         {'name': ('suffix', uuid.uuid1()),
@@ -117,6 +146,4 @@ def json_builder(tag_name, params=None, node_name=None, codec='latin-1',
     {'name': tag_name if node_name is None else node_name,
      'contents': [tag_start_open_desc, tag_start_cts_desc, tag_start_close_desc]}
 
-    tag_desc = tag_start_desc
-    
-    return tag_desc
+    return tag_start_desc

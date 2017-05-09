@@ -1,5 +1,4 @@
 import sys
-sys.path.append('.')
 
 from framework.plumbing import *
 
@@ -8,6 +7,7 @@ from framework.value_types import *
 from framework.data_model import *
 from framework.encoders import *
 import framework.dmhelpers.xml as xml
+from framework.dmhelpers.json import *
 
 class MyDF_DataModel(DataModel):
 
@@ -461,11 +461,52 @@ class MyDF_DataModel(DataModel):
                   'contents': UINT16_be(values=[30,40,50])},
              ] }
 
+
+        json_sample_1 = \
+            {"menu": {
+                "id": "file",
+                "value": "File",
+                "popup": {
+                    "menuitem": [
+                        {"value": "New", "onclick": "CreateNewDoc()"},
+                        {"value": "Open", "onclick": "OpenDoc()"},
+                        {"value": "Close", "onclick": "CloseDoc()"}
+                    ]
+                }
+            }}
+
+        json1_desc = json_builder('json1', params=json_sample_1)
+
+        json_sample_2 = \
+            {"glossary": {
+                "title": "example glossary",
+                "GlossDiv": {
+                    "title": "S",
+                    "GlossList": {
+                        "GlossEntry": {
+                            "ID": "SGML",
+                            "SortAs": "SGML",
+                            "GlossTerm": "Standard Generalized Markup Language",
+                            "Acronym": "SGML",
+                            "Abbrev": "ISO 8879:1986",
+                            "GlossDef": {
+                                "para": "A meta-markup language, used to create markup languages such as DocBook.",
+                                "GlossSeeAlso": ["GML", "XML"]
+                            },
+                            "GlossSee": "markup"
+                        }
+                    }
+                }
+            }}
+
+        json2_desc = json_builder('json2', params=json_sample_2)
+
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
                       shape_desc, for_network_tg1, for_network_tg2, for_net_default_tg, basic_intg,
                       enc_desc, example_desc,
-                      regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc)
+                      regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc,
+                      json1_desc, json2_desc)
 
 
 data_model = MyDF_DataModel()
