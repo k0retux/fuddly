@@ -102,6 +102,13 @@ except ImportError:
     sqlite3_module = False
     print('WARNING [FMK]: SQLite3 not installed, FmkDB will not be available!')
 
+numpy_module = True
+try:
+    import numpy
+except ImportError:
+    numpy_module = False
+    print('WARNING [FMK]: Numpy not installed, knowledge abstraction layer will not be available!')
+
 cups_module = True
 try:
     import cups

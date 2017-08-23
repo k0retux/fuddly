@@ -26,3 +26,6 @@ __all__ = []
 from test.unit.test_node import *
 from test.unit.test_node_builder import *
 from test.unit.test_monitor import *
+
+import test.unit.knowledge
+from test.unit.knowledge.all import *
