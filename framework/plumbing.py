@@ -223,6 +223,7 @@ class FmkPlumbing(object):
         self.error = False
         self.fmk_error = []
         self._sending_error = None
+        self._stop_sending = None
 
         self.__tg_enabled = False
         self.__prj_to_be_reloaded = False
@@ -1665,7 +1666,6 @@ class FmkPlumbing(object):
             if data is None:
                 self.set_error(msg='Data creation process has yielded!',
                                code=Error.DPHandOver)
-                print('\n+++ DP yield', data_desc.auto_regen)
                 return None
 
         elif isinstance(data_desc, str):
@@ -1728,6 +1728,10 @@ class FmkPlumbing(object):
                                     data_tmp.copy_callback_from(data)
                                 new_data.append(data_tmp)
                             else:
+                                # We mark the data unusable in order to make sending methods
+                                # aware of specific events that should stop the sending process.
+                                # In this case it is either the normal end of a scenario or an error
+                                # within a scenario step.
                                 newd = Data()
                                 newd.make_unusable()
                                 new_data = [newd]
@@ -1762,9 +1766,8 @@ class FmkPlumbing(object):
 
             if isinstance(new_data, list):
                 for newd in new_data:
-                    if not newd.is_unusable():
-                        new_data_list.append(newd)
-            elif not new_data.is_unusable():
+                    new_data_list.append(newd)
+            else:
                 new_data_list.append(new_data)
 
         return new_data_list
@@ -1828,15 +1831,16 @@ class FmkPlumbing(object):
         if not data_list:
             return True
 
-        data_list = self._send_data(data_list, add_preamble=True)
+        data_list = self._send_data(data_list)
+
+        if self._sending_error or self._stop_sending:
+            return False
+
         if data_list is None:
             # In this case, some data callbacks have triggered to block the emission of
             # what was in data_list. We go on because this is a normal behavior (especially in the
             # context of Scenario() execution).
             return True
-
-        if self._sending_error:
-            return False
 
         # All feedback entries that are available for relevant framework users (scenario
         # callbacks, operators, ...) are flushed just after sending a new data because it
@@ -1864,22 +1868,16 @@ class FmkPlumbing(object):
         for dt in data_list:
             dt.make_recordable()
 
+        # When checking target readiness, feedback timeout is taken into account indirectly
+        # through the call to Target.is_target_ready_for_new_data()
+        cont0 = self.check_target_readiness() >= 0
+
         if multiple_data:
             self._log_data(data_list, original_data=original_data,
                            verbose=verbose)
         else:
             orig = original_data[0] if orig_data_provided else None
             self._log_data(data_list[0], original_data=orig, verbose=verbose)
-
-        # When checking target readiness, feedback timeout is taken into account indirectly
-        # through the call to Target.is_target_ready_for_new_data()
-        cont0 = self.check_target_readiness() >= 0
-
-        ack_date = self.tg.get_last_target_ack_date()
-        self.lg.log_target_ack_date(ack_date)
-
-        if cont0:
-            cont0 = self.__delay_fuzzing()
 
         cont1 = True
         cont2 = True
@@ -1897,11 +1895,14 @@ class FmkPlumbing(object):
 
         self._do_after_feedback_retrieval(data_list)
 
+        if cont0:
+            cont0 = self.__delay_fuzzing()
+
         return cont0 and cont1 and cont2
 
 
     @EnforceOrder(accepted_states=['S2'])
-    def _send_data(self, data_list, add_preamble=False):
+    def _send_data(self, data_list):
         '''
         @data_list: either a list of Data() or a Data()
         '''
@@ -1928,8 +1929,18 @@ class FmkPlumbing(object):
                 self.mon.notify_error()
                 return None
 
+            self._stop_sending = False
+            if data_list[0].is_unusable():
+                self.set_error("_send_data(): A DataProcess has yielded. No more data to send.",
+                               code=Error.NoMoreData)
+                self.mon.notify_error()
+                self._stop_sending = True
+                return None
+
+            self._setup_new_sending()
             self._sending_error = False
             try:
+                self.tg._altered_data_queued = data_list[0].altered
                 if len(data_list) == 1:
                     self.tg.send_data_sync(data_list[0], from_fmk=True)
                 elif len(data_list) > 1:
@@ -1948,8 +1959,6 @@ class FmkPlumbing(object):
                 self.mon.notify_error()
                 self._sending_error = True
             else:
-                if add_preamble:
-                    self.new_transfer_preamble()
                 self.mon.notify_data_sending_event()
 
             self._do_after_sending_data(data_list)
@@ -2065,9 +2074,11 @@ class FmkPlumbing(object):
 
                 self.lg.log_data(dt, verbose=verbose)
 
+                ack_date = self.tg.get_last_target_ack_date()
+                self.lg.set_target_ack_date(ack_date)
 
                 if self.fmkDB.enabled:
-                    data_id = self.lg.commit_log_entry(self.group_id, self.prj.name, self.tg_name)
+                    data_id = self.lg.commit_data_table_entry(self.group_id, self.prj.name, self.tg_name)
                     if data_id is None:
                         self.lg.print_console('### Data not recorded in FmkDB',
                                               rgb=Color.DATAINFO, nl_after=True)
@@ -2078,9 +2089,12 @@ class FmkPlumbing(object):
                 if multiple_data:
                     self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
 
+                self.lg.log_target_ack_date()
+
+                self.lg.reset_current_state()
 
     @EnforceOrder(accepted_states=['S2'])
-    def new_transfer_preamble(self):
+    def _setup_new_sending(self):
         if self._burst > 1 and self._burst_countdown == self._burst:
             p = "\n::[ START BURST ]::\n"
         else:
@@ -2170,7 +2184,6 @@ class FmkPlumbing(object):
                     time.sleep(0.01)
                     now = datetime.datetime.now()
                     if (now - t0).total_seconds() > self._hc_timeout:
-                        print('\n***DBG: FBK timeout')
                         self.lg.log_target_feedback_from(
                             '*** Timeout! The target does not seem to be ready.',
                             now, status_code=-1, source='Fuddly FmK'
@@ -2570,9 +2583,12 @@ class FmkPlumbing(object):
                 if not data_list:
                     continue
 
-                data_list = self._send_data(data_list, add_preamble=True)
+                data_list = self._send_data(data_list)
                 if self._sending_error:
                     self.lg.log_fmk_info("Operator will shutdown because of a sending error")
+                    break
+                elif self._stop_sending:
+                    self.lg.log_fmk_info("Operator will shutdown because a DataProcess has yielded")
                     break
                 elif data_list is None:
                     self.lg.log_fmk_info("Operator will shutdown because there is no data to send")
@@ -2610,14 +2626,7 @@ class FmkPlumbing(object):
                     elif ret == -3:
                         self.lg.log_fmk_info("Operator will shutdown because of exception in user code")
 
-                ack_date = self.tg.get_last_target_ack_date()
-                self.lg.log_target_ack_date(ack_date)
-
-                # Delay introduced after logging data
-                if not self.__delay_fuzzing():
-                    exit_operator = True
-                    self.lg.log_fmk_info("Operator will shutdown because waiting has been cancelled by the user")
-
+                self.lg.log_target_ack_date()
 
                 # Target fbk is logged only at the end of a burst
                 if self._burst_countdown == self._burst:
@@ -2654,6 +2663,12 @@ class FmkPlumbing(object):
 
                 if self._burst_countdown == self._burst:
                     self.tg.cleanup()
+
+                # Delay introduced after logging data
+                if not self.__delay_fuzzing():
+                    exit_operator = True
+                    self.lg.log_fmk_info("Operator will shutdown because waiting has been cancelled by the user")
+
         try:
             operator.stop(self._exportable_fmk_ops, self.dm, self.mon, self.tg, self.lg)
         except:

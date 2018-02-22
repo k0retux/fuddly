@@ -152,9 +152,11 @@ class Step(object):
     def __init__(self, data_desc=None, final=False,
                  fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
-                 do_before_data_processing=None, do_before_sending=None):
+                 do_before_data_processing=None, do_before_sending=None,
+                 valid=True):
 
         self.final = final
+        self.valid = valid
         self._step_desc = step_desc
         self._transitions = []
         self._do_before_data_processing = do_before_data_processing
@@ -490,17 +492,18 @@ class Step(object):
 class FinalStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
-                 do_before_data_processing=None):
-        Step.__init__(self, final=True, do_before_data_processing=do_before_data_processing)
+                 do_before_data_processing=None, valid=True):
+        Step.__init__(self, final=True, do_before_data_processing=do_before_data_processing, valid=valid)
 
 class NoDataStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
-                 do_before_data_processing=None):
+                 do_before_data_processing=None, valid=True):
         Step.__init__(self, data_desc=Data(''), final=final,
                       fbk_timeout=fbk_timeout, fbk_mode=fbk_mode,
                       set_periodic=set_periodic, clear_periodic=clear_periodic,
-                      step_desc=step_desc, do_before_data_processing=do_before_data_processing)
+                      step_desc=step_desc, do_before_data_processing=do_before_data_processing,
+                      valid=valid)
         self.make_blocked()
 
     def make_free(self):

@@ -21,7 +21,6 @@
 #
 ################################################################################
 
-import cups
 import os
 import random
 
@@ -29,6 +28,8 @@ from framework.global_resources import workspace_folder
 from framework.target_helpers import Target, TargetFeedback
 from libs.external_modules import cups_module
 
+if cups_module:
+   import cups
 
 class PrinterTarget(Target):
 

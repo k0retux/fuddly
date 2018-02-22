@@ -475,7 +475,7 @@ class MyDF_DataModel(DataModel):
                 }
             }}
 
-        json1_desc = json_builder('json1', params=json_sample_1)
+        json1_desc = json_builder('json1', sample=json_sample_1)
 
         json_sample_2 = \
             {"glossary": {
@@ -499,7 +499,7 @@ class MyDF_DataModel(DataModel):
                 }
             }}
 
-        json2_desc = json_builder('json2', params=json_sample_2)
+        json2_desc = json_builder('json2', sample=json_sample_2)
 
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,

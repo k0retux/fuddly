@@ -21,6 +21,7 @@
 #
 ################################################################################
 
+import types
 import subprocess
 from copy import *
 
@@ -31,6 +32,7 @@ from framework.fuzzing_primitives import *
 from framework.basic_primitives import *
 from framework.value_types import *
 from framework.data_model import DataModel
+from framework.dmhelpers.generic import MH
 
 # from framework.plumbing import *
 from framework.evolutionary_helpers import Population
@@ -242,6 +244,7 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
             data.add_info('reevaluate all the constraints (if any)')
 
         data.update_from(exported_node)
+        data.altered = True
 
         return data
 
@@ -421,6 +424,7 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
         else:
             data.update_from(rnode)
 
+        data.altered = True
         return data
 
 
@@ -430,7 +434,7 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
                      'max_steps': ('Maximum number of steps (-1 means until the end).', -1, int) },
            args={'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
-                 'deep': ('If True, enable corruption of minimum and maxium amount of non-terminal nodes.',
+                 'deep': ('If True, enable corruption of minimum and maximum amount of non-terminal nodes.',
                           False, bool) })
 class sd_struct_constraints(StatefulDisruptor):
     '''
@@ -604,6 +608,7 @@ class sd_struct_constraints(StatefulDisruptor):
         data.add_info(' |_ {:s}'.format(op_performed))
 
         data.update_from(corrupted_seed)
+        data.altered = True
 
         return data
 
@@ -641,6 +646,7 @@ class SwapperDisruptor(StatefulDisruptor):
             data.update_from(self.node)
 
         self.count += 1
+        data.altered = True
         return data
 
 
@@ -896,6 +902,7 @@ class d_fuzz_model_structure(Disruptor):
         prev_content = prev_data.content
         if isinstance(prev_content, Node):
             fuzz_data_tree(prev_content, self.path)
+            prev_data.altered = True
         else:
             prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
 
@@ -1027,6 +1034,7 @@ class d_max_size(Disruptor):
             prev_data.update_from(new_val)
             ret = prev_data
 
+        ret.altered = True
         return ret
 
 
@@ -1095,6 +1103,7 @@ class d_corrupt_node_bits(Disruptor):
             prev_data.add_info('Corruption performed on a byte string as no Node is available')
             ret = prev_data
 
+        ret.altered = True
         return ret
 
 
@@ -1121,6 +1130,7 @@ class d_corrupt_bits_by_position(Disruptor):
         msg = val[:self.idx-1]+new_value+val[self.idx:]
 
         prev_data.update_from(msg)
+        prev_data.altered = True
 
         return prev_data
 
@@ -1129,8 +1139,8 @@ class d_corrupt_bits_by_position(Disruptor):
            args={'path': ('Graph path regexp to select nodes on which ' \
                           'the disruptor should apply.', None, str),
                  'clone_node': ('If True the dmaker will always return a copy ' \
-                                'of the node. (For stateless diruptors dealing with ' \
-                                'big data it can be usefull to it to False.)', False, bool)})
+                                'of the node. (For stateless disruptors dealing with ' \
+                                'big data it can be useful to it to False.)', False, bool)})
 class d_fix_constraints(Disruptor):
     '''
     Fix data constraints.
@@ -1181,8 +1191,8 @@ class d_fix_constraints(Disruptor):
                           'the disruptor should apply.', None, str),
                  'recursive': ('Apply the disruptor recursively.', True, str),
                  'clone_node': ('If True the dmaker will always return a copy ' \
-                                'of the node. (for stateless diruptors dealing with ' \
-                                'big data it can be usefull to it to False).', False, bool)})
+                                'of the node. (for stateless disruptors dealing with ' \
+                                'big data it can be useful to it to False).', False, bool)})
 class d_next_node_content(Disruptor):
     '''
     Move to the next content of the nodes from input data or from only
@@ -1226,6 +1236,75 @@ class d_next_node_content(Disruptor):
 
         return prev_data
 
+@disruptor(tactics, dtype="OP", weight=4,
+           args={'path': ('Graph path regexp to select nodes on which ' \
+                          'the disruptor should apply.', None, str),
+                 'op': ('The operation to perform on the selected nodes.', Node.clear_attr,
+                        (types.MethodType, types.FunctionType)), # python3, python2
+                 'params': ('Tuple of parameters that will be provided to the operation. ('
+                            'default: MH.Attr.Mutable)',
+                            (MH.Attr.Mutable,),
+                            tuple),
+                 'clone_node': ('If True the dmaker will always return a copy ' \
+                                'of the node. (For stateless disruptors dealing with ' \
+                                'big data it can be useful to set it to False.)', False, bool)})
+class d_operate_on_nodes(Disruptor):
+    '''
+    Perform an operation on the nodes specified by the regexp path. @op is an operation that
+    applies to a node and @params are a tuple containing the parameters that will be provided to
+    @op. If no path is provided, the root node will be used.
+    '''
+    def setup(self, dm, user_input):
+        return True
+
+    def disrupt_data(self, dm, target, prev_data):
+        ok = False
+        prev_content = prev_data.content
+        if not isinstance(prev_content, Node):
+            prev_data.add_info('INVALID INPUT')
+            return prev_data
+
+        if self.path:
+            l = prev_content.get_reachable_nodes(path_regexp=self.path)
+            if not l:
+                prev_data.add_info('INVALID INPUT')
+                return prev_data
+
+            for n in l:
+                try:
+                    self.op(n, *self.params)
+                except:
+                    prev_data.add_info("An error occurred while performing the operation on the "
+                                       "node '{:s}'".format(n.name))
+                else:
+                    ok = True
+                    self._add_info(prev_data, n)
+        else:
+            try:
+                self.op(prev_content, *self.params)
+            except:
+                prev_data.add_info("An error occurred while performing the operation on the "
+                                   "node '{:s}'".format(prev_content.name))
+            else:
+                ok = True
+                self._add_info(prev_data, prev_content)
+
+        if ok:
+            prev_data.add_info("performed operation: {!r}".format(self.op))
+            prev_data.add_info("parameters provided: {:s}"
+                               .format(', '.join((str(x) for x in self.params))))
+
+        prev_content.freeze()
+
+        if self.clone_node:
+            exported_node = Node(prev_content.name, base_node=prev_content, new_env=True)
+            prev_data.update_from(exported_node)
+
+        prev_data.altered = True
+        return prev_data
+
+    def _add_info(self, prev_data, n):
+        prev_data.add_info("changed node:        {!s}".format(n.get_path_from(prev_data.content)))
 
 @disruptor(tactics, dtype="MOD", weight=4,
            args={'path': ('Graph path regexp to select nodes on which ' \
@@ -1233,8 +1312,8 @@ class d_next_node_content(Disruptor):
                  'value': ('The new value to inject within the data.', '', str),
                  'constraints': ('Constraints for the absorption of the new value.', AbsNoCsts(), AbsCsts),
                  'clone_node': ('If True the dmaker will always return a copy ' \
-                                'of the node. (For stateless diruptors dealing with ' \
-                                'big data it can be usefull to it to False.)', False, bool)})
+                                'of the node. (For stateless disruptors dealing with ' \
+                                'big data it can be useful to it to False.)', False, bool)})
 class d_modify_nodes(Disruptor):
     '''
     Change the content of the nodes specified by the regexp path with
@@ -1272,6 +1351,7 @@ class d_modify_nodes(Disruptor):
             exported_node = Node(prev_content.name, base_node=prev_content, new_env=True)
             prev_data.update_from(exported_node)
 
+        prev_data.altered = True
         return prev_data
 
     def _add_info(self, prev_data, n, status, size):

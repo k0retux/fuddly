@@ -934,6 +934,7 @@ class DynGeneratorFromScenario(Generator):
         data = self.step.get_data()
         data.origin = self.scenario
         data.cleanup_all_callbacks()
+        data.altered = not self.step.valid
 
         if self.cond_fuzz or self.ignore_timing or self.data_fuzz:
             data.add_info("Current fuzzed step: '{:s}'"

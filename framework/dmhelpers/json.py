@@ -27,14 +27,14 @@ import framework.value_types as fvt
 import framework.global_resources as gr
 import uuid
 
-def json_builder(tag_name, params=None, node_name=None, codec='latin-1',
+def json_builder(tag_name, sample=None, node_name=None, codec='latin-1',
                 tag_name_mutable=True, struct_mutable=True, determinist=True):
     """
     Helper for modeling an JSON structure.
 
     Args:
       tag_name (str): name of the JSON tag.
-      params (dict): the JSON structure to be converted to a fuddly structure
+      sample (dict): the JSON structure to be converted to a fuddly structure
       node_name (str): name of the node to be created.
       codec (str): codec to be used for generating the JSON structure.
       tag_name_mutable (bool): if ``False``, the tag name will not be mutable, meaning that
@@ -48,11 +48,11 @@ def json_builder(tag_name, params=None, node_name=None, codec='latin-1',
       dict: Node-description of the JSON structure.
     """
 
-    if params is not None:
-        assert isinstance(params, dict)
+    if sample is not None:
+        assert isinstance(sample, dict)
         cts = []
         idx = 1
-        for k, v in params.items():
+        for k, v in sample.items():
             sep_id = uuid.uuid1() # The separator for the " in the key param.  e.g., "<key>"
 
             params = [
@@ -70,7 +70,7 @@ def json_builder(tag_name, params=None, node_name=None, codec='latin-1',
                     assert not isinstance(value, list)
                     if isinstance(value, dict):
                         # If the type of v is a dictionary, build a sub JSON structure for it.
-                        modeled_v.append(json_builder(tag_name + "_" + str(idx)+str(subidx), params=value))
+                        modeled_v.append(json_builder(tag_name + "_" + str(idx)+str(subidx), sample=value))
                     else:
                         checked_value = value if gr.is_string_compatible(value) else str(value)
                         modeled_v.append( 
@@ -101,7 +101,7 @@ def json_builder(tag_name, params=None, node_name=None, codec='latin-1',
                                     'mutable': struct_mutable, 'name': 'suffix'+str(idx)} ]})
 
             elif isinstance(v, dict):
-                params.append(json_builder(tag_name + "_" + str(idx), params=v))
+                params.append(json_builder(tag_name + "_" + str(idx), sample=v))
 
             elif gr.is_string_compatible(v):
                 params += [ {'name': ('sep', sep_id)},

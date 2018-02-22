@@ -49,6 +49,8 @@ class Target(object):
     _probes = None
     _send_data_lock = threading.Lock()
 
+    _altered_data_queued = None
+
     def set_logger(self, logger):
         self._logger = logger
 
@@ -245,6 +247,9 @@ class Target(object):
 
     def remove_probes(self):
         self._probes = None
+
+    def is_processed_data_altered(self):
+        return self._altered_data_queued
 
     @property
     def probes(self):

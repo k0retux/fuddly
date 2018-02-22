@@ -77,6 +77,11 @@ class Color(object):
     ND_ENCODED = 0xFFA500
     ND_CUSTO = 0x800080
 
+    ANALYSIS_CONFIRM = 0xEF0000
+    ANALYSIS_FALSEPOSITIVE = 0x00FF00
+    ANALYSIS_IMPACT = 0xFF0000
+    ANALYSIS_NO_IMPACT = 0x00C0FF
+
     @staticmethod
     def display():
         for c in dir(Color):

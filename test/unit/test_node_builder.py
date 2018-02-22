@@ -372,7 +372,7 @@ class RegexParserTest(unittest.TestCase):
 
         self._parser._create_terminal_node.assert_has_calls(calls)
 
-        self.assertEquals(self._parser._create_terminal_node.call_count, len(test_case['nodes']))
+        self.assertEqual(self._parser._create_terminal_node.call_count, len(test_case['nodes']))
 
 
     def assert_regex_is_invalid(self, test_case):

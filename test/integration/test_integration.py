@@ -3545,7 +3545,7 @@ class TestFMK(unittest.TestCase):
             d = fmk.get_data(['SEPARATOR', 'tSEP'])
             if d is None:
                 break
-            fmk.new_transfer_preamble()
+            fmk._setup_new_sending()
             fmk._log_data(d)
 
         self.assertGreater(i, 2)
@@ -3568,7 +3568,7 @@ class TestFMK(unittest.TestCase):
                 if d is None:
                     print('--> Exiting (need new input)')
                     break
-                fmk.new_transfer_preamble()
+                fmk._setup_new_sending()
                 fmk._log_data(d)
                 outcomes.append(d.to_bytes())
                 d.show()
@@ -3589,7 +3589,7 @@ class TestFMK(unittest.TestCase):
             if d is None:
                 print('--> Exiting (need new input)')
                 break
-            fmk.new_transfer_preamble()
+            fmk._setup_new_sending()
             fmk._log_data(d)
             outcomes.append(d.to_bytes())
             d.show()
@@ -3611,7 +3611,7 @@ class TestFMK(unittest.TestCase):
             if d is None:
                 print('--> Exiting (need new input)')
                 break
-            fmk.new_transfer_preamble()
+            fmk._setup_new_sending()
             fmk._log_data(d)
             outcomes.append(d.to_bytes())
             d.show()
@@ -3648,16 +3648,14 @@ class TestFMK(unittest.TestCase):
         print(fbk)
         self.assertIn(b'You loose!', fbk)
 
-    def test_scenario_infra_01(self):
+    def test_scenario_infra_01a(self):
 
-        print('\n*** test scenario SC_NO_REGEN')
+        print('\n*** test scenario SC_NO_REGEN via _send_data()')
 
         base_qty = 0
         for i in range(100):
             data = fmk.get_data(['SC_NO_REGEN'])
             data_list = fmk._send_data([data])  # needed to make the scenario progress
-            # send_data_and_log() should be used for more complex scenarios
-            # hooking the framework in more places.
             if not data_list:
                 base_qty = i
                 break
@@ -3672,13 +3670,46 @@ class TestFMK(unittest.TestCase):
                                        'DPHandOver', 'NoMoreData'])
         self.assertEqual(base_qty, 55)
 
-        print('\n*** test scenario SC_AUTO_REGEN')
+        print('\n*** test scenario SC_AUTO_REGEN via _send_data()')
 
         for i in range(base_qty * 3):
             data = fmk.get_data(['SC_AUTO_REGEN'])
             data_list = fmk._send_data([data])
             if not data_list:
                 raise ValueError
+
+    @unittest.skipIf(not run_long_tests, "Long test case")
+    def test_scenario_infra_01b(self):
+
+        print('\n*** test scenario SC_NO_REGEN via send_data_and_log()')
+        # send_data_and_log() is used to stimulate the framework in more places.
+
+        base_qty = 0
+        for i in range(100):
+            data = fmk.get_data(['SC_NO_REGEN'])
+            go_on = fmk.send_data_and_log([data])
+            if not go_on:
+                base_qty = i
+                break
+        else:
+            raise ValueError
+
+        err_list = fmk.get_error()
+        code_vector = [str(e) for e in err_list]
+        print('\n*** Retrieved error code vector: {!r}'.format(code_vector))
+
+        self.assertEqual(code_vector, ['DataUnusable', 'HandOver', 'DataUnusable', 'HandOver',
+                                       'DPHandOver', 'NoMoreData'])
+        self.assertEqual(base_qty, 55)
+
+        print('\n*** test scenario SC_AUTO_REGEN via send_data_and_log()')
+
+        for i in range(base_qty * 3):
+            data = fmk.get_data(['SC_AUTO_REGEN'])
+            go_on = fmk.send_data_and_log([data])
+            if not go_on:
+                raise ValueError
+
 
     @unittest.skipIf(not run_long_tests, "Long test case")
     def test_scenario_infra_02(self):

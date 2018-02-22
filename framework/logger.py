@@ -106,7 +106,7 @@ class Logger(object):
         self.__idx = 0
         self.__tmp = False
 
-        self._reset_current_state()
+        self.reset_current_state()
         self.last_data_id = None
         self.last_data_recordable = None
 
@@ -162,14 +162,14 @@ class Logger(object):
         if self._fd:
             self._fd.close()
 
-        self._reset_current_state()
+        self.reset_current_state()
         self.last_data_id = None
         self.last_data_recordable = None
 
         self.print_console('*** Logger is stopped ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
 
 
-    def _reset_current_state(self):
+    def reset_current_state(self):
         self._current_data = None
         self._current_orig_data_id = None
         self._current_size = None
@@ -180,7 +180,7 @@ class Logger(object):
         self._current_src_data_id = None
         self._current_fmk_info = []
 
-    def commit_log_entry(self, group_id, prj_name, tg_name):
+    def commit_data_table_entry(self, group_id, prj_name, tg_name):
         if self._current_data is not None:  # that means data will be recorded
             init_dmaker = self._current_data.get_initial_dmaker()
             init_dmaker = Database.DEFAULT_GTYPE_NAME if init_dmaker is None else init_dmaker[0]
@@ -199,7 +199,6 @@ class Logger(object):
                 print("\n*** ERROR: Cannot insert the data record in FMKDB!")
                 self.last_data_id = None
                 self.last_data_recordable = None
-                self._reset_current_state()
                 return self.last_data_id
 
             self._current_data.set_data_id(self.last_data_id)
@@ -224,8 +223,6 @@ class Logger(object):
 
             for msg, now in self._current_fmk_info:
                 self.fmkDB.insert_fmk_info(self.last_data_id, msg, now)
-
-            self._reset_current_state()
 
             return self.last_data_id
 
@@ -516,12 +513,13 @@ class Logger(object):
         msg = "### Info: {:s}".format(info)
         self.log_fn(msg, rgb=Color.INFO)
 
-    def log_target_ack_date(self, date):
-        self._current_ack_date = date
-
+    def log_target_ack_date(self):
         msg = "### Target ack received at: "
         self.log_fn(msg, nl_after=False, rgb=Color.LOGSECTION)
         self.log_fn(str(self._current_ack_date), nl_before=False)
+
+    def set_target_ack_date(self, date):
+        self._current_ack_date = date
 
     def log_orig_data(self, data):
 

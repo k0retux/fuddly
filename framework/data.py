@@ -201,7 +201,8 @@ class Data(object):
 
     _empty_data_backend = EmptyBackend()
 
-    def __init__(self, data=None):
+    def __init__(self, data=None, altered=False):
+        self.altered = altered
         self._backend = None
 
         self._type = None
@@ -301,6 +302,7 @@ class Data(object):
         dmaker_name = self._backend.data_maker_name
 
         if original_data is not None:
+            self.altered = original_data.altered
             if original_data.origin is not None:
                 self.add_info("Data instantiated from: {!s}".format(original_data.origin))
             if original_data.info:

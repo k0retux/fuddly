@@ -920,7 +920,7 @@ class NetworkTarget(Target):
 
                     retry = 0
                     socket_timed_out = False
-                    while retry < 3:
+                    while retry < 10:
                         try:
                             chunk = s.recv(sz)
                         except socket.timeout:
@@ -1031,6 +1031,7 @@ class NetworkTarget(Target):
                 fbk_ids[s] = self._default_fbk_id[(host, port)]
                 fbk_lengths[s] = self.feedback_length
 
+            assert from_fmk
             self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk,
                                       pre_fbk=pre_fbk)
 
@@ -1089,9 +1090,9 @@ class NetworkTarget(Target):
                     fbk_ids[s] = self._default_fbk_id[(host, port)]
                     fbk_lengths[s] = self.feedback_length
 
-
-            self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk,
-                                      pre_fbk=pre_fbk)
+            if from_fmk:
+                self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk,
+                                          pre_fbk=pre_fbk)
 
         else:
             raise TargetStuck("system not ready for sending data!")

@@ -60,8 +60,10 @@ group = parser.add_argument_group('Fuddly Database Visualization')
 group.add_argument('-s', '--all-stats', action='store_true', help='Show all statistics')
 
 group = parser.add_argument_group('Fuddly Database Information')
-group.add_argument('-i', '--info', type=int, metavar='DATA_ID',
-                   help='Display information on the specified data ID')
+group.add_argument('-i', '--data-id', type=int, metavar='DATA_ID',
+                   help='Provide the data ID on which actions will be performed. Without '
+                        'any other parameters the default action is to display '
+                        'information on the specified data ID.')
 group.add_argument('--info-by-date', nargs=2, metavar=('START','END'),
                    help='''Display information on data sent between START and END '''
                         '''(date format 'Year/Month/Day' or 'Year/Month/Day-Hour' or
@@ -70,10 +72,12 @@ group.add_argument('--info-by-ids', nargs=2, metavar=('FIRST_DATA_ID','LAST_DATA
                    help='''Display information on all the data included within the specified
                    data ID range''')
 
-group.add_argument('--with-fbk', action='store_true', help='Display full feedback (expect --info)')
-group.add_argument('--with-data', action='store_true', help='Display data content (expect --info)')
+group.add_argument('--with-fbk', action='store_true', help='Display full feedback (expect --data-id)')
+group.add_argument('--with-data', action='store_true', help='Display data content (expect --data-id)')
 group.add_argument('--without-fmkinfo', action='store_true',
-                   help='Do not display fmkinfo (expect --info)')
+                   help='Do not display fmkinfo (expect --data-id)')
+group.add_argument('--without-analysis', action='store_true',
+                   help='Do not display user analysis (expect --data-id)')
 group.add_argument('--limit', type=int, default=None,
                    help='Limit the size of what is displayed from the sent data and the '
                         'retrieved feedback (expect --with-data or --with-fbk).')
@@ -91,13 +95,23 @@ group.add_argument('-r', '--remove-one-data', type=int, metavar='DATA_ID',
 
 group = parser.add_argument_group('Fuddly Database Analysis')
 group.add_argument('--data-with-impact', action='store_true',
-                   help="Retrieve data that negatively impacted a target")
+                   help="Retrieve data that negatively impacted a target. Analysis is performed "
+                        "based on feedback status and user analysis if present")
+group.add_argument('--data-with-impact-raw', action='store_true',
+                   help="Retrieve data that negatively impacted a target. Analysis is performed "
+                        "based on feedback status")
 group.add_argument('--data-without-fbk', action='store_true',
                    help="Retrieve data without feedback")
 group.add_argument('--data-with-specific-fbk', metavar='FEEDBACK_REGEXP',
                    help="Retrieve data with specific feedback provided as a regexp")
-
-
+group.add_argument('-a', '--add-analysis', nargs=2, metavar=('IMPACT', 'COMMENT'),
+                   help='''Add an impact analysis to a specific data ID (expect --data-id).
+                        IMPACT should be either 0 (no impact) or 1 (impact), and COMMENT 
+                        provide information''')
+group.add_argument('--disprove-impact', nargs=2, metavar=('FIRST_ID', 'LAST_ID'), type=int,
+                   help='''Disprove the impact of a group of data present in the outcomes of 
+                   '--data-with-impact-raw'. The group is determined by providing the smaller data ID 
+                   (FIRST_ID) and the bigger data ID (LAST_ID).''')
 
 def handle_confirmation():
     try:
@@ -149,13 +163,14 @@ if __name__ == "__main__":
 
     display_stats = args.all_stats
 
-    data_info = args.info
+    data_ID = args.data_id
     data_info_by_date = args.info_by_date
     data_info_by_range = args.info_by_ids
     prj_name = args.project
     with_fbk = args.with_fbk
     with_data = args.with_data
     without_fmkinfo = args.without_fmkinfo
+    without_analysis = args.without_analysis
     limit_data_sz = args.limit
     raw_data = args.raw
 
@@ -165,9 +180,12 @@ if __name__ == "__main__":
     remove_one_data = args.remove_one_data
 
     impact_analysis = args.data_with_impact
+    raw_impact_analysis = args.data_with_impact_raw
     data_without_fbk = args.data_without_fbk
     fbk_src = args.fbk_src
     data_with_specific_fbk = args.data_with_specific_fbk
+    add_analysis = args.add_analysis
+    disprove_impact = args.disprove_impact
 
     fmkdb = Database(fmkdb_path=fmkdb)
     ok = fmkdb.start()
@@ -176,14 +194,48 @@ if __name__ == "__main__":
                        rgb=Color.ERROR))
         sys.exit(-1)
 
+    now = datetime.now()
+
     if display_stats:
 
         fmkdb.display_stats(colorized=colorized)
 
-    elif data_info is not None:
+    elif add_analysis is not None:
+        try:
+            ia_impact = int(add_analysis[0])
+        except ValueError:
+            print('*** IMPACT argument is incorrect! ***')
+        else:
+            ia_comment = add_analysis[1]
+            fmkdb.insert_analysis(data_ID, ia_comment, now, impact=bool(ia_impact))
 
-        fmkdb.display_data_info(data_info, with_data=with_data, with_fbk=with_fbk,
-                                with_fmkinfo=not without_fmkinfo, fbk_src=fbk_src,
+
+    elif disprove_impact is not None:
+
+        first_data_id = disprove_impact[0]
+        last_data_id = disprove_impact[1]
+
+        data_list = fmkdb.get_data_with_impact(prj_name=prj_name, fbk_src=fbk_src, display=False,
+                                               raw_analysis=True)
+        data_list = sorted(data_list)
+
+        if first_data_id not in data_list or last_data_id not in data_list:
+            print('*** Error with provided data IDs! ***')
+        else:
+            idx_first = data_list.index(first_data_id)
+            idx_last = data_list.index(last_data_id)
+            data_list_to_disprove = data_list[idx_first:idx_last + 1]
+
+            for data_id in data_list_to_disprove:
+                fmkdb.insert_analysis(data_id, "Impact is disproved by user analysis. (False Positive.)",
+                                      now, impact=False)
+
+    elif data_ID is not None:
+
+        fmkdb.display_data_info(data_ID, with_data=with_data, with_fbk=with_fbk,
+                                with_fmkinfo=not without_fmkinfo,
+                                with_analysis=not without_analysis,
+                                fbk_src=fbk_src,
                                 limit_data_sz=limit_data_sz, raw=raw_data, page_width=page_width,
                                 colorized=colorized)
 
@@ -224,8 +276,9 @@ if __name__ == "__main__":
         else:
             fmkdb.remove_data(remove_one_data, colorized=colorized)
 
-    elif impact_analysis:
+    elif impact_analysis or raw_impact_analysis:
         fmkdb.get_data_with_impact(prj_name=prj_name, fbk_src=fbk_src, verbose=verbose,
+                                   raw_analysis=raw_impact_analysis,
                                    colorized=colorized)
 
     elif data_without_fbk:

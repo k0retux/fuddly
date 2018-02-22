@@ -39,7 +39,7 @@ Parameters:
         |      | default: -1 [type: int]
         |_ clone_node
         |      | desc: if True the dmaker will always return a copy of the node. (for
-        |      |       stateless diruptors dealing with big data it can be usefull
+        |      |       stateless disruptors dealing with big data it can be useful
         |      |       to it to False)
         |      | default: True [type: bool]
 
@@ -140,7 +140,7 @@ Parameters:
        generic args:
          |_ clone_node
          |      | desc: if True the dmaker will always return a copy of the node. (for
-         |      |       stateless diruptors dealing with big data it can be usefull
+         |      |       stateless disruptors dealing with big data it can be useful
          |      |       to it to False)
          |      | default: True [type: bool]
          |_ init
@@ -180,7 +180,7 @@ Parameters:
        generic args: 
 	 |_ clone_node
 	 |      | desc: if True the dmaker will always return a copy of the node. (for 
-	 |      |       stateless diruptors dealing with big data it can be usefull 
+	 |      |       stateless disruptors dealing with big data it can be useful
 	 |      |       to it to False)
 	 |      | default: True [type: bool]
 	 |_ init
@@ -228,7 +228,7 @@ Parameters:
       generic args:
         |_ clone_node
         |      | desc: if True the dmaker will always return a copy of the node. (for
-        |      |       stateless diruptors dealing with big data it can be usefull
+        |      |       stateless disruptors dealing with big data it can be useful
         |      |       to it to False)
         |      | default: True [type: bool]
         |_ init
@@ -263,6 +263,38 @@ Parameters:
 Stateless Disruptors
 ====================
 
+OP - Perform Operations on Nodes
+--------------------------------
+
+Description:
+    Perform an operation on the nodes specified by the regexp path. @op is an operation that
+    applies to a node and @params are a tuple containing the parameters that will be provided to
+    @op. If no path is provided, the root node will be used.
+
+Reference:
+  :class:`framework.generic_data_makers.d_operate_on_nodes`
+
+Parameters:
+  .. code-block:: none
+
+      specific args:
+        |_ path
+        |      | desc: Graph path regexp to select nodes on which the disruptor should
+        |      |       apply.
+        |      | default: None [type: str]
+        |_ op
+        |      | desc: The operation to perform on the selected nodes.
+        |      | default: <function Node.clear_attr> [type: method, function]
+        |_ params
+        |      | desc: Tuple of parameters that will be provided to the operation.
+        |      |       (default: MH.Attr.Mutable)
+        |      | default: (2,) [type: tuple]
+        |_ clone_node
+        |      | desc: If True the dmaker will always return a copy of the node. (For
+        |      |       stateless disruptors dealing with big data it can be useful
+        |      |       to set it to False.)
+        |      | default: False [type: bool]
+
 
 MOD - Modify Node Contents
 --------------------------
@@ -286,7 +318,7 @@ Parameters:
 	  |      | default: None [type: str]
 	  |_ clone_node
 	  |      | desc: if True the dmaker will always return a copy of the node. (for
-	  |      |       stateless diruptors dealing with big data it can be usefull
+	  |      |       stateless disruptors dealing with big data it can be useful
 	  |      |       to it to False)
 	  |      | default: False [type: bool]
 	  |_ value
@@ -320,7 +352,7 @@ Parameters:
 	  |      | default: None [type: str]
 	  |_ clone_node
 	  |      | desc: if True the dmaker will always return a copy of the node. (for
-	  |      |       stateless diruptors dealing with big data it can be usefull
+	  |      |       stateless disruptors dealing with big data it can be useful
 	  |      |       to it to False)
 	  |      | default: False [type: bool]
 	  |_ recursive
@@ -355,7 +387,7 @@ Parameters:
 	  |      | default: None [type: str]
 	  |_ clone_node
 	  |      | desc: if True the dmaker will always return a copy of the node. (for
-	  |      |       stateless diruptors dealing with big data it can be usefull
+	  |      |       stateless disruptors dealing with big data it can be useful
 	  |      |       to it to False)
 	  |      | default: False [type: bool]
 
