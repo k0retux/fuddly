@@ -501,12 +501,18 @@ class MyDF_DataModel(DataModel):
 
         json2_desc = json_builder('json2', sample=json_sample_2)
 
+        file_desc = \
+            {'name': 'file',
+             'contents': Filename(values=['test.txt']),
+             'debug': True
+            }
+
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
                       shape_desc, for_network_tg1, for_network_tg2, for_net_default_tg, basic_intg,
                       enc_desc, example_desc,
                       regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc,
-                      json1_desc, json2_desc)
+                      json1_desc, json2_desc, file_desc)
 
 
 data_model = MyDF_DataModel()

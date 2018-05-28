@@ -785,7 +785,9 @@ class TypedNodeDisruption(NodeConsumerStub):
             fuzzy_vt_cls = list(vt.fuzzy_cls.values())
             fuzzy_vt_list = []
             for c in fuzzy_vt_cls:
-                fuzzy_vt_list.append(c(vt.endian))
+                new_vt = c(vt.endian)
+                # new_vt.knowledge_source = vt.knowledge_source
+                fuzzy_vt_list.append(new_vt)
 
         return fuzzy_vt_list
 

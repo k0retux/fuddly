@@ -34,6 +34,9 @@ VT_DEBUG = False
 # related to fuzzing_primitives.py
 MW_DEBUG = False
 
+# related to knowledge infrastructure
+KNOW_DEBUG = True
+
 try:
     from xtermcolor import colorize
 except ImportError:
@@ -56,3 +59,6 @@ def DEBUG_PRINT(msg, level=1, rgb=None):
             print(colorize(msg, rgb=DebugColor.LEVEL[level]))
         else:
             print(colorize(msg, rgb=rgb))
+
+def NO_PRINT(msg, level=1, rgb=None):
+    return

@@ -52,6 +52,7 @@ import framework.basic_primitives as bp
 from framework.encoders import *
 from framework.error_handling import *
 from framework.global_resources import *
+from framework.knowledge.information import *
 
 import libs.debug_facility as dbg
 
@@ -63,6 +64,7 @@ class VT(object):
     '''
     mini = None
     maxi = None
+    knowledge_source = None
 
     BigEndian = 1
     LittleEndian = 2
@@ -108,6 +110,14 @@ class VT(object):
 
     def pretty_print(self, max_size=None):
         return None
+
+    # @property
+    # def knowledge_source(self):
+    #     return self._knowledge_source
+    #
+    # @knowledge_source.setter
+    # def knowledge_source(self, src):
+    #     self._knowledge_source = src
 
 
 class VT_Alt(VT):
@@ -728,8 +738,6 @@ class String(VT_Alt):
 
         if extra_fuzzy_list is not None:
             self.extra_fuzzy_list = self._str2bytes(extra_fuzzy_list)
-        elif hasattr(self, 'specific_fuzzing_list'):
-            self.extra_fuzzy_list = self.specific_fuzzing_list
         else:
             self.extra_fuzzy_list = None
 
@@ -901,6 +909,11 @@ class String(VT_Alt):
     def _enable_fuzz_mode(self, fuzz_magnitude=1.0):
         self.values_fuzzy = []
 
+        def add_to_fuzz_list(flist):
+            for v in flist:
+                if v not in self.values_fuzzy:
+                    self.values_fuzzy.append(v)
+
         if self.drawn_val is not None:
             orig_val = self.drawn_val
         else:
@@ -951,9 +964,9 @@ class String(VT_Alt):
         self.values_fuzzy.append(orig_val + b'\r\n' * int(100*fuzz_magnitude))
 
         if self.extra_fuzzy_list:
-            for v in self.extra_fuzzy_list:
-                if v not in self.values_fuzzy:
-                    self.values_fuzzy.append(v)
+            add_to_fuzz_list(self.extra_fuzzy_list)
+        if hasattr(self, 'specific_fuzzing_list'):
+            add_to_fuzz_list(self.specific_fuzzing_list)
 
         if self.codec == self.ASCII:
             val = bytearray(orig_val)
@@ -1418,12 +1431,27 @@ class INT(VT):
 
 
 class Filename(String):
-    specific_fuzzing_list = [
-        b'../../../../../../etc/password',
-        b'../../../../../../Windows/system.ini',
-        b'file%n%n%n%nname.txt',
-    ]
+    @property
+    def specific_fuzzing_list(self):
+        linux_spe = [b'../../../../../../etc/password']
+        windows_spe = [b'..\\..\\..\\..\\..\\..\\Windows\\system.ini']
+        c_spe = [b'file%n%n%n%nname.txt']
 
+        if self.knowledge_source is None:
+            flist = linux_spe+windows_spe+c_spe
+        else:
+            flist = []
+            if self.knowledge_source.is_info_class_represented(OS):
+                if self.knowledge_source.is_assumption_valid(OS.Linux):
+                    flist += linux_spe
+                if self.knowledge_source.is_assumption_valid(OS.Windows):
+                    flist += windows_spe
+            else:
+                flist = linux_spe+windows_spe
+            if self.knowledge_source.is_assumption_valid(Language.C):
+                flist += c_spe
+
+        return flist
 
 def from_encoder(encoder_cls, encoding_arg=None):
     def internal_func(string_subclass):
@@ -1859,6 +1887,8 @@ class BitField(VT_Alt):
 
     def pretty_print(self, max_size=None):
 
+        current_raw_val = self.get_current_raw_val()
+
         first_pass = True
         for lim, sz, values, extrems, i in zip(self.subfield_limits[::-1],
                                                  self.subfield_sizes[::-1],
@@ -1900,7 +1930,7 @@ class BitField(VT_Alt):
         else:
             string += ' |-)'
 
-        return string + ' ' + str(self.get_current_raw_val())
+        return string + ' ' + str(current_raw_val)
 
 
     def is_compatible(self, integer, size):

@@ -1,0 +1,130 @@
+################################################################################
+#
+#  Copyright 2018 Eric Lacombe <eric.lacombe@security-labs.org>
+#
+################################################################################
+#
+#  This file is part of fuddly.
+#
+#  fuddly is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  fuddly is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with fuddly. If not, see <http://www.gnu.org/licenses/>
+#
+################################################################################
+
+from enum import Enum
+
+try:
+    from enum import auto
+except ImportError:
+    __my_enum_auto_id = 1
+    def auto():
+        global __my_enum_auto_id
+        i = __my_enum_auto_id
+        __my_enum_auto_id += 1
+        return i
+
+class Info(Enum):
+    def __init__(self, val):
+        self._trust = {}
+
+    def increase_trust(self):
+        if self.value not in self._trust:
+            self._trust[self.value] = 0
+        self._trust[self.value] += 1
+
+    def decrease_trust(self):
+        if self.value not in self._trust:
+            self._trust[self.value] = 0
+        self._trust[self.value] -= 1
+
+    def reset_trust(self):
+        self._trust[self.value] = 0
+
+    def show_trust(self):
+        if self.value not in self._trust:
+            self.reset_trust()
+        print('\n*** {} trust level: {}'.format(self, self._trust.get(self.value)))
+
+
+class OS(Info):
+    Linux = auto()
+    Windows = auto()
+    Android = auto()
+    Unknown = auto()
+
+class Hardware(Info):
+    X86_64 = auto()
+    X86_32 = auto()
+    PowerPc = auto()
+    ARM = auto()
+    Unknown = auto()
+
+class Language(Info):
+    C = auto()
+    Pascal = auto()
+    Unknown = auto()
+
+
+class InformationCollector(object):
+
+    def __init__(self):
+        self._collector = None
+        self.reset_information()
+
+    def add_information(self, info):
+        assert info is not None
+
+        try:
+            for i in info:
+                assert isinstance(i, Info)
+                if i in self._collector:
+                    i.increase_trust()
+                else:
+                    self._collector.add(i)
+                # i.show_trust()
+        except TypeError:
+            self._collector.add(info)
+
+    def is_assumption_valid(self, info):
+        return not self._collector or info in self._collector
+
+    def is_info_class_represented(self, info_class):
+        for info in self._collector:
+            if isinstance(info, info_class):
+                return True
+        else:
+            return False
+
+    def reset_information(self):
+        self._collector = set()
+
+    def __str__(self):
+        return str(self._collector)
+
+    # for python2 compatibility
+    def __nonzero__(self):
+        return bool(self._collector)
+
+    # for python3 compatibility
+    def __bool__(self):
+        return bool(self._collector)
+
+
+if __name__ == "__main__":
+
+    OS.Linux.increase_trust()
+    OS.Linux.increase_trust()
+    OS.Linux.show_trust()
+
+    OS.Windows.show_trust()
+

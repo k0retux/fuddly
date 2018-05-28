@@ -36,14 +36,18 @@ import framework.error_handling as eh
 
 
 class ProbeUser(object):
-    timeout = 10.0
-    probe_init_timeout = 20.0
+    timeout = 5.0
+    probe_init_timeout = 10.0
 
     def __init__(self, probe):
         self._probe = probe
         self._thread = None
         self._started_event = threading.Event()
         self._stop_event = threading.Event()
+
+    @property
+    def probe(self):
+        return self._probe
 
     def start(self, *args, **kwargs):
         if self.is_alive():
@@ -62,7 +66,7 @@ class ProbeUser(object):
             self._thread.join(ProbeUser.timeout if timeout is None else timeout)
 
             if self.is_alive():
-                raise ProbeTimeoutError(self.__class__.__name__, timeout, ["start()", "arm()", "main()", "stop()"])
+                raise ProbeTimeoutError(self._probe.__class__.__name__, timeout, ["start()", "arm()", "main()", "stop()"])
 
             self._stop_event.clear()
 
@@ -119,7 +123,7 @@ class ProbeUser(object):
         while not event.is_set():
             if (datetime.datetime.now() - start).total_seconds() >= timeout:
                 self.stop()
-                raise ProbeTimeoutError(self.__class__.__name__, timeout)
+                raise ProbeTimeoutError(self._probe.__class__.__name__, timeout)
             if not self.is_alive() or not self._go_on():
                 break
             event.wait(1)
@@ -357,9 +361,12 @@ class Monitor(object):
     def _get_probe_ref(self, probe):
         if isinstance(probe, type) and issubclass(probe, Probe):
             return probe.__name__
+        elif isinstance(probe, Probe):
+            return probe.__class__.__name__
         elif isinstance(probe, str):
             return probe
         else:
+            print(probe)
             raise TypeError
 
     def configure_probe(self, probe, *args):
@@ -414,6 +421,10 @@ class Monitor(object):
         for probe_name, _ in self.probe_users.items():
             probes_names.append(probe_name)
         return probes_names
+
+    def iter_probes(self):
+        for _, probeuser in self.probe_users.items():
+            yield probeuser.probe
 
     def _wait_for_specific_probes(self, probe_user_class, probe_user_wait_method, probes=None,
                                   timeout=None):
@@ -499,7 +510,7 @@ class Monitor(object):
             for n, probe_user in self.probe_users.items():
                 if probe_user.is_alive():
                     probe_status = probe_user.get_probe_status()
-                    if probe_status.get_status() < 0:
+                    if probe_status.value < 0:
                         self._target_status = -1
                         break
             else:
@@ -517,6 +528,9 @@ class Probe(object):
     def __init__(self, delay=1.0):
         self._status = ProbeStatus(0)
         self._delay = delay
+
+    def __str__(self):
+        return "Probe '{:s}'".format(self.__class__.__name__)
 
     @property
     def status(self):
@@ -616,24 +630,26 @@ class ProbeStatus(object):
 
     def __init__(self, status=None, info=None):
         self._now = None
-        self.__status = status
-        self.__private = info
+        self._status = status
+        self._private = info
 
-    def set_status(self, status):
+    @property
+    def value(self):
+        return self._status
+
+    @value.setter
+    def value(self, val):
         """
         Args:
-            status (int): negative status if something is wrong
+            val (int): negative value if something is wrong
         """
-        self.__status = status
-
-    def get_status(self):
-        return self.__status
+        self._status = val
 
     def set_private_info(self, pv):
-        self.__private = pv
+        self._private = pv
 
     def get_private_info(self):
-        return self.__private
+        return self._private
 
     def set_timestamp(self):
         self._now = datetime.datetime.now()
@@ -998,18 +1014,18 @@ class ProbePID(Probe):
         status = ProbeStatus()
 
         if current_pid == -10:
-            status.set_status(-10)
+            status.value = -10
             status.set_private_info("ERROR with the command")
         elif current_pid == -1:
-            status.set_status(-2)
+            status.value = -2
             status.set_private_info("'{:s}' is not running anymore!".format(self.process_name))
         elif self._saved_pid != current_pid:
             self._saved_pid = current_pid
-            status.set_status(-1)
+            status.value = -1
             status.set_private_info("'{:s}' PID({:d}) has changed!".format(self.process_name,
                                                                            current_pid))
         else:
-            status.set_status(current_pid)
+            status.value = current_pid
             status.set_private_info(None)
 
         return status
@@ -1090,10 +1106,10 @@ class ProbeMem(Probe):
         status = ProbeStatus()
 
         if current_mem == -10:
-            status.set_status(-10)
+            status.value = -10
             status.set_private_info("ERROR with the command")
         elif current_mem == -1:
-            status.set_status(-2)
+            status.value = -2
             status.set_private_info("'{:s}' is not found!".format(self.process_name))
         else:
             if current_mem > self._max_mem:
@@ -1112,11 +1128,11 @@ class ProbeMem(Probe):
                     ok = False
                     err_msg += '\n*** Tolerance exceeded (original RSS: {:d}) ***'.format(self._saved_mem)
             if not ok:
-                status.set_status(-1)
+                status.value = -1
                 status.set_private_info(err_msg+'\n'+info)
                 self._last_status_ok = False
             else:
-                status.set_status(self._max_mem)
+                status.value = self._max_mem
                 status.set_private_info(info)
                 self._last_status_ok = True
         return status

@@ -21,12 +21,10 @@
 #
 ################################################################################
 
-import collections
 import datetime
 import threading
 
 from framework.data import Data
-from framework.global_resources import *
 from libs.external_modules import *
 
 class TargetStuck(Exception): pass
@@ -50,6 +48,9 @@ class Target(object):
     _send_data_lock = threading.Lock()
 
     _altered_data_queued = None
+
+    def __str__(self):
+        return self.__class__.__name__
 
     def set_logger(self, logger):
         self._logger = logger
@@ -157,7 +158,7 @@ class Target(object):
 
     def get_feedback(self):
         '''
-        If overloaded, should return a TargetFeedback object.
+        If overloaded, should return a FeedbackCollector object.
         '''
         return None
 
@@ -281,66 +282,3 @@ class EmptyTarget(Target):
             return True
 
 
-class TargetFeedback(object):
-    fbk_lock = threading.Lock()
-
-    def __init__(self):
-        self.cleanup()
-        self._feedback_collector = collections.OrderedDict()
-        self._feedback_collector_tstamped = collections.OrderedDict()
-        self._tstamped_bstring = None
-        # self.set_bytes(bstring)
-
-    def add_fbk_from(self, ref, fbk, status=0):
-        now = datetime.datetime.now()
-        with self.fbk_lock:
-            if ref not in self._feedback_collector:
-                self._feedback_collector[ref] = {}
-                self._feedback_collector[ref]['data'] = []
-                self._feedback_collector[ref]['status'] = 0
-                self._feedback_collector_tstamped[ref] = []
-            if fbk.strip() not in self._feedback_collector[ref]:
-                self._feedback_collector[ref]['data'].append(fbk)
-                self._feedback_collector[ref]['status'] = status
-                self._feedback_collector_tstamped[ref].append(now)
-
-    def has_fbk_collector(self):
-        return len(self._feedback_collector) > 0
-
-    def __iter__(self):
-        with self.fbk_lock:
-            fbk_collector = copy.copy(self._feedback_collector)
-            fbk_collector_ts = copy.copy(self._feedback_collector_tstamped)
-        for ref, fbk in fbk_collector.items():
-            yield ref, fbk['data'], fbk['status'], fbk_collector_ts[ref]
-
-    def iter_and_cleanup_collector(self):
-        with self.fbk_lock:
-            fbk_collector = self._feedback_collector
-            fbk_collector_ts = self._feedback_collector_tstamped
-            self._feedback_collector = collections.OrderedDict()
-            self._feedback_collector_tstamped = collections.OrderedDict()
-        for ref, fbk in fbk_collector.items():
-            yield ref, fbk['data'], fbk['status'], fbk_collector_ts[ref]
-
-    def set_error_code(self, err_code):
-        self._err_code = err_code
-
-    def get_error_code(self):
-        return self._err_code
-
-    def set_bytes(self, bstring):
-        now = datetime.datetime.now()
-        self._tstamped_bstring = (bstring, now)
-
-    def get_bytes(self):
-        return None if self._tstamped_bstring is None else self._tstamped_bstring[0]
-
-    def get_timestamp(self):
-        return None if self._tstamped_bstring is None else self._tstamped_bstring[1]
-
-    def cleanup(self):
-        # fbk_collector cleanup is done during consumption to avoid loss of feedback in
-        # multi-threading context
-        self._tstamped_bstring = None
-        self.set_error_code(0)

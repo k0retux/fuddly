@@ -602,10 +602,13 @@ class Transition(object):
 
 class ScenarioEnv(object):
 
+    knowledge_source = None
+
     def __init__(self):
         self._dm = None
         self._target = None
         self._scenario = None
+        # self._knowledge_source = None
 
     @property
     def dm(self):
@@ -631,11 +634,20 @@ class ScenarioEnv(object):
     def scenario(self, val):
         self._scenario = val
 
+    # @property
+    # def knowledge_source(self):
+    #     return self._knowledge_source
+    #
+    # @knowledge_source.setter
+    # def knowledge_source(self, val):
+    #     self._knowledge_source = val
+
     def __copy__(self):
         new_env = type(self)()
         new_env.__dict__.update(self.__dict__)
         new_env._target = None
         new_env._scenario = None
+        # new_env._knowledge_source = None
         return new_env
 
 
@@ -677,6 +689,14 @@ class Scenario(object):
 
     def set_target(self, target):
         self._env.target = target
+
+    # @property
+    # def knowledge_source(self):
+    #     return self._env.knowledge_source
+    #
+    # @knowledge_source.setter
+    # def knowledge_source(self, val):
+    #     self._env.knowledge_source = val
 
     def _graph_setup(self, init_step, steps, transitions):
         for tr in init_step.transitions:

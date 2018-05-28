@@ -30,6 +30,7 @@ from datetime import datetime
 
 import framework.global_resources as gr
 import libs.external_modules as em
+from framework.knowledge.feedback_collector import FeedbackSource
 from libs.external_modules import *
 from libs.utils import ensure_dir, chunk_lines
 
@@ -50,7 +51,7 @@ def regexp_bin(expr, item):
     return robj is not None
 
 
-class FeedbackHandler(object):
+class FeedbackGate(object):
 
     def __init__(self, database):
         """
@@ -63,13 +64,24 @@ class FeedbackHandler(object):
         for item in self.db.iter_last_feedback_entries():
             yield item
 
+    def get_feedback_from(self, source):
+        if not isinstance(source, FeedbackSource):
+            source = FeedbackSource(source)
+
+        try:
+            fbk = self.db.last_feedback[source]
+        except KeyError:
+            raise
+        else:
+            return fbk
+
     def iter_entries(self, source=None):
         """
         Iterate over feedback entries that are related to the last data which has been sent by
         the framework.
 
         Args:
-            source ('str'): name of the feedback source to consider
+            source (FeedbackSource): feedback source to consider
 
         Returns:
             python generator: A generator that iterates over all the requested feedback entries and provides for each:
@@ -82,16 +94,16 @@ class FeedbackHandler(object):
         for item in self.db.iter_last_feedback_entries(source=source):
             yield item
 
-    def sources(self):
+    def sources_names(self):
         """
         Return a list of the feedback source names related to the last data which has been sent by
         the framework.
 
         Returns:
-            list: feedback sources
+            list: names of the feedback sources
 
         """
-        return self.db.last_feedback.keys()
+        return [str(fs) for fs in self.db.last_feedback.keys()]
 
     # for python2 compatibility
     def __nonzero__(self):
@@ -122,6 +134,8 @@ class Database(object):
         # self._con = None
         # self._cur = None
         self.enabled = False
+
+        self.current_project = None
 
         self.last_feedback = {}
 
@@ -309,6 +323,7 @@ class Database(object):
 
     def flush_current_feedback(self):
         self.last_feedback = {}
+        self.last_feedback_sources_names = {}
 
     def execute_sql_statement(self, sql_stmt, params=None):
         return self.submit_sql_stmt(sql_stmt, params=params, outcome_type=Database.OUTCOME_DATA)
@@ -380,6 +395,9 @@ class Database(object):
 
     def insert_feedback(self, data_id, source, timestamp, content, status_code=None):
 
+        if not isinstance(source, FeedbackSource):
+            source = FeedbackSource(source)
+
         if source not in self.last_feedback:
             self.last_feedback[source] = []
 
@@ -391,6 +409,10 @@ class Database(object):
             }
         )
 
+        if self.current_project:
+            self.current_project.trigger_feedback_handlers(source, timestamp, content, status_code,
+                                                           self.current_project.target)
+
         if not self.enabled:
             return None
 
@@ -399,18 +421,19 @@ class Database(object):
 
         stmt = "INSERT INTO FEEDBACK(DATA_ID,SOURCE,DATE,CONTENT,STATUS)"\
                " VALUES(?,?,?,?,?)"
-        params = (data_id, source, timestamp, content, status_code)
+        params = (data_id, str(source), timestamp, content, status_code)
         err_msg = 'while inserting a value into table FEEDBACK!'
         self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
 
     def iter_last_feedback_entries(self, source=None):
+        last_fbk = self.last_feedback.items()
         if source is None:
-            for source, fbks in self.last_feedback.items():
+            for src, fbks in last_fbk:
                 for item in fbks:
                     status = item['status']
                     ts = item['timestamp']
                     content = item['content']
-                    yield source, status, ts, content
+                    yield src, status, ts, content
         else:
             for item in self.last_feedback[source]:
                 status = item['status']

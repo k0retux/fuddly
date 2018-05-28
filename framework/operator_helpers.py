@@ -72,7 +72,7 @@ class LastInstruction(object):
         self._now = datetime.datetime.now()
         self.comments = None
         self.feedback_info = None
-        self._status_code = None
+        self._status_code = 0
         self.instructions = {
             LastInstruction.RecordData: False
             }
@@ -111,8 +111,8 @@ class LastInstruction(object):
 
 class Operator(object):
 
-    def __init__(self):
-        pass
+    def __str__(self):
+        return "Operator '{:s}'".format(self.__class__.__name__)
 
     def start(self, fmk_ops, dm, monitor, target, logger, user_input):
         '''

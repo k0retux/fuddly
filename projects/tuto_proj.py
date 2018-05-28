@@ -26,12 +26,25 @@ import socket
 from framework.plumbing import *
 from framework.targets.debug import TestTarget
 from framework.targets.network import NetworkTarget
+from framework.knowledge.information import *
+from framework.knowledge.feedback_handler import TestFbkHandler
 
 project = Project()
 project.default_dm = 'mydf'
 
 logger = Logger(export_data=False, explicit_data_recording=False, export_orig=False,
                 export_raw_data=True, enable_file_logging=False)
+
+### KNOWLEDGE ###
+
+project.add_knowledge(
+    Hardware.X86_64,
+    Language.C
+)
+
+project.register_feedback_handler(TestFbkHandler())
+
+### TARGETS DEFINITION ###
 
 class TutoNetTarget(NetworkTarget):
 
@@ -83,7 +96,7 @@ class P1(Probe):
     def main(self, dm, target, logger):
         self.cpt += 1
 
-        return ProbeStatus(self.cpt)
+        return ProbeStatus(self.cpt, info='This is a Linux OS!')
 
 
 @probe(project)
@@ -169,8 +182,8 @@ class MyOp(Operator):
 
         op = Operation()
 
-        p1_ret = monitor.get_probe_status(P1).get_status()
-        p2_ret = monitor.get_probe_status(P2).get_status()
+        p1_ret = monitor.get_probe_status(P1).value
+        p2_ret = monitor.get_probe_status(P2).value
 
         logger.print_console('*** status: p1: %d / p2: %d ***' % (p1_ret, p2_ret))
 
@@ -210,7 +223,7 @@ class MyOp(Operator):
             self.detected_error += 1
             linst.set_instruction(LastInstruction.RecordData)
             linst.set_operator_feedback('This input has crashed the target!')
-
+            linst.set_operator_status(0)
         if self.cpt > self.max_steps and self.detected_error < 9:
             linst.set_operator_feedback("We have less than 9 data that trigger some problem with the target!"
                                         " You win!")

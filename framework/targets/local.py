@@ -29,7 +29,9 @@ import signal
 import subprocess
 
 from framework.global_resources import workspace_folder
-from framework.target_helpers import Target, TargetFeedback
+from framework.target_helpers import Target
+from framework.knowledge.feedback_collector import FeedbackCollector
+
 
 class LocalTarget(Target):
 
@@ -44,7 +46,7 @@ class LocalTarget(Target):
         self.__post_args = None
         self._data_sent = None
         self._feedback_computed = None
-        self.__feedback = TargetFeedback()
+        self.__feedback = FeedbackCollector()
         self.set_target_path(target_path)
         self.set_tmp_file_extension(tmpfile_ext)
 

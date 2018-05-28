@@ -38,30 +38,37 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', u
 
         for source, status, timestamp, data in feedback:
 
-                msg_x = env.dm.get_atom(x)
-                msg_x.set_current_conf('ABS', recursive=True)
-                if x == 'padi':
-                    mac_dst = b'\xff\xff\xff\xff\xff\xff'
-                elif x == 'padr':
-                    if current_step.content is not None:
-                        mac_src = current_step.content['.*/mac_src']
-                        env.mac_src = mac_src
-                    else:
-                        mac_src = env.mac_src
-                    if mac_src is not None:
-                        mac_dst = mac_src.to_bytes()
-                        print('\n*** Destination MAC will be set to: {!r}'.format(mac_dst))
-                    else:
-                        raise ValueError
+            if x == 'padi':
+                mac_dst = b'\xff\xff\xff\xff\xff\xff'
+            elif x == 'padr':
+                if current_step.content is not None:
+                    mac_src = current_step.content['.*/mac_src']
+                    env.mac_src = mac_src
+                else:
+                    mac_src = env.mac_src
+                if mac_src is not None:
+                    mac_dst = mac_src.to_bytes()
+                    # print('\n*** Destination MAC will be set to: {!r}'.format(mac_dst))
                 else:
                     raise ValueError
+            else:
+                raise ValueError
 
-                if data is None:
-                    continue
-                off = data.find(mac_dst)
+            if data is None:
+                continue
+
+            off = -1
+            while True:
+                off = data.find(mac_dst, off+1)
+                if off < 0:
+                    break
                 data = data[off:]
+                msg_x = env.dm.get_atom(x)
+                msg_x.set_current_conf('ABS', recursive=True)
                 result = msg_x.absorb(data, constraints=AbsNoCsts(size=True, struct=True))
-                print('\n [ ABS result: {!s} ]'.format(result))
+                # print('\n [ ABS result: {!s} \n data: {!r} \n source: {!s} \ ts: {!s}]'
+                #       .format(result, data, source, timestamp))
+
                 if result[0] == AbsorbStatus.FullyAbsorbed:
                     try:
                         service_name = msg_x['.*/value/v101'].to_bytes()
@@ -120,7 +127,7 @@ class t_fix_pppoe_msg_fields(Disruptor):
         n = prev_data.content
         error_msg = '\n*** The node has no path to: {:s}. Thus, ignore it.\n'\
                     '    (probable reason: the node has been fuzzed in a way that makes the' \
-                    'path unavailable)'
+                    ' path unavailable)'
         if self.mac_src:
             try:
                 n['.*/mac_dst'] = self.mac_src

@@ -704,7 +704,7 @@ Resetting & Cloning Disruptors
 Whether you want to use generators or disruptors that you previously
 used in a *data maker chain*, you would certainly need to reset it or
 to clone it. Indeed, every data maker has an internal sequencing state,
-that remember if it has been disabled (and for generators it also
+that remember if it has been disabled (and for generators it may also
 keeps the *seeds*). Thus, if you want to reuse it, one way is to reset
 it by issuing the following command::
 
@@ -2421,7 +2421,7 @@ information from the target is given here under:
 
            status_code = check(target)
 
-           self.pstatus.set_status(status_code)
+           self.pstatus.value = status_code
 
            if status_code < 0:
                self.status.set_private_info("Something is wrong with the target!")
@@ -2515,7 +2515,7 @@ Let's illustrate this with the following example:
 
             health_status = monitor.get_probe_status(health_check)
 
-            if health_status.get_status() < 0 and self.op_state == 'critical':
+            if health_status.value < 0 and self.op_state == 'critical':
                 linst.set_instruction(LastInstruction.RecordData)
                 linst.set_operator_feedback('Data sent seems worthwhile!')
                 linst.set_operator_status(-3)

@@ -14,12 +14,12 @@ def cbk_transition1(env, current_step, next_step, feedback):
         current_step.make_blocked()
         return False
     else:
-        print("\n\nFeedback received from {!s}. Let's go on".format(feedback.sources()))
-        for source, status, timestamp, data in  feedback:
+        print("\n\nFeedback received from {!s}. Let's go on".format(feedback.sources_names()))
+        for source, status, timestamp, data in feedback:
             if data is not None:
                 data = data[:15]
             print('*** Feedback entry:\n'
-                  '    source: {:s}\n'
+                  '    source: {!s}\n'
                   '    status: {:d}\n'
                   ' timestamp: {!s}\n'
                   '   content: {!r} ...\n'.format(source, status, timestamp, data))

@@ -10,6 +10,17 @@ framework.basic_primitives module
     :undoc-members:
     :show-inheritance:
 
+framework.data module
+---------------------
+
+.. automodule:: framework.data
+    :members:
+    :undoc-members:
+    :private-members:
+    :special-members:
+    :exclude-members: __dict__, __weakref__
+    :show-inheritance:
+
 framework.data_model module
 ---------------------------
 
@@ -72,18 +83,6 @@ framework.target_helpers module
 -------------------------------
 
 .. automodule:: framework.target_helpers
-    :members:
-    :undoc-members:
-    :show-inheritance:
-    :private-members:
-    :special-members:
-    :exclude-members: __dict__, __weakref__
-
-
-framework.targets module
-------------------------
-
-.. automodule:: framework.targets
     :members:
     :undoc-members:
     :show-inheritance:
@@ -248,18 +247,6 @@ framework.scenario module
    :special-members:
    :exclude-members: __dict__, __weakref__
 
-framework.dmhelpers module
---------------------------
-
-.. automodule:: framework.dmhelpers
-   :members:
-   :undoc-members:
-   :show-inheritance:
-   :private-members:
-   :special-members:
-   :exclude-members: __dict__, __weakref__
-
-
 framework.dmhelpers.generic module
 ----------------------------------
 
@@ -288,6 +275,39 @@ framework.evolutionary_helpers module
 -------------------------------------
 
 .. automodule:: framework.evolutionary_helpers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
+
+framework.knowledge.feedback_collector module
+---------------------------------------------
+
+.. automodule:: framework.knowledge.feedback_collector
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
+
+framework.knowledge.feedback_handler module
+-------------------------------------------
+
+.. automodule:: framework.knowledge.feedback_handler
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
+
+framework.knowledge.information module
+--------------------------------------
+
+.. automodule:: framework.knowledge.information
    :members:
    :undoc-members:
    :show-inheritance:

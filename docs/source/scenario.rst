@@ -265,16 +265,16 @@ A brief explanation is provided below:
 
   This type of callback takes the additional parameter ``feedback`` filled by the framework with
   the target and/or probes feedback further to the current step data sending. It is an object
-  :class:`framework.database.FeedbackHandler` that provides the handful method
-  :meth:`framework.database.FeedbackHandler.iter_entries` which returns a generator that iterates
+  :class:`framework.database.FeedbackGate` that provides the handful method
+  :meth:`framework.database.FeedbackGate.iter_entries` which returns a generator that iterates
   over:
 
     - all the feedback entries associated to a specific feedback ``source`` provided as a
       parameter---and for each entry the triplet ``(status, timestamp, content)`` is provided;
     - all the feedback entries if the ``source`` parameter is ``None``---and for each entry the 4-uplet
       ``(source, status, timestamp, content)`` is provided. Note that for such kind of iteration, the
-      :class:`framework.database.FeedbackHandler` object can also be directly used as
-      an iterator---avoiding a call to :meth:`framework.database.FeedbackHandler.iter_entries`.
+      :class:`framework.database.FeedbackGate` object can also be directly used as
+      an iterator---avoiding a call to :meth:`framework.database.FeedbackGate.iter_entries`.
 
   This object can also be tested as a boolean object, returning False if there is no feedback at all.
 

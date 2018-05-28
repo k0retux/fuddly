@@ -47,6 +47,7 @@ class Tactics(object):
         self.disruptor_clones = {}
         self.generator_clones = {}
         self._fmkops = None
+        # self._knowledge_source = None
 
     def set_exportable_fmk_ops(self, fmkops):
         self._fmkops = fmkops
@@ -56,6 +57,20 @@ class Tactics(object):
         for dtype in self.disruptor_types:
             for name, attrs in self.get_disruptors_list(dtype).items():
                 attrs['obj'].set_exportable_fmk_ops(fmkops)
+
+    # @property
+    # def knowledge_source(self):
+    #     return self._knowledge_source
+    #
+    # @knowledge_source.setter
+    # def knowledge_source(self, val):
+    #     self._knowledge_source = val
+    #     for dtype in self.generator_types:
+    #         for name, attrs in self.get_generators_list(dtype).items():
+    #             attrs['obj'].knowledge_source = val
+    #     for dtype in self.disruptor_types:
+    #         for name, attrs in self.get_disruptors_list(dtype).items():
+    #             attrs['obj'].knowledge_source = val
 
     def register_scenarios(self, *scenarios):
         for sc in scenarios:
@@ -94,18 +109,17 @@ class Tactics(object):
             dict_var[dmaker_type][XT_VALID_CLS_LIST_K][name] = \
                 dict_var[dmaker_type][XT_NAME_LIST_K][name]
 
+        if self._fmkops is not None:
+            obj.set_exportable_fmk_ops(self._fmkops)
+        # obj.knowledge_source = self.knowledge_source
 
     def register_new_disruptor(self, name, obj, weight, dmaker_type, valid=False):
         self.__register_new_data_maker(self.disruptors, name, obj,
                                     weight, dmaker_type, valid)
-        if self._fmkops:
-            obj.set_exportable_fmk_ops(self._fmkops)
 
     def register_new_generator(self, name, obj, weight, dmaker_type, valid=False):
         self.__register_new_data_maker(self.generators, name, obj,
                                     weight, dmaker_type, valid)
-        if self._fmkops:
-            obj.set_exportable_fmk_ops(self._fmkops)
 
     def __clone_dmaker(self, dmaker, dmaker_clones, dmaker_type, new_dmaker_type, dmaker_name=None, register_func=None):
         if dmaker_type not in dmaker:
@@ -547,20 +561,35 @@ class DataMakerAttr:
     SetupRequired = 4
     NeedSeed = 5
 
-class Generator(object):
+class DataMaker(object):
+    knowledge_source = None
+
+    def __init__(self):
+        self._fmkops = None
+        # self._knowledge_source = None
+
+    def set_exportable_fmk_ops(self, fmkops):
+        self._fmkops = fmkops
+
+    # @property
+    # def knowledge_source(self):
+    #     return self._knowledge_source
+    #
+    # @knowledge_source.setter
+    # def knowledge_source(self, val):
+    #     self._knowledge_source = val
+
+class Generator(DataMaker):
     produced_seed = None
 
     def __init__(self):
+        DataMaker.__init__(self)
         self.__attrs = {
             DataMakerAttr.Active: True,
             DataMakerAttr.Controller: False,
             DataMakerAttr.HandOver: False,
             DataMakerAttr.SetupRequired: True
             }
-        self._fmkops = None
-
-    def set_exportable_fmk_ops(self, fmkops):
-        self._fmkops = fmkops
 
     def set_attr(self, name):
         if name not in self.__attrs:
@@ -580,7 +609,6 @@ class Generator(object):
         return self.__attrs[name]
 
     def _setup(self, dm, user_input):
-        # sys.stdout.write("\n__ setup generator '%s' __" % self.__class__.__name__)
         self.clear_attr(DataMakerAttr.SetupRequired)
         if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
             return False
@@ -598,14 +626,11 @@ class Generator(object):
         return ok
 
     def _cleanup(self):
-        # sys.stdout.write("\n__ cleanup generator '%s' __" % self.__class__.__name__)
         self.set_attr(DataMakerAttr.Active)
         self.set_attr(DataMakerAttr.SetupRequired)
         self.cleanup(self._fmkops)
 
-
     def need_reset(self):
-        # sys.stdout.write("\n__ generator need reset '%s' __" % self.__class__.__name__)
         self.set_attr(DataMakerAttr.SetupRequired)
         self.cleanup(self._fmkops)
 
@@ -729,6 +754,7 @@ class DynGeneratorFromScenario(Generator):
         if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
             return False
         self.__class__.scenario.set_data_model(dm)
+        # self.__class__.scenario.knowledge_source = self.knowledge_source
         self.scenario = copy.copy(self.__class__.scenario)
 
         assert (self.data_fuzz and not (self.cond_fuzz or self.ignore_timing)) or not self.data_fuzz
@@ -1025,19 +1051,16 @@ class DynGeneratorFromScenario(Generator):
         return cbkops
 
 
-class Disruptor(object):
+class Disruptor(DataMaker):
 
     def __init__(self):
+        DataMaker.__init__(self)
         self.__attrs = {
             DataMakerAttr.Active: True,
             DataMakerAttr.Controller: False,
             DataMakerAttr.HandOver: False,
             DataMakerAttr.SetupRequired: True
             }
-        self._fmkops = None
-
-    def set_exportable_fmk_ops(self, fmkops):
-        self._fmkops = fmkops
 
     def disrupt_data(self, dm, target, prev_data):
         raise NotImplementedError
@@ -1098,9 +1121,10 @@ class Disruptor(object):
 
 
 
-class StatefulDisruptor(object):
+class StatefulDisruptor(DataMaker):
 
     def __init__(self):
+        DataMaker.__init__(self)
         self.__attrs = {
             DataMakerAttr.Active: True,
             DataMakerAttr.Controller: False,
@@ -1108,10 +1132,6 @@ class StatefulDisruptor(object):
             DataMakerAttr.SetupRequired: True,
             DataMakerAttr.NeedSeed: True
             }
-        self._fmkops = None
-
-    def set_exportable_fmk_ops(self, fmkops):
-        self._fmkops = fmkops
 
     def set_seed(self, prev_data):
         raise NotImplementedError

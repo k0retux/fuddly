@@ -537,10 +537,16 @@ class NodeBuilder(object):
                 node.clear_attr(MH.Attr.DEBUG, conf=conf)
         param = desc.get('determinist', None)
         if param is not None:
-            node.make_determinist(conf=conf)
+            if param:
+                node.make_determinist(conf=conf)
+            else:
+                node.make_random(conf=conf)
         param = desc.get('random', None)
         if param is not None:
-            node.make_random(conf=conf)
+            if param:
+                node.make_random(conf=conf)
+            else:
+                node.make_determinist(conf=conf)
         param = desc.get('finite', None)
         if param is not None:
             node.make_finite(conf=conf)

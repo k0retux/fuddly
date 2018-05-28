@@ -217,7 +217,7 @@ def sectionize(that, parent):
     except BaseException:
         name = that.config_name
 
-    parser = configparser.SafeConfigParser()
+    parser = configparser.ConfigParser()
     resection = re.compile(r'^([^.]*)\.?(.*)')
     for section in that.parser.sections():
         match = resection.match(section)
@@ -466,7 +466,7 @@ class config_dot_proxy(object):
 class config(object):
     def __init__(self, parent, path=['.'], ext=['.ini', '.conf', '.cfg']):
 
-        object.__setattr__(self, 'parser', configparser.SafeConfigParser())
+        object.__setattr__(self, 'parser', configparser.ConfigParser())
 
         if isinstance(parent, str):
             name = parent

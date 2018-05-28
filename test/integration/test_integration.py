@@ -40,7 +40,6 @@ from framework.plumbing import *
 from framework.data_model import *
 from framework.encoders import *
 
-
 from test import ignore_data_model_specifics, run_long_tests
 
 def setUpModule():
@@ -49,6 +48,7 @@ def setUpModule():
     fmk.run_project(name='tuto', dm_name='example')
     dm = example.data_model
     results = collections.OrderedDict()
+    fmk.prj.reset_knowledge()
 
 def tearDownModule():
     global fmk
@@ -1617,7 +1617,7 @@ class TestModelWalker(unittest.TestCase):
             b' [!] ++++++++++ [!] ::AAA' + b'\"%s\"' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::AAA' + b'\r\n' * 100 + b'::AAA::AAA::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::../../../../../../etc/password::AAA::AAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::../../../../../../Windows/system.ini::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::..\\..\\..\\..\\..\\..\\Windows\\system.ini::AAA::AAA::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::AAA::AAA::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::=:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::?:: [!] ',
@@ -1639,7 +1639,7 @@ class TestModelWalker(unittest.TestCase):
             b' [!] ++++++++++ [!] ::AAA' + b'\"%s\"' * 400 + b'::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::AAA' + b'\r\n' * 100 + b'::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::../../../../../../etc/password::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::../../../../../../Windows/system.ini::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::..\\..\\..\\..\\..\\..\\Windows\\system.ini::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::=:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::?:: [!] ',
@@ -1669,7 +1669,7 @@ class TestModelWalker(unittest.TestCase):
             b' [!] >>>>>>>>>> [!] ::AAA' + b'\"%s\"' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA' + b'\r\n' * 100 + b'::AAA::AAA::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::AAA::AAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::../../../../../../Windows/system.ini::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::..\\..\\..\\..\\..\\..\\Windows\\system.ini::AAA::AAA::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::AAA::AAA::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::=:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::?:: [!] ',
@@ -1691,7 +1691,7 @@ class TestModelWalker(unittest.TestCase):
             b' [!] >>>>>>>>>> [!] ::AAA' + b'\"%s\"' * 400 + b'::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA' + b'\r\n' * 100 + b'::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::../../../../../../Windows/system.ini::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::..\\..\\..\\..\\..\\..\\Windows\\system.ini::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::=:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::?:: [!] ',
@@ -3638,13 +3638,15 @@ class TestFMK(unittest.TestCase):
     @unittest.skipIf(not run_long_tests, "Long test case")
     def test_operator_2(self):
 
+        myop = fmk.get_operator(name='MyOp')
         fmk.launch_operator('MyOp')
-        fbk = fmk.fmkDB.last_feedback["Operator 'MyOp'"][0]['content']
+
+        fbk = fmk.feedback_gate.get_feedback_from(myop)[0]['content']
         print(fbk)
         self.assertIn(b'You win!', fbk)
 
         fmk.launch_operator('MyOp')
-        fbk = fmk.fmkDB.last_feedback["Operator 'MyOp'"][0]['content']
+        fbk = fmk.feedback_gate.get_feedback_from(myop)[0]['content']
         print(fbk)
         self.assertIn(b'You loose!', fbk)
 

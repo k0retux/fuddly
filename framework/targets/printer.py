@@ -25,7 +25,8 @@ import os
 import random
 
 from framework.global_resources import workspace_folder
-from framework.target_helpers import Target, TargetFeedback
+from framework.target_helpers import Target
+from framework.knowledge.feedback_collector import FeedbackCollector
 from libs.external_modules import cups_module
 
 if cups_module:
@@ -40,7 +41,7 @@ class PrinterTarget(Target):
     def __init__(self, tmpfile_ext):
         Target.__init__(self)
         self.__suffix = '{:0>12d}'.format(random.randint(2**16, 2**32))
-        self.__feedback = TargetFeedback()
+        self.__feedback = FeedbackCollector()
         self.__target_ip = None
         self.__target_port = None
         self.__printer_name = None

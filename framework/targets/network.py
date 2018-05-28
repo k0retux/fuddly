@@ -36,7 +36,9 @@ from _socket import error as socket_error
 
 from framework.data import Data
 from framework.node import Node, NodeSemanticsCriteria
-from framework.target_helpers import Target, TargetFeedback, TargetStuck
+from framework.target_helpers import Target, TargetStuck
+from framework.knowledge.feedback_collector import FeedbackCollector
+
 
 class NetworkTarget(Target):
     '''Generic target class for interacting with a network resource. Can
@@ -145,7 +147,7 @@ class NetworkTarget(Target):
         self.sending_sockets = []
         self.multiple_destination = False
 
-        self._feedback = TargetFeedback()
+        self._feedback = FeedbackCollector()
 
         self._fbk_handling_lock = threading.Lock()
         self.socket_desc_lock = threading.Lock()
@@ -952,7 +954,6 @@ class NetworkTarget(Target):
                         chunks[s].append(chunk)
 
                 has_read = True
-
 
             if fbk_sockets:
                 for s in fbk_sockets:
