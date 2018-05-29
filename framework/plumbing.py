@@ -4117,7 +4117,7 @@ class FmkShell(cmd.Cmd):
               and even if you clean up the generator, you could still reproduce the exact sequence
               of data production from the beginning
         '''
-        ret = self.do_send_loop(line, use_existing_seed=False)
+        ret = self.do_send_loop(line, use_existing_seed=True)
         return ret
 
 
@@ -4425,7 +4425,7 @@ class FmkShell(cmd.Cmd):
         return ret
 
 
-    def do_send_loop(self, line, valid_gen=False, use_existing_seed=True):
+    def do_send_loop(self, line, valid_gen=False, use_existing_seed=False):
         '''
         Execute the 'send' command in a loop
         |_ syntax: send_loop <#loop> <generator_type> [disruptor_type_1 ... disruptor_type_n]
