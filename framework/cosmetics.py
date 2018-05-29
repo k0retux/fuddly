@@ -64,7 +64,13 @@ def setup_term():
     os.unsetenv('COLUMNS')
 
     # curses's setupterm with the real output (sys.__stdout__)
-    curses.setupterm(fd=sys.__stdout__.fileno())
+    try:
+        curses.setupterm(fd=sys.__stdout__.fileno())
+    except curses.error as e:
+        print('\n*** WARNING: {!s}'.format(e))
+        print('    --> set $TERM variable manually to xterm-256color')
+        os.environ['TERM'] = 'xterm-256color'
+        curses.setupterm(fd=sys.__stdout__.fileno())
 
 
 #: file: A reference to the "unwrapped" stdout.
