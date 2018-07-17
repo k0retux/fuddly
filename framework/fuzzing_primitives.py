@@ -698,7 +698,7 @@ class AltConfConsumer(NodeConsumerStub):
 
 class TypedNodeDisruption(NodeConsumerStub):
 
-    def init_specific(self, ignore_separator=False):
+    def init_specific(self, ignore_separator=False, enforce_determinism=True):
         if ignore_separator:
             self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable],
                                                                 negative_attrs=[dm.NodeInternals.Separator],
@@ -713,6 +713,7 @@ class TypedNodeDisruption(NodeConsumerStub):
         self.current_fuzz_vt_list = None
         self.current_node = None
         self.orig_internal = None
+        self.enforce_determinism = enforce_determinism
 
         self.need_reset_when_structure_change = True
 
@@ -742,7 +743,8 @@ class TypedNodeDisruption(NodeConsumerStub):
 
             node.set_values(value_type=vt_obj, ignore_entanglement=True, preserve_node=True)
             node.make_finite()
-            node.make_determinist()
+            if self.enforce_determinism:
+                node.make_determinist()
             node.unfreeze(ignore_entanglement=True)
             # we need to be sure that the current node is freezable
             node.set_attr(dm.NodeInternals.Freezable)

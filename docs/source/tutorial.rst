@@ -879,15 +879,12 @@ will need to issue the following commands:
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 1,2,5
 
    from framework.plumbing import *
 
    fmk = FmkPlumbing()
 
-
-The lines 1, 2 and 5 are not necessary if you don't intend to use
-external libraries. From now on you can use ``fuddly`` through the
+From now on you can use ``fuddly`` through the
 object ``fmk``. Every commands defined by ``Fuddly Shell`` (refer to
 :ref:`tuto:start-fuzzshell`) are backed by a method of the class
 :class:`framework.plumbing.FmkPlumbing`.

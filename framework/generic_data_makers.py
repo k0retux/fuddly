@@ -173,7 +173,11 @@ class sd_iter_over_data(StatefulDisruptor):
                  'fix': ("Limit constraints fixing to the nodes related to the currently fuzzed one"
                          " (only implemented for 'sync_size_with' and 'sync_enc_size_with').", True, bool),
                  'fuzz_mag': ('Order of magnitude for maximum size of some fuzzing test cases.',
-                              1.0, float)})
+                              1.0, float),
+                 'determinism': ("If set to 'True', each typed node will be fuzzed in "
+                                 "a deterministic way. Otherwise it will be guided by the "
+                                 "data model determinism.", True, bool)
+                 })
 class sd_fuzz_typed_nodes(StatefulDisruptor):
     '''
     Perform alterations on typed nodes (one at a time) according to
@@ -189,14 +193,13 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
             prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
             return prev_data
 
-        prev_content.make_finite(all_conf=True, recursive=True)
-
         self.consumer = TypedNodeDisruption(max_runs_per_node=self.max_runs_per_node,
                                             min_runs_per_node=self.min_runs_per_node,
                                             fuzz_magnitude=self.fuzz_mag,
                                             fix_constraints=self.fix,
                                             respect_order=self.order,
-                                            ignore_separator=self.ign_sep)
+                                            ignore_separator=self.ign_sep,
+                                            enforce_determinism=self.determinism)
         self.consumer.need_reset_when_structure_change = self.deep
         self.consumer.set_node_interest(path_regexp=self.path)
         self.modelwalker = ModelWalker(prev_content, self.consumer, max_steps=self.max_steps, initial_step=self.init)

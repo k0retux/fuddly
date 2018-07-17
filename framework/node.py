@@ -38,6 +38,7 @@ import struct
 import math
 
 from enum import Enum
+from random import shuffle
 
 sys.path.append('.')
 
@@ -2635,8 +2636,13 @@ class NodeInternals_NonTerm(NodeInternals):
         return ret
 
 
-    # To be used only in Finite mode
     def structure_will_change(self):
+        '''
+        To be used only in Finite mode.
+        Return True if the structure will change the next time _get_value() will be called.
+
+        Returns: bool
+        '''
 
         crit1 = (len(self.subnodes_order) // 2) > 1
 
@@ -2709,7 +2715,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 new_list.append([delim, [sublist[0], copy.copy(sublist[1])]])
         return new_list
 
-    def _generate_expanded_nodelist(self, node_list):
+    def _generate_expanded_nodelist(self, node_list, determinist=True):
 
         expanded_node_list = []
         for idx, delim, sublist in self.__iter_csts_verbose(node_list):
@@ -2752,6 +2758,9 @@ class NodeInternals_NonTerm(NodeInternals):
 
         if not expanded_node_list:
             expanded_node_list.append(node_list)
+
+        if not determinist:
+            shuffle(expanded_node_list)
 
         return expanded_node_list
 
@@ -2936,7 +2945,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                                                                           seed=self.component_seed)
 
                 # If the shape is Pick (=+), the shape is reduced to a singleton
-                self.expanded_nodelist = self._generate_expanded_nodelist(node_list)
+                self.expanded_nodelist = self._generate_expanded_nodelist(node_list, determinist=determinist)
             
                 self.expanded_nodelist_origsz = len(self.expanded_nodelist)
                 if self.expanded_nodelist_sz > 0:
@@ -2944,7 +2953,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 else:
                     self.expanded_nodelist = self.expanded_nodelist[:1]
             elif not self.expanded_nodelist: # that is == []
-                self.expanded_nodelist = self._generate_expanded_nodelist(node_list)
+                self.expanded_nodelist = self._generate_expanded_nodelist(node_list, determinist=determinist)
                 self.expanded_nodelist_origsz = len(self.expanded_nodelist)
 
             node_list = self.expanded_nodelist.pop(-1)
@@ -4168,7 +4177,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                                                                               excluded_idx=self.excluded_components,
                                                                                               seed=self.component_seed)
 
-                    fresh_expanded_nodelist = self._generate_expanded_nodelist(node_list)
+                    fresh_expanded_nodelist = self._generate_expanded_nodelist(node_list, determinist=determinist)
                     if self.expanded_nodelist is None:
                         self.expanded_nodelist_origsz = len(fresh_expanded_nodelist)
                         if self.expanded_nodelist_sz is not None:

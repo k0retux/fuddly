@@ -666,6 +666,18 @@ corresponding outputs for a data generated from them:
 - :class:`framework.value_types.SINT64_le`: signed integer on 64 bit (2's complement), little endian
 - :class:`framework.value_types.INT_str`: ASCII encoded integer
 
+For :class:`framework.value_types.INT_str`, additional parameters are available:
+
+``base`` [optional, default value: **10**]
+  Numerical base that have to be used to represent the integer into a string
+
+``letter_case`` [optional, default value: **'upper'**]
+  Only for hexadecimal base. It could be ``'upper'`` or ``'lower'`` for representing hexadecimal numbers
+  with these respective letter cases.
+
+``min_size`` [optional, default value: **None**]
+  If specified, the integer representation will have a minimum size (with added zeros when necessary).
+
 
 String
 ------

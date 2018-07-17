@@ -218,7 +218,7 @@ class NodeBuilder(object):
         return nd
 
     def __pre_handling(self, desc, node):
-        if node:
+        if node is not None:
             if isinstance(node.cc, NodeInternals_Empty):
                 raise ValueError("Error: alternative configuration"\
                                  " cannot be added to empty node ({:s})".format(node.name))
@@ -352,10 +352,14 @@ class NodeBuilder(object):
         if w is not None:
             # in this case there are multiple shapes, as shape can be
             # discriminated by its weight attr
-            for s in desc.get('contents'):
+            for s in cts:
                 self._verify_keys_conformity(s)
                 weight = s.get('weight', 1)
-                shape = self._create_nodes_from_shape(s['contents'], n)
+                subnodes = s['contents']
+                shtype = s.get('shape_type', MH.Ordered)
+                dupmode = s.get('duplicate_mode', MH.Copy)
+                shape = self._create_nodes_from_shape(subnodes, n, shape_type=shtype,
+                                                      dup_mode=dupmode)
                 shapes.append(weight)
                 shapes.append(shape)
         else:
@@ -379,7 +383,7 @@ class NodeBuilder(object):
             prefix = sep_desc.get('prefix', True)
             suffix = sep_desc.get('suffix', True)
             unique = sep_desc.get('unique', False)
-            n.set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique)
+            n.conf(conf).set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique)
 
         self._handle_common_attr(n, desc, conf)
 

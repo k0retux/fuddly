@@ -1514,27 +1514,67 @@ class Fuzzy_INT(INT):
         return string
 
 
-
-#class INT_str(VT, metaclass=meta_int_str):
 class INT_str(with_metaclass(meta_int_str, INT)):
     endian = VT.Native
+
+    regex_decimal = b'-?\d+'
+
+    regex_upper_hex = b'-?[0123456789ABCDEF]+'
+    regex_lower_hex = b'-?[0123456789abcdef]+'
+
+    regex_octal = b'-?[01234567]+'
+
+    regex_bin = b'-?[01]+'
+
+    def __init__(self, values=None, min=None, max=None, default=None, determinist=True,
+                 force_mode=False, base=10, letter_case='upper', min_size=None):
+        INT.__init__(self, values=values, min=min, max=max, default=default, determinist=determinist,
+                     force_mode=force_mode)
+        assert base in [10, 16, 8, 2]
+        assert letter_case in ['upper', 'lower']
+        assert min_size is None or isinstance(min_size, int)
+
+        self._base = base
+
+        if min_size is not None:
+            self._format_str = '{:0' + str(min_size)
+        else:
+            self._format_str = '{:'
+
+        if self._base == 10:
+            self._format_str += '}'
+            self._regex = self.regex_decimal
+        elif self._base == 16:
+            if letter_case == 'upper':
+                self._format_str += 'X}'
+                self._regex = self.regex_upper_hex
+            else:
+                self._format_str += 'x}'
+                self._regex = self.regex_lower_hex
+        elif self._base == 8:
+            self._format_str += 'o}'
+            self._regex = self.regex_octal
+        elif self._base == 2:
+            self._format_str += 'b}'
+            self._regex = self.regex_bin
+        else:
+            raise ValueError(self._base)
 
     def is_compatible(self, integer):
         return True
 
     def _read_value_from(self, blob, size):
-        g = re.match(b'-?\d+', blob)
+        g = re.match(self._regex, blob)
         if g is None:
             raise ValueError
         else:
             return g.group(0), len(g.group(0))
 
     def _unconvert_value(self, val):
-        return int(val)
+        return int(val, base=self._base)
 
     def _convert_value(self, val):
-        return str(val).encode('utf8')
-
+        return self._format_str.format(val).encode('utf8')
 
 #class Fuzzy_INT_str(Fuzzy_INT, metaclass=meta_int_str):
 class Fuzzy_INT_str(with_metaclass(meta_int_str, Fuzzy_INT)):

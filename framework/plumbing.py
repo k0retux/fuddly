@@ -248,7 +248,7 @@ class FmkPlumbing(object):
         self._prj_dict = {}
         self.__st_dict = {}
         self.__target_dict = {}
-        self.__current_tg = 0
+        self.__tg_idx = 0
         self.__logger_dict = {}
         self.__monitor_dict = {}
         self.__initialized_dmaker_dict = {}
@@ -852,8 +852,8 @@ class FmkPlumbing(object):
                     new_targets.append(tg)
                 targets = new_targets
 
-            if self.__current_tg >= len(targets):
-                self.__current_tg = 0
+            if self.__tg_idx >= len(targets):
+                self.__tg_idx = 0
             
             prj_params['target'] = targets
 
@@ -1042,7 +1042,7 @@ class FmkPlumbing(object):
                            code=Error.CommandError)
             return False
 
-        self.__current_tg = num
+        self.__tg_idx = num
         return True
 
     @EnforceOrder(accepted_states=['25_load_dm','S1','S2'])
@@ -1108,7 +1108,7 @@ class FmkPlumbing(object):
                         msg += " {:s},".format(pname)
                 msg = msg[:-1]
 
-            if self.__current_tg == idx:
+            if self.__tg_idx == idx:
                 msg = colorize(FontStyle.BOLD + msg, rgb=Color.SELECTED)
             else:
                 msg = colorize(msg, rgb=Color.SUBINFO)
@@ -1189,10 +1189,10 @@ class FmkPlumbing(object):
         # self.dm.knowledge_source = prj.knowledge_source
         self.lg = self.__logger_dict[prj]
         try:
-            self.tg = self.__target_dict[prj][self.__current_tg]
+            self.tg = self.__target_dict[prj][self.__tg_idx]
         except IndexError:
-            self.__current_tg = 0
-            self.tg = self.__target_dict[prj][self.__current_tg]
+            self.__tg_idx = 0
+            self.tg = self.__target_dict[prj][self.__tg_idx]
 
         self.tg_name = self._get_detailed_target_desc(self.tg)
 
