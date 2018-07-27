@@ -24,6 +24,7 @@
 import random
 
 from framework.target_helpers import Target
+from framework.basic_primitives import rand_string
 
 class TestTarget(Target):
 
@@ -40,7 +41,7 @@ class TestTarget(Target):
         return True
 
     def send_data(self, data, from_fmk=False):
-        pass
+        self._logger.collect_feedback(content=rand_string(size=10), status_code=random.randint(-3, 3))
 
     def send_multiple_data(self, data_list, from_fmk=False):
         pass

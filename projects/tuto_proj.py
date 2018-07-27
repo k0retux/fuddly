@@ -51,7 +51,7 @@ class TutoNetTarget(NetworkTarget):
     def _custom_data_handling_before_emission(self, data_list):
         self.listen_to('localhost', 64001, 'Dynamic server interface')
         # self.connect_to('localhost', 64002, 'Dynamic client interface')
-        # self._logger.collect_target_feedback('TEST', status_code=random.randint(-2,2))
+        # self._logger.collect_feedback('TEST', status_code=random.randint(-2,2))
 
     def _feedback_handling(self, fbk, ref):
         # self.remove_all_dynamic_interfaces()
@@ -148,6 +148,7 @@ class probe_mem(ProbeMem):
 
 targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
            tuto_tg, net_tg, udpnet_tg, udpnetsrv_tg, rawnetsrv_tg,
+           TestTarget(),
            (TestTarget(), probe_pid, (probe_mem, 0.2))]
 
 ### OPERATOR DEFINITION ###

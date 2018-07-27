@@ -83,7 +83,7 @@ class SIMTarget(Target):
 
         fbk = self._retrieve_feedback_from_serial(timeout=1)
         code = 0 if fbk.find(b'ERROR') == -1 else -1
-        self._logger.collect_target_feedback(fbk, status_code=code)
+        self._logger.collect_feedback(fbk, status_code=code)
         if code < 0:
             self._logger.print_console(cpin_fbk+fbk, rgb=Color.ERROR)
 
@@ -130,4 +130,4 @@ class SIMTarget(Target):
 
         fbk = self._retrieve_feedback_from_serial()
         code = 0 if fbk.find(b'ERROR') == -1 else -1
-        self._logger.collect_target_feedback(fbk, status_code=code)
+        self._logger.collect_feedback(fbk, status_code=code)

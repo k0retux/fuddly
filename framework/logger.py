@@ -28,6 +28,7 @@ import threading
 import itertools
 
 from libs.external_modules import *
+from libs.utils import get_caller_object
 from framework.data import Data
 from framework.global_resources import *
 from framework.database import Database
@@ -250,7 +251,7 @@ class Logger(object):
             else:
                 self._current_fmk_info.append((info, now))
 
-    def collect_target_feedback(self, fbk, status_code=None):
+    def collect_feedback(self, content, status_code=None):
         """
         Used within the scope of the Logger feedback-collector infrastructure.
         If your target implement the interface :meth:`Target.get_feedback`, no need to
@@ -259,22 +260,59 @@ class Logger(object):
         To be called by the target each time feedback need to be registered.
 
         Args:
-            fbk: feedback record
+            content: feedback record
             status_code (int): should be negative for error
         """
         now = datetime.datetime.now()
+        fbk_src = get_caller_object()
 
         with self._tg_fbk_lck:
-            self._tg_fbk.append((now, fbk, status_code))
+            self._tg_fbk.append((now, fbk_src, content, status_code))
 
-    def log_collected_target_feedback(self, preamble=None, epilogue=None):
+    def shall_record(self):
+        if self.last_data_recordable or not self.__explicit_data_recording:
+            return True
+        else:
+            # feedback will not be recorded because data is not recorded
+            return False
+
+    def _log_feedback(self, source, content, status_code, timestamp, record=True):
+
+        processed_feedback = self._process_target_feedback(content)
+        fbk_cond = status_code is not None and status_code < 0
+        hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
+        body_color = Color.FEEDBACK_HLIGHT if fbk_cond else None
+        if not processed_feedback:
+            msg_hdr = "### Status from '{!s}': {!s}".format(source, status_code)
+        else:
+            msg_hdr = "### Feedback from '{!s}' (status={!s}):".format(source, status_code)
+        self.log_fn(msg_hdr, rgb=hdr_color, do_record=record)
+        if processed_feedback:
+            if isinstance(processed_feedback, list):
+                for dfbk in processed_feedback:
+                    self.log_fn(dfbk, rgb=body_color, do_record=record)
+            else:
+                self.log_fn(processed_feedback, rgb=body_color, do_record=record)
+
+        if record:
+            if isinstance(content, list):
+                for fbk, ts in zip(content, timestamp):
+                    self.fmkDB.insert_feedback(self.last_data_id, source, ts,
+                                               self._encode_target_feedback(fbk),
+                                               status_code=status_code)
+            else:
+                self.fmkDB.insert_feedback(self.last_data_id, source, timestamp,
+                                           self._encode_target_feedback(content),
+                                           status_code=status_code)
+
+    def log_collected_feedback(self, preamble=None, epilogue=None):
         """
         Used within the scope of the Logger feedback-collector feature.
         If your target implement the interface :meth:`Target.get_feedback`, no need to
         use this infrastructure.
 
         It allows to retrieve the collected feedback, that has been populated
-        by the target (through call to :meth:`Logger.collect_target_feedback`).
+        by the target (through call to :meth:`Logger.collect_feedback`).
 
         Args:
             preamble (str): prefix added to each collected feedback
@@ -282,7 +320,7 @@ class Logger(object):
 
         Returns:
             bool: True if target feedback has been collected through logger infrastructure
-              :meth:`Logger.collect_target_feedback`, False otherwise.
+              :meth:`Logger.collect_feedback`, False otherwise.
         """
         error_detected = False
 
@@ -294,29 +332,15 @@ class Logger(object):
             # self.log_fn("\n::[ NO TARGET FEEDBACK ]::\n") 
             raise NotImplementedError
 
-        if self.last_data_recordable or not self.__explicit_data_recording:
-            record = True
-        else:
-            # feedback will not be recorded because data is not recorded
-            record = False
+        record = self.shall_record()
 
         if preamble is not None:
             self.log_fn(preamble, do_record=record, rgb=Color.FMKINFO)
 
-        for fbk, idx in zip(fbk_list, range(len(fbk_list))):
-            timestamp, m, status = fbk
-            fbk_cond = status is not None and status < 0
-            hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
-            body_color = Color.FEEDBACK_HLIGHT if fbk_cond else None
-            self.log_fn("### Collected Target Feedback [{:d}] (status={!s}): ".format(idx, status),
-                        rgb=hdr_color, do_record=record)
-            self.log_fn(m, rgb=body_color, do_record=record)
-            if record:
-                self.fmkDB.insert_feedback(self.last_data_id,
-                                           FeedbackSource(self, subref="[record #{:d}]".format(idx)),
-                                           timestamp,
-                                           self._encode_target_feedback(m),
-                                           status_code=status)
+        for idx, fbk_record in enumerate(fbk_list):
+            timestamp, fbk_src, fbk, status = fbk_record
+            self._log_feedback(fbk_src, fbk, status, timestamp, record=record)
+
             if status is not None and status < 0:
                 error_detected = True
 
@@ -325,90 +349,30 @@ class Logger(object):
 
         return error_detected
 
-    def log_target_feedback_from(self, feedback, timestamp, source,
-                                 status_code=None,
-                                 preamble=None, epilogue=None):
-        decoded_feedback = self._decode_target_feedback(feedback)
 
-        if self.last_data_recordable or not self.__explicit_data_recording:
-            record = True
-        else:
-            # feedback will not be recorded because data is not recorded
-            record = False
+    def log_target_feedback_from(self, source, content, status_code, timestamp,
+                                 preamble=None, epilogue=None):
+        record = self.shall_record()
 
         if preamble is not None:
             self.log_fn(preamble, do_record=record, rgb=Color.FMKINFO)
 
-        if not decoded_feedback and (status_code is None or status_code >= 0):
-            msg_hdr = '### No Target Feedback from "{!s}"!'.format(source)
-            self.log_fn(msg_hdr, rgb=Color.FEEDBACK, do_record=record)
-        else:
-            fbk_cond = status_code is not None and status_code < 0
-            hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
-            body_color = Color.FEEDBACK_HLIGHT if fbk_cond else None
-            if not decoded_feedback:
-                msg_hdr = "### Target Status from '{!s}': {!s}".format(source, status_code)
-            else:
-                msg_hdr = "### Target Feedback from '{!s}' (status={!s}):".format(source, status_code)
-            self.log_fn(msg_hdr, rgb=hdr_color, do_record=record)
-            if decoded_feedback:
-                if isinstance(decoded_feedback, list):
-                    for dfbk in decoded_feedback:
-                        self.log_fn(dfbk, rgb=body_color, do_record=record)
-                else:
-                    self.log_fn(decoded_feedback, rgb=body_color, do_record=record)
-
-            if record:
-                if isinstance(feedback, list):
-                    for fbk, ts in zip(feedback, timestamp):
-                        self.fmkDB.insert_feedback(self.last_data_id, source, ts,
-                                                   self._encode_target_feedback(fbk),
-                                                   status_code=status_code)
-                else:
-                    self.fmkDB.insert_feedback(self.last_data_id, source, timestamp,
-                                               self._encode_target_feedback(feedback),
-                                               status_code=status_code)
+        self._log_feedback(source, content, status_code, timestamp, record=record)
 
         if epilogue is not None:
             self.log_fn(epilogue, do_record=record, rgb=Color.FMKINFO)
 
-    def log_operator_feedback(self, feedback, timestamp, operator, status_code=None):
-        if feedback is None:
-            decoded_feedback = None
-        else:
-            decoded_feedback = self._decode_target_feedback(feedback)
-            # decoded_feedback can be the empty string
 
-        if self.last_data_recordable or not self.__explicit_data_recording:
-            record = True
-        else:
-            # feedback will not be recorded because data is not recorded
-            record = False
+    def log_operator_feedback(self, operator, content, status_code, timestamp):
+        self._log_feedback(FeedbackSource(operator), content, status_code, timestamp,
+                           record=self.shall_record())
 
-        if not decoded_feedback and status_code is None:
-            self.log_fn("### No Operator Feedback!", rgb=Color.FEEDBACK,
-                        do_record=record)
-        else:
-            fbk_cond = status_code is not None and status_code < 0
-            hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
-            body_color = Color.FEEDBACK_HLIGHT if fbk_cond else None
-            if decoded_feedback:
-                self.log_fn("### Operator Feedback (status={!s}):".format(status_code),
-                            rgb=hdr_color, do_record=record)
-                self.log_fn(decoded_feedback, rgb=body_color, do_record=record)
-            else: # status_code is not None
-                self.log_fn("### Operator Status: {:d}".format(status_code),
-                            rgb=hdr_color, do_record=record)
+    def log_probe_feedback(self, probe, content, status_code, timestamp):
+        self._log_feedback(FeedbackSource(probe), content, status_code, timestamp,
+                           record=self.shall_record())
 
-            if self.last_data_id is not None and record:
-                feedback = None if feedback is None else self._encode_target_feedback(feedback)
-                self.fmkDB.insert_feedback(self.last_data_id,
-                                           FeedbackSource(operator),
-                                           timestamp,
-                                           feedback,
-                                           status_code=status_code)
 
-    def _decode_target_feedback(self, feedback):
+    def _process_target_feedback(self, feedback):
         if feedback is None:
             return feedback
 
@@ -435,29 +399,6 @@ class Logger(object):
             return None
         return convert_to_internal_repr(feedback)
 
-    def log_probe_feedback(self, probe, timestamp, content, status_code, force_record=False):
-        if self.last_data_recordable or not self.__explicit_data_recording or force_record:
-            record = True
-        else:
-            # feedback will not be recorded because data is not recorded
-            record = False
-
-        fbk_cond = status_code is not None and status_code < 0
-        hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
-        body_color = Color.FEEDBACK_HLIGHT if fbk_cond else None
-        if content is None:
-            self.log_fn("### {!s} Status: {:d}".format(probe, status_code),
-                        rgb=hdr_color, do_record=record)
-        else:
-            self.log_fn("### {!s} Feedback (status={:d}):".format(probe, status_code),
-                        rgb=hdr_color, do_record=record)
-            self.log_fn(self._decode_target_feedback(content),rgb=body_color,
-                        do_record=record)
-
-        if record:
-            content = None if content is None else self._encode_target_feedback(content)
-            self.fmkDB.insert_feedback(self.last_data_id, FeedbackSource(probe), timestamp, content,
-                                       status_code=status_code)
 
     def start_new_log_entry(self, preamble=''):
         self.__idx += 1

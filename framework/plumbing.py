@@ -572,8 +572,7 @@ class FmkPlumbing(object):
                     tstamp = pstatus.get_timestamp()
                     priv = pstatus.get_private_info()
                     self.lg.log_probe_feedback(probe=probe,
-                                               timestamp=tstamp,
-                                               content=priv, status_code=err)
+                                               content=priv, status_code=err, timestamp=tstamp)
 
 
         ret = self._recover_target() if not ok else True
@@ -2008,8 +2007,10 @@ class FmkPlumbing(object):
                     raise ValueError
             except TargetStuck as e:
                 self.lg.log_target_feedback_from(
-                    '*** WARNING: Unable to send data to the target! [reason: {!s}]'.format(e),
-                    datetime.datetime.now(), status_code=-1, source=FeedbackSource(self)
+                    source=FeedbackSource(self),
+                    content='*** WARNING: Unable to send data to the target! [reason: {!s}]'.format(e),
+                    status_code=-1,
+                    timestamp=datetime.datetime.now(),
                 )
                 self.mon.notify_error()
                 self._sending_error = True
@@ -2169,7 +2170,7 @@ class FmkPlumbing(object):
             else:
                 p = None
             try:
-                err_detected1 = self.lg.log_collected_target_feedback(preamble=p)
+                err_detected1 = self.lg.log_collected_feedback(preamble=p)
             except NotImplementedError:
                 pass
             finally:
@@ -2186,7 +2187,7 @@ class FmkPlumbing(object):
             p = "*** RESIDUAL TARGET FEEDBACK ***"
             e = "********************************"
             try:
-                err_detected1 = self.lg.log_collected_target_feedback(preamble=p, epilogue=e)
+                err_detected1 = self.lg.log_collected_feedback(preamble=p, epilogue=e)
             except NotImplementedError:
                 pass
             finally:
@@ -2199,7 +2200,7 @@ class FmkPlumbing(object):
     def _log_directly_retrieved_target_feedback(self, preamble=None, epilogue=None):
         """
         This method is to be used when the target does not make use
-        of Logger.collect_target_feedback() facility. We thus try to
+        of Logger.collect_feedback() facility. We thus try to
         access the feedback from Target directly
         """
         err_detected = False
@@ -2213,18 +2214,19 @@ class FmkPlumbing(object):
                 for ref, fbk, status, tstamp in tg_fbk.iter_and_cleanup_collector():
                     if status < 0:
                         err_detected = True
-                    self.lg.log_target_feedback_from(fbk, tstamp,
+                    self.lg.log_target_feedback_from(source=FeedbackSource(self.tg, subref=ref),
+                                                     content=fbk,
                                                      status_code=status,
-                                                     source=FeedbackSource(self.tg, subref=ref),
+                                                     timestamp=tstamp,
                                                      preamble=preamble,
                                                      epilogue=epilogue)
 
             raw_fbk = tg_fbk.get_bytes()
             if raw_fbk is not None:
-                self.lg.log_target_feedback_from(raw_fbk,
-                                                 tg_fbk.get_timestamp(),
+                self.lg.log_target_feedback_from(source=FeedbackSource(self.tg),
+                                                 content=raw_fbk,
                                                  status_code=err_code,
-                                                 source=FeedbackSource(self.tg),
+                                                 timestamp=tg_fbk.get_timestamp(),
                                                  preamble=preamble,
                                                  epilogue=epilogue)
 
@@ -2247,8 +2249,10 @@ class FmkPlumbing(object):
                     now = datetime.datetime.now()
                     if (now - t0).total_seconds() > self._hc_timeout:
                         self.lg.log_target_feedback_from(
-                            '*** Timeout! The target does not seem to be ready.',
-                            now, status_code=-1, source=FeedbackSource(self)
+                            source=FeedbackSource(self),
+                            content='*** Timeout! The target does not seem to be ready.',
+                            status_code=-1,
+                            timestamp=now
                         )
                         ret = -1
                         self.tg.cleanup()
@@ -2719,9 +2723,8 @@ class FmkPlumbing(object):
                 op_status = linst.get_operator_status()
                 op_tstamp = linst.get_timestamp()
                 if op_feedback or op_status:
-                    self.lg.log_operator_feedback(op_feedback, op_tstamp,
-                                                  operator=operator,
-                                                  status_code=op_status)
+                    self.lg.log_operator_feedback(operator=operator, content=op_feedback,
+                                                  status_code=op_status, timestamp=op_tstamp)
 
                 comments = linst.get_comments()
                 if comments:
