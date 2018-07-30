@@ -1196,7 +1196,7 @@ class NodeInternals_Empty(NodeInternals):
 
     def set_child_env(self, env):
         self.env = env
-        print('Empty:', hex(id(self)))
+        print('\n*** Empty Node: {!s}'.format(hex(id(self))))
         raise AttributeError
 
 

@@ -32,6 +32,7 @@ class PopulationError(Exception): pass
 class ExtinctPopulationError(PopulationError): pass
 
 class DataModelDefinitionError(Exception): pass
+class ProjectDefinitionError(Exception): pass
 
 class RegexParserError(DataModelDefinitionError): pass
 

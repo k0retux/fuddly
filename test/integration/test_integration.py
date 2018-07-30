@@ -40,11 +40,11 @@ from framework.plumbing import *
 from framework.data_model import *
 from framework.encoders import *
 
-from test import ignore_data_model_specifics, run_long_tests
+from test import ignore_data_model_specifics, run_long_tests, exit_on_import_error
 
 def setUpModule():
     global fmk, dm, results
-    fmk = FmkPlumbing()
+    fmk = FmkPlumbing(exit_on_error=exit_on_import_error)
     fmk.run_project(name='tuto', dm_name='example')
     dm = example.data_model
     results = collections.OrderedDict()
@@ -3209,7 +3209,7 @@ class TestDataModel(unittest.TestCase):
             except:
                 print("\n*** WARNING: Data Model '{:s}' not tested because" \
                       " the loading process has failed ***\n".format(dm.name))
-                continue
+                raise
 
             print("Test '%s' Data Model" % dm.name)
             for data_id in dm.atom_identifiers():

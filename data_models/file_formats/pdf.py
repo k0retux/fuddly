@@ -164,8 +164,8 @@ class PDFObj(object):
         e = Node(name)
         e.set_subnodes_with_csts([
             2, ['u>', [sign, 0, 1], [int_part, 0, 1], [end, 1]],
-            3, ['u>', [sign, 0, 1], [int_part, 1], [end, 0, 1]],
-            1, ['u>', [sign, 0, 1], [int_part, 1], [dot, 1]]
+            3, ['u>', [sign, 0, 1], [int_part.get_clone('int_part_s2'), 1], [end.get_clone('float_part_s2'), 0, 1]],
+            1, ['u>', [sign, 0, 1], [int_part.get_clone('int_part_s3'), 1], [dot, 1]]
             ])
 
         e.set_semantics(NodeSemantics(['PDF_number', 'basic_type']))

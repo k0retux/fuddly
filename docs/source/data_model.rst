@@ -678,6 +678,8 @@ For :class:`framework.value_types.INT_str`, additional parameters are available:
 ``min_size`` [optional, default value: **None**]
   If specified, the integer representation will have a minimum size (with added zeros when necessary).
 
+``reverse`` [optional, default value: **False**]
+  Reverse the order of the string if set to ``True``.
 
 String
 ------

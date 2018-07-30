@@ -1527,7 +1527,7 @@ class INT_str(with_metaclass(meta_int_str, INT)):
     regex_bin = b'-?[01]+'
 
     def __init__(self, values=None, min=None, max=None, default=None, determinist=True,
-                 force_mode=False, base=10, letter_case='upper', min_size=None):
+                 force_mode=False, base=10, letter_case='upper', min_size=None, reverse=False):
         INT.__init__(self, values=values, min=min, max=max, default=default, determinist=determinist,
                      force_mode=force_mode)
         assert base in [10, 16, 8, 2]
@@ -1535,6 +1535,7 @@ class INT_str(with_metaclass(meta_int_str, INT)):
         assert min_size is None or isinstance(min_size, int)
 
         self._base = base
+        self._reverse = reverse
 
         if min_size is not None:
             self._format_str = '{:0' + str(min_size)
@@ -1571,10 +1572,16 @@ class INT_str(with_metaclass(meta_int_str, INT)):
             return g.group(0), len(g.group(0))
 
     def _unconvert_value(self, val):
+        if self._reverse:
+            val = val[::-1]
         return int(val, base=self._base)
 
     def _convert_value(self, val):
-        return self._format_str.format(val).encode('utf8')
+        ret = self._format_str.format(val).encode('utf8')
+        if self._reverse:
+            ret = ret[::-1]
+        return ret
+
 
 #class Fuzzy_INT_str(Fuzzy_INT, metaclass=meta_int_str):
 class Fuzzy_INT_str(with_metaclass(meta_int_str, Fuzzy_INT)):

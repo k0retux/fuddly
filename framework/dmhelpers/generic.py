@@ -236,7 +236,8 @@ def TIMESTAMP(time_format="%H%M%S", utc=False,
 
 
 def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=True,
-        set_attrs=None, clear_attrs=None, after_encoding=True, freezable=False):
+        set_attrs=None, clear_attrs=None, after_encoding=True, freezable=False,
+        base=16, letter_case='upper', reverse_str=False):
     """
     Return a *generator* that returns the CRC (in the chosen type) of
     all the node parameters. (Default CRC is PKZIP CRC32)
@@ -253,11 +254,16 @@ def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=Tr
         set to False only if node arguments support encoding.
       freezable (bool): if ``False`` make the generator unfreezable in order to always provide
         the right value. (Note that tTYPE will still be able to corrupt the generator.)
+      base (int): Relevant when ``vt`` is ``INT_str``. Numerical base to use for string representation
+      letter_case (str): Relevant when ``vt`` is ``INT_str``. Letter case for string representation
+        ('upper' or 'lower')
+      reverse_str (bool): Reverse the order of the string if set to ``True``.
     """
     class Crc(object):
         unfreezable = not freezable
 
-        def __init__(self, vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs):
+        def __init__(self, vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs,
+                     base=16, letter_case='upper', reverse_str=False):
             self.vt = vt
             self.poly = poly
             self.init_crc = init_crc
@@ -265,6 +271,9 @@ def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=Tr
             self.rev = rev
             self.set_attrs = set_attrs
             self.clear_attrs = clear_attrs
+            self.base = base
+            self.letter_case = letter_case
+            self.reverse_str = reverse_str
 
         def __call__(self, nodes):
             crc_func = crcmod.mkCrcFun(self.poly, initCrc=self.init_crc,
@@ -283,7 +292,12 @@ def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=Tr
 
             result = crc_func(s)
 
-            n = Node('cts', value_type=self.vt(values=[result], force_mode=True))
+            if issubclass(self.vt, fvt.INT_str):
+                n = Node('cts', value_type=self.vt(values=[result], force_mode=True,
+                                                   base=self.base, letter_case=self.letter_case,
+                                                   reverse=self.reverse_str))
+            else:
+                n = Node('cts', value_type=self.vt(values=[result], force_mode=True))
             n.set_semantics(NodeSemantics(['crc']))
             MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
             return n
@@ -292,7 +306,8 @@ def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=Tr
         raise NotImplementedError('the CRC template has been disabled because python-crcmod module is not installed!')
 
     vt = MH._validate_int_vt(vt)
-    return Crc(vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs)
+    return Crc(vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs,
+               base=base, letter_case=letter_case, reverse_str=reverse_str)
 
 
 

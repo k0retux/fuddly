@@ -212,7 +212,7 @@ class FmkPlumbing(object):
     Defines the methods to operate every sub-systems of fuddly
     '''
 
-    def __init__(self):
+    def __init__(self, exit_on_error=False):
         self._prj = None
         self.dm = None
         self.lg = None
@@ -287,8 +287,16 @@ class FmkPlumbing(object):
 
         self.enable_wkspace()
 
+        self.import_successfull = True
         self.get_data_models()
+        if exit_on_error and not self.import_successfull:
+            self.fmkDB.stop()
+            raise DataModelDefinitionError('Error with some DM imports')
+
         self.get_projects()
+        if exit_on_error and not self.import_successfull:
+            self.fmkDB.stop()
+            raise ProjectDefinitionError('Error with some Project imports')
 
         print(colorize(FontStyle.BOLD + '='*44 + '[ Fuddly Data Folder Information ]==\n',
                        rgb=Color.FMKINFOGROUP))
@@ -634,11 +642,12 @@ class FmkPlumbing(object):
                         self.__dyngenerators_created[dm_params['dm']] = False
                         # populate FMK DB
                         self._fmkDB_insert_dm_and_dmakers(dm_params['dm'].name, dm_params['tactics'])
+                    else:
+                        self.import_successfull = False
 
         self.fmkDB.insert_data_model(Database.DEFAULT_DM_NAME)
         self.fmkDB.insert_dmaker(Database.DEFAULT_DM_NAME, Database.DEFAULT_GTYPE_NAME,
                                  Database.DEFAULT_GEN_NAME, True, True)
-
 
     def __import_dm(self, prefix, name, reload_dm=False):
 
@@ -787,6 +796,8 @@ class FmkPlumbing(object):
                                       prj_params['prj_rld_args'],
                                       reload_prj=False)
                     self.fmkDB.insert_project(prj_params['project'].name)
+                else:
+                    self.import_successfull = False
 
 
     def _import_project(self, prefix, name, reload_prj=False):
