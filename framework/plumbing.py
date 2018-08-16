@@ -4487,6 +4487,7 @@ class FmkShell(cmd.Cmd):
             for arg in args[::-1]:
                 tg_id = int(arg)
                 tg_ids.append(tg_id)
+            args = []
         except ValueError:
             if tg_ids:
                 tg_ids = tg_ids[::-1]
@@ -5033,18 +5034,20 @@ class FmkShell(cmd.Cmd):
     def do_replay_db(self, line):
         '''
         Replay data from the Data Bank and optionnaly apply new disruptors on it
-        |_ syntax: replay_db <idx_from_db> [disruptor_type_1 ... disruptor_type_n]
+        |_ syntax: replay_db i<idx_from_db> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
         '''
 
         self.__error = True
 
         args = line.split()
+        args, tg_ids = self._retrieve_tg_ids(args)
         args_len = len(args)
 
         if args_len < 1:
             return False
+
         try:
-            idx = int(args.pop(0))
+            idx = int(args.pop(0)[1:])
         except ValueError:
             return False
 
@@ -5066,6 +5069,8 @@ class FmkShell(cmd.Cmd):
 
         self.__error = False
 
+        if tg_ids:
+            data.tg_ids = tg_ids
         self.fz.send_data_and_log(data, original_data=data_orig)
 
         return False
@@ -5074,19 +5079,22 @@ class FmkShell(cmd.Cmd):
     def do_replay_db_loop(self, line):
         '''
         Loop ( Replay data from the Data Bank and optionnaly apply new disruptors on it )
-        |_ syntax: replay_db_loop <#loop> <idx_from_db> [disruptor_type_1 ... disruptor_type_n]
+        |_ syntax: replay_db_loop <#loop> i<idx_from_db> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
         '''
 
         self.__error = True
 
         args = line.split()
+        args, tg_ids = self._retrieve_tg_ids(args)
+
         args_len = len(args)
 
         if args_len < 2:
             return False
+
         try:
             nb = int(args.pop(0))
-            idx = int(args.pop(0))
+            idx = int(args.pop(0)[1:])
         except ValueError:
             return False
 
@@ -5107,10 +5115,14 @@ class FmkShell(cmd.Cmd):
                 if new_data is None:
                     return False
 
+                if tg_ids:
+                    new_data.tg_ids = tg_ids
                 self.fz.send_data_and_log(new_data, original_data=data_orig)
 
         else:
             for i in range(nb):
+                if tg_ids:
+                    data.tg_ids = tg_ids
                 self.fz.send_data_and_log(data, original_data=data_orig)
 
         self.__error = False
@@ -5119,7 +5131,13 @@ class FmkShell(cmd.Cmd):
 
 
     def do_replay_db_all(self, line):
-        '''Replay all data from the Data Bank'''
+        '''
+        Replay all data from the Data Bank
+        |_ syntax: replay_db_all [targetID1 ... targetIDN]
+        '''
+
+        args = line.split()
+        args, tg_ids = self._retrieve_tg_ids(args)
 
         try:
             next(self.fz.iter_data_bank())
@@ -5129,6 +5147,8 @@ class FmkShell(cmd.Cmd):
             return False
 
         for data_orig, data in self.fz.iter_data_bank():
+            if tg_ids:
+                data.tg_ids = tg_ids
             self.fz.send_data_and_log(data, original_data=data_orig)
 
         return False
@@ -5196,7 +5216,7 @@ class FmkShell(cmd.Cmd):
     def do_replay_last(self, line):
         '''
         Replay last data and optionnaly apply new disruptors on it
-        |_ syntax: replay_last [disruptor_type_1 ... disruptor_type_n]
+        |_ syntax: replay_last [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
         '''
 
         self.__error = True
@@ -5205,9 +5225,12 @@ class FmkShell(cmd.Cmd):
         if data is None:
             return False
 
+        tg_ids = None
+
         if line:
             args = line.split()
             data_orig = data
+            args, tg_ids = self._retrieve_tg_ids(args)
 
             t = self.__parse_instructions(args)
             if t is None:
@@ -5220,6 +5243,8 @@ class FmkShell(cmd.Cmd):
 
         self.__error = False
 
+        if tg_ids:
+            data.tg_ids = tg_ids
         self.fz.send_data_and_log(data, original_data=data_orig)
 
         return False
