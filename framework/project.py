@@ -51,7 +51,10 @@ class Project(object):
         self._feedback_processing_thread = None
         self._fbk_handlers = []
 
-        self.target = None
+        self.scenario_target_mapping = None
+        self.reset_target_mappings()
+
+        self.targets = None
         self.dm = None
         self.operators = {}
 
@@ -76,10 +79,10 @@ class Project(object):
         for fh in self._fbk_handlers:
             fh.notify_data_sending(data_list, timestamp, target)
 
-    def trigger_feedback_handlers(self, source, timestamp, content, status, target):
+    def trigger_feedback_handlers(self, source, timestamp, content, status, targets):
         if not self._fbk_processing_enabled:
             return
-        self._feedback_fifo.put((source, timestamp, content, status, target))
+        self._feedback_fifo.put((source, timestamp, content, status, targets))
 
     def _feedback_processing(self):
         '''
@@ -111,14 +114,20 @@ class Project(object):
     def set_logger(self, logger):
         self.logger = logger
 
-    def set_target(self, target):
-        self.target = target
+    def set_targets(self, targets):
+        self.targets = targets
 
     def set_monitor(self, monitor):
         self.monitor = monitor
 
     def set_data_model(self, dm):
         self.dm = dm
+
+    def map_targets_to_scenario(self, scenario_name, target_mapping):
+        self.scenario_target_mapping[scenario_name] = target_mapping
+
+    def reset_target_mappings(self):
+        self.scenario_target_mapping = {}
 
     def register_new_operator(self, name, obj):
 

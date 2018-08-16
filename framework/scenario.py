@@ -32,7 +32,7 @@ from libs.external_modules import *
 from libs.utils import find_file, retrieve_app_handler
 
 class DataProcess(object):
-    def __init__(self, process, seed=None, auto_regen=False):
+    def __init__(self, process, seed=None, auto_regen=False, vtg_ids=None):
         """
         Describe a process to generate a data.
 
@@ -54,6 +54,8 @@ class DataProcess(object):
               all disruptors are exhausted. If ``False``, the data process won't notify the
               framework to rerun the data maker chain, thus triggering the end of the scenario
               that embeds this data process.
+            vtg_ids (list): Virtual ID list of the targets to which the outcomes of this data process will be sent.
+              If ``None``, the outcomes will be sent to the first target that has been enabled.
         """
         self.seed = seed
         self.auto_regen = auto_regen
@@ -61,6 +63,7 @@ class DataProcess(object):
         self.outcomes = None
         self.feedback_timeout = None
         self.feedback_mode = None
+        self.vtg_ids = vtg_ids
         self._process = [process]
         self._process_idx = 0
         self._blocked = False
@@ -153,10 +156,27 @@ class Step(object):
                  fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
                  do_before_data_processing=None, do_before_sending=None,
-                 valid=True):
+                 valid=True, vtg_ids=None):
+        '''
+
+        Args:
+            data_desc:
+            final:
+            fbk_timeout:
+            fbk_mode:
+            set_periodic:
+            clear_periodic:
+            step_desc:
+            do_before_data_processing:
+            do_before_sending:
+            valid:
+            vtg_ids (list, int): Virtual ID list of the targets to which the outcomes of this data process will be sent.
+              If ``None``, the outcomes will be sent to the first target that has been enabled.
+        '''
 
         self.final = final
         self.valid = valid
+        self.vtg_ids = vtg_ids
         self._step_desc = step_desc
         self._transitions = []
         self._do_before_data_processing = do_before_data_processing
@@ -361,7 +381,7 @@ class Step(object):
             # Practically it means that the creation of these data need to be performed
             # by data framework callback (CallBackOps.Replace_Data) because
             # a generator (by which a scenario will be executed) can only provide one data.
-            d = Data('STEP:POISON_1')
+            d = Data('STEP:POISON_2')
 
         if not d.has_info():
             if self._step_desc is not None:
@@ -394,6 +414,8 @@ class Step(object):
             d.feedback_timeout = self._feedback_timeout
         if self._feedback_mode is not None:
             d.feedback_mode = self._feedback_mode
+
+        d.tg_ids = self.vtg_ids
 
         return d
 
@@ -492,18 +514,19 @@ class Step(object):
 class FinalStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
-                 do_before_data_processing=None, valid=True):
-        Step.__init__(self, final=True, do_before_data_processing=do_before_data_processing, valid=valid)
+                 do_before_data_processing=None, valid=True, vtg_ids=None):
+        Step.__init__(self, final=True, do_before_data_processing=do_before_data_processing,
+                      valid=valid, vtg_ids=vtg_ids)
 
 class NoDataStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
-                 do_before_data_processing=None, valid=True):
+                 do_before_data_processing=None, valid=True, vtg_ids=None):
         Step.__init__(self, data_desc=Data(''), final=final,
                       fbk_timeout=fbk_timeout, fbk_mode=fbk_mode,
                       set_periodic=set_periodic, clear_periodic=clear_periodic,
                       step_desc=step_desc, do_before_data_processing=do_before_data_processing,
-                      valid=valid)
+                      valid=valid, vtg_ids=vtg_ids)
         self.make_blocked()
 
     def make_free(self):

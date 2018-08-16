@@ -112,7 +112,8 @@ class Logger(object):
         self.__tmp = False
 
         self.reset_current_state()
-        self.last_data_id = None
+        self._current_sent_date = None
+        self._last_data_IDs = {} # per target_ref
         self.last_data_recordable = None
 
         with self._tg_fbk_lck:
@@ -168,7 +169,8 @@ class Logger(object):
             self._fd.close()
 
         self.reset_current_state()
-        self.last_data_id = None
+        self._current_sent_date = None
+        self._last_data_IDs = {}
         self.last_data_recordable = None
 
         self.print_console('*** Logger is stopped ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
@@ -176,60 +178,63 @@ class Logger(object):
 
     def reset_current_state(self):
         self._current_data = None
+        self._current_group_id = None
         self._current_orig_data_id = None
         self._current_size = None
-        self._current_sent_date = None
-        self._current_ack_date = None
+        self._current_ack_dates = None
         self._current_dmaker_list= []
         self._current_dmaker_info = {}
         self._current_src_data_id = None
         self._current_fmk_info = []
 
-    def commit_data_table_entry(self, group_id, prj_name, tg_name):
+    def commit_data_table_entry(self, group_id, prj_name):
         if self._current_data is not None:  # that means data will be recorded
             init_dmaker = self._current_data.get_initial_dmaker()
             init_dmaker = Database.DEFAULT_GTYPE_NAME if init_dmaker is None else init_dmaker[0]
             dm = self._current_data.get_data_model()
             dm_name = Database.DEFAULT_DM_NAME if dm is None else dm.name
+            self._current_group_id = group_id
 
-            self.last_data_id = self.fmkDB.insert_data(init_dmaker, dm_name,
-                                                       self._current_data.to_bytes(),
-                                                       self._current_size,
-                                                       self._current_sent_date,
-                                                       self._current_ack_date,
-                                                       tg_name, prj_name,
-                                                       group_id=group_id)
+            for tg_ref, ack_date in self._current_ack_dates.items():
+                last_data_id = self.fmkDB.insert_data(init_dmaker, dm_name,
+                                                           self._current_data.to_bytes(),
+                                                           self._current_size,
+                                                           self._current_sent_date,
+                                                           ack_date,
+                                                           tg_ref, prj_name,
+                                                           group_id=group_id)
+                self._last_data_IDs[tg_ref] = last_data_id
 
-            if self.last_data_id is None:
-                print("\n*** ERROR: Cannot insert the data record in FMKDB!")
-                self.last_data_id = None
-                self.last_data_recordable = None
-                return self.last_data_id
+                if last_data_id is None:
+                    print("\n*** ERROR: Cannot insert the data record in FMKDB!")
+                    last_data_id = None
+                    self.last_data_recordable = None
+                    return last_data_id
 
-            self._current_data.set_data_id(self.last_data_id)
+                self._current_data.set_data_id(last_data_id)
 
-            if self._current_orig_data_id is not None:
-                self.fmkDB.insert_steps(self.last_data_id, 1, None, None,
-                                        self._current_orig_data_id,
-                                        None, None)
-                step_id_start = 2
-            else:
-                step_id_start = 1
+                if self._current_orig_data_id is not None:
+                    self.fmkDB.insert_steps(last_data_id, 1, None, None,
+                                            self._current_orig_data_id,
+                                            None, None)
+                    step_id_start = 2
+                else:
+                    step_id_start = 1
 
-            for step_id, dmaker in enumerate(self._current_dmaker_list, start=step_id_start):
-                dmaker_type, dmaker_name, user_input = dmaker
-                info = self._current_dmaker_info.get((dmaker_type,dmaker_name), None)
-                if info is not None:
-                    info = '\n'.join(info)
-                    info = convert_to_internal_repr(info)
-                self.fmkDB.insert_steps(self.last_data_id, step_id, dmaker_type, dmaker_name,
-                                        self._current_src_data_id,
-                                        str(user_input), info)
+                for step_id, dmaker in enumerate(self._current_dmaker_list, start=step_id_start):
+                    dmaker_type, dmaker_name, user_input = dmaker
+                    info = self._current_dmaker_info.get((dmaker_type,dmaker_name), None)
+                    if info is not None:
+                        info = '\n'.join(info)
+                        info = convert_to_internal_repr(info)
+                    self.fmkDB.insert_steps(last_data_id, step_id, dmaker_type, dmaker_name,
+                                            self._current_src_data_id,
+                                            str(user_input), info)
 
-            for msg, now in self._current_fmk_info:
-                self.fmkDB.insert_fmk_info(self.last_data_id, msg, now)
+                for msg, now in self._current_fmk_info:
+                    self.fmkDB.insert_fmk_info(last_data_id, msg, now)
 
-            return self.last_data_id
+            return last_data_id
 
         else:
             return None
@@ -244,10 +249,14 @@ class Logger(object):
 
         msg = "{prefix:s}*** [ {message:s} ] ***{suffix:s}".format(prefix=p, suffix=s, message=info)
         self.log_fn(msg, rgb=rgb)
-        data_id = self.last_data_id if data_id is None else data_id
+
         if do_record:
             if not delay_recording:
-                self.fmkDB.insert_fmk_info(data_id, info, now)
+                if data_id is None:
+                    for d_id in self._last_data_IDs.values():
+                        self.fmkDB.insert_fmk_info(d_id, info, now)
+                else:
+                    self.fmkDB.insert_fmk_info(data_id, info, now)
             else:
                 self._current_fmk_info.append((info, now))
 
@@ -267,7 +276,7 @@ class Logger(object):
         fbk_src = get_caller_object()
 
         with self._tg_fbk_lck:
-            self._tg_fbk.append((now, fbk_src, content, status_code))
+            self._tg_fbk.append((now, FeedbackSource(fbk_src), content, status_code))
 
     def shall_record(self):
         if self.last_data_recordable or not self.__explicit_data_recording:
@@ -295,13 +304,23 @@ class Logger(object):
                 self.log_fn(processed_feedback, rgb=body_color, do_record=record)
 
         if record:
+            assert isinstance(source, FeedbackSource)
+            source = source.related_tg if source.related_tg is not None else source
+            try:
+                data_id = self._last_data_IDs[source]
+            except KeyError:
+                print('\nWarning: The feedback source does not provide a related target. '
+                      'Retrieved feedback will be attached to the last data ID.')
+                ids = self._last_data_IDs.values()
+                data_id = max(ids) if ids else None
+
             if isinstance(content, list):
                 for fbk, ts in zip(content, timestamp):
-                    self.fmkDB.insert_feedback(self.last_data_id, source, ts,
+                    self.fmkDB.insert_feedback(data_id, source, ts,
                                                self._encode_target_feedback(fbk),
                                                status_code=status_code)
             else:
-                self.fmkDB.insert_feedback(self.last_data_id, source, timestamp,
+                self.fmkDB.insert_feedback(data_id, source, timestamp,
                                            self._encode_target_feedback(content),
                                            status_code=status_code)
 
@@ -322,7 +341,7 @@ class Logger(object):
             bool: True if target feedback has been collected through logger infrastructure
               :meth:`Logger.collect_feedback`, False otherwise.
         """
-        error_detected = False
+        error_detected = {}
 
         with self._tg_fbk_lck:
             fbk_list = self._tg_fbk
@@ -342,7 +361,9 @@ class Logger(object):
             self._log_feedback(fbk_src, fbk, status, timestamp, record=record)
 
             if status is not None and status < 0:
-                error_detected = True
+                error_detected[fbk_src.obj] = True
+            else:
+                error_detected[fbk_src.obj] = False
 
         if epilogue is not None:
             self.log_fn(epilogue, do_record=record, rgb=Color.FMKINFO)
@@ -367,8 +388,8 @@ class Logger(object):
         self._log_feedback(FeedbackSource(operator), content, status_code, timestamp,
                            record=self.shall_record())
 
-    def log_probe_feedback(self, probe, content, status_code, timestamp):
-        self._log_feedback(FeedbackSource(probe), content, status_code, timestamp,
+    def log_probe_feedback(self, probe, content, status_code, timestamp, related_tg=None):
+        self._log_feedback(FeedbackSource(probe, related_tg=related_tg), content, status_code, timestamp,
                            record=self.shall_record())
 
 
@@ -456,12 +477,16 @@ class Logger(object):
         self.log_fn(msg, rgb=Color.INFO)
 
     def log_target_ack_date(self):
-        msg = "### Target ack received at: "
-        self.log_fn(msg, nl_after=False, rgb=Color.LOGSECTION)
-        self.log_fn(str(self._current_ack_date), nl_before=False)
+        for tg_ref, ack_date in self._current_ack_dates.items():
+            msg = "### Ack from '{!s}' received at: ".format(tg_ref)
+            self.log_fn(msg, nl_after=False, rgb=Color.LOGSECTION)
+            self.log_fn(str(ack_date), nl_before=False)
 
-    def set_target_ack_date(self, date):
-        self._current_ack_date = date
+    def set_target_ack_date(self, tg_ref, date):
+        if self._current_ack_dates is None:
+            self._current_ack_dates = {tg_ref: date}
+        else:
+            self._current_ack_dates[tg_ref] = date
 
     def log_orig_data(self, data):
 
@@ -576,14 +601,16 @@ class Logger(object):
 
         self.log_fn("### Comments [{date:s}]:".format(date=current_date), rgb=Color.COMMENTS)
         self.log_fn(comment)
-        self.fmkDB.insert_comment(self.last_data_id, comment, now)
+        for data_id in self._last_data_IDs.values():
+            self.fmkDB.insert_comment(data_id, comment, now)
         self.print_console('\n')
 
     def log_error(self, err_msg):
         now = datetime.datetime.now()
         msg = "\n/!\\ ERROR: %s /!\\\n" % err_msg
         self.log_fn(msg, rgb=Color.ERROR)
-        self.fmkDB.insert_fmk_info(self.last_data_id, msg, now, error=True)
+        for data_id in self._last_data_IDs.values():
+            self.fmkDB.insert_fmk_info(data_id, msg, now, error=True)
 
     def print_console(self, msg, nl_before=True, nl_after=False, rgb=None, style=None,
                       raw_limit=None, limit_output=True):

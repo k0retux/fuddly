@@ -315,11 +315,11 @@ class Monitor(object):
     def __init__(self):
         self.fmk_ops = None
         self._logger = None
-        self._target = None
+        self._targets = None
         self._target_status = None
         self._dm = None
-
         self.probe_users = {}
+        self._tg_from_probe = {}
 
         self.__enable = True
 
@@ -329,8 +329,8 @@ class Monitor(object):
     def set_logger(self, logger):
         self._logger = logger
 
-    def set_target(self, target):
-        self._target = target
+    def set_targets(self, targets):
+        self._targets = targets
 
     def set_data_model(self, dm):
         self._dm = dm
@@ -359,6 +359,7 @@ class Monitor(object):
         self.__enable = False
 
     def _get_probe_ref(self, probe):
+        # TODO: provide unique ref for same probe class name
         if isinstance(probe, type) and issubclass(probe, Probe):
             return probe.__name__
         elif isinstance(probe, Probe):
@@ -376,19 +377,28 @@ class Monitor(object):
             return False
         return True
 
-    def start_probe(self, probe):
-        probe_name = self._get_probe_ref(probe)
-        if probe_name in self.probe_users:
+    def start_probe(self, probe, related_tg=None):
+        probe_ref = self._get_probe_ref(probe)
+        if probe_ref in self.probe_users:
             try:
-                self.probe_users[probe_name].start(self._dm, self._target, self._logger)
+                if related_tg is None:
+                    self.probe_users[probe_ref].start(self._dm, self._targets, self._logger)
+                else:
+                    self.probe_users[probe_ref].start(self._dm, related_tg, self._logger)
             except:
+                self.fmk_ops.set_error("Exception raised in probe '{:s}' start".format(probe_ref),
+                                       code=Error.UserCodeError)
                 return False
+            else:
+                self._tg_from_probe[probe_ref] = related_tg
         return True
 
     def stop_probe(self, probe):
         probe_name = self._get_probe_ref(probe)
         if probe_name in self.probe_users:
             self.probe_users[probe_name].stop()
+            if probe_name in self._tg_from_probe:
+                del self._tg_from_probe[probe_name]
             self._wait_for_specific_probes(ProbeUser, ProbeUser.join, [probe])
         else:
             self.fmk_ops.set_error("Probe '{:s}' does not exist".format(probe_name),
@@ -397,9 +407,12 @@ class Monitor(object):
     def stop_all_probes(self):
         for _, probe_user in self.probe_users.items():
             probe_user.stop()
-
+        self._tg_from_probe = {}
         self._wait_for_specific_probes(ProbeUser, ProbeUser.join)
 
+
+    def get_probe_related_tg(self, probe):
+        return self._tg_from_probe[self._get_probe_ref(probe)]
 
     def get_probe_status(self, probe):
         return self.probe_users[self._get_probe_ref(probe)].get_probe_status()

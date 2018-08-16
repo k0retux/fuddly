@@ -201,7 +201,7 @@ class Data(object):
 
     _empty_data_backend = EmptyBackend()
 
-    def __init__(self, data=None, altered=False):
+    def __init__(self, data=None, altered=False, tg_ids=None):
         self.altered = altered
         self._backend = None
 
@@ -217,6 +217,8 @@ class Data(object):
         self.info_list = []
         self.info = {}
 
+        self.scenario_dependence = None
+
         # callback related
         self._callbacks = {}
         self._pending_ops = {}
@@ -226,6 +228,8 @@ class Data(object):
         # Used to provide information on the origin of the Data().
         # If it comes from a scenario _origin point to the related scenario.
         self._origin = None
+
+        self.tg_ids = tg_ids  # targets ID
 
         # This attribute is set to True when the Data content has been retrieved from the fmkDB
         self.from_fmkdb = False
@@ -240,6 +244,22 @@ class Data(object):
     @property
     def content(self):
         return self._backend.content
+
+    @property
+    def tg_ids(self):
+        return self._targets
+
+    @tg_ids.setter
+    def tg_ids(self, tg_ids):
+        if tg_ids is None:
+            self._targets = None
+        elif isinstance(tg_ids, list):
+            assert len(tg_ids) > 0
+            self._targets = tg_ids
+        elif isinstance(tg_ids, int):
+            self._targets = [tg_ids]
+        else:
+            raise ValueError
 
     def is_empty(self):
         return isinstance(self._backend, EmptyBackend)
@@ -470,6 +490,7 @@ class Data(object):
                 new_data._callbacks[hook][id(cbk)] = cbk
         new_data._pending_ops = {}  # we do not copy pending_ops
         new_data._backend = copy.copy(self._backend)
+        new_data._targets = copy.copy(self._targets)
         return new_data
 
     def __str__(self):

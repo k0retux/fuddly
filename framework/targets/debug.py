@@ -22,6 +22,8 @@
 ################################################################################
 
 import random
+import datetime
+import time
 
 from framework.target_helpers import Target
 from framework.basic_primitives import rand_string
@@ -30,6 +32,7 @@ class TestTarget(Target):
 
     _feedback_mode = None
     supported_feedback_mode = []
+    _last_ack_date = None
 
     def __init__(self, recover_ratio=100):
         Target.__init__(self)
@@ -41,10 +44,14 @@ class TestTarget(Target):
         return True
 
     def send_data(self, data, from_fmk=False):
+        self._last_ack_date = datetime.datetime.now() + datetime.timedelta(microseconds=random.randint(20, 40))
+        time.sleep(0.001)
         self._logger.collect_feedback(content=rand_string(size=10), status_code=random.randint(-3, 3))
 
     def send_multiple_data(self, data_list, from_fmk=False):
-        pass
+        self._last_ack_date = datetime.datetime.now() + datetime.timedelta(microseconds=random.randint(20, 40))
+        time.sleep(0.001)
+        self._logger.collect_feedback(content=rand_string(size=20), status_code=random.randint(-3, 3))
 
     def is_target_ready_for_new_data(self):
         self._cpt += 1
@@ -59,3 +66,6 @@ class TestTarget(Target):
             return True
         else:
             return False
+
+    def get_last_target_ack_date(self):
+        return self._last_ack_date

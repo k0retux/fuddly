@@ -32,6 +32,8 @@ from framework.knowledge.feedback_handler import TestFbkHandler
 project = Project()
 project.default_dm = 'mydf'
 
+project.map_targets_to_scenario('ex1', {0: 8, 1: 9, None: 9})
+
 logger = Logger(export_data=False, explicit_data_recording=False, export_orig=False,
                 export_raw_data=True, enable_file_logging=False)
 
@@ -148,8 +150,9 @@ class probe_mem(ProbeMem):
 
 targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
            tuto_tg, net_tg, udpnet_tg, udpnetsrv_tg, rawnetsrv_tg,
+           (TestTarget(), probe_pid, (probe_mem, 0.2)),
            TestTarget(),
-           (TestTarget(), probe_pid, (probe_mem, 0.2))]
+           TestTarget()]
 
 ### OPERATOR DEFINITION ###
 
@@ -206,7 +209,7 @@ class MyOp(Operator):
         else:
             actions = ['SHAPE#3', 'tTYPE#3']
 
-        op.add_instruction(actions)
+        op.add_instruction(actions, tg_ids=[8,9])
 
         if self.mode == 1:
             actions_sup = ['SEPARATOR#2', ('tSTRUCT#2', None, UI(deep=True)), ('SIZE', None, UI(sz=10))]

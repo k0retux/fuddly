@@ -100,6 +100,7 @@ class DataModel(object):
 
     def register(self, *atom_list):
         for a in atom_list:
+            if a is None: continue
             key, prepared_atom = self._backend(a).prepare_atom(a)
             self._dm_hashtable[key] = prepared_atom
 

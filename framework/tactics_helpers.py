@@ -970,7 +970,11 @@ class DynGeneratorFromScenario(Generator):
         data.register_callback(self._callback_dispatcher_before_sending_step2, hook=HOOK.before_sending_step2)
         data.register_callback(self._callback_dispatcher_after_sending, hook=HOOK.after_sending)
         data.register_callback(self._callback_dispatcher_after_fbk, hook=HOOK.after_fbk)
+
+        data.scenario_dependence = self.scenario.name
+
         return data
+
 
     def _callback_cleanup_periodic(self):
         cbkops = CallBackOps()

@@ -354,7 +354,7 @@ class Database(object):
 
 
     def insert_data(self, dtype, dm_name, raw_data, sz, sent_date, ack_date,
-                    target_name, prj_name, group_id=None):
+                    target_ref, prj_name, group_id=None):
 
         if not self.enabled:
             return None
@@ -364,13 +364,13 @@ class Database(object):
         stmt = "INSERT INTO DATA(GROUP_ID,TYPE,DM_NAME,CONTENT,SIZE,SENT_DATE,ACK_DATE,"\
                "TARGET,PRJ_NAME)"\
                " VALUES(?,?,?,?,?,?,?,?,?)"
-        params = (group_id, dtype, dm_name, blob, sz, sent_date, ack_date, target_name, prj_name)
+        params = (group_id, dtype, dm_name, blob, sz, sent_date, ack_date, str(target_ref), prj_name)
         err_msg = 'while inserting a value into table DATA!'
 
         if self._data_id is None:
-            did = self.submit_sql_stmt(stmt, params=params, outcome_type=Database.OUTCOME_ROWID,
+            d_id = self.submit_sql_stmt(stmt, params=params, outcome_type=Database.OUTCOME_ROWID,
                                        error_msg=err_msg)
-            self._data_id = did
+            self._data_id = d_id
         else:
             self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
             self._data_id += 1
@@ -411,7 +411,7 @@ class Database(object):
 
         if self.current_project:
             self.current_project.trigger_feedback_handlers(source, timestamp, content, status_code,
-                                                           self.current_project.target)
+                                                           self.current_project.targets)
 
         if not self.enabled:
             return None

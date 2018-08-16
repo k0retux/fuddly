@@ -114,7 +114,7 @@ experiment without a real target. But let's say you want to fuzz the
    :linenos:
    :emphasize-lines: 1
 
-   >> set_target 3
+   >> load_targets 3
 
 
 .. seealso::
@@ -908,7 +908,7 @@ Here under some basic commands to start with:
    fmk.show_targets()
 
    # Select the target with ID ``3``
-   fmk.set_target(3)
+   fmk.load_targets(3)
 
    # To show all the available data models
    fmk.show_data_models()

@@ -3506,10 +3506,12 @@ class TestDataModelHelpers(unittest.TestCase):
 class TestFMK(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        fmk.run_project(name='tuto', dm_name='mydf', tg=0)
+        fmk.run_project(name='tuto', tg_ids=0, dm_name='mydf')
+        fmk.prj.reset_target_mappings()
 
     def setUp(self):
-        fmk.reload_all(tg_num=0)
+        fmk.reload_all(tg_ids=[0])
+        fmk.prj.reset_target_mappings()
 
     def test_generic_disruptors_01(self):
         dmaker_type = 'TESTNODE'
@@ -3621,12 +3623,15 @@ class TestFMK(unittest.TestCase):
 
     def test_operator_1(self):
 
+        fmk.reload_all(tg_ids=[8,9])
+
         fmk.launch_operator('MyOp', user_input=UserInputContainer(specific=UI(max_steps=100, mode=1)))
-        print('\n*** Last data ID: {:d}'.format(fmk.lg.last_data_id))
+        last_data_id = max(fmk.lg._last_data_IDs.values())
+        print('\n*** Last data ID: {:d}'.format(last_data_id))
         fmkinfo = fmk.fmkDB.execute_sql_statement(
             "SELECT CONTENT FROM FMKINFO "
             "WHERE DATA_ID == {data_id:d} "
-            "ORDER BY ERROR DESC;".format(data_id=fmk.lg.last_data_id)
+            "ORDER BY ERROR DESC;".format(data_id=last_data_id)
         )
         self.assertTrue(fmkinfo)
         for info in fmkinfo:
@@ -3637,6 +3642,8 @@ class TestFMK(unittest.TestCase):
 
     @unittest.skipIf(not run_long_tests, "Long test case")
     def test_operator_2(self):
+
+        fmk.reload_all(tg_ids=[8,9])
 
         myop = fmk.get_operator(name='MyOp')
         fmk.launch_operator('MyOp')
@@ -3698,7 +3705,9 @@ class TestFMK(unittest.TestCase):
 
         err_list = fmk.get_error()
         code_vector = [str(e) for e in err_list]
-        print('\n*** Retrieved error code vector: {!r}'.format(code_vector))
+        full_code_vector = [(str(e), e.msg) for e in err_list]
+        print('\n*** Retrieved error code vector: {!r}'.format(full_code_vector))
+
 
         self.assertEqual(code_vector, ['DataUnusable', 'HandOver', 'DataUnusable', 'HandOver',
                                        'DPHandOver', 'NoMoreData'])
@@ -3716,7 +3725,10 @@ class TestFMK(unittest.TestCase):
     @unittest.skipIf(not run_long_tests, "Long test case")
     def test_scenario_infra_02(self):
 
-        fmk.reload_all(tg_num=1)  # to collect feedback from monitoring probes
+        fmk.reload_all(tg_ids=[1])  # to collect feedback from monitoring probes
+        fmk.prj.reset_target_mappings()
+        fmk.prj.map_targets_to_scenario('ex1', {0: 1, 1: 1, None: 1})
+        fmk.prj.map_targets_to_scenario('ex2', {0: 1, 1: 1, None: 1})
 
         print('\n*** Test scenario EX1')
 

@@ -78,10 +78,10 @@ def retrieve_app_handler(filename):
 
 
 if sys.version_info[0] > 2:
-    def get_caller_object():
-        caller_frame_record = inspect.stack()[2]
+    def get_caller_object(stack_frame=2):
+        caller_frame_record = inspect.stack()[stack_frame]
         return caller_frame_record.frame.f_locals['self']
 else:
-    def get_caller_object():
-        caller_frame_record = inspect.stack()[2]
+    def get_caller_object(stack_frame=2):
+        caller_frame_record = inspect.stack()[stack_frame]
         return caller_frame_record[0].f_locals['self']

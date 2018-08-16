@@ -28,10 +28,11 @@ import collections
 
 class FeedbackSource(object):
 
-    def __init__(self, src, subref=None, reliability=None):
+    def __init__(self, src, subref=None, reliability=None, related_tg=None):
         self._name = str(src) if subref is None else str(src) + ' - ' + str(subref)
         self._obj = src
         self._reliability = reliability
+        self._related_tg = related_tg
 
     def __str__(self):
         return self._name
@@ -45,6 +46,10 @@ class FeedbackSource(object):
     @property
     def obj(self):
         return self._obj
+
+    @property
+    def related_tg(self):
+        return self._related_tg
 
 
 class FeedbackCollector(object):

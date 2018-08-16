@@ -34,6 +34,9 @@ class Target(object):
     Class abstracting the target we interact with.
     '''
     feedback_timeout = None
+    sending_delay = 0
+
+    tg_id = None  # this is set by FmkPlumbing
 
     FBK_WAIT_FULL_TIME = 1
     fbk_wait_full_time_slot_msg = 'Wait for the full time slot allocated for feedback retrieval'
@@ -49,8 +52,10 @@ class Target(object):
 
     _altered_data_queued = None
 
+    _pending_data = None
+
     def __str__(self):
-        return self.__class__.__name__
+        return self.__class__.__name__ + str(id(self))[-6:]
 
     def set_logger(self, logger):
         self._logger = logger
@@ -58,12 +63,16 @@ class Target(object):
     def set_data_model(self, dm):
         self.current_dm = dm
 
-    def _start(self):
-        self._logger.print_console('*** Target initialization ***\n', nl_before=False, rgb=Color.COMPONENT_START)
+    def _start(self, target_desc, tg_id):
+        self._logger.print_console('*** Target initialization: ({:d}) {!s} ***\n'.format(tg_id, target_desc),
+                                   nl_before=False, rgb=Color.COMPONENT_START)
+        self._pending_data = []
         return self.start()
 
-    def _stop(self):
-        self._logger.print_console('*** Target cleanup procedure ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
+    def _stop(self, target_desc, tg_id):
+        self._logger.print_console('*** Target cleanup procedure for ({:d}) {!s} ***\n'.format(tg_id, target_desc),
+                                   nl_before=False, rgb=Color.COMPONENT_STOP)
+        self._pending_data = None
         return self.stop()
 
     def start(self):
@@ -205,8 +214,6 @@ class Target(object):
     def fbk_wait_full_time_slot_mode(self):
         return self._feedback_mode == Target.FBK_WAIT_FULL_TIME
 
-    sending_delay = 0
-
     def set_sending_delay(self, sending_delay):
         '''
         Set the sending delay.
@@ -221,6 +228,25 @@ class Target(object):
     def get_description(self):
         return None
 
+    def add_pending_data(self, data):
+        with self._send_data_lock:
+            if isinstance(data, list):
+                self._pending_data += data
+            else:
+                self._pending_data.append(data)
+
+    def send_pending_data(self, from_fmk=False):
+        with self._send_data_lock:
+            data_list = self._pending_data
+            self._pending_data = []
+
+        if len(data_list) == 1:
+            self.send_data_sync(data_list[0], from_fmk=from_fmk)
+        elif len(data_list) > 1:
+            self.send_multiple_data_sync(data_list, from_fmk=from_fmk)
+        else:
+            raise ValueError('No pending data')
+
     def send_data_sync(self, data, from_fmk=False):
         '''
         Can be used in user-code to send data to the target without interfering
@@ -231,6 +257,7 @@ class Target(object):
         emits the message by itself.
         '''
         with self._send_data_lock:
+            self._altered_data_queued = data.altered
             self.send_data(data, from_fmk=from_fmk)
 
     def send_multiple_data_sync(self, data_list, from_fmk=False):
@@ -239,6 +266,7 @@ class Target(object):
         with the framework.
         '''
         with self._send_data_lock:
+            self._altered_data_queued = data_list[0].altered
             self.send_multiple_data(data_list, from_fmk=from_fmk)
 
     def add_probe(self, probe):
@@ -276,7 +304,8 @@ class EmptyTarget(Target):
             self._sending_time = datetime.datetime.now()
 
     def is_target_ready_for_new_data(self):
-        if self._feedback_enabled and self._sending_time is not None:
+        if self._feedback_enabled and self.feedback_timeout is not None and \
+                self._sending_time is not None:
             return (datetime.datetime.now() - self._sending_time).total_seconds() > self.feedback_timeout
         else:
             return True

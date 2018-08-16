@@ -56,9 +56,9 @@ class Operation(object):
     def set_status(self, status):
         self.status = status
 
-    def add_instruction(self, actions, seed=None):
+    def add_instruction(self, actions, seed=None, tg_ids=None):
         l = list(actions) if actions is not None else None
-        self.action_register.append((l, seed))
+        self.action_register.append((l, seed, tg_ids))
 
     def get_instructions(self):
         return self.action_register
