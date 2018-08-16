@@ -1545,7 +1545,6 @@ class FmkPlumbing(object):
             self._hc_timeout_max = max(self._hc_timeout.values())
             if do_show or do_record:
                 if target is None:
-                    tg = self._currently_used_targets[0]
                     self.lg.log_fmk_info('Target(s) health-check timeout = {:.1f}s'.format(timeout),
                                          do_record=do_record)
                 else:
@@ -4353,7 +4352,7 @@ class FmkShell(cmd.Cmd):
         return False
 
 
-    def do_launch_operator(self, line, use_existing_seed=True, verbose=False):
+    def do_launch_operator(self, line, use_existing_seed=False, verbose=False):
         '''
         Launch the specified operator and use any existing seed
         |_ syntax: launch_operator <op_name>
@@ -4381,12 +4380,12 @@ class FmkShell(cmd.Cmd):
         return False
 
 
-    def do_launch_operator_noseed(self, line):
+    def do_launch_operator_keepseed(self, line):
         '''
         Launch the specified operator without using any current seed
-        |_ syntax: launch_operator_noseed  <op_name>
+        |_ syntax: launch_operator_keepseed  <op_name>
         '''
-        ret = self.do_launch_operator(line, use_existing_seed=False)
+        ret = self.do_launch_operator(line, use_existing_seed=True)
         return ret
 
 

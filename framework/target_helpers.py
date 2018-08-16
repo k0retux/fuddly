@@ -36,7 +36,7 @@ class Target(object):
     feedback_timeout = None
     sending_delay = 0
 
-    tg_id = None  # this is set by FmkPlumbing
+    # tg_id = None  # this is set by FmkPlumbing
 
     FBK_WAIT_FULL_TIME = 1
     fbk_wait_full_time_slot_msg = 'Wait for the full time slot allocated for feedback retrieval'

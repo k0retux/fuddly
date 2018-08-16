@@ -116,6 +116,13 @@ experiment without a real target. But let's say you want to fuzz the
 
    >> load_targets 3
 
+.. note::
+   You can also load several targets at the same time if you want to sequence different actions
+   through various systems or on the same system but through different kinds of interfaces
+   (represented by different targets). To do it, provide a list of target IDs to the
+   ``load_targets`` command. For instance to load the targets 1, 4 and 5, issue the command::
+
+     >> load_targets 1 4 5
 
 .. seealso::
    In order to define new targets, look at :ref:`targets-def`.
@@ -216,11 +223,12 @@ Send Malformed ZIP Files to the Target (Manually)
 How to Send a ZIP File
 ++++++++++++++++++++++
 
-In order to send a ZIP file to the target, type the following::
+In order to send a ZIP file to a loaded target, type the following::
 
-   >> send ZIP
+   >> send ZIP [target ID]
 
-which will invoke the ``unzip`` program with a ZIP file:
+In our case we previously only loaded the target ID 3 (linked to the ``unzip`` program). It means that
+issuing the following command with 3 as <target ID> will invoke the ``unzip`` program with a ZIP file:
 
 .. code-block:: none
 
@@ -236,6 +244,16 @@ which will invoke the ``unzip`` program with a ZIP file:
    ### Target Feedback:
    ...
    >> 
+
+.. note::
+   If you don't provide a target ID on the command line, the one that will be used will be the first
+   loaded one. Thus in our case, we can forget to specify the target ID.
+
+.. note::
+   You can also send data to multiple targets at once (assuming that you enabled them at first), by
+   providing the list of target IDs like the following command::
+
+     >> send ZIP 3 5
 
 Note that a :class:`framework.data_model.DataModel` can define any number of data
 types---to model for instance the various atoms within a data format,
@@ -717,15 +735,14 @@ You can also reset all the data makers at once by issuing the following command:
 
   >> reset_all_dmakers
 
-.. note:: You can also choose to cleanup a *Generator* without resetting the
-   specifics of the previously produced data, that is, preserving the *seed* that
-   guided the data generation. Actually this seed is a copy of the
-   data that has been generated at the beginning, before any disruptor got a chance to
-   modify it. This original data is kept within the generator and will be provided again
-   if you use the command ``cleanup_dmaker`` instead of ``reset_dmaker``. The latter will
-   remove this seed.
+.. note::
+   In the case where the original data (i.e., the pristine generated data that does not get changed
+   by any disruptor) is asked to be preserved (for instance by using the command ``send_loop_keepseed``),
+   for repeatability purpose (when issuing the same command again), using the previous command will
+   also remove this original data. Thus you could prefer to use the command ``cleanup_dmaker`` that
+   will only reset the sequencing state, without resetting the seed (i.e., the original data).
 
-   Keeping such *seeds* may consume a lot of memory at some point. Moreover, they may only
+   Note that keeping such *seeds* may consume a lot of memory at some point. Moreover, they may only
    be useful for non-determinist data model.
 
 
@@ -756,8 +773,8 @@ probes, ..., you have to reload every fuddly subsystems. To do so, you
 only need to issue the command ``reload_all``.
 
 Now, imagine that you want to switch to a new target already
-registered, simply issue the command ``reload_all <target_id>``, where
-``<target_id>`` is picked up through the IDs displayed by the command
+registered, simply issue the command ``reload_all [target_ID1 .. target_ID2]``, where
+``target IDs`` are picked up through the IDs displayed by the command
 ``show_targets``
 
 Finally, if you want to switch to a new data model while a project is
