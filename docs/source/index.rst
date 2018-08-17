@@ -22,6 +22,8 @@ Contents:
 
    scenario
 
+   knowledge
+
    evolutionary_fuzzing
 
    disruptors

@@ -5,7 +5,7 @@ In this tutorial we will begin with the basic UI of ``fuddly``. Then
 we will see how to use ``fuddly`` directly from an advanced python
 interpreter like ``ipython``. Finally, we will walk through basic
 steps to create a new data model and the way to define specific
-disruptors,
+disruptors.
 
 
 Using ``fuddly`` simple UI: ``Fuddly Shell``

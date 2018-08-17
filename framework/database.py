@@ -410,8 +410,7 @@ class Database(object):
         )
 
         if self.current_project:
-            self.current_project.trigger_feedback_handlers(source, timestamp, content, status_code,
-                                                           self.current_project.targets)
+            self.current_project.trigger_feedback_handlers(source, timestamp, content, status_code)
 
         if not self.enabled:
             return None

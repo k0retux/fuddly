@@ -10,6 +10,9 @@ and providing the expected parameters. Besides, you have to provide them with a 
 access the monitored system, namely a :class:`framework.monitor.Backend`. Note that you can use
 the same backend for simultaneous probes.
 
+.. seealso::
+   To define your own probe refer to :ref:`tuto:probes`.
+
 Let's illustrate this with the following example where two probes are used to monitor a process
 through an SSH connection. One is used to check if the PID of the process has changed after each
 data sending, and the other one to check if the memory used by the process has exceeded

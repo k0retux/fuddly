@@ -33,27 +33,50 @@ except ImportError:
         __my_enum_auto_id += 1
         return i
 
+
+class TrustLevel(Enum):
+    Maximum = auto()
+    Medium = auto()
+    Minimum = auto()
+
 class Info(Enum):
     def __init__(self, val):
         self._trust = {}
 
-    def increase_trust(self):
+    def increase_trust(self, inc=1):
         if self.value not in self._trust:
             self._trust[self.value] = 0
-        self._trust[self.value] += 1
+        self._trust[self.value] += inc
 
-    def decrease_trust(self):
+    def decrease_trust(self, inc=1):
         if self.value not in self._trust:
             self._trust[self.value] = 0
-        self._trust[self.value] -= 1
+        self._trust[self.value] -= inc
 
     def reset_trust(self):
         self._trust[self.value] = 0
 
-    def show_trust(self):
-        if self.value not in self._trust:
-            self.reset_trust()
-        print('\n*** {} trust level: {}'.format(self, self._trust.get(self.value)))
+    def __str__(self):
+        name = self.__class__.__name__ + '.' + self.name
+        return 'Info: {!s} [{!s} --> value: {:d}]'.format(
+                name, self.trust_level, self.trust_value)
+
+    @property
+    def trust_value(self):
+        return self._trust.get(self.value, 0)
+
+    @property
+    def trust_level(self):
+        trust_values = self._trust.values()
+        if not trust_values:
+            return None
+        trust_val = self.trust_value
+        if trust_val >= max(trust_values):
+            return TrustLevel.Maximum
+        elif trust_val <= min(trust_values):
+            return TrustLevel.Minimum
+        else:
+            return TrustLevel.Medium
 
 
 class OS(Info):
@@ -81,7 +104,7 @@ class InformationCollector(object):
         self._collector = None
         self.reset_information()
 
-    def add_information(self, info):
+    def add_information(self, info, initial_trust_value=0):
         assert info is not None
 
         try:
@@ -90,10 +113,11 @@ class InformationCollector(object):
                 if i in self._collector:
                     i.increase_trust()
                 else:
+                    i.increase_trust(inc=initial_trust_value)
                     self._collector.add(i)
-                # i.show_trust()
         except TypeError:
-            self._collector.add(info)
+            raise
+            # self._collector.add(info)
 
     def is_assumption_valid(self, info):
         return not self._collector or info in self._collector
@@ -109,7 +133,11 @@ class InformationCollector(object):
         self._collector = set()
 
     def __str__(self):
-        return str(self._collector)
+        desc = ''
+        for info in self._collector:
+            desc += str(info) + '\n'
+
+        return desc
 
     # for python2 compatibility
     def __nonzero__(self):

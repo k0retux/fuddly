@@ -67,7 +67,7 @@ class Project(object):
         return self._knowledge_source
 
     def add_knowledge(self, *info):
-        self.knowledge_source.add_information(info)
+        self.knowledge_source.add_information(info, initial_trust_value=50)
 
     def reset_knowledge(self):
         self.knowledge_source.reset_information()
@@ -79,10 +79,10 @@ class Project(object):
         for fh in self._fbk_handlers:
             fh.notify_data_sending(data_list, timestamp, target)
 
-    def trigger_feedback_handlers(self, source, timestamp, content, status, targets):
+    def trigger_feedback_handlers(self, source, timestamp, content, status):
         if not self._fbk_processing_enabled:
             return
-        self._feedback_fifo.put((source, timestamp, content, status, targets))
+        self._feedback_fifo.put((source, timestamp, content, status))
 
     def _feedback_processing(self):
         '''

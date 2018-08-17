@@ -409,7 +409,7 @@ The execution of this scenario will follow the pattern::
 
 .. _sc:dataprocess:
 
-Data generation process
+Data Generation Process
 -----------------------
 
 The data produced by a :class:`framework.scenario.Step` or a :class:`framework.scenario.Periodic`

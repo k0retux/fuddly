@@ -65,7 +65,7 @@ class FeedbackHandler(object):
         *** To be overloaded ***
 
         This function is called when data have been sent. It enables to process feedback relatively
-        to this sending.
+        to previously sent data.
 
         Args:
             data_list (list): list of :class:`framework.data.Data` that were sent
@@ -74,7 +74,7 @@ class FeedbackHandler(object):
         '''
         pass
 
-    def extract_info_from_feedback(self, source, timestamp, content, status, target):
+    def extract_info_from_feedback(self, source, timestamp, content, status):
         '''
         *** To be overloaded ***
 
@@ -83,7 +83,6 @@ class FeedbackHandler(object):
             timestamp (datetime): date of reception of the feedback
             content (bytes): binary data to process
             status (int): negative status signify an error
-            target (Target): target from which feedback are retrieved
 
         Returns:
             Info: a set of :class:`.information.Info` or only one
@@ -103,7 +102,7 @@ class FeedbackHandler(object):
         '''
         return UNIQUE
 
-    def process_feedback(self, source, timestamp, content, status, target):
+    def process_feedback(self, source, timestamp, content, status):
         info_set = set()
         truncated_content = None if content is None else content[:60]
 
@@ -114,7 +113,7 @@ class FeedbackHandler(object):
               '   content: {!r} ...\n'
               '    status: {!s}'.format(source, timestamp, truncated_content, status))
 
-        info = self.extract_info_from_feedback(source, status, timestamp, content, target)
+        info = self.extract_info_from_feedback(source, timestamp, content, status)
         if info is not None:
             if isinstance(info, list):
                 for i in info:
@@ -127,13 +126,12 @@ class FeedbackHandler(object):
 
 class TestFbkHandler(FeedbackHandler):
 
-    def extract_info_from_feedback(self, source, status, timestamp, data, target):
-        if data is None:
+    def extract_info_from_feedback(self, source, timestamp, content, status):
+        if content is None:
             return None
-
-        if b'Linux' in data:
+        elif b'Linux' in content:
             # OS.Linux.increase_trust()
             return OS.Linux
-        elif b'Windows' in data:
+        elif b'Windows' in content:
             # OS.Windows.increase_trust()
             return OS.Windows
