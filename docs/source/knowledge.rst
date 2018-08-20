@@ -156,9 +156,22 @@ Automatic Fuddly Adaptation to Knowledge
 
 **It is a work in progress.**
 
-Currently, data model that use :class:`framework.value_types.Filename`
-within their description will benefit from knowledge about the Language and Operating System used by the
-target under test.
+Currently, data models that use the following node types
+within their description will benefit from knowledge about the targets under test:
+
+- :class:`framework.value_types.String`: Specific cases related to :class:`framework.knowledge.information.Language`
+  are added.
+- :class:`framework.value_types.Filename`: Specific cases related to
+  :class:`framework.knowledge.information.OS` and :class:`framework.knowledge.information.Language`
+  are added.
+
+If knowledge on the targets are provided to the framework (either from the project file or because
+some in-use feedback handlers populated at some point the knowledge pool) then the previous type nodes
+will restrict their own fuzzing cases, impacting directly the disruptor ``tTYPE`` (refer to :ref:`dis:ttype`)
+in order to avoid doing irrelevant tests (e.g., providing a C format strings input to an ADA program).
+
+If there is no knowledge on a specific category, then all specific fuzzing cases related to that category
+will still be provided.
 
 
 Leveraging Knowledge in User-defined Components

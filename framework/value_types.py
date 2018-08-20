@@ -914,6 +914,13 @@ class String(VT_Alt):
                 if v not in self.values_fuzzy:
                     self.values_fuzzy.append(v)
 
+        if self.knowledge_source is None \
+                or not self.knowledge_source.is_info_class_represented(Language) \
+                or self.knowledge_source.is_assumption_valid(Language.C):
+            C_strings_enabled = True
+        else:
+            C_strings_enabled = False
+
         if self.drawn_val is not None:
             orig_val = self.drawn_val
         else:
@@ -947,7 +954,7 @@ class String(VT_Alt):
 
         self.values_fuzzy.append(b'\x00' * sz if sz > 0 else b'\x00')
 
-        if sz > 1:
+        if C_strings_enabled and sz > 1:
             is_even = sz % 2 == 0
             cpt = sz // 2
             if is_even:
@@ -957,10 +964,11 @@ class String(VT_Alt):
                 self.values_fuzzy.append(orig_val[:1] + b'%n' * cpt)
                 self.values_fuzzy.append(orig_val[:1] + b'%s' * cpt)
 
-        self.values_fuzzy.append(orig_val + b'%n' * int(400*fuzz_magnitude))
-        self.values_fuzzy.append(orig_val + b'%s' * int(400*fuzz_magnitude))
-        self.values_fuzzy.append(orig_val + b'\"%n\"' * int(400*fuzz_magnitude))
-        self.values_fuzzy.append(orig_val + b'\"%s\"' * int(400*fuzz_magnitude))
+        if C_strings_enabled:
+            self.values_fuzzy.append(orig_val + b'%n' * int(400*fuzz_magnitude))
+            self.values_fuzzy.append(orig_val + b'%s' * int(400*fuzz_magnitude))
+            self.values_fuzzy.append(orig_val + b'\"%n\"' * int(400*fuzz_magnitude))
+            self.values_fuzzy.append(orig_val + b'\"%s\"' * int(400*fuzz_magnitude))
         self.values_fuzzy.append(orig_val + b'\r\n' * int(100*fuzz_magnitude))
 
         if self.extra_fuzzy_list:
@@ -1437,6 +1445,7 @@ class Filename(String):
         windows_spe = [b'..\\..\\..\\..\\..\\..\\Windows\\system.ini']
         c_spe = [b'file%n%n%n%nname.txt']
 
+
         if self.knowledge_source is None:
             flist = linux_spe+windows_spe+c_spe
         else:
@@ -1448,7 +1457,10 @@ class Filename(String):
                     flist += windows_spe
             else:
                 flist = linux_spe+windows_spe
-            if self.knowledge_source.is_assumption_valid(Language.C):
+            if self.knowledge_source.is_info_class_represented(Language):
+                if self.knowledge_source.is_assumption_valid(Language.C):
+                    flist += c_spe
+            else:
                 flist += c_spe
 
         return flist
