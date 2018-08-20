@@ -1104,28 +1104,8 @@ class FmkPlumbing(object):
 
 
     def _get_detailed_target_desc(self, tg):
-        if isinstance(tg, PrinterTarget):
-            printer_name = tg.get_printer_name()
-            printer_name = ', Name: ' + printer_name if printer_name is not None else ''
-            detailed_desc = tg.__class__.__name__ + ' [IP: ' + tg.get_target_ip() + printer_name + ']'
-        elif isinstance(tg, LocalTarget):
-            pre_args = tg.get_pre_args()
-            post_args = tg.get_post_args()
-            args = ''
-            if pre_args or post_args:
-                if pre_args is not None:
-                    args += pre_args
-                if post_args is not None:
-                    args += post_args
-                args = ', Args: ' + args
-            detailed_desc = tg.__class__.__name__ + ' [Program: ' + tg.get_target_path() + args + ']'
-        else:
-            desc = tg.get_description()
-            if desc is None:
-                desc = ''
-            else:
-                desc = ' [' + desc + ']'
-            detailed_desc = str(tg) + desc
+        desc = ' [' + tg.get_description() + ']'
+        detailed_desc = tg.__class__.__name__ + desc
 
         return detailed_desc
 

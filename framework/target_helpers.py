@@ -54,9 +54,6 @@ class Target(object):
 
     _pending_data = None
 
-    def __str__(self):
-        return self.__class__.__name__ + str(id(self))[-6:]
-
     def set_logger(self, logger):
         self._logger = logger
 
@@ -225,8 +222,11 @@ class Target(object):
         assert sending_delay >= 0
         self.sending_delay = sending_delay
 
+    def __str__(self):
+        return self.__class__.__name__ + ' [' + self.get_description() + ']'
+
     def get_description(self):
-        return None
+        return 'ID: ' + str(id(self))[-6:]
 
     def add_pending_data(self, data):
         with self._send_data_lock:

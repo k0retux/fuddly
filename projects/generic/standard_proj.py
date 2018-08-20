@@ -47,15 +47,10 @@ class display_mem_check(ProbeMem):
     process_name = 'display'
     tolerance = 10
 
-local_tg = LocalTarget(tmpfile_ext='.png')
-local_tg.set_target_path('/usr/bin/display')
-
-local2_tg = LocalTarget(tmpfile_ext='.pdf')
-local2_tg.set_target_path('okular')
-
-local3_tg = LocalTarget(tmpfile_ext='.zip')
-local3_tg.set_target_path('unzip')
-local3_tg.set_post_args('-d ' + gr.workspace_folder)
+local_tg = LocalTarget(tmpfile_ext='.png', target_path='/usr/bin/display')
+local2_tg = LocalTarget(tmpfile_ext='.pdf', target_path='okular')
+local3_tg = LocalTarget(tmpfile_ext='.zip', target_path='unzip', post_args='-d ' + gr.workspace_folder)
+local4_tg = LocalTarget(target_path='python', pre_args='-c', send_via_cmdline=True)
 
 net_tg = NetworkTarget(host='localhost', port=12345, data_semantics='TG1', hold_connection=True)
 net_tg.register_new_interface('localhost', 54321, (socket.AF_INET, socket.SOCK_STREAM), 'TG2', server_mode=True)
@@ -73,6 +68,7 @@ rawnetsrv_tg = NetworkTarget(host='eth0', port=ETH_P_ALL,
 targets = [(local_tg, (display_mem_check, 0.1)),
            local2_tg,
            local3_tg,
+           local4_tg,
            printer1_tg, net_tg, netsrv_tg, rawnetsrv_tg]
 
 

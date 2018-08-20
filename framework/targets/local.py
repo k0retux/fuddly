@@ -38,38 +38,47 @@ class LocalTarget(Target):
     _feedback_mode = Target.FBK_WAIT_UNTIL_RECV
     supported_feedback_mode = [Target.FBK_WAIT_UNTIL_RECV]
 
-    def __init__(self, tmpfile_ext, target_path=None):
+    def __init__(self, target_path=None, pre_args='', post_args='',
+                 tmpfile_ext='.bin', send_via_stdin=False, send_via_cmdline=False):
         Target.__init__(self)
-        self.__suffix = '{:0>12d}'.format(random.randint(2**16, 2**32))
-        self.__app = None
-        self.__pre_args = None
-        self.__post_args = None
+        self._suffix = '{:0>12d}'.format(random.randint(2 ** 16, 2 ** 32))
+        self._app = None
+        self._pre_args = pre_args
+        self._post_args = post_args
+        self._send_via_stdin = send_via_stdin
+        self._send_via_cmdline = send_via_cmdline
         self._data_sent = None
         self._feedback_computed = None
-        self.__feedback = FeedbackCollector()
+        self._feedback = FeedbackCollector()
         self.set_target_path(target_path)
         self.set_tmp_file_extension(tmpfile_ext)
+
+    def get_description(self):
+        pre_args = self._pre_args
+        post_args = self._post_args
+        args = ', Args: ' + pre_args + post_args if pre_args or post_args else ''
+        return 'Program: ' + self._target_path + args
 
     def set_tmp_file_extension(self, tmpfile_ext):
         self._tmpfile_ext = tmpfile_ext
 
     def set_target_path(self, target_path):
-        self.__target_path = target_path
+        self._target_path = target_path
 
     def get_target_path(self):
-        return self.__target_path
+        return self._target_path
 
     def set_pre_args(self, pre_args):
-        self.__pre_args = pre_args
+        self._pre_args = pre_args
 
     def get_pre_args(self):
-        return self.__pre_args
+        return self._pre_args
 
     def set_post_args(self, post_args):
-        self.__post_args = post_args
+        self._post_args = post_args
 
     def get_post_args(self):
-        return self.__post_args
+        return self._post_args
 
     def initialize(self):
         '''
@@ -84,7 +93,7 @@ class LocalTarget(Target):
         return True
 
     def start(self):
-        if not self.__target_path:
+        if not self._target_path:
             print('/!\\ ERROR /!\\: the LocalTarget path has not been set')
             return False
 
@@ -101,66 +110,78 @@ class LocalTarget(Target):
     def send_data(self, data, from_fmk=False):
         self._before_sending_data()
         data = data.to_bytes()
-        wkspace = workspace_folder
 
-        name = os.path.join(wkspace, 'fuzz_test_' + self.__suffix + self._tmpfile_ext)
-        with open(name, 'wb') as f:
-             f.write(data)
-
-        if self.__pre_args is not None and self.__post_args is not None:
-            cmd = [self.__target_path] + self.__pre_args.split() + [name] + self.__post_args.split()
-        elif self.__pre_args is not None:
-            cmd = [self.__target_path] + self.__pre_args.split() + [name]
-        elif self.__post_args is not None:
-            cmd = [self.__target_path, name] + self.__post_args.split()
+        if self._send_via_stdin:
+            name = ''
+        elif self._send_via_cmdline:
+            name = data
         else:
-            cmd = [self.__target_path, name]
+            name = os.path.join(workspace_folder, 'fuzz_test_' + self._suffix + self._tmpfile_ext)
+            with open(name, 'wb') as f:
+                 f.write(data)
 
-        self.__app = subprocess.Popen(args=cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if self._pre_args is not None and self._post_args is not None:
+            cmd = [self._target_path] + self._pre_args.split() + [name] + self._post_args.split()
+        elif self._pre_args is not None:
+            cmd = [self._target_path] + self._pre_args.split() + [name]
+        elif self._post_args is not None:
+            cmd = [self._target_path, name] + self._post_args.split()
+        else:
+            cmd = [self._target_path, name]
 
-        fl = fcntl.fcntl(self.__app.stderr, fcntl.F_GETFL)
-        fcntl.fcntl(self.__app.stderr, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+        stdin_arg = subprocess.PIPE if self._send_via_stdin else None
+        self._app = subprocess.Popen(args=cmd, stdin=stdin_arg, stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE)
 
-        fl = fcntl.fcntl(self.__app.stdout, fcntl.F_GETFL)
-        fcntl.fcntl(self.__app.stdout, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+        if self._send_via_stdin:
+            with self._app.stdin as f:
+                f.write(data)
+
+        if not self._send_via_stdin and not self._send_via_cmdline:
+            fl = fcntl.fcntl(self._app.stderr, fcntl.F_GETFL)
+            fcntl.fcntl(self._app.stderr, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+
+            fl = fcntl.fcntl(self._app.stdout, fcntl.F_GETFL)
+            fcntl.fcntl(self._app.stdout, fcntl.F_SETFL, fl | os.O_NONBLOCK)
+
         self._data_sent = True
 
     def cleanup(self):
-        if self.__app is None:
+        if self._app is None:
             return
 
         try:
-            os.kill(self.__app.pid, signal.SIGTERM)
+            os.kill(self._app.pid, signal.SIGTERM)
         except:
-            print("\n*** WARNING: cannot kill application with PID {:d}".format(self.__app.pid))
+            print("\n*** WARNING: cannot kill application with PID {:d}".format(self._app.pid))
         finally:
             self._data_sent = False
 
     def get_feedback(self, timeout=0.2):
         timeout = self.feedback_timeout if timeout is None else timeout
         if self._feedback_computed:
-            return self.__feedback
+            return self._feedback
         else:
             self._feedback_computed = True
 
         err_detected = False
 
-        if self.__app is None and self._data_sent:
+        if self._app is None and self._data_sent:
             err_detected = True
-            self.__feedback.add_fbk_from("LocalTarget", "Application has terminated (crash?)",
-                                         status=-3)
-            return self.__feedback
-        elif self.__app is None:
-            return self.__feedback
+            self._feedback.add_fbk_from("LocalTarget", "Application has terminated (crash?)",
+                                        status=-3)
+            return self._feedback
+        elif self._app is None:
+            return self._feedback
 
-        exit_status = self.__app.poll()
+        exit_status = self._app.poll()
         if exit_status is not None and exit_status < 0:
             err_detected = True
-            self.__feedback.add_fbk_from("Application[{:d}]".format(self.__app.pid),
+            self._feedback.add_fbk_from("Application[{:d}]".format(self._app.pid),
                                          "Negative return status ({:d})".format(exit_status),
-                                         status=exit_status)
+                                        status=exit_status)
 
-        ret = select.select([self.__app.stdout, self.__app.stderr], [], [], timeout)
+        ret = select.select([self._app.stdout, self._app.stderr], [], [], timeout)
         if ret[0]:
             byte_string = b''
             for fd in ret[0][:-1]:
@@ -168,16 +189,16 @@ class LocalTarget(Target):
 
             if b'error' in byte_string or b'invalid' in byte_string:
                 err_detected = True
-                self.__feedback.add_fbk_from("LocalTarget[stdout]",
+                self._feedback.add_fbk_from("LocalTarget[stdout]",
                                              "Application outputs errors on stdout",
-                                             status=-1)
+                                            status=-1)
 
             stderr_msg = ret[0][-1].read()
             if stderr_msg:
                 err_detected = True
-                self.__feedback.add_fbk_from("LocalTarget[stderr]",
+                self._feedback.add_fbk_from("LocalTarget[stderr]",
                                              "Application outputs on stderr",
-                                             status=-2)
+                                            status=-2)
                 byte_string += stderr_msg
             else:
                 byte_string = byte_string[:-2]  # remove '\n\n'
@@ -186,7 +207,7 @@ class LocalTarget(Target):
             byte_string = b''
 
         if err_detected:
-            self.__feedback.set_error_code(-1)
-        self.__feedback.set_bytes(byte_string)
+            self._feedback.set_error_code(-1)
+        self._feedback.set_bytes(byte_string)
 
-        return self.__feedback
+        return self._feedback
