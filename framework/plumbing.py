@@ -246,6 +246,7 @@ class FmkPlumbing(object):
 
         self.__tg_enabled = False
         self.__prj_to_be_reloaded = False
+        self._dm_to_be_reloaded = False
 
         self._exportable_fmk_ops = ExportableFMKOps(self)
 
@@ -265,6 +266,7 @@ class FmkPlumbing(object):
         self.__initialized_dmaker_dict = {}
         self.__dm_rld_args_dict= {}
         self.__prj_rld_args_dict= {}
+        self.__initialized_dmakers = None
 
         self.__dyngenerators_created = {}
         self.__dynamic_generator_ids = {}
@@ -430,42 +432,78 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def reload_dm(self):
-        prefix = self.__dm_rld_args_dict[self.dm][0]
-        name = self.__dm_rld_args_dict[self.dm][1]
+        return self._reload_dm()
+
+    @EnforceOrder(always_callable=True, transition=['25_load_dm','S1'])
+    def _reload_dm(self, dm_name=None):
+        if dm_name is None:
+            prefix = self.__dm_rld_args_dict[self.dm][0]
+            name = self.__dm_rld_args_dict[self.dm][1]
+        else:
+            if isinstance(dm_name, list):
+                prefix = None
+                name = dm_name
+            else:
+                dm_obj = self.get_data_model_by_name(dm_name)
+                prefix = self.__dm_rld_args_dict[dm_obj][0]
+                name = dm_name
 
         if prefix is None:
             # In this case we face a composed DM, name is in fact a dm_list
             dm_list = name
             name_list = []
 
-            self.cleanup_all_dmakers()
+            self._cleanup_all_dmakers()
 
-            for dm in dm_list:
-                name_list.append(dm.name)
-                self.dm = dm
-                self.reload_dm()
+            orig_dm = self.dm
+            for idx, dm_ref in enumerate(copy.copy(dm_list)):
+                if isinstance(dm_ref, str):
+                    dm_name = dm_ref
+                    dm_obj = self.get_data_model_by_name(dm_ref)
+                else:
+                    dm_name = dm_ref.name
+                    dm_obj = dm_ref
+
+                name_list.append(dm_name)
+                self.dm = dm_obj
+                ok = self._reload_dm()
+                dm_list[idx] = self.dm
+
+                if not ok:
+                    self.dm = orig_dm
+                    return False
 
             # reloading is based on name because DM objects have changed
             if not self.load_multiple_data_model(name_list=name_list, reload_dm=True):
                 self.set_error("Error encountered while reloading the composed Data Model")
 
         else:
-            self.cleanup_all_dmakers()
+            self._cleanup_all_dmakers()
             self.dm.cleanup()
 
             dm_params = self.__import_dm(prefix, name, reload_dm=True)
             if dm_params is not None:
+                if self.dm in self.__dynamic_generator_ids:
+                    del self.__dynamic_generator_ids[self.dm]
+                if self.dm in self.__dyngenerators_created:
+                    del self.__dyngenerators_created[self.dm]
                 self.__add_data_model(dm_params['dm'], dm_params['tactics'],
                                       dm_params['dm_rld_args'], reload_dm=True)
                 self.__dyngenerators_created[dm_params['dm']] = False
+                try:
+                    i = self.dm_list.index(self.dm)
+                except ValueError:
+                    pass
+                else:
+                    self.dm_list[i] = dm_params['dm']
                 self.dm = dm_params['dm']
             else:
                 return False
 
             self._cleanup_dm_attrs_from_fmk()
-
-            if not self._load_data_model():
-                return False
+            if self._is_started():
+                if not self._load_data_model():
+                    return False
 
             self.prj.set_data_model(self.dm)
             for tg in self.targets.values():
@@ -511,7 +549,7 @@ class FmkPlumbing(object):
                 # it is ok to call reload_dm() here because it is a
                 # composed DM, and it won't call the methods used within
                 # _init_fmk_internals_step1().
-                self.reload_dm()
+                self._reload_dm()
                 self._init_fmk_internals_step1(prj_params['project'], self.dm)
             else:
                 dm_params = self.__import_dm(dm_prefix, dm_name, reload_dm=True)
@@ -755,10 +793,8 @@ class FmkPlumbing(object):
         if old_dm is not None:
             self.__dm_rld_args_dict.pop(old_dm)
             self.__st_dict.pop(old_dm)
-            self.__st_dict[data_model] = strategy
-        else:
-            self.__st_dict[data_model] = strategy
 
+        self.__st_dict[data_model] = strategy
         self.__dm_rld_args_dict[data_model] = dm_rld_args
 
 
@@ -962,7 +998,19 @@ class FmkPlumbing(object):
     def _load_data_model(self):
         try:
             self.dm.load_data_model(self._name2dm)
+        except:
+            msg = "Error encountered while loading the data model. (checkup the associated" \
+                  " '{:s}.py' file)".format(self.dm.name)
+            self._handle_user_code_exception(msg=msg)
+            self._dm_to_be_reloaded = True
+            if self.dm in self.__dyngenerators_created:
+                del self.__dyngenerators_created[self.dm]
+            if self.dm in self.__dynamic_generator_ids:
+                del self.__dynamic_generator_ids[self.dm]
 
+            return False
+
+        else:
             if not self.__dyngenerators_created[self.dm]:
                 self.__dyngenerators_created[self.dm] = True
                 self.__dynamic_generator_ids[self.dm] = []
@@ -977,13 +1025,7 @@ class FmkPlumbing(object):
                     self.fmkDB.insert_dmaker(self.dm.name, dmaker_type, gen_cls_name, True, True)
 
             print(colorize("*** Data Model '%s' loaded ***" % self.dm.name, rgb=Color.DATA_MODEL_LOADED))
-
-        except:
-            self._handle_user_code_exception()
-            self.__prj_to_be_reloaded = True
-            self.set_error("Error encountered while loading the data model. (checkup" \
-                           " the associated '%s.py' file)" % self.dm.name)
-            return False
+            self._dm_to_be_reloaded = False
 
         return True
 
@@ -1333,7 +1375,7 @@ class FmkPlumbing(object):
         name = ''
         for dm in dm_list:
             name += dm.name + '+'
-            if not reload_dm:
+            if not reload_dm or not self._is_started():
                 self.dm = dm
                 self._cleanup_dm_attrs_from_fmk()
                 ok = self._load_data_model()
@@ -1360,7 +1402,7 @@ class FmkPlumbing(object):
         if reload_dm or not is_dm_name_exists:
             self.fmkDB.insert_data_model(new_dm.name)
             self.__add_data_model(new_dm, new_tactics,
-                                  (None, dm_list),
+                                  [None, dm_list],
                                   reload_dm=reload_dm)
 
             # In this case DynGens have already been generated through
@@ -1417,13 +1459,20 @@ class FmkPlumbing(object):
             else:
                 dm_name = self.prj.default_dm
 
-        if isinstance(dm_name, list):
-            ok = self.load_multiple_data_model(name_list=dm_name)
+        if self._dm_to_be_reloaded:
+            self._reload_dm(dm_name=dm_name)
+            ok = self.is_ok()
         else:
-            ok = self.load_data_model(name=dm_name)
+            if isinstance(dm_name, list):
+                ok = self.load_multiple_data_model(name_list=dm_name)
+            else:
+                ok = self.load_data_model(name=dm_name)
 
         if not ok:
+            self._dm_to_be_reloaded = True
             return False
+        else:
+            self._dm_to_be_reloaded = False
  
         if tg_ids is not None:
             if isinstance(tg_ids, int):
@@ -1433,7 +1482,7 @@ class FmkPlumbing(object):
         else:
             self._load_targets([0])
 
-        return self.launch()
+        return self._launch()
 
 
     @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'], final_state='25_load_dm')
@@ -1457,20 +1506,24 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S1'], final_state='S2')
     def launch(self):
-        if not self.__prj_to_be_reloaded:
-            self._init_fmk_internals_step1(self.prj, self.dm)
-            self._start_fmk_plumbing()
-            if self.is_not_ok():
-                self._stop_fmk_plumbing()
-                return False
-
-            self._init_fmk_internals_step2(self.prj, self.dm)
-            return True
-
+        if not self._dm_to_be_reloaded:
+            return self._launch()
         else:
-            self.__prj_to_be_reloaded = False
-            self._reload_all()
+            self._dm_to_be_reloaded = False
+            self._reload_dm()
+            self._launch()
+            # self._reload_all()
             return True
+
+    def _launch(self):
+        self._init_fmk_internals_step1(self.prj, self.dm)
+        self._start_fmk_plumbing()
+        if self.is_not_ok():
+            self._stop_fmk_plumbing()
+            return False
+
+        self._init_fmk_internals_step2(self.prj, self.dm)
+        return True
 
     def is_target_enabled(self):
         return self.__tg_enabled
@@ -3269,6 +3322,11 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S1','S2'])
     def cleanup_all_dmakers(self, reset_existing_seed=True):
+        return self._cleanup_all_dmakers(reset_existing_seed=reset_existing_seed)
+
+    def _cleanup_all_dmakers(self, reset_existing_seed=True):
+        if not self.__initialized_dmakers:
+            return
 
         for dmaker_obj in self.__initialized_dmakers:
             if self.__initialized_dmakers[dmaker_obj][0]:

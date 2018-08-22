@@ -1658,9 +1658,9 @@ class BitField(VT_Alt):
         self.current_idx = None
         self.idx = None
         self.idx_inuse = None
-        self.set_bitfield(sf_valuess=subfield_values, sf_val_extremums=subfield_val_extremums,
-                          sf_limits=subfield_limits, sf_sizes=subfield_sizes, sf_descs=subfield_descs,
-                          sf_defaults=defaults)
+        self.set_bitfield(sf_values=subfield_values, sf_val_extremums=subfield_val_extremums,
+                          sf_limits=subfield_limits, sf_sizes=subfield_sizes,
+                          sf_descs=subfield_descs, sf_defaults=defaults)
 
     def make_private(self, forget_current_state):
         # no need to copy self.default (that should not be modified)
@@ -1744,7 +1744,7 @@ class BitField(VT_Alt):
         return ret
 
         
-    def set_bitfield(self, sf_valuess=None, sf_val_extremums=None, sf_limits=None, sf_sizes=None,
+    def set_bitfield(self, sf_values=None, sf_val_extremums=None, sf_limits=None, sf_sizes=None,
                      sf_descs=None, sf_defaults=None):
 
         if sf_limits is not None:
@@ -1757,9 +1757,9 @@ class BitField(VT_Alt):
         else:
             raise DataModelDefinitionError
 
-        if sf_valuess is None:
-            sf_valuess = [None for i in range(len(self.subfield_limits))]
-        elif len(sf_valuess) != len(self.subfield_limits):
+        if sf_values is None:
+            sf_values = [None for i in range(len(self.subfield_limits))]
+        elif len(sf_values) != len(self.subfield_limits):
             raise DataModelDefinitionError
 
         if sf_val_extremums is None:
@@ -1794,7 +1794,7 @@ class BitField(VT_Alt):
         # provided limits are not included in the subfields
         for idx, lim in enumerate(self.subfield_limits):
 
-            values = sf_valuess[idx]
+            values = sf_values[idx]
             extrems = sf_val_extremums[idx]
 
             size = lim - prev_lim
