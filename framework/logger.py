@@ -203,7 +203,8 @@ class Logger(object):
                                                            ack_date,
                                                            tg_ref, prj_name,
                                                            group_id=group_id)
-                self._last_data_IDs[tg_ref] = last_data_id
+                # assert isinstance(tg_ref, FeedbackSource)
+                self._last_data_IDs[tg_ref.obj] = last_data_id
 
                 if last_data_id is None:
                     print("\n*** ERROR: Cannot insert the data record in FMKDB!")
@@ -305,12 +306,14 @@ class Logger(object):
 
         if record:
             assert isinstance(source, FeedbackSource)
-            source = source.related_tg if source.related_tg is not None else source
-            try:
-                data_id = self._last_data_IDs[source]
-            except KeyError:
-                print('\nWarning: The feedback source does not provide a related target. '
-                      'Retrieved feedback will be attached to the last data ID.')
+            if source.related_tg is not None:
+                try:
+                    data_id = self._last_data_IDs[source.related_tg]
+                except KeyError:
+                    print('\nWarning: The feedback source is related to a target to which nothing has been sent.'
+                          ' Retrieved feedback will not be attached to any data ID.')
+                    data_id = None
+            else:
                 ids = self._last_data_IDs.values()
                 data_id = max(ids) if ids else None
 
