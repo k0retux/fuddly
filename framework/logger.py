@@ -88,13 +88,13 @@ class Logger(object):
         def init_logfn(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
                        do_record=True):
             if issubclass(x.__class__, Data):
-                data = repr(x) if self.__export_raw_data else str(x)
+                data = self._handle_binary_content(x.to_bytes(), raw=self.__export_raw_data)
                 rgb = None
                 style = None
-            elif issubclass(x.__class__, bytes) and sys.version_info[0] > 2:
-                data = repr(x) if self.__export_raw_data else x.decode(internal_repr_codec)
-            else:
+            elif isinstance(x, str):
                 data = x
+            else:
+                data = self._handle_binary_content(x, raw=self.__export_raw_data)
             self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)
             if verbose and issubclass(x.__class__, Data):
                 x.show()
@@ -105,6 +105,16 @@ class Logger(object):
 
     def __str__(self):
         return 'Logger'
+
+
+    def _handle_binary_content(self, content, raw=False):
+        content = gr.unconvert_from_internal_repr(content)
+        if sys.version_info[0] > 2:
+            content = content if not raw else '{!a}'.format(content)
+        else:
+            content = content if not raw else repr(content)
+
+        return content
 
     def start(self):
 
@@ -132,13 +142,13 @@ class Logger(object):
             def intern_func(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
                             do_record=True):
                 if issubclass(x.__class__, Data):
-                    data = repr(x) if self.__export_raw_data else str(x)
+                    data = self._handle_binary_content(x.to_bytes(), raw=self.__export_raw_data)
                     rgb = None
                     style = None
-                elif issubclass(x.__class__, bytes) and sys.version_info[0] > 2:
-                    data = repr(x) if self.__export_raw_data else x.decode(internal_repr_codec)
-                else:
+                elif isinstance(x, str):
                     data = x
+                else:
+                    data = self._handle_binary_content(x, raw=self.__export_raw_data)
                 self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)
                 if not do_record:
                     return data
@@ -404,17 +414,15 @@ class Logger(object):
             new_fbk = []
             for f in feedback:
                 new_f = f.strip()
-                if sys.version_info[0] > 2 and new_f and isinstance(new_f, bytes):
-                    new_f = new_f.decode(internal_repr_codec, 'replace')
-                    new_f = eval('{!a}'.format(new_f))
+                if isinstance(new_f, bytes):
+                    new_f = self._handle_binary_content(new_f, raw=self.__export_raw_data)
                 new_fbk.append(new_f)
             if not list(filter(lambda x: x != b'', new_fbk)):
                 new_fbk = None
         else:
             new_fbk = feedback.strip()
-            if sys.version_info[0] > 2 and new_fbk and isinstance(new_fbk, bytes):
-                new_fbk = new_fbk.decode(internal_repr_codec, 'replace')
-                new_fbk = eval('{!a}'.format(new_fbk))
+            if isinstance(new_fbk, bytes):
+                new_fbk = self._handle_binary_content(new_fbk, raw=self.__export_raw_data)
 
         return new_fbk
 
@@ -626,8 +634,8 @@ class Logger(object):
 
         prefix = p + self.p
 
-        if (sys.version_info[0] > 2 and isinstance(msg, bytes)) or issubclass(msg.__class__, Data):
-            msg = repr(msg)
+        # if (sys.version_info[0] > 2 and isinstance(msg, bytes)) or issubclass(msg.__class__, Data):
+        #     msg = repr(msg)
 
         suffix = ''
         if limit_output and len(msg) > raw_limit:
