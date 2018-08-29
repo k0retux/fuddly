@@ -432,7 +432,7 @@ class NetworkTarget(Target):
         self._additional_fbk_ids = {}
         self._additional_fbk_lengths = {}
         self._dynamic_interfaces = {}
-        self._feedback_handled = None
+        self._feedback_handled = True
         self.feedback_thread_qty = 0
         self.feedback_complete_cpt = 0
         self._sending_id = 0
@@ -1174,10 +1174,7 @@ class NetworkTarget(Target):
         # We answer we are ready if at least one receiver has
         # terminated its job, either because the target answered to
         # it, or because of the current specified timeout.
-        if self._feedback_handled:
-            return True
-        else:
-            return False
+        return self._feedback_handled
 
     def _register_last_ack_date(self, ack_date):
         self._last_ack_date = ack_date

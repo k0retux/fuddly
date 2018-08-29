@@ -68,8 +68,11 @@ sys.path.insert(0, external_libs_folder)
 
 user_dm_mod = os.path.basename(os.path.normpath(user_data_models_folder))
 user_prj_mod = os.path.basename(os.path.normpath(user_projects_folder))
+user_tg_mod = os.path.basename(os.path.normpath(user_targets_folder))
+
 exec('import ' + user_dm_mod)
 exec('import ' + user_prj_mod)
+exec('import ' + user_tg_mod)
 
 sig_int_handler = signal.getsignal(signal.SIGINT)
 
@@ -2448,7 +2451,7 @@ class FmkPlumbing(object):
 
             # Wait until the target is ready or timeout expired
             try:
-                for tg in self._currently_used_targets:
+                for tg in self.targets.values():
                     while not tg.is_target_ready_for_new_data():
                         time.sleep(0.005)
                         now = datetime.datetime.now()
