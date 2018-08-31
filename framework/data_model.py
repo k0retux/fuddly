@@ -76,18 +76,6 @@ class DataModel(object):
         self._dm_db = None
         self._built = False
         self._dm_hashtable = {}
-    #     self._knowledge_soure = None
-    #
-    # @property
-    # def knowledge_source(self):
-    #     return self._knowledge_source
-    #
-    # @knowledge_source.setter
-    # def knowledge_source(self, src):
-    #     self._knowledge_source = src
-    #     self.node_backend.knowledge_source = src
-    #     for atom in self._dm_hashtable.values():
-    #         self._backend(atom).update_knowledge_source(atom)
 
     def _backend(self, atom):
         if isinstance(atom, (Node, dict)):

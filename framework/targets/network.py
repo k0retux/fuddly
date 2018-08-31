@@ -523,10 +523,11 @@ class NetworkTarget(Target):
                 port = self._port[key]
                 socket_type = self._socket_type[key]
                 server_mode = self.server_mode[(host, port)]
-                if self.hold_connection[(host, port)]:
-                    # Collecting feedback makes sense only if we keep the socket (thus, 'hold_connection'
-                    # has to be True) or if a data callback wait for feedback.
-                    sending_list.append((None, host, port, socket_type, server_mode))
+                sending_list.append((None, host, port, socket_type, server_mode))
+                # if self.hold_connection[(host, port)]:
+                #     # Collecting feedback makes sense only if we keep the socket (thus, 'hold_connection'
+                #     # has to be True) or if a data callback wait for feedback.
+                #     sending_list.append((None, host, port, socket_type, server_mode))
         else:
             for data in data_list:
                 host, port, socket_type, server_mode = self._get_net_info_from(data)
@@ -555,7 +556,7 @@ class NetworkTarget(Target):
         else:
             # this case exist when data are only sent through 'server_mode'-configured interfaces
             # or a connection error has occurred.
-            pass
+            self._feedback_handled = True
 
         if data_list is None:
             return
@@ -812,11 +813,6 @@ class NetworkTarget(Target):
                         continue
                     else:
                         raise
-                except socket.error as serr:
-                    if serr.errno == 11:  # [Errno 11] Resource temporarily unavailable
-                        retry += 1
-                        time.sleep(0.5)
-                        continue
                 else:
                     address = address if target_address is None else target_address
                     serversocket.settimeout(self.feedback_timeout)
@@ -977,9 +973,10 @@ class NetworkTarget(Target):
         for s, chks in chunks.items():
             fbk = b'\n'.join(chks)
             with self._fbk_handling_lock:
-                fbkid = fbk_ids[s]
-                fbk, err = self._feedback_handling(fbk, fbkid)
-                self._feedback_collect(fbk, fbkid, error=err)
+                if fbk != b'':
+                    fbkid = fbk_ids[s]
+                    fbk, err = self._feedback_handling(fbk, fbkid)
+                    self._feedback_collect(fbk, fbkid, error=err)
                 if (self._additional_fbk_sockets is None or s not in self._additional_fbk_sockets) and \
                         (self._hclient_sock2hp is None or s not in self._hclient_sock2hp.keys()) and \
                         (self._last_client_sock2hp is None or s not in self._last_client_sock2hp.keys()):
