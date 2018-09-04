@@ -46,6 +46,8 @@ class NetworkTarget(Target):
     fit your needs.
     '''
 
+    General_Info_ID = 'General Information'
+
     UNKNOWN_SEMANTIC = "Unknown Semantic"
     CHUNK_SZ = 2048
     _INTERNALS_ID = 'NetworkTarget()'
@@ -55,7 +57,7 @@ class NetworkTarget(Target):
 
     def __init__(self, host='localhost', port=12345, socket_type=(socket.AF_INET, socket.SOCK_STREAM),
                  data_semantics=UNKNOWN_SEMANTIC, server_mode=False, target_address=None, wait_for_client=True,
-                 hold_connection=False,
+                 hold_connection=False, keep_first_client=True,
                  mac_src=None, mac_dst=None):
         """
         Args:
@@ -89,6 +91,11 @@ class NetworkTarget(Target):
           hold_connection (bool): If `True`, we will maintain the connection while
             sending data to the real target. Otherwise, after each data emission,
             we close the related socket.
+          keep_first_client (bool): Used only in server mode (`server_mode` is `True`) with `SOCK_STREAM`
+            socket type. If set to `True`, the first client that connects to the server will remain
+            the one used for data sending until the target is reloaded. Otherwise, last client
+            information are used. This is not supported for `SOCK_DGRAM` where the first client will
+            always be the one used for data sending.
           mac_src (bytes): Only in conjunction with raw socket. For each data sent through
             this interface, and if this data contain nodes with the semantic ``'mac_src'``,
             these nodes will be overwritten (through absorption) with this parameter. If nothing
@@ -134,7 +141,7 @@ class NetworkTarget(Target):
             self._mac_dst[(host, port)] = mac_dst
 
         self._server_mode_additional_info = {}
-        self._server_mode_additional_info[(host, port)] = (target_address, wait_for_client)
+        self._server_mode_additional_info[(host, port)] = (target_address, wait_for_client, keep_first_client)
 
         self._host = {}
         self._port = {}
@@ -186,7 +193,8 @@ class NetworkTarget(Target):
 
     def register_new_interface(self, host, port, socket_type, data_semantics, server_mode=False,
                                target_address = None, wait_for_client=True,
-                               hold_connection=False, mac_src=None, mac_dst=None):
+                               hold_connection=False, keep_first_client=True,
+                               mac_src=None, mac_dst=None):
 
         if not self._is_valid_socket_type(socket_type):
             raise ValueError("Unrecognized socket type")
@@ -198,7 +206,7 @@ class NetworkTarget(Target):
         assert data_semantics not in self.known_semantics
         self.known_semantics.add(data_semantics)
         self.server_mode[(host,port)] = server_mode
-        self._server_mode_additional_info[(host, port)] = (target_address, wait_for_client)
+        self._server_mode_additional_info[(host, port)] = (target_address, wait_for_client, keep_first_client)
         self._default_fbk_id[(host, port)] = self._default_fbk_socket_id + ' - {:s}:{:d}'.format(host, port)
         self.hold_connection[(host, port)] = hold_connection
         if socket_type[1] == socket.SOCK_RAW:
@@ -251,7 +259,7 @@ class NetworkTarget(Target):
             assert(not str(fbk_id).startswith('Default Additional Feedback ID'))
         self._additional_fbk_desc[fbk_id] = (host, port, socket_type, fbk_id, fbk_length, server_mode)
         self.hold_connection[(host, port)] = True
-        self._server_mode_additional_info[(host, port)] = (None, None)
+        self._server_mode_additional_info[(host, port)] = (None, None, None)
 
     def _custom_data_handling_before_emission(self, data_list):
         '''To be overloaded if you want to perform some operation before
@@ -555,8 +563,10 @@ class NetworkTarget(Target):
             self._send_data(sockets, data_refs, self._sending_id, from_fmk)
         else:
             # this case exist when data are only sent through 'server_mode'-configured interfaces
+            # (because self._send_data() is called through self._handle_target_connection())
             # or a connection error has occurred.
-            self._feedback_handled = True
+            pass
+            # self._feedback_handled = True
 
         if data_list is None:
             return
@@ -739,10 +749,20 @@ class NetworkTarget(Target):
 
     # For SOCK_STREAM
     def _server_main(self, serversocket, host, port, func):
+        _first_client = {}
         while not self.stop_event.is_set():
+            _, _, keep_first_client = self._server_mode_additional_info[(host, port)]
             try:
-                # accept connections from outside
-                (clientsocket, address) = serversocket.accept()
+                fc_addr = _first_client.get((host,port), None)
+                clientsocket, address = serversocket.accept()
+                if keep_first_client and fc_addr is not None:
+                    continue
+                elif keep_first_client:
+                    _first_client[(host, port)] = (clientsocket, address)
+                msg = "Connection from {!s}({!s}). Use this information to send data to " \
+                      "the interface '{!s}:{:d}'.".format(address, clientsocket, host, port)
+                self._feedback_collect(msg, self.General_Info_ID, error=0)
+
             except socket.timeout:
                 pass
             except OSError as e:
@@ -761,8 +781,9 @@ class NetworkTarget(Target):
     # For SOCK_RAW and SOCK_DGRAM
     def _raw_server_main(self, serversocket, host, port, sock_type, func,
                          sending_event, notif_host_event):
-        while True:
 
+        _first_client = {}
+        while True:
             sending_event.wait()
             sending_event.clear()
             if self.stop_event.is_set():
@@ -774,32 +795,39 @@ class NetworkTarget(Target):
 
             notif_host_event.set()
 
-            target_address, wait_for_client = self._server_mode_additional_info[(host, port)]
+            target_address, wait_for_client, _ = self._server_mode_additional_info[(host, port)]
             if func == self._handle_connection_to_fbk_server:
                 # args = fbk_id, fbk_length, connected_client_event
                 assert args[0] in self._additional_fbk_desc
-                wait_before_sending = False
+                wait_before_first_sending = False
             elif func == self._handle_target_connection:
                 # args = data, host, port, connected_client_event, from_fmk
                 if args[0] is None:
                     # In the case 'data' is None there is no data to send,
                     # thus we are requested to only collect feedback
-                    wait_before_sending = False
+                    wait_before_first_sending = False
                 elif target_address is not None:
-                    wait_before_sending = wait_for_client
+                    wait_before_first_sending = wait_for_client
                 elif sock_type == socket.SOCK_RAW:
                     # in this case target_address is not provided, but it is OK if it is a SOCK_RAW
-                    wait_before_sending = wait_for_client
+                    wait_before_first_sending = wait_for_client
                 else:
-                    wait_before_sending = True
+                    wait_before_first_sending = True
             else:
                 raise ValueError
 
             retry = 0
             while retry < 10:
+                saved_addr = _first_client.get((host, port), None)
                 try:
-                    if wait_before_sending:
+                    if saved_addr is not None:
+                        data, address = None, saved_addr
+                    elif wait_before_first_sending:
                         data, address = serversocket.recvfrom(self.CHUNK_SZ)
+                        _first_client[(host, port)] = address
+                        msg = "Received data from {!s}. Use this information to send data to " \
+                              "the interface '{!s}:{:d}'.".format(address, host, port)
+                        self._feedback_collect(msg, self.General_Info_ID, error=0)
                     else:
                         data, address = None, None
                 except socket.timeout:

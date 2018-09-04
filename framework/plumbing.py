@@ -4874,7 +4874,7 @@ class FmkShell(cmd.Cmd):
                 if not exhausted_data[j]:
                     action_seq, tg_ids = actions_list[j]
                     data = self.fz.get_data(action_seq)
-                    if tg_ids:
+                    if tg_ids and data is not None:
                         data.tg_ids = tg_ids
                 else:
                     if prev_data_list is not None:

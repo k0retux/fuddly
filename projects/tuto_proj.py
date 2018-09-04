@@ -69,7 +69,7 @@ tuto_tg.set_timeout(fbk_timeout=5, sending_delay=2)
 
 net_tg = NetworkTarget(host='localhost', port=12345,
                        socket_type=(socket.AF_INET, socket.SOCK_STREAM),
-                       hold_connection=True, server_mode=False)
+                       hold_connection=True, server_mode=False, keep_first_client=False)
 
 udpnet_tg = NetworkTarget(host='localhost', port=12345,
                           socket_type=(socket.AF_INET, socket.SOCK_DGRAM),
