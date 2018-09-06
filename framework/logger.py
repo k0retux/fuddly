@@ -634,8 +634,8 @@ class Logger(object):
 
         prefix = p + self.p
 
-        # if (sys.version_info[0] > 2 and isinstance(msg, bytes)) or issubclass(msg.__class__, Data):
-        #     msg = repr(msg)
+        if isinstance(msg, Data):
+            msg = repr(msg)
 
         suffix = ''
         if limit_output and len(msg) > raw_limit:

@@ -32,7 +32,7 @@ from framework.knowledge.feedback_handler import TestFbkHandler
 project = Project()
 project.default_dm = 'mydf'
 
-project.map_targets_to_scenario('ex1', {0: 8, 1: 9, None: 9})
+project.map_targets_to_scenario('ex1', {0: 7, 1: 8, None: 8})
 
 logger = Logger(export_data=False, explicit_data_recording=False, export_orig=False,
                 export_raw_data=True, enable_file_logging=False)
@@ -132,27 +132,29 @@ class health_check(Probe):
 
         return ProbeStatus(status)
 
-serial_backend = Serial_Backend('/dev/ttyUSB0', username='test', password='test', slowness_factor=8)
+if serial_module:
+    serial_backend = Serial_Backend('/dev/ttyUSB0', username='test', password='test', slowness_factor=8)
 
-@blocking_probe(project)
-class probe_pid(ProbePID):
-    backend = serial_backend
-    process_name = 'bash'
+    @blocking_probe(project)
+    class probe_pid(ProbePID):
+        backend = serial_backend
+        process_name = 'bash'
 
-@probe(project)
-class probe_mem(ProbeMem):
-    backend = serial_backend
-    process_name = 'bash'
-    tolerance = 1
-
+    @probe(project)
+    class probe_mem(ProbeMem):
+        backend = serial_backend
+        process_name = 'bash'
+        tolerance = 1
 
 ### TARGETS ALLOCATION ###
 
 targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
            tuto_tg, net_tg, udpnet_tg, udpnetsrv_tg, rawnetsrv_tg,
-           (TestTarget(), probe_pid, (probe_mem, 0.2)),
            TestTarget(),
            TestTarget()]
+
+if serial_module:
+    targets.append((TestTarget(), probe_pid, (probe_mem, 0.2)))
 
 ### OPERATOR DEFINITION ###
 

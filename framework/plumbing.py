@@ -2005,7 +2005,18 @@ class FmkPlumbing(object):
                 tg_ids = [mapping.get(tg_id, tg_id) for tg_id in data.tg_ids]
             else:
                 tg_ids = data.tg_ids
-        return tg_ids
+
+        valid_tg_ids = []
+        for i in tg_ids:
+            if i not in self._tg_ids:
+                self.set_error("WARNING: An access attempt occurs on a disabled target: '({:d}) {!s}' "
+                               "It will be redirected to the first enabled target."
+                               .format(i, self.get_available_targets()[i]),
+                                     code=Error.FmkWarning)
+                i = self._tg_ids[0]
+            valid_tg_ids.append(i)
+
+        return valid_tg_ids
 
     def _send_periodic(self, tg_ids, data_desc):
         data = self._handle_data_desc(data_desc)
@@ -2025,7 +2036,7 @@ class FmkPlumbing(object):
                                      '(Task ID #{!s})'.format(id))
             elif not ign_error:
                 self.set_error('ERROR: Task ID #{!s} does not exist. '
-                               'Cannot unregister.'.format(id, code=Error.UserCodeError))
+                               'Cannot unregister.'.format(id), code=Error.UserCodeError)
 
     def _register_task(self, id, task):
         with self._task_list_lock:
@@ -2034,7 +2045,7 @@ class FmkPlumbing(object):
                 task.start()
             else:
                 self.set_error('WARNING: Task ID #{!s} already exists. '
-                               'Task ignored.'.format(id, code=Error.UserCodeError))
+                               'Task ignored.'.format(id), code=Error.UserCodeError)
 
     def _cleanup_tasks(self):
         for id in self._task_list:
