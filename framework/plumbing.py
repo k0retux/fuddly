@@ -1255,7 +1255,10 @@ class FmkPlumbing(object):
         print(colorize(FontStyle.BOLD + '\n-=[ Data Models ]=-\n', rgb=Color.INFO))
         idx = 0
         for dm in self.__iter_data_models():
-            print(colorize('[%d] ' % idx + dm.name, rgb=Color.SUBINFO))
+            if dm is self.dm:
+                print(colorize(FontStyle.BOLD + '[{:d}] {!s}'.format(idx, dm.name), rgb=Color.SELECTED))
+            else:
+                print(colorize('[{:d}] {!s}'.format(idx, dm.name), rgb=Color.SUBINFO))
             idx += 1
 
     def _init_fmk_internals_step1(self, prj, dm):
