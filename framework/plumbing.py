@@ -219,7 +219,9 @@ class FmkPlumbing(object):
     Defines the methods to operate every sub-systems of fuddly
     '''
 
-    def __init__(self, exit_on_error=False):
+    def __init__(self, exit_on_error=False, debug_mode=False):
+        self._debug_mode = debug_mode
+
         self._prj = None
         self.dm = None
         self.lg = None
@@ -2017,6 +2019,8 @@ class FmkPlumbing(object):
                                .format(i, self.get_available_targets()[i]),
                                      code=Error.FmkWarning)
                 i = self._tg_ids[0]
+                if self._debug_mode:
+                    raise ValueError('Access attempt occurs on a disabled target')
             valid_tg_ids.append(i)
 
         return valid_tg_ids
@@ -2783,7 +2787,7 @@ class FmkPlumbing(object):
             return operator
 
     @EnforceOrder(accepted_states=['S2'])
-    def launch_operator(self, name, user_input=UserInputContainer(), use_existing_seed=True, verbose=False):
+    def launch_operator(self, name, user_input=None, use_existing_seed=True, verbose=False):
         
         operator = self.prj.get_operator(name)
         if operator is None:
@@ -2983,11 +2987,11 @@ class FmkPlumbing(object):
     @EnforceOrder(accepted_states=['S2'])
     def get_data(self, action_list, data_orig=None, valid_gen=False, save_seed=False):
         '''
-        @action_list shall have the following formats:
-        [(action_1, generic_UI_1, specific_UI_1), ...,
-         (action_n, generic_UI_n, specific_UI_n)]
+        @action_list shall have a format compatible with what follows:
+        [(action_1, UserInput_1), ...,
+         (action_n, UserInput_n)]
 
-        [action_1, (action_2, generic_UI_2, specific_UI_2), ... action_n]
+        [action_1, (action_2, UserInput_2), ... action_n]
 
         where action_N can be either: dmaker_type_N or (dmaker_type_N, dmaker_name_N)
         '''
@@ -3037,18 +3041,11 @@ class FmkPlumbing(object):
         for idx, full_action in enumerate(action_list):
 
             if isinstance(full_action, (tuple, list)):
-                if len(full_action) == 2:
-                    action, gen_args = full_action
-                    user_input = UserInputContainer(generic=gen_args, specific=None)
-                elif len(full_action) == 3:
-                    action, gen_args, args = full_action
-                    user_input = UserInputContainer(generic=gen_args, specific=args)
-                else:
-                    print(full_action)
-                    raise ValueError
+                assert len(full_action) == 2
+                action, user_input = full_action
             else:
                 action = full_action
-                user_input = UserInputContainer(generic=None, specific=None)
+                user_input = None
 
             if unrecoverable_error:
                 break
@@ -3584,12 +3581,8 @@ class FmkPlumbing(object):
             msg = '\n' + colorize(obj.__doc__, rgb=Color.INFO_ALT_HLIGHT)
         else:
             msg = ''
-        if obj._gen_args_desc:
-            msg += "\n  generic args: "
-            for k, v in obj._gen_args_desc.items():
-                msg += _make_str(k, v)
         if obj._args_desc:
-            msg += "\n  specific args: "
+            msg += "\n  parameters: "
             for k, v in obj._args_desc.items():
                 msg += _make_str(k, v)
 
@@ -3710,11 +3703,9 @@ class FmkShell(cmd.Cmd):
             '|^run_project|^config|^display_color_theme$|^help'
             )
 
-        self.dmaker_name_re = re.compile('([#\-\w]+)(.*)', re.S)
-        # the symbol '<' shall not be used within group(3)
-        self.input_gen_arg_re = re.compile('<(.*)>(.*)', re.S)
-        self.input_spe_arg_re = re.compile('\((.*)\)', re.S)
-        self.input_arg_re = re.compile('(.*)=(.*)', re.S)
+        self.dmaker_name_re = re.compile('^([#\-\w]+)(\(?[\w=:]*\)?)$', re.S)
+        self.input_params_re = re.compile('\((.*)\)', re.S)
+        self.input_param_values_re = re.compile('(.*)=(.*)', re.S)
 
         self.config = config(self, path=[config_folder])
         def save_config():
@@ -4426,7 +4417,7 @@ class FmkShell(cmd.Cmd):
             return False
 
         operator = t[0][0]
-        user_input = UserInputContainer(generic=t[0][1], specific=t[0][2])
+        user_input = t[0][1]
 
         self.fz.launch_operator(operator, user_input, use_existing_seed=use_existing_seed,
                                 verbose=verbose)
@@ -4461,12 +4452,12 @@ class FmkShell(cmd.Cmd):
     def __parse_instructions(self, cmdline):
         '''
         return a list of the following format:
-        [(action_1, [gen_arg_11, ..., gen_arg_1n], [arg_11, ..., arg_1n]), ...,
-        (action_n, [gen_arg_n1, ..., gen_arg_nn], [arg_n1, ..., arg_nn])]
+        [(action_1, [arg_11, ..., arg_1n]), ...,
+        (action_n, [arg_n1, ..., arg_nn])]
         '''
 
         def __extract_arg(exp, dico):
-            re_obj = self.input_arg_re.match(exp)
+            re_obj = self.input_param_values_re.match(exp)
             if re_obj is None:
                 return False
             key, val = re_obj.group(1), re_obj.group(2)
@@ -4485,30 +4476,11 @@ class FmkShell(cmd.Cmd):
                 name = parsed.group(1)
                 allargs_str = parsed.group(2)
             else:
-                name = 'INCORRECT_NAME'
-                allargs_str = None
+                return None
 
             if allargs_str is not None:
-                parsed = self.input_gen_arg_re.match(allargs_str)
-                # Parse generic arguments
-                if parsed:
-                    arg_str = parsed.group(1)
-                    specific_args_str = parsed.group(2)
-                    gen_args = {}
-                    l = arg_str.split(':')
-                    for a in l:
-                        ok = __extract_arg(a, gen_args)
-                        if not ok:
-                            return None
-                else:
-                    gen_args = None
-                    specific_args_str = allargs_str
-
-                # Parse specific arguments
-                if specific_args_str is not None:
-                    parsed = self.input_spe_arg_re.match(specific_args_str)
-                else:
-                    parsed = None
+                # Parse arguments
+                parsed = self.input_params_re.match(allargs_str)
                 if parsed:
                     arg_str = parsed.group(1)
                     args = {}
@@ -4521,19 +4493,15 @@ class FmkShell(cmd.Cmd):
                     args = None
 
             else:
-                gen_args = None
                 args = None
 
-            gen_ui = UI()
-            spe_ui = UI()
-            if gen_args is not None and len(gen_args) > 0:
-                gen_ui.set_user_inputs(gen_args)
+            user_input = UI()
             if args is not None and len(args) > 0:
-                spe_ui.set_user_inputs(args)
+                user_input.set_user_inputs(args)
 
-            d.append((name, gen_ui, spe_ui))
+            d.append((name, user_input))
 
-        return d
+        return d if bool(d) else None
 
     def _retrieve_tg_ids(self, args):
         tg_ids = []

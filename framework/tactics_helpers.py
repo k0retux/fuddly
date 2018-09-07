@@ -391,55 +391,59 @@ class UI(object):
     Once initialized, attributes cannot be modified
     '''
     def __init__(self, **kwargs):
-        self.inputs = {}
+        self._inputs = {}
         for k, v in kwargs.items():
-            self.inputs[k] = v
+            self._inputs[k] = v
+
+    # for python2 compatibility
+    def __nonzero__(self):
+        return bool(self._inputs)
+
+    # for python3 compatibility
+    def __bool__(self):
+        return bool(self._inputs)
+
+    def get_inputs(self):
+        return self._inputs
 
     def is_attrs_defined(self, *names):
         for n in names:
-            if n not in self.inputs:
+            if n not in self._inputs:
                 return False
         return True
 
     def set_user_inputs(self, user_inputs):
         assert isinstance(user_inputs, dict)
-        self.inputs = user_inputs
+        self._inputs = user_inputs
 
     def check_conformity(self, valid_args):
-        for arg in self.inputs:
+        for arg in self._inputs:
             if arg not in valid_args:
                 return False, arg
         return True, None
 
     def __getattr__(self, name):
-        if name in self.inputs:
-            return self.inputs[name]
+        if name in self._inputs:
+            return self._inputs[name]
         else:
             return None
 
     def __str__(self):
-        if self.inputs:
+        if self._inputs:
             ui = '['
-            for k, v in self.inputs.items():
+            for k, v in self._inputs.items():
                 ui += "{:s}={!r},".format(k, v)
             return ui[:-1]+']'
         else:
             return '[ ]'
 
 
-def _user_input_conformity(self, user_input, _gen_args_desc, _args_desc):
+def _user_input_conformity(self, user_input, _args_desc):
     if not user_input:
         return True
-    generic_ui = user_input.get_generic()
-    specific_ui = user_input.get_specific()
 
-    if _gen_args_desc and generic_ui is not None:
-        ok, guilty = generic_ui.check_conformity(_gen_args_desc.keys())
-        if not ok:
-            print("\n*** Unknown parameter: '{:s}'".format(guilty))
-            return False
-    if _args_desc and specific_ui is not None:
-        ok, guilty = specific_ui.check_conformity(_args_desc.keys())
+    if _args_desc:
+        ok, guilty = user_input.check_conformity(_args_desc.keys())
         if not ok:
             print("\n*** Unknown parameter: '{:s}'".format(guilty))
             return False
@@ -447,41 +451,16 @@ def _user_input_conformity(self, user_input, _gen_args_desc, _args_desc):
     return True
 
 
-def _handle_user_inputs(dmaker, ui):
-    generic_ui = ui.get_generic()
-    specific_ui = ui.get_specific()
-    if generic_ui is None:
-        for k, v in dmaker._gen_args_desc.items():
-            desc, default, arg_type = v
-            setattr(dmaker, k, default)
-    else:
-        for k, v in dmaker._gen_args_desc.items():
-            desc, default, arg_type = v
-            ui_val = getattr(generic_ui, k)
-            if isinstance(arg_type, tuple):
-                assert(type(ui_val) in arg_type or ui_val is None)
-            elif isinstance(arg_type, type):
-                assert(type(ui_val) == arg_type or ui_val is None)
-            else:
-                raise ValueError
-            if ui_val is None:
-                setattr(dmaker, k, default)
-            else:
-                setattr(dmaker, k, ui_val)
+def _handle_user_inputs(dmaker, user_input):
 
-    if dmaker._gen_args_desc \
-            and issubclass(dmaker.__class__, (Disruptor, StatefulDisruptor)) \
-            and dmaker._gen_args_desc == GENERIC_ARGS:
-        modelwalker_inputs_handling_helper(dmaker, generic_ui)
-
-    if specific_ui is None:
+    if user_input is None:
         for k, v in dmaker._args_desc.items():
             desc, default, arg_type = v
             setattr(dmaker, k, default)
     else:
         for k, v in dmaker._args_desc.items():
             desc, default, arg_type = v
-            ui_val = getattr(specific_ui, k)
+            ui_val = getattr(user_input, k)
             if isinstance(arg_type, tuple):
                 assert(type(ui_val) in arg_type or ui_val is None)
             elif isinstance(arg_type, type):
@@ -493,41 +472,15 @@ def _handle_user_inputs(dmaker, ui):
             else:
                 setattr(dmaker, k, ui_val)
 
+    if isinstance(dmaker, DataMaker) and dmaker.modelwalker_user:
+        modelwalker_inputs_handling_helper(dmaker)
+
 
 def _restore_dmaker_internals(dmaker):
-    for k, v in dmaker._gen_args_desc.items():
-        desc, default, arg_type = v
-        setattr(dmaker, k, default)
     for k, v in dmaker._args_desc.items():
         desc, default, arg_type = v
         setattr(dmaker, k, default)
 
-
-class UserInputContainer(object):
-
-    def __init__(self, generic=None, specific=None):
-        self._generic_input = generic
-        self._specific_input = specific
-
-    # for python2 compatibility
-    def __nonzero__(self):
-        return self._generic_input is not None or self._specific_input is not None
-
-    # for python3 compatibility
-    def __bool__(self):
-        return self._generic_input is not None or self._specific_input is not None
-
-    def get_generic(self):
-        return self._generic_input
-
-    def get_specific(self):
-        return self._specific_input
-
-    def __str__(self):
-        return "G="+str(self._generic_input)+", S="+str(self._specific_input)
-
-    def __repr__(self):
-        return str(self)
 
 ################################
 # ModelWalker Helper Functions #
@@ -542,7 +495,7 @@ GENERIC_ARGS = {
                    'big data it can be usefull to it to False)', True, bool)
 }
 
-def modelwalker_inputs_handling_helper(dmaker, user_generic_input):
+def modelwalker_inputs_handling_helper(dmaker):
     assert(dmaker.runs_per_node > 0 or dmaker.runs_per_node == -1)
 
     if dmaker.runs_per_node == -1:
@@ -563,6 +516,8 @@ class DataMakerAttr:
 
 class DataMaker(object):
     knowledge_source = None
+    _modelwalker_user = False
+    _args_desc = None
 
     def __init__(self):
         self._fmkops = None
@@ -571,13 +526,9 @@ class DataMaker(object):
     def set_exportable_fmk_ops(self, fmkops):
         self._fmkops = fmkops
 
-    # @property
-    # def knowledge_source(self):
-    #     return self._knowledge_source
-    #
-    # @knowledge_source.setter
-    # def knowledge_source(self, val):
-    #     self._knowledge_source = val
+    @property
+    def modelwalker_user(self):
+        return self._modelwalker_user
 
 class Generator(DataMaker):
     produced_seed = None
@@ -610,7 +561,7 @@ class Generator(DataMaker):
 
     def _setup(self, dm, user_input):
         self.clear_attr(DataMakerAttr.SetupRequired)
-        if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
+        if not _user_input_conformity(self, user_input, self._args_desc):
             return False
 
         _handle_user_inputs(self, user_input)
@@ -655,7 +606,6 @@ class dyn_generator(type):
     data_id = ''
     
     def __init__(cls, name, bases, attrs):
-        attrs['_gen_args_desc'] = DynGenerator._gen_args_desc
         attrs['_args_desc'] = DynGenerator._args_desc
         type.__init__(cls, name, bases, attrs)
         cls.data_id = dyn_generator.data_id
@@ -663,12 +613,11 @@ class dyn_generator(type):
 
 class DynGenerator(Generator):
     data_id = ''
-    _gen_args_desc = {
+    _args_desc = {
         'finite': ('make the data model finite', False, bool),
         'determinist': ('make the data model determinist', False, bool),
         'random': ('make the data model random', False, bool)
     }
-    _args_desc = {}
 
     def setup(self, dm, user_input):
         if self.determinist or self.random:
@@ -692,14 +641,13 @@ class DynGenerator(Generator):
 class dyn_generator_from_scenario(type):
     scenario = None
     def __init__(cls, name, bases, attrs):
-        attrs['_gen_args_desc'] = DynGeneratorFromScenario._gen_args_desc
         attrs['_args_desc'] = DynGeneratorFromScenario._args_desc
         type.__init__(cls, name, bases, attrs)
         cls.scenario = dyn_generator_from_scenario.scenario
 
 class DynGeneratorFromScenario(Generator):
     scenario = None
-    _gen_args_desc = collections.OrderedDict([
+    _args_desc = collections.OrderedDict([
         ('graph', ('Display the scenario and highlight the current step each time the generator '
                   'is called.', False, bool)),
         ('graph_format', ('Format to be used for displaying the scenario (e.g., xdot, pdf, png).',
@@ -725,7 +673,6 @@ class DynGeneratorFromScenario(Generator):
                   "the generator begin with the Nth corrupted scenario (where N is provided "
                   "through this parameter).", 0, int))
         ])
-    _args_desc = {}
 
     @property
     def produced_seed(self):
@@ -751,7 +698,7 @@ class DynGeneratorFromScenario(Generator):
         self.tr_selected_idx = -1
 
     def setup(self, dm, user_input):
-        if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
+        if not _user_input_conformity(self, user_input, self._args_desc):
             return False
         self.__class__.scenario.set_data_model(dm)
         # self.__class__.scenario.knowledge_source = self.knowledge_source
@@ -825,7 +772,7 @@ class DynGeneratorFromScenario(Generator):
                 or (isinstance(data_desc[0], Data) and data_desc[0].content is not None):
             dp = sc.DataProcess(process=['tTYPE#{:d}'.format(self._step_num)], seed=data_desc[0],
                                 auto_regen=True)
-            dp.append_new_process([('tSTRUCT#{:d}'.format(self._step_num), UI(init=1), UI(deep=True))])
+            dp.append_new_process([('tSTRUCT#{:d}'.format(self._step_num), UI(init=1, deep=True))])
             data_desc[0] = dp
             step.data_desc = data_desc
         elif isinstance(data_desc[0], sc.DataProcess):
@@ -833,7 +780,7 @@ class DynGeneratorFromScenario(Generator):
             proc2 = copy.copy(data_desc[0].process)
             proc.append('tTYPE#{:d}'.format(self._step_num))
             data_desc[0].process = proc
-            proc2.append(('tSTRUCT#{:d}'.format(self._step_num), UI(init=1), UI(deep=True)))
+            proc2.append(('tSTRUCT#{:d}'.format(self._step_num), UI(init=1, deep=True)))
             data_desc[0].append_new_process(proc2)
             data_desc[0].auto_regen = True
         elif isinstance(data_desc[0], Data):
@@ -1101,7 +1048,7 @@ class Disruptor(DataMaker):
     def _setup(self, dm, user_input):
         # sys.stdout.write("\n__ setup disruptor '%s' __" % self.__class__.__name__)
         self.clear_attr(DataMakerAttr.SetupRequired)
-        if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
+        if not _user_input_conformity(self, user_input, self._args_desc):
             return False
 
         _handle_user_inputs(self, user_input)
@@ -1185,7 +1132,7 @@ class StatefulDisruptor(DataMaker):
     def _setup(self, dm, user_input):
         # sys.stdout.write("\n__ setup disruptor '%s' __" % self.__class__.__name__)
         self.clear_attr(DataMakerAttr.SetupRequired)
-        if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
+        if not _user_input_conformity(self, user_input, self._args_desc):
             return False
 
         _handle_user_inputs(self, user_input)
@@ -1214,14 +1161,17 @@ class StatefulDisruptor(DataMaker):
             return ret
 
 
-def disruptor(st, dtype, weight=1, valid=False, gen_args={}, args={}):
+def disruptor(st, dtype, weight=1, valid=False, args=None, modelwalker_user=False):
     def internal_func(disruptor_cls):
-        disruptor_cls._gen_args_desc = gen_args
-        disruptor_cls._args_desc = args
-        # check conflict between gen_args & args
-        for k in gen_args:
-            if k in args.keys():
-                raise ValueError("Specific parameter '{:s}' is in conflict with a generic parameter!".format(k))
+        disruptor_cls._modelwalker_user = modelwalker_user
+        if modelwalker_user:
+            if set(GENERIC_ARGS.keys()).intersection(set(args.keys())):
+                raise ValueError('At least one parameter is in conflict with a built-in parameter')
+            disruptor_cls._args_desc = copy.copy(GENERIC_ARGS)
+            if args:
+                disruptor_cls._args_desc.update(args)
+        else:
+            disruptor_cls._args_desc = {} if args is None else args
         # register an object of this class
         disruptor = disruptor_cls()
         if issubclass(disruptor_cls, StatefulDisruptor):
@@ -1233,14 +1183,17 @@ def disruptor(st, dtype, weight=1, valid=False, gen_args={}, args={}):
     return internal_func
 
 
-def generator(st, gtype, weight=1, valid=False, gen_args={}, args={}):
+def generator(st, gtype, weight=1, valid=False, args=None, modelwalker_user=False):
     def internal_func(generator_cls):
-        generator_cls._gen_args_desc = gen_args
-        generator_cls._args_desc = args
-        # check conflict between gen_args & args
-        for k in gen_args:
-            if k in args.keys():
-                raise ValueError("Specific parameter '{:s}' is in conflict with a generic parameter!".format(k))
+        generator_cls._modelwalker_user = modelwalker_user
+        if modelwalker_user:
+            if set(GENERIC_ARGS.keys()).intersection(set(args.keys())):
+                raise ValueError('At least one parameter is in conflict with a built-in parameter')
+            generator_cls._args_desc = copy.copy(GENERIC_ARGS)
+            if args:
+                generator_cls._args_desc.update(args)
+        else:
+            generator_cls._args_desc = {} if args is None else args
         # register an object of this class
         gen = generator_cls()
         st.register_new_generator(gen.__class__.__name__, gen, weight, gtype, valid)

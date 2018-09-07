@@ -178,14 +178,14 @@ class t_fix_pppoe_msg_fields(Disruptor):
 step_wait_padi = NoDataStep(fbk_timeout=10, fbk_mode=Target.FBK_WAIT_UNTIL_RECV,
                             step_desc='Wait PADI')
 
-dp_pado = DataProcess(process=[('ALT', None, UI(conf='fuzz')),
-                               ('tTYPE', UI(init=1), UI(order=True, fuzz_mag=0.7)),
+dp_pado = DataProcess(process=[('ALT', UI(conf='fuzz')),
+                               ('tTYPE', UI(init=1, order=True, fuzz_mag=0.7)),
                                'FIX_FIELDS#pado1'], seed='pado')
-dp_pado.append_new_process([('ALT', None, UI(conf='fuzz')),
-                            ('tSTRUCT', UI(init=1), UI(deep=True)), 'FIX_FIELDS#pado2'])
+dp_pado.append_new_process([('ALT', UI(conf='fuzz')),
+                            ('tSTRUCT', UI(init=1, deep=True)), 'FIX_FIELDS#pado2'])
 step_send_pado = Step(dp_pado, fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
 # step_send_pado = Step('pado')
-step_end = Step(DataProcess(process=[('FIX_FIELDS#pado3', None, UI(reevaluate_csts=True))],
+step_end = Step(DataProcess(process=[('FIX_FIELDS#pado3', UI(reevaluate_csts=True))],
                             seed='padt'), fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
 
 step_wait_padi.connect_to(step_send_pado, cbk_after_fbk=retrieve_padi_from_feedback_and_update)
@@ -197,16 +197,16 @@ sc1.set_anchor(step_wait_padi)
 
 ### PADS fuzz scenario ###
 step_wait_padi = NoDataStep(fbk_timeout=10, fbk_mode=Target.FBK_WAIT_UNTIL_RECV, step_desc='Wait PADI')
-step_send_valid_pado = Step(DataProcess(process=[('FIX_FIELDS#pads1', None, UI(reevaluate_csts=True))],
+step_send_valid_pado = Step(DataProcess(process=[('FIX_FIELDS#pads1', UI(reevaluate_csts=True))],
                                         seed='pado'), fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
-step_send_padt = Step(DataProcess(process=[('FIX_FIELDS#pads2', None, UI(reevaluate_csts=True))],
+step_send_padt = Step(DataProcess(process=[('FIX_FIELDS#pads2', UI(reevaluate_csts=True))],
                                   seed='padt'), fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
 
-dp_pads = DataProcess(process=[('ALT', None, UI(conf='fuzz')),
-                               ('tTYPE#2', UI(init=1), UI(order=True, fuzz_mag=0.7)),
+dp_pads = DataProcess(process=[('ALT', UI(conf='fuzz')),
+                               ('tTYPE#2', UI(init=1, order=True, fuzz_mag=0.7)),
                                'FIX_FIELDS#pads3'], seed='pads')
-dp_pads.append_new_process([('ALT', None, UI(conf='fuzz')),
-                            ('tSTRUCT#2', UI(init=1), UI(deep=True)), 'FIX_FIELDS#pads4'])
+dp_pads.append_new_process([('ALT', UI(conf='fuzz')),
+                            ('tSTRUCT#2', UI(init=1, deep=True)), 'FIX_FIELDS#pads4'])
 step_send_fuzzed_pads = Step(dp_pads, fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
 step_wait_padr = NoDataStep(fbk_timeout=10, fbk_mode=Target.FBK_WAIT_UNTIL_RECV,
                             step_desc='Wait PADR/PADI')

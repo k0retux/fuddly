@@ -46,7 +46,6 @@ tactics = Tactics()
 #######################
 
 @generator(tactics, gtype='POPULATION', weight=1,
-           gen_args=GENERIC_ARGS,
            args={'population': ('The population to iterate over.', None, Population)})
 class g_population(Generator):
     """ Walk through the given population """
@@ -94,8 +93,7 @@ def truncate_info(info, max_size=60):
     return repr(info)
 
 
-@disruptor(tactics, dtype="tWALK", weight=1,
-           gen_args = GENERIC_ARGS,
+@disruptor(tactics, dtype="tWALK", weight=1, modelwalker_user=True,
            args={'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
                  'order': ('When set to True, the walking order is strictly guided ' \
@@ -157,8 +155,7 @@ class sd_iter_over_data(StatefulDisruptor):
 
 
 
-@disruptor(tactics, dtype="tTYPE", weight=1,
-           gen_args = GENERIC_ARGS,
+@disruptor(tactics, dtype="tTYPE", weight=1, modelwalker_user=True,
            args={'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
                  'order': ('When set to True, the fuzzing order is strictly guided ' \
@@ -253,8 +250,7 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
 
 
 
-@disruptor(tactics, dtype="tALT", weight=1,
-           gen_args = GENERIC_ARGS,
+@disruptor(tactics, dtype="tALT", weight=1, modelwalker_user=True,
            args={'conf': ("Change the configuration, with the one provided (by name), of " \
                           "all nodes reachable from the root, one-by-one. [default value is set " \
                           "dynamically with the first-found existing alternate configuration]",
@@ -347,8 +343,7 @@ class sd_switch_to_alternate_conf(StatefulDisruptor):
         return data
 
 
-@disruptor(tactics, dtype="tSEP", weight=1,
-           gen_args = GENERIC_ARGS,
+@disruptor(tactics, dtype="tSEP", weight=1, modelwalker_user=True,
            args={'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
                  'order': ('When set to True, the fuzzing order is strictly guided ' \
@@ -433,9 +428,9 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
 
 
 @disruptor(tactics, dtype="tSTRUCT", weight=1,
-           gen_args={'init': ('Make the model walker ignore all the steps until the provided one.', 1, int),
-                     'max_steps': ('Maximum number of steps (-1 means until the end).', -1, int) },
-           args={'path': ('Graph path regexp to select nodes on which' \
+           args={'init': ('Make the model walker ignore all the steps until the provided one.', 1, int),
+                 'max_steps': ('Maximum number of steps (-1 means until the end).', -1, int),
+                 'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
                  'deep': ('If True, enable corruption of minimum and maximum amount of non-terminal nodes.',
                           False, bool) })
@@ -654,7 +649,6 @@ class SwapperDisruptor(StatefulDisruptor):
 
 
 @disruptor(tactics, dtype="tCROSS", weight=1,
-           gen_args=GENERIC_ARGS,
            args={'node': ('Node to crossover with.', None, Node),
                  'percentage_to_share': ('Percentage of the base node to share.', 0.50, float)})
 class sd_crossover(SwapperDisruptor):
@@ -755,7 +749,6 @@ class sd_crossover(SwapperDisruptor):
 
 
 @disruptor(tactics, dtype="tCOMB", weight=1,
-           gen_args=GENERIC_ARGS,
            args={'node': ('Node to combine with.', None, Node)})
 class sd_combine(SwapperDisruptor):
     """
@@ -1373,7 +1366,7 @@ class d_modify_nodes(Disruptor):
 
 
 @disruptor(tactics, dtype="COPY", weight=4,
-           args={})
+           args=None)
 class d_shallow_copy(Disruptor):
     '''
     Shallow copy of the input data, which means: ignore its frozen

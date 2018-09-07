@@ -52,7 +52,7 @@ def before_data_processing_cbk(env, step):
         step.content.show()
     return True
 
-periodic1 = Periodic(DataProcess(process=[('C', None, UI(nb=1)), 'tTYPE'], seed='enc'),
+periodic1 = Periodic(DataProcess(process=[('C', UI(nb=1)), 'tTYPE'], seed='enc'),
                      period=5)
 periodic2 = Periodic(Data('2nd Periodic (3s)\n'), period=3)
 
@@ -104,14 +104,14 @@ sc3.set_anchor(anchor)
 
 ### SCENARIO 4 & 5 ###
 dp = DataProcess(['tTYPE#NOREG'], seed='exist_cond', auto_regen=False)
-dp.append_new_process([('tSTRUCT#NOREG', None, UI(deep=True))])
+dp.append_new_process([('tSTRUCT#NOREG', UI(deep=True))])
 unique_step = Step(dp)
 unique_step.connect_to(unique_step)
 sc4 = Scenario('no_regen')
 sc4.set_anchor(unique_step)
 
 dp = DataProcess(['tTYPE#REG'], seed='exist_cond', auto_regen=True)
-dp.append_new_process([('tSTRUCT#REG', None, UI(deep=True))])
+dp.append_new_process([('tSTRUCT#REG', UI(deep=True))])
 unique_step = Step(dp)
 unique_step.connect_to(unique_step)
 sc5 = Scenario('auto_regen')

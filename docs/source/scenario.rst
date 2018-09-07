@@ -340,7 +340,7 @@ service for instance. This is illustrated in the following example in the lines 
     step1 = Step('exist_cond', fbk_timeout=2, set_periodic=[periodic1, periodic2])
     step2 = Step('separator', fbk_timeout=5)
     step3 = NoDataStep()
-    step4 = Step(DataProcess(process=[('C',None,UI(nb=1)),'tTYPE'], seed='enc'))
+    step4 = Step(DataProcess(process=[('C', UI(nb=1)),'tTYPE'], seed='enc'))
 
     step1.connect_to(step2)
     step2.connect_to(step3, cbk_after_fbk=feedback_callback)
@@ -456,7 +456,7 @@ Here under examples of steps leveraging the different ways to describe their dat
 
    Step( Data('A raw message') )
 
-   Step( DataProcess(process=['ZIP', 'tSTRUCT', ('SIZE', None, UI(sz=100))]) )
+   Step( DataProcess(process=['ZIP', 'tSTRUCT', ('SIZE', UI(sz=100))]) )
    Step( DataProcess(process=['C', 'tTYPE'], seed='enc') )
    Step( DataProcess(process=['C'], seed=Data('my seed')) )
 

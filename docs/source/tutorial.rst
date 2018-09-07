@@ -322,7 +322,7 @@ To send in a loop, five ZIP archives generated from the data model in
 a deterministic way---that is by walking through the data model---you
 can use the following command::
 
-   >> send_loop 5 ZIP<determinist=True> tWALK
+   >> send_loop 5 ZIP(determinist=True) tWALK
 
 We use for this example, the generic stateful disruptor ``tWALK`` whose purpose
 is to simply walk through the data model. Note that disruptors are
@@ -334,7 +334,7 @@ Note that if you want to send data indefinitely until the generator exhausts (in
 or a stateful disruptor (in our case ``tWALK``) of the chain exhausts you should use ``-1`` as
 the number of iteration. In our case it means issuing the following command::
 
-   >> send_loop -1 ZIP<determinist=True> tWALK
+   >> send_loop -1 ZIP(determinist=True) tWALK
 
 And if you want to stop the execution before the normal termination (which could never happen if
 the ``finite`` parameter has not been set), then you have to issue a ``SIGINT`` signal to ``fuddly`` via
@@ -419,7 +419,7 @@ Let's illustrate this with the following example:
    :linenos:
    :emphasize-lines: 1,16,19,25,30
 
-   >> send ZIP_00 C(nb=2:path="ZIP_00/file_list/.*/file_name") tTYPE<max_steps=50>(order=True) SIZE(sz=256)
+   >> send ZIP_00 C(nb=2:path="ZIP_00/file_list/.*/file_name") tTYPE(max_steps=50:order=True) SIZE(sz=256)
 
    __ setup generator 'g_zip_00' __
    __ setup disruptor 'd_corrupt_node_bits' __
@@ -508,21 +508,12 @@ can see on lines 16 & 19.
 
 
 
-.. note:: Generic parameters are given to data makers
-   (generators/disruptors) through a tuple wrapped with the characters
-   ``<`` and ``>`` and separated with the character ``:``. Syntax::
-
-     data_maker_type<param1=val1:param2=val2>
-
-   Specific parameters are given to data makers
+.. note::
+   Parameters are given to data makers
    (generators/disruptors) through a tuple wrapped with the characters
    ``(`` and ``)`` and separated with the character ``:``. Syntax::
    
      data_maker_type(param1=val1:param2=val2)
-
-   Generic and specific parameters can be used together. Syntax::
-
-     data_maker_type<param1=val1>(param2=val2:param3=val3)
 
 
 After ``C`` has performed its corruption, fuddly gets the result and
@@ -584,7 +575,7 @@ exceeds 256---as the parameter ``sz`` is equal to 256.
    :linenos:
    :emphasize-lines: 1,5-7,11,16,17-18
 
-   >> send ZIP_00 C(nb=2:path="$ZIP/file_list.*") tTYPE<max_steps=50>(order=True) SIZE(sz=256)
+   >> send ZIP_00 C(nb=2:path="$ZIP/file_list.*") tTYPE(max_steps=50:order=True) SIZE(sz=256)
 
    ========[ 2 ]==[ 20/08/2015 - 15:20:08 ]=======================
    ### Target ack received at: None
@@ -706,13 +697,14 @@ Last, to avoid re-issuing the same command for each time you
 want to send a new data, you can use the ``send_loop`` command as
 follows::
 
-  >> send_loop <NB> ZIP_00 C(nb=2:path="ZIP_00/file_list/.*") tTYPE<max_steps=50>(order=True) SIZE(sz=256)
+  >> send_loop <NB> ZIP_00 C(nb=2:path="ZIP_00/file_list/.*") tTYPE(max_steps=50:order=True) SIZE(sz=256)
 
 where ``<NB>`` shall be replaced by the maximum number of iteration
 you want before fuddly return to the prompt. Note that it is a
 maximum; in our case it will stop at the 50 :sup:`th` run because of
-``tTYPE``.
-
+``tTYPE``. Note that you can also use the special value -1 to loop indefinitely
+or until a data maker is exhausted.
+In such situation, if you want to interrupt the looping, just use ``Ctrl+C``.
 
 .. _tuto:reset-dmaker:
 
@@ -832,7 +824,7 @@ This command will display the `following <#operator-show>`_:
 To launch the operator ``Op1`` and limit to 5 the number of test cases to
 run, issue the command::
 
-  >> launch_operator Op1<max_steps=5>
+  >> launch_operator Op1(max_steps=5)
 
 This will trigger the Operator that will execute the ``display``
 program with the first generated JPG file. It will look at ``stdout``
@@ -843,7 +835,7 @@ also try to avoid saving JPG files that trigger errors whose type has
 already been seen. Once the operator is all done with this first test
 case, it can plan the next actions it needs ``fuddly`` to perform for
 it. In our case, it will go on with the next iteration of a disruptor
-chain, basically ``JPG<finite=True> tTYPE``.
+chain, basically ``JPG(finite=True) tTYPE``.
 
 
 Replay Data From a Previous Session
@@ -981,7 +973,7 @@ Here under some basic commands to start with:
    # Perform a tTYPE disruption on it, but give the 5th generated
    # cases and enforce the disruptor to strictly follow the ZIP structure
    # Finally truncate the output to 200 bytes
-   action_list = [('tTYPE', UI(init=5), UI(order=True)), ('SIZE', None, UI(sz=200))]
+   action_list = [('tTYPE', UI(init=5, order=True)), ('SIZE', UI(sz=200))]
    altered_data = fmk.get_data(action_list, data_orig=Data(dt))
 
    # Send this new data and look at the actions that perform tTYPE and
@@ -2313,7 +2305,7 @@ is given here under:
        if fmk_feedback.is_flag_set(FmkFeedback.NeedChange):
           op.set_flag(Operation.Stop)
        else:
-          actions = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', None, UI(deep=True))]
+          actions = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', UI(deep=True))]
           op.add_instruction(actions)
 
        return op

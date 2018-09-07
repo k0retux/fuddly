@@ -103,7 +103,7 @@ class DefaultIndividual(Individual):
         self.probability_of_survival = None  # between 0 and 1
 
     def mutate(self, nb):
-        data = self._fmk.get_data([('C', None, UI(nb=nb))], data_orig=Data(self.node))
+        data = self._fmk.get_data([('C', UI(nb=nb))], data_orig=Data(self.node))
         if data is None:
             raise PopulationError
         assert isinstance(data.content, Node)
@@ -188,7 +188,7 @@ class DefaultPopulation(Population):
 
 
             while True:
-                data = self._fmk.get_data([('tCOMB', None, UI(node=ind_2))], data_orig=Data(ind_1))
+                data = self._fmk.get_data([('tCOMB', UI(node=ind_2))], data_orig=Data(ind_1))
                 if data is None or data.is_unusable():
                     break
                 else:
@@ -241,7 +241,7 @@ class EvolutionaryScenariosFactory(object):
 
             return True
 
-        step = Step(data_desc=DataProcess(process=[('POPULATION', None, UI(population=population))]))
+        step = Step(data_desc=DataProcess(process=[('POPULATION', UI(population=population))]))
         step.connect_to(step, cbk_after_fbk=cbk_after)
 
         return Scenario(name, anchor=step)

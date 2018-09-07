@@ -204,17 +204,17 @@ class MyOp(Operator):
 
         if p1_ret + p2_ret > 0:
             actions = [('SEPARATOR', UI(determinist=True)),
-                       ('tSTRUCT', None, UI(deep=True)),
-                       ('Cp', None, UI(idx=1)), ('Cp#1', None, UI(idx=3))]
+                       ('tSTRUCT', UI(deep=True)),
+                       ('Cp', UI(idx=1)), ('Cp#1', UI(idx=3))]
         elif -5 < p1_ret + p2_ret <= 0:
-            actions = ['SHAPE#specific', ('C#2', None, UI(path='.*prefix.$')), ('Cp#2', None, UI(idx=1))]
+            actions = ['SHAPE#specific', ('C#2', UI(path='.*prefix.$')), ('Cp#2', UI(idx=1))]
         else:
             actions = ['SHAPE#3', 'tTYPE#3']
 
-        op.add_instruction(actions, tg_ids=[8,9])
+        op.add_instruction(actions, tg_ids=[7,8])
 
         if self.mode == 1:
-            actions_sup = ['SEPARATOR#2', ('tSTRUCT#2', None, UI(deep=True)), ('SIZE', None, UI(sz=10))]
+            actions_sup = ['SEPARATOR#2', ('tSTRUCT#2', UI(deep=True)), ('SIZE', UI(sz=10))]
             op.add_instruction(actions_sup)
 
         self.cpt += 1

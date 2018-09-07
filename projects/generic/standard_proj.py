@@ -73,9 +73,9 @@ targets = [(local_tg, (display_mem_check, 0.1)),
 
 
 @operator(project,
-          gen_args={'init': ('make the model walker ignore all the steps until the provided one', 1, int),
-                    'max_steps': ("number of test cases to run", 20, int)},
-          args={'mode': ('strategy mode (0 or 1)', 0, int),
+          args={'init': ('make the model walker ignore all the steps until the provided one', 1, int),
+                'max_steps': ("number of test cases to run", 20, int),
+                'mode': ('strategy mode (0 or 1)', 0, int),
                 'path': ("path of the target application (for LocalTarget's only)", '/usr/bin/display', str)})
 class Op1(Operator):
 

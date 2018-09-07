@@ -44,7 +44,7 @@ from test import ignore_data_model_specifics, run_long_tests, exit_on_import_err
 
 def setUpModule():
     global fmk, dm, results
-    fmk = FmkPlumbing(exit_on_error=exit_on_import_error)
+    fmk = FmkPlumbing(exit_on_error=exit_on_import_error, debug_mode=True)
     fmk.run_project(name='tuto', dm_name='example')
     dm = example.data_model
     results = collections.OrderedDict()
@@ -3527,7 +3527,7 @@ class TestFMK(unittest.TestCase):
 
             print("\n\n---[ Tested Disruptor %r ]---" % dis)
             if dis == 'EXT':
-                act = [dmaker_type, (dis, None, UI(cmd='/bin/cat', file_mode=True))]
+                act = [dmaker_type, (dis, UI(cmd='/bin/cat', file_mode=True))]
                 d = fmk.get_data(act)
             else:
                 act = [dmaker_type, dis]
@@ -3563,7 +3563,7 @@ class TestFMK(unittest.TestCase):
 
         outcomes = []
 
-        act = [('EXIST_COND', UI(determinist=True)), 'tWALK', ('tSTRUCT', None)]
+        act = [('EXIST_COND', UI(determinist=True)), 'tWALK', 'tSTRUCT']
         for i in range(4):
             for j in range(10):
                 d = fmk.get_data(act)
@@ -3585,7 +3585,7 @@ class TestFMK(unittest.TestCase):
 
         expected_idx = 10
         idx = 0
-        act = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', None, UI(deep=True))]
+        act = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', UI(deep=True))]
         for j in range(10):
             d = fmk.get_data(act)
             if d is None:
@@ -3623,9 +3623,9 @@ class TestFMK(unittest.TestCase):
 
     def test_operator_1(self):
 
-        fmk.reload_all(tg_ids=[8,9])
+        fmk.reload_all(tg_ids=[7,8])
 
-        fmk.launch_operator('MyOp', user_input=UserInputContainer(specific=UI(max_steps=100, mode=1)))
+        fmk.launch_operator('MyOp', user_input=UI(max_steps=100, mode=1))
         last_data_id = max(fmk.lg._last_data_IDs.values())
         print('\n*** Last data ID: {:d}'.format(last_data_id))
         fmkinfo = fmk.fmkDB.execute_sql_statement(
@@ -3643,7 +3643,7 @@ class TestFMK(unittest.TestCase):
     @unittest.skipIf(not run_long_tests, "Long test case")
     def test_operator_2(self):
 
-        fmk.reload_all(tg_ids=[8,9])
+        fmk.reload_all(tg_ids=[7,8])
 
         myop = fmk.get_operator(name='MyOp')
         fmk.launch_operator('MyOp')
