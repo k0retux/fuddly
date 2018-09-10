@@ -1211,14 +1211,31 @@ class INT(VT):
                     raise ValueError('contents not valid!')
             self.values.insert(0, orig_val)
             self.values_copy = copy.copy(self.values)
+        elif self.maxi is None and self.mini is None:
+            # this case means 'self' is an unlimited INT (like INT_str subclass) where no constraints
+            # have been provided to the constructor, like INT_str().
+            self.values = [orig_val]
+            self.values_copy = [orig_val]
         else:
             if constraints[AbsCsts.Contents]:
                 if self.maxi is not None and orig_val > self.maxi:
                     raise ValueError('contents not valid! (max limit)')
                 if self.mini is not None and orig_val < self.mini:
                     raise ValueError('contents not valid! (min limit)')
-            # self.values = [orig_val]
-            self.idx = orig_val - self.mini
+            else:
+                # mini_gen and maxi_gen are always defined
+                if orig_val < self.mini_gen:
+                    if self.__class__.mini is not None and orig_val < self.__class__.mini:
+                        raise ValueError('The type {!s} is not able to represent the value {:d}'
+                                         .format(self.__class__, orig_val))
+                    self.mini = self.mini_gen = orig_val
+                if orig_val > self.maxi_gen:
+                    if self.__class__.maxi is not None and orig_val > self.__class__.maxi:
+                        raise ValueError('The type {!s} is not able to represent the value {:d}'
+                                         .format(self.__class__, orig_val))
+                    self.maxi = self.maxi_gen = orig_val
+
+            self.idx = orig_val - self.mini_gen
 
         # self.reset_state()
         self.exhausted = False
