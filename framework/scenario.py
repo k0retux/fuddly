@@ -172,17 +172,25 @@ class Step(object):
             valid:
             vtg_ids (list, int): Virtual ID list of the targets to which the outcomes of this data process will be sent.
               If ``None``, the outcomes will be sent to the first target that has been enabled.
+              If ``data_desc`` is a list, this parameter should be a list where each item is the ``vtg_ids``
+              of the corresponding item in the ``data_desc`` list.
         '''
 
         self.final = final
         self.valid = valid
-        self.vtg_ids = vtg_ids
         self._step_desc = step_desc
         self._transitions = []
         self._do_before_data_processing = do_before_data_processing
         self._do_before_sending = do_before_sending
 
         self._handle_data_desc(data_desc)
+        if isinstance(data_desc, list):
+            assert isinstance(vtg_ids, list)
+            assert len(vtg_ids) == len(data_desc)
+            self.vtg_ids = vtg_ids
+        else:
+            self.vtg_ids = [vtg_ids]
+
         self.make_free()
 
         # need to be set after self._data_desc
@@ -415,7 +423,9 @@ class Step(object):
         if self._feedback_mode is not None:
             d.feedback_mode = self._feedback_mode
 
-        d.tg_ids = self.vtg_ids
+        d.tg_ids = self.vtg_ids[0]
+        # Note in the case of self._data_desc contains multiple data, related
+        # vtg_ids are retrieved directly from the Step in the Replace_Data callback.
 
         return d
 

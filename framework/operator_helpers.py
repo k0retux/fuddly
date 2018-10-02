@@ -188,7 +188,7 @@ def operator(prj, args=None):
                 setattr(operator_cls, k, default)
         # register an object of this class
         operator = operator_cls()
-        prj.register_new_operator(operator.__class__.__name__, operator)
+        prj.register_operator(operator.__class__.__name__, operator)
         return operator_cls
 
     return internal_func

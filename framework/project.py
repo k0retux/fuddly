@@ -54,6 +54,7 @@ class Project(object):
         self.scenario_target_mapping = None
         self.reset_target_mappings()
 
+        self.project_scenarios = None
         self.targets = None
         self.dm = None
         self.operators = {}
@@ -129,7 +130,10 @@ class Project(object):
     def reset_target_mappings(self):
         self.scenario_target_mapping = {}
 
-    def register_new_operator(self, name, obj):
+    def register_scenarios(self, *scenarios):
+        self.project_scenarios = scenarios
+
+    def register_operator(self, name, obj):
 
         if name in self.operators:
             print("\n*** /!\\ ERROR: The operator name '{:s}' is already used\n".format(name))
@@ -137,7 +141,7 @@ class Project(object):
 
         self.operators[name] = obj
 
-    def register_new_probe(self, probe, blocking=False):
+    def register_probe(self, probe, blocking=False):
         try:
             self.monitor.add_probe(probe, blocking)
         except AddExistingProbeToMonitorError as e:
@@ -161,6 +165,7 @@ class Project(object):
             self._feedback_processing_thread = threading.Thread(target=self._feedback_processing,
                                                                 name='fuddly feedback processing')
             self._feedback_processing_thread.start()
+
 
     def stop(self):
         VT.knowledge_source = None

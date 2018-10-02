@@ -962,16 +962,17 @@ class DynGeneratorFromScenario(Generator):
         cbkops = CallBackOps()
         if self.step.has_dataprocess():
             cbkops.add_operation(CallBackOps.Replace_Data,
-                                 param=self.step.data_desc)
+                                 param=(self.step.data_desc, self.step.vtg_ids))
 
         return cbkops
 
     def _callback_dispatcher_before_sending_step2(self):
         # Callback called after any data have been processed but not sent yet
         self.step.do_before_sending()
+        # We add again the operation CallBackOps.Replace_Data, because the step contents could have changed
         cbkops = CallBackOps()
         cbkops.add_operation(CallBackOps.Replace_Data,
-                             param=self.step.data_desc)
+                             param=(self.step.data_desc, self.step.vtg_ids))
         return cbkops
 
     def _callback_dispatcher_after_sending(self):

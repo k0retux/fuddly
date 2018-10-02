@@ -1298,8 +1298,8 @@ class FmkPlumbing(object):
             self._tactics.clear_disruptor_clones()
 
         self._tactics = self.__st_dict[dm]
-        # self._tactics.knowledge_source = prj.knowledge_source
-        # self._generic_tactics.knowledge_source = prj.knowledge_source
+        if self.prj.project_scenarios:
+            self._tactics.register_scenarios(*self.prj.project_scenarios)
 
         self.mon = self.__monitor_dict[prj]
         self.mon.set_targets(self.targets)
@@ -1913,7 +1913,12 @@ class FmkPlumbing(object):
     def _handle_data_callbacks(self, data_list, hook, resolve_dataprocess=True):
 
         new_data_list = []
+        stop_data_list_processing = False
+
         for data in data_list:
+            if stop_data_list_processing:
+                break
+
             try:
                 if hook == HOOK.after_fbk:
                     data.run_callbacks(feedback=self.feedback_gate, hook=hook)
@@ -1936,11 +1941,21 @@ class FmkPlumbing(object):
                     if fbk_timeout is not None:
                         self.set_feedback_timeout(fbk_timeout)
 
-                    data_desc = op[CallBackOps.Replace_Data]
-                    if data_desc is not None:
+                    returned_obj = op[CallBackOps.Replace_Data]
+                    if returned_obj is not None:
+                        # This means that data_list will be replaced by something else, thus ignore
+                        # current data_list and start from scratch.
+                        # In case of Scenario handling with a multi data step, we skip the remaining
+                        # data in the list because they will be regenerated or new ones will prevail.
+                        # Indeed, the Replace_Data callback is triggered twice:
+                        # in Hook.before_sending_step1 and in Hook.before_sending_step2.
+                        stop_data_list_processing = True
+
+                        data_desc, vtg_ids_list = returned_obj
+
                         new_data = []
                         first_step = True
-                        for d_desc in data_desc:
+                        for d_desc, vtg_ids in zip(data_desc, vtg_ids_list):
                             data_tmp = self._handle_data_desc(d_desc,
                                                               resolve_dataprocess=resolve_dataprocess,
                                                               original_data=data)
@@ -1948,7 +1963,7 @@ class FmkPlumbing(object):
                                 if first_step:
                                     first_step = False
                                     data_tmp.copy_callback_from(data)
-                                data_tmp.tg_ids = data_tg_ids
+                                data_tmp.tg_ids = vtg_ids
                                 data_tmp.scenario_dependence = data.scenario_dependence
                                 new_data.append(data_tmp)
                             else:
@@ -1957,7 +1972,7 @@ class FmkPlumbing(object):
                                 # In this case it is either the normal end of a scenario or an error
                                 # within a scenario step.
                                 newd = Data()
-                                newd.tg_ids = data_tg_ids
+                                newd.tg_ids = vtg_ids
                                 newd.scenario_dependence = data.scenario_dependence
                                 newd.make_unusable()
                                 new_data = [newd]
