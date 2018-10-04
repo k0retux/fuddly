@@ -184,12 +184,15 @@ class Step(object):
         self._do_before_sending = do_before_sending
 
         self._handle_data_desc(data_desc)
-        if isinstance(data_desc, list):
-            assert isinstance(vtg_ids, list)
-            assert len(vtg_ids) == len(data_desc)
-            self.vtg_ids = vtg_ids
+        if vtg_ids is not None:
+            if isinstance(data_desc, list):
+                assert isinstance(vtg_ids, list)
+                assert len(vtg_ids) == len(data_desc)
+                self.vtg_ids_list = vtg_ids
+            else:
+                self.vtg_ids_list = [vtg_ids]
         else:
-            self.vtg_ids = [vtg_ids]
+            self.vtg_ids_list = None
 
         self.make_free()
 
@@ -423,9 +426,10 @@ class Step(object):
         if self._feedback_mode is not None:
             d.feedback_mode = self._feedback_mode
 
-        d.tg_ids = self.vtg_ids[0]
-        # Note in the case of self._data_desc contains multiple data, related
-        # vtg_ids are retrieved directly from the Step in the Replace_Data callback.
+        if self.vtg_ids_list:
+            # Note in the case of self._data_desc contains multiple data, related
+            # vtg_ids are retrieved directly from the Step in the Replace_Data callback.
+            d.tg_ids = self.vtg_ids_list[0]
 
         return d
 

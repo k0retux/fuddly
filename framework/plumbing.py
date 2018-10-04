@@ -1952,6 +1952,8 @@ class FmkPlumbing(object):
                         stop_data_list_processing = True
 
                         data_desc, vtg_ids_list = returned_obj
+                        if vtg_ids_list is None:
+                            vtg_ids_list = itertools.repeat(None)
 
                         new_data = []
                         first_step = True
