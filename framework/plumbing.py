@@ -3720,7 +3720,7 @@ class FmkShell(cmd.Cmd):
             '|^run_project|^config|^display_color_theme$|^help'
             )
 
-        self.dmaker_name_re = re.compile('^([#\-\w]+)(\(?[\w=:]*\)?)$', re.S)
+        self.dmaker_name_re = re.compile('^([#\-\w]+)(\(?[^\(\)]*\)?)$', re.S)
         self.input_params_re = re.compile('\((.*)\)', re.S)
         self.input_param_values_re = re.compile('(.*)=(.*)', re.S)
 
