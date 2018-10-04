@@ -1374,6 +1374,10 @@ class RegexParser(StateMachine):
         if self.values is not None and all(val.isdigit() for val in self.values):
             self.values = [int(i) for i in self.values]
             type = fvt.INT_str
+        elif self.alphabet is not None and all(c.isdigit() for c in self.alphabet):
+            self.values = [int(c) for c in self.alphabet]
+            type = fvt.INT_str
+            self.alphabet = None
         else:
             type = fvt.String
 

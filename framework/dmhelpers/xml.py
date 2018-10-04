@@ -25,15 +25,25 @@ from framework.node import *
 from framework.dmhelpers.generic import *
 import framework.value_types as fvt
 import framework.global_resources as gr
+from enum import Enum
 
-def tag_builder(tag_name, params=None, contents=None, node_name=None, codec='latin-1',
-                tag_name_mutable=True, struct_mutable=True, determinist=True):
+class TAG_TYPE(Enum):
+    standard = 1
+    comment = 2
+    proc_instr = 3
+
+def tag_builder(tag_name, params=None, refs=None, contents=None, node_name=None, codec='latin-1',
+                tag_name_mutable=True, struct_mutable=True, determinist=True, condition=None,
+                tag_type=TAG_TYPE.standard, nl_prefix=False, nl_suffix=False):
     """
     Helper for modeling an XML tag.
 
     Args:
       tag_name (str): name of the XML tag.
       params (dict): optional attributes to be added in the XML tag
+      refs (dict): if provided it should give for each parameter key (provided in ``params`` dict)
+        the name to be used for the node representing the corresponding value. Useful when
+        the parameter ``condition`` is in use and needs to relate to the value of specific parameters.
       contents: can be either None (empty tag), a :class:`framework.data_model.Node`,
         a dictionary (Node description), a string or a string list (string-Node values).
       node_name (str): name of the node to be created.
@@ -44,6 +54,11 @@ def tag_builder(tag_name, params=None, contents=None, node_name=None, codec='lat
         that each node related to the structure will have its ``Mutable`` attribute cleared.
       determinist (bool): if ``False``, the attribute order could change from one retrieved
         data to another.
+      condition (tuple): optional existence condition for the tag. If not ``None`` a keyword ``exists_if``
+        will be added to the root node with this parameter as a value.
+      tag_type (TAG_TYPE): specify the type of notation
+      nl_prefix (bool): add a new line character before the tag
+      nl_suffix (bool): add a new line character after the tag
 
     Returns:
       dict: Node-description of the XML tag.
@@ -53,9 +68,19 @@ def tag_builder(tag_name, params=None, contents=None, node_name=None, codec='lat
         assert isinstance(params, dict)
         cts = []
         idx = 1
+        refs = {} if refs is None else refs
         for k, v in params.items():
-            assert gr.is_string_compatible(v)
-            v = v if isinstance(v, list) else [v]
+            if gr.is_string_compatible(v):
+                val_ref = refs.get(k, ('val', uuid.uuid1()))
+                v = v if isinstance(v, list) else [v]
+                nd_desc = {'name': val_ref, 'contents': fvt.String(values=v, codec=codec)}
+            elif isinstance(v, dict):
+                nd_desc = v
+            elif isinstance(v, Node):
+                nd_desc = (v, 1, 1)
+            else:
+                raise ValueError
+
             sep_id = uuid.uuid1()
             cts.append({'name': ('attr'+str(idx), uuid.uuid1()),
                         'contents': [
@@ -64,7 +89,7 @@ def tag_builder(tag_name, params=None, contents=None, node_name=None, codec='lat
                              'set_attrs': MH.Attr.Separator, 'mutable': struct_mutable},
                             {'name': ('sep', sep_id), 'contents': fvt.String(values=['"'], codec=codec),
                              'set_attrs': MH.Attr.Separator, 'mutable': struct_mutable},
-                            {'name': ('val', uuid.uuid1()), 'contents': fvt.String(values=v, codec=codec)},
+                            nd_desc,
                             {'name': ('sep', sep_id)},
                         ]})
             idx += 1
@@ -76,7 +101,17 @@ def tag_builder(tag_name, params=None, contents=None, node_name=None, codec='lat
     else:
         params_desc = None
 
-    prefix = '</' if contents is None else '<'
+    if tag_type in [TAG_TYPE.comment, TAG_TYPE.proc_instr]:
+        assert contents is None
+        if tag_type is TAG_TYPE.proc_instr:
+            prefix = '<?'
+        elif tag_type is TAG_TYPE.comment:
+            prefix = '<!--'
+        else:
+            raise ValueError
+    else:
+        prefix = '</' if contents is None else '<'
+
     tag_start_open_desc = \
         {'name': ('prefix', uuid.uuid1()),
          'contents': fvt.String(values=[prefix], codec=codec),
@@ -99,9 +134,19 @@ def tag_builder(tag_name, params=None, contents=None, node_name=None, codec='lat
                        'prefix': False, 'suffix': False, 'unique': False},
          'contents': tag_cts}
 
+    if tag_type in [TAG_TYPE.comment, TAG_TYPE.proc_instr]:
+        if tag_type is TAG_TYPE.proc_instr:
+            suffix = '?>'
+        elif tag_type is TAG_TYPE.comment:
+            suffix = '-->'
+        else:
+            raise ValueError
+    else:
+        suffix = '>'
+
     tag_start_close_desc = \
         {'name': ('suffix', uuid.uuid1()),
-         'contents': fvt.String(values=['>'], codec=codec),
+         'contents': fvt.String(values=[suffix], codec=codec),
          'mutable': struct_mutable, 'set_attrs': MH.Attr.Separator}
 
     tag_start_desc = \
@@ -133,12 +178,17 @@ def tag_builder(tag_name, params=None, contents=None, node_name=None, codec='lat
             cts = [tag_start_desc,
                    contents,
                    tag_end_desc]
+        elif isinstance(contents, list) and not gr.is_string_compatible(contents[0]):
+            cts = [tag_start_desc]
+            for c in contents:
+                cts.append(c)
+            cts.append(tag_end_desc)
         else:
             assert gr.is_string_compatible(contents)
             if not isinstance(contents, list):
                 contents = [contents]
             cts = [tag_start_desc,
-                   {'name': 'elt-content',
+                   {'name': ('elt-content', uuid.uuid1()),
                     'contents': fvt.String(values=contents, codec=codec)},
                    tag_end_desc]
 
@@ -146,9 +196,25 @@ def tag_builder(tag_name, params=None, contents=None, node_name=None, codec='lat
         {'name': tag_name if node_name is None else node_name,
          'separator': {'contents': {'name': ('nl', uuid.uuid1()),
                                     'contents': fvt.String(values=['\n'], max_sz=100,
-                                                           absorb_regexp='[\r\n|\n]+', codec=codec),
+                                                           absorb_regexp='\s*', codec=codec),
                                     'absorb_csts': AbsNoCsts(regexp=True)},
-                       'prefix': False, 'suffix': False, 'unique': False},
+                       'prefix': nl_prefix, 'suffix': nl_suffix, 'unique': False},
          'contents': cts}
 
+    if condition:
+        tag_desc['exists_if'] = condition
+
     return tag_desc
+
+def xml_decl_builder():
+    version_desc = {'name': 'version',
+                    'contents': '[123456789]\.\d'}
+
+    encoding_list = ['UTF-8', 'UTF-16', 'ISO-10646-UCS-2','ISO-10646-UCS-4',
+                     'ISO-2022-JP', 'Shift_JIS', 'EUC-JP'] + \
+                     ['ISO-8859-{:d}'.format(x) for x in range(1, 10)]
+
+    return tag_builder('xml', params={'version': version_desc,
+                                      'encoding': encoding_list,
+                                      'standalone': ['no', 'yes']},
+                       tag_type=TAG_TYPE.proc_instr)

@@ -113,7 +113,8 @@ class RegexParserTest(unittest.TestCase):
         {'regex': "hi\x58", 'nodes': [{"values": ["hi\x58"]}]},
         {'regex': "hi\x00hola", 'nodes': [{"values": ["hi\x00hola"]}]},
         {'regex': "\xFFdom", 'nodes': [{"values": ["\xFFdom"]}]},
-        {'regex': "\ddom", 'nodes': [{"alphabet": "0123456789"}, {"values": ["dom"]}]},
+        {'regex': "\ddom",
+         'nodes': [{"values": [i for i in range(0,10)], "type": vt.INT_str}, {"values": ["dom"]}]},
         {'regex': "dom[abcd\d]", 'nodes': [{"values": ["dom"]}, {"alphabet": "abcd0123456789"}]},
         {'regex': "[abcd]\x43", 'nodes': [{"alphabet": "abcd"}, {"values": ["\x43"]}]},
         {'regex': "(abcd)\x53", 'nodes': [{"values": ["abcd"]}, {"values": ["\x53"]}]},
@@ -127,7 +128,7 @@ class RegexParserTest(unittest.TestCase):
          'nodes': [
              {"type": fvt.INT_str, "values": [333,444]},
              {"values": [u"foo-bar"]},
-             {"alphabet": "0123456789"},
+             {"values": [i for i in range(0,10)], "type": vt.INT_str},
              {"alphabet": "th|is"}]},
         {'regex': u"(333|444)|foo-bar|\||[th|is]",
          'nodes': [
@@ -266,19 +267,19 @@ class RegexParserTest(unittest.TestCase):
 
         {'regex': "[a-e]", 'nodes': [{"alphabet": "abcde"}]},
         {'regex': "[a-ewxy]", 'nodes': [{"alphabet": "abcdewxy"}]},
-        {'regex': "[1-9]", 'nodes': [{"alphabet": "123456789"}]},
+        {'regex': "[1-9]", 'nodes': [{"values": [i for i in range(1,10)], 'type': vt.INT_str}]},
         {'regex': "[what1-9]", 'nodes': [{"alphabet": "what123456789"}]},
         {'regex': "[a-c1-9]", 'nodes': [{"alphabet": "abc123456789"}]},
         {'regex': "[a-c1-9fin]", 'nodes': [{"alphabet": "abc123456789fin"}]},
         {'regex': "[a-c9-9fin]", 'nodes': [{"alphabet": "abc9fin"}]},
         {'regex': "[pa-cwho1-9fin]", 'nodes': [{"alphabet": "pabcwho123456789fin"}]},
 
-        {'regex': "[\x33]", 'nodes': [{"alphabet": "\x33"}]},
-        {'regex': "[\x33-\x35]", 'nodes': [{"alphabet": "\x33\x34\x35"}]},
+        {'regex': "[\x33]", 'nodes': [{"values": [3], 'type': vt.INT_str}]},
+        {'regex': "[\x33-\x35]", 'nodes': [{"values": [3,4,5], 'type': vt.INT_str}]},
         {'regex': "[e\x33-\x35a]", 'nodes': [{"alphabet": "e\x33\x34\x35a"}]},
 
         {'regex': u"[\u0033]", "charset": MH.Charset.UNICODE,
-         'nodes': [{"alphabet": u"\u0033"}]},
+         'nodes': [{"values": [3], 'type': vt.INT_str}]},
         {'regex': u"[\u0003-\u0005]", "charset": MH.Charset.UNICODE,
          'nodes': [{"alphabet": u"\u0003\u0004\u0005"}]},
         {'regex': u"[\u0333-\u0335]", "charset": MH.Charset.UNICODE,
