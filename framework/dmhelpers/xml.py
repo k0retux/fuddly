@@ -34,6 +34,7 @@ class TAG_TYPE(Enum):
 
 def tag_builder(tag_name, params=None, refs=None, contents=None, node_name=None, codec='latin-1',
                 tag_name_mutable=True, struct_mutable=True, determinist=True, condition=None,
+                absorb_regexp=None,
                 tag_type=TAG_TYPE.standard, nl_prefix=False, nl_suffix=False):
     """
     Helper for modeling an XML tag.
@@ -56,6 +57,7 @@ def tag_builder(tag_name, params=None, refs=None, contents=None, node_name=None,
         data to another.
       condition (tuple): optional existence condition for the tag. If not ``None`` a keyword ``exists_if``
         will be added to the root node with this parameter as a value.
+      absorb_regexp (str): regex for ``contents`` absorption
       tag_type (TAG_TYPE): specify the type of notation
       nl_prefix (bool): add a new line character before the tag
       nl_suffix (bool): add a new line character after the tag
@@ -187,9 +189,13 @@ def tag_builder(tag_name, params=None, refs=None, contents=None, node_name=None,
             assert gr.is_string_compatible(contents)
             if not isinstance(contents, list):
                 contents = [contents]
+            content_desc = {'name': ('elt-content', uuid.uuid1()),
+                            'contents': fvt.String(values=contents, codec=codec, absorb_regexp=absorb_regexp)}
+            if absorb_regexp is not None:
+                content_desc['absorb_csts'] = AbsNoCsts(regexp=True)
+
             cts = [tag_start_desc,
-                   {'name': ('elt-content', uuid.uuid1()),
-                    'contents': fvt.String(values=contents, codec=codec)},
+                   content_desc,
                    tag_end_desc]
 
         tag_desc = \
