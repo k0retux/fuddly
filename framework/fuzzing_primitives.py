@@ -827,17 +827,18 @@ class TypedNodeDisruption(NodeConsumerStub):
 
             if vt.mini is not None:
                 cond1 = False
-                if hasattr(vt, 'size'):
+                if hasattr(vt, 'size'):  # meaning not an INT_str
                     cond1 = (vt.mini != 0 or vt.maxi != ((1 << vt.size) - 1)) and \
                        (vt.mini != -(1 << (vt.size-1)) or vt.maxi != ((1 << (vt.size-1)) - 1))
                 else:
                     cond1 = True
 
                 if cond1:
-                    if vt.mini-1 not in supp_list:
-                        supp_list.append(vt.mini-1)
-                    if vt.maxi+1 not in supp_list:
-                        supp_list.append(vt.maxi+1)
+                    # we avoid using vt.mini or vt.maxi has they could be undefined (e.g., INT_str)
+                    if vt.mini_gen-1 not in supp_list:
+                        supp_list.append(vt.mini_gen-1)
+                    if vt.maxi_gen+1 not in supp_list:
+                        supp_list.append(vt.maxi_gen+1)
 
             if specific_fuzzy_vals is not None:
                 for v in specific_fuzzy_vals:

@@ -894,7 +894,7 @@ class FmkPlumbing(object):
             try:
                 logger = eval(prefix + name + '_proj' + '.logger')
             except:
-                logger = Logger(name, prefix=' || ')
+                logger = Logger(name)
             logger.fmkDB = self.fmkDB
             if logger.name is None:
                 logger.name = name
