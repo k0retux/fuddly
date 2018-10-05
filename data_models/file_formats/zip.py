@@ -33,7 +33,7 @@ class ZIP_DataModel(DataModel):
     file_extension = 'zip'
     name = 'zip'
 
-    def absorb(self, data, idx):
+    def create_node_from_raw_data(self, data, idx, filename):
         
         nm = 'ZIP_{:0>2d}'.format(idx)
         pkzip = self.pkzip.get_clone(nm, new_env=True)

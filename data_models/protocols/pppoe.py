@@ -29,7 +29,7 @@ class PPPOE_DataModel(DataModel):
 
     file_extension = 'bin'
 
-    def absorb(self, data, idx):
+    def create_node_from_raw_data(self, data, idx, filename):
         pass
 
     def build_data_model(self):

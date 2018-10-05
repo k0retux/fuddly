@@ -151,8 +151,13 @@ def tag_builder(tag_name, params=None, refs=None, contents=None, node_name=None,
          'contents': fvt.String(values=[suffix], codec=codec),
          'mutable': struct_mutable, 'set_attrs': MH.Attr.Separator}
 
+    if contents is None:
+        start_tag_name = tag_name
+    else:
+        start_tag_name = ('start-tag', uuid.uuid1())
+
     tag_start_desc = \
-    {'name': ('start-tag', uuid.uuid1()),
+    {'name': start_tag_name,
      'contents': [tag_start_open_desc, tag_start_cts_desc, tag_start_close_desc]}
 
     tag_end_desc = \
@@ -212,7 +217,7 @@ def tag_builder(tag_name, params=None, refs=None, contents=None, node_name=None,
 
     return tag_desc
 
-def xml_decl_builder():
+def xml_decl_builder(determinist=True):
     version_desc = {'name': 'version',
                     'contents': '[123456789]\.\d'}
 
@@ -223,4 +228,4 @@ def xml_decl_builder():
     return tag_builder('xml', params={'version': version_desc,
                                       'encoding': encoding_list,
                                       'standalone': ['no', 'yes']},
-                       tag_type=TAG_TYPE.proc_instr)
+                       tag_type=TAG_TYPE.proc_instr, determinist=determinist)

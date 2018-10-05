@@ -58,15 +58,18 @@ class DataModel(object):
         pass
 
 
-    def absorb(self, raw_data, idx):
+    def create_node_from_raw_data(self, data, idx, filename):
         """
         If your data model is able to absorb raw data, do it here.  This
         function is called for each files (with the right extension)
         present in imported_data/<data_model_name>.
         
         It should return an modeled data (atom)
+
+        Args:
+            filename:
         """
-        return raw_data
+        return data
 
     def cleanup(self):
         pass
@@ -144,7 +147,7 @@ class DataModel(object):
                              subdir=None, path=None, filename=None):
 
         if absorber is None:
-            absorber = self.absorb
+            absorber = self.create_node_from_raw_data
 
         if extension is None:
             extension = self.file_extension
@@ -173,7 +176,7 @@ class DataModel(object):
         for name in files:
             with open(os.path.join(path, name), 'rb') as f:
                 buff = f.read()
-                d_abs = absorber(buff, idx)
+                d_abs = absorber(buff, idx, name)
                 if d_abs is not None:
                     msgs[name] = d_abs
             idx +=1

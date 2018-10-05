@@ -49,7 +49,7 @@ class JPG_DataModel(DataModel):
     file_extension = 'jpg'
     name = 'jpg'
 
-    def absorb(self, data, idx):
+    def create_node_from_raw_data(self, data, idx, filename):
         nm = 'jpg_{:0>2d}'.format(idx)
         jpg = self.jpg.get_clone(nm, new_env=True)
         jpg.set_current_conf('ABS', recursive=True)

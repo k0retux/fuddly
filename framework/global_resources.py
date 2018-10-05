@@ -59,7 +59,7 @@ external_libs_folder = fuddly_data_folder + 'external_libs' + os.sep
 ensure_dir(external_libs_folder)
 external_tools_folder = fuddly_data_folder + 'external_tools' + os.sep
 ensure_dir(external_tools_folder)
-config_folder = os.path.join(fuddly_data_folder, 'config')
+config_folder = os.path.join(fuddly_data_folder, 'config') + os.sep
 ensure_dir(config_folder)
 
 user_projects_folder = fuddly_data_folder + 'user_projects' + os.sep
