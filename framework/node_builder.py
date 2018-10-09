@@ -525,7 +525,8 @@ class NodeBuilder(object):
         vals = desc.get('specific_fuzzy_vals', None)
         if vals is not None:
             if not node.is_typed_value(conf=conf):
-                raise DataModelDefinitionError("'specific_fuzzy_vals' is only usable with Typed-nodes")
+                raise DataModelDefinitionError("'specific_fuzzy_vals' is only usable with Typed-nodes."
+                                               " [guilty node: '{:s}']".format(node.name))
             node.conf(conf).set_specific_fuzzy_values(vals)
         param = desc.get('mutable', None)
         if param is not None:

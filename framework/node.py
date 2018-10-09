@@ -1791,6 +1791,7 @@ class NodeInternals_TypedValue(NodeInternals_Term):
 
     def set_specific_fuzzy_values(self, vals):
         self.__fuzzy_values = vals
+        self.value_type.add_specific_fuzzy_vals(vals)
 
     def get_specific_fuzzy_values(self):
         return self.__fuzzy_values

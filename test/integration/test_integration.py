@@ -3444,6 +3444,10 @@ class TestDataModel(unittest.TestCase):
 @ddt.ddt
 class TestDataModelHelpers(unittest.TestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        fmk.run_project(name='tuto', tg_ids=0, dm_name='mydf')
+
     @ddt.data("HTTP_version_regex", ("HTTP_version_regex", 17), ("HTTP_version_regex", "whatever"))
     def test_regex(self, regex_node_name):
         HTTP_version_classic = \
@@ -3502,6 +3506,59 @@ class TestDataModelHelpers(unittest.TestCase):
 
         self.assertEqual(len(shapes), 0)
 
+    def test_xml_helpers(self):
+
+        xml5_samples = [
+            '<?xml encoding="UTF-8" version="1.0" standalone="no"?>\n<command name="LOGIN">'
+            '\n<LOGIN backend="ssh" auth="cert">\n<msg_id>\n0\n</msg_id>\n<username>\nMyUser'
+            '\n</username>\n<password>\nplopi\n</password>\n</LOGIN>\n</command>',
+            '<?xml  \t encoding="UTF-16"   standalone="yes"\n version="7.9"?>\n  <command name="LOGIN">'
+            '\n<LOGIN backend="ssh" auth="cert">\t \n<msg_id>\n56\n\t\n</msg_id>\n<username>\nMyUser'
+            '\n</username>\n<password>\nohohoh!  \n</password>\n</LOGIN>\n</command>']
+
+
+        for idx, sample in enumerate(xml5_samples):
+            xml_atom = fmk.dm.get_atom('xml5')
+            status, off, size, name = xml_atom.absorb(sample, constraints=AbsFullCsts())
+
+            print('{:s} Absorb Status: {:d}, {:d}, {:s}'.format(status, off, size, name))
+            print(' \_ length of original data: {:d}'.format(len(sample)))
+            print(' \_ remaining: {!r}'.format(sample[size:size+1000]))
+
+            xml_atom.show()
+            assert status == AbsorbStatus.FullyAbsorbed
+
+        data_sizes = [211, 149, 184]
+        for i in range(100):
+            data = fmk.get_data(['XML5', ('tWALK', UI(path='xml5/command/start-tag/content/attr1/cmd_val'))])
+            if data is None:
+                break
+            assert len(data.to_bytes()) == data_sizes[i]
+            go_on = fmk.send_data_and_log([data])
+            if not go_on:
+                raise ValueError
+        else:
+            raise ValueError
+
+        assert i == 3
+
+        specific_cases_checked = False
+        for i in range(100):
+            data = fmk.get_data(['XML5', ('tTYPE', UI(path='xml5/command/LOGIN/start-tag/content/attr1/val'))])
+            if data is None:
+                break
+            node_to_check = data.content['xml5/command/LOGIN/start-tag/content/attr1/val']
+            if node_to_check.to_bytes() == b'None':
+                # on case should trigger this condition
+                specific_cases_checked = True
+            go_on = fmk.send_data_and_log([data])
+            if not go_on:
+                raise ValueError
+        else:
+            raise ValueError
+
+        assert i == 13
+        assert specific_cases_checked
 
 class TestFMK(unittest.TestCase):
     @classmethod

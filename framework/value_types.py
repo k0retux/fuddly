@@ -111,19 +111,18 @@ class VT(object):
     def pretty_print(self, max_size=None):
         return None
 
-    # @property
-    # def knowledge_source(self):
-    #     return self._knowledge_source
-    #
-    # @knowledge_source.setter
-    # def knowledge_source(self, src):
-    #     self._knowledge_source = src
+    def add_specific_fuzzy_vals(self, vals):
+        pass
+
+    def get_specific_fuzzy_vals(self):
+        pass
 
 
 class VT_Alt(VT):
 
     def __init__(self, *args, **kargs):
         self._fuzzy_mode = False
+        self._specific_fuzzy_vals = None
         self.init_specific(*args, **kargs)
 
     def init_specific(self, *args, **kargs):
@@ -159,6 +158,13 @@ class VT_Alt(VT):
     def _enable_fuzz_mode(self, fuzz_magnitude=1.0):
         raise NotImplementedError
 
+    def add_specific_fuzzy_vals(self, vals):
+        if self._specific_fuzzy_vals is None:
+            self._specific_fuzzy_vals = []
+        self._specific_fuzzy_vals += convert_to_internal_repr(vals)
+
+    def get_specific_fuzzy_vals(self):
+        return self._specific_fuzzy_vals
 
 
 class meta_8b(type):
@@ -289,7 +295,7 @@ class String(VT_Alt):
     Attributes:
         encoded_string (bool): shall be set to True by any subclass that deals
           with encoding
-        specific_fuzzing_list (list): attribute to be added by subclasses that provide
+        subclass_fuzzing_list (list): attribute to be added by subclasses that provide
           specific test cases.
     """
 
@@ -708,7 +714,6 @@ class String(VT_Alt):
                 else:
                     assert(sz >= self.min_sz)
 
-
     def set_description(self, values=None, size=None, min_sz=None,
                         max_sz=None, determinist=True, codec='latin-1',
                         extra_fuzzy_list=None,
@@ -737,9 +742,7 @@ class String(VT_Alt):
             self.regexp = absorb_regexp
 
         if extra_fuzzy_list is not None:
-            self.extra_fuzzy_list = self._str2bytes(extra_fuzzy_list)
-        else:
-            self.extra_fuzzy_list = None
+            self.add_specific_fuzzy_vals(extra_fuzzy_list)
 
         if values is not None:
             assert isinstance(values, list)
@@ -971,10 +974,11 @@ class String(VT_Alt):
             self.values_fuzzy.append(orig_val + b'\"%s\"' * int(400*fuzz_magnitude))
         self.values_fuzzy.append(orig_val + b'\r\n' * int(100*fuzz_magnitude))
 
-        if self.extra_fuzzy_list:
-            add_to_fuzz_list(self.extra_fuzzy_list)
-        if hasattr(self, 'specific_fuzzing_list'):
-            add_to_fuzz_list(self.specific_fuzzing_list)
+        specif = self.get_specific_fuzzy_vals()
+        if specif:
+            add_to_fuzz_list(specif)
+        if hasattr(self, 'subclass_fuzzing_list'):
+            add_to_fuzz_list(self.subclass_fuzzing_list)
 
         if self.codec == self.ASCII:
             val = bytearray(orig_val)
@@ -1457,7 +1461,7 @@ class INT(VT):
 
 class Filename(String):
     @property
-    def specific_fuzzing_list(self):
+    def subclass_fuzzing_list(self):
         linux_spe = [b'../../../../../../etc/password']
         windows_spe = [b'..\\..\\..\\..\\..\\..\\Windows\\system.ini']
         c_spe = [b'file%n%n%n%nname.txt']

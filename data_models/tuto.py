@@ -8,6 +8,8 @@ from framework.data_model import *
 from framework.encoders import *
 import framework.dmhelpers.xml as xml
 from framework.dmhelpers.json import *
+from framework.dmhelpers.xml import tag_builder as xtb
+from framework.dmhelpers.xml import xml_decl_builder
 
 class MyDF_DataModel(DataModel):
 
@@ -449,6 +451,7 @@ class MyDF_DataModel(DataModel):
                  {'name': 'inside_cpy',
                   'clone': 'i2'},
                  xml.tag_builder('D1', params={'p1':'a', 'p2': ['foo', 'bar'], 'p3': 'c'},
+                                 specific_fuzzy_vals={'p2': ['myfuzzyvalue!']},
                                  contents= \
                                      {'name': 'inside',
                                       'contents': [
@@ -461,6 +464,28 @@ class MyDF_DataModel(DataModel):
                   'contents': UINT16_be(values=[30,40,50])},
              ] }
 
+        xml5_desc = \
+            {'name': 'xml5',
+             'contents': [
+                 xml_decl_builder(determinist=False),
+                 xtb('command', params={'name': ['LOGIN', 'CMD_1', 'CMD_2']},
+                     nl_prefix=True, refs={'name': 'cmd_val'}, contents= \
+                         [xtb('LOGIN', condition=(RawCondition(val=['LOGIN']), 'cmd_val'),
+                              params={'auth': ['cert', 'psk'], 'backend': ['ssh', 'serial']},
+                              specific_fuzzy_vals={'auth': ['None']}, determinist=False, contents= \
+                             [xtb('msg_id', contents=Node('mid', vt=INT_str(min=0))),
+                              xtb('username', contents=['MyUser'], absorb_regexp='\w*'),
+                              xtb('password', contents=['plopi'],
+                                  absorb_regexp='[^<\s]*')]),
+                          xtb('CMD_1', condition=(RawCondition(val=['CMD_1']), 'cmd_val'), contents= \
+                              [{'name': 'msg_id'},
+                               xtb('counter', contents=Node('counter_val', vt=UINT8()))]),
+                          xtb('CMD_2', condition=(RawCondition(val=['CMD_2']), 'cmd_val'), contents= \
+                              [{'name': 'msg_id'},
+                               {'name': 'counter'},
+                               xtb('filename', contents=Node('fln', vt=Filename(values=['/usr/bin/ls'])))])
+                          ])
+             ]}
 
         json_sample_1 = \
             {"menu": {
@@ -511,7 +536,7 @@ class MyDF_DataModel(DataModel):
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
                       shape_desc, for_network_tg1, for_network_tg2, for_net_default_tg, basic_intg,
                       enc_desc, example_desc,
-                      regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc,
+                      regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc, xml5_desc,
                       json1_desc, json2_desc, file_desc)
 
 

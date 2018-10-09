@@ -731,7 +731,6 @@ class TypedNodeDisruption(NodeConsumerStub):
             self.orig_all_attrs = node.cc.get_attrs_copy()
             # self.orig_value = node.to_bytes()
 
-
             vt_node = node.generated_node if node.is_genfunc() else node
             self.current_fuzz_vt_list = self._create_fuzzy_vt_list(vt_node, self.fuzz_magnitude)
             self._extend_fuzzy_vt_list(self.current_fuzz_vt_list, vt_node)

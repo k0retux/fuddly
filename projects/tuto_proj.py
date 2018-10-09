@@ -34,8 +34,8 @@ project.default_dm = 'mydf'
 
 project.map_targets_to_scenario('ex1', {0: 7, 1: 8, None: 8})
 
-logger = Logger(export_data=False, explicit_data_recording=False, export_orig=False,
-                export_raw_data=True, enable_file_logging=False)
+logger = Logger(record_data=False, explicit_data_recording=False, export_orig=False,
+                export_raw_data=False, enable_file_logging=False)
 
 ### KNOWLEDGE ###
 

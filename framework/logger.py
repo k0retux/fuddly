@@ -45,14 +45,14 @@ class Logger(object):
 
     fmkDB = None
 
-    def __init__(self, name=None, prefix='', export_data=False, explicit_data_recording=False,
+    def __init__(self, name=None, prefix='', record_data=False, explicit_data_recording=False,
                  export_orig=True, export_raw_data=True, console_display_limit=800,
                  enable_file_logging=False):
         '''
         Args:
           name (str): Name to be used in the log filenames. If not specified, the name of the project
             in which the logger is embedded will be used.
-          export_data (bool): If True, each emitted data will be stored in a specific
+          record_data (bool): If True, each emitted data will be stored in a specific
             file within `exported_data/`.
           explicit_data_recording (bool): Used for logging outcomes further to an Operator instruction. If True,
             the operator would have to state explicitly if it wants the just emitted data to be recorded.
@@ -69,7 +69,7 @@ class Logger(object):
         '''
         self.name = name
         self.p = prefix
-        self.__export_data = export_data
+        self.__record_data = record_data
         self.__explicit_data_recording = explicit_data_recording
         self.__export_orig = export_orig
         self._console_display_limit = console_display_limit
@@ -509,7 +509,7 @@ class Logger(object):
         if data is not None:
             self._current_orig_data_id = data.get_data_id()
 
-        if self.__export_orig and not self.__export_data:
+        if self.__export_orig and not self.__record_data:
             if data is None:
                 msgs = ("### No Original Data",)
             else:
@@ -554,7 +554,7 @@ class Logger(object):
         self._current_data = data
         self.last_data_recordable = self._current_data.is_recordable()
 
-        if not self.__export_data:
+        if not self.__record_data:
             self.log_fn("### Data emitted:", rgb=Color.LOGSECTION)
             self.log_fn(data, nl_after=True, verbose=verbose)
         else:

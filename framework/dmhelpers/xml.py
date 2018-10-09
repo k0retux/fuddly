@@ -34,7 +34,7 @@ class TAG_TYPE(Enum):
 
 def tag_builder(tag_name, params=None, refs=None, contents=None, node_name=None, codec='latin-1',
                 tag_name_mutable=True, struct_mutable=True, determinist=True, condition=None,
-                absorb_regexp=None,
+                absorb_regexp=None, specific_fuzzy_vals=None,
                 tag_type=TAG_TYPE.standard, nl_prefix=False, nl_suffix=False):
     """
     Helper for modeling an XML tag.
@@ -42,7 +42,7 @@ def tag_builder(tag_name, params=None, refs=None, contents=None, node_name=None,
     Args:
       tag_name (str): name of the XML tag.
       params (dict): optional attributes to be added in the XML tag
-      refs (dict): if provided it should give for each parameter key (provided in ``params`` dict)
+      refs (dict): if provided it should contain for at least one parameter key (provided in ``params`` dict)
         the name to be used for the node representing the corresponding value. Useful when
         the parameter ``condition`` is in use and needs to relate to the value of specific parameters.
       contents: can be either None (empty tag), a :class:`framework.data_model.Node`,
@@ -59,6 +59,9 @@ def tag_builder(tag_name, params=None, refs=None, contents=None, node_name=None,
         will be added to the root node with this parameter as a value.
       absorb_regexp (str): regex for ``contents`` absorption
       tag_type (TAG_TYPE): specify the type of notation
+      specific_fuzzy_vals (dict): if provided it should contain for at least one parameter key (provided
+        in ``params`` dict) a list of specific values that will be used by some generic disruptors
+        like tTYPE.
       nl_prefix (bool): add a new line character before the tag
       nl_suffix (bool): add a new line character after the tag
 
@@ -76,10 +79,15 @@ def tag_builder(tag_name, params=None, refs=None, contents=None, node_name=None,
                 val_ref = refs.get(k, ('val', uuid.uuid1()))
                 v = v if isinstance(v, list) else [v]
                 nd_desc = {'name': val_ref, 'contents': fvt.String(values=v, codec=codec)}
+                if specific_fuzzy_vals:
+                    nd_desc['specific_fuzzy_vals'] = specific_fuzzy_vals.get(k)
             elif isinstance(v, dict):
                 nd_desc = v
+                if specific_fuzzy_vals:
+                    nd_desc['specific_fuzzy_vals'] = specific_fuzzy_vals.get(k)
             elif isinstance(v, Node):
                 nd_desc = (v, 1, 1)
+                v.set_specific_fuzzy_vals(specific_fuzzy_vals.get(k))
             else:
                 raise ValueError
 
