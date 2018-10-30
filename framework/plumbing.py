@@ -1937,6 +1937,9 @@ class FmkPlumbing(object):
             if pending_ops:
                 for op in pending_ops:
 
+                    # CallBackOps.Set_FbkTimeout is obsolete. Not used by scenario, only used in
+                    # tuto_strategy.py as an example. Note that fbk timeout is dealt directly at Data()
+                    # level by self._do_sending_and_logging_init()
                     fbk_timeout = op[CallBackOps.Set_FbkTimeout]
                     if fbk_timeout is not None:
                         self.set_feedback_timeout(fbk_timeout)
@@ -2498,8 +2501,9 @@ class FmkPlumbing(object):
                                 status_code=-1,
                                 timestamp=now
                             )
-                            ret = -1
-                            tg.cleanup()
+                            go_on = self._recover_target(tg)
+                            ret = 0 if go_on else -1
+                            # tg.cleanup()
                             break
             except KeyboardInterrupt:
                 self.lg.log_comment("*** Waiting for target to become ready has been cancelled by the user!\n")
@@ -2584,15 +2588,19 @@ class FmkPlumbing(object):
                 data.set_data_model(dm)
             self.__register_in_data_bank(None, data)
 
-    @EnforceOrder(accepted_states=['S2'])
+    def _log_fmk_info(self, msg):
+        if self.lg:
+            self.lg.log_fmk_info(msg, do_record=False)
+        else:
+            print(colorize('*** [ {:s} ] ***'.format(msg), rgb=Color.FMKINFO))
+
     def enable_fmkdb(self):
         self.fmkDB.enable()
-        self.lg.log_fmk_info('Enable FmkDB', do_record=False)
+        self._log_fmk_info('Enable FmkDB')
 
-    @EnforceOrder(accepted_states=['S2'])
     def disable_fmkdb(self):
         self.fmkDB.disable()
-        self.lg.log_fmk_info('Disable FmkDB', do_record=False)
+        self._log_fmk_info('Disable FmkDB')
 
     @EnforceOrder(accepted_states=['S2'])
     def get_last_data(self):
@@ -3717,7 +3725,7 @@ class FmkShell(cmd.Cmd):
 
         self.__allowed_cmd = re.compile(
             '^quit$|^show_projects$|^show_data_models$|^load_project|^load_data_model|^load_targets|^show_targets$|^launch$' \
-            '|^run_project|^config|^display_color_theme$|^help'
+            '|^run_project|^config|^display_color_theme$|^fmkdb_disable$|^fmkdb_enable$|^help'
             )
 
         self.dmaker_name_re = re.compile('^([#\-\w]+)(\(?[^\(\)]*\)?)$', re.S)
@@ -5332,7 +5340,6 @@ class FmkShell(cmd.Cmd):
 
         args, tg_ids = self._retrieve_tg_ids(args)
         line = ''.join(args)
-        print('\n***', args)
 
         if line:
             try:

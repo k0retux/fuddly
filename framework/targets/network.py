@@ -302,6 +302,7 @@ class NetworkTarget(Target):
         Used for collecting feedback from the target while it is already started.
         '''
         self.hold_connection[(host, port)] = hold_connection
+        self._server_mode_additional_info[(host, port)] = (None, False, False)
         self._raw_listen_to(host, port, ref_id, socket_type, chk_size, wait_time=wait_time)
         self._dynamic_interfaces[(host, port)] = (-1, ref_id)
 
@@ -721,7 +722,7 @@ class NetworkTarget(Target):
         try:
             serversocket.bind((host, port))
         except socket.error as serr:
-            print('\n*** ERROR(while binding socket|host={!s},port={:d}): {:s}'.format(host, port, str(serr)))
+            print('\n*** ERROR(while binding socket -- host={!s} port={:d}): {:s}'.format(host, port, str(serr)))
             return False
 
         serversocket.settimeout(self.sending_delay)
@@ -759,6 +760,8 @@ class NetworkTarget(Target):
                     continue
                 elif keep_first_client:
                     _first_client[(host, port)] = (clientsocket, address)
+                else:
+                    pass
                 msg = "Connection from {!s}({!s}). Use this information to send data to " \
                       "the interface '{!s}:{:d}'.".format(address, clientsocket, host, port)
                 self._feedback_collect(msg, self.General_Info_ID, error=0)

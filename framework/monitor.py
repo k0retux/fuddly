@@ -543,7 +543,7 @@ class Probe(object):
         self._delay = delay
 
     def __str__(self):
-        return "Probe '{:s}'".format(self.__class__.__name__)
+        return "Probe - {:s}".format(self.__class__.__name__)
 
     @property
     def status(self):
