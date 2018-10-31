@@ -69,7 +69,7 @@ Note that ``fuddly`` looks for *Data Model* files (within
 ``data_models/``) and *Project* files (within ``projects/``) during
 its initialization. A *Project* file is used to describe the targets
 that can be tested, the logger behaviour, and optionally specific
-monitoring means as well as some virtual operators.
+monitoring means as well as some scenarios and/or virtual operators.
 
 .. seealso:: To create a new project file, and to describe the
              associated components refer to :ref:`tuto:project`.
@@ -98,7 +98,7 @@ You can look at the defined targets by issuing the following command:
 
    -=[ Available Targets ]=-
 
-   [0] EmptyTarget
+   [0] EmptyTarget [ID: 307144]
    [1] LocalTarget [Program: display]
    [2] LocalTarget [Program: okular]
    [3] LocalTarget [Program: unzip, Args: -d ~/fuddly_data/workspace/]
@@ -175,7 +175,7 @@ issuing the following command:
 
    *** Data Model 'zip' loaded ***
    *** Logger is started ***
-   *** Target initialization ***
+   *** Target initialization: (0) EmptyTarget [ID: 307144] ***
    *** Monitor is started ***
 
    *** [ Fuzz delay = 0 ] ***
@@ -197,14 +197,24 @@ issuing the following command:
    - The timeout value for checking target's health. (Can be changed
      through the command ``set_health_timeout``)
 
+Finally, you may prefer to directly launch your project thanks to
+the command ``run_project``. Indeed, by using it, you will automatically trigger the commands we
+just talked about. Regarding the loaded data models it will initially load what is defined as default
+in the project file. In the case of the ``standard`` project, if you issue the following command::
 
-Finally, note that if you know the target from the project file you
-want to interact with, you can directly launch your project thanks to
-the command ``run_project``. Basically by issuing ``run_project
-standard 1``, you will automatically trigger the commands we just
-talked about. Note this command will initially load the default data
-model defined in the ``standard`` project file, which is the imaginary
-data model used by our tutorial (``mydf``). 
+>> run_project standard
+
+the imaginary data model used by our tutorial (``mydf``) will be loaded and the default target
+will be chosen, namely the ``EmptyTarget`` (usefull for testing purpose) with the ID 0.
+
+In order to run the project with the ``unzip`` target (ID 4), you will have to issue the following
+command::
+
+>> run_project standard 4
+
+.. note::
+   If you want to load other targets while your project is currently running, you should use the
+   ``reload_all`` command (refer to :ref:`tuto-reload_cmd`)
 
 .. note::
    If you want to load another data model at any time while your
@@ -751,6 +761,8 @@ the cloned data makers::
 
   >> send ZIP_00#new tTYPE#new
 
+
+.. _tuto-reload_cmd:
 
 Reloading Data Models / Targets / ...
 +++++++++++++++++++++++++++++++++++++
@@ -2073,12 +2085,18 @@ show the beginning of ``generic/standard_proj.py``:
    targets = [local_tg, local2_tg, local3_tg, printer1_tg, net_tg]
 
 
-A project file should contain at a minimum a
-:class:`framework.project.Project` object (referenced by a variable
-``project``), a :class:`framework.logger.Logger` object
-(:ref:`logger-def`, referenced by a variable ``logger``), and
-optionally target objects (referenced by a variable ``targets``,
-:ref:`targets-def`), and operators & probes (:ref:`tuto:operator`).
+A project file should contain at a minimum:
+
+- a :class:`framework.project.Project` object (referenced by a variable ``project``)
+- a :class:`framework.logger.Logger` object (:ref:`logger-def`, referenced by a variable ``logger``)
+
+and optionally:
+
+- targets (referenced by a variable ``targets``, :ref:`targets-def`)
+- scenarios (:ref:`scenario-infra`) that can be registered into a project through the method
+  :meth:`framework.project.Project.register_scenarios`
+- probes (:ref:`tuto:probes`).
+- operators (:ref:`tuto:operator`).
 
 A default data model or a list of data models can be added to the
 project through its attribute ``default_dm``. ``fuddly`` will use this

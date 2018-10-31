@@ -68,11 +68,21 @@ Let's begin with a simple example that interconnect 3 steps in a loop without an
 
     tactics.register_scenarios(sc1)
 
-You should first note that scenarios have to be described in a ``*_strategy.py`` file that matches
-the data model you base your scenarios on. In our case we use the data model ``mydf`` defined in
-``tuto.py`` (refer to :ref:`dm:mydf` for further explanation on file organization).
-The special object ``tactics`` (line 4) is usually used to register the data makers (`disruptors` or
-`generators`) specific to a data model (refer to :ref:`tuto:disruptors` for details). It is also used
+Note that scenarios can be described:
+
+- either in a ``*_strategy.py`` file that matches the data model you base your scenarios on;
+- or in a project file, if your scenarios use different data models involved in your project or
+  the scenarios are agnostic to any data model but have a meaning only at project level.
+
+In what follows we illustrate how to describe scenarios in the context of the data model ``mydf`` defined in
+``tuto.py`` (refer to :ref:`dm:mydf` for further explanation on file organization). Describing scenarios
+in the context of a project will be the same except for the scenarios registration step, where the method
+:meth:`framework.project.Project.register_scenarios` will have to be used to make them
+available within the framework.
+
+In our example, the registration goes through the special object ``tactics`` (line 4) of ``tuto_strategy.py``
+which is usually used to register the data makers (`disruptors` or
+`generators`) specific to a data model (refer to :ref:`tuto:disruptors` for details), but also used
 to register scenarios as shown in line 20.
 
 From line 9 to 11 we define 3 :class:`framework.scenario.Step`:
