@@ -3858,6 +3858,16 @@ class FmkShell(cmd.Cmd):
 
         return False
 
+    def do_logger_switch_format(self, line):
+        '''
+        Change the way the logger display the data which are sent to the targets and retrieved from them.
+        (From raw format to interpreted format and reversely.)
+        This command modify the current Project's Logger.
+        '''
+        self.fz.lg.export_raw_data = not self.fz.lg.export_raw_data
+
+        return False
+
     def complete_config(self, text, line, bgidx, endix, target=None):
         init = False
         if target is None:

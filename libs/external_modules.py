@@ -21,10 +21,19 @@
 #
 ################################################################################
 
+import sys
+
 try:
     import xtermcolor
     from xtermcolor import colorize
     xtermcolor.isatty = lambda x: True
+
+    if sys.version_info[0] <= 2:
+        def colorize(string, rgb=None, ansi=None, bg=None, ansi_bg=None, fd=1):
+            if isinstance(string, unicode):
+                string = str(string)
+            return xtermcolor.colorize(string, rgb=rgb, ansi=ansi, bg=bg, ansi_bg=ansi_bg, fd=fd)
+
 except ImportError:
     print("WARNING [FMK]: python-xtermcolor module is not installed, colors won't be available!")
     def colorize(string, rgb=None, ansi=None, bg=None, ansi_bg=None, fd=1):

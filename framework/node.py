@@ -1348,7 +1348,8 @@ class NodeInternals_GenFunc(NodeInternals):
     def reset_generator(self):
         self._generated_node = None
 
-    def _get_generated_node(self):
+    @property
+    def generated_node(self):
         if self._generated_node is None:
             
             if self.generator_arg is not None and self.node_arg is not None:
@@ -1388,7 +1389,7 @@ class NodeInternals_GenFunc(NodeInternals):
 
         return self._generated_node
 
-    generated_node = property(fget=_get_generated_node)
+    # generated_node = property(fget=_get_generated_node)
 
     def import_generator_func(self, generator_func,
                               generator_node_arg=None, generator_arg=None,
@@ -5752,6 +5753,10 @@ class Node(object):
         
         ret = self._get_value(conf=conf, recursive=recursive,
                               return_node_internals=return_node_internals)
+
+        if self.env is None:
+            print('Warning: freeze() is called on a node that does not have an Env()\n'
+                  '  --> node name: {!s}'.format(self.name))
 
         if self.env is not None and self.env.delayed_jobs_enabled and \
                 (not self._delayed_jobs_called or self.env.delayed_jobs_pending):

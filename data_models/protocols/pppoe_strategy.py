@@ -125,6 +125,7 @@ class t_fix_pppoe_msg_fields(Disruptor):
 
     def disrupt_data(self, dm, target, prev_data):
         n = prev_data.content
+        n.freeze()
         error_msg = '\n*** The node has no path to: {:s}. Thus, ignore it.\n'\
                     '    (probable reason: the node has been fuzzed in a way that makes the' \
                     ' path unavailable)'

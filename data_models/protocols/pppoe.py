@@ -266,7 +266,7 @@ class PPPOE_DataModel(DataModel):
 
         pado = pppoe_msg.get_clone('pado')
         pado['.*/code'].set_values(value_type=UINT8(values=[0x7]))
-        pado['.*/code'].clear_attr(MH.Attr.Mutable)
+        # pado['.*/code'].clear_attr(MH.Attr.Mutable)
 
         padr = pppoe_msg.get_clone('padr')
         padr['.*/code'].set_values(value_type=UINT8(values=[0x19]))

@@ -77,7 +77,7 @@ class Logger(object):
         now = datetime.datetime.now()
         self.__prev_export_date = now.strftime("%Y%m%d_%H%M%S")
         self.__export_cpt = 0
-        self.__export_raw_data = export_raw_data
+        self.export_raw_data = export_raw_data
 
         self._enable_file_logging = enable_file_logging
         self._fd = None
@@ -88,13 +88,13 @@ class Logger(object):
         def init_logfn(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
                        do_record=True):
             if issubclass(x.__class__, Data):
-                data = self._handle_binary_content(x.to_bytes(), raw=self.__export_raw_data)
+                data = self._handle_binary_content(x.to_bytes(), raw=self.export_raw_data)
                 rgb = None
                 style = None
             elif isinstance(x, str):
                 data = x
             else:
-                data = self._handle_binary_content(x, raw=self.__export_raw_data)
+                data = self._handle_binary_content(x, raw=self.export_raw_data)
             self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)
             if verbose and issubclass(x.__class__, Data):
                 x.show()
@@ -142,13 +142,13 @@ class Logger(object):
             def intern_func(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
                             do_record=True):
                 if issubclass(x.__class__, Data):
-                    data = self._handle_binary_content(x.to_bytes(), raw=self.__export_raw_data)
+                    data = self._handle_binary_content(x.to_bytes(), raw=self.export_raw_data)
                     rgb = None
                     style = None
                 elif isinstance(x, str):
                     data = x
                 else:
-                    data = self._handle_binary_content(x, raw=self.__export_raw_data)
+                    data = self._handle_binary_content(x, raw=self.export_raw_data)
                 self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)
                 if not do_record:
                     return data
@@ -415,14 +415,14 @@ class Logger(object):
             for f in feedback:
                 new_f = f.strip()
                 if isinstance(new_f, bytes):
-                    new_f = self._handle_binary_content(new_f, raw=self.__export_raw_data)
+                    new_f = self._handle_binary_content(new_f, raw=self.export_raw_data)
                 new_fbk.append(new_f)
             if not list(filter(lambda x: x != b'', new_fbk)):
                 new_fbk = None
         else:
             new_fbk = feedback.strip()
             if isinstance(new_fbk, bytes):
-                new_fbk = self._handle_binary_content(new_fbk, raw=self.__export_raw_data)
+                new_fbk = self._handle_binary_content(new_fbk, raw=self.export_raw_data)
 
         return new_fbk
 
