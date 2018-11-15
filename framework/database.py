@@ -766,9 +766,9 @@ class Database(object):
         colorize = self._get_color_function(colorized)
 
         if sys.version_info[0] > 2:
-            content = content if raw else '{!a}'.format(content)
+            content = content if not raw else '{!a}'.format(content)
         else:
-            content = content if raw else repr(content)
+            content = content if not raw else repr(content)
 
         if sz_limit is not None and len(content) > sz_limit:
             content = content[:sz_limit]

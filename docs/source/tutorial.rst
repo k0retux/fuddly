@@ -2056,7 +2056,7 @@ show the beginning of ``generic/standard_proj.py``:
    # If you only want one default DM, provide its name directly as follows:
    # project.default_dm = 'mydf'
 
-   logger = Logger(export_data=False, explicit_data_recording=False,
+   logger = Logger(record_data=False, explicit_data_recording=False,
 		   export_orig=False, export_raw_data=False)
 
    printer1_tg = PrinterTarget(tmpfile_ext='.png')
@@ -2200,7 +2200,7 @@ The outputs of the logger are of four types:
 
 Some parameters allows to customize the behavior of the logger, such as:
 
-- ``export_data`` which control the location of where data
+- ``record_data`` which control the location of where data
   will be stored. If set to ``False``, instead of being stored in
   separate files as explained previously, they will be written
   directly within the log files (if ``enable_file_logging`` is set to ``True``).
