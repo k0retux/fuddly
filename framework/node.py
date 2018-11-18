@@ -153,10 +153,10 @@ class SyncObj(object):
             elif isinstance(node_containers, (tuple, list)):
                 new_node_containers = []
                 for ctr in node_containers:
-                    if isinstance(node_containers, Node):
+                    if isinstance(ctr, Node):
                         node, param = ctr, None
                     else:
-                        assert isinstance(node_containers, (tuple, list)) and len(node_containers) == 2
+                        assert isinstance(ctr, (tuple, list)) and len(ctr) == 2
                         node, param = ctr
                     new_node = node_dico.get(node, None)
                     if new_node is not None:

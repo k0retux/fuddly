@@ -108,7 +108,7 @@ class NodeBuilder(object):
         n = self._create_graph_from_desc(desc, None)
 
         if self._add_env_to_the_node:
-            self._register_todo(n, self._set_env, prio=self.LOW_PRIO)
+            self._register_todo(n, self._set_env, prio=self.VERYLOW_PRIO)
 
         todo = self._create_todo_list()
         while todo:
@@ -204,7 +204,7 @@ class NodeBuilder(object):
         if clone_ref is not None:
             ref = self._handle_name(clone_ref)
             self._register_todo(nd, self._clone_from_dict, args=(ref, desc),
-                                prio=self.MEDIUM_PRIO)
+                                prio=self.LOW_PRIO)
             self.node_dico[(name, ident)] = nd
         else:
             ref = (name, ident)
@@ -633,7 +633,7 @@ class NodeBuilder(object):
         if encoder is not None:
             node.set_encoder(encoder)
 
-    def _register_todo(self, node, func, args=None, unpack_args=True, prio=VERYLOW_PRIO):
+    def _register_todo(self, node, func, args=None, unpack_args=True, prio=MEDIUM_PRIO):
         if self.sorted_todo.get(prio, None) is None:
             self.sorted_todo[prio] = []
         self.sorted_todo[prio].insert(0, (node, func, args, unpack_args))
