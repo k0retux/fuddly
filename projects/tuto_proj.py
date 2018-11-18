@@ -30,7 +30,7 @@ from framework.knowledge.information import *
 from framework.knowledge.feedback_handler import TestFbkHandler
 
 project = Project()
-project.default_dm = 'mydf'
+project.default_dm = ['mydf', 'myproto']
 
 project.map_targets_to_scenario('ex1', {0: 7, 1: 8, None: 8})
 

@@ -68,7 +68,7 @@ class JPG_DataModel(DataModel):
             print("--> Create {:s} from provided JPG sample [x:{:d}, y:{:d}].".format(nm, x, y))
             return jpg
         else:
-            return Node(nm, values=['JPG ABSORBSION FAILED'])
+            return None
 
     def build_data_model(self):
 

@@ -33,7 +33,7 @@ sys.path.append('.')
 
 from framework.value_types import *
 
-import data_models.example as example
+import data_models.tutorial.example as example
 
 from framework.fuzzing_primitives import *
 from framework.plumbing import *
@@ -3218,6 +3218,22 @@ class TestDataModel(unittest.TestCase):
                 data.get_value()
                 # data.show(raw_limit=200)
                 print('Success!')
+
+    @unittest.skipIf(not run_long_tests, "Long test case")
+    def test_data_model_specifics(self):
+
+        for dm in fmk.dm_list:
+            try:
+                dm.load_data_model(fmk._name2dm)
+            except:
+                print("\n*** WARNING: Data Model '{:s}' not tested because" \
+                      " the loading process has failed ***\n".format(dm.name))
+                raise
+
+            print("Validating '{:s}' Data Model".format(dm.name))
+
+            ok = dm.validation_tests()
+            self.assertTrue(ok)
 
     def test_generic_generators(self):
         dm = fmk.get_data_model_by_name('mydf')

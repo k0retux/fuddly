@@ -67,9 +67,22 @@ class DataModel(object):
         It should return an modeled data (atom)
 
         Args:
-            filename:
+            filename: name of the imported file
+            data: file content
+            idx:
         """
         return data
+
+    def validation_tests(self):
+        """
+        Optional test cases to validate the correct behavior of the data model
+
+        Returns:
+            bool: `True` if the validation succeeds. `False` otherwise.
+
+        """
+
+        return True
 
     def cleanup(self):
         pass
