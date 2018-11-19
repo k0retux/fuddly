@@ -62,14 +62,16 @@ class DataModel(object):
         """
         If your data model is able to absorb raw data, do it here.  This
         function is called for each files (with the right extension)
-        present in imported_data/<data_model_name>.
-        
-        It should return an modeled data (atom)
+        present in ``imported_data/<data_model_name>``.
 
         Args:
-            filename: name of the imported file
-            data: file content
-            idx:
+            filename (str): name of the imported file
+            data (bytes): file content
+            idx (int): index of the imported file
+
+        Returns:
+            :class:`framework.node.Node`: a modeled data (atom) or ``None``
+
         """
         return data
 
@@ -78,7 +80,7 @@ class DataModel(object):
         Optional test cases to validate the correct behavior of the data model
 
         Returns:
-            bool: `True` if the validation succeeds. `False` otherwise.
+            bool: ``True`` if the validation succeeds. ``False`` otherwise
 
         """
 

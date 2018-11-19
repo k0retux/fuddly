@@ -157,7 +157,8 @@ class Step(object):
                  set_periodic=None, clear_periodic=None, step_desc=None,
                  do_before_data_processing=None, do_before_sending=None,
                  valid=True, vtg_ids=None):
-        '''
+        """
+        Step objects are the building blocks of Scenarios.
 
         Args:
             data_desc:
@@ -174,7 +175,7 @@ class Step(object):
               If ``None``, the outcomes will be sent to the first target that has been enabled.
               If ``data_desc`` is a list, this parameter should be a list where each item is the ``vtg_ids``
               of the corresponding item in the ``data_desc`` list.
-        '''
+        """
 
         self.final = final
         self.valid = valid

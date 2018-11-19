@@ -887,6 +887,8 @@ class SeparatorDisruption(NodeConsumerStub):
         # operation, especially usefull in our case, because we have
         # to preserve dm.NodeInternals.Separator
 
+        node.unfreeze() # ignore previous state
+
         node.make_finite()
         node.make_determinist()
 

@@ -41,7 +41,7 @@ A First Example
 Let's begin with a simple example that interconnect 3 steps in a loop without any callback.
 
 .. note:: All the examples (or similar ones) of this chapter are provided in the file
-  ``<fuddly_root>/data_models/tuto_strategy.py``.
+  ``<fuddly_root>/data_models/tutorial/tuto_strategy.py``.
 
 .. code-block:: python
    :linenos:
@@ -484,7 +484,7 @@ Scenario Involving Multiple Targets
 If you want to define a scenario that involves multiple targets, you will have to refer to the
 different targets through virtual target IDs.
 To illustrate such case, let's look at the ``ex1`` scenario defined in the ``tuto``
-data model (refer to the file ``data_models/tuto_strategy.py``). ``step1`` and ``step2`` are defined with
+data model (refer to the file ``data_models/tutorial/tuto_strategy.py``). ``step1`` and ``step2`` are defined with
 respectively the virtual target ID ``0`` and the virtual target ID ``1``::
 
   step1 = Step(... vtg_ids=0)
@@ -545,7 +545,7 @@ an imaginary protocol.
     :scale: 100%
 
 .. note::
-    It is described by the following code snippet extracted from ``data_models/tuto_strategy.py``:
+    It is described by the following code snippet extracted from ``data_models/tutorial/tuto_strategy.py``:
 
     .. code-block:: python
        :linenos:

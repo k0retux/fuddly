@@ -171,9 +171,14 @@ class sd_iter_over_data(StatefulDisruptor):
                          " (only implemented for 'sync_size_with' and 'sync_enc_size_with').", True, bool),
                  'fuzz_mag': ('Order of magnitude for maximum size of some fuzzing test cases.',
                               1.0, float),
-                 'determinism': ("If set to 'True', each typed node will be fuzzed in "
+                 'determinism': ("If set to 'True', the whole model will be fuzzed in "
                                  "a deterministic way. Otherwise it will be guided by the "
-                                 "data model determinism.", True, bool)
+                                 "data model determinism.", True, bool),
+                 'leaf_determinism': ("If set to 'True', each typed node will be fuzzed in "
+                                      "a deterministic way. Otherwise it will be guided by the "
+                                      "data model determinism. Note: this option is complementary to "
+                                      "'determinism' is it acts on the typed node substitutions "
+                                      "that occur through this disruptor", True, bool),
                  })
 class sd_fuzz_typed_nodes(StatefulDisruptor):
     '''
@@ -196,10 +201,11 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
                                             fix_constraints=self.fix,
                                             respect_order=self.order,
                                             ignore_separator=self.ign_sep,
-                                            enforce_determinism=self.determinism)
+                                            enforce_determinism=self.leaf_determinism)
         self.consumer.need_reset_when_structure_change = self.deep
         self.consumer.set_node_interest(path_regexp=self.path)
-        self.modelwalker = ModelWalker(prev_content, self.consumer, max_steps=self.max_steps, initial_step=self.init)
+        self.modelwalker = ModelWalker(prev_content, self.consumer, max_steps=self.max_steps,
+                                       initial_step=self.init, make_determinist=self.determinism)
         self.walker = iter(self.modelwalker)
 
         self.max_runs = None

@@ -1953,6 +1953,7 @@ another inappropriate separator.
 	       new_values.remove(orig_val)
 
 	   node.import_value_type(value_type=vtype.String(values=new_values))
+       node.unfreeze()
 
 	   node.make_finite()
 	   node.make_determinist()

@@ -71,6 +71,17 @@ Parameters:
         |_ fuzz_mag
         |      | desc: order of magnitude for maximum size of some fuzzing test cases.
         |      | default: 1.0 [type: float]
+        |_ determinism
+        |      | desc: If set to 'True', the whole model will be fuzzed in a deterministic
+        |      |       way. Otherwise it will be guided by the data model determinism.
+        |      | default: True [type: bool]
+        |_ leaf_determinism
+        |      | desc: If set to 'True', each typed node will be fuzzed in a deterministic
+        |      |       way. Otherwise it will be guided by the data model determinism.
+        |      |       Note: this option is complementary to 'determinism' is it acts
+        |      |       on the typed node substitutions that occur through this disruptor
+        |      | default: True [type: bool]
+
 
 tSTRUCT - Alter Data Structure
 ------------------------------
