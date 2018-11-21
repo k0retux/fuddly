@@ -111,11 +111,17 @@ class VT(object):
     def pretty_print(self, max_size=None):
         return None
 
+    def copy_attrs_from(self, vt):
+        pass
+
     def add_specific_fuzzy_vals(self, vals):
         pass
 
     def get_specific_fuzzy_vals(self):
         pass
+
+    def get_fuzzed_vt(self):
+        return None
 
 
 class VT_Alt(VT):
@@ -1175,6 +1181,8 @@ class INT(VT):
         else:
             self.values_copy = copy.copy(self.values_copy)
 
+    def copy_attrs_from(self, vt):
+        self.endian = vt.endian
 
     def absorb_auto_helper(self, blob, constraints):
         off = 0
@@ -1569,30 +1577,92 @@ class INT_str(with_metaclass(meta_int_str, INT)):
 
         self._base = base
         self._reverse = reverse
+        self._min_size = min_size
+        self._letter_case = letter_case
 
+        self._format_str, self._regex = self._prepare_format_str(self._min_size, self._base,
+                                                                 self._letter_case)
+
+    def copy_attrs_from(self, vt):
+        INT.copy_attrs_from(self, vt)
+        self._base = vt._base
+        self._letter_case = vt._letter_case
+        self._min_size = vt._min_size
+        self._reverse = vt._reverse
+        self._format_str = vt._format_str
+        self._regex = vt._regex
+
+    def _prepare_format_str(self, min_size, base, letter_case):
         if min_size is not None:
-            self._format_str = '{:0' + str(min_size)
+            format_str = '{:0' + str(min_size)
         else:
-            self._format_str = '{:'
+            format_str = '{:'
 
-        if self._base == 10:
-            self._format_str += '}'
-            self._regex = self.regex_decimal
-        elif self._base == 16:
+        if base == 10:
+            format_str += '}'
+            regex = self.regex_decimal
+        elif base == 16:
             if letter_case == 'upper':
-                self._format_str += 'X}'
-                self._regex = self.regex_upper_hex
+                format_str += 'X}'
+                regex = self.regex_upper_hex
             else:
-                self._format_str += 'x}'
-                self._regex = self.regex_lower_hex
-        elif self._base == 8:
-            self._format_str += 'o}'
-            self._regex = self.regex_octal
-        elif self._base == 2:
-            self._format_str += 'b}'
-            self._regex = self.regex_bin
+                format_str += 'x}'
+                regex = self.regex_lower_hex
+        elif base == 8:
+            format_str += 'o}'
+            regex = self.regex_octal
+        elif base == 2:
+            format_str += 'b}'
+            regex = self.regex_bin
         else:
             raise ValueError(self._base)
+
+        return (format_str, regex)
+
+
+    def get_fuzzed_vt(self):
+        fuzzed_vals = []
+
+        def handle_size(self, v):
+            sz = math.ceil(math.log(v, self._base))
+            if sz <= new_min_size:
+                format_str, _ = self._prepare_format_str(new_min_size,
+                                                         self._base, self._letter_case)
+                fuzzed_vals.append(format_str.format(v))
+                return True
+            else:
+                return False
+
+        if self._min_size is not None and self._min_size > 1:
+            new_min_size = self._min_size - 1
+
+            if self.values:
+                for v in self.values:
+                    if handle_size(self, v):
+                        break
+            elif self.mini is None:
+                handle_size(self, 5)
+            elif self.mini >= 0:
+                ok = handle_size(self, self.mini)
+                if not ok:
+                    for v in range(0, self.mini):
+                        if handle_size(self, v):
+                            break
+
+        qty = self._min_size if self._min_size is not None else 1
+        if self._base <= 10:
+            fuzzed_vals.append('A'*qty)
+        else:
+            if self._letter_case == 'upper':
+                fuzzed_vals.append('a'*qty)
+            else:
+                fuzzed_vals.append('A'*qty)
+        if self._base <= 8:
+            fuzzed_vals.append('8'*qty)
+        if self._base <= 2:
+            fuzzed_vals.append('2'*qty)
+
+        return String(values=fuzzed_vals) if fuzzed_vals else None
 
     def is_compatible(self, integer):
         return True
@@ -1617,10 +1687,14 @@ class INT_str(with_metaclass(meta_int_str, INT)):
 
 
 #class Fuzzy_INT_str(Fuzzy_INT, metaclass=meta_int_str):
-class Fuzzy_INT_str(with_metaclass(meta_int_str, Fuzzy_INT)):
+class Fuzzy_INT_str(with_metaclass(meta_int_str, INT_str)):
     values = [0, -1, -2**32, 2 ** 32 - 1, 2 ** 32,
               b'%n'*8, b'%n'*100, b'\"%n\"'*100,
               b'%s'*8, b'%s'*100, b'\"%s\"'*100]
+
+    def __init__(self):
+        assert(self.values is not None)
+        INT_str.__init__(self, values=self.values, determinist=True)
 
     def is_compatible(self, integer):
         return True
@@ -1633,11 +1707,10 @@ class Fuzzy_INT_str(with_metaclass(meta_int_str, Fuzzy_INT)):
 
     def _convert_value(self, val):
         if isinstance(val, int):
-            return str(val).encode('utf8')
+            return INT_str._convert_value(self, val)
         else:
             assert isinstance(val, bytes)
             return val
-
 
 
 class BitField(VT_Alt):

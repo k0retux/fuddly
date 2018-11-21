@@ -735,6 +735,12 @@ class TypedNodeDisruption(NodeConsumerStub):
             self.current_fuzz_vt_list = self._create_fuzzy_vt_list(vt_node, self.fuzz_magnitude)
             self._extend_fuzzy_vt_list(self.current_fuzz_vt_list, vt_node)
 
+            vt = vt_node.get_value_type()
+            if issubclass(vt.__class__, vtype.VT):
+                fuzzed_vt = vt.get_fuzzed_vt()
+                if fuzzed_vt:
+                    self.current_fuzz_vt_list.insert(0, fuzzed_vt)
+
         DEBUG_PRINT(' *** CONSUME: ' + node.name + ', ' + repr(self.current_fuzz_vt_list), level=0)
 
         if self.current_fuzz_vt_list:
@@ -773,8 +779,8 @@ class TypedNodeDisruption(NodeConsumerStub):
             return False
 
     @staticmethod
-    def _create_fuzzy_vt_list(e, fuzz_magnitude):
-        vt = e.cc.get_value_type()
+    def _create_fuzzy_vt_list(n, fuzz_magnitude):
+        vt = n.cc.get_value_type()
 
         if issubclass(vt.__class__, vtype.VT_Alt):
             new_vt = copy.copy(vt)
@@ -786,20 +792,20 @@ class TypedNodeDisruption(NodeConsumerStub):
             fuzzy_vt_cls = list(vt.fuzzy_cls.values())
             fuzzy_vt_list = []
             for c in fuzzy_vt_cls:
-                new_vt = c(vt.endian)
-                # new_vt.knowledge_source = vt.knowledge_source
+                new_vt = c()
+                new_vt.copy_attrs_from(vt)
                 fuzzy_vt_list.append(new_vt)
 
         return fuzzy_vt_list
 
     @staticmethod
-    def _extend_fuzzy_vt_list(flist, e):
-        vt = e.cc.get_value_type()
+    def _extend_fuzzy_vt_list(flist, n):
+        vt = n.cc.get_value_type()
 
         if issubclass(vt.__class__, vtype.VT_Alt):
             return
 
-        specific_fuzzy_vals = e.cc.get_specific_fuzzy_values()
+        specific_fuzzy_vals = n.cc.get_specific_fuzzy_values()
 
         val = vt.get_current_raw_val()
         if val is not None:
