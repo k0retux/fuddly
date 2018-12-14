@@ -205,6 +205,7 @@ class Logger(object):
             dm_name = Database.DEFAULT_DM_NAME if dm is None else dm.name
             self._current_group_id = group_id
 
+            last_data_id = None
             for tg_ref, ack_date in self._current_ack_dates.items():
                 last_data_id = self.fmkDB.insert_data(init_dmaker, dm_name,
                                                            self._current_data.to_bytes(),
@@ -218,7 +219,6 @@ class Logger(object):
 
                 if last_data_id is None:
                     print("\n*** ERROR: Cannot insert the data record in FMKDB!")
-                    last_data_id = None
                     self.last_data_recordable = None
                     return last_data_id
 
@@ -238,9 +238,10 @@ class Logger(object):
                     if info is not None:
                         info = '\n'.join(info)
                         info = convert_to_internal_repr(info)
+                    ui = str(user_input) if bool(user_input) else None
                     self.fmkDB.insert_steps(last_data_id, step_id, dmaker_type, dmaker_name,
                                             self._current_src_data_id,
-                                            str(user_input), info)
+                                            ui, info)
 
                 for msg, now in self._current_fmk_info:
                     self.fmkDB.insert_fmk_info(last_data_id, msg, now)

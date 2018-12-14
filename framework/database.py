@@ -611,7 +611,7 @@ class Database(object):
         prt(msg)
 
 
-        def handle_dmaker(dmk_pattern, info, dmk_type, dmk_name, name_sep_sz, id_src=None):
+        def handle_dmaker(dmk_pattern, info, dmk_type, dmk_name, name_sep_sz, ui, id_src=None):
             msg = ''
             msg += colorize("\n  |_ {:s}: ".format(dmk_pattern), rgb=Color.FMKINFO)
             msg += colorize(str(dmk_type).ljust(name_sep_sz, ' '), rgb=Color.FMKSUBINFO)
@@ -654,17 +654,15 @@ class Database(object):
                 if dmk_type != data_type:
                     msg += colorize("\n  |_ Generator: ", rgb=Color.FMKINFO)
                     msg += colorize(str(data_type), rgb=Color.FMKSUBINFO)
-                    msg += colorize("  | UI: ", rgb=Color.FMKINFO)
-                    msg += colorize(str(ui), rgb=Color.FMKSUBINFO)
                     sid += 1
                     msg += colorize("\n Step #{:d}:".format(sid), rgb=Color.FMKINFOGROUP)
-                    msg += handle_dmaker('Disruptor', info, dmk_type, dmk_name, len(data_type))
+                    msg += handle_dmaker('Disruptor', info, dmk_type, dmk_name, len(data_type), ui)
                 else:
-                    msg += handle_dmaker('Generator', info, dmk_type, dmk_name, name_sep_sz,
+                    msg += handle_dmaker('Generator', info, dmk_type, dmk_name, name_sep_sz, ui,
                                          id_src=id_src)
             else:
                 msg += colorize("\n Step #{:d}:".format(sid), rgb=Color.FMKINFOGROUP)
-                msg += handle_dmaker('Disruptor', info, dmk_type, dmk_name, name_sep_sz)
+                msg += handle_dmaker('Disruptor', info, dmk_type, dmk_name, name_sep_sz, ui)
             sid += 1
         msg += colorize('\n' + line_pattern, rgb=Color.NEWLOGENTRY)
         prt(msg)
