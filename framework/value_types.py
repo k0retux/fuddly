@@ -308,6 +308,11 @@ class String(VT_Alt):
     DEFAULT_MAX_SZ = 10000
     encoded_string = False
 
+    ctrl_char_set = ''.join([chr(i) for i in range(0, 0x20)])+'\x7f'
+    printable_char_set = ''.join([chr(i) for i in range(0x20, 0x7F)])
+    extended_char_set = ''.join([chr(i) for i in range(0x80, 0x100)])
+    non_ctrl_char = printable_char_set + extended_char_set
+
     def encode(self, val):
         """
         To be overloaded by a subclass that deals with encoding.
@@ -930,6 +935,13 @@ class String(VT_Alt):
         else:
             C_strings_enabled = False
 
+        if self.knowledge_source \
+                and self.knowledge_source.is_info_class_represented(InputHandling) \
+                and self.knowledge_source.is_assumption_valid(InputHandling.Ctrl_Char_Set):
+            CTRL_char_enabled = True
+        else:
+            CTRL_char_enabled = False
+
         if self.drawn_val is not None:
             orig_val = self.drawn_val
         else:
@@ -963,6 +975,31 @@ class String(VT_Alt):
 
         self.values_fuzzy.append(b'\x00' * sz if sz > 0 else b'\x00')
 
+        if self.alphabet is not None and sz > 0:
+            if self.codec == self.ASCII:
+                base_char_set = set(self.printable_char_set)
+            else:
+                base_char_set = set(self.non_ctrl_char)
+
+            unsupported_chars = base_char_set - set(self._bytes2str(self.alphabet))
+            if unsupported_chars:
+                sample = random.sample(unsupported_chars, 1)[0]
+                test_case = orig_val[:-1] + sample.encode(self.codec)
+                self.values_fuzzy.append(test_case)
+
+        if CTRL_char_enabled:
+            if sz > 0:
+                self.values_fuzzy.append(b'\x08'*self.max_sz) # backspace characters
+            if sz == self.max_sz:
+                # also include fixed size string i.e., self.min_sz == self.max_sz
+                for c in self.ctrl_char_set:
+                    test_case = orig_val[:-1]+c.encode(self.codec)
+                    self.values_fuzzy.append(test_case)
+            else:
+                for c in self.ctrl_char_set:
+                    test_case = orig_val+c.encode(self.codec)
+                    self.values_fuzzy.append(test_case)
+
         if C_strings_enabled and sz > 1:
             is_even = sz % 2 == 0
             cpt = sz // 2
@@ -979,12 +1016,6 @@ class String(VT_Alt):
             self.values_fuzzy.append(orig_val + b'\"%n\"' * int(400*fuzz_magnitude))
             self.values_fuzzy.append(orig_val + b'\"%s\"' * int(400*fuzz_magnitude))
         self.values_fuzzy.append(orig_val + b'\r\n' * int(100*fuzz_magnitude))
-
-        specif = self.get_specific_fuzzy_vals()
-        if specif:
-            add_to_fuzz_list(specif)
-        if hasattr(self, 'subclass_fuzzing_list'):
-            add_to_fuzz_list(self.subclass_fuzzing_list)
 
         if self.codec == self.ASCII:
             val = bytearray(orig_val)
@@ -1008,6 +1039,12 @@ class String(VT_Alt):
                                              self.min_encoded_sz, self.max_encoded_sz)
         if enc_cases:
             self.values_fuzzy += enc_cases
+
+        specif = self.get_specific_fuzzy_vals()
+        if specif:
+            add_to_fuzz_list(specif)
+        if hasattr(self, 'subclass_fuzzing_list'):
+            add_to_fuzz_list(self.subclass_fuzzing_list)
 
         self.values_save = self.values
         self.values = self.values_fuzzy

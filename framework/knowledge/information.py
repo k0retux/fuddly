@@ -97,6 +97,10 @@ class Language(Info):
     Pascal = auto()
     Unknown = auto()
 
+class InputHandling(Info):
+    Ctrl_Char_Set = auto()
+    Unknown = auto()
+
 
 class InformationCollector(object):
 
