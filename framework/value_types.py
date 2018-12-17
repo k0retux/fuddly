@@ -1661,7 +1661,7 @@ class INT_str(with_metaclass(meta_int_str, INT)):
         fuzzed_vals = []
 
         def handle_size(self, v):
-            sz = math.ceil(math.log(v, self._base))
+            sz = 1 if v == 0 else math.ceil(math.log(abs(v), self._base))
             if sz <= new_min_size:
                 format_str, _ = self._prepare_format_str(new_min_size,
                                                          self._base, self._letter_case)
