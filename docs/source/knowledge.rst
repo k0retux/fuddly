@@ -139,6 +139,7 @@ The current information categories are:
 - :class:`framework.knowledge.information.OS`
 - :class:`framework.knowledge.information.Hardware`
 - :class:`framework.knowledge.information.Language`
+- :class:`framework.knowledge.information.InputHandling`
 
 Depending on your project, you may want to define new specific information categories. In such case,
 You will simply have to define new python enumeration that inherits from

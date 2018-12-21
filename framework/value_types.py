@@ -39,14 +39,11 @@ import codecs
 if sys.version_info[0] > 2:
     # python3
     import builtins
+    CHR_compat = chr
 else:
     # python2.7
     import __builtin__ as builtins
-
-import six
-from six import with_metaclass
-
-sys.path.append('.')
+    CHR_compat = unichr
 
 import framework.basic_primitives as bp
 from framework.encoders import *
@@ -91,7 +88,23 @@ class VT(object):
         pass
 
     def get_value(self):
-        raise NotImplementedError('New value type shall impplement this method!')
+        """
+        Walk other the values of the object on a per-call basis.
+
+        Returns: bytes
+
+        """
+        raise NotImplementedError('New value type shall implement this method!')
+
+    def get_current_value(self):
+        """
+        Provide the current value of the object.
+        Should not change the state of the object except if no current values.
+
+        Returns: bytes
+
+        """
+        raise NotImplementedError('New value type shall implement this method!')
 
     def get_current_raw_val(self):
         return None
@@ -115,12 +128,12 @@ class VT(object):
         pass
 
     def add_specific_fuzzy_vals(self, vals):
-        pass
+        raise NotImplementedError
 
     def get_specific_fuzzy_vals(self):
-        pass
+        raise NotImplementedError
 
-    def get_fuzzed_vt(self):
+    def get_fuzzed_vt_list(self):
         return None
 
 
@@ -173,127 +186,6 @@ class VT_Alt(VT):
         return self._specific_fuzzy_vals
 
 
-class meta_8b(type):
-
-    compatible_class = collections.OrderedDict()
-    fuzzy_class = collections.OrderedDict()
-
-    def __init__(cls, name, bases, attrs):
-        type.__init__(cls, name, (VT,) + bases, attrs)
-        cls.size = 8
-        cls.compat_cls = meta_8b.compatible_class
-        cls.fuzzy_cls = meta_8b.fuzzy_class
-
-        # avoid adding the class of the 'six' module
-        if cls.__module__ != 'six':
-            if 'usable' in attrs:
-                if cls.usable == False:
-                    return
-            else:
-                cls.usable = True
-            meta_8b.compatible_class[name] = cls
-
-        if "Fuzzy" in name:
-            meta_8b.fuzzy_class[name] = cls
-
-
-
-class meta_16b(type):
-
-    compatible_class = collections.OrderedDict()
-    fuzzy_class = collections.OrderedDict()
-
-    def __init__(cls, name, bases, attrs):
-        type.__init__(cls, name, (VT,) + bases, attrs)
-        cls.size = 16
-        cls.compat_cls = meta_16b.compatible_class
-        cls.fuzzy_cls = meta_16b.fuzzy_class
-
-        # avoid adding the class of the 'six' module
-        if cls.__module__ != 'six':
-            if 'usable' in attrs:
-                if cls.usable == False:
-                    return
-            else:
-                cls.usable = True
-            meta_16b.compatible_class[name] = cls
-
-        if "Fuzzy" in name:
-            meta_16b.fuzzy_class[name] = cls
-
-
-
-class meta_32b(type):
-
-    compatible_class = collections.OrderedDict()
-    fuzzy_class = collections.OrderedDict()
-
-    def __init__(cls, name, bases, attrs):
-        type.__init__(cls, name, (VT,) + bases, attrs)
-        cls.size = 32
-        cls.compat_cls = meta_32b.compatible_class
-        cls.fuzzy_cls = meta_32b.fuzzy_class
-
-        # avoid adding the class of the 'six' module
-        if cls.__module__ != 'six':
-            if 'usable' in attrs:
-                if cls.usable == False:
-                    return
-            else:
-                cls.usable = True
-            meta_32b.compatible_class[name] = cls
-
-        if "Fuzzy" in name:
-            meta_32b.fuzzy_class[name] = cls
-
-
-class meta_64b(type):
-
-    compatible_class = collections.OrderedDict()
-    fuzzy_class = collections.OrderedDict()
-
-    def __init__(cls, name, bases, attrs):
-        type.__init__(cls, name, (VT,) + bases, attrs)
-        cls.size = 64
-        cls.compat_cls = meta_64b.compatible_class
-        cls.fuzzy_cls = meta_64b.fuzzy_class
-
-        # avoid adding the class of the 'six' module
-        if cls.__module__ != 'six':
-            if 'usable' in attrs:
-                if cls.usable == False:
-                    return
-            else:
-                cls.usable = True
-            meta_64b.compatible_class[name] = cls
-
-        if "Fuzzy" in name:
-            meta_64b.fuzzy_class[name] = cls
-
-
-class meta_int_str(type):
-
-    compatible_class = collections.OrderedDict()
-    fuzzy_class = collections.OrderedDict()
-
-    def __init__(cls, name, bases, attrs):
-        type.__init__(cls, name, (VT,) + bases, attrs)
-        cls.compat_cls = meta_int_str.compatible_class
-        cls.fuzzy_cls = meta_int_str.fuzzy_class
-
-        # avoid adding the class of the 'six' module
-        if cls.__module__ != 'six':
-            if 'usable' in attrs:
-                if cls.usable == False:
-                    return
-            else:
-                cls.usable = True
-            meta_int_str.compatible_class[name] = cls
-
-        if "Fuzzy" in name:
-            meta_int_str.fuzzy_class[name] = cls
-
-
 class String(VT_Alt):
     """
     Value type that represents a character string.
@@ -310,7 +202,7 @@ class String(VT_Alt):
 
     ctrl_char_set = ''.join([chr(i) for i in range(0, 0x20)])+'\x7f'
     printable_char_set = ''.join([chr(i) for i in range(0x20, 0x7F)])
-    extended_char_set = ''.join([chr(i) for i in range(0x80, 0x100)])
+    extended_char_set = ''.join([CHR_compat(i) for i in range(0x80, 0x100)])
     non_ctrl_char = printable_char_set + extended_char_set
 
     def encode(self, val):
@@ -907,12 +799,6 @@ class String(VT_Alt):
         if len(self.values) == 0:
             raise DataModelDefinitionError
 
-    def get_current_raw_val(self, str_form=False):
-        if self.drawn_val is None:
-            self.get_value()
-        val = self._bytes2str(self.drawn_val) if str_form else self.drawn_val
-        return val
-
     def _enable_normal_mode(self):
         self.values = self.values_save
         self.values_copy = copy.copy(self.values)
@@ -1070,6 +956,17 @@ class String(VT_Alt):
             ret = self.encode(ret)
         return ret
 
+    def get_current_raw_val(self, str_form=False):
+        if self.drawn_val is None:
+            self.get_value()
+        val = self._bytes2str(self.drawn_val) if str_form else self.drawn_val
+        return val
+
+    def get_current_value(self):
+        if self.drawn_val is None:
+            self.get_value()
+        return self.encode(self.drawn_val) if self.encoded_string else self.drawn_val
+
     def is_exhausted(self):
         if self.values_copy:
             return False
@@ -1120,6 +1017,7 @@ class INT(VT):
     mini = None
     maxi = None
     cformat = None
+    alt_cformat = None
     endian = None
     determinist = True
 
@@ -1130,14 +1028,18 @@ class INT(VT):
     GEN_MIN_INT = -2**32  # 'mini_gen' is set to this when the INT subclass does not define 'mini'
                           # and that mini is not specified by the user
 
+    fuzzy_values = None
+    value_space_size = None
+    size = None
 
     def __init__(self, values=None, min=None, max=None, default=None, determinist=True,
-                 force_mode=False):
+                 force_mode=False, fuzz_mode=False):
         self.idx = 0
         self.determinist = determinist
         self.exhausted = False
         self.drawn_val = None
         self.default = None
+        self._specific_fuzzy_vals = None
 
         if not self.usable:
             raise DataModelDefinitionError("ERROR: {!r} is not usable! (use a subclass of it)"
@@ -1152,13 +1054,19 @@ class INT(VT):
                         if v > self.__class__.maxi:
                             v = self.__class__.maxi
                     new_values.append(v)
-                self.values = new_values
+                values = new_values
+            elif fuzz_mode:
+                new_values = []
+                for v in values:
+                    if not self.is_size_compatible(v):
+                        raise DataModelDefinitionError("Incompatible value ({!r}) regarding possible"
+                                                       " encoding size for {!s}".format(v, self.__class__))
             else:
                 for v in values:
                     if not self.is_compatible(v):
                         raise DataModelDefinitionError("Incompatible value ({!r}) with {!s}".format(v, self.__class__))
-                self.values = list(values)
 
+            self.values = list(values)
             self.values_copy = list(self.values)
 
         else:
@@ -1220,6 +1128,74 @@ class INT(VT):
 
     def copy_attrs_from(self, vt):
         self.endian = vt.endian
+
+    def get_fuzzed_vt_list(self):
+
+        specific_fuzzy_values = self.get_specific_fuzzy_vals()
+        supp_list = specific_fuzzy_values if specific_fuzzy_values is not None else []
+
+        val = self.get_current_raw_val()
+        if val is not None:
+            # don't use a set to preserve determinism if needed
+            if val-1 not in supp_list:
+                supp_list.append(val+1)
+            if val-1 not in supp_list:
+                supp_list.append(val-1)
+
+            if self.values is not None:
+                orig_set = set(self.values)
+                max_oset = max(orig_set)
+                min_oset = min(orig_set)
+                if min_oset != max_oset:
+                    diff_sorted = sorted(set(range(min_oset, max_oset+1)) - orig_set)
+                    if diff_sorted:
+                        item1 = diff_sorted[0]
+                        item2 = diff_sorted[-1]
+                        if item1 not in supp_list:
+                            supp_list.append(item1)
+                        if item2 not in supp_list:
+                            supp_list.append(item2)
+                    if max_oset+1 not in supp_list:
+                        supp_list.append(max_oset+1)
+                    if min_oset-1 not in supp_list:
+                        supp_list.append(min_oset-1)
+
+            if self.mini is not None:
+                cond1 = False
+                if self.value_space_size != -1:  # meaning not an INT_str
+                    cond1 = (self.mini != 0 or self.maxi != ((1 << self.size) - 1)) and \
+                       (self.mini != -(1 << (self.size-1)) or self.maxi != ((1 << (self.size-1)) - 1))
+                else:
+                    cond1 = True
+
+                if cond1:
+                    # we avoid using vt.mini or vt.maxi has they could be undefined (e.g., INT_str)
+                    if self.mini_gen-1 not in supp_list:
+                        supp_list.append(self.mini_gen-1)
+                    if self.maxi_gen+1 not in supp_list:
+                        supp_list.append(self.maxi_gen+1)
+
+        if self.fuzzy_values:
+            for v in self.fuzzy_values:
+                if v not in supp_list:
+                    supp_list.append(v)
+
+        if supp_list:
+            supp_list = list(filter(self.is_size_compatible, supp_list))
+            fuzzed_vt = self.__class__(values=supp_list, fuzz_mode=True)
+            return [fuzzed_vt]
+
+        else:
+            return None
+
+
+    def add_specific_fuzzy_vals(self, vals):
+        if self._specific_fuzzy_vals is None:
+            self._specific_fuzzy_vals = []
+        self._specific_fuzzy_vals += vals
+
+    def get_specific_fuzzy_vals(self):
+        return self._specific_fuzzy_vals
 
     def absorb_auto_helper(self, blob, constraints):
         off = 0
@@ -1325,6 +1301,14 @@ class INT(VT):
     def is_compatible(self, integer):
         return self.mini <= integer <= self.maxi
 
+    def is_size_compatible(self, integer):
+        if self.value_space_size == -1:
+            return True
+        elif -((self.value_space_size + 1) // 2) <= integer <= self.value_space_size:
+            return True
+        else:
+            return False
+
     def set_value_list(self, new_list):
         ret = False
         if self.values:
@@ -1419,7 +1403,7 @@ class INT(VT):
         self.drawn_val = val
         return self._convert_value(val)
 
-    def get_current_encoded_value(self):
+    def get_current_value(self):
         if self.drawn_val is None:
             self.get_value()
         return self._convert_value(self.drawn_val)
@@ -1456,7 +1440,13 @@ class INT(VT):
         return struct.unpack(self.cformat, val)[0]
 
     def _convert_value(self, val):
-        return struct.pack(self.cformat, val)
+        try:
+            string = struct.pack(self.cformat, val)
+        except:
+            # this case can trigger with values that have been added for fuzzing
+            string = struct.pack(self.alt_cformat, val)
+
+        return string
 
     def _read_value_from(self, blob, size):
         sz = struct.calcsize(self.cformat)
@@ -1557,43 +1547,9 @@ class GSMPhoneNum(String): pass
 class Wrapper(String): pass
 
 
-class Fuzzy_INT(INT):
-    '''
-    Base class to be inherited and not used directly
-    '''
-    values = None
-    short_cformat = None
-
-    def __init__(self, endian=VT.BigEndian, supp_list=None):
-        self.endian = endian
-        if supp_list:
-            self.extend_value_list(supp_list)
-
-        assert(self.values is not None)
-        INT.__init__(self, values=self.values, determinist=True)
-
-    def make_private(self, forget_current_state):
-        self.values = copy.copy(self.values)
-
-    def is_compatible(self, integer):
-        if self.mini <= integer <= self.maxi:
-            return True
-        elif -((self.maxi + 1) // 2) <= integer <= ((self.maxi + 1) // 2) - 1:
-            return True
-        else:
-            return False
-
-    def _convert_value(self, val):
-        try:
-            string = struct.pack(VT.enc2struct[self.endian] + self.short_cformat, val)
-        except:
-            string = struct.pack(VT.enc2struct[self.endian] + self.alt_short_cformat, val)
-
-        return string
-
-
-class INT_str(with_metaclass(meta_int_str, INT)):
+class INT_str(INT):
     endian = VT.Native
+    usable = True
 
     regex_decimal = b'-?\d+'
 
@@ -1604,10 +1560,15 @@ class INT_str(with_metaclass(meta_int_str, INT)):
 
     regex_bin = b'-?[01]+'
 
+    fuzzy_values = [0, -1, -2**32, 2 ** 32 - 1, 2 ** 32,
+                    b'%n'*8, b'%n'*100, b'\"%n\"'*100,
+                    b'%s'*8, b'%s'*100, b'\"%s\"'*100]
+    value_space_size = -1  # means infinite
+
     def __init__(self, values=None, min=None, max=None, default=None, determinist=True,
-                 force_mode=False, base=10, letter_case='upper', min_size=None, reverse=False):
+                 force_mode=False, fuzz_mode=False, base=10, letter_case='upper', min_size=None, reverse=False):
         INT.__init__(self, values=values, min=min, max=max, default=default, determinist=determinist,
-                     force_mode=force_mode)
+                     force_mode=force_mode, fuzz_mode=fuzz_mode)
         assert base in [10, 16, 8, 2]
         assert letter_case in ['upper', 'lower']
         assert min_size is None or isinstance(min_size, int)
@@ -1657,7 +1618,8 @@ class INT_str(with_metaclass(meta_int_str, INT)):
         return (format_str, regex)
 
 
-    def get_fuzzed_vt(self):
+    def get_fuzzed_vt_list(self):
+        vt_list = INT.get_fuzzed_vt_list(self)
         fuzzed_vals = []
 
         def handle_size(self, v):
@@ -1699,10 +1661,21 @@ class INT_str(with_metaclass(meta_int_str, INT)):
         if self._base <= 2:
             fuzzed_vals.append('2'*qty)
 
-        return String(values=fuzzed_vals) if fuzzed_vals else None
+        if fuzzed_vals:
+            if vt_list is None:
+                vt_list = []
+            vt_list.insert(0, String(values=fuzzed_vals))
+
+        return vt_list
 
     def is_compatible(self, integer):
         return True
+
+    def pretty_print(self, max_size=None):
+        if self.drawn_val is None:
+            self.get_value()
+
+        return str(self.drawn_val)
 
     def _read_value_from(self, blob, size):
         g = re.match(self._regex, blob)
@@ -1717,38 +1690,15 @@ class INT_str(with_metaclass(meta_int_str, INT)):
         return int(val, base=self._base)
 
     def _convert_value(self, val):
-        ret = self._format_str.format(val).encode('utf8')
-        if self._reverse:
-            ret = ret[::-1]
-        return ret
-
-
-#class Fuzzy_INT_str(Fuzzy_INT, metaclass=meta_int_str):
-class Fuzzy_INT_str(with_metaclass(meta_int_str, INT_str)):
-    values = [0, -1, -2**32, 2 ** 32 - 1, 2 ** 32,
-              b'%n'*8, b'%n'*100, b'\"%n\"'*100,
-              b'%s'*8, b'%s'*100, b'\"%s\"'*100]
-
-    def __init__(self):
-        assert(self.values is not None)
-        INT_str.__init__(self, values=self.values, determinist=True)
-
-    def is_compatible(self, integer):
-        return True
-
-    def pretty_print(self, max_size=None):
-        if self.drawn_val is None:
-            self.get_value()
-
-        return str(self.drawn_val)
-
-    def _convert_value(self, val):
         if isinstance(val, int):
-            return INT_str._convert_value(self, val)
+            ret = self._format_str.format(val).encode('utf8')
+            if self._reverse:
+                ret = ret[::-1]
+            return ret
         else:
+            # for some fuzzing case
             assert isinstance(val, bytes)
             return val
-
 
 class BitField(VT_Alt):
     '''
@@ -2600,392 +2550,139 @@ class BitField(VT_Alt):
         return self.exhausted
 
 
-#class INT8(INT, metaclass=meta_8b):
-class INT8(with_metaclass(meta_8b, INT)):
+
+class INT8(INT):
+    fuzzy_values = [0xFF, 0, 0x01, 0x80, 0x7F]
+    value_space_size = 2**8-1
+    size = 8
     usable = False
 
 class SINT8(INT8):
     mini = -2**7
     maxi = 2**7-1
     cformat = 'b'
+    alt_cformat = 'B'
     endian = VT.Native
+    usable = True
 
 class UINT8(INT8):
     mini = 0
     maxi = 2**8-1
     cformat = 'B'
+    alt_cformat = 'b'
     endian = VT.Native
+    usable = True
 
-#class Fuzzy_INT8(Fuzzy_INT, metaclass=meta_8b):
-class Fuzzy_INT8(with_metaclass(meta_8b, Fuzzy_INT)):
-    mini = 0
-    maxi = 2**8-1
-    values = [0xFF, 0, 0x01, 0x80, 0x7F]
-    short_cformat = 'B'
-    alt_short_cformat = 'b'
-
-
-#class INT16(VT, metaclass=meta_16b):
-class INT16(with_metaclass(meta_16b, INT)):
+class INT16(INT):
+    fuzzy_values = [0xFFFF, 0, 0x8000, 0x7FFF]
+    value_space_size = 2**16-1
+    size = 16
     usable = False
-
 
 class SINT16_be(INT16):
     mini = -2**15
     maxi = 2**15-1
     cformat = '>h'
+    alt_cformat = '>H'
     endian = VT.BigEndian
+    usable = True
 
 class SINT16_le(INT16):
     mini = -2**15
     maxi = 2**15-1
     cformat = '<h'
+    alt_cformat = '<H'
     endian = VT.LittleEndian
+    usable = True
 
 class UINT16_be(INT16):
     mini = 0
     maxi = 2**16-1
     cformat = '>H'
+    alt_cformat = '>h'
     endian = VT.BigEndian
+    usable = True
 
 class UINT16_le(INT16):
     mini = 0
     maxi = 2**16-1
     cformat = '<H'
+    alt_cformat = '<h'
     endian = VT.LittleEndian
+    usable = True
 
-
-#class Fuzzy_INT16(Fuzzy_INT, metaclass=meta_16b):
-class Fuzzy_INT16(with_metaclass(meta_16b, Fuzzy_INT)):
-    mini = 0
-    maxi = 2**16-1
-    values = [0xFFFF, 0, 0x8000, 0x7FFF]
-    short_cformat = 'H'
-    alt_short_cformat = 'h'
-
-# class Other_Fuzzy_INT16(Fuzzy_INT16):
-#     mini = 0
-#     maxi = 2**16-1
-#     values = [0xDEAD, 0xBEEF, 0xCAFE]
-#     short_cformat = 'H'
-#     alt_short_cformat = 'h'
-
-
-#class INT32(INT, metaclass=meta_32b):
-class INT32(with_metaclass(meta_32b, INT)):
+class INT32(INT):
+    fuzzy_values = [0xFFFFFFFF, 0, 0x80000000, 0x7FFFFFFF]
+    value_space_size = 2**32-1
+    size = 32
     usable = False
 
 class SINT32_be(INT32):
     mini = -2**31
     maxi = 2**31-1
     cformat = '>l'
+    alt_cformat = '>L'
     endian = VT.BigEndian
+    usable = True
 
 class SINT32_le(INT32):
     mini = -2**31
     maxi = 2**31-1
     cformat = '<l'
+    alt_cformat = '<L'
     endian = VT.LittleEndian
+    usable = True
 
 class UINT32_be(INT32):
     mini = 0
     maxi = 2**32-1
     cformat = '>L'
+    alt_cformat = '>l'
     endian = VT.BigEndian
+    usable = True
 
 class UINT32_le(INT32):
     mini = 0
     maxi = 2**32-1
     cformat = '<L'
+    alt_cformat = '<l'
     endian = VT.LittleEndian
+    usable = True
 
-
-#class Fuzzy_INT32(Fuzzy_INT, metaclass=meta_32b):
-class Fuzzy_INT32(with_metaclass(meta_32b, Fuzzy_INT)):
-    mini = 0
-    maxi = 2**32-1
-    values = [0xFFFFFFFF, 0, 0x80000000, 0x7FFFFFFF]
-    short_cformat = 'L'
-    alt_short_cformat = 'l'
-
-# class Other_Fuzzy_INT32(Fuzzy_INT32):
-#     mini = 0
-#     maxi = 2**32-1
-#     values = [0xDEADBEEF, 0xAAAAAAAA]
-#     short_cformat = 'L'
-#     alt_short_cformat = 'l'
-
-
-#class INT64(INT, metaclass=meta_64b)
-class INT64(with_metaclass(meta_64b, INT)):
+class INT64(INT):
+    fuzzy_values = [0xFFFFFFFFFFFFFFFF, 0, 0x8000000000000000, 0x7FFFFFFFFFFFFFFF, 0x1111111111111111]
+    value_space_size = 2**64-1
+    size = 64
     usable = False
 
 class SINT64_be(INT64):
     mini = -2**63
     maxi = 2**63-1
     cformat = '>q'
+    alt_cformat = '>Q'
     endian = VT.BigEndian
+    usable = True
 
 class SINT64_le(INT64):
     mini = -2**63
     maxi = 2**63-1
     cformat = '<q'
+    alt_cformat = '<Q'
     endian = VT.LittleEndian
+    usable = True
 
 class UINT64_be(INT64):
     mini = 0
     maxi = 2**64-1
     cformat = '>Q'
+    alt_cformat = '>q'
     endian = VT.BigEndian
+    usable = True
 
 class UINT64_le(INT64):
     mini = 0
     maxi = 2**64-1
     cformat = '<Q'
+    alt_cformat = '<q'
     endian = VT.LittleEndian
-
-
-#class Fuzzy_INT64(Fuzzy_INT, metaclass=meta_64b):
-class Fuzzy_INT64(with_metaclass(meta_64b, Fuzzy_INT)):
-    mini = 0
-    maxi = 2**64-1
-    values = [0xFFFFFFFFFFFFFFFF, 0, 0x8000000000000000, 0x7FFFFFFFFFFFFFFF, 0x1111111111111111]
-    short_cformat = 'Q'
-    alt_short_cformat = 'q'
-
-# class Other_Fuzzy_INT64(Fuzzy_INT64):
-#     mini = 0
-#     maxi = 2**64-1
-#     values = [0xDEADBEEFDEADBEEF, 0xAAAAAAAAAAAAAAAA]
-#     short_cformat = 'Q'
-#     alt_short_cformat = 'q'
-
-
-
-
-if __name__ == "__main__":
-
-    import copy
-
-    d = copy.copy(meta_8b.compatible_class)
-    d.update(meta_16b.compatible_class)
-    d.update(meta_32b.compatible_class)
-    d.update(meta_64b.compatible_class)
-    d.update(meta_int_str.compatible_class)
-    print(d)
-    
-    obj = {}
-    for k, v in d.items():
-        print('\n***** [ %s ] *****\n' % k)
-
-        if issubclass(v, INT_str):
-            obj[k] = v(min=1, max=10)
-        else:
-            obj[k] = v()
-        obj[k].get_value()
-
-        try:
-            obj[k] = v(values=[0x11,0x12,0x13])
-        except TypeError:
-            obj[k] = v()
-
-        for i in range(8):
-            print(obj[k].get_value())
-
-        print('\n********\n')
-
-        try:
-            obj[k] = v(values=[0x11,0x12,0x13], determinist=False)
-        except TypeError:
-            print(v().__class__)
-            obj[k] = v()
-
-        for i in range(8):
-            print(obj[k].get_value())
-
-        print('\n********\n')
-
-        try:
-            obj[k] = v(min=0, max=2**7-1, determinist=False)
-        except TypeError:
-            print(v().__class__)
-            obj[k] = v()
-
-        for i in range(8):
-            print(obj[k].get_value())
-
-
-
-    print('\n*******************************\n')
-
-
-    t = SINT16_be()
-    t.is_exhausted()
-
-    print('size: ', t.size)
-    print('class: ', t.__class__)
-    print('compatible classes: ')
-    for c in t.compat_cls.values():
-        if c != t.__class__:
-            print(c, c().get_value())
-    print('fuzzy classes: ')
-    for c in t.fuzzy_cls.values():
-        print(c, c().get_value())
-    print('---')        
-    print('val: ', t.get_value())
-
-    print('\n***\n')
-
-    t = UINT16_le(values=range(100,400,4))
-    print('size: ', t.size)
-    print('class: ', t.__class__)
-    print('compatible classes: ')
-    for c in t.compat_cls.values():
-        if c != t.__class__:
-            print(c)
-    print('fuzzy classes: ')
-    for c in t.fuzzy_cls.values():
-        print(c, c().get_value())
-    print('---')
-    for i in range(5):
-        print(i, t.get_value())
-    
-    print('\n***\n')
-
-    t = Fuzzy_INT16()
-    for i in range(5):
-        print(i, t.get_value())
-        if t.is_exhausted():
-            print('fin iteration')
-
-    for i in range(5):
-        print(i, t.get_value())
-        if t.is_exhausted():
-            print('fin iteration')
-
-
-    print('\n***** [ String ] *****\n')
-
-    t = String(values=['AA', 'BBB', 'CCCC'], min_sz=1, max_sz=10,
-               extra_fuzzy_list=['XTRA_1', '', 'XTRA_2'])
-
-    for i in range(30):
-        print(t.get_value())
-        if t.is_exhausted():
-            break
-
-    print('\n********\n')
-
-    for i in range(30):
-        print(t.get_value())
-        if t.is_exhausted():
-            break
-
-    print('\n********\n')
-
-    t.reset_state()
-    t.switch_mode()
-
-    for i in range(30):
-        print(t.get_value())
-        if t.is_exhausted():
-            break
-
-    print('\n====> New String\n')
-
-    t = String(values=['AAA', 'BBBB', 'CCCCC'], min_sz=3, max_sz=10)
-
-    for i in range(30):
-        print(t.get_value())
-        if t.is_exhausted():
-            break
-
-    print('\n********\n')
-    t.reset_state()
-    t.switch_mode()
-
-    for i in range(30):
-        print(t.get_value())
-        if t.is_exhausted():
-            break
-
-    print('\n********\n')
-    t.reset_state()
-    t.switch_mode()
-
-    for i in range(30):
-        print(t.get_value())
-        if t.is_exhausted():
-            break
-
-    print('\n********\n')
-
-    t.reset_state()
-    t.get_value()
-    t.get_value()
-    t.switch_mode()
-
-    for i in range(30):
-        print(t.get_value())
-        if t.is_exhausted():
-            break
-
-    print('\n====> New String\n')
-
-    t = String(values=['AAA', 'BBBB', 'CCCCC'], max_sz=10)
-
-    print(t.get_value())
-    print(t.get_value())
-
-    print('\n********\n')
-
-    t.rewind()
-    print(t.get_value())
-    print(t.get_value())
-
-    print('\n********\n')
-
-    t.reset_state()
-    print(t.get_value())
-    print(t.get_value())
-
-    print('\n********\n')
-
-    t.rewind()
-    t.rewind()
-    print(t.get_value())
-    print(t.get_value())
-
-    print('\n********\n')
-
-    t.rewind()
-    t.rewind()
-    t.rewind()
-    t.rewind()
-    print(t.get_value())
-    print(t.get_value())
-
-    print('\n====> New String\n')
-
-    t = String(min_sz=1, max_sz=10)
-
-    for i in range(30):
-        print(t.get_value())
-        if t.is_exhausted():
-            break
-
-    print('\n********\n')
-    t.reset_state()
-    t.switch_mode()
-
-    for i in range(30):
-        print(t.get_value())
-        if t.is_exhausted():
-            break
-
-    print('\n********\n')
-
-    t.rewind()
-    t.rewind()
-    print(t.get_value())
-    print(t.get_value())
+    usable = True

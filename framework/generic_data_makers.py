@@ -163,7 +163,7 @@ class sd_iter_over_data(StatefulDisruptor):
                            'in the data model) is used for ordering.', True, bool),
                  'deep': ('When set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes.', True, bool),
-                 'ign_sep': ('When set to True, non-terminal separators will be ignored ' \
+                 'ign_sep': ('When set to True, separators will be ignored ' \
                           'if any are defined.', False, bool),
                  'fix_all': ('For each produced data, reevaluate the constraints on the whole graph.',
                              False, bool),

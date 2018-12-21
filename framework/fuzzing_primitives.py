@@ -84,6 +84,7 @@ class ModelWalker(object):
     def set_consumer(self, node_consumer):
         self._consumer = node_consumer
         self._consumer._root_node = self._root_node
+        self._consumer.preload(self._root_node)
 
 
     def __iter__(self):
@@ -336,7 +337,6 @@ class ModelWalker(object):
 
                     consume_called_again = True
 
-                    node.get_value()
                     not_recovered = True
                 else:
                     if node in consumed_nodes:
@@ -349,14 +349,43 @@ class ModelWalker(object):
             else:
                 yield node, orig_node_val, False, False
 
-            if max_steps != 0 and not consume_called_again:
+            # if max_steps != 0 and not consume_called_again:
+            #     max_steps -= 1
+            #     # In this case we iterate only on the current node
+            #     node.unfreeze(recursive=False, ignore_entanglement=True)
+            #     node.freeze()
+            #     if self._consumer.fix_constraints:
+            #         node.fix_synchronized_nodes()
+            # elif not consume_called_again:
+            #     if not_recovered and (self._consumer.interested_by(node) or node in consumed_nodes):
+            #         self._consumer.recover_node(node)
+            #         if self._consumer.fix_constraints:
+            #             node.fix_synchronized_nodes()
+            #         if not node.is_exhausted() and self._consumer.need_reset(node):
+            #             yield None, None, True, True
+            #     again = False
+            #
+            # else:
+            #     consume_called_again = False
+            #     node.freeze()
+
+            if max_steps != 0:
                 max_steps -= 1
-                # In this case we iterate only on the current node
-                node.unfreeze(recursive=False, ignore_entanglement=True)
+                if consume_called_again:
+                    node.freeze()
+                    consume_called_again = False
+                else:
+                    # In this case we iterate only on the current node
+                    node.unfreeze(recursive=False, ignore_entanglement=True)
+                    node.freeze()
+                    if self._consumer.fix_constraints:
+                        node.fix_synchronized_nodes()
+
+            elif consume_called_again:
                 node.freeze()
-                if self._consumer.fix_constraints:
-                    node.fix_synchronized_nodes()
-            elif not consume_called_again:
+                consume_called_again = False
+
+            else:
                 if not_recovered and (self._consumer.interested_by(node) or node in consumed_nodes):
                     self._consumer.recover_node(node)
                     if self._consumer.fix_constraints:
@@ -365,8 +394,6 @@ class ModelWalker(object):
                         yield None, None, True, True
                 again = False
 
-            else:
-                consume_called_again = False
 
         return
 
@@ -401,6 +428,17 @@ class NodeConsumerStub(object):
     def init_specific(self, **kwargs):
         self._internals_criteria = dm.NodeInternalsCriteria(negative_node_kinds=[dm.NodeInternals_NonTerm])
 
+    def preload(self, root_node):
+        """
+        Called by the ModelWalker when it initializes
+
+        Args:
+            root_node: Root node of the modeled data
+
+        Returns: None
+
+        """
+        pass
 
     def consume_node(self, node):
         '''
@@ -714,8 +752,16 @@ class TypedNodeDisruption(NodeConsumerStub):
         self.current_node = None
         self.orig_internal = None
         self.enforce_determinism = enforce_determinism
+        self._ignore_separator  = ignore_separator
+        self.sep_list = None
 
         self.need_reset_when_structure_change = True
+
+    def preload(self, root_node):
+        if not self._ignore_separator:
+            ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Separator])
+            self.sep_list = set(map(lambda x: x.to_bytes(), root_node.get_reachable_nodes(internals_criteria=ic)))
+            self.sep_list = list(self.sep_list)
 
     def consume_node(self, node):
         if node.is_genfunc() and (node.is_attr_set(dm.NodeInternals.Freezable) or
@@ -732,14 +778,7 @@ class TypedNodeDisruption(NodeConsumerStub):
             # self.orig_value = node.to_bytes()
 
             vt_node = node.generated_node if node.is_genfunc() else node
-            self.current_fuzz_vt_list = self._create_fuzzy_vt_list(vt_node, self.fuzz_magnitude)
-            self._extend_fuzzy_vt_list(self.current_fuzz_vt_list, vt_node)
-
-            vt = vt_node.get_value_type()
-            if issubclass(vt.__class__, vtype.VT):
-                fuzzed_vt = vt.get_fuzzed_vt()
-                if fuzzed_vt:
-                    self.current_fuzz_vt_list.insert(0, fuzzed_vt)
+            self._populate_fuzzy_vt_list(vt_node, self.fuzz_magnitude)
 
         DEBUG_PRINT(' *** CONSUME: ' + node.name + ', ' + repr(self.current_fuzz_vt_list), level=0)
 
@@ -759,6 +798,44 @@ class TypedNodeDisruption(NodeConsumerStub):
         else:
             raise ValueError
 
+    def _populate_fuzzy_vt_list(self, vt_node, fuzz_magnitude):
+
+        vt = vt_node.get_value_type()
+
+        if issubclass(vt.__class__, vtype.VT_Alt):
+            new_vt = copy.copy(vt)
+            new_vt.make_private(forget_current_state=False)
+            new_vt.enable_fuzz_mode(fuzz_magnitude=fuzz_magnitude)
+            self.current_fuzz_vt_list = [new_vt]
+        else:
+            self.current_fuzz_vt_list = []
+
+        fuzzed_vt = vt.get_fuzzed_vt_list()
+        if fuzzed_vt:
+            self.current_fuzz_vt_list += fuzzed_vt
+
+        if self.sep_list:
+            self._add_separator_cases(vt_node)
+
+    def _add_separator_cases(self, vt_node):
+        current_val = vt_node.get_current_value()
+        if vt_node.is_attr_set(dm.NodeInternals.Separator):
+            sep_l = copy.copy(self.sep_list)
+            try:
+                sep_l.remove(current_val)
+            except ValueError:
+                print("\n*** WARNING: separator not part of the initial set. (Could happen if "
+                      "separators are generated dynamically)")
+            self.current_fuzz_vt_list.insert(0, vtype.String(values=sep_l))
+        else:
+            sz = len(current_val)
+            if sz > 1:
+                fuzzy_sep_val_list = []
+                for sep in self.sep_list:
+                    new_val = current_val[:-1] + sep + current_val[-1:]
+                    fuzzy_sep_val_list.append(new_val)
+                self.current_fuzz_vt_list.insert(0, vtype.String(values=fuzzy_sep_val_list))
+
     def save_node(self, node):
         pass
 
@@ -777,95 +854,6 @@ class TypedNodeDisruption(NodeConsumerStub):
             return True
         else:
             return False
-
-    @staticmethod
-    def _create_fuzzy_vt_list(n, fuzz_magnitude):
-        vt = n.cc.get_value_type()
-
-        if issubclass(vt.__class__, vtype.VT_Alt):
-            new_vt = copy.copy(vt)
-            new_vt.make_private(forget_current_state=False)
-            new_vt.enable_fuzz_mode(fuzz_magnitude=fuzz_magnitude)
-            fuzzy_vt_list = [new_vt]
-
-        else:
-            fuzzy_vt_cls = list(vt.fuzzy_cls.values())
-            fuzzy_vt_list = []
-            for c in fuzzy_vt_cls:
-                new_vt = c()
-                new_vt.copy_attrs_from(vt)
-                fuzzy_vt_list.append(new_vt)
-
-        return fuzzy_vt_list
-
-    @staticmethod
-    def _extend_fuzzy_vt_list(flist, n):
-        vt = n.cc.get_value_type()
-
-        if issubclass(vt.__class__, vtype.VT_Alt):
-            return
-
-        specific_fuzzy_vals = n.cc.get_specific_fuzzy_values()
-
-        val = vt.get_current_raw_val()
-        if val is not None:
-            # don't use a set to preserve determinism if needed
-            supp_list = [val + 1, val - 1]
-
-            if vt.values is not None:
-                orig_set = set(vt.values)
-                max_oset = max(orig_set)
-                min_oset = min(orig_set)
-                if min_oset != max_oset:
-                    diff_sorted = sorted(set(range(min_oset, max_oset+1)) - orig_set)
-                    if diff_sorted:
-                        item1 = diff_sorted[0]
-                        item2 = diff_sorted[-1]
-                        if item1 not in supp_list:
-                            supp_list.append(item1)
-                        if item2 not in supp_list:
-                            supp_list.append(item2)
-                    if max_oset+1 not in supp_list:
-                        supp_list.append(max_oset+1)
-                    if min_oset-1 not in supp_list:
-                        supp_list.append(min_oset-1)
-
-            if vt.mini is not None:
-                cond1 = False
-                if hasattr(vt, 'size'):  # meaning not an INT_str
-                    cond1 = (vt.mini != 0 or vt.maxi != ((1 << vt.size) - 1)) and \
-                       (vt.mini != -(1 << (vt.size-1)) or vt.maxi != ((1 << (vt.size-1)) - 1))
-                else:
-                    cond1 = True
-
-                if cond1:
-                    # we avoid using vt.mini or vt.maxi has they could be undefined (e.g., INT_str)
-                    if vt.mini_gen-1 not in supp_list:
-                        supp_list.append(vt.mini_gen-1)
-                    if vt.maxi_gen+1 not in supp_list:
-                        supp_list.append(vt.maxi_gen+1)
-
-            if specific_fuzzy_vals is not None:
-                for v in specific_fuzzy_vals:
-                    if v not in supp_list:
-                        supp_list.append(v)
-
-            fuzzy_vt_obj = None
-            for o in flist:
-                # We don't need to check with vt.mini-1 or vt.maxi+1,
-                # as the following test will provide the first
-                # compliant choice that will also be OK for the
-                # previous values (ortherwise, no VT will be OK, and
-                # these values will be filtered through the call to
-                # extend_value_list())
-                if o.is_compatible(val + 1) or o.is_compatible(val - 1):
-                    fuzzy_vt_obj = o
-                    break
-
-            if fuzzy_vt_obj is not None:
-                fuzzy_vt_obj.extend_value_list(supp_list)
-                fuzzy_vt_obj.remove_value_list([val])
-
 
 
 class SeparatorDisruption(NodeConsumerStub):

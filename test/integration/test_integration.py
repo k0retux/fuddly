@@ -55,9 +55,6 @@ def tearDownModule():
     fmk.exit_fmk()
 
 
-class TEST_Fuzzy_INT16(Fuzzy_INT16):
-    values = [0xDEAD, 0xBEEF, 0xCAFE]
-
 ######## Tests cases begins Here ########
 
 # Legacy --> Need to be revamped
@@ -670,120 +667,6 @@ class TestBasics(unittest.TestCase):
         for i in node_ex1.iter_paths(only_paths=True):
             print(i)
 
-        print('\n*** test 13: test typed_value Node')
-
-        print('\n*** test 13.1:')
-
-        tux = dm.get_atom('TUX')
-
-        crit = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
-                                     node_kinds=[NodeInternals_TypedValue])
-
-        print('> before changing types:')
-
-        vt = {}
-        l1 = tux.get_reachable_nodes(internals_criteria=crit)
-        for e in l1:
-            print('Node.name: ', e.name, ', Id: ', e)
-            print('Node.env: ', e.env)
-            print('Node.value_type: ', e.cc.get_value_type())
-            vt[e] = e.cc.get_value_type()
-            if issubclass(vt[e].__class__, VT_Alt):  # isinstance(vt[e], (BitField, String)):
-                continue
-            compat = list(vt[e].compat_cls.values())
-            compat.remove(vt[e].__class__)
-            print('Compatible types: ', compat)
-
-            c = random.choice(compat)
-            # while True:
-            #     c = random.choice(compat)
-            #     if c != vt[e].__class__:
-            #         break
-
-            e.set_values(value_type=c())
-
-        res1 = False
-        if len(l1) == 29:
-            res1 = True
-
-        print('\n> after changing types:')
-
-        l1 = tux.get_reachable_nodes(internals_criteria=crit)
-        for e in l1:
-            print('Node.name', e.name)
-            print('Node.value_type:', e.cc.get_value_type())
-            new_vt = e.cc.get_value_type()
-            # if isinstance(new_vt, BitField):
-            if issubclass(vt[e].__class__, VT_Alt):
-                continue
-            if new_vt.__class__ == vt[e].__class__:
-                res2 = False
-                break
-            else:
-                res2 = True
-
-        # print(res1, res2)
-        # raise ValueError
-
-        print('\n*** test 13.2:')
-
-        evt = dm.get_atom('TVE')
-        l = evt.get_reachable_nodes(internals_criteria=crit)
-
-        print('\n> part1:\n')
-
-        print('--[ EVT1 ]-----[ EVT2 ]--')
-        for i in range(7):
-            print(evt.to_bytes())
-            evt.unfreeze_all()
-
-        vt = {}
-        for e in l:
-            print('-----')
-            print('Node.name:          ', e.name)
-            print('Node.env:           ', e.env)
-            print('Node.value_type:    ', e.cc.get_value_type())
-            vt[e] = e.cc.get_value_type()
-            # if isinstance(vt[e], BitField):
-            if issubclass(vt[e].__class__, VT_Alt):
-                continue
-            compat = list(vt[e].compat_cls.values())
-            print('Compatible types:  ', compat)
-            fuzzy = list(vt[e].fuzzy_cls.values())
-            print('Fuzz compat types: ', fuzzy)
-            c = random.choice(fuzzy)
-            e.set_values(value_type=c())
-            print("Set new value type '%s' for the Node %s!" % (c, e.name))
-
-        print('\n> part2:\n')
-
-        print('--[ EVT1 ]-----[ EVT2 ]--')
-        for i in range(20):
-            s = evt.to_bytes()
-            print(s)
-            if evt.env.exhausted_node_exists():
-                print("Exhausted Elts Exists!")
-                l = evt.env.get_exhausted_nodes()
-                for e in l:
-                    evt.env.clear_exhausted_node(e)
-                    print('Node %s has been cleared!' % e.name)
-                    if e.is_value():
-                        continue
-                    vt = e.cc.get_value_type()
-                    if isinstance(vt, BitField):
-                        continue
-                    if vt:
-                        compat = list(vt.compat_cls.values())
-                        compat.remove(vt.__class__)
-                        c = random.choice(compat)
-                        e.set_values(value_type=c())
-                        print("Set new value type '%s' for the Node %s!" % (c, e.name))
-
-            evt.unfreeze_all()
-
-        print(res1, res2)
-        results['test13'] = res1 and res2
-
         print('\n### SUMMARY ###')
 
         for k, v in results.items():
@@ -866,10 +749,6 @@ class TestMisc(unittest.TestCase):
             vt[e] = e.cc.get_value_type()
             if issubclass(vt[e].__class__, VT_Alt):
                 continue
-            compat = list(vt[e].compat_cls.values())
-            print('  Compatible types:   ', compat)
-            fuzzy = list(vt[e].fuzzy_cls.values())
-            print('  Fuzz compat types:  ', fuzzy)
 
         print('')
 
@@ -877,12 +756,13 @@ class TestMisc(unittest.TestCase):
         evt.make_finite(all_conf=True, recursive=True)
         evt.make_determinist(all_conf=True, recursive=True)
         evt.show()
+        orig_rnode = evt.to_bytes()
         prev_path = None
         turn_nb_list = []
         tn_consumer = TypedNodeDisruption()
         for rnode, node, orig_node_val, i in ModelWalker(evt, tn_consumer, make_determinist=True, max_steps=300):
             print('=======[ %d ]========' % i)
-            print('  orig:    ', rnode.to_bytes())
+            print('  orig:    ', orig_rnode)
             print('  ----')
             if node != None:
                 print('  fuzzed:  ', rnode.to_bytes())
@@ -893,7 +773,7 @@ class TestMisc(unittest.TestCase):
                 print('  current fuzzed node:     %s' % current_path)
                 prev_path = current_path
                 vt = node.cc.get_value_type()
-                print('  node value type:        ', vt)
+                print('  node value type (changed by disruptor):        ', vt)
                 if issubclass(vt.__class__, VT_Alt):
                     print('  |- node fuzzy mode:        ', vt._fuzzy_mode)
                 print('  node value type determinist:        ', vt.determinist)
@@ -911,8 +791,8 @@ class TestMisc(unittest.TestCase):
                 break
 
         print('\nTurn number when Node has changed: %r, number of test cases: %d' % (turn_nb_list, i))
-        good_list = [1, 13, 23, 33, 43, 52, 61, 71, 81, 91, 103, 113, 123, 133, 143,
-                     152, 162, 172, 182, 191, 200, 215, 230]
+        good_list = [1, 13, 23, 33, 43, 49, 55, 65, 75, 85, 97, 107, 117, 127, 137, 143, 153, 163,
+                     173, 182, 191, 206, 221]
 
         msg = "If Fuzzy_<TypedValue>.values have been modified in size, the good_list should be updated.\n" \
               "If BitField are in random mode [currently put in determinist mode], the fuzzy_mode can produce more" \
@@ -1599,8 +1479,8 @@ class TestModelWalker(unittest.TestCase):
         nt_data = data.get_clone()
 
         raw_vals = [
-            b' [!] ++++++++++ [!] ::=:: [!] ',
             b' [!] ++++++++++ [!] ::?:: [!] ',
+            b' [!] ++++++++++ [!] ::=:: [!] ',
             b' [!] ++++++++++ [!] ::\xff:: [!] ',
             b' [!] ++++++++++ [!] ::\x00:: [!] ',
             b' [!] ++++++++++ [!] ::\x01:: [!] ',
@@ -1621,8 +1501,8 @@ class TestModelWalker(unittest.TestCase):
             b' [!] ++++++++++ [!] ::../../../../../../etc/password::AAA::AAA::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::..\\..\\..\\..\\..\\..\\Windows\\system.ini::AAA::AAA::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::AAA::AAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::=:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::?:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::=:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\xff:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x00:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x01:: [!] ',
@@ -1643,16 +1523,16 @@ class TestModelWalker(unittest.TestCase):
             b' [!] ++++++++++ [!] ::../../../../../../etc/password::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::..\\..\\..\\..\\..\\..\\Windows\\system.ini::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA::AAA::=:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::?:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::=:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::\xff:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::\x00:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::\x01:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::\x80:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::\x7f:: [!] ',
 
-            b' [!] >>>>>>>>>> [!] ::=:: [!] ',
             b' [!] >>>>>>>>>> [!] ::?:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::=:: [!] ',
             b' [!] >>>>>>>>>> [!] ::\xff:: [!] ',
             b' [!] >>>>>>>>>> [!] ::\x00:: [!] ',
             b' [!] >>>>>>>>>> [!] ::\x01:: [!] ',
@@ -1673,8 +1553,8 @@ class TestModelWalker(unittest.TestCase):
             b' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::AAA::AAA::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::..\\..\\..\\..\\..\\..\\Windows\\system.ini::AAA::AAA::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::AAA::AAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::=:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::?:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::=:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\xff:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x00:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x01:: [!] ',
@@ -1695,8 +1575,8 @@ class TestModelWalker(unittest.TestCase):
             b' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::..\\..\\..\\..\\..\\..\\Windows\\system.ini::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA::AAA::=:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::?:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::=:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::\xff:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x00:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x01:: [!] ',
@@ -1704,7 +1584,7 @@ class TestModelWalker(unittest.TestCase):
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x7f:: [!] ',
         ]
 
-        tn_consumer = TypedNodeDisruption(respect_order=True)
+        tn_consumer = TypedNodeDisruption(respect_order=True, ignore_separator=True)
         ic = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
                                    negative_attrs=[NodeInternals.Separator],
                                    node_kinds=[NodeInternals_TypedValue],
@@ -1746,7 +1626,7 @@ class TestModelWalker(unittest.TestCase):
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True,
                                                                     max_steps=300):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 27)
+        self.assertEqual(idx, 21)
 
     def test_TypedNodeDisruption_2(self):
         nt = self.dm.get_atom('Simple')
@@ -1770,7 +1650,7 @@ class TestModelWalker(unittest.TestCase):
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True,
                                                                     max_steps=-1):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 450)
+        self.assertEqual(idx, 444)
 
     def test_TypedNodeDisruption_BitfieldCollapse(self):
         '''
@@ -1868,7 +1748,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of imgs: %d' % idx, rgb=Color.INFO))
 
-        self.assertEqual(idx, 116)
+        self.assertEqual(idx, 112)
 
     def test_USB(self):
         dm_usb = fmk.get_data_model_by_name('usb')
@@ -1884,8 +1764,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of confs: %d' % idx, rgb=Color.INFO))
 
-        self.assertIn(idx, [527])
-
+        self.assertIn(idx, [542])
 
 
 class TestNodeFeatures(unittest.TestCase):
@@ -3567,7 +3446,7 @@ class TestDataModelHelpers(unittest.TestCase):
                 break
             node_to_check = data.content['xml5/command/LOGIN/start-tag/content/attr1/val']
             if node_to_check.to_bytes() == b'None':
-                # on case should trigger this condition
+                # one case should trigger this condition
                 specific_cases_checked = True
             go_on = fmk.send_data_and_log([data])
             if not go_on:
@@ -3575,7 +3454,7 @@ class TestDataModelHelpers(unittest.TestCase):
         else:
             raise ValueError
 
-        assert i == 13
+        assert i == 22, 'number of test cases: {:d}'.format(i)
         assert specific_cases_checked
 
 class TestFMK(unittest.TestCase):

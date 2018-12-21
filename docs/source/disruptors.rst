@@ -51,7 +51,7 @@ Parameters:
         |      |       will reset its walk through the children nodes
         |      | default: True [type: bool]
         |_ ign_sep
-        |      | desc: when set to True, non-terminal separators will be ignored if
+        |      | desc: when set to True, separators will be ignored if
         |      |       any are defined.
         |      | default: False [type: bool]
         |_ fix

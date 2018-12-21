@@ -220,7 +220,7 @@ class SyncSizeObj(SyncObj):
         if not ok:
             print("\n*** WARNING: The node '{:s}' is not compatible with the integer"
                   " '{:d}'".format(self._node.name, size))
-        self._node.set_frozen_value(self._node.get_current_encoded_value())
+        self._node.set_frozen_value(self._node.get_current_value())
 
     def _sync_nodes_specific(self, src_node):
         if self.apply_to_enc_size:
