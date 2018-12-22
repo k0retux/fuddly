@@ -873,34 +873,11 @@ class String(VT_Alt):
                 test_case = orig_val[:-1] + sample.encode(self.codec)
                 self.values_fuzzy.append(test_case)
 
-        if CTRL_char_enabled:
-            if sz > 0:
-                self.values_fuzzy.append(b'\x08'*self.max_sz) # backspace characters
-            if sz == self.max_sz:
-                # also include fixed size string i.e., self.min_sz == self.max_sz
-                for c in self.ctrl_char_set:
-                    test_case = orig_val[:-1]+c.encode(self.codec)
-                    self.values_fuzzy.append(test_case)
-            else:
-                for c in self.ctrl_char_set:
-                    test_case = orig_val+c.encode(self.codec)
-                    self.values_fuzzy.append(test_case)
+        self.values_fuzzy += String.fuzz_cases_ctrl_chars(self.knowledge_source, orig_val, sz,
+                                                          self.max_sz, self.codec)
+        self.values_fuzzy += String.fuzz_cases_c_strings(self.knowledge_source, orig_val, sz,
+                                                         fuzz_magnitude)
 
-        if C_strings_enabled and sz > 1:
-            is_even = sz % 2 == 0
-            cpt = sz // 2
-            if is_even:
-                self.values_fuzzy.append(b'%n' * cpt)
-                self.values_fuzzy.append(b'%s' * cpt)
-            else:
-                self.values_fuzzy.append(orig_val[:1] + b'%n' * cpt)
-                self.values_fuzzy.append(orig_val[:1] + b'%s' * cpt)
-
-        if C_strings_enabled:
-            self.values_fuzzy.append(orig_val + b'%n' * int(400*fuzz_magnitude))
-            self.values_fuzzy.append(orig_val + b'%s' * int(400*fuzz_magnitude))
-            self.values_fuzzy.append(orig_val + b'\"%n\"' * int(400*fuzz_magnitude))
-            self.values_fuzzy.append(orig_val + b'\"%s\"' * int(400*fuzz_magnitude))
         self.values_fuzzy.append(orig_val + b'\r\n' * int(100*fuzz_magnitude))
 
         if self.codec == self.ASCII:
@@ -937,6 +914,63 @@ class String(VT_Alt):
         self.values_copy = copy.copy(self.values)
 
         self.drawn_val = None
+
+    @staticmethod
+    def fuzz_cases_c_strings(knowledge, orig_val, sz, fuzz_magnitude):
+        if knowledge is None \
+                or not knowledge.is_info_class_represented(Language) \
+                or knowledge.is_assumption_valid(Language.C):
+
+            fuzzy_values = []
+
+            if sz > 1:
+                is_even = sz % 2 == 0
+                cpt = sz // 2
+                if is_even:
+                    fuzzy_values.append(b'%n' * cpt)
+                    fuzzy_values.append(b'%s' * cpt)
+                else:
+                    fuzzy_values.append(orig_val[:1] + b'%n' * cpt)
+                    fuzzy_values.append(orig_val[:1] + b'%s' * cpt)
+            else:
+                fuzzy_values.append(b'%n')
+                fuzzy_values.append(b'%s')
+
+            fuzzy_values.append(orig_val + b'%n' * int(400*fuzz_magnitude))
+            fuzzy_values.append(orig_val + b'%s' * int(400*fuzz_magnitude))
+            fuzzy_values.append(orig_val + b'\"%n\"' * int(400*fuzz_magnitude))
+            fuzzy_values.append(orig_val + b'\"%s\"' * int(400*fuzz_magnitude))
+
+            return fuzzy_values
+
+        else:
+            return []
+
+
+    @staticmethod
+    def fuzz_cases_ctrl_chars(knowledge, orig_val, sz, max_sz, codec):
+        if knowledge \
+                and knowledge.is_info_class_represented(InputHandling) \
+                and knowledge.is_assumption_valid(InputHandling.Ctrl_Char_Set):
+
+            fuzzy_values = []
+
+            if sz > 0:
+                fuzzy_values.append(b'\x08'*max_sz) # backspace characters
+            if sz == max_sz:
+                # also include fixed size string i.e., self.min_sz == self.max_sz
+                for c in String.ctrl_char_set:
+                    test_case = orig_val[:-1]+c.encode(codec)
+                    fuzzy_values.append(test_case)
+            else:
+                for c in String.ctrl_char_set:
+                    test_case = orig_val+c.encode(codec)
+                    fuzzy_values.append(test_case)
+
+            return fuzzy_values
+
+        else:
+            return []
 
     def get_value(self):
         if not self.values:
@@ -1560,9 +1594,7 @@ class INT_str(INT):
 
     regex_bin = b'-?[01]+'
 
-    fuzzy_values = [0, -1, -2**32, 2 ** 32 - 1, 2 ** 32,
-                    b'%n'*8, b'%n'*100, b'\"%n\"'*100,
-                    b'%s'*8, b'%s'*100, b'\"%s\"'*100]
+    fuzzy_values = [0, -1, -2**32, 2 ** 32 - 1, 2 ** 32]
     value_space_size = -1  # means infinite
 
     def __init__(self, values=None, min=None, max=None, default=None, determinist=True,
@@ -1660,6 +1692,20 @@ class INT_str(INT):
             fuzzed_vals.append('8'*qty)
         if self._base <= 2:
             fuzzed_vals.append('2'*qty)
+
+        orig_val = self.get_current_value()
+        sz = len(orig_val)
+        if self._min_size and self._min_size > sz:
+            max_sz = self._min_size
+        else:
+            max_sz = sz
+
+        fuzzed_vals += String.fuzz_cases_ctrl_chars(self.knowledge_source, orig_val, sz,
+                                                    max_sz, codec=String.ASCII)
+        fuzzed_vals += String.fuzz_cases_c_strings(self.knowledge_source, orig_val, sz,
+                                                   fuzz_magnitude=0.3)
+
+        fuzzed_vals.append(orig_val + b'\r\n' * 100)
 
         if fuzzed_vals:
             if vt_list is None:

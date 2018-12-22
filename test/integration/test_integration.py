@@ -791,8 +791,8 @@ class TestMisc(unittest.TestCase):
                 break
 
         print('\nTurn number when Node has changed: %r, number of test cases: %d' % (turn_nb_list, i))
-        good_list = [1, 13, 23, 33, 43, 49, 55, 65, 75, 85, 97, 107, 117, 127, 137, 143, 153, 163,
-                     173, 182, 191, 206, 221]
+        good_list = [1, 13, 25, 37, 49, 55, 61, 73, 85, 97, 109, 121, 133, 145, 157, 163, 175, 187,
+                     199, 208, 217, 233, 248]
 
         msg = "If Fuzzy_<TypedValue>.values have been modified in size, the good_list should be updated.\n" \
               "If BitField are in random mode [currently put in determinist mode], the fuzzy_mode can produce more" \
