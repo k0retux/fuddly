@@ -79,7 +79,20 @@ class MyProto_DataModel(DataModel):
 
          ]}
 
-        self.register(req_desc)
+        req_atom = NodeBuilder(add_env=True).create_graph_from_desc(req_desc)
+
+        init_atom = req_atom.get_clone('init', ignore_frozen_state=True)
+        init_atom['.*/header'].set_subfield(idx=1, val=1)
+        init_atom.freeze()
+        register_atom = req_atom.get_clone('register', ignore_frozen_state=True)
+        register_atom['.*/header'].set_subfield(idx=1, val=10)
+        register_atom.freeze()
+        zregister_atom = req_atom.get_clone('zregister', ignore_frozen_state=True)
+        zregister_atom['.*/header'].set_subfield(idx=1, val=20)
+        zregister_atom['.*/header'].set_subfield(idx=2, val=3)
+        zregister_atom.freeze()
+
+        self.register(req_atom, init_atom, register_atom, zregister_atom)
 
     def validation_tests(self):
 

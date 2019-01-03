@@ -1791,18 +1791,18 @@ class BitField(VT_Alt):
 
     def make_private(self, forget_current_state):
         # no need to copy self.default (that should not be modified)
-        self.subfield_limits = copy.copy(self.subfield_limits)
-        self.subfield_sizes = copy.copy(self.subfield_sizes)
-        self.subfield_vals = copy.copy(self.subfield_vals)
-        self.subfield_vals_save = copy.copy(self.subfield_vals_save)
-        self.subfield_extrems = copy.copy(self.subfield_extrems)
-        self.subfield_extrems_save = copy.copy(self.subfield_extrems_save)
+        self.subfield_limits = copy.deepcopy(self.subfield_limits)
+        self.subfield_sizes = copy.deepcopy(self.subfield_sizes)
+        self.subfield_vals = copy.deepcopy(self.subfield_vals)
+        self.subfield_vals_save = copy.deepcopy(self.subfield_vals_save)
+        self.subfield_extrems = copy.deepcopy(self.subfield_extrems)
+        self.subfield_extrems_save = copy.deepcopy(self.subfield_extrems_save)
         if forget_current_state:
             self.reset_state()
         else:
-            self.idx = copy.copy(self.idx)
-            self.idx_inuse = copy.copy(self.idx_inuse)
-            self.subfield_fuzzy_vals = copy.copy(self.subfield_fuzzy_vals)
+            self.idx = copy.deepcopy(self.idx)
+            self.idx_inuse = copy.deepcopy(self.idx_inuse)
+            self.subfield_fuzzy_vals = copy.deepcopy(self.subfield_fuzzy_vals)
 
     def reset_state(self):
         self._reset_idx()
@@ -1851,6 +1851,10 @@ class BitField(VT_Alt):
             # specifically handled here (for preventing overflow),
             # because even if len(subfield_vals)==1, we add a new element
             # within, making a subfield_vals always >= 2.
+            try:
+                self.subfield_vals[idx].remove(val)
+            except:
+                pass
             self.subfield_vals[idx].insert(self.idx[idx], val)
             self.idx_inuse[idx] = self.idx[idx]
 
