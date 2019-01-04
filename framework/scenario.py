@@ -749,6 +749,7 @@ class Scenario(object):
         assert self._anchor is not None
         self._steps = []
         self._transitions = []
+        self._steps.append(self._anchor)
         self._graph_setup(self._anchor, self._steps, self._transitions)
 
     def _init_reinit_seq_properties(self):

@@ -1847,10 +1847,6 @@ class BitField(VT_Alt):
                 self.subfield_extrems[idx][1] = builtins.max(maxi, val)
             self.idx_inuse[idx] = self.idx[idx] = val - mini
         else:
-            # Note that the case "self.idx[idx]==1" has not to be
-            # specifically handled here (for preventing overflow),
-            # because even if len(subfield_vals)==1, we add a new element
-            # within, making a subfield_vals always >= 2.
             try:
                 self.subfield_vals[idx].remove(val)
             except:
