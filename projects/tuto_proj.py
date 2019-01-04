@@ -150,7 +150,7 @@ if serial_module:
 
 targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
            tuto_tg, net_tg, udpnet_tg, udpnetsrv_tg, rawnetsrv_tg,
-           TestTarget(),
+           TestTarget(fbk_samples=['CRC error', 'OK']),
            TestTarget()]
 
 if serial_module:
