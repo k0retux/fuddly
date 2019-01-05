@@ -363,6 +363,8 @@ class Step(object):
                     self._atom = {}
                 if update_node:
                     self._atom[idx] = self._scenario_env.dm.get_atom(self._node_name[idx])
+                    self._data_desc[idx] = Data(self._atom[idx])
+                    update_node = False
                 atom_list.append(self._atom[idx])
 
         return atom_list[0] if len(atom_list) == 1 else atom_list
