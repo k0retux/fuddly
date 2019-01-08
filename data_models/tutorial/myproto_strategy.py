@@ -14,7 +14,7 @@ def set_init_v3(env, step):
     step.content['.*/header'].set_subfield(2, 3)
 
 
-init_step = Step('init', fbk_timeout=0.5, do_before_data_processing=set_init_v3)
+init_step = Step('init', fbk_timeout=0.5, do_before_sending=set_init_v3)
 v3cmd_step = Step('zregister', fbk_timeout=1)
 final_step = FinalStep()
 

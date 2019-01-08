@@ -476,7 +476,7 @@ class Step(object):
                     if self.__class__.__name__ != 'Step':
                         step_desc += '[' + self.__class__.__name__ + ']'
                     else:
-                        step_desc += d.content.name if isinstance(d.content, Node) else 'Data(...)'
+                        step_desc += d.content.name.upper() if isinstance(d.content, Node) else 'Data(...)'
                 elif isinstance(d, str):
                     step_desc += "{:s}".format(self._node_name[idx].upper())
                 else:
