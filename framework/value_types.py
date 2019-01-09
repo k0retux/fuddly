@@ -1931,12 +1931,15 @@ class BitField(VT_Alt):
             self.subfield_sizes.append(size)
 
             if values is not None:
-                default = self.subfield_defaults[idx]
-                assert default is None
                 l = []
                 for v in values:
                     if self.is_compatible(v, size):
                         l.append(v)
+                default = self.subfield_defaults[idx]
+                if default is not None:
+                    assert default in l
+                    l.remove(default)
+                    l.insert(self.idx[idx], default)
                 self.subfield_vals.append(l)
                 self.subfield_extrems.append(None)
             else:
