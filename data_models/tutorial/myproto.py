@@ -61,7 +61,8 @@ class MyProto_DataModel(DataModel):
                              'contents': UINT32_be()},
                             {'name': 'content',
                              'sync_size_with': 'len',
-                             'contents': String(min_sz=20, max_sz=50, alphabet=string.printable, codec='latin-1')},
+                             'contents': String(min_sz=20, max_sz=50, alphabet='éùijklm:;!',
+                                                codec='latin-1')},
                             {'name': 'crc32',
                              'contents': CRC(vt=UINT32_be),
                              'node_args': ['filename', 'content']},
@@ -83,14 +84,14 @@ class MyProto_DataModel(DataModel):
 
         init_atom = req_atom.get_clone('init', ignore_frozen_state=True)
         init_atom['.*/header'].set_subfield(idx=1, val=1)
-        init_atom.freeze()
+        init_atom.unfreeze(recursive=True)
         register_atom = req_atom.get_clone('register', ignore_frozen_state=True)
         register_atom['.*/header'].set_subfield(idx=1, val=10)
-        register_atom.freeze()
+        register_atom.unfreeze(recursive=True)
         zregister_atom = req_atom.get_clone('zregister', ignore_frozen_state=True)
         zregister_atom['.*/header'].set_subfield(idx=1, val=20)
         zregister_atom['.*/header'].set_subfield(idx=2, val=3)
-        zregister_atom.freeze()
+        zregister_atom.unfreeze(recursive=True)
 
         self.register(req_atom, init_atom, register_atom, zregister_atom)
 
