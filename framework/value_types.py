@@ -139,13 +139,9 @@ class VT(object):
 
 class VT_Alt(VT):
 
-    def __init__(self, *args, **kargs):
+    def __init__(self):
         self._fuzzy_mode = False
         self._specific_fuzzy_vals = None
-        self.init_specific(*args, **kargs)
-
-    def init_specific(self, *args, **kargs):
-        raise NotImplementedError
 
     def switch_mode(self):
         if self._fuzzy_mode:
@@ -300,10 +296,10 @@ class String(VT_Alt):
     ASCII = codecs.lookup('ascii').name
     LATIN_1 = codecs.lookup('latin-1').name
 
-    def init_specific(self, values=None, size=None, min_sz=None,
-                      max_sz=None, determinist=True, codec='latin-1',
-                      extra_fuzzy_list=None, absorb_regexp=None,
-                      alphabet=None, min_encoded_sz=None, max_encoded_sz=None, encoding_arg=None):
+    def __init__(self, values=None, size=None, min_sz=None,
+                 max_sz=None, determinist=True, codec='latin-1',
+                 extra_fuzzy_list=None, absorb_regexp=None,
+                 alphabet=None, min_encoded_sz=None, max_encoded_sz=None, encoding_arg=None):
 
         """
         Initialize the String
@@ -340,6 +336,8 @@ class String(VT_Alt):
               provided to :meth:`String.init_encoding_scheme`. Any object that go through this
               parameter should support the ``__copy__`` method.
         """
+
+        VT_Alt.__init__(self)
 
         self.drawn_val = None
 
@@ -1080,7 +1078,6 @@ class INT(VT):
                                            .format(self.__class__))
 
         if values:
-            assert default is None
             if force_mode:
                 new_values = []
                 for v in values:
@@ -1101,6 +1098,10 @@ class INT(VT):
                         raise DataModelDefinitionError("Incompatible value ({!r}) with {!s}".format(v, self.__class__))
 
             self.values = list(values)
+            if default is not None:
+                assert default in self.values
+                self.values.remove(default)
+                self.values.insert(0, default)
             self.values_copy = list(self.values)
 
         else:
@@ -1755,11 +1756,13 @@ class BitField(VT_Alt):
     '''
     padding_one = [0, 1, 0b11, 0b111, 0b1111, 0b11111, 0b111111, 0b1111111]
 
-    def init_specific(self, subfield_limits=None, subfield_sizes=None,
-                      subfield_values=None, subfield_val_extremums=None,
-                      padding=0, lsb_padding=True,
-                      endian=VT.BigEndian, determinist=True,
-                      subfield_descs=None, defaults=None):
+    def __init__(self, subfield_limits=None, subfield_sizes=None,
+                 subfield_values=None, subfield_val_extremums=None,
+                 padding=0, lsb_padding=True,
+                 endian=VT.BigEndian, determinist=True,
+                 subfield_descs=None, defaults=None):
+
+        VT_Alt.__init__(self)
 
         self.drawn_val = None
         self.exhausted = False

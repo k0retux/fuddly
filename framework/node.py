@@ -1498,9 +1498,8 @@ class NodeInternals_GenFunc(NodeInternals):
 
     def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False,
                  only_generators=False, reevaluate_constraints=False):
-        # if self.is_attr_set(NodeInternals.Mutable):
-        # print(self.custo.reset_on_unfreeze_mode, self.generated_node.name,
-        #       self.default_custo.reset_on_unfreeze_mode)
+        # if self.is_attr_set(NodeInternals.DEBUG):
+        #     print('\n*** DBG Gen:', self.custo.reset_on_unfreeze_mode)
         if self.custo.reset_on_unfreeze_mode:
             # 'dont_change_state' is not supported in this case. But
             # if generator is stateless, it should not be a problem.
@@ -4209,12 +4208,13 @@ class NodeInternals_NonTerm(NodeInternals):
                     # don't bother trying to recover the previous one
                     pass
 
-                for e in iterable:
-                    self._cleanup_entangled_nodes_from(e)
-                    if e.is_frozen(conf) and (e.is_nonterm(conf) or e.is_genfunc(conf) or e.is_func(conf)):
-                        e.unfreeze(conf=conf, recursive=True, dont_change_state=dont_change_state,
-                                   ignore_entanglement=ignore_entanglement, only_generators=only_generators,
-                                   reevaluate_constraints=reevaluate_constraints)
+                if iterable is not None:
+                    for n in iterable:
+                        self._cleanup_entangled_nodes_from(n)
+                        if n.is_nonterm(conf) or n.is_genfunc(conf) or n.is_func(conf):
+                            n.unfreeze(conf=conf, recursive=True, dont_change_state=dont_change_state,
+                                       ignore_entanglement=ignore_entanglement, only_generators=only_generators,
+                                       reevaluate_constraints=reevaluate_constraints)
 
                 self.frozen_node_list = None
                 for n in self.subnodes_set:
@@ -4227,12 +4227,11 @@ class NodeInternals_NonTerm(NodeInternals):
                 if self.separator is not None:
                     iterable.add(self.separator.node)
 
-            if not reevaluate_constraints:
-                for e in iterable:
-                    if e.is_frozen(conf):
-                        e.unfreeze(conf=conf, recursive=True, dont_change_state=dont_change_state,
-                                   ignore_entanglement=ignore_entanglement, only_generators=only_generators,
-                                   reevaluate_constraints=reevaluate_constraints)
+            if not reevaluate_constraints and iterable is not None:
+                for n in iterable:
+                    n.unfreeze(conf=conf, recursive=True, dont_change_state=dont_change_state,
+                               ignore_entanglement=ignore_entanglement, only_generators=only_generators,
+                               reevaluate_constraints=reevaluate_constraints)
 
         if not dont_change_state and not only_generators and not reevaluate_constraints:
             self._cleanup_entangled_nodes()
@@ -5918,10 +5917,10 @@ class Node(object):
         if not self.is_conf_existing(conf):
             conf = self.current_conf
 
-        if self.is_frozen(conf):
-            self.internals[conf].unfreeze(next_conf, recursive=recursive, dont_change_state=dont_change_state,
-                                          ignore_entanglement=ignore_entanglement, only_generators=only_generators,
-                                          reevaluate_constraints=reevaluate_constraints)
+        # if self.is_frozen(conf):
+        self.internals[conf].unfreeze(next_conf, recursive=recursive, dont_change_state=dont_change_state,
+                                      ignore_entanglement=ignore_entanglement, only_generators=only_generators,
+                                      reevaluate_constraints=reevaluate_constraints)
 
         if not ignore_entanglement and self.entangled_nodes is not None:
             for e in self.entangled_nodes:
