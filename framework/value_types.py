@@ -1065,13 +1065,17 @@ class INT(VT):
     size = None
 
     def __init__(self, values=None, min=None, max=None, default=None, determinist=True,
-                 force_mode=False, fuzz_mode=False):
+                 force_mode=False, fuzz_mode=False, values_desc=None):
         self.idx = 0
         self.determinist = determinist
         self.exhausted = False
         self.drawn_val = None
         self.default = None
         self._specific_fuzzy_vals = None
+        self.values_desc = values_desc
+
+        if self.values_desc and not isinstance(self.values_desc, dict):
+            raise ValueError('@values_desc should be a dictionary')
 
         if not self.usable:
             raise DataModelDefinitionError("ERROR: {!r} is not usable! (use a subclass of it)"
@@ -1087,7 +1091,6 @@ class INT(VT):
                     new_values.append(v)
                 values = new_values
             elif fuzz_mode:
-                new_values = []
                 for v in values:
                     if not self.is_size_compatible(v):
                         raise DataModelDefinitionError("Incompatible value ({!r}) regarding possible"
@@ -1450,12 +1453,18 @@ class INT(VT):
         if self.drawn_val is None:
             self.get_value()
 
+        if self.values_desc:
+            desc = self.values_desc.get(self.drawn_val)
+            desc = '' if desc is None else ' [' + desc + ']'
+        else:
+            desc = ''
+
         if self.drawn_val < 0:
             formatted_val = '-0x' + hex(self.drawn_val)[3:].upper()
         else:
             formatted_val = '0x' + hex(self.drawn_val)[2:].upper()
 
-        return str(self.drawn_val) + ' (' + formatted_val + ')'
+        return str(self.drawn_val) + ' (' + formatted_val + ')' + desc
 
 
     def rewind(self):
