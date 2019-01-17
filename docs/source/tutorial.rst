@@ -5,7 +5,7 @@ In this tutorial we will begin with the basic UI of ``fuddly``. Then
 we will see how to use ``fuddly`` directly from an advanced python
 interpreter like ``ipython``. Finally, we will walk through basic
 steps to create a new data model and the way to define specific
-disruptors,
+disruptors.
 
 
 Using ``fuddly`` simple UI: ``Fuddly Shell``
@@ -69,7 +69,7 @@ Note that ``fuddly`` looks for *Data Model* files (within
 ``data_models/``) and *Project* files (within ``projects/``) during
 its initialization. A *Project* file is used to describe the targets
 that can be tested, the logger behaviour, and optionally specific
-monitoring means as well as some virtual operators.
+monitoring means as well as some scenarios and/or virtual operators.
 
 .. seealso:: To create a new project file, and to describe the
              associated components refer to :ref:`tuto:project`.
@@ -98,7 +98,7 @@ You can look at the defined targets by issuing the following command:
 
    -=[ Available Targets ]=-
 
-   [0] EmptyTarget
+   [0] EmptyTarget [ID: 307144]
    [1] LocalTarget [Program: display]
    [2] LocalTarget [Program: okular]
    [3] LocalTarget [Program: unzip, Args: -d ~/fuddly_data/workspace/]
@@ -114,8 +114,15 @@ experiment without a real target. But let's say you want to fuzz the
    :linenos:
    :emphasize-lines: 1
 
-   >> set_target 3
+   >> load_targets 3
 
+.. note::
+   You can also load several targets at the same time if you want to sequence different actions
+   through various systems or on the same system but through different kinds of interfaces
+   (represented by different targets). To do it, provide a list of target IDs to the
+   ``load_targets`` command. For instance to load the targets 1, 4 and 5, issue the command::
+
+     >> load_targets 1 4 5
 
 .. seealso::
    In order to define new targets, look at :ref:`targets-def`.
@@ -168,7 +175,7 @@ issuing the following command:
 
    *** Data Model 'zip' loaded ***
    *** Logger is started ***
-   *** Target initialization ***
+   *** Target initialization: (0) EmptyTarget [ID: 307144] ***
    *** Monitor is started ***
 
    *** [ Fuzz delay = 0 ] ***
@@ -190,14 +197,24 @@ issuing the following command:
    - The timeout value for checking target's health. (Can be changed
      through the command ``set_health_timeout``)
 
+Finally, you may prefer to directly launch your project thanks to
+the command ``run_project``. Indeed, by using it, you will automatically trigger the commands we
+just talked about. Regarding the loaded data models it will initially load what is defined as default
+in the project file. In the case of the ``standard`` project, if you issue the following command::
 
-Finally, note that if you know the target from the project file you
-want to interact with, you can directly launch your project thanks to
-the command ``run_project``. Basically by issuing ``run_project
-standard 1``, you will automatically trigger the commands we just
-talked about. Note this command will initially load the default data
-model defined in the ``standard`` project file, which is the imaginary
-data model used by our tutorial (``mydf``). 
+>> run_project standard
+
+the imaginary data model used by our tutorial (``mydf``) will be loaded and the default target
+will be chosen, namely the ``EmptyTarget`` (usefull for testing purpose) with the ID 0.
+
+In order to run the project with the ``unzip`` target (ID 4), you will have to issue the following
+command::
+
+>> run_project standard 4
+
+.. note::
+   If you want to load other targets while your project is currently running, you should use the
+   ``reload_all`` command (refer to :ref:`tuto-reload_cmd`)
 
 .. note::
    If you want to load another data model at any time while your
@@ -216,11 +233,12 @@ Send Malformed ZIP Files to the Target (Manually)
 How to Send a ZIP File
 ++++++++++++++++++++++
 
-In order to send a ZIP file to the target, type the following::
+In order to send a ZIP file to a loaded target, type the following::
 
-   >> send ZIP
+   >> send ZIP [target ID]
 
-which will invoke the ``unzip`` program with a ZIP file:
+In our case we previously only loaded the target ID 3 (linked to the ``unzip`` program). It means that
+issuing the following command with 3 as <target ID> will invoke the ``unzip`` program with a ZIP file:
 
 .. code-block:: none
 
@@ -236,6 +254,16 @@ which will invoke the ``unzip`` program with a ZIP file:
    ### Target Feedback:
    ...
    >> 
+
+.. note::
+   If you don't provide a target ID on the command line, the one that will be used will be the first
+   loaded one. Thus in our case, we can forget to specify the target ID.
+
+.. note::
+   You can also send data to multiple targets at once (assuming that you enabled them at first), by
+   providing the list of target IDs like the following command::
+
+     >> send ZIP 3 5
 
 Note that a :class:`framework.data_model.DataModel` can define any number of data
 types---to model for instance the various atoms within a data format,
@@ -304,7 +332,7 @@ To send in a loop, five ZIP archives generated from the data model in
 a deterministic way---that is by walking through the data model---you
 can use the following command::
 
-   >> send_loop 5 ZIP<determinist=True> tWALK
+   >> send_loop 5 ZIP(determinist=True) tWALK
 
 We use for this example, the generic stateful disruptor ``tWALK`` whose purpose
 is to simply walk through the data model. Note that disruptors are
@@ -316,7 +344,7 @@ Note that if you want to send data indefinitely until the generator exhausts (in
 or a stateful disruptor (in our case ``tWALK``) of the chain exhausts you should use ``-1`` as
 the number of iteration. In our case it means issuing the following command::
 
-   >> send_loop -1 ZIP<determinist=True> tWALK
+   >> send_loop -1 ZIP(determinist=True) tWALK
 
 And if you want to stop the execution before the normal termination (which could never happen if
 the ``finite`` parameter has not been set), then you have to issue a ``SIGINT`` signal to ``fuddly`` via
@@ -401,7 +429,7 @@ Let's illustrate this with the following example:
    :linenos:
    :emphasize-lines: 1,16,19,25,30
 
-   >> send ZIP_00 C(nb=2:path="ZIP_00/file_list/.*/file_name") tTYPE<max_steps=50>(order=True) SIZE(sz=256)
+   >> send ZIP_00 C(nb=2:path="ZIP_00/file_list/.*/file_name") tTYPE(max_steps=50:order=True) SIZE(sz=256)
 
    __ setup generator 'g_zip_00' __
    __ setup disruptor 'd_corrupt_node_bits' __
@@ -490,21 +518,12 @@ can see on lines 16 & 19.
 
 
 
-.. note:: Generic parameters are given to data makers
-   (generators/disruptors) through a tuple wrapped with the characters
-   ``<`` and ``>`` and separated with the character ``:``. Syntax::
-
-     data_maker_type<param1=val1:param2=val2>
-
-   Specific parameters are given to data makers
+.. note::
+   Parameters are given to data makers
    (generators/disruptors) through a tuple wrapped with the characters
    ``(`` and ``)`` and separated with the character ``:``. Syntax::
    
      data_maker_type(param1=val1:param2=val2)
-
-   Generic and specific parameters can be used together. Syntax::
-
-     data_maker_type<param1=val1>(param2=val2:param3=val3)
 
 
 After ``C`` has performed its corruption, fuddly gets the result and
@@ -566,7 +585,7 @@ exceeds 256---as the parameter ``sz`` is equal to 256.
    :linenos:
    :emphasize-lines: 1,5-7,11,16,17-18
 
-   >> send ZIP_00 C(nb=2:path="$ZIP/file_list.*") tTYPE<max_steps=50>(order=True) SIZE(sz=256)
+   >> send ZIP_00 C(nb=2:path="$ZIP/file_list.*") tTYPE(max_steps=50:order=True) SIZE(sz=256)
 
    ========[ 2 ]==[ 20/08/2015 - 15:20:08 ]=======================
    ### Target ack received at: None
@@ -688,13 +707,14 @@ Last, to avoid re-issuing the same command for each time you
 want to send a new data, you can use the ``send_loop`` command as
 follows::
 
-  >> send_loop <NB> ZIP_00 C(nb=2:path="ZIP_00/file_list/.*") tTYPE<max_steps=50>(order=True) SIZE(sz=256)
+  >> send_loop <NB> ZIP_00 C(nb=2:path="ZIP_00/file_list/.*") tTYPE(max_steps=50:order=True) SIZE(sz=256)
 
 where ``<NB>`` shall be replaced by the maximum number of iteration
 you want before fuddly return to the prompt. Note that it is a
 maximum; in our case it will stop at the 50 :sup:`th` run because of
-``tTYPE``.
-
+``tTYPE``. Note that you can also use the special value -1 to loop indefinitely
+or until a data maker is exhausted.
+In such situation, if you want to interrupt the looping, just use ``Ctrl+C``.
 
 .. _tuto:reset-dmaker:
 
@@ -704,7 +724,7 @@ Resetting & Cloning Disruptors
 Whether you want to use generators or disruptors that you previously
 used in a *data maker chain*, you would certainly need to reset it or
 to clone it. Indeed, every data maker has an internal sequencing state,
-that remember if it has been disabled (and for generators it also
+that remember if it has been disabled (and for generators it may also
 keeps the *seeds*). Thus, if you want to reuse it, one way is to reset
 it by issuing the following command::
 
@@ -717,15 +737,14 @@ You can also reset all the data makers at once by issuing the following command:
 
   >> reset_all_dmakers
 
-.. note:: You can also choose to cleanup a *Generator* without resetting the
-   specifics of the previously produced data, that is, preserving the *seed* that
-   guided the data generation. Actually this seed is a copy of the
-   data that has been generated at the beginning, before any disruptor got a chance to
-   modify it. This original data is kept within the generator and will be provided again
-   if you use the command ``cleanup_dmaker`` instead of ``reset_dmaker``. The latter will
-   remove this seed.
+.. note::
+   In the case where the original data (i.e., the pristine generated data that does not get changed
+   by any disruptor) is asked to be preserved (for instance by using the command ``send_loop_keepseed``),
+   for repeatability purpose (when issuing the same command again), using the previous command will
+   also remove this original data. Thus you could prefer to use the command ``cleanup_dmaker`` that
+   will only reset the sequencing state, without resetting the seed (i.e., the original data).
 
-   Keeping such *seeds* may consume a lot of memory at some point. Moreover, they may only
+   Note that keeping such *seeds* may consume a lot of memory at some point. Moreover, they may only
    be useful for non-determinist data model.
 
 
@@ -743,6 +762,8 @@ the cloned data makers::
   >> send ZIP_00#new tTYPE#new
 
 
+.. _tuto-reload_cmd:
+
 Reloading Data Models / Targets / ...
 +++++++++++++++++++++++++++++++++++++
 
@@ -756,8 +777,8 @@ probes, ..., you have to reload every fuddly subsystems. To do so, you
 only need to issue the command ``reload_all``.
 
 Now, imagine that you want to switch to a new target already
-registered, simply issue the command ``reload_all <target_id>``, where
-``<target_id>`` is picked up through the IDs displayed by the command
+registered, simply issue the command ``reload_all [target_ID1 .. target_ID2]``, where
+``target IDs`` are picked up through the IDs displayed by the command
 ``show_targets``
 
 Finally, if you want to switch to a new data model while a project is
@@ -815,7 +836,7 @@ This command will display the `following <#operator-show>`_:
 To launch the operator ``Op1`` and limit to 5 the number of test cases to
 run, issue the command::
 
-  >> launch_operator Op1<max_steps=5>
+  >> launch_operator Op1(max_steps=5)
 
 This will trigger the Operator that will execute the ``display``
 program with the first generated JPG file. It will look at ``stdout``
@@ -826,7 +847,7 @@ also try to avoid saving JPG files that trigger errors whose type has
 already been seen. Once the operator is all done with this first test
 case, it can plan the next actions it needs ``fuddly`` to perform for
 it. In our case, it will go on with the next iteration of a disruptor
-chain, basically ``JPG<finite=True> tTYPE``.
+chain, basically ``JPG(finite=True) tTYPE``.
 
 
 Replay Data From a Previous Session
@@ -879,15 +900,12 @@ will need to issue the following commands:
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 1,2,5
 
    from framework.plumbing import *
 
    fmk = FmkPlumbing()
 
-
-The lines 1, 2 and 5 are not necessary if you don't intend to use
-external libraries. From now on you can use ``fuddly`` through the
+From now on you can use ``fuddly`` through the
 object ``fmk``. Every commands defined by ``Fuddly Shell`` (refer to
 :ref:`tuto:start-fuzzshell`) are backed by a method of the class
 :class:`framework.plumbing.FmkPlumbing`.
@@ -911,7 +929,7 @@ Here under some basic commands to start with:
    fmk.show_targets()
 
    # Select the target with ID ``3``
-   fmk.set_target(3)
+   fmk.load_targets(3)
 
    # To show all the available data models
    fmk.show_data_models()
@@ -967,7 +985,7 @@ Here under some basic commands to start with:
    # Perform a tTYPE disruption on it, but give the 5th generated
    # cases and enforce the disruptor to strictly follow the ZIP structure
    # Finally truncate the output to 200 bytes
-   action_list = [('tTYPE', UI(init=5), UI(order=True)), ('SIZE', None, UI(sz=200))]
+   action_list = [('tTYPE', UI(init=5, order=True)), ('SIZE', UI(sz=200))]
    altered_data = fmk.get_data(action_list, data_orig=Data(dt))
 
    # Send this new data and look at the actions that perform tTYPE and
@@ -1935,6 +1953,7 @@ another inappropriate separator.
 	       new_values.remove(orig_val)
 
 	   node.import_value_type(value_type=vtype.String(values=new_values))
+       node.unfreeze()
 
 	   node.make_finite()
 	   node.make_determinist()
@@ -2038,7 +2057,7 @@ show the beginning of ``generic/standard_proj.py``:
    # If you only want one default DM, provide its name directly as follows:
    # project.default_dm = 'mydf'
 
-   logger = Logger(export_data=False, explicit_data_recording=False,
+   logger = Logger(record_data=False, explicit_data_recording=False,
 		   export_orig=False, export_raw_data=False)
 
    printer1_tg = PrinterTarget(tmpfile_ext='.png')
@@ -2067,12 +2086,18 @@ show the beginning of ``generic/standard_proj.py``:
    targets = [local_tg, local2_tg, local3_tg, printer1_tg, net_tg]
 
 
-A project file should contain at a minimum a
-:class:`framework.project.Project` object (referenced by a variable
-``project``), a :class:`framework.logger.Logger` object
-(:ref:`logger-def`, referenced by a variable ``logger``), and
-optionally target objects (referenced by a variable ``targets``,
-:ref:`targets-def`), and operators & probes (:ref:`tuto:operator`).
+A project file should contain at a minimum:
+
+- a :class:`framework.project.Project` object (referenced by a variable ``project``)
+- a :class:`framework.logger.Logger` object (:ref:`logger-def`, referenced by a variable ``logger``)
+
+and optionally:
+
+- targets (referenced by a variable ``targets``, :ref:`targets-def`)
+- scenarios (:ref:`scenario-infra`) that can be registered into a project through the method
+  :meth:`framework.project.Project.register_scenarios`
+- probes (:ref:`tuto:probes`).
+- operators (:ref:`tuto:operator`).
 
 A default data model or a list of data models can be added to the
 project through its attribute ``default_dm``. ``fuddly`` will use this
@@ -2176,7 +2201,7 @@ The outputs of the logger are of four types:
 
 Some parameters allows to customize the behavior of the logger, such as:
 
-- ``export_data`` which control the location of where data
+- ``record_data`` which control the location of where data
   will be stored. If set to ``False``, instead of being stored in
   separate files as explained previously, they will be written
   directly within the log files (if ``enable_file_logging`` is set to ``True``).
@@ -2299,7 +2324,7 @@ is given here under:
        if fmk_feedback.is_flag_set(FmkFeedback.NeedChange):
           op.set_flag(Operation.Stop)
        else:
-          actions = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', None, UI(deep=True))]
+          actions = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', UI(deep=True))]
           op.add_instruction(actions)
 
        return op
@@ -2421,7 +2446,7 @@ information from the target is given here under:
 
            status_code = check(target)
 
-           self.pstatus.set_status(status_code)
+           self.pstatus.value = status_code
 
            if status_code < 0:
                self.status.set_private_info("Something is wrong with the target!")
@@ -2515,7 +2540,7 @@ Let's illustrate this with the following example:
 
             health_status = monitor.get_probe_status(health_check)
 
-            if health_status.get_status() < 0 and self.op_state == 'critical':
+            if health_status.value < 0 and self.op_state == 'critical':
                 linst.set_instruction(LastInstruction.RecordData)
                 linst.set_operator_feedback('Data sent seems worthwhile!')
                 linst.set_operator_status(-3)

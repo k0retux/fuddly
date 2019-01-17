@@ -22,8 +22,10 @@
 ################################################################################
 
 import os
+import sys
 import subprocess
 import re
+import inspect
 
 def ensure_dir(f):
     d = os.path.dirname(f)
@@ -73,3 +75,13 @@ def retrieve_app_handler(filename):
         result = re.search("Exec=(.*)", buff)
         app_name = result.group(1).split()[0]
     return app_name
+
+
+if sys.version_info[0] > 2:
+    def get_caller_object(stack_frame=2):
+        caller_frame_record = inspect.stack()[stack_frame]
+        return caller_frame_record.frame.f_locals['self']
+else:
+    def get_caller_object(stack_frame=2):
+        caller_frame_record = inspect.stack()[stack_frame]
+        return caller_frame_record[0].f_locals['self']

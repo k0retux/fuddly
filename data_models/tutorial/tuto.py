@@ -1,5 +1,4 @@
 import sys
-sys.path.append('.')
 
 from framework.plumbing import *
 
@@ -8,13 +7,16 @@ from framework.value_types import *
 from framework.data_model import *
 from framework.encoders import *
 import framework.dmhelpers.xml as xml
+from framework.dmhelpers.json import *
+from framework.dmhelpers.xml import tag_builder as xtb
+from framework.dmhelpers.xml import xml_decl_builder
 
 class MyDF_DataModel(DataModel):
 
     file_extension = 'df'
     name = 'mydf'
 
-    def absorb(self, data, idx):
+    def create_node_from_raw_data(self, data, idx, filename):
         pass
 
     def build_data_model(self):
@@ -449,6 +451,7 @@ class MyDF_DataModel(DataModel):
                  {'name': 'inside_cpy',
                   'clone': 'i2'},
                  xml.tag_builder('D1', params={'p1':'a', 'p2': ['foo', 'bar'], 'p3': 'c'},
+                                 specific_fuzzy_vals={'p2': ['myfuzzyvalue!']},
                                  contents= \
                                      {'name': 'inside',
                                       'contents': [
@@ -461,11 +464,80 @@ class MyDF_DataModel(DataModel):
                   'contents': UINT16_be(values=[30,40,50])},
              ] }
 
+        xml5_desc = \
+            {'name': 'xml5',
+             'contents': [
+                 xml_decl_builder(determinist=False),
+                 xtb('command', params={'name': ['LOGIN', 'CMD_1', 'CMD_2']},
+                     nl_prefix=True, refs={'name': 'cmd_val'}, contents= \
+                         [xtb('LOGIN', condition=(RawCondition(val=['LOGIN']), 'cmd_val'),
+                              params={'auth': ['cert', 'psk'], 'backend': ['ssh', 'serial']},
+                              specific_fuzzy_vals={'auth': ['None']}, determinist=False, contents= \
+                             [xtb('msg_id', contents=Node('mid', vt=INT_str(min=0))),
+                              xtb('username', contents=['MyUser'], absorb_regexp='\w*'),
+                              xtb('password', contents=['plopi'],
+                                  absorb_regexp='[^<\s]*')]),
+                          xtb('CMD_1', condition=(RawCondition(val=['CMD_1']), 'cmd_val'), contents= \
+                              [{'name': 'msg_id'},
+                               xtb('counter', contents=Node('counter_val', vt=UINT8()))]),
+                          xtb('CMD_2', condition=(RawCondition(val=['CMD_2']), 'cmd_val'), contents= \
+                              [{'name': 'msg_id'},
+                               {'name': 'counter'},
+                               xtb('filename', contents=Node('fln', vt=Filename(values=['/usr/bin/ls'])))])
+                          ])
+             ]}
+
+        json_sample_1 = \
+            {"menu": {
+                "id": "file",
+                "value": "File",
+                "popup": {
+                    "menuitem": [
+                        {"value": "New", "onclick": "CreateNewDoc()"},
+                        {"value": "Open", "onclick": "OpenDoc()"},
+                        {"value": "Close", "onclick": "CloseDoc()"}
+                    ]
+                }
+            }}
+
+        json1_desc = json_builder('json1', sample=json_sample_1)
+
+        json_sample_2 = \
+            {"glossary": {
+                "title": "example glossary",
+                "GlossDiv": {
+                    "title": "S",
+                    "GlossList": {
+                        "GlossEntry": {
+                            "ID": "SGML",
+                            "SortAs": "SGML",
+                            "GlossTerm": "Standard Generalized Markup Language",
+                            "Acronym": "SGML",
+                            "Abbrev": "ISO 8879:1986",
+                            "GlossDef": {
+                                "para": "A meta-markup language, used to create markup languages such as DocBook.",
+                                "GlossSeeAlso": ["GML", "XML"]
+                            },
+                            "GlossSee": "markup"
+                        }
+                    }
+                }
+            }}
+
+        json2_desc = json_builder('json2', sample=json_sample_2)
+
+        file_desc = \
+            {'name': 'file',
+             'contents': Filename(values=['test.txt']),
+             'debug': True
+            }
+
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
                       shape_desc, for_network_tg1, for_network_tg2, for_net_default_tg, basic_intg,
                       enc_desc, example_desc,
-                      regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc)
+                      regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc, xml5_desc,
+                      json1_desc, json2_desc, file_desc)
 
 
 data_model = MyDF_DataModel()

@@ -31,7 +31,7 @@ import framework
 from libs.utils import ensure_dir, ensure_file
 
 
-fuddly_version = '0.26'
+fuddly_version = '0.27'
 
 framework_folder = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 # framework_folder = os.path.dirname(framework.__file__)
@@ -59,6 +59,8 @@ external_libs_folder = fuddly_data_folder + 'external_libs' + os.sep
 ensure_dir(external_libs_folder)
 external_tools_folder = fuddly_data_folder + 'external_tools' + os.sep
 ensure_dir(external_tools_folder)
+config_folder = os.path.join(fuddly_data_folder, 'config') + os.sep
+ensure_dir(config_folder)
 
 user_projects_folder = fuddly_data_folder + 'user_projects' + os.sep
 ensure_dir(user_projects_folder)
@@ -66,6 +68,10 @@ ensure_file(user_projects_folder + os.sep + '__init__.py')
 user_data_models_folder = fuddly_data_folder + 'user_data_models' + os.sep
 ensure_dir(user_data_models_folder)
 ensure_file(user_data_models_folder + os.sep + '__init__.py')
+
+user_targets_folder = fuddly_data_folder + 'user_targets' + os.sep
+ensure_dir(user_targets_folder)
+ensure_file(user_targets_folder + os.sep + '__init__.py')
 
 fmk_folder = app_folder + os.sep + 'framework' + os.sep
 

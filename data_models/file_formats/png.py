@@ -31,7 +31,7 @@ class PNG_DataModel(DataModel):
     file_extension = 'png'
     name = 'png'
 
-    def absorb(self, data, idx):
+    def create_node_from_raw_data(self, data, idx, filename):
         nm = 'PNG_{:0>2d}'.format(idx)
         png = self.png.get_clone(nm, new_env=True)
         status, off, size, name = png.absorb(data, constraints=AbsNoCsts(size=True))

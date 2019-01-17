@@ -41,7 +41,7 @@ A First Example
 Let's begin with a simple example that interconnect 3 steps in a loop without any callback.
 
 .. note:: All the examples (or similar ones) of this chapter are provided in the file
-  ``<fuddly_root>/data_models/tuto_strategy.py``.
+  ``<fuddly_root>/data_models/tutorial/tuto_strategy.py``.
 
 .. code-block:: python
    :linenos:
@@ -68,11 +68,21 @@ Let's begin with a simple example that interconnect 3 steps in a loop without an
 
     tactics.register_scenarios(sc1)
 
-You should first note that scenarios have to be described in a ``*_strategy.py`` file that matches
-the data model you base your scenarios on. In our case we use the data model ``mydf`` defined in
-``tuto.py`` (refer to :ref:`dm:mydf` for further explanation on file organization).
-The special object ``tactics`` (line 4) is usually used to register the data makers (`disruptors` or
-`generators`) specific to a data model (refer to :ref:`tuto:disruptors` for details). It is also used
+Note that scenarios can be described:
+
+- either in a ``*_strategy.py`` file that matches the data model you base your scenarios on;
+- or in a project file, if your scenarios use different data models involved in your project or
+  the scenarios are agnostic to any data model but have a meaning only at project level.
+
+In what follows we illustrate how to describe scenarios in the context of the data model ``mydf`` defined in
+``tuto.py`` (refer to :ref:`dm:mydf` for further explanation on file organization). Describing scenarios
+in the context of a project will be the same except for the scenarios registration step, where the method
+:meth:`framework.project.Project.register_scenarios` will have to be used to make them
+available within the framework.
+
+In our example, the registration goes through the special object ``tactics`` (line 4) of ``tuto_strategy.py``
+which is usually used to register the data makers (`disruptors` or
+`generators`) specific to a data model (refer to :ref:`tuto:disruptors` for details), but also used
 to register scenarios as shown in line 20.
 
 From line 9 to 11 we define 3 :class:`framework.scenario.Step`:
@@ -153,9 +163,14 @@ Steps
 -----
 
 The main objective of a :class:`framework.scenario.Step` is to command the generation and sending
-of one or multiple data to the target selected in the framework. The data generation depends on
+of one or multiple data to targets selected in the framework. The data generation depends on
 what has been provided to the parameter ``data_desc`` of a :class:`framework.scenario.Step`. This
 is described in the section :ref:`sc:dataprocess`.
+
+Note that the data generated in one step will be sent by default to the first loaded target. If the
+scenario you describe involve different targets, you could then refer to them by specifying virtual
+target IDs in the step constructor thanks to the parameter ``vtg_ids``. Virtual target IDs are then
+to be mapped to real targets within the project file. Refer to :ref:`multi-target-scenario`.
 
 A step can also modify the way the feedback is handled after the data have been emitted by the
 framework. The parameters ``fbk_timeout``, and ``fbk_mode`` (refer to :ref:`targets`) are used
@@ -265,16 +280,16 @@ A brief explanation is provided below:
 
   This type of callback takes the additional parameter ``feedback`` filled by the framework with
   the target and/or probes feedback further to the current step data sending. It is an object
-  :class:`framework.database.FeedbackHandler` that provides the handful method
-  :meth:`framework.database.FeedbackHandler.iter_entries` which returns a generator that iterates
+  :class:`framework.database.FeedbackGate` that provides the handful method
+  :meth:`framework.database.FeedbackGate.iter_entries` which returns a generator that iterates
   over:
 
     - all the feedback entries associated to a specific feedback ``source`` provided as a
       parameter---and for each entry the triplet ``(status, timestamp, content)`` is provided;
     - all the feedback entries if the ``source`` parameter is ``None``---and for each entry the 4-uplet
       ``(source, status, timestamp, content)`` is provided. Note that for such kind of iteration, the
-      :class:`framework.database.FeedbackHandler` object can also be directly used as
-      an iterator---avoiding a call to :meth:`framework.database.FeedbackHandler.iter_entries`.
+      :class:`framework.database.FeedbackGate` object can also be directly used as
+      an iterator---avoiding a call to :meth:`framework.database.FeedbackGate.iter_entries`.
 
   This object can also be tested as a boolean object, returning False if there is no feedback at all.
 
@@ -335,7 +350,7 @@ service for instance. This is illustrated in the following example in the lines 
     step1 = Step('exist_cond', fbk_timeout=2, set_periodic=[periodic1, periodic2])
     step2 = Step('separator', fbk_timeout=5)
     step3 = NoDataStep()
-    step4 = Step(DataProcess(process=[('C',None,UI(nb=1)),'tTYPE'], seed='enc'))
+    step4 = Step(DataProcess(process=[('C', UI(nb=1)),'tTYPE'], seed='enc'))
 
     step1.connect_to(step2)
     step2.connect_to(step3, cbk_after_fbk=feedback_callback)
@@ -404,7 +419,7 @@ The execution of this scenario will follow the pattern::
 
 .. _sc:dataprocess:
 
-Data generation process
+Data Generation Process
 -----------------------
 
 The data produced by a :class:`framework.scenario.Step` or a :class:`framework.scenario.Periodic`
@@ -451,7 +466,7 @@ Here under examples of steps leveraging the different ways to describe their dat
 
    Step( Data('A raw message') )
 
-   Step( DataProcess(process=['ZIP', 'tSTRUCT', ('SIZE', None, UI(sz=100))]) )
+   Step( DataProcess(process=['ZIP', 'tSTRUCT', ('SIZE', UI(sz=100))]) )
    Step( DataProcess(process=['C', 'tTYPE'], seed='enc') )
    Step( DataProcess(process=['C'], seed=Data('my seed')) )
 
@@ -460,6 +475,32 @@ meaning the framework will be ordered to use :meth:`framework.target.Target.send
 (refer to :ref:`targets-def`). For that purpose, you have to provide the ``Step`` constructor with
 a list of `data descriptors` (instead of one).
 
+
+.. _multi-target-scenario:
+
+Scenario Involving Multiple Targets
+-----------------------------------
+
+If you want to define a scenario that involves multiple targets, you will have to refer to the
+different targets through virtual target IDs.
+To illustrate such case, let's look at the ``ex1`` scenario defined in the ``tuto``
+data model (refer to the file ``data_models/tutorial/tuto_strategy.py``). ``step1`` and ``step2`` are defined with
+respectively the virtual target ID ``0`` and the virtual target ID ``1``::
+
+  step1 = Step(... vtg_ids=0)
+  step2 = Step(... vtg_ids=1)
+
+Then, in order to use this scenario in your project you will have to provide a mapping with real targets
+thanks to the method :meth:`framework.project.Project.map_targets_to_scenario`. For instance in the
+``tuto`` project (refer to the file ``projects/tuto_proj.py``), a mapping is created for the
+scenario ``ex1``::
+
+  project.map_targets_to_scenario('ex1', {0: 8, 1: 9, None: 9})
+
+A mapping is a simple python dictionnary that maps virtual target IDs to real target IDs. In our
+case, virtual IDs 0 and 1 have been mapped respectiveley to real IDs 8 and 9. Finally, the last
+association with the ``None`` virtual target ID is to cover data generated by steps that did not
+specify any virtual IDs at all.
 
 .. _scenario-fuzz:
 
@@ -504,7 +545,7 @@ an imaginary protocol.
     :scale: 100%
 
 .. note::
-    It is described by the following code snippet extracted from ``data_models/tuto_strategy.py``:
+    It is described by the following code snippet extracted from ``data_models/tutorial/tuto_strategy.py``:
 
     .. code-block:: python
        :linenos:

@@ -108,7 +108,7 @@ class NodeBuilder(object):
         n = self._create_graph_from_desc(desc, None)
 
         if self._add_env_to_the_node:
-            self._register_todo(n, self._set_env, prio=self.LOW_PRIO)
+            self._register_todo(n, self._set_env, prio=self.VERYLOW_PRIO)
 
         todo = self._create_todo_list()
         while todo:
@@ -204,7 +204,7 @@ class NodeBuilder(object):
         if clone_ref is not None:
             ref = self._handle_name(clone_ref)
             self._register_todo(nd, self._clone_from_dict, args=(ref, desc),
-                                prio=self.MEDIUM_PRIO)
+                                prio=self.LOW_PRIO)
             self.node_dico[(name, ident)] = nd
         else:
             ref = (name, ident)
@@ -218,7 +218,7 @@ class NodeBuilder(object):
         return nd
 
     def __pre_handling(self, desc, node):
-        if node:
+        if node is not None:
             if isinstance(node.cc, NodeInternals_Empty):
                 raise ValueError("Error: alternative configuration"\
                                  " cannot be added to empty node ({:s})".format(node.name))
@@ -352,10 +352,14 @@ class NodeBuilder(object):
         if w is not None:
             # in this case there are multiple shapes, as shape can be
             # discriminated by its weight attr
-            for s in desc.get('contents'):
+            for s in cts:
                 self._verify_keys_conformity(s)
                 weight = s.get('weight', 1)
-                shape = self._create_nodes_from_shape(s['contents'], n)
+                subnodes = s['contents']
+                shtype = s.get('shape_type', MH.Ordered)
+                dupmode = s.get('duplicate_mode', MH.Copy)
+                shape = self._create_nodes_from_shape(subnodes, n, shape_type=shtype,
+                                                      dup_mode=dupmode)
                 shapes.append(weight)
                 shapes.append(shape)
         else:
@@ -379,7 +383,7 @@ class NodeBuilder(object):
             prefix = sep_desc.get('prefix', True)
             suffix = sep_desc.get('suffix', True)
             unique = sep_desc.get('unique', False)
-            n.set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique)
+            n.conf(conf).set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique)
 
         self._handle_common_attr(n, desc, conf)
 
@@ -521,7 +525,8 @@ class NodeBuilder(object):
         vals = desc.get('specific_fuzzy_vals', None)
         if vals is not None:
             if not node.is_typed_value(conf=conf):
-                raise DataModelDefinitionError("'specific_fuzzy_vals' is only usable with Typed-nodes")
+                raise DataModelDefinitionError("'specific_fuzzy_vals' is only usable with Typed-nodes."
+                                               " [guilty node: '{:s}']".format(node.name))
             node.conf(conf).set_specific_fuzzy_values(vals)
         param = desc.get('mutable', None)
         if param is not None:
@@ -537,10 +542,16 @@ class NodeBuilder(object):
                 node.clear_attr(MH.Attr.DEBUG, conf=conf)
         param = desc.get('determinist', None)
         if param is not None:
-            node.make_determinist(conf=conf)
+            if param:
+                node.make_determinist(conf=conf)
+            else:
+                node.make_random(conf=conf)
         param = desc.get('random', None)
         if param is not None:
-            node.make_random(conf=conf)
+            if param:
+                node.make_random(conf=conf)
+            else:
+                node.make_determinist(conf=conf)
         param = desc.get('finite', None)
         if param is not None:
             node.make_finite(conf=conf)
@@ -622,7 +633,7 @@ class NodeBuilder(object):
         if encoder is not None:
             node.set_encoder(encoder)
 
-    def _register_todo(self, node, func, args=None, unpack_args=True, prio=VERYLOW_PRIO):
+    def _register_todo(self, node, func, args=None, unpack_args=True, prio=MEDIUM_PRIO):
         if self.sorted_todo.get(prio, None) is None:
             self.sorted_todo[prio] = []
         self.sorted_todo[prio].insert(0, (node, func, args, unpack_args))
@@ -1364,6 +1375,10 @@ class RegexParser(StateMachine):
         if self.values is not None and all(val.isdigit() for val in self.values):
             self.values = [int(i) for i in self.values]
             type = fvt.INT_str
+        elif self.alphabet is not None and all(c.isdigit() for c in self.alphabet):
+            self.values = [int(c) for c in self.alphabet]
+            type = fvt.INT_str
+            self.alphabet = None
         else:
             type = fvt.String
 

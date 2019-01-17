@@ -33,6 +33,11 @@ def rand_string(size=None, min=1, max=10, str_set=string.printable):
     out = ""
     if size is None:
         size = random.randint(min, max)
+    else:
+        # if size is not an int, TypeError is raised with python3, but not
+        # with python2 where the loop condition is always evaluated to True
+        assert isinstance(size, int)
+
     while len(out) < size:
         val = random.choice(str_set)
         out += val

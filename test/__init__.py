@@ -57,9 +57,12 @@ parser.add_argument('-a', '--all', action='store_true',
                     help='Run all test cases. Some can take lot of time. (Disabled by default.)')
 parser.add_argument('--ignore-dm-specifics', action='store_true',
                     help='Run Data Models specific test cases. (Enabled by default.)')
+parser.add_argument('--exit-on-import-error', action='store_true',
+                    help='Exit on Data Models or Projects import errors. (Disabled by default.)')
 
 test_args = parser.parse_known_args()
 run_long_tests = test_args[0].all
 ignore_data_model_specifics = test_args[0].ignore_dm_specifics
+exit_on_import_error = test_args[0].exit_on_import_error
 
 args = [sys.argv[0]] + test_args[1]

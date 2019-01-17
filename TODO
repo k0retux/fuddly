@@ -9,9 +9,6 @@
 
 [ENHANCEMENT]
 
-- Add support for absorption of nodes leveraging the 'Bitfield collapse'
-  customization (i.e., absorption of bit-oriented nodes without a byte boundary).
-  (Counter-part of the generation supported feature.)
 - Add support for absorption of nodes whose existence has not been resolved yet.
   (Counter-part of the generation supported feature.)
 - Clean up test/test_integration.py

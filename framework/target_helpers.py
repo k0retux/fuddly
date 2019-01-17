@@ -21,12 +21,10 @@
 #
 ################################################################################
 
-import collections
 import datetime
 import threading
 
 from framework.data import Data
-from framework.global_resources import *
 from libs.external_modules import *
 
 class TargetStuck(Exception): pass
@@ -36,6 +34,9 @@ class Target(object):
     Class abstracting the target we interact with.
     '''
     feedback_timeout = None
+    sending_delay = 0
+
+    # tg_id = None  # this is set by FmkPlumbing
 
     FBK_WAIT_FULL_TIME = 1
     fbk_wait_full_time_slot_msg = 'Wait for the full time slot allocated for feedback retrieval'
@@ -49,18 +50,26 @@ class Target(object):
     _probes = None
     _send_data_lock = threading.Lock()
 
+    _altered_data_queued = None
+
+    _pending_data = None
+
     def set_logger(self, logger):
         self._logger = logger
 
     def set_data_model(self, dm):
         self.current_dm = dm
 
-    def _start(self):
-        self._logger.print_console('*** Target initialization ***\n', nl_before=False, rgb=Color.COMPONENT_START)
+    def _start(self, target_desc, tg_id):
+        self._logger.print_console('*** Target initialization: ({:d}) {!s} ***\n'.format(tg_id, target_desc),
+                                   nl_before=False, rgb=Color.COMPONENT_START)
+        self._pending_data = []
         return self.start()
 
-    def _stop(self):
-        self._logger.print_console('*** Target cleanup procedure ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
+    def _stop(self, target_desc, tg_id):
+        self._logger.print_console('*** Target cleanup procedure for ({:d}) {!s} ***\n'.format(tg_id, target_desc),
+                                   nl_before=False, rgb=Color.COMPONENT_STOP)
+        self._pending_data = None
         return self.stop()
 
     def start(self):
@@ -155,7 +164,7 @@ class Target(object):
 
     def get_feedback(self):
         '''
-        If overloaded, should return a TargetFeedback object.
+        If overloaded, should return a FeedbackCollector object.
         '''
         return None
 
@@ -202,8 +211,6 @@ class Target(object):
     def fbk_wait_full_time_slot_mode(self):
         return self._feedback_mode == Target.FBK_WAIT_FULL_TIME
 
-    sending_delay = 0
-
     def set_sending_delay(self, sending_delay):
         '''
         Set the sending delay.
@@ -215,8 +222,30 @@ class Target(object):
         assert sending_delay >= 0
         self.sending_delay = sending_delay
 
+    def __str__(self):
+        return self.__class__.__name__ + ' [' + self.get_description() + ']'
+
     def get_description(self):
-        return None
+        return 'ID: ' + str(id(self))[-6:]
+
+    def add_pending_data(self, data):
+        with self._send_data_lock:
+            if isinstance(data, list):
+                self._pending_data += data
+            else:
+                self._pending_data.append(data)
+
+    def send_pending_data(self, from_fmk=False):
+        with self._send_data_lock:
+            data_list = self._pending_data
+            self._pending_data = []
+
+        if len(data_list) == 1:
+            self.send_data_sync(data_list[0], from_fmk=from_fmk)
+        elif len(data_list) > 1:
+            self.send_multiple_data_sync(data_list, from_fmk=from_fmk)
+        else:
+            raise ValueError('No pending data')
 
     def send_data_sync(self, data, from_fmk=False):
         '''
@@ -228,6 +257,7 @@ class Target(object):
         emits the message by itself.
         '''
         with self._send_data_lock:
+            self._altered_data_queued = data.altered
             self.send_data(data, from_fmk=from_fmk)
 
     def send_multiple_data_sync(self, data_list, from_fmk=False):
@@ -236,6 +266,7 @@ class Target(object):
         with the framework.
         '''
         with self._send_data_lock:
+            self._altered_data_queued = data_list[0].altered
             self.send_multiple_data(data_list, from_fmk=from_fmk)
 
     def add_probe(self, probe):
@@ -245,6 +276,9 @@ class Target(object):
 
     def remove_probes(self):
         self._probes = None
+
+    def is_processed_data_altered(self):
+        return self._altered_data_queued
 
     @property
     def probes(self):
@@ -270,72 +304,10 @@ class EmptyTarget(Target):
             self._sending_time = datetime.datetime.now()
 
     def is_target_ready_for_new_data(self):
-        if self._feedback_enabled and self._sending_time is not None:
+        if self._feedback_enabled and self.feedback_timeout is not None and \
+                self._sending_time is not None:
             return (datetime.datetime.now() - self._sending_time).total_seconds() > self.feedback_timeout
         else:
             return True
 
 
-class TargetFeedback(object):
-    fbk_lock = threading.Lock()
-
-    def __init__(self):
-        self.cleanup()
-        self._feedback_collector = collections.OrderedDict()
-        self._feedback_collector_tstamped = collections.OrderedDict()
-        self._tstamped_bstring = None
-        # self.set_bytes(bstring)
-
-    def add_fbk_from(self, ref, fbk, status=0):
-        now = datetime.datetime.now()
-        with self.fbk_lock:
-            if ref not in self._feedback_collector:
-                self._feedback_collector[ref] = {}
-                self._feedback_collector[ref]['data'] = []
-                self._feedback_collector[ref]['status'] = 0
-                self._feedback_collector_tstamped[ref] = []
-            if fbk.strip() not in self._feedback_collector[ref]:
-                self._feedback_collector[ref]['data'].append(fbk)
-                self._feedback_collector[ref]['status'] = status
-                self._feedback_collector_tstamped[ref].append(now)
-
-    def has_fbk_collector(self):
-        return len(self._feedback_collector) > 0
-
-    def __iter__(self):
-        with self.fbk_lock:
-            fbk_collector = copy.copy(self._feedback_collector)
-            fbk_collector_ts = copy.copy(self._feedback_collector_tstamped)
-        for ref, fbk in fbk_collector.items():
-            yield ref, fbk['data'], fbk['status'], fbk_collector_ts[ref]
-
-    def iter_and_cleanup_collector(self):
-        with self.fbk_lock:
-            fbk_collector = self._feedback_collector
-            fbk_collector_ts = self._feedback_collector_tstamped
-            self._feedback_collector = collections.OrderedDict()
-            self._feedback_collector_tstamped = collections.OrderedDict()
-        for ref, fbk in fbk_collector.items():
-            yield ref, fbk['data'], fbk['status'], fbk_collector_ts[ref]
-
-    def set_error_code(self, err_code):
-        self._err_code = err_code
-
-    def get_error_code(self):
-        return self._err_code
-
-    def set_bytes(self, bstring):
-        now = datetime.datetime.now()
-        self._tstamped_bstring = (bstring, now)
-
-    def get_bytes(self):
-        return None if self._tstamped_bstring is None else self._tstamped_bstring[0]
-
-    def get_timestamp(self):
-        return None if self._tstamped_bstring is None else self._tstamped_bstring[1]
-
-    def cleanup(self):
-        # fbk_collector cleanup is done during consumption to avoid loss of feedback in
-        # multi-threading context
-        self._tstamped_bstring = None
-        self.set_error_code(0)

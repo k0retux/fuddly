@@ -38,30 +38,37 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', u
 
         for source, status, timestamp, data in feedback:
 
-                msg_x = env.dm.get_atom(x)
-                msg_x.set_current_conf('ABS', recursive=True)
-                if x == 'padi':
-                    mac_dst = b'\xff\xff\xff\xff\xff\xff'
-                elif x == 'padr':
-                    if current_step.content is not None:
-                        mac_src = current_step.content['.*/mac_src']
-                        env.mac_src = mac_src
-                    else:
-                        mac_src = env.mac_src
-                    if mac_src is not None:
-                        mac_dst = mac_src.to_bytes()
-                        print('\n*** Destination MAC will be set to: {!r}'.format(mac_dst))
-                    else:
-                        raise ValueError
+            if x == 'padi':
+                mac_dst = b'\xff\xff\xff\xff\xff\xff'
+            elif x == 'padr':
+                if current_step.content is not None:
+                    mac_src = current_step.content['.*/mac_src']
+                    env.mac_src = mac_src
+                else:
+                    mac_src = env.mac_src
+                if mac_src is not None:
+                    mac_dst = mac_src.to_bytes()
+                    # print('\n*** Destination MAC will be set to: {!r}'.format(mac_dst))
                 else:
                     raise ValueError
+            else:
+                raise ValueError
 
-                if data is None:
-                    continue
-                off = data.find(mac_dst)
+            if data is None:
+                continue
+
+            off = -1
+            while True:
+                off = data.find(mac_dst, off+1)
+                if off < 0:
+                    break
                 data = data[off:]
+                msg_x = env.dm.get_atom(x)
+                msg_x.set_current_conf('ABS', recursive=True)
                 result = msg_x.absorb(data, constraints=AbsNoCsts(size=True, struct=True))
-                print('\n [ ABS result: {!s} ]'.format(result))
+                # print('\n [ ABS result: {!s} \n data: {!r} \n source: {!s} \ ts: {!s}]'
+                #       .format(result, data, source, timestamp))
+
                 if result[0] == AbsorbStatus.FullyAbsorbed:
                     try:
                         service_name = msg_x['.*/value/v101'].to_bytes()
@@ -118,9 +125,10 @@ class t_fix_pppoe_msg_fields(Disruptor):
 
     def disrupt_data(self, dm, target, prev_data):
         n = prev_data.content
+        n.freeze()
         error_msg = '\n*** The node has no path to: {:s}. Thus, ignore it.\n'\
                     '    (probable reason: the node has been fuzzed in a way that makes the' \
-                    'path unavailable)'
+                    ' path unavailable)'
         if self.mac_src:
             try:
                 n['.*/mac_dst'] = self.mac_src
@@ -171,14 +179,14 @@ class t_fix_pppoe_msg_fields(Disruptor):
 step_wait_padi = NoDataStep(fbk_timeout=10, fbk_mode=Target.FBK_WAIT_UNTIL_RECV,
                             step_desc='Wait PADI')
 
-dp_pado = DataProcess(process=[('ALT', None, UI(conf='fuzz')),
-                               ('tTYPE', UI(init=1), UI(order=True, fuzz_mag=0.7)),
+dp_pado = DataProcess(process=[('ALT', UI(conf='fuzz')),
+                               ('tTYPE', UI(init=1, order=True, fuzz_mag=0.7)),
                                'FIX_FIELDS#pado1'], seed='pado')
-dp_pado.append_new_process([('ALT', None, UI(conf='fuzz')),
-                            ('tSTRUCT', UI(init=1), UI(deep=True)), 'FIX_FIELDS#pado2'])
+dp_pado.append_new_process([('ALT', UI(conf='fuzz')),
+                            ('tSTRUCT', UI(init=1, deep=True)), 'FIX_FIELDS#pado2'])
 step_send_pado = Step(dp_pado, fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
 # step_send_pado = Step('pado')
-step_end = Step(DataProcess(process=[('FIX_FIELDS#pado3', None, UI(reevaluate_csts=True))],
+step_end = Step(DataProcess(process=[('FIX_FIELDS#pado3', UI(reevaluate_csts=True))],
                             seed='padt'), fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
 
 step_wait_padi.connect_to(step_send_pado, cbk_after_fbk=retrieve_padi_from_feedback_and_update)
@@ -190,16 +198,16 @@ sc1.set_anchor(step_wait_padi)
 
 ### PADS fuzz scenario ###
 step_wait_padi = NoDataStep(fbk_timeout=10, fbk_mode=Target.FBK_WAIT_UNTIL_RECV, step_desc='Wait PADI')
-step_send_valid_pado = Step(DataProcess(process=[('FIX_FIELDS#pads1', None, UI(reevaluate_csts=True))],
+step_send_valid_pado = Step(DataProcess(process=[('FIX_FIELDS#pads1', UI(reevaluate_csts=True))],
                                         seed='pado'), fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
-step_send_padt = Step(DataProcess(process=[('FIX_FIELDS#pads2', None, UI(reevaluate_csts=True))],
+step_send_padt = Step(DataProcess(process=[('FIX_FIELDS#pads2', UI(reevaluate_csts=True))],
                                   seed='padt'), fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
 
-dp_pads = DataProcess(process=[('ALT', None, UI(conf='fuzz')),
-                               ('tTYPE#2', UI(init=1), UI(order=True, fuzz_mag=0.7)),
+dp_pads = DataProcess(process=[('ALT', UI(conf='fuzz')),
+                               ('tTYPE#2', UI(init=1, order=True, fuzz_mag=0.7)),
                                'FIX_FIELDS#pads3'], seed='pads')
-dp_pads.append_new_process([('ALT', None, UI(conf='fuzz')),
-                            ('tSTRUCT#2', UI(init=1), UI(deep=True)), 'FIX_FIELDS#pads4'])
+dp_pads.append_new_process([('ALT', UI(conf='fuzz')),
+                            ('tSTRUCT#2', UI(init=1, deep=True)), 'FIX_FIELDS#pads4'])
 step_send_fuzzed_pads = Step(dp_pads, fbk_timeout=0.1, fbk_mode=Target.FBK_WAIT_FULL_TIME)
 step_wait_padr = NoDataStep(fbk_timeout=10, fbk_mode=Target.FBK_WAIT_UNTIL_RECV,
                             step_desc='Wait PADR/PADI')

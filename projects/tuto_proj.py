@@ -26,19 +26,34 @@ import socket
 from framework.plumbing import *
 from framework.targets.debug import TestTarget
 from framework.targets.network import NetworkTarget
+from framework.knowledge.information import *
+from framework.knowledge.feedback_handler import TestFbkHandler
 
 project = Project()
-project.default_dm = 'mydf'
+project.default_dm = ['mydf', 'myproto']
 
-logger = Logger(export_data=False, explicit_data_recording=False, export_orig=False,
-                export_raw_data=True, enable_file_logging=False)
+project.map_targets_to_scenario('ex1', {0: 7, 1: 8, None: 8})
+
+logger = Logger(record_data=False, explicit_data_recording=False, export_orig=False,
+                export_raw_data=False, enable_file_logging=False)
+
+### KNOWLEDGE ###
+
+project.add_knowledge(
+    Hardware.X86_64,
+    Language.C
+)
+
+project.register_feedback_handler(TestFbkHandler())
+
+### TARGETS DEFINITION ###
 
 class TutoNetTarget(NetworkTarget):
 
     def _custom_data_handling_before_emission(self, data_list):
         self.listen_to('localhost', 64001, 'Dynamic server interface')
         # self.connect_to('localhost', 64002, 'Dynamic client interface')
-        # self._logger.collect_target_feedback('TEST', status_code=random.randint(-2,2))
+        # self._logger.collect_feedback('TEST', status_code=random.randint(-2,2))
 
     def _feedback_handling(self, fbk, ref):
         # self.remove_all_dynamic_interfaces()
@@ -54,7 +69,7 @@ tuto_tg.set_timeout(fbk_timeout=5, sending_delay=2)
 
 net_tg = NetworkTarget(host='localhost', port=12345,
                        socket_type=(socket.AF_INET, socket.SOCK_STREAM),
-                       hold_connection=True, server_mode=False)
+                       hold_connection=True, server_mode=False, keep_first_client=False)
 
 udpnet_tg = NetworkTarget(host='localhost', port=12345,
                           socket_type=(socket.AF_INET, socket.SOCK_DGRAM),
@@ -83,7 +98,7 @@ class P1(Probe):
     def main(self, dm, target, logger):
         self.cpt += 1
 
-        return ProbeStatus(self.cpt)
+        return ProbeStatus(self.cpt, info='This is a Linux OS!')
 
 
 @probe(project)
@@ -117,25 +132,29 @@ class health_check(Probe):
 
         return ProbeStatus(status)
 
-serial_backend = Serial_Backend('/dev/ttyUSB0', username='test', password='test', slowness_factor=8)
+if serial_module:
+    serial_backend = Serial_Backend('/dev/ttyUSB0', username='test', password='test', slowness_factor=8)
 
-@blocking_probe(project)
-class probe_pid(ProbePID):
-    backend = serial_backend
-    process_name = 'bash'
+    @blocking_probe(project)
+    class probe_pid(ProbePID):
+        backend = serial_backend
+        process_name = 'bash'
 
-@probe(project)
-class probe_mem(ProbeMem):
-    backend = serial_backend
-    process_name = 'bash'
-    tolerance = 1
-
+    @probe(project)
+    class probe_mem(ProbeMem):
+        backend = serial_backend
+        process_name = 'bash'
+        tolerance = 1
 
 ### TARGETS ALLOCATION ###
 
 targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
            tuto_tg, net_tg, udpnet_tg, udpnetsrv_tg, rawnetsrv_tg,
-           (TestTarget(), probe_pid, (probe_mem, 0.2))]
+           TestTarget(fbk_samples=['CRC error', 'OK']),
+           TestTarget()]
+
+if serial_module:
+    targets.append((TestTarget(), probe_pid, (probe_mem, 0.2)))
 
 ### OPERATOR DEFINITION ###
 
@@ -169,8 +188,8 @@ class MyOp(Operator):
 
         op = Operation()
 
-        p1_ret = monitor.get_probe_status(P1).get_status()
-        p2_ret = monitor.get_probe_status(P2).get_status()
+        p1_ret = monitor.get_probe_status(P1).value
+        p2_ret = monitor.get_probe_status(P2).value
 
         logger.print_console('*** status: p1: %d / p2: %d ***' % (p1_ret, p2_ret))
 
@@ -185,17 +204,17 @@ class MyOp(Operator):
 
         if p1_ret + p2_ret > 0:
             actions = [('SEPARATOR', UI(determinist=True)),
-                       ('tSTRUCT', None, UI(deep=True)),
-                       ('Cp', None, UI(idx=1)), ('Cp#1', None, UI(idx=3))]
+                       ('tSTRUCT', UI(deep=True)),
+                       ('Cp', UI(idx=1)), ('Cp#1', UI(idx=3))]
         elif -5 < p1_ret + p2_ret <= 0:
-            actions = ['SHAPE#specific', ('C#2', None, UI(path='.*prefix.$')), ('Cp#2', None, UI(idx=1))]
+            actions = ['SHAPE#specific', ('C#2', UI(path='.*prefix.$')), ('Cp#2', UI(idx=1))]
         else:
             actions = ['SHAPE#3', 'tTYPE#3']
 
-        op.add_instruction(actions)
+        op.add_instruction(actions, tg_ids=[7,8])
 
         if self.mode == 1:
-            actions_sup = ['SEPARATOR#2', ('tSTRUCT#2', None, UI(deep=True)), ('SIZE', None, UI(sz=10))]
+            actions_sup = ['SEPARATOR#2', ('tSTRUCT#2', UI(deep=True)), ('SIZE', UI(sz=10))]
             op.add_instruction(actions_sup)
 
         self.cpt += 1
@@ -210,7 +229,7 @@ class MyOp(Operator):
             self.detected_error += 1
             linst.set_instruction(LastInstruction.RecordData)
             linst.set_operator_feedback('This input has crashed the target!')
-
+            linst.set_operator_status(0)
         if self.cpt > self.max_steps and self.detected_error < 9:
             linst.set_operator_feedback("We have less than 9 data that trigger some problem with the target!"
                                         " You win!")

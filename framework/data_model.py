@@ -38,6 +38,8 @@ class DataModel(object):
     file_extension = 'bin'
     name = None
 
+    knowledge_source = None
+
     def pre_build(self):
         """
         This method is called when a data model is loaded.
@@ -56,15 +58,33 @@ class DataModel(object):
         pass
 
 
-    def absorb(self, raw_data, idx):
+    def create_node_from_raw_data(self, data, idx, filename):
         """
         If your data model is able to absorb raw data, do it here.  This
         function is called for each files (with the right extension)
-        present in imported_data/<data_model_name>.
-        
-        It should return an modeled data (atom)
+        present in ``imported_data/<data_model_name>``.
+
+        Args:
+            filename (str): name of the imported file
+            data (bytes): file content
+            idx (int): index of the imported file
+
+        Returns:
+            :class:`framework.node.Node`: a modeled data (atom) or ``None``
+
         """
-        return raw_data
+        return data
+
+    def validation_tests(self):
+        """
+        Optional test cases to validate the correct behavior of the data model
+
+        Returns:
+            bool: ``True`` if the validation succeeds. ``False`` otherwise
+
+        """
+
+        return True
 
     def cleanup(self):
         pass
@@ -86,6 +106,7 @@ class DataModel(object):
 
     def register(self, *atom_list):
         for a in atom_list:
+            if a is None: continue
             key, prepared_atom = self._backend(a).prepare_atom(a)
             self._dm_hashtable[key] = prepared_atom
 
@@ -141,7 +162,7 @@ class DataModel(object):
                              subdir=None, path=None, filename=None):
 
         if absorber is None:
-            absorber = self.absorb
+            absorber = self.create_node_from_raw_data
 
         if extension is None:
             extension = self.file_extension
@@ -170,7 +191,7 @@ class DataModel(object):
         for name in files:
             with open(os.path.join(path, name), 'rb') as f:
                 buff = f.read()
-                d_abs = absorber(buff, idx)
+                d_abs = absorber(buff, idx, name)
                 if d_abs is not None:
                     msgs[name] = d_abs
             idx +=1
@@ -195,6 +216,19 @@ class NodeBackend(object):
     def __init__(self, data_model):
         self._dm = data_model
         self._confs = set()
+        # self._knowledge_source = None
+
+    # @property
+    # def knowledge_source(self):
+    #     return self._knowledge_source
+    #
+    # @knowledge_source.setter
+    # def knowledge_source(self, src):
+    #     self._knowledge_source = src
+    #
+    # def update_knowledge_source(self, atom):
+    #     if self.knowledge_source is not None:
+    #         atom.env.knowledge_source = self.knowledge_source
 
     def merge_with(self, node_backend):
         self._confs = self._confs.union(node_backend._confs)
@@ -223,7 +257,7 @@ class NodeBackend(object):
         if atom.env is None:
             self.update_atom(atom)
         else:
-            atom.env.set_data_model(self._dm)
+            self.update_atom(atom, existing_env=True)
 
         self._confs = self._confs.union(atom.gather_alt_confs())
 
@@ -231,13 +265,15 @@ class NodeBackend(object):
 
     def atom_copy(self, orig_atom, new_name=None):
         name = orig_atom.name if new_name is None else new_name
-        return Node(name, base_node=orig_atom, ignore_frozen_state=False, new_env=True)
+        node = Node(name, base_node=orig_atom, ignore_frozen_state=False, new_env=True)
+        # self.update_knowledge_source(node)
+        return node
 
-    def update_atom(self, atom):
-        env = Env()
-        env.set_data_model(self._dm)
-        atom.set_env(env)
+    def update_atom(self, atom, existing_env=False):
+        if not existing_env:
+            atom.set_env(Env())
+        atom.env.set_data_model(self._dm)
+        # self.update_knowledge_source(atom)
 
     def get_all_confs(self):
         return sorted(self._confs)
-

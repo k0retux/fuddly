@@ -29,7 +29,7 @@ class PPPOE_DataModel(DataModel):
 
     file_extension = 'bin'
 
-    def absorb(self, data, idx):
+    def create_node_from_raw_data(self, data, idx, filename):
         pass
 
     def build_data_model(self):
@@ -266,7 +266,7 @@ class PPPOE_DataModel(DataModel):
 
         pado = pppoe_msg.get_clone('pado')
         pado['.*/code'].set_values(value_type=UINT8(values=[0x7]))
-        pado['.*/code'].clear_attr(MH.Attr.Mutable)
+        # pado['.*/code'].clear_attr(MH.Attr.Mutable)
 
         padr = pppoe_msg.get_clone('padr')
         padr['.*/code'].set_values(value_type=UINT8(values=[0x19]))

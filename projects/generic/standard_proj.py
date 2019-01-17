@@ -33,7 +33,7 @@ project.default_dm = ['mydf','jpg']
 # If you only want one default DM, provide its name directly as follows:
 # project.default_dm = 'mydf'
 
-logger = Logger('standard', export_data=False, explicit_data_recording=True, export_orig=False,
+logger = Logger('standard', record_data=False, explicit_data_recording=True, export_orig=False,
                 enable_file_logging=False)
 
 printer1_tg = PrinterTarget(tmpfile_ext='.png')
@@ -47,15 +47,10 @@ class display_mem_check(ProbeMem):
     process_name = 'display'
     tolerance = 10
 
-local_tg = LocalTarget(tmpfile_ext='.png')
-local_tg.set_target_path('/usr/bin/display')
-
-local2_tg = LocalTarget(tmpfile_ext='.pdf')
-local2_tg.set_target_path('okular')
-
-local3_tg = LocalTarget(tmpfile_ext='.zip')
-local3_tg.set_target_path('unzip')
-local3_tg.set_post_args('-d ' + gr.workspace_folder)
+local_tg = LocalTarget(tmpfile_ext='.png', target_path='/usr/bin/display')
+local2_tg = LocalTarget(tmpfile_ext='.pdf', target_path='okular')
+local3_tg = LocalTarget(tmpfile_ext='.zip', target_path='unzip', post_args='-d ' + gr.workspace_folder)
+local4_tg = LocalTarget(target_path='python', pre_args='-c', send_via_cmdline=True)
 
 net_tg = NetworkTarget(host='localhost', port=12345, data_semantics='TG1', hold_connection=True)
 net_tg.register_new_interface('localhost', 54321, (socket.AF_INET, socket.SOCK_STREAM), 'TG2', server_mode=True)
@@ -73,13 +68,14 @@ rawnetsrv_tg = NetworkTarget(host='eth0', port=ETH_P_ALL,
 targets = [(local_tg, (display_mem_check, 0.1)),
            local2_tg,
            local3_tg,
+           local4_tg,
            printer1_tg, net_tg, netsrv_tg, rawnetsrv_tg]
 
 
 @operator(project,
-          gen_args={'init': ('make the model walker ignore all the steps until the provided one', 1, int),
-                    'max_steps': ("number of test cases to run", 20, int)},
-          args={'mode': ('strategy mode (0 or 1)', 0, int),
+          args={'init': ('make the model walker ignore all the steps until the provided one', 1, int),
+                'max_steps': ("number of test cases to run", 20, int),
+                'mode': ('strategy mode (0 or 1)', 0, int),
                 'path': ("path of the target application (for LocalTarget's only)", '/usr/bin/display', str)})
 class Op1(Operator):
 

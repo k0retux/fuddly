@@ -149,10 +149,19 @@ custo_set, custo_clear
 		customization mode.
 
   - ``MH.Custo.NTerm.CollapsePadding``: By default, this mode is *disabled*.
-    When enabled, every time two adjacent BitFields (within its scope) are found, they
+    When enabled, every time two adjacent ``BitField`` 's (within its scope) are found, they
     will be merged in order to remove any padding in between. This is done
-    "recursively" until any inner padding is removed. (Note this customization is currently
-    only supported for *generation* purpose and not for *absorption*.)
+    "recursively" until any inner padding is removed.
+
+    .. note::
+      To be compatible with an *absorption* operation, the non-terminal set with this
+      customization should comply with the following requirements:
+
+      - It shall only contains ``BitField`` 's (which implies that no *separators* shall be used)
+      - The ``lsb_padding`` parameter shall be set to ``True`` on every related ``BitField`` 's.
+      - The ``endian`` parameter shall be set to ``VT.BigEndian`` on every related ``BitField`` 's.
+      - the ``qty`` keyword should not be used on the children except if it is equal to ``1``,
+        or ``(1,1)``.
 
   For *generator* node, the customizable behavior modes are:
 
@@ -631,6 +640,9 @@ following parameters:
   to do it at the node level by using the data model keyword ``determinist``
   (refer to :ref:`dm:node_prop_keywords`).
 
+``values_desc`` [optional, default value: **None**]
+  Dictionary that maps integer values to their descriptions (character strings). Leveraged for
+  display purpose. Even if provided, all values do not need to be described.
 
 All these parameters are optional. If you don't specify all of them
 the constructor will let more freedom within the data model. But if
@@ -657,6 +669,20 @@ corresponding outputs for a data generated from them:
 - :class:`framework.value_types.SINT64_le`: signed integer on 64 bit (2's complement), little endian
 - :class:`framework.value_types.INT_str`: ASCII encoded integer
 
+For :class:`framework.value_types.INT_str`, additional parameters are available:
+
+``base`` [optional, default value: **10**]
+  Numerical base that have to be used to represent the integer into a string
+
+``letter_case`` [optional, default value: **'upper'**]
+  Only for hexadecimal base. It could be ``'upper'`` or ``'lower'`` for representing hexadecimal numbers
+  with these respective letter cases.
+
+``min_size`` [optional, default value: **None**]
+  If specified, the integer representation will have a minimum size (with added zeros when necessary).
+
+``reverse`` [optional, default value: **False**]
+  Reverse the order of the string if set to ``True``.
 
 String
 ------

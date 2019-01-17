@@ -4,6 +4,6 @@
 !file_formats/*.py
 !protocols
 !protocols/*.py
-!example*.py
-!tuto*.py
+!tutorial
+!tutorial/*.py
 !__init__.py

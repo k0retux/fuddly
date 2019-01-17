@@ -30,6 +30,7 @@ from datetime import datetime
 
 import framework.global_resources as gr
 import libs.external_modules as em
+from framework.knowledge.feedback_collector import FeedbackSource
 from libs.external_modules import *
 from libs.utils import ensure_dir, chunk_lines
 
@@ -50,7 +51,7 @@ def regexp_bin(expr, item):
     return robj is not None
 
 
-class FeedbackHandler(object):
+class FeedbackGate(object):
 
     def __init__(self, database):
         """
@@ -63,13 +64,24 @@ class FeedbackHandler(object):
         for item in self.db.iter_last_feedback_entries():
             yield item
 
+    def get_feedback_from(self, source):
+        if not isinstance(source, FeedbackSource):
+            source = FeedbackSource(source)
+
+        try:
+            fbk = self.db.last_feedback[source]
+        except KeyError:
+            raise
+        else:
+            return fbk
+
     def iter_entries(self, source=None):
         """
         Iterate over feedback entries that are related to the last data which has been sent by
         the framework.
 
         Args:
-            source ('str'): name of the feedback source to consider
+            source (FeedbackSource): feedback source to consider
 
         Returns:
             python generator: A generator that iterates over all the requested feedback entries and provides for each:
@@ -82,16 +94,16 @@ class FeedbackHandler(object):
         for item in self.db.iter_last_feedback_entries(source=source):
             yield item
 
-    def sources(self):
+    def sources_names(self):
         """
         Return a list of the feedback source names related to the last data which has been sent by
         the framework.
 
         Returns:
-            list: feedback sources
+            list: names of the feedback sources
 
         """
-        return self.db.last_feedback.keys()
+        return [str(fs) for fs in self.db.last_feedback.keys()]
 
     # for python2 compatibility
     def __nonzero__(self):
@@ -122,6 +134,8 @@ class Database(object):
         # self._con = None
         # self._cur = None
         self.enabled = False
+
+        self.current_project = None
 
         self.last_feedback = {}
 
@@ -189,10 +203,12 @@ class Database(object):
         connection.create_function("REGEXP", 2, regexp)
         connection.create_function("BINREGEXP", 2, regexp_bin)
 
-        while not self._sql_handler_stop_event.is_set():
+        while True:
 
             with self._sql_stmt_submitted_cond:
-                self._sql_stmt_submitted_cond.wait(0.01)
+                if self._sql_handler_stop_event.is_set() and not self._sql_stmt_list:
+                    break
+                self._sql_stmt_submitted_cond.wait(0.001)
 
                 if self._sql_stmt_list:
                     sql_stmts = self._sql_stmt_list
@@ -234,7 +250,7 @@ class Database(object):
 
                 self._sql_stmt_handled.set()
 
-            self._sql_handler_stop_event.wait(0.01)
+            self._sql_handler_stop_event.wait(0.001)
 
         if connection:
             connection.close()
@@ -307,6 +323,7 @@ class Database(object):
 
     def flush_current_feedback(self):
         self.last_feedback = {}
+        self.last_feedback_sources_names = {}
 
     def execute_sql_statement(self, sql_stmt, params=None):
         return self.submit_sql_stmt(sql_stmt, params=params, outcome_type=Database.OUTCOME_DATA)
@@ -337,7 +354,7 @@ class Database(object):
 
 
     def insert_data(self, dtype, dm_name, raw_data, sz, sent_date, ack_date,
-                    target_name, prj_name, group_id=None):
+                    target_ref, prj_name, group_id=None):
 
         if not self.enabled:
             return None
@@ -347,13 +364,13 @@ class Database(object):
         stmt = "INSERT INTO DATA(GROUP_ID,TYPE,DM_NAME,CONTENT,SIZE,SENT_DATE,ACK_DATE,"\
                "TARGET,PRJ_NAME)"\
                " VALUES(?,?,?,?,?,?,?,?,?)"
-        params = (group_id, dtype, dm_name, blob, sz, sent_date, ack_date, target_name, prj_name)
+        params = (group_id, dtype, dm_name, blob, sz, sent_date, ack_date, str(target_ref), prj_name)
         err_msg = 'while inserting a value into table DATA!'
 
         if self._data_id is None:
-            did = self.submit_sql_stmt(stmt, params=params, outcome_type=Database.OUTCOME_ROWID,
+            d_id = self.submit_sql_stmt(stmt, params=params, outcome_type=Database.OUTCOME_ROWID,
                                        error_msg=err_msg)
-            self._data_id = did
+            self._data_id = d_id
         else:
             self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
             self._data_id += 1
@@ -378,6 +395,9 @@ class Database(object):
 
     def insert_feedback(self, data_id, source, timestamp, content, status_code=None):
 
+        if not isinstance(source, FeedbackSource):
+            source = FeedbackSource(source)
+
         if source not in self.last_feedback:
             self.last_feedback[source] = []
 
@@ -389,6 +409,9 @@ class Database(object):
             }
         )
 
+        if self.current_project:
+            self.current_project.trigger_feedback_handlers(source, timestamp, content, status_code)
+
         if not self.enabled:
             return None
 
@@ -397,18 +420,19 @@ class Database(object):
 
         stmt = "INSERT INTO FEEDBACK(DATA_ID,SOURCE,DATE,CONTENT,STATUS)"\
                " VALUES(?,?,?,?,?)"
-        params = (data_id, source, timestamp, content, status_code)
+        params = (data_id, str(source), timestamp, content, status_code)
         err_msg = 'while inserting a value into table FEEDBACK!'
         self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
 
     def iter_last_feedback_entries(self, source=None):
+        last_fbk = self.last_feedback.items()
         if source is None:
-            for source, fbks in self.last_feedback.items():
+            for src, fbks in last_fbk:
                 for item in fbks:
                     status = item['status']
                     ts = item['timestamp']
                     content = item['content']
-                    yield source, status, ts, content
+                    yield src, status, ts, content
         else:
             for item in self.last_feedback[source]:
                 status = item['status']
@@ -437,6 +461,15 @@ class Database(object):
         err_msg = 'while inserting a value into table FMKINFO!'
         self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
 
+    def insert_analysis(self, data_id, content, date, impact=False):
+        if not self.enabled:
+            return None
+
+        stmt = "INSERT INTO ANALYSIS(DATA_ID,CONTENT,DATE,IMPACT)"\
+               " VALUES(?,?,?,?)"
+        params = (data_id, content, date, impact)
+        err_msg = 'while inserting a value into table ANALYSIS!'
+        self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
 
     def fetch_data(self, start_id=1, end_id=-1):
         ign_end_id = '--' if end_id < 1 else ''
@@ -481,6 +514,7 @@ class Database(object):
         return data
 
     def display_data_info(self, data_id, with_data=False, with_fbk=False, with_fmkinfo=True,
+                          with_analysis=True,
                           fbk_src=None, limit_data_sz=None, page_width=100, colorized=True,
                           raw=False):
 
@@ -533,6 +567,12 @@ class Database(object):
             "ORDER BY ERROR DESC;".format(data_id=data_id)
         )
 
+        analysis_records = self.execute_sql_statement(
+            "SELECT CONTENT, DATE, IMPACT FROM ANALYSIS "
+            "WHERE DATA_ID == {data_id:d} "
+            "ORDER BY DATE ASC;".format(data_id=data_id)
+        )
+
         line_pattern = '-' * page_width
         data_id_pattern = " Data ID #{:d} ".format(data_id)
 
@@ -560,8 +600,8 @@ class Database(object):
                 msg += colorize(",\n".format(src) + ' '*len(status_prefix), rgb=Color.FMKINFO)
 
         msg += '\n'
-        sentd = sent_date.strftime("%d/%m/%Y - %H:%M:%S") if sent_date else 'None'
-        ackd = ack_date.strftime("%d/%m/%Y - %H:%M:%S") if ack_date else 'None'
+        sentd = sent_date.strftime("%d/%m/%Y - %H:%M:%S.%f") if sent_date else 'None'
+        ackd = ack_date.strftime("%d/%m/%Y - %H:%M:%S.%f") if ack_date else 'None'
         msg += colorize("      Sent: ", rgb=Color.FMKINFO) + colorize(sentd, rgb=Color.DATE)
         msg += colorize("\n  Received: ", rgb=Color.FMKINFO) + colorize(ackd, rgb=Color.DATE)
         msg += colorize("\n      Size: ", rgb=Color.FMKINFO) + colorize(str(size) + ' Bytes',
@@ -571,7 +611,7 @@ class Database(object):
         prt(msg)
 
 
-        def handle_dmaker(dmk_pattern, info, dmk_type, dmk_name, name_sep_sz, id_src=None):
+        def handle_dmaker(dmk_pattern, info, dmk_type, dmk_name, name_sep_sz, ui, id_src=None):
             msg = ''
             msg += colorize("\n  |_ {:s}: ".format(dmk_pattern), rgb=Color.FMKINFO)
             msg += colorize(str(dmk_type).ljust(name_sep_sz, ' '), rgb=Color.FMKSUBINFO)
@@ -614,20 +654,41 @@ class Database(object):
                 if dmk_type != data_type:
                     msg += colorize("\n  |_ Generator: ", rgb=Color.FMKINFO)
                     msg += colorize(str(data_type), rgb=Color.FMKSUBINFO)
-                    msg += colorize("  | UI: ", rgb=Color.FMKINFO)
-                    msg += colorize(str(ui), rgb=Color.FMKSUBINFO)
                     sid += 1
                     msg += colorize("\n Step #{:d}:".format(sid), rgb=Color.FMKINFOGROUP)
-                    msg += handle_dmaker('Disruptor', info, dmk_type, dmk_name, len(data_type))
+                    msg += handle_dmaker('Disruptor', info, dmk_type, dmk_name, len(data_type), ui)
                 else:
-                    msg += handle_dmaker('Generator', info, dmk_type, dmk_name, name_sep_sz,
+                    msg += handle_dmaker('Generator', info, dmk_type, dmk_name, name_sep_sz, ui,
                                          id_src=id_src)
             else:
                 msg += colorize("\n Step #{:d}:".format(sid), rgb=Color.FMKINFOGROUP)
-                msg += handle_dmaker('Disruptor', info, dmk_type, dmk_name, name_sep_sz)
+                msg += handle_dmaker('Disruptor', info, dmk_type, dmk_name, name_sep_sz, ui)
             sid += 1
         msg += colorize('\n' + line_pattern, rgb=Color.NEWLOGENTRY)
         prt(msg)
+
+        msg = ''
+        for idx, info in enumerate(analysis_records, start=1):
+            content, tstamp, impact = info
+            if not with_analysis:
+                continue
+            date_str = tstamp.strftime("%d/%m/%Y - %H:%M") if tstamp else 'Not Dated'
+            msg += colorize("\n User Analysis: ", rgb=Color.FMKINFOGROUP)
+            msg += colorize(date_str, rgb=Color.DATE)
+            msg += colorize(" | ", rgb=Color.FMKINFOGROUP)
+            if impact:
+                msg += colorize("Data triggered an unexpected behavior", rgb=Color.ANALYSIS_IMPACT)
+            else:
+                msg += colorize("Data did not trigger an unexpected behavior", rgb=Color.ANALYSIS_NO_IMPACT)
+            if content:
+                chks = chunk_lines(content, page_width - 10)
+                for c in chks:
+                    color = Color.FMKHLIGHT if impact else Color.DATAINFO_ALT
+                    msg += '\n' + colorize(' ' * 2 + '| ', rgb=Color.FMKINFOGROUP) + \
+                           colorize(str(c), rgb=color)
+        if msg:
+            msg += colorize('\n' + line_pattern, rgb=Color.NEWLOGENTRY)
+            prt(msg)
 
         msg = ''
         for idx, com in enumerate(comments, start=1):
@@ -674,7 +735,7 @@ class Database(object):
 
         if with_fbk:
             for src, tstamp, status, content in feedback:
-                formatted_ts = None if tstamp is None else tstamp.strftime("%d/%m/%Y - %H:%M:%S")
+                formatted_ts = None if tstamp is None else tstamp.strftime("%d/%m/%Y - %H:%M:%S.%f")
                 msg += colorize("\n Status(", rgb=Color.FMKINFOGROUP)
                 msg += colorize("{!s}".format(src), rgb=Color.FMKSUBINFO)
                 msg += colorize(" | ", rgb=Color.FMKINFOGROUP)
@@ -703,9 +764,9 @@ class Database(object):
         colorize = self._get_color_function(colorized)
 
         if sys.version_info[0] > 2:
-            content = content if raw else '{!a}'.format(content)
+            content = content if not raw else '{!a}'.format(content)
         else:
-            content = content if raw else repr(content)
+            content = content if not raw else repr(content)
 
         if sz_limit is not None and len(content) > sz_limit:
             content = content[:sz_limit]
@@ -715,6 +776,7 @@ class Database(object):
 
 
     def display_data_info_by_date(self, start, end, with_data=False, with_fbk=False, with_fmkinfo=True,
+                                  with_analysis=True,
                                   fbk_src=None, prj_name=None,
                                   limit_data_sz=None, raw=False, page_width=100, colorized=True):
         colorize = self._get_color_function(colorized)
@@ -736,7 +798,9 @@ class Database(object):
             for rec in records:
                 data_id = rec[0]
                 self.display_data_info(data_id, with_data=with_data, with_fbk=with_fbk,
-                                       with_fmkinfo=with_fmkinfo, fbk_src=fbk_src,
+                                       with_fmkinfo=with_fmkinfo,
+                                       with_analysis=with_analysis,
+                                       fbk_src=fbk_src,
                                        limit_data_sz=limit_data_sz, raw=raw, page_width=page_width,
                                        colorized=colorized)
         else:
@@ -744,6 +808,7 @@ class Database(object):
                            rgb=Color.ERROR))
 
     def display_data_info_by_range(self, first_id, last_id, with_data=False, with_fbk=False, with_fmkinfo=True,
+                                   with_analysis=True,
                                    fbk_src=None, prj_name=None,
                                    limit_data_sz=None, raw=False, page_width=100, colorized=True):
 
@@ -766,7 +831,8 @@ class Database(object):
             for rec in records:
                 data_id = rec[0]
                 self.display_data_info(data_id, with_data=with_data, with_fbk=with_fbk,
-                                       with_fmkinfo=with_fmkinfo, fbk_src=fbk_src,
+                                       with_fmkinfo=with_fmkinfo, with_analysis=with_analysis,
+                                       fbk_src=fbk_src,
                                        limit_data_sz=limit_data_sz, raw=raw, page_width=page_width,
                                        colorized=colorized)
         else:
@@ -921,6 +987,7 @@ class Database(object):
         return prj_records
 
     def get_data_with_impact(self, prj_name=None, fbk_src=None, display=True, verbose=False,
+                             raw_analysis=False,
                              colorized=True):
 
         colorize = self._get_color_function(colorized)
@@ -937,6 +1004,16 @@ class Database(object):
                 "WHERE STATUS < 0;"
             )
 
+
+        analysis_records = self.execute_sql_statement(
+            "SELECT DATA_ID, CONTENT, DATE, IMPACT FROM ANALYSIS "
+            "ORDER BY DATE DESC;"
+        )
+        if analysis_records:
+            data_analyzed = set([x[0] for x in analysis_records])
+        else:
+            data_analyzed = set()
+
         prj_records = self.get_project_record(prj_name)
         data_list = []
 
@@ -950,6 +1027,15 @@ class Database(object):
                     id2fbk[data_id][src] = []
                 id2fbk[data_id][src].append(status)
 
+            user_src = 'User Analysis'
+            for rec in analysis_records:
+                data_id, content, tstamp, impact = rec
+                if data_id not in id2fbk:
+                    id2fbk[data_id] = {}
+                if user_src not in id2fbk[data_id]:
+                    id2fbk[data_id][user_src] = []
+                id2fbk[data_id][user_src].append(impact)
+
             data_id_pattern = "{:>" + str(int(math.log10(len(prj_records))) + 2) + "s}"
             format_string = "     [DataID " + data_id_pattern + "] --> {:s}"
 
@@ -957,6 +1043,16 @@ class Database(object):
             for rec in prj_records:
                 data_id, target, prj = rec
                 if data_id in id2fbk:
+
+                    if not raw_analysis and data_id in data_analyzed:
+                        records = self.execute_sql_statement(
+                            "SELECT IMPACT FROM ANALYSIS "
+                            "WHERE DATA_ID == {data_id:d} "
+                            "ORDER BY DATE DESC;".format(data_id=data_id)
+                        )
+                        if records[0][0] == False:
+                            continue
+
                     data_list.append(data_id)
                     if display:
                         if prj != current_prj:
@@ -967,10 +1063,19 @@ class Database(object):
                                        rgb=Color.DATAINFO))
                         if verbose:
                             for src, status in id2fbk[data_id].items():
-                                status_str = ''.join([str(s) + ',' for s in status])[:-1]
-                                print(colorize("       |_ status={:s} from {:s}".format(status_str,
-                                                                                        src),
-                                               rgb=Color.FMKSUBINFO))
+                                if src == user_src:
+                                    if status[0] == 0:
+                                        status_str = 'User analysis carried out: False Positive'
+                                    else:
+                                        status_str = 'User analysis carried out: Impact Confirmed'
+                                    color = Color.ANALYSIS_FALSEPOSITIVE if status[0] == 0 else Color.ANALYSIS_CONFIRM
+                                    print(colorize("       |_ {:s}".format(status_str),
+                                                   rgb=color))
+                                else:
+                                    status_str = ''.join([str(s) + ',' for s in status])[:-1]
+                                    print(colorize("       |_ status={:s} from {:s}"
+                                                   .format(status_str, src),
+                                                   rgb=Color.FMKSUBINFO))
 
         else:
             print(colorize("*** No data has negatively impacted a target ***", rgb=Color.FMKINFO))

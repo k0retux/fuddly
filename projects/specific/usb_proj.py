@@ -31,7 +31,7 @@ from framework.node import *
 project = Project()
 project.default_dm = 'usb'
 
-logger = Logger('bin', export_data=False, explicit_data_recording=True, export_orig=False)
+logger = Logger('bin', record_data=False, explicit_data_recording=True, export_orig=False)
 
 rpyc_module = True
 try:
@@ -116,9 +116,9 @@ else:
 
 
 @operator(project,
-          gen_args={'init': ('make the model walker ignore all the steps until the provided one', 1, int),
-                    'max_steps': ("number of test cases to run", 20, int)},
-          args={'mode': ('strategy mode: 0, 1 (fuzz DEV), 2 (Mass-Storage) or 666 (BigConf)', 2, int)})
+          args={'init': ('make the model walker ignore all the steps until the provided one', 1, int),
+                'max_steps': ("number of test cases to run", 20, int),
+                'mode': ('strategy mode: 0, 1 (fuzz DEV), 2 (Mass-Storage) or 666 (BigConf)', 2, int)})
 class Op1(Operator):
 
     def start(self, fmk_ops, dm, monitor, target, logger, user_input):
@@ -135,15 +135,15 @@ class Op1(Operator):
         if self.mode == 1:
             self.instr_list.append([('DEV', UI(finite=True)), ('tTYPE', UI(init=self.init))])
         elif self.mode == 2:
-            self.instr_list.append([('DEV', UI(finite=True)), ('ALT', None, UI(conf='MS'))])
+            self.instr_list.append([('DEV', UI(finite=True)), ('ALT', UI(conf='MS'))])
         else:
             self.instr_list.append([('DEV', UI(finite=True))])
 
         if self.mode == 666:
-            self.instr_list.append([('CONF', UI(finite=True)), ('ALT', None, UI(conf='BIGCONF')),
-                                    ('tTYPE#2', UI(init=self.init, clone_node=False), None)])
+            self.instr_list.append([('CONF', UI(finite=True)), ('ALT', UI(conf='BIGCONF')),
+                                    ('tTYPE#2', UI(init=self.init, clone_node=False))])
         elif self.mode == 2:
-            self.instr_list.append([('CONF', UI(finite=True)), ('ALT', None, UI(conf='MSD')),
+            self.instr_list.append([('CONF', UI(finite=True)), ('ALT', UI(conf='MSD')),
                                     ('tTYPE#2', UI(init=self.init))])
         else:
             self.instr_list.append([('CONF', UI(finite=True)), ('tTYPE#2', UI(init=self.init))])

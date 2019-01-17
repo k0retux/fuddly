@@ -14,12 +14,12 @@ def cbk_transition1(env, current_step, next_step, feedback):
         current_step.make_blocked()
         return False
     else:
-        print("\n\nFeedback received from {!s}. Let's go on".format(feedback.sources()))
-        for source, status, timestamp, data in  feedback:
+        print("\n\nFeedback received from {!s}. Let's go on".format(feedback.sources_names()))
+        for source, status, timestamp, data in feedback:
             if data is not None:
                 data = data[:15]
             print('*** Feedback entry:\n'
-                  '    source: {:s}\n'
+                  '    source: {!s}\n'
                   '    status: {:d}\n'
                   ' timestamp: {!s}\n'
                   '   content: {!r} ...\n'.format(source, status, timestamp, data))
@@ -52,14 +52,14 @@ def before_data_processing_cbk(env, step):
         step.content.show()
     return True
 
-periodic1 = Periodic(DataProcess(process=[('C', None, UI(nb=1)), 'tTYPE'], seed='enc'),
+periodic1 = Periodic(DataProcess(process=[('C', UI(nb=1)), 'tTYPE'], seed='enc'),
                      period=5)
 periodic2 = Periodic(Data('2nd Periodic (3s)\n'), period=3)
 
 ### SCENARIO 1 ###
 step1 = Step('exist_cond', fbk_timeout=1, set_periodic=[periodic1, periodic2],
-             do_before_sending=before_sending_cbk)
-step2 = Step('separator', fbk_timeout=2, clear_periodic=[periodic1])
+             do_before_sending=before_sending_cbk, vtg_ids=0)
+step2 = Step('separator', fbk_timeout=2, clear_periodic=[periodic1], vtg_ids=1)
 empty = NoDataStep(clear_periodic=[periodic2])
 step4 = Step('off_gen', fbk_timeout=0, step_desc='overriding the auto-description!')
 
@@ -104,14 +104,14 @@ sc3.set_anchor(anchor)
 
 ### SCENARIO 4 & 5 ###
 dp = DataProcess(['tTYPE#NOREG'], seed='exist_cond', auto_regen=False)
-dp.append_new_process([('tSTRUCT#NOREG', None, UI(deep=True))])
+dp.append_new_process([('tSTRUCT#NOREG', UI(deep=True))])
 unique_step = Step(dp)
 unique_step.connect_to(unique_step)
 sc4 = Scenario('no_regen')
 sc4.set_anchor(unique_step)
 
 dp = DataProcess(['tTYPE#REG'], seed='exist_cond', auto_regen=True)
-dp.append_new_process([('tSTRUCT#REG', None, UI(deep=True))])
+dp.append_new_process([('tSTRUCT#REG', UI(deep=True))])
 unique_step = Step(dp)
 unique_step.connect_to(unique_step)
 sc5 = Scenario('auto_regen')

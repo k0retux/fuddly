@@ -56,9 +56,9 @@ class Operation(object):
     def set_status(self, status):
         self.status = status
 
-    def add_instruction(self, actions, seed=None):
+    def add_instruction(self, actions, seed=None, tg_ids=None):
         l = list(actions) if actions is not None else None
-        self.action_register.append((l, seed))
+        self.action_register.append((l, seed, tg_ids))
 
     def get_instructions(self):
         return self.action_register
@@ -72,7 +72,7 @@ class LastInstruction(object):
         self._now = datetime.datetime.now()
         self.comments = None
         self.feedback_info = None
-        self._status_code = None
+        self._status_code = 0
         self.instructions = {
             LastInstruction.RecordData: False
             }
@@ -111,8 +111,10 @@ class LastInstruction(object):
 
 class Operator(object):
 
-    def __init__(self):
-        pass
+    _args_desc = None
+
+    def __str__(self):
+        return "Operator '{:s}'".format(self.__class__.__name__)
 
     def start(self, fmk_ops, dm, monitor, target, logger, user_input):
         '''
@@ -159,8 +161,8 @@ class Operator(object):
         return linst
 
     def _start(self, fmk_ops, dm, monitor, target, logger, user_input):
-        sys.stdout.write("\n__ setup operator '%s' __" % self.__class__.__name__)
-        if not _user_input_conformity(self, user_input, self._gen_args_desc, self._args_desc):
+        # sys.stdout.write("\n__ setup operator '%s' __" % self.__class__.__name__)
+        if not _user_input_conformity(self, user_input, self._args_desc):
             return False
 
         _handle_user_inputs(self, user_input)
@@ -176,25 +178,17 @@ class Operator(object):
         return ok
 
 
-def operator(prj, gen_args={}, args={}):
+def operator(prj, args=None):
     def internal_func(operator_cls):
-        operator_cls._gen_args_desc = gen_args
-        operator_cls._args_desc = args
-        # check conflict between gen_args & args
-        for k in gen_args:
-            if k in args.keys():
-                raise ValueError("Specific parameter '{:s}' is in conflict with a generic parameter!".format(k))
-        # create generic attributes
-        for k, v in gen_args.items():
-            desc, default, arg_type = v
-            setattr(operator_cls, k, default)
-        # create specific attributes
-        for k, v in args.items():
-            desc, default, arg_type = v
-            setattr(operator_cls, k, default)
+        operator_cls._args_desc = {} if args is None else args
+        if args is not None:
+            # create specific attributes
+            for k, v in args.items():
+                desc, default, arg_type = v
+                setattr(operator_cls, k, default)
         # register an object of this class
         operator = operator_cls()
-        prj.register_new_operator(operator.__class__.__name__, operator)
+        prj.register_operator(operator.__class__.__name__, operator)
         return operator_cls
 
     return internal_func

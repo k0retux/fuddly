@@ -176,12 +176,14 @@ class Example_DataModel(DataModel):
         prefix.make_determinist()
 
         te3 = Node('EVT3')
-        te3.set_values(value_type=BitField(subfield_sizes=[4,4], subfield_values=[[0x5, 0x6], [0xF, 0xC]]))
+        te3.set_values(value_type=BitField(subfield_sizes=[4,4], endian=VT.LittleEndian,
+                                           subfield_values=[[0x5, 0x6], [0xF, 0xC]]))
         te3.set_fuzz_weight(8)
         # te3.make_determinist()
 
         te4 = Node('EVT4')
-        te4.set_values(value_type=BitField(subfield_sizes=[4,4], subfield_val_extremums=[[4, 8], [3, 15]]))
+        te4.set_values(value_type=BitField(subfield_sizes=[4,4], endian=VT.LittleEndian,
+                                           subfield_val_extremums=[[4, 8], [3, 15]]))
         te4.set_fuzz_weight(7)
         # te4.make_determinist()
 

@@ -21,14 +21,16 @@
 #
 ################################################################################
 
-import cups
 import os
 import random
 
 from framework.global_resources import workspace_folder
-from framework.target_helpers import Target, TargetFeedback
+from framework.target_helpers import Target
+from framework.knowledge.feedback_collector import FeedbackCollector
 from libs.external_modules import cups_module
 
+if cups_module:
+   import cups
 
 class PrinterTarget(Target):
 
@@ -38,51 +40,55 @@ class PrinterTarget(Target):
 
     def __init__(self, tmpfile_ext):
         Target.__init__(self)
-        self.__suffix = '{:0>12d}'.format(random.randint(2**16, 2**32))
-        self.__feedback = TargetFeedback()
-        self.__target_ip = None
-        self.__target_port = None
-        self.__printer_name = None
-        self.__cpt = None
+        self._suffix = '{:0>12d}'.format(random.randint(2 ** 16, 2 ** 32))
+        self._feedback = FeedbackCollector()
+        self._target_ip = None
+        self._target_port = None
+        self._printer_name = None
+        self._cpt = None
         self.set_tmp_file_extension(tmpfile_ext)
+
+    def get_description(self):
+        printer_name = ', Name: ' + self._printer_name if self._printer_name is not None else ''
+        return 'IP: ' + self._target_ip + printer_name
 
     def set_tmp_file_extension(self, tmpfile_ext):
         self._tmpfile_ext = tmpfile_ext
 
     def set_target_ip(self, target_ip):
-        self.__target_ip = target_ip
+        self._target_ip = target_ip
 
     def get_target_ip(self):
-        return self.__target_ip
+        return self._target_ip
 
     def set_target_port(self, target_port):
-        self.__target_port = target_port
+        self._target_port = target_port
 
     def get_target_port(self):
-        return self.__target_port
+        return self._target_port
 
     def set_printer_name(self, printer_name):
-        self.__printer_name = printer_name
+        self._printer_name = printer_name
 
     def get_printer_name(self):
-        return self.__printer_name
+        return self._printer_name
 
     def start(self):
-        self.__cpt = 0
+        self._cpt = 0
 
         if not cups_module:
             print('/!\\ ERROR /!\\: the PrinterTarget has been disabled because python-cups module is not installed')
             return False
 
-        if not self.__target_ip:
+        if not self._target_ip:
             print('/!\\ ERROR /!\\: the PrinterTarget IP has not been set')
             return False
 
-        if self.__target_port is None:
-            self.__target_port = 631
+        if self._target_port is None:
+            self._target_port = 631
 
-        cups.setServer(self.__target_ip)
-        cups.setPort(self.__target_port)
+        cups.setServer(self._target_ip)
+        cups.setPort(self._target_port)
 
         self.__connection = cups.Connection()
 
@@ -92,16 +98,16 @@ class PrinterTarget(Target):
             print('CUPS Server Errror: ', err)
             return False
 
-        if self.__printer_name is not None:
+        if self._printer_name is not None:
             try:
-                params = printers[self.__printer_name]
+                params = printers[self._printer_name]
             except:
-                print("Printer '%s' is not connected to CUPS server!" % self.__printer_name)
+                print("Printer '%s' is not connected to CUPS server!" % self._printer_name)
                 return False
         else:
-            self.__printer_name, params = printers.popitem()
+            self._printer_name, params = printers.popitem()
 
-        print("\nDevice-URI: %s\nPrinter Name: %s" % (params["device-uri"], self.__printer_name))
+        print("\nDevice-URI: %s\nPrinter Name: %s" % (params["device-uri"], self._printer_name))
 
         return True
 
@@ -109,15 +115,15 @@ class PrinterTarget(Target):
 
         data = data.to_bytes()
         wkspace = workspace_folder
-        file_name = os.path.join(wkspace, 'fuzz_test_' + self.__suffix + self._tmpfile_ext)
+        file_name = os.path.join(wkspace, 'fuzz_test_' + self._suffix + self._tmpfile_ext)
 
         with open(file_name, 'wb') as f:
              f.write(data)
 
-        inc = '_{:0>5d}'.format(self.__cpt)
-        self.__cpt += 1
+        inc = '_{:0>5d}'.format(self._cpt)
+        self._cpt += 1
 
         try:
-            self.__connection.printFile(self.__printer_name, file_name, 'job_'+ self.__suffix + inc, {})
+            self.__connection.printFile(self._printer_name, file_name, 'job_' + self._suffix + inc, {})
         except cups.IPPError as err:
             print('CUPS Server Errror: ', err)

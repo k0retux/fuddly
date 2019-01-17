@@ -29,7 +29,7 @@ class SMS_DataModel(DataModel):
 
     file_extension = 'sms'
 
-    def absorb(self, data, idx):
+    def create_node_from_raw_data(self, data, idx, filename):
         pass
 
     def build_data_model(self):
@@ -146,6 +146,12 @@ class SMS_DataModel(DataModel):
              {'name': 'TP-DCS',  # Data Coding Scheme (refer to GSM 03.38)
               'custo_set': MH.Custo.NTerm.CollapsePadding,
               'contents': [
+                  {'name': 'msb',
+                   'determinist': True,
+                   'contents': BitField(subfield_sizes=[4], endian=VT.BigEndian,
+                                        subfield_values=[
+                                            [0b1111,0b1101,0b1100,0b0000]],  # last coding group
+                                        ) },
                   {'name': 'lsb1',
                    'determinist': True,
                    'exists_if': (BitFieldCondition(sf=0, val=[0b1111]), 'msb'),
@@ -169,12 +175,6 @@ class SMS_DataModel(DataModel):
                                         subfield_values=[
                                             [0b0000]  # Default alphabet
                                         ]
-                                        ) },
-                  {'name': 'msb',
-                   'determinist': True,
-                   'contents': BitField(subfield_sizes=[4], endian=VT.BigEndian,
-                                        subfield_values=[
-                                            [0b1111,0b1101,0b1100,0b0000]],  # last coding group
                                         ) },
              ]},
              {'name': 'UDL',

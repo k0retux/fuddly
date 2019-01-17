@@ -21,6 +21,7 @@
 #
 ################################################################################
 
+import types
 import subprocess
 from copy import *
 
@@ -31,6 +32,7 @@ from framework.fuzzing_primitives import *
 from framework.basic_primitives import *
 from framework.value_types import *
 from framework.data_model import DataModel
+from framework.dmhelpers.generic import MH
 
 # from framework.plumbing import *
 from framework.evolutionary_helpers import Population
@@ -44,7 +46,6 @@ tactics = Tactics()
 #######################
 
 @generator(tactics, gtype='POPULATION', weight=1,
-           gen_args=GENERIC_ARGS,
            args={'population': ('The population to iterate over.', None, Population)})
 class g_population(Generator):
     """ Walk through the given population """
@@ -92,8 +93,7 @@ def truncate_info(info, max_size=60):
     return repr(info)
 
 
-@disruptor(tactics, dtype="tWALK", weight=1,
-           gen_args = GENERIC_ARGS,
+@disruptor(tactics, dtype="tWALK", weight=1, modelwalker_user=True,
            args={'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
                  'order': ('When set to True, the walking order is strictly guided ' \
@@ -155,8 +155,7 @@ class sd_iter_over_data(StatefulDisruptor):
 
 
 
-@disruptor(tactics, dtype="tTYPE", weight=1,
-           gen_args = GENERIC_ARGS,
+@disruptor(tactics, dtype="tTYPE", weight=1, modelwalker_user=True,
            args={'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
                  'order': ('When set to True, the fuzzing order is strictly guided ' \
@@ -164,20 +163,38 @@ class sd_iter_over_data(StatefulDisruptor):
                            'in the data model) is used for ordering.', True, bool),
                  'deep': ('When set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes.', True, bool),
-                 'ign_sep': ('When set to True, non-terminal separators will be ignored ' \
+                 'ign_sep': ('When set to True, separators will be ignored ' \
                           'if any are defined.', False, bool),
                  'fix_all': ('For each produced data, reevaluate the constraints on the whole graph.',
                              False, bool),
                  'fix': ("Limit constraints fixing to the nodes related to the currently fuzzed one"
                          " (only implemented for 'sync_size_with' and 'sync_enc_size_with').", True, bool),
                  'fuzz_mag': ('Order of magnitude for maximum size of some fuzzing test cases.',
-                              1.0, float)})
+                              1.0, float),
+                 'determinism': ("If set to 'True', the whole model will be fuzzed in "
+                                 "a deterministic way. Otherwise it will be guided by the "
+                                 "data model determinism.", True, bool),
+                 'leaf_determinism': ("If set to 'True', each typed node will be fuzzed in "
+                                      "a deterministic way. Otherwise it will be guided by the "
+                                      "data model determinism. Note: this option is complementary to "
+                                      "'determinism' is it acts on the typed node substitutions "
+                                      "that occur through this disruptor", True, bool),
+                 })
 class sd_fuzz_typed_nodes(StatefulDisruptor):
-    '''
-    Perform alterations on typed nodes (one at a time) according to
-    its type and various complementary information (such as size,
-    allowed values, ...).
-    '''
+    """
+    Perform alterations on typed nodes (one at a time) according to:
+    - their type (e.g., INT, Strings, ...)
+    - their attributes (e.g., allowed values, minimum size, ...)
+    - knowledge retrieved from the data (e.g., if the input data uses separators, their symbols
+    are leveraged in the fuzzing)
+    - knowledge on the target retrieved from the project file or dynamically from feedback inspection
+    (e.g., C language, GNU/Linux OS, ...)
+
+    If the input has different shapes (described in non-terminal nodes), this will be taken into
+    account by fuzzing every shape combinations.
+
+    Note: this disruptor includes what tSEP does and goes beyond with respect to separators.
+    """
     def setup(self, dm, user_input):
         return True
 
@@ -187,17 +204,17 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
             prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
             return prev_data
 
-        prev_content.make_finite(all_conf=True, recursive=True)
-
         self.consumer = TypedNodeDisruption(max_runs_per_node=self.max_runs_per_node,
                                             min_runs_per_node=self.min_runs_per_node,
                                             fuzz_magnitude=self.fuzz_mag,
                                             fix_constraints=self.fix,
                                             respect_order=self.order,
-                                            ignore_separator=self.ign_sep)
+                                            ignore_separator=self.ign_sep,
+                                            enforce_determinism=self.leaf_determinism)
         self.consumer.need_reset_when_structure_change = self.deep
         self.consumer.set_node_interest(path_regexp=self.path)
-        self.modelwalker = ModelWalker(prev_content, self.consumer, max_steps=self.max_steps, initial_step=self.init)
+        self.modelwalker = ModelWalker(prev_content, self.consumer, max_steps=self.max_steps,
+                                       initial_step=self.init, make_determinist=self.determinism)
         self.walker = iter(self.modelwalker)
 
         self.max_runs = None
@@ -242,13 +259,13 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
             data.add_info('reevaluate all the constraints (if any)')
 
         data.update_from(exported_node)
+        data.altered = True
 
         return data
 
 
 
-@disruptor(tactics, dtype="tALT", weight=1,
-           gen_args = GENERIC_ARGS,
+@disruptor(tactics, dtype="tALT", weight=1, modelwalker_user=True,
            args={'conf': ("Change the configuration, with the one provided (by name), of " \
                           "all nodes reachable from the root, one-by-one. [default value is set " \
                           "dynamically with the first-found existing alternate configuration]",
@@ -341,8 +358,7 @@ class sd_switch_to_alternate_conf(StatefulDisruptor):
         return data
 
 
-@disruptor(tactics, dtype="tSEP", weight=1,
-           gen_args = GENERIC_ARGS,
+@disruptor(tactics, dtype="tSEP", weight=1, modelwalker_user=True,
            args={'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
                  'order': ('When set to True, the fuzzing order is strictly guided ' \
@@ -421,27 +437,28 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
         else:
             data.update_from(rnode)
 
+        data.altered = True
         return data
 
 
 
 @disruptor(tactics, dtype="tSTRUCT", weight=1,
-           gen_args={'init': ('Make the model walker ignore all the steps until the provided one.', 1, int),
-                     'max_steps': ('Maximum number of steps (-1 means until the end).', -1, int) },
-           args={'path': ('Graph path regexp to select nodes on which' \
+           args={'init': ('Make the model walker ignore all the steps until the provided one.', 1, int),
+                 'max_steps': ('Maximum number of steps (-1 means until the end).', -1, int),
+                 'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
-                 'deep': ('If True, enable corruption of minimum and maxium amount of non-terminal nodes.',
+                 'deep': ('If True, enable corruption of non-terminal node internals',
                           False, bool) })
 class sd_struct_constraints(StatefulDisruptor):
-    '''
-    For each node associated to existence constraints or quantity
-    constraints, alter the constraint, one at a time, after each call
-    to this disruptor.
+    """
+    Perform constraints alteration (one at a time) on each node that depends on another one
+    regarding its existence, its quantity, its size, ...
 
-    If `deep` is set, enable new structure corruption cases, based on
-    the minimum and maximum amount of non-terminal nodes (within the
-    input data) specified in the data model.
-    '''
+    If `deep` is set, enable more corruption cases on the data structure, based on the internals of
+    each non-terminal node:
+    - the minimum and maximum amount of the subnodes of each non-terminal nodes
+    - ...
+    """
     def setup(self, dm, user_input):
         return True
 
@@ -604,6 +621,7 @@ class sd_struct_constraints(StatefulDisruptor):
         data.add_info(' |_ {:s}'.format(op_performed))
 
         data.update_from(corrupted_seed)
+        data.altered = True
 
         return data
 
@@ -641,11 +659,11 @@ class SwapperDisruptor(StatefulDisruptor):
             data.update_from(self.node)
 
         self.count += 1
+        data.altered = True
         return data
 
 
 @disruptor(tactics, dtype="tCROSS", weight=1,
-           gen_args=GENERIC_ARGS,
            args={'node': ('Node to crossover with.', None, Node),
                  'percentage_to_share': ('Percentage of the base node to share.', 0.50, float)})
 class sd_crossover(SwapperDisruptor):
@@ -746,7 +764,6 @@ class sd_crossover(SwapperDisruptor):
 
 
 @disruptor(tactics, dtype="tCOMB", weight=1,
-           gen_args=GENERIC_ARGS,
            args={'node': ('Node to combine with.', None, Node)})
 class sd_combine(SwapperDisruptor):
     """
@@ -896,6 +913,7 @@ class d_fuzz_model_structure(Disruptor):
         prev_content = prev_data.content
         if isinstance(prev_content, Node):
             fuzz_data_tree(prev_content, self.path)
+            prev_data.altered = True
         else:
             prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
 
@@ -1027,6 +1045,7 @@ class d_max_size(Disruptor):
             prev_data.update_from(new_val)
             ret = prev_data
 
+        ret.altered = True
         return ret
 
 
@@ -1074,15 +1093,18 @@ class d_corrupt_node_bits(Disruptor):
                 if self.new_val is None:
                     if val != b'':
                         val = corrupt_bits(val, n=1, ascii=self.ascii)
-                        prev_data.add_info('corrupt data: {!s}'.format(truncate_info(val)))
+                        prev_data.add_info('corrupted data: {!s}'.format(truncate_info(val)))
                     else:
                         prev_data.add_info('Nothing to corrupt!')
                 else:
                     val = self.new_val
-                    prev_data.add_info('corrupt data: {!s}'.format(truncate_info(val)))
+                    prev_data.add_info('corrupted data: {!s}'.format(truncate_info(val)))
 
-                i.set_values(values=[val])
-                i.get_value()
+                status, _, _, _ = i.absorb(val, constraints=AbsNoCsts())
+                if status != AbsorbStatus.FullyAbsorbed:
+                    prev_data.add_info('data absorption failure, fallback to node replacement')
+                    i.set_values(values=[val])
+                i.freeze()
 
             ret = prev_data
 
@@ -1092,6 +1114,7 @@ class d_corrupt_node_bits(Disruptor):
             prev_data.add_info('Corruption performed on a byte string as no Node is available')
             ret = prev_data
 
+        ret.altered = True
         return ret
 
 
@@ -1118,6 +1141,7 @@ class d_corrupt_bits_by_position(Disruptor):
         msg = val[:self.idx-1]+new_value+val[self.idx:]
 
         prev_data.update_from(msg)
+        prev_data.altered = True
 
         return prev_data
 
@@ -1126,8 +1150,8 @@ class d_corrupt_bits_by_position(Disruptor):
            args={'path': ('Graph path regexp to select nodes on which ' \
                           'the disruptor should apply.', None, str),
                  'clone_node': ('If True the dmaker will always return a copy ' \
-                                'of the node. (For stateless diruptors dealing with ' \
-                                'big data it can be usefull to it to False.)', False, bool)})
+                                'of the node. (For stateless disruptors dealing with ' \
+                                'big data it can be useful to it to False.)', False, bool)})
 class d_fix_constraints(Disruptor):
     '''
     Fix data constraints.
@@ -1178,8 +1202,8 @@ class d_fix_constraints(Disruptor):
                           'the disruptor should apply.', None, str),
                  'recursive': ('Apply the disruptor recursively.', True, str),
                  'clone_node': ('If True the dmaker will always return a copy ' \
-                                'of the node. (for stateless diruptors dealing with ' \
-                                'big data it can be usefull to it to False).', False, bool)})
+                                'of the node. (for stateless disruptors dealing with ' \
+                                'big data it can be useful to it to False).', False, bool)})
 class d_next_node_content(Disruptor):
     '''
     Move to the next content of the nodes from input data or from only
@@ -1223,6 +1247,75 @@ class d_next_node_content(Disruptor):
 
         return prev_data
 
+@disruptor(tactics, dtype="OP", weight=4,
+           args={'path': ('Graph path regexp to select nodes on which ' \
+                          'the disruptor should apply.', None, str),
+                 'op': ('The operation to perform on the selected nodes.', Node.clear_attr,
+                        (types.MethodType, types.FunctionType)), # python3, python2
+                 'params': ('Tuple of parameters that will be provided to the operation. ('
+                            'default: MH.Attr.Mutable)',
+                            (MH.Attr.Mutable,),
+                            tuple),
+                 'clone_node': ('If True the dmaker will always return a copy ' \
+                                'of the node. (For stateless disruptors dealing with ' \
+                                'big data it can be useful to set it to False.)', False, bool)})
+class d_operate_on_nodes(Disruptor):
+    '''
+    Perform an operation on the nodes specified by the regexp path. @op is an operation that
+    applies to a node and @params are a tuple containing the parameters that will be provided to
+    @op. If no path is provided, the root node will be used.
+    '''
+    def setup(self, dm, user_input):
+        return True
+
+    def disrupt_data(self, dm, target, prev_data):
+        ok = False
+        prev_content = prev_data.content
+        if not isinstance(prev_content, Node):
+            prev_data.add_info('INVALID INPUT')
+            return prev_data
+
+        if self.path:
+            l = prev_content.get_reachable_nodes(path_regexp=self.path)
+            if not l:
+                prev_data.add_info('INVALID INPUT')
+                return prev_data
+
+            for n in l:
+                try:
+                    self.op(n, *self.params)
+                except:
+                    prev_data.add_info("An error occurred while performing the operation on the "
+                                       "node '{:s}'".format(n.name))
+                else:
+                    ok = True
+                    self._add_info(prev_data, n)
+        else:
+            try:
+                self.op(prev_content, *self.params)
+            except:
+                prev_data.add_info("An error occurred while performing the operation on the "
+                                   "node '{:s}'".format(prev_content.name))
+            else:
+                ok = True
+                self._add_info(prev_data, prev_content)
+
+        if ok:
+            prev_data.add_info("performed operation: {!r}".format(self.op))
+            prev_data.add_info("parameters provided: {:s}"
+                               .format(', '.join((str(x) for x in self.params))))
+
+        prev_content.freeze()
+
+        if self.clone_node:
+            exported_node = Node(prev_content.name, base_node=prev_content, new_env=True)
+            prev_data.update_from(exported_node)
+
+        prev_data.altered = True
+        return prev_data
+
+    def _add_info(self, prev_data, n):
+        prev_data.add_info("changed node:        {!s}".format(n.get_path_from(prev_data.content)))
 
 @disruptor(tactics, dtype="MOD", weight=4,
            args={'path': ('Graph path regexp to select nodes on which ' \
@@ -1230,8 +1323,8 @@ class d_next_node_content(Disruptor):
                  'value': ('The new value to inject within the data.', '', str),
                  'constraints': ('Constraints for the absorption of the new value.', AbsNoCsts(), AbsCsts),
                  'clone_node': ('If True the dmaker will always return a copy ' \
-                                'of the node. (For stateless diruptors dealing with ' \
-                                'big data it can be usefull to it to False.)', False, bool)})
+                                'of the node. (For stateless disruptors dealing with ' \
+                                'big data it can be useful to it to False.)', False, bool)})
 class d_modify_nodes(Disruptor):
     '''
     Change the content of the nodes specified by the regexp path with
@@ -1269,6 +1362,7 @@ class d_modify_nodes(Disruptor):
             exported_node = Node(prev_content.name, base_node=prev_content, new_env=True)
             prev_data.update_from(exported_node)
 
+        prev_data.altered = True
         return prev_data
 
     def _add_info(self, prev_data, n, status, size):
@@ -1287,7 +1381,7 @@ class d_modify_nodes(Disruptor):
 
 
 @disruptor(tactics, dtype="COPY", weight=4,
-           args={})
+           args=None)
 class d_shallow_copy(Disruptor):
     '''
     Shallow copy of the input data, which means: ignore its frozen

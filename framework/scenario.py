@@ -32,7 +32,7 @@ from libs.external_modules import *
 from libs.utils import find_file, retrieve_app_handler
 
 class DataProcess(object):
-    def __init__(self, process, seed=None, auto_regen=False):
+    def __init__(self, process, seed=None, auto_regen=False, vtg_ids=None):
         """
         Describe a process to generate a data.
 
@@ -54,6 +54,8 @@ class DataProcess(object):
               all disruptors are exhausted. If ``False``, the data process won't notify the
               framework to rerun the data maker chain, thus triggering the end of the scenario
               that embeds this data process.
+            vtg_ids (list): Virtual ID list of the targets to which the outcomes of this data process will be sent.
+              If ``None``, the outcomes will be sent to the first target that has been enabled.
         """
         self.seed = seed
         self.auto_regen = auto_regen
@@ -61,6 +63,7 @@ class DataProcess(object):
         self.outcomes = None
         self.feedback_timeout = None
         self.feedback_mode = None
+        self.vtg_ids = vtg_ids
         self._process = [process]
         self._process_idx = 0
         self._blocked = False
@@ -152,15 +155,46 @@ class Step(object):
     def __init__(self, data_desc=None, final=False,
                  fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
-                 do_before_data_processing=None, do_before_sending=None):
+                 do_before_data_processing=None, do_before_sending=None,
+                 valid=True, vtg_ids=None):
+        """
+        Step objects are the building blocks of Scenarios.
+
+        Args:
+            data_desc:
+            final:
+            fbk_timeout:
+            fbk_mode:
+            set_periodic:
+            clear_periodic:
+            step_desc:
+            do_before_data_processing:
+            do_before_sending:
+            valid:
+            vtg_ids (list, int): Virtual ID list of the targets to which the outcomes of this data process will be sent.
+              If ``None``, the outcomes will be sent to the first target that has been enabled.
+              If ``data_desc`` is a list, this parameter should be a list where each item is the ``vtg_ids``
+              of the corresponding item in the ``data_desc`` list.
+        """
 
         self.final = final
+        self.valid = valid
         self._step_desc = step_desc
         self._transitions = []
         self._do_before_data_processing = do_before_data_processing
         self._do_before_sending = do_before_sending
 
         self._handle_data_desc(data_desc)
+        if vtg_ids is not None:
+            if isinstance(data_desc, list):
+                assert isinstance(vtg_ids, list)
+                assert len(vtg_ids) == len(data_desc)
+                self.vtg_ids_list = vtg_ids
+            else:
+                self.vtg_ids_list = [vtg_ids]
+        else:
+            self.vtg_ids_list = None
+
         self.make_free()
 
         # need to be set after self._data_desc
@@ -329,6 +363,8 @@ class Step(object):
                     self._atom = {}
                 if update_node:
                     self._atom[idx] = self._scenario_env.dm.get_atom(self._node_name[idx])
+                    self._data_desc[idx] = Data(self._atom[idx])
+                    update_node = False
                 atom_list.append(self._atom[idx])
 
         return atom_list[0] if len(atom_list) == 1 else atom_list
@@ -359,7 +395,7 @@ class Step(object):
             # Practically it means that the creation of these data need to be performed
             # by data framework callback (CallBackOps.Replace_Data) because
             # a generator (by which a scenario will be executed) can only provide one data.
-            d = Data('STEP:POISON_1')
+            d = Data('STEP:POISON_2')
 
         if not d.has_info():
             if self._step_desc is not None:
@@ -392,6 +428,11 @@ class Step(object):
             d.feedback_timeout = self._feedback_timeout
         if self._feedback_mode is not None:
             d.feedback_mode = self._feedback_mode
+
+        if self.vtg_ids_list:
+            # Note in the case of self._data_desc contains multiple data, related
+            # vtg_ids are retrieved directly from the Step in the Replace_Data callback.
+            d.tg_ids = self.vtg_ids_list[0]
 
         return d
 
@@ -435,7 +476,7 @@ class Step(object):
                     if self.__class__.__name__ != 'Step':
                         step_desc += '[' + self.__class__.__name__ + ']'
                     else:
-                        step_desc += d.content.name if isinstance(d.content, Node) else 'Data(...)'
+                        step_desc += d.content.name.upper() if isinstance(d.content, Node) else 'Data(...)'
                 elif isinstance(d, str):
                     step_desc += "{:s}".format(self._node_name[idx].upper())
                 else:
@@ -490,17 +531,19 @@ class Step(object):
 class FinalStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
-                 do_before_data_processing=None):
-        Step.__init__(self, final=True, do_before_data_processing=do_before_data_processing)
+                 do_before_data_processing=None, valid=True, vtg_ids=None):
+        Step.__init__(self, final=True, do_before_data_processing=do_before_data_processing,
+                      valid=valid, vtg_ids=vtg_ids)
 
 class NoDataStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
-                 do_before_data_processing=None):
+                 do_before_data_processing=None, valid=True, vtg_ids=None):
         Step.__init__(self, data_desc=Data(''), final=final,
                       fbk_timeout=fbk_timeout, fbk_mode=fbk_mode,
                       set_periodic=set_periodic, clear_periodic=clear_periodic,
-                      step_desc=step_desc, do_before_data_processing=do_before_data_processing)
+                      step_desc=step_desc, do_before_data_processing=do_before_data_processing,
+                      valid=valid, vtg_ids=vtg_ids)
         self.make_blocked()
 
     def make_free(self):
@@ -599,10 +642,13 @@ class Transition(object):
 
 class ScenarioEnv(object):
 
+    knowledge_source = None
+
     def __init__(self):
         self._dm = None
         self._target = None
         self._scenario = None
+        # self._knowledge_source = None
 
     @property
     def dm(self):
@@ -628,11 +674,20 @@ class ScenarioEnv(object):
     def scenario(self, val):
         self._scenario = val
 
+    # @property
+    # def knowledge_source(self):
+    #     return self._knowledge_source
+    #
+    # @knowledge_source.setter
+    # def knowledge_source(self, val):
+    #     self._knowledge_source = val
+
     def __copy__(self):
         new_env = type(self)()
         new_env.__dict__.update(self.__dict__)
         new_env._target = None
         new_env._scenario = None
+        # new_env._knowledge_source = None
         return new_env
 
 
@@ -675,6 +730,14 @@ class Scenario(object):
     def set_target(self, target):
         self._env.target = target
 
+    # @property
+    # def knowledge_source(self):
+    #     return self._env.knowledge_source
+    #
+    # @knowledge_source.setter
+    # def knowledge_source(self, val):
+    #     self._env.knowledge_source = val
+
     def _graph_setup(self, init_step, steps, transitions):
         for tr in init_step.transitions:
             transitions.append(tr)
@@ -688,6 +751,7 @@ class Scenario(object):
         assert self._anchor is not None
         self._steps = []
         self._transitions = []
+        self._steps.append(self._anchor)
         self._graph_setup(self._anchor, self._steps, self._transitions)
 
     def _init_reinit_seq_properties(self):
