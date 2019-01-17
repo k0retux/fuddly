@@ -640,6 +640,9 @@ following parameters:
   to do it at the node level by using the data model keyword ``determinist``
   (refer to :ref:`dm:node_prop_keywords`).
 
+``values_desc`` [optional, default value: **None**]
+  Dictionary that maps integer values to their descriptions (character strings). Leveraged for
+  display purpose. Even if provided, all values do not need to be described.
 
 All these parameters are optional. If you don't specify all of them
 the constructor will let more freedom within the data model. But if

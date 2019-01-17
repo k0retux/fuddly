@@ -181,11 +181,20 @@ class sd_iter_over_data(StatefulDisruptor):
                                       "that occur through this disruptor", True, bool),
                  })
 class sd_fuzz_typed_nodes(StatefulDisruptor):
-    '''
-    Perform alterations on typed nodes (one at a time) according to
-    its type and various complementary information (such as size,
-    allowed values, ...).
-    '''
+    """
+    Perform alterations on typed nodes (one at a time) according to:
+    - their type (e.g., INT, Strings, ...)
+    - their attributes (e.g., allowed values, minimum size, ...)
+    - knowledge retrieved from the data (e.g., if the input data uses separators, their symbols
+    are leveraged in the fuzzing)
+    - knowledge on the target retrieved from the project file or dynamically from feedback inspection
+    (e.g., C language, GNU/Linux OS, ...)
+
+    If the input has different shapes (described in non-terminal nodes), this will be taken into
+    account by fuzzing every shape combinations.
+
+    Note: this disruptor includes what tSEP does and goes beyond with respect to separators.
+    """
     def setup(self, dm, user_input):
         return True
 
@@ -438,18 +447,18 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
                  'max_steps': ('Maximum number of steps (-1 means until the end).', -1, int),
                  'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
-                 'deep': ('If True, enable corruption of minimum and maximum amount of non-terminal nodes.',
+                 'deep': ('If True, enable corruption of non-terminal node internals',
                           False, bool) })
 class sd_struct_constraints(StatefulDisruptor):
-    '''
-    For each node associated to existence constraints or quantity
-    constraints, alter the constraint, one at a time, after each call
-    to this disruptor.
+    """
+    Perform constraints alteration (one at a time) on each node that depends on another one
+    regarding its existence, its quantity, its size, ...
 
-    If `deep` is set, enable new structure corruption cases, based on
-    the minimum and maximum amount of non-terminal nodes (within the
-    input data) specified in the data model.
-    '''
+    If `deep` is set, enable more corruption cases on the data structure, based on the internals of
+    each non-terminal node:
+    - the minimum and maximum amount of the subnodes of each non-terminal nodes
+    - ...
+    """
     def setup(self, dm, user_input):
         return True
 
