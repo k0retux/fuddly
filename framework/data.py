@@ -63,7 +63,7 @@ class DataBackend(object):
     def to_bytes(self):
         raise NotImplementedError
 
-    def show(self, raw_limit=200, log_func=lambda x: x):
+    def show(self, raw_limit=200, log_func=sys.stdout.write):
         raise NotImplementedError
 
     def get_content(self, do_copy=False, materialize=True):
@@ -100,7 +100,7 @@ class NodeBackend(DataBackend):
     def to_bytes(self):
         return self._node.to_bytes()
 
-    def show(self, raw_limit=200, log_func=lambda x: x):
+    def show(self, raw_limit=200, log_func=sys.stdout.write):
         self._node.show(raw_limit=raw_limit, log_func=log_func)
 
     def get_content(self, do_copy=False, materialize=True):
@@ -152,8 +152,8 @@ class RawBackend(DataBackend):
     def to_bytes(self):
         return self._content
 
-    def show(self, raw_limit=200, log_func=lambda x: x):
-        print(self._content)
+    def show(self, raw_limit=200, log_func=sys.stdout.write):
+        log_func(self._content)
 
     def get_content(self, do_copy=False, materialize=True):
         return copy.copy(self._content) if do_copy else self._content
@@ -408,7 +408,7 @@ class Data(object):
     def get_content(self, do_copy=False):
         return self._backend.get_content(do_copy=do_copy)
 
-    def show(self, raw_limit=200, log_func=lambda x: x):
+    def show(self, raw_limit=200, log_func=sys.stdout.write):
         self._backend.show(raw_limit=raw_limit, log_func=log_func)
 
     pretty_print = show

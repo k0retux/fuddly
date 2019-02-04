@@ -2070,7 +2070,7 @@ class TestNodeFeatures(unittest.TestCase):
         # print(repr(top))
         print(top.get_value())
 
-        def verif_val_and_print(arg, log_func=None):
+        def verif_val_and_print(arg):
             Node._print_contents(arg)
             if 'TBD' in arg:
                 raise ValueError('Dissection Error!')
