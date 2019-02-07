@@ -179,7 +179,7 @@ class EnforceOrder(object):
 class FmkTask(threading.Thread):
 
     def __init__(self, name, func, arg, period=None,
-                 error_func=lambda x: x, cleanup_func=lambda x: None):
+                 error_func=lambda x: x, cleanup_func=lambda: None):
         threading.Thread.__init__(self)
         self._name = name
         self._func = func
@@ -1556,7 +1556,7 @@ class FmkPlumbing(object):
     def set_fuzz_delay(self, delay, do_record=False):
         if delay >= 0 or delay == -1:
             self._delay = delay
-            self.lg.log_fmk_info('Fuzz delay = {:.1f}s'.format(self._delay), do_record=do_record)
+            self.lg.log_fmk_info('Fuzz delay = {:.2f}s'.format(self._delay), do_record=do_record)
             return True
         else:
             self.lg.log_fmk_info('Wrong delay value!', do_record=False)
@@ -1610,9 +1610,12 @@ class FmkPlumbing(object):
             # This case occurs in self._do_sending_and_logging_init()
             # if the Target has not defined a feedback_timeout (like the EmptyTarget)
             if tg_id is None:
+                for tg in self.targets.values():
+                    tg.set_feedback_timeout(None)
                 self._recompute_health_check_timeout(timeout, max_sending_delay, do_show=do_show)
             else:
                 tg = self.targets[tg_id]
+                tg.set_feedback_timeout(None)
                 self._recompute_health_check_timeout(timeout, tg.sending_delay, target=tg, do_show=do_show)
 
         elif timeout >= 0:
@@ -1756,8 +1759,10 @@ class FmkPlumbing(object):
         blocked_data = list(filter(lambda x: x.is_blocked(), data_list))
         data_list = list(filter(lambda x: not x.is_blocked(), data_list))
 
-        user_interrupt, go_on = self._collect_residual_feedback(cond1=(self._burst_countdown == self._burst),
-                                                                cond2=(not blocked_data))
+        if self._burst_countdown == self._burst:
+            user_interrupt, go_on = self._collect_residual_feedback(force_mode=False)
+        else:
+            user_interrupt, go_on = False, True
 
         if blocked_data:
             self._handle_data_callbacks(blocked_data, hook=HOOK.after_fbk)
@@ -1771,36 +1776,28 @@ class FmkPlumbing(object):
             raise TargetFeedbackError
 
     def collect_residual_feedback(self):
-        if self._collect_residual_feedback(True, True)[0]:
+        if self._collect_residual_feedback(force_mode=True)[0]:
             raise UserInterruption
 
-    def _collect_residual_feedback(self, cond1, cond2):
+    def _collect_residual_feedback(self, force_mode=False):
         # If feedback_timeout = 0 then we don't consider residual feedback.
         # We try to avoid unnecessary latency in this case, as well as
         # to avoid retrieving some feedback that could be a trigger for sending the next data
         # (e.g., with a NetworkTarget in server_mode + wait_for_client)
         targets_to_retrieve_fbk = {}
-        do_residual_fbk_gathering = False
+        do_residual_tg_fbk_gathering = False
         for tg_id, tg in self.targets.items():
-            cond = True if tg.feedback_timeout is None else tg.feedback_timeout > 0
+            cond = True if tg.feedback_timeout is None or force_mode else tg.feedback_timeout > 0
             if cond:
-                do_residual_fbk_gathering = True
+                do_residual_tg_fbk_gathering = True
                 targets_to_retrieve_fbk[tg_id] = tg
 
         go_on = True
         fbk_timeout = {}
         user_interrupt = False
-        if cond1 and do_residual_fbk_gathering:
+        if do_residual_tg_fbk_gathering:
             # log residual just before sending new data to avoid
             # polluting feedback logs of the next emission
-            if cond2:
-                for tg in targets_to_retrieve_fbk.values():
-                    fbk_timeout[tg] = tg.feedback_timeout
-                # we change feedback timeout as the targets could use it to determine if they are
-                # ready to accept new data (check_target_readiness). For instance, the NetworkTarget
-                # launch a thread when collect_feedback_without_sending() is called for a duration
-                # of 'feedback_timeout'.
-                self.set_feedback_timeout(0, do_show=False)
 
             collected = False
             for tg in targets_to_retrieve_fbk.values():
@@ -1814,10 +1811,6 @@ class FmkPlumbing(object):
                 user_interrupt = ret == -2
 
             go_on = self.log_target_residual_feedback()
-
-            if cond2:
-                for tg_id, tg in targets_to_retrieve_fbk.items():
-                    self.set_feedback_timeout(fbk_timeout[tg], tg_id=tg_id, do_show=False)
 
             for tg in targets_to_retrieve_fbk.values():
                 tg.cleanup()
@@ -1988,7 +1981,11 @@ class FmkPlumbing(object):
 
                     final_data_tg_ids = self._vtg_to_tg(data)
                     for idx, obj in op[CallBackOps.Add_PeriodicData].items():
-                        data_desc, period = obj
+                        periodic_obj, period = obj
+                        data_desc = periodic_obj.data
+                        if periodic_obj.vtg_ids_list:
+                            final_data_tg_ids = self._vtg_to_tg(data, vtg_ids_list=periodic_obj.vtg_ids_list)
+
                         if isinstance(data_desc, DataProcess):
                             # In this case each time we send the periodic we walk through the process
                             # (thus, sending a new data each time)
@@ -2020,16 +2017,17 @@ class FmkPlumbing(object):
 
         return new_data_list
 
-    def _vtg_to_tg(self, data):
+    def _vtg_to_tg(self, data, vtg_ids_list=None):
         mapping = self.prj.scenario_target_mapping.get(data.scenario_dependence, None)
-        if data.tg_ids is None:
+        vtg_ids = data.tg_ids if vtg_ids_list is None else vtg_ids_list
+        if vtg_ids is None:
             tg_ids = mapping.get(None, self._tg_ids[0]) if mapping else self._tg_ids[0]
             tg_ids = [tg_ids]
         else:
             if mapping:
-                tg_ids = [mapping.get(tg_id, tg_id) for tg_id in data.tg_ids]
+                tg_ids = [mapping.get(tg_id, tg_id) for tg_id in vtg_ids]
             else:
-                tg_ids = data.tg_ids
+                tg_ids = vtg_ids
 
         valid_tg_ids = []
         for i in tg_ids:

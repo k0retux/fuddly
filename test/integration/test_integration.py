@@ -2070,8 +2070,8 @@ class TestNodeFeatures(unittest.TestCase):
         # print(repr(top))
         print(top.get_value())
 
-        def verif_val_and_print(arg):
-            Node._print_contents(arg)
+        def verif_val_and_print(*arg, **kwargs):
+            Node._print_contents(*arg, **kwargs)
             if 'TBD' in arg:
                 raise ValueError('Dissection Error!')
 
@@ -3489,7 +3489,7 @@ class TestFMK(unittest.TestCase):
             if d is not None:
                 fmk._log_data(d)
                 print("\n---[ Pretty Print ]---\n")
-                d.pretty_print()
+                d.show()
                 fmk.cleanup_dmaker(dmaker_type=dmaker_type, reset_existing_seed=True)
             else:
                 raise ValueError("\n***WARNING: the sequence {!r} returns {!r}!".format(act, d))

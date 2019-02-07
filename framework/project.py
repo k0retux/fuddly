@@ -35,7 +35,7 @@ from framework.value_types import VT
 from framework.node import Env
 from framework.data_model import DataModel
 from framework.tactics_helpers import DataMaker
-from framework.scenario import ScenarioEnv
+from framework.scenario import Scenario, ScenarioEnv
 
 class Project(object):
 
@@ -124,8 +124,14 @@ class Project(object):
     def set_data_model(self, dm):
         self.dm = dm
 
-    def map_targets_to_scenario(self, scenario_name, target_mapping):
-        self.scenario_target_mapping[scenario_name] = target_mapping
+    def map_targets_to_scenario(self, scenario, target_mapping):
+        if isinstance(scenario, (list, tuple)):
+            for sc in scenario:
+                name = sc.name if isinstance(sc, Scenario) else sc
+                self.scenario_target_mapping[name] = target_mapping
+        else:
+            name = scenario.name if isinstance(scenario, Scenario) else scenario
+            self.scenario_target_mapping[name] = target_mapping
 
     def reset_target_mappings(self):
         self.scenario_target_mapping = {}

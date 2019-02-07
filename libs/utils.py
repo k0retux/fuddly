@@ -21,6 +21,8 @@
 #
 ################################################################################
 
+from __future__ import print_function
+
 import os
 import sys
 import subprocess
@@ -38,7 +40,6 @@ class Term(object):
         self.xterm_prg_name = xterm_prg_name
 
     def start(self):
-        self._input_desc = None
         self.pipe_path = os.sep + os.path.join('tmp', 'fuddly_term_'+str(uuid.uuid4()))
         if not os.path.exists(self.pipe_path):
             os.mkfifo(self.pipe_path)
@@ -54,15 +55,10 @@ class Term(object):
 
     def _launch_term(self):
         self._p = subprocess.Popen(self.cmd)
-        if not self._input_desc or self._input_desc.closed:
-            self._input_desc = open(self.pipe_path, "w")
 
     def stop(self):
         if not self.keepterm and self._p.poll() is None:
             self._p.kill()
-        if self._input_desc:
-            self._input_desc.close()
-        self._input_desc = None
         try:
             os.remove(self.pipe_path)
         except FileNotFoundError:
@@ -72,10 +68,9 @@ class Term(object):
         s += '\n' if newline else ''
         if self._p.poll() is not None:
             self._launch_term()
-        if not self._input_desc or self._input_desc.closed:
-            self._input_desc = open(self.pipe_path, "w")
-        self._input_desc.write(s)
-        self._input_desc.close()
+        with open(self.pipe_path, "w") as input_desc:
+            input_desc.write(s)
+
 
     def print_nl(self, s):
         self.print(s, newline=True)

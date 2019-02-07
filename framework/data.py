@@ -153,7 +153,7 @@ class RawBackend(DataBackend):
         return self._content
 
     def show(self, raw_limit=200, log_func=sys.stdout.write):
-        log_func(self._content)
+        log_func(unconvert_from_internal_repr(self._content))
 
     def get_content(self, do_copy=False, materialize=True):
         return copy.copy(self._content) if do_copy else self._content

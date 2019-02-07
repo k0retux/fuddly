@@ -986,7 +986,7 @@ class DynGeneratorFromScenario(Generator):
         cbkops = CallBackOps()
         for desc in self.step.periodic_to_set:
             cbkops.add_operation(CallBackOps.Add_PeriodicData, id=id(desc),
-                                 param=desc.data, period=desc.period)
+                                 param=desc, period=desc.period)
 
         for periodic_id in self.step.periodic_to_clear:
             cbkops.add_operation(CallBackOps.Del_PeriodicData, id=periodic_id)

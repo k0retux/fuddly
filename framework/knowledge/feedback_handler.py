@@ -21,6 +21,8 @@
 #
 ################################################################################
 
+from __future__ import print_function
+
 import functools
 
 from framework.knowledge.information import *
@@ -62,7 +64,7 @@ class FeedbackHandler(object):
     A feedback handler extract information from binary data.
     """
 
-    def __init__(self, new_window=False, xterm_prg_name='x-terminal-emulator'):
+    def __init__(self, new_window=False, new_window_title=None, xterm_prg_name='x-terminal-emulator'):
         """
         Args:
             new_window: If `True`, a new terminal emulator is created, enabling the decoder to use
@@ -71,7 +73,10 @@ class FeedbackHandler(object):
             xterm_prg_name: name of the terminal emulator program to be started
         """
         self._new_window = new_window
+        self._new_window_title = new_window_title
         self._xterm_prg_name = xterm_prg_name
+        self._s = None
+        self.term = None
 
     def notify_data_sending(self, current_dm, data_list, timestamp, target):
         """
@@ -118,13 +123,16 @@ class FeedbackHandler(object):
         return UNIQUE
 
     def _start(self):
+        self._s = ''
         if self._new_window:
-            self.term = Term(name=self.__class__.__name__, xterm_prg_name=self._xterm_prg_name,
+            nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
+            self.term = Term(name=nm, xterm_prg_name=self._xterm_prg_name,
                              keepterm=True)
             self.term.start()
 
     def _stop(self):
-        if self._new_window:
+        self._s = None
+        if self._new_window and self.term is not None:
             self.term.stop()
 
     def print(self, msg):
@@ -138,6 +146,13 @@ class FeedbackHandler(object):
             self.term.print_nl(msg)
         else:
             print(msg)
+
+    def collect_data(self, s):
+        self._s += s
+
+    def flush_collector(self):
+        self.print(self._s)
+        self._s = ''
 
     def process_feedback(self, current_dm, source, timestamp, content, status):
         info_set = set()

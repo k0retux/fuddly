@@ -230,9 +230,6 @@ class NetworkTarget(Target):
         self.set_sending_delay(sending_delay)
         self.set_feedback_timeout(fbk_timeout)
 
-    def _set_feedback_timeout_specific(self, fbk_timeout):
-        self._feedback_timeout = fbk_timeout
-
     def initialize(self):
         '''
         To be overloaded if some intial setup for the target is necessary.
@@ -311,7 +308,7 @@ class NetworkTarget(Target):
                        chk_size=CHUNK_SZ, wait_time=None):
 
         if wait_time is None:
-            wait_time = self._feedback_timeout
+            wait_time = self.feedback_timeout
 
         initial_call = False
         if (host, port) not in self._server_sock2hp.values():
@@ -1062,7 +1059,7 @@ class NetworkTarget(Target):
 
             assert from_fmk
             self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk,
-                                      pre_fbk=pre_fbk)
+                                      pre_fbk=pre_fbk, timeout=0)
 
             return
 
@@ -1121,21 +1118,21 @@ class NetworkTarget(Target):
 
             if from_fmk:
                 self._start_fbk_collector(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk,
-                                          pre_fbk=pre_fbk)
+                                          pre_fbk=pre_fbk, timeout=self.feedback_timeout)
 
         else:
             raise TargetStuck("system not ready for sending data!")
 
 
     def _start_fbk_collector(self, fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd, from_fmk,
-                             pre_fbk=None):
+                             pre_fbk=None, timeout=None):
         self._thread_cpt += 1
         if from_fmk:
             self.feedback_thread_qty += 1
         feedback_thread = threading.Thread(None, self._collect_feedback_from,
                                            name='FBK-' + repr(self._sending_id) + '#' + repr(self._thread_cpt),
                                            args=(fbk_sockets, fbk_ids, fbk_lengths, epobj, fileno2fd,
-                                                 self._sending_id, self._feedback_timeout, from_fmk,
+                                                 self._sending_id, timeout, from_fmk,
                                                  pre_fbk))
         feedback_thread.start()
 

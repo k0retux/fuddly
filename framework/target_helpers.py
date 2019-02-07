@@ -186,7 +186,7 @@ class Target(object):
             fbk_timeout: maximum time duration for collecting the feedback
 
         '''
-        assert fbk_timeout >= 0
+        assert fbk_timeout is None or fbk_timeout >= 0
         self.feedback_timeout = fbk_timeout
         self._set_feedback_timeout_specific(fbk_timeout)
 

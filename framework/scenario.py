@@ -145,9 +145,10 @@ class DataProcess(object):
 
 
 class Periodic(object):
-    def __init__(self, data, period=None):
+    def __init__(self, data, period=None, vtg_ids=None):
         self.data = data
         self.period = period
+        self.vtg_ids_list = None if vtg_ids is None else [vtg_ids]
 
 
 class Step(object):
