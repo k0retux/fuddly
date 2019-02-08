@@ -1322,18 +1322,24 @@ class d_operate_on_nodes(Disruptor):
                           'the disruptor should apply.', None, str),
                  'value': ('The new value to inject within the data.', '', str),
                  'constraints': ('Constraints for the absorption of the new value.', AbsNoCsts(), AbsCsts),
+                 'multi_mod': ('Dictionary of <path>:<item> pairs to change multiple nodes with '
+                             'diferent values. <item> can be either only the new <value> or a '
+                             'tuple (<value>,<abscsts>) if new constraint for absorption is '
+                             'needed', None, dict),
                  'clone_node': ('If True the dmaker will always return a copy ' \
                                 'of the node. (For stateless disruptors dealing with ' \
                                 'big data it can be useful to it to False.)', False, bool)})
 class d_modify_nodes(Disruptor):
-    '''
-    Change the content of the nodes specified by the regexp path with
-    the value privided as a parameter (use *node absorption*
-    infrastructure). If no path is provided, the root node will be
-    used.
+    """
+    Perform modifications on the provided data. Two ways are possible:
 
-    Constraints can also be provided for absorption of the new value.
-    '''
+    - Either the change is performed on the content of the nodes specified by the `path`
+      parameter with the new `value` provided, and the optional constraints for the
+      absorption (use *node absorption* infrastructure);
+
+    - Or the changed is performed based on a dictionary provided through the parameter `multi_mod`
+
+    """
     def setup(self, dm, user_input):
         return True
 
@@ -1343,18 +1349,31 @@ class d_modify_nodes(Disruptor):
             prev_data.add_info('INVALID INPUT')
             return prev_data
 
-        if self.path:
-            l = prev_content.get_reachable_nodes(path_regexp=self.path)
-            if not l:
-                prev_data.add_info('INVALID INPUT')
-                return prev_data
-
-            for n in l:
-                status, off, size, name = n.absorb(self.value, constraints=self.constraints)
-                self._add_info(prev_data, n, status, size)
+        if self.multi_mod:
+            change_dict = self.multi_mod
         else:
-            status, off, size, name = prev_content.absorb(self.value, constraints=self.constraints)
-            self._add_info(prev_data, prev_content, status, size)
+            change_dict = {self.path: (self.value, self.constraints)}
+
+        for path, item in change_dict.items():
+            if isinstance(item, (tuple, list)):
+                assert len(item) == 2
+                new_value, new_csts = item
+            else:
+                new_value = item
+                new_csts = AbsNoCsts()
+
+            if path:
+                l = prev_content.get_reachable_nodes(path_regexp=path)
+                if not l:
+                    prev_data.add_info('INVALID INPUT')
+                    return prev_data
+
+                for n in l:
+                    status, off, size, name = n.absorb(new_value, constraints=new_csts)
+                    self._add_info(prev_data, n, status, size)
+            else:
+                status, off, size, name = prev_content.absorb(new_value, constraints=new_csts)
+                self._add_info(prev_data, prev_content, status, size)
 
         prev_content.freeze()
 
