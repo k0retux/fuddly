@@ -38,6 +38,8 @@ import datetime
 import time
 import signal
 
+from functools import wraps
+
 from framework.database import FeedbackGate
 from framework.knowledge.feedback_collector import FeedbackSource
 from framework.error_handling import *
@@ -146,8 +148,9 @@ class EnforceOrder(object):
 
     current_state = None
 
-    def __init__(self, accepted_states=[], final_state=None,
+    def __init__(self, accepted_states=None, final_state=None,
                  initial_func=False, always_callable=False, transition=None):
+        accepted_states = [] if accepted_states is None else accepted_states
         if initial_func:
             self.accepted_states = accepted_states + [None]
         else:
@@ -157,7 +160,7 @@ class EnforceOrder(object):
         self.transition = transition
 
     def __call__(self, func):
-        
+        @wraps(func)
         def wrapped_func(*args, **kargs):
             if not self.always_callable and EnforceOrder.current_state not in self.accepted_states:
                 print(colorize("[INVALID CALL] function '%s' cannot be called in the state '%r'!" \
