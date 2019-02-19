@@ -922,7 +922,11 @@ class Scenario(object):
         else:
             graph_creation(self._anchor, node_list=[], edge_list=[])
 
-            rendered = f.render()
+            try:
+                rendered = f.render()
+            except:
+                print("\n*** The renderer has stopped! (because of an unexpected event) ***")
+                return
 
             if graph_filename != viewer_filename or viewer_app is None or viewer_app.poll() is not None:
                 viewer_filename = graph_filename

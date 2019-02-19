@@ -1778,11 +1778,11 @@ class FmkPlumbing(object):
         else:
             raise TargetFeedbackError
 
-    def collect_residual_feedback(self):
-        if self._collect_residual_feedback(force_mode=True)[0]:
+    def collect_residual_feedback(self, timeout=0):
+        if self._collect_residual_feedback(force_mode=True, timeout=timeout)[0]:
             raise UserInterruption
 
-    def _collect_residual_feedback(self, force_mode=False):
+    def _collect_residual_feedback(self, force_mode=False, timeout=0):
         # If feedback_timeout = 0 then we don't consider residual feedback.
         # We try to avoid unnecessary latency in this case, as well as
         # to avoid retrieving some feedback that could be a trigger for sending the next data
@@ -1804,13 +1804,14 @@ class FmkPlumbing(object):
 
             collected = False
             for tg in targets_to_retrieve_fbk.values():
-                if tg.collect_feedback_without_sending():
+                if tg.collect_feedback_without_sending(timeout=timeout):
                     collected = True
 
             if collected:
                 # We have to make sure the targets are ready for sending data after
                 # collecting feedback.
-                ret = self.check_target_readiness()
+                ftimeout = None if timeout == 0 else timeout + 0.1
+                ret = self.check_target_readiness(forced_timeout=ftimeout)
                 user_interrupt = ret == -2
 
             go_on = self.log_target_residual_feedback()
@@ -2035,10 +2036,16 @@ class FmkPlumbing(object):
         valid_tg_ids = []
         for i in tg_ids:
             if i not in self._tg_ids:
-                self.set_error("WARNING: An access attempt occurs on a disabled target: '({:d}) {!s}' "
-                               "It will be redirected to the first enabled target."
-                               .format(i, self.get_available_targets()[i]),
-                                     code=Error.FmkWarning)
+                try:
+                    requested_tg_id = self.get_available_targets()[i]
+                except IndexError:
+                    self.set_error("WARNING: The provided target number '{:d}' does not exist ".format(i),
+                                   code=Error.FmkWarning)
+                else:
+                    self.set_error("WARNING: An access attempt occurs on a disabled target: '({:d}) {!s}' "
+                                   "It will be redirected to the first enabled target."
+                                   .format(i, requested_tg_id),
+                                   code=Error.FmkWarning)
                 i = self._tg_ids[0]
                 if self._debug_mode:
                     raise ValueError('Access attempt occurs on a disabled target')
@@ -2050,7 +2057,7 @@ class FmkPlumbing(object):
         data = self._handle_data_desc(data_desc)
         if data is not None:
             for tg in [self.targets[tg_id] for tg_id in tg_ids]:
-                tg.send_data_sync(data)
+                tg.send_data_sync(data, from_fmk=False)
         else:
             self.set_error(msg="Data descriptor handling returned 'None'!", code=Error.UserCodeError)
             raise DataProcessTermination
@@ -2397,22 +2404,24 @@ class FmkPlumbing(object):
         self._current_sent_date = self.lg.start_new_log_entry(preamble=p)
 
     @EnforceOrder(accepted_states=['S2'])
-    def log_target_feedback(self):
+    def log_target_feedback(self, residual=False):
         collected_err, err_detected2 = None, False
         ok = True
         if self.__tg_enabled:
-            if self._burst > 1:
-                p = "::[ END BURST ]::\n"
+            if residual:
+                p = "*** RESIDUAL TARGET FEEDBACK ***"
+                e = "********************************"
             else:
-                p = None
+                p = "::[ END BURST ]::\n" if self._burst > 1 else None
+                e = None
             try:
-                collected_err = self.lg.log_collected_feedback(preamble=p)
+                collected_err = self.lg.log_collected_feedback(preamble=p, epilogue=e)
             except NotImplementedError:
                 pass
 
             for tg in self.targets.values():
                 err_detected1 = collected_err.get(tg, False) if collected_err else False
-                err_detected2 = self._log_directly_retrieved_target_feedback(tg=tg, preamble=p)
+                err_detected2 = self._log_directly_retrieved_target_feedback(tg=tg, preamble=p, epilogue=e)
                 go_on = self._recover_target(tg) if err_detected1 or err_detected2 else True
                 if not go_on:
                     ok = False
@@ -2421,25 +2430,7 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def log_target_residual_feedback(self):
-        collected_err, err_detected2 = None, False
-        ok = True
-        if self.__tg_enabled:
-            p = "*** RESIDUAL TARGET FEEDBACK ***"
-            e = "********************************"
-            try:
-                collected_err = self.lg.log_collected_feedback(preamble=p, epilogue=e)
-            except NotImplementedError:
-                pass
-
-            for tg in self.targets.values():
-                err_detected1 = collected_err.get(tg, False) if collected_err else False
-                err_detected2 = self._log_directly_retrieved_target_feedback(tg=tg,
-                                                                             preamble=p, epilogue=e)
-                go_on = self._recover_target(tg) if err_detected1 or err_detected2 else True
-                if not go_on:
-                    ok = False
-
-        return ok
+        return self.log_target_feedback(residual=True)
 
     def _log_directly_retrieved_target_feedback(self, tg, preamble=None, epilogue=None):
         """
@@ -2479,7 +2470,7 @@ class FmkPlumbing(object):
         return err_detected
 
     @EnforceOrder(accepted_states=['S2'])
-    def check_target_readiness(self):
+    def check_target_readiness(self, forced_timeout=None):
 
         if self.__tg_enabled:
             t0 = datetime.datetime.now()
@@ -2487,6 +2478,7 @@ class FmkPlumbing(object):
             signal.signal(signal.SIGINT, sig_int_handler)
             ret = 0
             tg = None
+            hc_timeout = self._hc_timeout_max if forced_timeout is None else forced_timeout
 
             # Wait until the target is ready or timeout expired
             try:
@@ -2494,7 +2486,7 @@ class FmkPlumbing(object):
                     while not tg.is_target_ready_for_new_data():
                         time.sleep(0.005)
                         now = datetime.datetime.now()
-                        if (now - t0).total_seconds() > self._hc_timeout_max:
+                        if (now - t0).total_seconds() > hc_timeout:
                             self.lg.log_target_feedback_from(
                                 source=FeedbackSource(self),
                                 content='*** Timeout! The target {!s} does not seem to be ready.'
@@ -4647,7 +4639,7 @@ class FmkShell(cmd.Cmd):
         '''
         Collect the residual feedback (received by the target and the probes)
         '''
-        self.fz.collect_residual_feedback()
+        self.fz.collect_residual_feedback(timeout=3)
         return False
 
 

@@ -168,10 +168,13 @@ class Target(object):
         '''
         return None
 
-    def collect_feedback_without_sending(self):
+    def collect_feedback_without_sending(self, timeout=0):
         """
         If overloaded, it can be used by the framework to retrieve additional feedback from the
         target without sending any new data.
+
+        Args:
+            timeout: Maximum delay before returning from feedback collecting
 
         Returns:
             bool: False if it is not possible, otherwise it should be True
@@ -257,7 +260,8 @@ class Target(object):
         emits the message by itself.
         '''
         with self._send_data_lock:
-            self._altered_data_queued = data.altered
+            if data is not None:
+                self._altered_data_queued = data.altered
             self.send_data(data, from_fmk=from_fmk)
 
     def send_multiple_data_sync(self, data_list, from_fmk=False):
@@ -266,7 +270,8 @@ class Target(object):
         with the framework.
         '''
         with self._send_data_lock:
-            self._altered_data_queued = data_list[0].altered
+            if data_list is not None:
+                self._altered_data_queued = data_list[0].altered
             self.send_multiple_data(data_list, from_fmk=from_fmk)
 
     def add_probe(self, probe):

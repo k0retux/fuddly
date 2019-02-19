@@ -1399,6 +1399,43 @@ class d_modify_nodes(Disruptor):
             prev_data.add_info("remaining:      '{!s}'".format(remaining))
 
 
+@disruptor(tactics, dtype="CALL", weight=4,
+           args={'func': ('The function that will be called with a node as its first parameter, '
+                          'and provided optionnaly with addtionnal parameters if @params is set.',
+                          lambda x:x,
+                          (types.MethodType, types.FunctionType)), # python3, python2
+                 'params': ('Tuple of parameters that will be provided to the function.',
+                            None, tuple) })
+class d_call_function(Disruptor):
+    """
+    Call the function provided with the first parameter being the Data() object received as
+    input of this disruptor, and optionally with additional parameters if @params is set. The
+    function should return a Data() object.
+
+    The signature of the function should be compatible with:
+
+    `func(data, *args) --> Data()`
+
+    """
+
+    def disrupt_data(self, dm, target, prev_data):
+        try:
+            if self.params:
+                new_data = self.func(prev_data, *self.params)
+            else:
+                new_data = self.func(prev_data)
+        except:
+            new_data = prev_data
+            new_data.add_info("an error occurred while executing the user function '{!r}'".format(self.func))
+        else:
+            new_data.add_info("called function: {!r}".format(self.func))
+            if self.params:
+                new_data.add_info("additional parameters provided: {:s}"
+                                  .format(', '.join((str(x) for x in self.params))))
+
+        return new_data
+
+
 @disruptor(tactics, dtype="COPY", weight=4,
            args=None)
 class d_shallow_copy(Disruptor):

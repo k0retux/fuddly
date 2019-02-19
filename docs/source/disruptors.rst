@@ -355,6 +355,36 @@ Parameters:
         |      | default: False [type: bool]
 
 
+CALL - Call Function
+--------------------
+
+Description:
+    Call the function provided with the first parameter being the :class:`framework.data.Data`
+    object received as input of this disruptor, and optionally with additional parameters
+    if `params` is set. The function should return a :class:`framework.data.Data` object.
+
+    The signature of the function should be compatible with:
+
+    ``func(data, *args) --> Data()``
+
+Reference:
+  :class:`framework.generic_data_makers.d_modify_nodes`
+
+Parameters:
+  .. code-block:: none
+
+      parameters:
+        |_ func
+        |      | desc: The function that will be called with a node as its first parameter,
+        |      |       and provided optionnaly with addtionnal parameters if @params
+        |      |       is set.
+        |      | default: lambda x: x [type: method, function]
+        |_ params
+        |      | desc: Tuple of parameters that will be provided to the function.
+        |      | default: None [type: tuple]
+
+
+
 NEXT - Next Node Content
 ------------------------
 
