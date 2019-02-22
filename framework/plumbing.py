@@ -443,7 +443,7 @@ class FmkPlumbing(object):
         return self._reload_dm()
 
     @EnforceOrder(always_callable=True, transition=['25_load_dm','S1'])
-    def _reload_dm(self, dm_name=None):
+    def _reload_dm(self, dm_name=None, ignore_prj_scenarios=False):
         if dm_name is None:
             prefix = self.__dm_rld_args_dict[self.dm][0]
             name = self.__dm_rld_args_dict[self.dm][1]
@@ -474,7 +474,7 @@ class FmkPlumbing(object):
 
                 name_list.append(dm_name)
                 self.dm = dm_obj
-                ok = self._reload_dm()
+                ok = self._reload_dm(ignore_prj_scenarios=True)
                 dm_list[idx] = self.dm
 
                 if not ok:
@@ -519,6 +519,9 @@ class FmkPlumbing(object):
             if self.mon:
                 self.mon.set_data_model(self.dm)
             self._fmkDB_insert_dm_and_dmakers(self.dm.name, dm_params['tactics'])
+
+            if not ignore_prj_scenarios and self.prj.project_scenarios:
+                self.__st_dict[self.dm].register_scenarios(*self.prj.project_scenarios)
 
         return True
 
@@ -1301,8 +1304,6 @@ class FmkPlumbing(object):
             self._tactics.clear_disruptor_clones()
 
         self._tactics = self.__st_dict[dm]
-        if self.prj.project_scenarios:
-            self._tactics.register_scenarios(*self.prj.project_scenarios)
 
         self.mon = self.__monitor_dict[prj]
         self.mon.set_targets(self.targets)
@@ -1429,6 +1430,9 @@ class FmkPlumbing(object):
 
         self.dm = new_dm
         self.prj.set_data_model(self.dm)
+        if self.prj.project_scenarios:
+            self.__st_dict[new_dm].register_scenarios(*self.prj.project_scenarios)
+
         for tg in self.targets.values():
             tg.set_data_model(self.dm)
         if self.mon:
@@ -1742,6 +1746,7 @@ class FmkPlumbing(object):
         return data_list
 
     def _do_after_sending_data(self, data_list):
+        self._recovered_tgs = None
         self._handle_data_callbacks(data_list, hook=HOOK.after_sending)
         self.prj.notify_data_sending(data_list, self._current_sent_date, self.targets)
 
@@ -1795,7 +1800,8 @@ class FmkPlumbing(object):
                 do_residual_tg_fbk_gathering = True
                 targets_to_retrieve_fbk[tg_id] = tg
 
-        go_on = True
+        tg_ready = True
+        log_no_error = True
         fbk_timeout = {}
         user_interrupt = False
         if do_residual_tg_fbk_gathering:
@@ -1805,6 +1811,7 @@ class FmkPlumbing(object):
             collected = False
             for tg in targets_to_retrieve_fbk.values():
                 if tg.collect_feedback_without_sending(timeout=timeout):
+                    self._recovered_tgs = None
                     collected = True
 
             if collected:
@@ -1813,13 +1820,16 @@ class FmkPlumbing(object):
                 ftimeout = None if timeout == 0 else timeout + 0.1
                 ret = self.check_target_readiness(forced_timeout=ftimeout)
                 user_interrupt = ret == -2
+                tg_ready = ret >= 0
 
-            go_on = self.log_target_residual_feedback()
+            log_no_error = self.log_target_residual_feedback()
 
             for tg in targets_to_retrieve_fbk.values():
                 tg.cleanup()
 
         self.monitor_probes(prefix='Probe Status Before Sending Data')
+
+        go_on = tg_ready and log_no_error
 
         return user_interrupt, go_on
 

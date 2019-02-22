@@ -386,58 +386,6 @@ class Tactics(object):
               )
 
 
-class UI(object):
-    '''
-    Once initialized, attributes cannot be modified
-    '''
-    def __init__(self, **kwargs):
-        self._inputs = {}
-        for k, v in kwargs.items():
-            self._inputs[k] = v
-
-    # for python2 compatibility
-    def __nonzero__(self):
-        return bool(self._inputs)
-
-    # for python3 compatibility
-    def __bool__(self):
-        return bool(self._inputs)
-
-    def get_inputs(self):
-        return self._inputs
-
-    def is_attrs_defined(self, *names):
-        for n in names:
-            if n not in self._inputs:
-                return False
-        return True
-
-    def set_user_inputs(self, user_inputs):
-        assert isinstance(user_inputs, dict)
-        self._inputs = user_inputs
-
-    def check_conformity(self, valid_args):
-        for arg in self._inputs:
-            if arg not in valid_args:
-                return False, arg
-        return True, None
-
-    def __getattr__(self, name):
-        if name in self._inputs:
-            return self._inputs[name]
-        else:
-            return None
-
-    def __str__(self):
-        if self._inputs:
-            ui = '['
-            for k, v in self._inputs.items():
-                ui += "{:s}={!r},".format(k, v)
-            return ui[:-1]+']'
-        else:
-            return '[ ]'
-
-
 def _user_input_conformity(self, user_input, _args_desc):
     if not user_input:
         return True

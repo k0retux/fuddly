@@ -28,6 +28,8 @@ from framework.targets.debug import TestTarget
 from framework.targets.network import NetworkTarget
 from framework.knowledge.information import *
 from framework.knowledge.feedback_handler import TestFbkHandler
+from framework.scenario import *
+from framework.global_resources import UI
 
 project = Project()
 project.default_dm = ['mydf', 'myproto']
@@ -155,6 +157,21 @@ targets = [(EmptyTarget(), (P1, 2), (P2, 1.4), health_check),
 
 if serial_module:
     targets.append((TestTarget(), probe_pid, (probe_mem, 0.2)))
+
+### PROJECT SCENARIOS DEFINITION ###
+
+def cbk_print(env, step):
+    print(env.user_context)
+    print(env.user_context.prj)
+
+open_step = Step('ex', do_before_sending=cbk_print)
+open_step.connect_to(FinalStep())
+
+sc_proj1 = Scenario('proj1', anchor=open_step, user_context=UI(prj='proj1'))
+sc_proj2 = sc_proj1.clone('proj2')
+sc_proj2.set_user_context(UI(prj='proj2'))
+
+project.register_scenarios(sc_proj1, sc_proj2)
 
 ### OPERATOR DEFINITION ###
 

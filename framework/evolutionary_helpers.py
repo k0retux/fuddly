@@ -25,6 +25,7 @@
 from operator import attrgetter
 
 from framework.tactics_helpers import *
+from framework.global_resources import UI
 from framework.scenario import *
 from framework.error_handling import ExtinctPopulationError, PopulationError
 

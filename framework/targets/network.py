@@ -58,7 +58,7 @@ class NetworkTarget(Target):
     def __init__(self, host='localhost', port=12345, socket_type=(socket.AF_INET, socket.SOCK_STREAM),
                  data_semantics=UNKNOWN_SEMANTIC, server_mode=False, target_address=None, wait_for_client=True,
                  hold_connection=False, keep_first_client=True,
-                 mac_src=None, mac_dst=None):
+                 mac_src=None, mac_dst=None, recover_timeout=0.5):
         """
         Args:
           host (str): IP address of the target to connect to, or
@@ -104,6 +104,9 @@ class NetworkTarget(Target):
           mac_dst (bytes): Only in conjunction with raw socket. For each data sent through
             this interface, and if this data contain nodes with the semantic ``'mac_dst'``,
             these nodes will be overwritten (through absorption) with this parameter.
+          recover_timeout (int): Allowed delay for recovering the target. (the recovering can be triggered
+            by the framework if the feedback threads did not terminate before the target health check)
+            Impact the behavior of self.recover_target()
         """
 
         Target.__init__(self)
@@ -180,6 +183,8 @@ class NetworkTarget(Target):
         self._server_thread_lock = threading.Lock()
         self._network_send_lock = threading.Lock()
         self._raw_server_private = None
+
+        self._recover_timeout = recover_timeout
 
     def _is_valid_socket_type(self, socket_type):
         skt_sz = len(socket_type)
@@ -484,6 +489,15 @@ class NetworkTarget(Target):
 
         return self.terminate()
 
+    def recover_target(self):
+        t0 = datetime.datetime.now()
+        while not self.is_target_ready_for_new_data():
+            time.sleep(0.0001)
+            now = datetime.datetime.now()
+            if (now - t0).total_seconds() > self._recover_timeout:
+                return False
+        return True
+
     def send_data(self, data, from_fmk=False):
         self.send_multiple_data(data_list=[data], from_fmk=from_fmk)
 
@@ -510,7 +524,6 @@ class NetworkTarget(Target):
             for intf, data in data_to_send.items():
                 sending_list.append((data,)+intf)
 
-        self._fbk_collector_to_launch_cpt = 0
         for data, host, port, socket_type, server_mode in sending_list:
             if server_mode:
                 if from_fmk:
@@ -1170,7 +1183,6 @@ class NetworkTarget(Target):
                         self._logger.log_comment('WARNING: Unable to set the MAC DESTINATION on the packet')
 
         self._custom_data_handling_before_emission(data_list)
-
 
     def collect_feedback_without_sending(self, timeout=0):
         self._flush_feedback_delay = timeout

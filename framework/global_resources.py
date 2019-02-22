@@ -123,6 +123,66 @@ def is_string_compatible(val):
     else:
         return False
 
+# Generic container for user inputs
+
+class UI(object):
+    """
+    Once initialized, attributes cannot be modified
+    """
+    def __init__(self, **kwargs):
+        self._inputs = {}
+        for k, v in kwargs.items():
+            self._inputs[k] = v
+
+    # for python2 compatibility
+    def __nonzero__(self):
+        return bool(self._inputs)
+
+    # for python3 compatibility
+    def __bool__(self):
+        return bool(self._inputs)
+
+    def get_inputs(self):
+        return self._inputs
+
+    def is_attrs_defined(self, *names):
+        for n in names:
+            if n not in self._inputs:
+                return False
+        return True
+
+    def set_user_inputs(self, user_inputs):
+        assert isinstance(user_inputs, dict)
+        self._inputs = user_inputs
+
+    def check_conformity(self, valid_args):
+        for arg in self._inputs:
+            if arg not in valid_args:
+                return False, arg
+        return True, None
+
+    def __getattr__(self, name):
+        if name in self._inputs:
+            return self._inputs[name]
+        else:
+            return None
+
+    def __str__(self):
+        if self._inputs:
+            ui = '['
+            for k, v in self._inputs.items():
+                ui += "{:s}={!r},".format(k, v)
+            return ui[:-1]+']'
+        else:
+            return '[ ]'
+
+    def __copy__(self):
+        new_ui = type(self)()
+        new_ui.__dict__.update(self.__dict__)
+        new_ui._inputs = copy.copy(self._inputs)
+        return new_ui
+
+
 ### Exports for Node Absorption ###
 
 class AbsorbStatus(Enum):

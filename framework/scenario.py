@@ -649,6 +649,7 @@ class ScenarioEnv(object):
         self._dm = None
         self._target = None
         self._scenario = None
+        self._context = None
         # self._knowledge_source = None
 
     @property
@@ -675,6 +676,14 @@ class ScenarioEnv(object):
     def scenario(self, val):
         self._scenario = val
 
+    @property
+    def user_context(self):
+        return self._context
+
+    @user_context.setter
+    def user_context(self, val):
+        self._context = val
+
     # @property
     # def knowledge_source(self):
     #     return self._knowledge_source
@@ -688,6 +697,7 @@ class ScenarioEnv(object):
         new_env.__dict__.update(self.__dict__)
         new_env._target = None
         new_env._scenario = None
+        new_env._context = copy.copy(self._context)
         # new_env._knowledge_source = None
         return new_env
 
@@ -700,7 +710,7 @@ viewer_filename = None
 
 class Scenario(object):
 
-    def __init__(self, name, anchor=None, reinit_anchor=None):
+    def __init__(self, name, anchor=None, reinit_anchor=None, user_context=None):
         self.name = name
         self._steps = None
         self._reinit_steps = None
@@ -709,6 +719,7 @@ class Scenario(object):
         self._dm = None
         self._env = ScenarioEnv()
         self._env.scenario = self
+        self._env.user_context = user_context
         self._periodic_ids = set()
         self._current = None
         self._anchor = None
@@ -721,8 +732,16 @@ class Scenario(object):
     def __str__(self):
         return "Scenario '{:s}'".format(self.name)
 
+    def clone(self, new_name):
+        new_sc = copy.copy(self)
+        new_sc.name = new_name
+        return new_sc
+
     def reset(self):
         self._current = self._anchor
+
+    def set_user_context(self, user_context):
+        self._env.user_context = user_context
 
     def set_data_model(self, dm):
         self._dm = dm
