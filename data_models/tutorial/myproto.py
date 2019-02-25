@@ -1,3 +1,5 @@
+# -*- coding: utf8 -*-
+
 ################################################################################
 #
 #  Copyright 2018 Eric Lacombe <eric.lacombe@security-labs.org>

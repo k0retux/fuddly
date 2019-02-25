@@ -168,7 +168,7 @@ class Target(object):
         '''
         return None
 
-    def collect_feedback_without_sending(self, timeout=0):
+    def collect_pending_feedback(self, timeout=0):
         """
         If overloaded, it can be used by the framework to retrieve additional feedback from the
         target without sending any new data.
@@ -182,25 +182,25 @@ class Target(object):
         return True
 
     def set_feedback_timeout(self, fbk_timeout):
-        '''
+        """
         To set dynamically the feedback timeout.
 
         Args:
-            fbk_timeout: maximum time duration for collecting the feedback
+            fbk_timeout (float): maximum time duration for collecting the feedback
 
-        '''
+        """
         assert fbk_timeout is None or fbk_timeout >= 0
         self.feedback_timeout = fbk_timeout
         self._set_feedback_timeout_specific(fbk_timeout)
 
     def _set_feedback_timeout_specific(self, fbk_timeout):
-        '''
+        """
         Overload this function to handle feedback specifics
 
         Args:
-            fbk_timeout: time duration for collecting the feedback
+            fbk_timeout (float): time duration for collecting the feedback
 
-        '''
+        """
         pass
 
     def set_feedback_mode(self, mode):
@@ -215,13 +215,13 @@ class Target(object):
         return self._feedback_mode == Target.FBK_WAIT_FULL_TIME
 
     def set_sending_delay(self, sending_delay):
-        '''
+        """
         Set the sending delay.
 
         Args:
-            sending_delay (int): maximum time (in seconds) taken to send data
+            sending_delay (float): maximum time (in seconds) taken to send data
               once the method ``send_(multiple_)data()`` has been called.
-        '''
+        """
         assert sending_delay >= 0
         self.sending_delay = sending_delay
 

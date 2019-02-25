@@ -39,6 +39,24 @@ from framework.node import Node, NodeSemanticsCriteria
 from framework.target_helpers import Target, TargetStuck
 from framework.knowledge.feedback_collector import FeedbackCollector
 
+from framework.value_types import *
+from framework.node_builder import NodeBuilder
+
+eth_hdr_desc = \
+    {'name': 'eth_hdr',
+     'contents': [
+         {'name': 'mac_dst',
+          'semantics': 'mac_dst',
+          'contents': String(size=6)},
+         {'name': 'mac_src',
+          'semantics': 'mac_src',
+          'contents': String(size=6)},
+         {'name': 'proto',
+          'contents': UINT16_be(values=[0x0800])},
+     ]}
+
+eth_hdr_node = NodeBuilder(add_env=True).create_graph_from_desc(eth_hdr_desc)
+
 
 class NetworkTarget(Target):
     '''Generic target class for interacting with a network resource. Can
@@ -58,7 +76,8 @@ class NetworkTarget(Target):
     def __init__(self, host='localhost', port=12345, socket_type=(socket.AF_INET, socket.SOCK_STREAM),
                  data_semantics=UNKNOWN_SEMANTIC, server_mode=False, target_address=None, wait_for_client=True,
                  hold_connection=False, keep_first_client=True,
-                 mac_src=None, mac_dst=None, recover_timeout=0.5):
+                 mac_src=None, mac_dst=None, add_eth_header=False,
+                 fbk_timeout=2, sending_delay=1, recover_timeout=0.5):
         """
         Args:
           host (str): IP address of the target to connect to, or
@@ -104,9 +123,14 @@ class NetworkTarget(Target):
           mac_dst (bytes): Only in conjunction with raw socket. For each data sent through
             this interface, and if this data contain nodes with the semantic ``'mac_dst'``,
             these nodes will be overwritten (through absorption) with this parameter.
+          add_eth_header (bool): Add an ethernet header to the data to send. Only possible in
+            combination with a SOCK_RAW socket type.
+          fbk_timeout (float): maximum time duration for collecting the feedback
+          sending_delay (float): maximum time (in seconds) taken to send data
+            once the method ``send_(multiple_)data()`` has been called.
           recover_timeout (int): Allowed delay for recovering the target. (the recovering can be triggered
             by the framework if the feedback threads did not terminate before the target health check)
-            Impact the behavior of self.recover_target()
+            Impact the behavior of self.recover_target().
         """
 
         Target.__init__(self)
@@ -114,14 +138,14 @@ class NetworkTarget(Target):
         if not self._is_valid_socket_type(socket_type):
             raise ValueError("Unrecognized socket type")
 
-        if sys.platform == 'linux':
+        if sys.platform in ['linux', 'linux2']:  # python3, python2
             def get_mac_addr(ifname):
                 if sys.version_info[0] > 2:
                     ifname = bytes(ifname, 'latin_1')
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 try:
                     info = fcntl.ioctl(s.fileno(), 0x8927, struct.pack('256s', ifname[:15]))
-                except OSError:
+                except (OSError, IOError):
                     ret = b''
                 else:
                     info = bytearray(info)
@@ -136,55 +160,51 @@ class NetworkTarget(Target):
 
         self._mac_src_semantic = NodeSemanticsCriteria(mandatory_criteria=['mac_src'])
         self._mac_dst_semantic = NodeSemanticsCriteria(mandatory_criteria=['mac_dst'])
-
-        self._mac_src = {(host, port): None}
-        self._mac_dst = {(host, port): None}
-        if socket_type[1] == socket.SOCK_RAW:
-            self._mac_src[(host, port)] = self.get_mac_addr(host) if mac_src is None else mac_src
-            self._mac_dst[(host, port)] = mac_dst
-
-        self._server_mode_additional_info = {}
-        self._server_mode_additional_info[(host, port)] = (target_address, wait_for_client, keep_first_client)
+        self._mac_src = {}
+        self._mac_dst = {}
+        self._add_eth_header = {}
 
         self._host = {}
         self._port = {}
         self._socket_type = {}
-        self.host = self._host[data_semantics] = host
-        self.port = self._port[data_semantics] = port
-        self._socket_type[data_semantics] = socket_type
+        self.host = host  # main interface host
+        self.port = port  # main interface port
 
-        self.known_semantics = {data_semantics}
-        self._semantics_to_intf = {data_semantics: (host, port, socket_type, server_mode)}
-        self.sending_sockets = []
-        self.multiple_destination = False
+        self.server_mode = {}
+        self._server_mode_additional_info = {}
 
-        self._feedback = FeedbackCollector()
-
-        self._fbk_handling_lock = threading.Lock()
-        self.socket_desc_lock = threading.Lock()
-
-        self.set_timeout(fbk_timeout=6, sending_delay=4)
-
-        self.feedback_length = None  # if specified, timeout will be ignored
+        # interfaces semantics
+        self.known_semantics = set()
+        self._semantics_to_intf = {}
 
         self._default_fbk_socket_id = 'Default Feedback Socket'
         self._default_fbk_id = {}
+
+        self.hold_connection = {}
+
+        self.register_new_interface(host=host, port=port, socket_type=socket_type, data_semantics=data_semantics,
+                                    server_mode=server_mode, target_address=target_address,
+                                    wait_for_client=wait_for_client, hold_connection=hold_connection,
+                                    keep_first_client=keep_first_client, mac_src=mac_src,
+                                    mac_dst=mac_dst, add_eth_header=add_eth_header)
+        self.multiple_destination = False
+
         self._additional_fbk_desc = {}
         self._default_additional_fbk_id = 1
 
-        self._default_fbk_id[(host, port)] = self._default_fbk_socket_id + ' - {:s}:{:d}'.format(host, port)
-
-        self.server_mode = {}
-        self.server_mode[(host,port)] = server_mode
-        self.hold_connection = {}
-        self.hold_connection[(host, port)] = hold_connection
-
+        self._feedback = FeedbackCollector()
+        self.feedback_length = None  # if specified, timeout will be ignored
+        self._fbk_handling_lock = threading.Lock()
+        self.socket_desc_lock = threading.Lock()
+        self.sending_sockets = []
         self.stop_event = threading.Event()
         self._server_thread_lock = threading.Lock()
         self._network_send_lock = threading.Lock()
         self._raw_server_private = None
-
         self._recover_timeout = recover_timeout
+
+        self.set_timeout(fbk_timeout=fbk_timeout, sending_delay=sending_delay)
+
 
     def _is_valid_socket_type(self, socket_type):
         skt_sz = len(socket_type)
@@ -201,7 +221,7 @@ class NetworkTarget(Target):
     def register_new_interface(self, host, port, socket_type, data_semantics, server_mode=False,
                                target_address = None, wait_for_client=True,
                                hold_connection=False, keep_first_client=True,
-                               mac_src=None, mac_dst=None):
+                               mac_src=None, mac_dst=None, add_eth_header=False):
 
         if not self._is_valid_socket_type(socket_type):
             raise ValueError("Unrecognized socket type")
@@ -219,10 +239,14 @@ class NetworkTarget(Target):
         self.hold_connection[(host, port)] = hold_connection
         if socket_type[1] == socket.SOCK_RAW:
             self._mac_src[(host, port)] = self.get_mac_addr(host) if mac_src is None else mac_src
-            self._mac_dst[(host, port)] = mac_dst
+            self._mac_dst[(host, port)] = b'\xff\xff\xff\xff\xff\xff' if mac_dst is None else mac_dst
         else:
-            self._mac_src = {(host, port): None}
-            self._mac_dst = {(host, port): None}
+            self._mac_src[(host, port)] = None
+            self._mac_dst[(host, port)] = None
+
+        if add_eth_header:
+            assert self._mac_src[(host, port)] is not None and self._mac_dst[(host, port)] is not None
+        self._add_eth_header[(host, port)] = add_eth_header
 
     def set_timeout(self, fbk_timeout, sending_delay):
         '''
@@ -272,8 +296,11 @@ class NetworkTarget(Target):
 
         Args:
           data_list (list): list of Data objects that will be sent to the target.
+
+        Returns:
+          list: the data list to send
         '''
-        pass
+        return data_list
 
     def _feedback_handling(self, fbk, ref):
         '''To be overloaded if feedback from the target need to be filtered
@@ -455,6 +482,7 @@ class NetworkTarget(Target):
         for k, mac_src in self._mac_src.items():
             if mac_src is not None:
                 if mac_src:
+                    mac_src = mac_src.hex() if sys.version_info[0] > 2 else mac_src.encode('hex')
                     self.record_info('*** Detected HW address for {!s}: {!s} ***'
                                      .format(k[0], mac_src))
                 else:
@@ -502,7 +530,7 @@ class NetworkTarget(Target):
         self.send_multiple_data(data_list=[data], from_fmk=from_fmk)
 
     def send_multiple_data(self, data_list, from_fmk=False):
-        self._before_sending_data(data_list, from_fmk)
+        data_list = self._before_sending_data(data_list, from_fmk)
         sockets = []
         data_refs = {}
         connected_client_event = {}
@@ -1046,7 +1074,7 @@ class NetworkTarget(Target):
 
         if data_refs[sockets[0]][0] is None:
             # We check the data to send. If it is None, we only collect feedback from the sockets.
-            # This is used by self.collect_feedback_without_sending()
+            # This is used by self.collect_pending_feedback()
             if fbk_sockets is None:
                 assert fbk_ids is None
                 assert fbk_lengths is None
@@ -1098,10 +1126,14 @@ class NetworkTarget(Target):
                                                         status=-1)
                             break
                         else:
+                            if from_fmk:
+                                self._fbk_collector_to_launch_cpt -= 1
                             raise TargetStuck("system not ready for sending data! {!r}".format(serr))
                     else:
                         if sent == 0:
                             s.close()
+                            if from_fmk:
+                                self._fbk_collector_to_launch_cpt -= 1
                             raise TargetStuck("socket connection broken")
                         totalsent = totalsent + sent
 
@@ -1163,28 +1195,47 @@ class NetworkTarget(Target):
         if isinstance(data_list, Data):
             data_list = [data_list]
 
+        new_data_list = []
         for data in data_list:
-            if not isinstance(data.content, Node):
-                continue
-            data.content.freeze()
+            if isinstance(data.content, Node):
+                data.content.freeze()
             host, port, socket_type, _ = self._get_net_info_from(data)
             if socket_type[1] == socket.SOCK_RAW:
                 mac_src = self._mac_src[(host,port)]
                 mac_dst = self._mac_dst[(host,port)]
-                if mac_src is not None:
-                    try:
-                        data.content[self._mac_src_semantic] = mac_src
-                    except ValueError:
-                        self._logger.log_comment('WARNING: Unable to set the MAC SOURCE on the packet')
-                if mac_dst is not None:
-                    try:
-                        data.content[self._mac_dst_semantic] = mac_dst
-                    except ValueError:
-                        self._logger.log_comment('WARNING: Unable to set the MAC DESTINATION on the packet')
 
-        self._custom_data_handling_before_emission(data_list)
+                if self._add_eth_header[(host,port)]:
+                    eth_hdr = eth_hdr_node.get_clone()
+                    eth_hdr[self._mac_src_semantic] = mac_src
+                    eth_hdr[self._mac_dst_semantic] = mac_dst
 
-    def collect_feedback_without_sending(self, timeout=0):
+                    if isinstance(data.content, Node):
+                        payload = data.content
+                    else:
+                        payload = Node('payload', values=[data.to_bytes()])
+
+                    n = Node(name='eth_packet', subnodes=[eth_hdr, payload])
+                    data = Data(n)
+
+                elif isinstance(data.content, Node):
+                    if mac_src is not None:
+                        try:
+                            data.content[self._mac_src_semantic] = mac_src
+                        except ValueError:
+                            self._logger.log_comment('WARNING: Unable to set the MAC SOURCE on the packet')
+                    if mac_dst is not None:
+                        try:
+                            data.content[self._mac_dst_semantic] = mac_dst
+                        except ValueError:
+                            self._logger.log_comment('WARNING: Unable to set the MAC DESTINATION on the packet')
+                else:
+                    pass
+
+            new_data_list.append(data)
+
+        return self._custom_data_handling_before_emission(new_data_list)
+
+    def collect_pending_feedback(self, timeout=0):
         self._flush_feedback_delay = timeout
         self.send_multiple_data_sync(None, from_fmk=True)
         return True

@@ -1810,7 +1810,7 @@ class FmkPlumbing(object):
 
             collected = False
             for tg in targets_to_retrieve_fbk.values():
-                if tg.collect_feedback_without_sending(timeout=timeout):
+                if tg.collect_pending_feedback(timeout=timeout):
                     self._recovered_tgs = None
                     collected = True
 
@@ -2139,11 +2139,19 @@ class FmkPlumbing(object):
         # means the previous feedback entries are obsolete.
         self.fmkDB.flush_current_feedback()
 
-        if len(data_list) > 1:
-            # the provided data_list can be changed after having called self._send_data()
-            multiple_data = True
-        else:
-            multiple_data = False
+        if self._burst_countdown == self._burst:
+            try:
+                max_fbk_timeout = max([tg.feedback_timeout for tg in self.targets.values()
+                                       if tg.feedback_timeout is not None])
+            except ValueError:
+                # empty list
+                max_fbk_timeout = 0
+            for tg in self.targets.values():
+                if tg not in self._currently_used_targets:
+                    tg.collect_pending_feedback(timeout=max_fbk_timeout)
+
+        # the provided data_list can be changed after having called self._send_data()
+        multiple_data = len(data_list) > 1
 
         if self._wkspace_enabled:
             for idx, dt in zip(range(len(data_list)), data_list):
@@ -2245,10 +2253,10 @@ class FmkPlumbing(object):
 
                     tg = self.targets[tg_id]
                     tg.add_pending_data(d)
-                    used_targets.append(tg)
+                    if tg not in used_targets:
+                        used_targets.append(tg)
 
-            seen = set()
-            self._currently_used_targets = [x for x in used_targets if not (x in seen or seen.add(x))]
+            self._currently_used_targets = used_targets
 
             for tg in self._currently_used_targets:
                 try:
