@@ -464,11 +464,8 @@ class FmkPlumbing(object):
             self._cleanup_all_dmakers()
 
             orig_dm = self.dm
-            for dm_ref in dm_list:
-                if isinstance(dm_ref, str):
-                    dm_name = dm_ref
-                else:
-                    dm_name = dm_ref.name
+            for dm_name in dm_list:
+                assert isinstance(dm_name, str)
                 # we always take the DM from self.dm_list, as self.__dm_rld_args_dict[self.dm][1]
                 # could have obsolete references
                 dm_obj = self.get_data_model_by_name(dm_name)
@@ -1413,8 +1410,9 @@ class FmkPlumbing(object):
 
         if reload_dm or not is_dm_name_exists:
             self.fmkDB.insert_data_model(new_dm.name)
+            dm_name_list = [dm.name for dm in dm_list]
             self.__add_data_model(new_dm, new_tactics,
-                                  dm_rld_args=[None, dm_list],
+                                  dm_rld_args=[None, dm_name_list],
                                   reload_dm=reload_dm)
 
             # In this case DynGens have already been generated through
@@ -1424,12 +1422,6 @@ class FmkPlumbing(object):
 
         elif is_dm_name_exists:
             new_dm = self.get_data_model_by_name(new_dm.name)
-            dm_list = self.__dm_rld_args_dict[new_dm][1]
-            new_dm_names = []
-            for dm in dm_list:
-                ndm = self.get_data_model_by_name(dm.name)
-                new_dm_names.append(ndm)
-            self.__dm_rld_args_dict[new_dm][1] = new_dm_names
 
         else:  # unreachable
             raise ValueError
