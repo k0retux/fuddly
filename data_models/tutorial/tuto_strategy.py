@@ -71,8 +71,7 @@ step2.connect_to(empty, cbk_after_fbk=cbk_transition1)
 empty.connect_to(step4)
 step4.connect_to(step1, cbk_after_sending=cbk_transition2)
 
-sc1 = Scenario('ex1')
-sc1.set_anchor(step1)
+sc_tuto_ex1 = Scenario('ex1', anchor=step1)
 
 ### SCENARIO 2 ###
 step4 = Step(DataProcess(process=['tTYPE#2'], seed='shape'))
@@ -82,8 +81,7 @@ step1_copy.connect_to(step2_copy)
 step2_copy.connect_to(step4, cbk_after_fbk=cbk_transition1)
 step4.connect_to(step_final)
 
-sc2 = Scenario('ex2')
-sc2.set_anchor(step1_copy)
+sc_tuto_ex2 = Scenario('ex2', anchor=step1_copy)
 
 ### SCENARIO 3 ###
 anchor = Step(DataProcess(process=['tTYPE#3'], seed='exist_cond'),
@@ -99,8 +97,7 @@ anchor.connect_to(option2)
 option1.connect_to(anchor)
 option2.connect_to(anchor)
 
-sc3 = Scenario('ex3')
-sc3.set_anchor(anchor)
+sc_tuto_ex3 = Scenario('ex3', anchor=anchor)
 
 ### SCENARIO 4 & 5 ###
 dp = DataProcess(['tTYPE#NOREG'], seed='exist_cond', auto_regen=False)
@@ -241,10 +238,10 @@ option2.connect_to(final_step)
 reinit = Step(Data(Node('reinit', vt=String(values=['REINIT']))))
 reinit.connect_to(init)
 
-sc_test_basic = Scenario('BASIC', anchor=init, reinit_anchor=reinit)
+sc_tuto_ex4 = Scenario('ex4', anchor=init, reinit_anchor=reinit)
 
-tactics.register_scenarios(sc1, sc2, sc3, sc4, sc5, sc_test, sc_test2, sc_test3, sc_test4,
-                           sc_test_basic)
+tactics.register_scenarios(sc_tuto_ex1, sc_tuto_ex2, sc_tuto_ex3, sc_tuto_ex4,
+                           sc4, sc5, sc_test, sc_test2, sc_test3, sc_test4)
 
 @generator(tactics, gtype="CBK")
 class g_test_callback_01(Generator):

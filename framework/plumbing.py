@@ -443,7 +443,7 @@ class FmkPlumbing(object):
         return self._reload_dm()
 
     @EnforceOrder(always_callable=True, transition=['25_load_dm','S1'])
-    def _reload_dm(self, dm_name=None, ignore_prj_scenarios=False):
+    def _reload_dm(self, dm_name=None):
         if dm_name is None:
             prefix = self.__dm_rld_args_dict[self.dm][0]
             name = self.__dm_rld_args_dict[self.dm][1]
@@ -464,18 +464,18 @@ class FmkPlumbing(object):
             self._cleanup_all_dmakers()
 
             orig_dm = self.dm
-            for idx, dm_ref in enumerate(copy.copy(dm_list)):
+            for dm_ref in dm_list:
                 if isinstance(dm_ref, str):
                     dm_name = dm_ref
-                    dm_obj = self.get_data_model_by_name(dm_ref)
                 else:
                     dm_name = dm_ref.name
-                    dm_obj = dm_ref
+                # we always take the DM from self.dm_list, as self.__dm_rld_args_dict[self.dm][1]
+                # could have obsolete references
+                dm_obj = self.get_data_model_by_name(dm_name)
 
                 name_list.append(dm_name)
                 self.dm = dm_obj
-                ok = self._reload_dm(ignore_prj_scenarios=True)
-                dm_list[idx] = self.dm
+                ok = self._reload_dm()
 
                 if not ok:
                     self.dm = orig_dm
@@ -498,12 +498,6 @@ class FmkPlumbing(object):
                 self.__add_data_model(dm_params['dm'], dm_params['tactics'],
                                       dm_params['dm_rld_args'], reload_dm=True)
                 self.__dyngenerators_created[dm_params['dm']] = False
-                try:
-                    i = self.dm_list.index(self.dm)
-                except ValueError:
-                    pass
-                else:
-                    self.dm_list[i] = dm_params['dm']
                 self.dm = dm_params['dm']
             else:
                 return False
@@ -519,9 +513,6 @@ class FmkPlumbing(object):
             if self.mon:
                 self.mon.set_data_model(self.dm)
             self._fmkDB_insert_dm_and_dmakers(self.dm.name, dm_params['tactics'])
-
-            if not ignore_prj_scenarios and self.prj.project_scenarios:
-                self.__st_dict[self.dm].register_scenarios(*self.prj.project_scenarios)
 
         return True
 
@@ -1082,6 +1073,9 @@ class FmkPlumbing(object):
                 self.mon.wait_for_probe_initialization()
                 self.prj.start()
 
+                if self.prj.project_scenarios:
+                    self._generic_tactics.register_scenarios(*self.prj.project_scenarios)
+
                 if need_monitoring:
                     time.sleep(0.5)
                     self.monitor_probes(force_record=True)
@@ -1096,6 +1090,12 @@ class FmkPlumbing(object):
 
     def _stop_fmk_plumbing(self):
         self.flush_errors()
+
+        if self.prj and self.prj.project_scenarios:
+            for sc_ref in [Tactics.scenario_ref_from(sc) for sc in self.prj.project_scenarios]:
+                if sc_ref in self._generic_tactics.generators:
+                    del self._generic_tactics.generators[sc_ref]
+
         if self._is_started():
             if self.is_target_enabled():
                 self.log_target_residual_feedback()
@@ -1401,7 +1401,7 @@ class FmkPlumbing(object):
                 else:
                     new_tactics.disruptors[k] = v
             for k, v in tactics.generators.items():
-                if k in new_tactics.disruptors:
+                if k in new_tactics.generators:
                     raise ValueError("the generator '{:s}' exists already".format(k))
                 else:
                     new_tactics.generators[k] = v
@@ -1414,7 +1414,7 @@ class FmkPlumbing(object):
         if reload_dm or not is_dm_name_exists:
             self.fmkDB.insert_data_model(new_dm.name)
             self.__add_data_model(new_dm, new_tactics,
-                                  [None, dm_list],
+                                  dm_rld_args=[None, dm_list],
                                   reload_dm=reload_dm)
 
             # In this case DynGens have already been generated through
@@ -1424,14 +1424,18 @@ class FmkPlumbing(object):
 
         elif is_dm_name_exists:
             new_dm = self.get_data_model_by_name(new_dm.name)
+            dm_list = self.__dm_rld_args_dict[new_dm][1]
+            new_dm_names = []
+            for dm in dm_list:
+                ndm = self.get_data_model_by_name(dm.name)
+                new_dm_names.append(ndm)
+            self.__dm_rld_args_dict[new_dm][1] = new_dm_names
 
         else:  # unreachable
             raise ValueError
 
         self.dm = new_dm
         self.prj.set_data_model(self.dm)
-        if self.prj.project_scenarios:
-            self.__st_dict[new_dm].register_scenarios(*self.prj.project_scenarios)
 
         for tg in self.targets.values():
             tg.set_data_model(self.dm)

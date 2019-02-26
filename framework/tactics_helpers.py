@@ -58,24 +58,14 @@ class Tactics(object):
             for name, attrs in self.get_disruptors_list(dtype).items():
                 attrs['obj'].set_exportable_fmk_ops(fmkops)
 
-    # @property
-    # def knowledge_source(self):
-    #     return self._knowledge_source
-    #
-    # @knowledge_source.setter
-    # def knowledge_source(self, val):
-    #     self._knowledge_source = val
-    #     for dtype in self.generator_types:
-    #         for name, attrs in self.get_generators_list(dtype).items():
-    #             attrs['obj'].knowledge_source = val
-    #     for dtype in self.disruptor_types:
-    #         for name, attrs in self.get_disruptors_list(dtype).items():
-    #             attrs['obj'].knowledge_source = val
+    @staticmethod
+    def scenario_ref_from(scenario):
+        return 'SC_' + scenario.name.upper()
 
     def register_scenarios(self, *scenarios):
         for sc in scenarios:
             dyn_generator_from_scenario.scenario = sc
-            dmaker_type = 'SC_' + sc.name.upper()
+            dmaker_type = self.scenario_ref_from(sc)
             gen_cls_name = 'g_' + sc.name.lower()
             gen = dyn_generator_from_scenario(gen_cls_name, (DynGeneratorFromScenario,), {})()
             self.register_new_generator(gen_cls_name, gen, weight=1, dmaker_type=dmaker_type,
