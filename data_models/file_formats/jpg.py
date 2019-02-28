@@ -172,8 +172,7 @@ class JPG_DataModel(DataModel):
         mb = NodeBuilder(delayed_jobs=True)
         self.jpg = mb.create_graph_from_desc(jpg_desc)
 
-        self.jpg_dict = self.import_file_contents(extension='jpg')
-        self.register(self.jpg, *self.jpg_dict.values())
+        self.register(self.jpg)
 
 
 data_model = JPG_DataModel()

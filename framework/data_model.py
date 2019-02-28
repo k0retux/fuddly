@@ -73,7 +73,8 @@ class DataModel(object):
             :class:`framework.node.Node`: a modeled data (atom) or ``None``
 
         """
-        return data
+        return Node('RAW_{:s}'.format(filename[:-len(self.file_extension)-1]),
+                    values=[data])
 
     def validation_tests(self):
         """
@@ -132,6 +133,8 @@ class DataModel(object):
         if not self._built:
             self._dm_db = dm_db
             self.build_data_model()
+            raw_data = self.import_file_contents(extension=self.file_extension)
+            self.register(*raw_data.values())
             self._built = True
 
     def merge_with(self, data_model):

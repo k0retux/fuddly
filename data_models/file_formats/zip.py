@@ -49,7 +49,7 @@ class ZIP_DataModel(DataModel):
             print("--> Create {:s} from provided ZIP samples.".format(nm))
             return pkzip
         else:
-            return Node(nm, values=['ZIP ABSORBSION FAILED'])
+            return None
 
 
     def build_data_model(self):
@@ -337,9 +337,7 @@ class ZIP_DataModel(DataModel):
         mb = NodeBuilder(delayed_jobs=True)
         self.pkzip = mb.create_graph_from_desc(zip_desc)
 
-        self.zip_dict = self.import_file_contents(extension='zip')
-
-        self.register(self.pkzip, *self.zip_dict.values())
+        self.register(self.pkzip)
 
 
 data_model = ZIP_DataModel()

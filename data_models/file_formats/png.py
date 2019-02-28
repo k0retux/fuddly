@@ -44,7 +44,7 @@ class PNG_DataModel(DataModel):
             print("--> Create {:s} from provided PNG samples.".format(nm))
             return png
         else:
-            return Node(nm, values=['PNG ABSORBSION FAILED'])
+            return None
 
 
     def build_data_model(self):
@@ -121,9 +121,7 @@ class PNG_DataModel(DataModel):
         mb = NodeBuilder()
         self.png = mb.create_graph_from_desc(png_desc)
 
-        self.png_dict = self.import_file_contents(extension='png')
-       
-        self.register(*self.png_dict.values())
+        self.register(self.png)
 
 
 data_model = PNG_DataModel()
