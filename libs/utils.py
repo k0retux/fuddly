@@ -51,14 +51,15 @@ class Term(object):
         if self.keepterm:
             self.cmd.append('--hold')
         self.cmd.extend(['-e', 'tail -f {:s}'.format(self.pipe_path)])
-        self._launch_term()
+        self._p = None
 
     def _launch_term(self):
         self._p = subprocess.Popen(self.cmd)
 
     def stop(self):
-        if not self.keepterm and self._p.poll() is None:
+        if not self.keepterm and self._p is not None and self._p.poll() is None:
             self._p.kill()
+        self._p = None
         try:
             os.remove(self.pipe_path)
         except FileNotFoundError:
@@ -66,11 +67,10 @@ class Term(object):
 
     def print(self, s, newline=False):
         s += '\n' if newline else ''
-        if self._p.poll() is not None:
+        if self._p is None or self._p.poll() is not None:
             self._launch_term()
         with open(self.pipe_path, "w") as input_desc:
             input_desc.write(s)
-
 
     def print_nl(self, s):
         self.print(s, newline=True)
