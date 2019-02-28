@@ -26,7 +26,7 @@
 import os
 import sys
 import inspect
-from datetime import datetime
+import datetime
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
@@ -83,6 +83,14 @@ group.add_argument('--limit', type=int, default=None,
                         'retrieved feedback (expect --with-data or --with-fbk).')
 group.add_argument('--raw', action='store_true', help='Display data and feedback in raw format')
 
+group = parser.add_argument_group('Fuddly Decoding')
+group.add_argument('--decoder', metavar='DATAMODEL_NAME',
+                   help="Decode feedback with the decoder of the Data Model specified")
+group.add_argument('--atom', metavar='ATOM_NAME',
+                   help="Atom of the Data Model to be used for decoding the sent data")
+group.add_argument('--fbk-atom', metavar='ATOM_NAME',
+                   help="Atom of the Data Model to be used for decoding feedback")
+
 group = parser.add_argument_group('Fuddly Database Operations')
 group.add_argument('--export-data', nargs=2, metavar=('FIRST_DATA_ID','LAST_DATA_ID'), type=int,
                    help='Extract data from provided data ID range')
@@ -130,13 +138,13 @@ def handle_confirmation():
 
 def handle_date(date_str):
     try:
-        date = datetime.strptime(date_str, "%Y/%m/%d")
+        date = datetime.datetime.strptime(date_str, "%Y/%m/%d")
     except ValueError:
         try:
-            date = datetime.strptime(date_str, "%Y/%m/%d-%H")
+            date = datetime.datetime.strptime(date_str, "%Y/%m/%d-%H")
         except ValueError:
             try:
-                date = datetime.strptime(date_str, "%Y/%m/%d-%H:%M")
+                date = datetime.datetime.strptime(date_str, "%Y/%m/%d-%H:%M")
             except ValueError:
                 print(colorize("*** ERROR: Unrecognized Dates ***", rgb=Color.ERROR))
                 sys.exit(-1)
@@ -179,6 +187,10 @@ if __name__ == "__main__":
     remove_data = args.remove_data
     remove_one_data = args.remove_one_data
 
+    decoder = args.decoder
+    atom = args.atom
+    fbk_atom = args.fbk_atom
+
     impact_analysis = args.data_with_impact
     raw_impact_analysis = args.data_with_impact_raw
     data_without_fbk = args.data_without_fbk
@@ -187,6 +199,23 @@ if __name__ == "__main__":
     add_analysis = args.add_analysis
     disprove_impact = args.disprove_impact
 
+    if decoder:
+        from framework.plumbing import *
+        fmk = FmkPlumbing(quiet=True)
+        dm_list = fmk.dm_list
+        fmk.exit_fmk()
+        fbk_decoder_func = None
+        decoder_func = None
+        for dm in fmk.dm_list:
+            if dm.name == decoder:
+                dm.load_data_model(fmk._name2dm)
+                decoder_func = functools.partial(dm.decode, atom_name=atom)
+                fbk_decoder_func = functools.partial(dm.decode, atom_name=fbk_atom)
+                break
+    else:
+        fbk_decoder_func = None
+        decoder_func = None
+
     fmkdb = Database(fmkdb_path=fmkdb)
     ok = fmkdb.start()
     if not ok:
@@ -194,7 +223,7 @@ if __name__ == "__main__":
                        rgb=Color.ERROR))
         sys.exit(-1)
 
-    now = datetime.now()
+    now = datetime.datetime.now()
 
     if display_stats:
 
@@ -237,7 +266,7 @@ if __name__ == "__main__":
                                 with_analysis=not without_analysis,
                                 fbk_src=fbk_src,
                                 limit_data_sz=limit_data_sz, raw=raw_data, page_width=page_width,
-                                colorized=colorized)
+                                colorized=colorized, fbk_decoder=fbk_decoder_func, data_decoder=decoder_func)
 
     elif data_info_by_date is not None:
 
@@ -248,7 +277,7 @@ if __name__ == "__main__":
                                         with_fmkinfo=not without_fmkinfo, fbk_src=fbk_src,
                                         prj_name=prj_name,
                                         limit_data_sz=limit_data_sz, raw=raw_data, page_width=page_width,
-                                        colorized=colorized)
+                                        colorized=colorized, fbk_decoder=fbk_decoder_func, data_decoder=decoder_func)
 
     elif data_info_by_range is not None:
 
@@ -259,7 +288,7 @@ if __name__ == "__main__":
                                          with_fmkinfo=not without_fmkinfo, fbk_src=fbk_src,
                                          prj_name=prj_name,
                                          limit_data_sz=limit_data_sz, raw=raw_data, page_width=page_width,
-                                         colorized=colorized)
+                                         colorized=colorized, fbk_decoder=fbk_decoder_func, data_decoder=decoder_func)
 
     elif export_data is not None or export_one_data is not None:
 

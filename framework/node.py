@@ -6007,7 +6007,7 @@ class Node(object):
 
     def show(self, conf=None, verbose=True, print_name_func=None, print_contents_func=None,
              print_raw_func=None, print_nonterm_func=None, print_type_func=None, alpha_order=False,
-             raw_limit=None, log_func=sys.stdout.write, pretty_print=True):
+             raw_limit=None, log_func=sys.stdout.write, pretty_print=True, display_title=True):
 
         if print_name_func is None:
             print_name_func = self._print_name
@@ -6080,8 +6080,9 @@ class Node(object):
             l = sorted(l, key=lambda x: x[0])
 
         name = '[' + self.name + ']'
-        print_name_func(name, log_func=log_func, pretty_print=pretty_print)
-        print_name_func('-' * len(name), log_func=log_func, pretty_print=pretty_print)
+        if display_title:
+            print_name_func(name, log_func=log_func, pretty_print=pretty_print)
+            print_name_func('-' * len(name), log_func=log_func, pretty_print=pretty_print)
 
         nodes_nb = len(l)
 

@@ -222,8 +222,9 @@ class FmkPlumbing(object):
     Defines the methods to operate every sub-systems of fuddly
     '''
 
-    def __init__(self, exit_on_error=False, debug_mode=False):
+    def __init__(self, exit_on_error=False, debug_mode=False, quiet=False):
         self._debug_mode = debug_mode
+        self._quiet = quiet
 
         self._prj = None
         self.dm = None
@@ -319,19 +320,21 @@ class FmkPlumbing(object):
             self.fmkDB.stop()
             raise ProjectDefinitionError('Error with some Project imports')
 
-        print(colorize(FontStyle.BOLD + '='*44 + '[ Fuddly Data Folder Information ]==\n',
-                       rgb=Color.FMKINFOGROUP))
+        if not quiet:
+            print(colorize(FontStyle.BOLD + '='*44 + '[ Fuddly Data Folder Information ]==\n',
+                           rgb=Color.FMKINFOGROUP))
 
-        if hasattr(gr, 'new_fuddly_data_folder'):
+        if not quiet and hasattr(gr, 'new_fuddly_data_folder'):
             print(colorize(FontStyle.BOLD + \
                            ' *** New Fuddly Data Folder Has Been Created ***\n',
                            rgb=Color.FMKINFO_HLIGHT))
 
-        print(colorize(' --> path: {:s}'.format(gr.fuddly_data_folder),
-                       rgb=Color.FMKINFO))
-        print(colorize(' --> contains: - fmkDB.db, logs, imported/exported data, ...\n'
-                       '               - user projects and user data models',
-                       rgb=Color.FMKSUBINFO))
+        if not quiet:
+            print(colorize(' --> path: {:s}'.format(gr.fuddly_data_folder),
+                           rgb=Color.FMKINFO))
+            print(colorize(' --> contains: - fmkDB.db, logs, imported/exported data, ...\n'
+                           '               - user projects and user data models',
+                           rgb=Color.FMKSUBINFO))
 
     def __str__(self):
         return 'Fuddly FmK'
@@ -677,11 +680,13 @@ class FmkPlumbing(object):
 
         rexp_strategy = re.compile("(.*)_strategy\.py$")
 
-        print(colorize(FontStyle.BOLD + "="*63+"[ Data Models ]==", rgb=Color.FMKINFOGROUP))
+        if not self._quiet:
+            print(colorize(FontStyle.BOLD + "="*63+"[ Data Models ]==", rgb=Color.FMKINFOGROUP))
 
         for dname, file_list in data_models.items():
-            print(colorize(">>> Look for Data Models within '%s' directory" % dname,
-                           rgb=Color.FMKINFOSUBGROUP))
+            if not self._quiet:
+                print(colorize(">>> Look for Data Models within '%s' directory" % dname,
+                               rgb=Color.FMKINFOSUBGROUP))
             prefix = dname.replace(os.sep, '.') + '.'
             for f in file_list:
                 res = rexp_strategy.match(f)
@@ -719,6 +724,9 @@ class FmkPlumbing(object):
                 exec('import ' + prefix + name)
                 exec('import ' + prefix + name + '_strategy')
         except:
+            if self._quiet:
+                return None
+
             if reload_dm:
                 print(colorize("*** Problem during reload of '%s.py' and/or '%s_strategy.py' ***" % (name, name), rgb=Color.ERROR))
             else:
@@ -737,12 +745,14 @@ class FmkPlumbing(object):
             try:
                 dm_params['dm'] = eval(prefix + name + '.data_model')
             except:
-                print(colorize("*** ERROR: '%s.py' shall contain a global variable 'data_model' ***" % (name), rgb=Color.ERROR))
+                if not self._quiet:
+                    print(colorize("*** ERROR: '%s.py' shall contain a global variable 'data_model' ***" % (name), rgb=Color.ERROR))
                 return None
             try:
                 dm_params['tactics'] = eval(prefix + name + '_strategy' + '.tactics')
             except:
-                print(colorize("*** ERROR: '%s_strategy.py' shall contain a global variable 'tactics' ***" % (name), rgb=Color.ERROR))
+                if not self._quiet:
+                    print(colorize("*** ERROR: '%s_strategy.py' shall contain a global variable 'tactics' ***" % (name), rgb=Color.ERROR))
                 return None
 
             try:
@@ -763,10 +773,11 @@ class FmkPlumbing(object):
                 dm_params['dm'].name = name
             self._name2dm[dm_params['dm'].name] = dm_params['dm']
 
-            if reload_dm:
-                print(colorize("*** Data Model '%s' updated ***" % dm_params['dm'].name, rgb=Color.DATA_MODEL_LOADED))
-            else:
-                print(colorize("*** Found Data Model: '%s' ***" % dm_params['dm'].name, rgb=Color.FMKSUBINFO))
+            if not self._quiet:
+                if reload_dm:
+                    print(colorize("*** Data Model '%s' updated ***" % dm_params['dm'].name, rgb=Color.DATA_MODEL_LOADED))
+                else:
+                    print(colorize("*** Found Data Model: '%s' ***" % dm_params['dm'].name, rgb=Color.FMKSUBINFO))
 
             return dm_params
 
@@ -831,11 +842,13 @@ class FmkPlumbing(object):
 
         rexp_proj = re.compile("(.*)_proj\.py$")
 
-        print(colorize(FontStyle.BOLD + "="*66+"[ Projects ]==", rgb=Color.FMKINFOGROUP))
+        if not self._quiet:
+            print(colorize(FontStyle.BOLD + "="*66+"[ Projects ]==", rgb=Color.FMKINFOGROUP))
 
         for dname, file_list in projects.items():
-            print(colorize(">>> Look for Projects within '%s' Directory" % dname,
-                           rgb=Color.FMKINFOSUBGROUP))
+            if not self._quiet:
+                print(colorize(">>> Look for Projects within '%s' Directory" % dname,
+                               rgb=Color.FMKINFOSUBGROUP))
             prefix = dname.replace(os.sep, '.') + '.'
             for f in file_list:
                 res = rexp_proj.match(f)
@@ -864,6 +877,9 @@ class FmkPlumbing(object):
             else:
                 exec('import ' + prefix + name + '_proj')
         except:
+            if self._quiet:
+                return None
+
             if reload_prj:
                 print(colorize("*** Problem during reload of '%s_proj.py' ***" % (name), rgb=Color.ERROR))
             else:
@@ -882,7 +898,8 @@ class FmkPlumbing(object):
             try:
                 prj_params['project'] = eval(prefix + name + '_proj' + '.project')
             except:
-                print(colorize("*** ERROR: '%s_proj.py' shall contain a global variable 'project' ***" % (name), rgb=Color.ERROR))
+                if not self._quiet:
+                    print(colorize("*** ERROR: '%s_proj.py' shall contain a global variable 'project' ***" % (name), rgb=Color.ERROR))
                 return None
 
             try:
@@ -926,10 +943,11 @@ class FmkPlumbing(object):
                 prj_params['project'].name = name
             self._name2prj[prj_params['project'].name] = prj_params['project']
 
-            if reload_prj:
-                print(colorize("*** Project '%s' updated ***" % prj_params['project'].name, rgb=Color.FMKSUBINFO))
-            else:
-                print(colorize("*** Found Project: '%s' ***" % prj_params['project'].name, rgb=Color.FMKSUBINFO))
+            if not self._quiet:
+                if reload_prj:
+                    print(colorize("*** Project '%s' updated ***" % prj_params['project'].name, rgb=Color.FMKSUBINFO))
+                else:
+                    print(colorize("*** Found Project: '%s' ***" % prj_params['project'].name, rgb=Color.FMKSUBINFO))
 
             return prj_params
 

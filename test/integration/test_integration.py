@@ -3154,7 +3154,8 @@ class TestDataModel(unittest.TestCase):
         dm = fmk.get_data_model_by_name('png')
         dm.build_data_model()
 
-        for n, png in dm.png_dict.items():
+        png_dict = dm.import_file_contents(extension='png')
+        for n, png in png_dict.items():
 
             png_buff = png.to_bytes()
             png.show(raw_limit=400)
@@ -3179,7 +3180,8 @@ class TestDataModel(unittest.TestCase):
         dm = fmk.get_data_model_by_name('jpg')
         dm.build_data_model()
 
-        for n, jpg in dm.jpg_dict.items():
+        jpg_dict = dm.import_file_contents(extension='jpg')
+        for n, jpg in jpg_dict.items():
 
             jpg_buff = jpg.to_bytes()
 
@@ -3315,7 +3317,8 @@ class TestDataModel(unittest.TestCase):
                              flen_before - flen_after)
             self.assertEqual(struct.unpack('<L', csz_after)[0], len(NEWVAL))
 
-        for n, pkzip in dm.zip_dict.items():
+        zip_dict = dm.import_file_contents(extension='zip')
+        for n, pkzip in zip_dict.items():
 
             zip_buff = pkzip.to_bytes()
             # pkzip.show(raw_limit=400)

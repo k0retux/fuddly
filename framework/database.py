@@ -131,8 +131,7 @@ class Database(object):
             self.fmk_db_path = os.path.join(gr.fuddly_data_folder, self.name)
         else:
             self.fmk_db_path = fmkdb_path
-        # self._con = None
-        # self._cur = None
+
         self.enabled = False
 
         self.current_project = None
@@ -516,7 +515,7 @@ class Database(object):
     def display_data_info(self, data_id, with_data=False, with_fbk=False, with_fmkinfo=True,
                           with_analysis=True,
                           fbk_src=None, limit_data_sz=None, page_width=100, colorized=True,
-                          raw=False):
+                          raw=False, fbk_decoder=None, data_decoder=None):
 
         colorize = self._get_color_function(colorized)
 
@@ -727,10 +726,13 @@ class Database(object):
         msg = ''
         if with_data:
             msg += colorize("\n Sent Data:\n", rgb=Color.FMKINFOGROUP)
-            data_content = gr.unconvert_from_internal_repr(data_content)
-            data_content = self._handle_binary_content(data_content, sz_limit=limit_data_sz, raw=raw,
-                                                       colorized=colorized)
-            msg += data_content
+            if data_decoder:
+                msg += data_decoder(data_content)
+            else:
+                data_content = gr.unconvert_from_internal_repr(data_content)
+                data_content = self._handle_binary_content(data_content, sz_limit=limit_data_sz, raw=raw,
+                                                           colorized=colorized)
+                msg += data_content
             msg += colorize('\n' + line_pattern, rgb=Color.NEWLOGENTRY)
 
         if with_fbk:
@@ -744,17 +746,20 @@ class Database(object):
                 msg += colorize(")", rgb=Color.FMKINFOGROUP)
                 msg += colorize(" = {!s}".format(status), rgb=Color.FMKSUBINFO)
                 if content:
-                    content = gr.unconvert_from_internal_repr(content)
-                    content = self._handle_binary_content(content, sz_limit=limit_data_sz, raw=raw,
-                                                          colorized=colorized)
-                    chks = chunk_lines(content, page_width - 4)
-                    for c in chks:
-                        c_sz = len(c)
-                        for i in range(c_sz):
-                            c = c[:-1] if c[-1] == '\n' else c
-                            break
-                        msg += colorize('\n' + ' ' * 2 + '| ', rgb=Color.FMKINFOGROUP) + \
-                               colorize(str(c), rgb=Color.DATAINFO_ALT)
+                    if fbk_decoder:
+                        msg += fbk_decoder(content)
+                    else:
+                        content = gr.unconvert_from_internal_repr(content)
+                        content = self._handle_binary_content(content, sz_limit=limit_data_sz, raw=raw,
+                                                              colorized=colorized)
+                        chks = chunk_lines(content, page_width - 4)
+                        for c in chks:
+                            c_sz = len(c)
+                            for i in range(c_sz):
+                                c = c[:-1] if c[-1] == '\n' else c
+                                break
+                            msg += colorize('\n' + ' ' * 2 + '| ', rgb=Color.FMKINFOGROUP) + \
+                                   colorize(str(c), rgb=Color.DATAINFO_ALT)
             if feedback:
                 msg += colorize('\n' + line_pattern, rgb=Color.NEWLOGENTRY)
 
@@ -778,7 +783,8 @@ class Database(object):
     def display_data_info_by_date(self, start, end, with_data=False, with_fbk=False, with_fmkinfo=True,
                                   with_analysis=True,
                                   fbk_src=None, prj_name=None,
-                                  limit_data_sz=None, raw=False, page_width=100, colorized=True):
+                                  limit_data_sz=None, raw=False, page_width=100, colorized=True,
+                                  fbk_decoder=None, data_decoder=None):
         colorize = self._get_color_function(colorized)
 
         if prj_name:
@@ -802,7 +808,8 @@ class Database(object):
                                        with_analysis=with_analysis,
                                        fbk_src=fbk_src,
                                        limit_data_sz=limit_data_sz, raw=raw, page_width=page_width,
-                                       colorized=colorized)
+                                       colorized=colorized,
+                                       fbk_decoder=fbk_decoder, data_decoder=data_decoder)
         else:
             print(colorize("*** ERROR: No data found between {!s} and {!s} ***".format(start, end),
                            rgb=Color.ERROR))
@@ -810,7 +817,8 @@ class Database(object):
     def display_data_info_by_range(self, first_id, last_id, with_data=False, with_fbk=False, with_fmkinfo=True,
                                    with_analysis=True,
                                    fbk_src=None, prj_name=None,
-                                   limit_data_sz=None, raw=False, page_width=100, colorized=True):
+                                   limit_data_sz=None, raw=False, page_width=100, colorized=True,
+                                   fbk_decoder=None, data_decoder=None):
 
         colorize = self._get_color_function(colorized)
 
@@ -834,7 +842,8 @@ class Database(object):
                                        with_fmkinfo=with_fmkinfo, with_analysis=with_analysis,
                                        fbk_src=fbk_src,
                                        limit_data_sz=limit_data_sz, raw=raw, page_width=page_width,
-                                       colorized=colorized)
+                                       colorized=colorized,
+                                       fbk_decoder=fbk_decoder, data_decoder=data_decoder)
         else:
             print(colorize("*** ERROR: No data found between {!s} and {!s} ***".format(first_id,
                                                                                        last_id),

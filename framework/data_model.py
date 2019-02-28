@@ -76,6 +76,35 @@ class DataModel(object):
         return Node('RAW_{:s}'.format(filename[:-len(self.file_extension)-1]),
                     values=[data])
 
+    def decode(self, data, atom_name=None, abs_csts=AbsFullCsts()):
+
+        self._final_msg = ''
+        def accumulate(msg):
+            self._final_msg += msg
+
+        if atom_name is None:
+            atom_name = list(self._dm_hashtable.keys())[0]
+
+        try:
+            atom = self.get_atom(atom_name)
+        except ValueError:
+            msg = colorize("\n*** ERROR: provided atom name is unknown: '{:s}'".format(atom_name),
+                           rgb=Color.ERROR)
+            return msg
+
+        status, off, size, name = atom.absorb(data, constraints=abs_csts)
+
+        if status == AbsorbStatus.FullyAbsorbed:
+            accumulate('\n')
+            atom.show(log_func=accumulate, display_title=False)
+        else:
+            accumulate(colorize("\n*** DECODING ERROR [atom used: '{:s}'] ***", rgb=Color.ERROR).format(atom_name))
+            accumulate('\nAbsorption Status: {!r}, {:d}, {:d}'.format(status, off, size))
+            accumulate('\n \_ length of original data: {:d}'.format(len(data)))
+            accumulate('\n \_ remaining: {!r}'.format(data[size:size+1000]))
+
+        return self._final_msg
+
     def validation_tests(self):
         """
         Optional test cases to validate the correct behavior of the data model
@@ -189,15 +218,13 @@ class DataModel(object):
         else:
             files = list(filter(is_good_file_by_fname, files))
         msgs = {}
-        idx = 0
 
-        for name in files:
+        for idx, name in enumerate(files):
             with open(os.path.join(path, name), 'rb') as f:
                 buff = f.read()
                 d_abs = absorber(buff, idx, name)
                 if d_abs is not None:
                     msgs[name] = d_abs
-            idx +=1
 
         return msgs
 
