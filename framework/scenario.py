@@ -28,6 +28,7 @@ import platform
 from framework.global_resources import *
 from framework.data import Data
 from framework.node import Node
+from framework.target_helpers import Target
 from libs.external_modules import *
 from libs.utils import find_file, retrieve_app_handler
 
@@ -111,12 +112,15 @@ class DataProcess(object):
 
     def formatted_str(self, oneliner=False):
         desc = ''
-        suffix = ', Process=' if oneliner else '\n'
+        suffix = ', proc=' if oneliner else '\n'
         if isinstance(self.seed, str):
-            desc += 'Seed=' + self.seed + suffix
+            desc += "seed='" + self.seed + "'" + suffix
         elif isinstance(self.seed, Data):
-            seed_str = self.seed.content.name if isinstance(self.seed.content, Node) else 'Data(...)'
-            desc += 'Seed={:s}'.format(seed_str) + suffix
+            if isinstance(self.seed.content, Node):
+                seed_str = self.seed.content.name
+            else:
+                seed_str = "Data('{!s}'...)".format(self.seed.to_str()[:10])
+            desc += "seed='{:s}'".format(seed_str) + suffix
         else:
             desc += suffix[2:]
 
@@ -148,7 +152,38 @@ class Periodic(object):
     def __init__(self, data, period=None, vtg_ids=None):
         self.data = data
         self.period = period
-        self.vtg_ids_list = None if vtg_ids is None else [vtg_ids]
+        if vtg_ids is None:
+            self.vtg_ids_list = None
+        elif isinstance(vtg_ids, list):
+            self.vtg_ids_list = vtg_ids
+        else:
+            assert isinstance(vtg_ids, int)
+            self.vtg_ids_list = [vtg_ids]
+
+    def __str__(self):
+        desc = 'period={}s \| '.format(self.period)
+        d = self.data
+        if isinstance(d, DataProcess):
+            desc += 'DP({:s})'.format(d.formatted_str(oneliner=True))
+        elif isinstance(d, Data):
+            if isinstance(d.content, Node):
+                desc += d.content.name
+            else:
+                desc += "Data('{!s}'...)".format(d.to_str()[:10])
+        elif isinstance(d, str):
+            desc += "{:s}".format(d.upper())
+        else:
+            assert d is None
+            desc += '[' + self.__class__.__name__ + ']'
+        if self.vtg_ids_list is not None:
+            vtg_str = str(self.vtg_ids_list) if len(self.vtg_ids_list) > 1 else str(self.vtg_ids_list[0])
+            desc += ' -(vtg)-\> {:s}\n'.format(vtg_str)
+        else:
+            desc += '\n'
+        desc = desc[:-1]
+
+        return desc
+
 
 
 class Step(object):
@@ -472,18 +507,19 @@ class Step(object):
             step_desc = ''
             for idx, d in enumerate(self._data_desc):
                 if isinstance(d, DataProcess):
-                    step_desc += d.formatted_str(oneliner=False)
+                    step_desc += 'DP({:s})'.format(d.formatted_str(oneliner=True))
                 elif isinstance(d, Data):
                     if self.__class__.__name__ != 'Step':
                         step_desc += '[' + self.__class__.__name__ + ']'
                     else:
-                        step_desc += d.content.name.upper() if isinstance(d.content, Node) else 'Data(...)'
+                        step_desc += d.content.name.upper() if isinstance(d.content, Node) else "Data('{!s}'...)".format(d.to_str()[:10])
                 elif isinstance(d, str):
                     step_desc += "{:s}".format(self._node_name[idx].upper())
                 else:
                     assert d is None
                     step_desc += '[' + self.__class__.__name__ + ']'
-                step_desc += '\n'
+                vtgids_str = ' -(vtg)-\> {:s}'.format(str(self.vtg_ids_list[idx])) if self.vtg_ids_list is not None else ''
+                step_desc += vtgids_str + '\n'
             step_desc = step_desc[:-1]
 
         return step_desc
@@ -507,10 +543,39 @@ class Step(object):
             else:
                 step_desc = step_desc + '|{{{:s}|{:s}}}'.format(cbk_before_dataproc_str, cbk_before_sending_str)
 
-        if self.feedback_timeout is not None:
-            step_desc = '{:s}\\n{!s}s|'.format('wait', self.feedback_timeout) + step_desc
+        fbk_mode = None if self.feedback_mode is None else Target.get_fbk_mode_desc(self.feedback_mode, short=True)
+        if self.feedback_timeout is not None and self.feedback_mode is not None:
+            step_desc = '{{fbk timeout {!s}s|{:s}}}|{:s}'.format(self.feedback_timeout, fbk_mode, step_desc)
+        elif self.feedback_timeout is not None:
+            step_desc = 'fbk timeout\\n{!s}s|{:s}'.format(self.feedback_timeout, step_desc)
+        elif self.feedback_mode is not None:
+            step_desc = 'fbk mode\\n{:s}|{:s}'.format(fbk_mode, step_desc)
+        else:
+            pass
 
         return step_desc
+
+    def is_periodic_set(self):
+        return bool(self._periodic_data)
+
+    def is_periodic_cleared(self):
+        return bool(self._periodic_data_to_remove)
+
+    def get_periodic_description(self):
+        # Note the provided string is dot/graphviz oriented.
+        if self.is_periodic_set() or self.is_periodic_cleared():
+            desc = '{'
+            if self.is_periodic_set():
+                for p in self.periodic_to_set:
+                    desc += 'SET Periodic [{:s}]\l [{:s}]\l|'.format(str(id(p))[-6:], str(p))
+
+            if self.is_periodic_cleared():
+                for p in self.periodic_to_clear:
+                    desc += 'CLEAR Periodic [{:s}]\l|'.format(str(p)[-6:])
+            desc = desc[:-1] + '}'
+            return desc
+        else:
+            return 'No periodic to set'
 
     def __hash__(self):
         return id(self)
@@ -874,7 +939,7 @@ class Scenario(object):
         """Start filepath with its associated application (windows)."""
         os.startfile(os.path.normpath(filepath))
 
-    def graph(self, fmt='pdf', select_current=False):
+    def graph(self, fmt='pdf', select_current=False, display_ucontext=True):
         global viewer_format
         global viewer_app
         global viewer_app_name
@@ -889,44 +954,58 @@ class Scenario(object):
             viewer_app = None
             viewer_app_name = None
 
-        def graph_creation(init_step, node_list, edge_list):
+        def graph_creation(init_step, node_list, edge_list, graph):
+
+            def graph_periodic(step, node_list):
+                if (step.is_periodic_set() or step.is_periodic_cleared()) \
+                        and step._periodic_data not in node_list:
+                    id_node = str(id(step))
+                    id_periodic = str(id(step._periodic_data))
+                    graph.node(id_periodic, label=step.get_periodic_description(),
+                           shape='record', style='filled', color='black', fillcolor='palegreen',
+                           fontcolor='black', fontsize='8')
+                    node_list.append(step._periodic_data)
+                    graph.edge(id_node, id_periodic, arrowhead='dot') # headport='se', tailport='nw')
+
             step_color = current_color if init_step is current_step else 'black'
             if init_step.final or init_step is self._anchor:
                 step_fillcolor = current_fillcolor if init_step is current_step else 'slategray'
                 step_fontcolor = current_fontcolor if init_step is current_step else 'white'
                 step_style = 'rounded,filled,dotted,bold' if isinstance(init_step, NoDataStep) else 'rounded,filled,bold'
-                f.attr('node', fontcolor=step_fontcolor, shape='record', style=step_style,
+                graph.attr('node', fontcolor=step_fontcolor, shape='record', style=step_style,
                        color=step_color, fillcolor=step_fillcolor)
             else:
                 step_style = 'rounded,dotted' if isinstance(init_step, NoDataStep) else 'rounded,filled'
                 step_fillcolor = current_fillcolor if init_step is current_step else 'lightgray'
                 step_fontcolor = current_fontcolor if init_step is current_step else 'black'
-                f.attr('node', fontcolor=step_fontcolor, shape='record', style=step_style,
+                graph.attr('node', fontcolor=step_fontcolor, shape='record', style=step_style,
                        color=step_color, fillcolor=step_fillcolor)
-            f.node(str(id(init_step)), label=init_step.get_description())
+            graph.node(str(id(init_step)), label=init_step.get_description())
+            graph_periodic(init_step, node_list)
             for idx, tr in enumerate(init_step.transitions):
                 if tr.step not in node_list:
                     step_color = current_color if tr.step is current_step else 'black'
                     if tr.step.final:
                         step_fillcolor = current_fillcolor if tr.step is current_step else 'slategray'
                         step_fontcolor = current_fontcolor if tr.step is current_step else 'white'
-                        f.attr('node', fontcolor=step_fontcolor, shape='record', style='rounded,filled,bold',
+                        graph.attr('node', fontcolor=step_fontcolor, shape='record', style='rounded,filled,bold',
                                fillcolor=step_fillcolor, color=step_color)
                     else:
                         step_fillcolor = current_fillcolor if tr.step is current_step else 'lightgray'
                         step_fontcolor = current_fontcolor if tr.step is current_step else 'black'
                         step_style = 'rounded,dotted' if isinstance(tr.step, NoDataStep) else 'rounded,filled'
-                        f.attr('node', fontcolor=step_fontcolor, shape='record', style=step_style,
+                        graph.attr('node', fontcolor=step_fontcolor, shape='record', style=step_style,
                                fillcolor=step_fillcolor, color=step_color)
-                    f.node(str(id(tr.step)), label=tr.step.get_description())
+                    graph.node(str(id(tr.step)), label=tr.step.get_description())
+                    graph_periodic(tr.step, node_list)
                 if id(tr) not in edge_list:
-                    f.edge(str(id(init_step)), str(id(tr.step)), label='[{:d}] {!s}'.format(idx+1, tr))
+                    graph.edge(str(id(init_step)), str(id(tr.step)), label='[{:d}] {!s}'.format(idx+1, tr))
                     edge_list.append(id(tr))
                 if tr.step in node_list:
                     continue
                 if tr.step not in node_list:
                     node_list.append(tr.step)
-                graph_creation(tr.step, node_list=node_list, edge_list=edge_list)
+                graph_creation(tr.step, node_list=node_list, edge_list=edge_list, graph=graph)
 
         if not graphviz_module:
             print("\n*** ERROR: need python graphviz module to be installed ***")
@@ -935,14 +1014,34 @@ class Scenario(object):
         graph_filename = os.path.join(workspace_folder, self.name+'.gv')
 
         try:
-            f = graphviz.Digraph(self.name, format=fmt, filename=graph_filename)
+            g = graphviz.Digraph(self.name, format=fmt, filename=graph_filename)
         except:
             print("\n*** ERROR: Unknown format ('{!s}') ***".format(fmt))
         else:
-            graph_creation(self._anchor, node_list=[], edge_list=[])
+            if display_ucontext and self.env.user_context:
+                with g.subgraph(name='cluster_1') as graph:
+                    graph.attr(label='SCENARIO', fontcolor='black', labelloc='b')
+                    graph_creation(self._anchor, node_list=[], edge_list=[], graph=graph)
+
+                with g.subgraph(name='cluster_2') as h:
+                    h.attr(label='USER CONTEXT', style='filled', color='gray90', labelloc='b')
+                    context_id = str(id(self.env.user_context))
+                    if isinstance(self.env.user_context, UI):
+                        uctxt_desc = '{'
+                        uinputs = self.env.user_context.get_inputs()
+                        for k, v in uinputs.items():
+                            uctxt_desc += '{:s} = {!r}\l|'.format(k, v)
+                        uctxt_desc = uctxt_desc[:-1] + '}'
+                    else:
+                        uctxt_desc = str(self.env.user_context)
+                    h.node(context_id, label=uctxt_desc,
+                           shape='record', style='filled,bold', color='black', fillcolor='deepskyblue',
+                           fontcolor='black', fontsize='10')
+            else:
+                graph_creation(self._anchor, node_list=[], edge_list=[], graph=g)
 
             try:
-                rendered = f.render()
+                rendered = g.render()
             except:
                 print("\n*** The renderer has stopped! (because of an unexpected event) ***")
                 return

@@ -54,6 +54,13 @@ class Target(object):
 
     _pending_data = None
 
+    @staticmethod
+    def get_fbk_mode_desc(fbk_mode, short=False):
+        if fbk_mode == Target.FBK_WAIT_FULL_TIME:
+            return 'wait full time' if short else Target.fbk_wait_full_time_slot_msg
+        elif fbk_mode == Target.FBK_WAIT_UNTIL_RECV:
+            return 'wait until reception' if short else Target.fbk_wait_until_recv_msg
+
     def set_logger(self, logger):
         self._logger = logger
 
