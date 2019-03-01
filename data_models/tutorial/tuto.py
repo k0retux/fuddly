@@ -16,9 +16,6 @@ class MyDF_DataModel(DataModel):
     file_extension = 'df'
     name = 'mydf'
 
-    def create_node_from_raw_data(self, data, idx, filename):
-        pass
-
     def build_data_model(self):
 
         test_node_desc = \

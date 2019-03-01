@@ -317,10 +317,13 @@ MOD - Modify Node Contents
 --------------------------
 
 Description:
-  Change the content of the nodes specified by the regexp path with
-  the value privided as a parameter (use *node absorption*
-  infrastructure). If no path is provided, the root node will be
-  used.
+    Perform modifications on the provided data. Two ways are possible:
+
+    - Either the change is performed on the content of the nodes specified by the `path`
+      parameter with the new `value` provided, and the optional constraints for the
+      absorption (use *node absorption* infrastructure);
+
+    - Or the changed is performed based on a dictionary provided through the parameter `multi_mod`
 
 Reference:
   :class:`framework.generic_data_makers.d_modify_nodes`
@@ -328,22 +331,57 @@ Reference:
 Parameters:
   .. code-block:: none
 
-    parameters:
-      |_ path
-      |      | desc: graph path regexp to select nodes on which the disruptor should
-      |      |       apply
-      |      | default: None [type: str]
-      |_ clone_node
-      |      | desc: if True the dmaker will always return a copy of the node. (for
-      |      |       stateless disruptors dealing with big data it can be useful
-      |      |       to it to False)
-      |      | default: False [type: bool]
-      |_ value
-      |      | desc: the new value to inject within the data
-      |      | default: '' [type: str]
-      |_ constraints
-      |      | desc: constraints for the absorption of the new value
-      |      | default: AbsNoCsts() [type: AbsCsts]
+      parameters:
+        |_ path
+        |      | desc: Graph path regexp to select nodes on which the disruptor should
+        |      |       apply.
+        |      | default: None [type: str]
+        |_ value
+        |      | desc: The new value to inject within the data.
+        |      | default: '' [type: str]
+        |_ constraints
+        |      | desc: Constraints for the absorption of the new value.
+        |      | default: AbsNoCsts() [type: AbsCsts]
+        |_ multi_mod
+        |      | desc: Dictionary of <path>:<item> pairs to change multiple nodes with
+        |      |       diferent values. <item> can be either only the new <value> or
+        |      |       a tuple (<value>,<abscsts>) if new constraint for absorption
+        |      |       is needed
+        |      | default: None [type: dict]
+        |_ clone_node
+        |      | desc: If True the dmaker will always return a copy of the node. (For
+        |      |       stateless disruptors dealing with big data it can be useful
+        |      |       to it to False.)
+        |      | default: False [type: bool]
+
+
+CALL - Call Function
+--------------------
+
+Description:
+    Call the function provided with the first parameter being the :class:`framework.data.Data`
+    object received as input of this disruptor, and optionally with additional parameters
+    if `params` is set. The function should return a :class:`framework.data.Data` object.
+
+    The signature of the function should be compatible with:
+
+    ``func(data, *args) --> Data()``
+
+Reference:
+  :class:`framework.generic_data_makers.d_modify_nodes`
+
+Parameters:
+  .. code-block:: none
+
+      parameters:
+        |_ func
+        |      | desc: The function that will be called with a node as its first parameter,
+        |      |       and provided optionnaly with addtionnal parameters if @params
+        |      |       is set.
+        |      | default: lambda x: x [type: method, function]
+        |_ params
+        |      | desc: Tuple of parameters that will be provided to the function.
+        |      | default: None [type: tuple]
 
 
 

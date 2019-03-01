@@ -5969,44 +5969,45 @@ class Node(object):
 
 
     @staticmethod
-    def _print(msg, rgb, style='', nl=True, log_func=lambda x: x):
+    def _print(msg, rgb, style='', nl=True, log_func=sys.stdout.write, pretty_print=True):
         end = '\n' if nl else ''
-        sys.stdout.write(style)
-        sys.stdout.write(colorize(msg, rgb=rgb))
-        log_func(msg + end)
-        if style:
-            sys.stdout.write(FontStyle.END+end)
+        if pretty_print:
+            log_func(style)
+            log_func(colorize(msg, rgb=rgb))
+            if style:
+                log_func(FontStyle.END + end)
+            else:
+                log_func(end)
         else:
-            sys.stdout.write(end)
-        sys.stdout.flush()
+            log_func(msg+end)
 
     @staticmethod
-    def _print_name(msg, style='', nl=True, log_func=lambda x: x):
-        Node._print(msg, rgb=Color.ND_NAME, style=style, nl=nl, log_func=log_func)
+    def _print_name(msg, style='', nl=True, log_func=sys.stdout.write, pretty_print=True):
+        Node._print(msg, rgb=Color.ND_NAME, style=style, nl=nl, log_func=log_func, pretty_print=pretty_print)
 
     @staticmethod
-    def _print_type(msg, style=FontStyle.BOLD, nl=True, log_func=lambda x: x):
-        Node._print(msg, rgb=Color.ND_TYPE, style=style, nl=nl, log_func=log_func)
+    def _print_type(msg, style=FontStyle.BOLD, nl=True, log_func=sys.stdout.write, pretty_print=True):
+        Node._print(msg, rgb=Color.ND_TYPE, style=style, nl=nl, log_func=log_func, pretty_print=pretty_print)
 
     @staticmethod
-    def _print_contents(msg, style='', nl=True, log_func=lambda x: x):
-        Node._print(msg, rgb=Color.ND_CONTENTS, style=style, nl=nl, log_func=log_func)
+    def _print_contents(msg, style='', nl=True, log_func=sys.stdout.write, pretty_print=True):
+        Node._print(msg, rgb=Color.ND_CONTENTS, style=style, nl=nl, log_func=log_func, pretty_print=pretty_print)
 
     @staticmethod
-    def _print_nonterm(msg, style=FontStyle.BOLD, nl=True, log_func=lambda x: x):
-        Node._print(msg, rgb=Color.ND_NONTERM, style=style, nl=nl, log_func=log_func)
+    def _print_nonterm(msg, style=FontStyle.BOLD, nl=True, log_func=sys.stdout.write, pretty_print=True):
+        Node._print(msg, rgb=Color.ND_NONTERM, style=style, nl=nl, log_func=log_func, pretty_print=pretty_print)
 
     @staticmethod
-    def _print_raw(msg, style='', nl=True, hlight=False, log_func=lambda x: x):
+    def _print_raw(msg, style='', nl=True, hlight=False, log_func=sys.stdout.write, pretty_print=True):
         if hlight:
             st = FontStyle.BOLD if style == '' else style
-            Node._print(msg, rgb=Color.ND_RAW_HLIGHT, style=st, nl=nl, log_func=log_func)
+            Node._print(msg, rgb=Color.ND_RAW_HLIGHT, style=st, nl=nl, log_func=log_func, pretty_print=pretty_print)
         else:
-            Node._print(msg, rgb=Color.ND_RAW, style=style, nl=nl, log_func=log_func)
+            Node._print(msg, rgb=Color.ND_RAW, style=style, nl=nl, log_func=log_func, pretty_print=pretty_print)
 
     def show(self, conf=None, verbose=True, print_name_func=None, print_contents_func=None,
              print_raw_func=None, print_nonterm_func=None, print_type_func=None, alpha_order=False,
-             raw_limit=None, log_func=lambda x: x):
+             raw_limit=None, log_func=sys.stdout.write, pretty_print=True, display_title=True):
 
         if print_name_func is None:
             print_name_func = self._print_name
@@ -6079,8 +6080,9 @@ class Node(object):
             l = sorted(l, key=lambda x: x[0])
 
         name = '[' + self.name + ']'
-        print_name_func(name, log_func=log_func)
-        print_name_func('-' * len(name), log_func=log_func)
+        if display_title:
+            print_name_func(name, log_func=log_func, pretty_print=pretty_print)
+            print_name_func('-' * len(name), log_func=log_func, pretty_print=pretty_print)
 
         nodes_nb = len(l)
 
@@ -6159,49 +6161,49 @@ class Node(object):
                             .format(node_type, args, raw_len)
                     else:
                         type_and_args = '[{:s}] size={:d}B'.format(node_type, raw_len)
-                    print_nonterm_func(prefix, nl=False, log_func=log_func)
-                    print_name_func('({:d}) {:s}'.format(depth, name), nl=False, log_func=log_func)
-                    print_type_func(type_and_args, nl=False, log_func=log_func)
+                    print_nonterm_func(prefix, nl=False, log_func=log_func, pretty_print=pretty_print)
+                    print_name_func('({:d}) {:s}'.format(depth, name), nl=False, log_func=log_func, pretty_print=pretty_print)
+                    print_type_func(type_and_args, nl=False, log_func=log_func, pretty_print=pretty_print)
                     if node.is_attr_set(NodeInternals.Separator):
                         self._print(sep_deco, rgb=Color.ND_SEPARATOR, style=FontStyle.BOLD, nl=False,
-                                    log_func=log_func)
+                                    log_func=log_func, pretty_print=pretty_print)
                     self._print(graph_deco, rgb=Color.ND_DUPLICATED, style=FontStyle.BOLD,
-                                log_func=log_func)
+                                log_func=log_func, pretty_print=pretty_print)
                     if val is not None:
-                        print_nonterm_func("{:s}  ".format(indent_spc) , nl=False, log_func=log_func)
-                        print_contents_func("\_ {:s}".format(val), log_func=log_func)
-                    print_nonterm_func("{:s}  ".format(indent_spc) , nl=False, log_func=log_func)
+                        print_nonterm_func("{:s}  ".format(indent_spc), nl=False, log_func=log_func, pretty_print=pretty_print)
+                        print_contents_func("\_ {:s}".format(val), log_func=log_func, pretty_print=pretty_print)
+                    print_nonterm_func("{:s}  ".format(indent_spc), nl=False, log_func=log_func, pretty_print=pretty_print)
                     if raw_limit is not None and raw_len > raw_limit:
                         print_raw_func("\_raw: {:s}".format(repr(raw[:raw_limit])), nl=False,
-                                       log_func=log_func)
-                        print_raw_func(" ...", hlight=True, log_func=log_func)
+                                       log_func=log_func, pretty_print=pretty_print)
+                        print_raw_func(" ...", hlight=True, log_func=log_func, pretty_print=pretty_print)
                     else:
-                        print_raw_func("\_raw: {:s}".format(repr(raw)), log_func=log_func)
+                        print_raw_func("\_raw: {:s}".format(repr(raw)), log_func=log_func, pretty_print=pretty_print)
                 else:
                     print_nonterm_func("{:s}[{:d}] {:s}".format(indent_nonterm, depth, name), nl=False,
-                                       log_func=log_func)
+                                       log_func=log_func, pretty_print=pretty_print)
                     if isinstance(node.c[conf_tmp], NodeInternals_GenFunc):
                         args = get_args(node, conf_tmp)
                         print_nonterm_func(' [{:s} | node_args: {:s}]'.format(node_type, args),
-                                           nl=False, log_func=log_func)
+                                           nl=False, log_func=log_func, pretty_print=pretty_print)
                         self._print(graph_deco, rgb=Color.ND_DUPLICATED, style=FontStyle.BOLD,
-                                    log_func=log_func)
+                                    log_func=log_func, pretty_print=pretty_print)
                     else:
-                        print_nonterm_func(' [{:s}]'.format(node_type), nl=False, log_func=log_func)
+                        print_nonterm_func(' [{:s}]'.format(node_type), nl=False, log_func=log_func, pretty_print=pretty_print)
                         if node.is_nonterm(conf_tmp) and node.encoder is not None:
                             self._print(' [Encoded by {:s}]'.format(node.encoder.__class__.__name__),
                                         rgb=Color.ND_ENCODED, style=FontStyle.BOLD,
-                                        nl=False, log_func=log_func)
+                                        nl=False, log_func=log_func, pretty_print=pretty_print)
                         if node.is_nonterm(conf_tmp) and node.custo.collapse_padding_mode:
                             self._print(' >Collapse Bitfields<',
                                         rgb=Color.ND_CUSTO, style=FontStyle.BOLD,
-                                        nl=False, log_func=log_func)
+                                        nl=False, log_func=log_func, pretty_print=pretty_print)
                         self._print(graph_deco, rgb=Color.ND_DUPLICATED, style=FontStyle.BOLD,
-                                    log_func=log_func)
+                                    log_func=log_func, pretty_print=pretty_print)
 
         else:
             for name, node in l:
-                print_name_func("{:s} [{:d}]".format(name, node.depth), log_func=log_func)
+                print_name_func("{:s} [{:d}]".format(name, node.depth), log_func=log_func, pretty_print=pretty_print)
 
 
     def __lt__(self, other):

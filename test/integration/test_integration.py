@@ -45,6 +45,7 @@ from test import ignore_data_model_specifics, run_long_tests, exit_on_import_err
 def setUpModule():
     global fmk, dm, results
     fmk = FmkPlumbing(exit_on_error=exit_on_import_error, debug_mode=True)
+    fmk.start()
     fmk.run_project(name='tuto', dm_name='example')
     dm = example.data_model
     results = collections.OrderedDict()
@@ -52,7 +53,7 @@ def setUpModule():
 
 def tearDownModule():
     global fmk
-    fmk.exit_fmk()
+    fmk.stop()
 
 
 ######## Tests cases begins Here ########
@@ -2070,8 +2071,8 @@ class TestNodeFeatures(unittest.TestCase):
         # print(repr(top))
         print(top.get_value())
 
-        def verif_val_and_print(arg, log_func=None):
-            Node._print_contents(arg)
+        def verif_val_and_print(*arg, **kwargs):
+            Node._print_contents(*arg, **kwargs)
             if 'TBD' in arg:
                 raise ValueError('Dissection Error!')
 
@@ -3154,7 +3155,8 @@ class TestDataModel(unittest.TestCase):
         dm = fmk.get_data_model_by_name('png')
         dm.build_data_model()
 
-        for n, png in dm.png_dict.items():
+        png_dict = dm.import_file_contents(extension='png')
+        for n, png in png_dict.items():
 
             png_buff = png.to_bytes()
             png.show(raw_limit=400)
@@ -3179,7 +3181,8 @@ class TestDataModel(unittest.TestCase):
         dm = fmk.get_data_model_by_name('jpg')
         dm.build_data_model()
 
-        for n, jpg in dm.jpg_dict.items():
+        jpg_dict = dm.import_file_contents(extension='jpg')
+        for n, jpg in jpg_dict.items():
 
             jpg_buff = jpg.to_bytes()
 
@@ -3250,7 +3253,7 @@ class TestDataModel(unittest.TestCase):
         dm = fmk.get_data_model_by_name('zip')
         dm.build_data_model()
 
-        abszip = dm.pkzip.get_clone('ZIP')
+        abszip = dm.get_atom('ZIP')
         abszip.set_current_conf('ABS', recursive=True)
 
         # We generate a ZIP file from the model only (no real ZIP file)
@@ -3315,7 +3318,8 @@ class TestDataModel(unittest.TestCase):
                              flen_before - flen_after)
             self.assertEqual(struct.unpack('<L', csz_after)[0], len(NEWVAL))
 
-        for n, pkzip in dm.zip_dict.items():
+        zip_dict = dm.import_file_contents(extension='zip')
+        for n, pkzip in zip_dict.items():
 
             zip_buff = pkzip.to_bytes()
             # pkzip.show(raw_limit=400)
@@ -3489,7 +3493,7 @@ class TestFMK(unittest.TestCase):
             if d is not None:
                 fmk._log_data(d)
                 print("\n---[ Pretty Print ]---\n")
-                d.pretty_print()
+                d.show()
                 fmk.cleanup_dmaker(dmaker_type=dmaker_type, reset_existing_seed=True)
             else:
                 raise ValueError("\n***WARNING: the sequence {!r} returns {!r}!".format(act, d))

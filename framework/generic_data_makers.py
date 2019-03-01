@@ -1322,18 +1322,24 @@ class d_operate_on_nodes(Disruptor):
                           'the disruptor should apply.', None, str),
                  'value': ('The new value to inject within the data.', '', str),
                  'constraints': ('Constraints for the absorption of the new value.', AbsNoCsts(), AbsCsts),
+                 'multi_mod': ('Dictionary of <path>:<item> pairs to change multiple nodes with '
+                             'diferent values. <item> can be either only the new <value> or a '
+                             'tuple (<value>,<abscsts>) if new constraint for absorption is '
+                             'needed', None, dict),
                  'clone_node': ('If True the dmaker will always return a copy ' \
                                 'of the node. (For stateless disruptors dealing with ' \
                                 'big data it can be useful to it to False.)', False, bool)})
 class d_modify_nodes(Disruptor):
-    '''
-    Change the content of the nodes specified by the regexp path with
-    the value privided as a parameter (use *node absorption*
-    infrastructure). If no path is provided, the root node will be
-    used.
+    """
+    Perform modifications on the provided data. Two ways are possible:
 
-    Constraints can also be provided for absorption of the new value.
-    '''
+    - Either the change is performed on the content of the nodes specified by the `path`
+      parameter with the new `value` provided, and the optional constraints for the
+      absorption (use *node absorption* infrastructure);
+
+    - Or the changed is performed based on a dictionary provided through the parameter `multi_mod`
+
+    """
     def setup(self, dm, user_input):
         return True
 
@@ -1343,18 +1349,31 @@ class d_modify_nodes(Disruptor):
             prev_data.add_info('INVALID INPUT')
             return prev_data
 
-        if self.path:
-            l = prev_content.get_reachable_nodes(path_regexp=self.path)
-            if not l:
-                prev_data.add_info('INVALID INPUT')
-                return prev_data
-
-            for n in l:
-                status, off, size, name = n.absorb(self.value, constraints=self.constraints)
-                self._add_info(prev_data, n, status, size)
+        if self.multi_mod:
+            change_dict = self.multi_mod
         else:
-            status, off, size, name = prev_content.absorb(self.value, constraints=self.constraints)
-            self._add_info(prev_data, prev_content, status, size)
+            change_dict = {self.path: (self.value, self.constraints)}
+
+        for path, item in change_dict.items():
+            if isinstance(item, (tuple, list)):
+                assert len(item) == 2
+                new_value, new_csts = item
+            else:
+                new_value = item
+                new_csts = AbsNoCsts()
+
+            if path:
+                l = prev_content.get_reachable_nodes(path_regexp=path)
+                if not l:
+                    prev_data.add_info('INVALID INPUT')
+                    return prev_data
+
+                for n in l:
+                    status, off, size, name = n.absorb(new_value, constraints=new_csts)
+                    self._add_info(prev_data, n, status, size)
+            else:
+                status, off, size, name = prev_content.absorb(new_value, constraints=new_csts)
+                self._add_info(prev_data, prev_content, status, size)
 
         prev_content.freeze()
 
@@ -1378,6 +1397,43 @@ class d_modify_nodes(Disruptor):
             else:
                 remaining = self.value[size:]
             prev_data.add_info("remaining:      '{!s}'".format(remaining))
+
+
+@disruptor(tactics, dtype="CALL", weight=4,
+           args={'func': ('The function that will be called with a node as its first parameter, '
+                          'and provided optionnaly with addtionnal parameters if @params is set.',
+                          lambda x:x,
+                          (types.MethodType, types.FunctionType)), # python3, python2
+                 'params': ('Tuple of parameters that will be provided to the function.',
+                            None, tuple) })
+class d_call_function(Disruptor):
+    """
+    Call the function provided with the first parameter being the Data() object received as
+    input of this disruptor, and optionally with additional parameters if @params is set. The
+    function should return a Data() object.
+
+    The signature of the function should be compatible with:
+
+    `func(data, *args) --> Data()`
+
+    """
+
+    def disrupt_data(self, dm, target, prev_data):
+        try:
+            if self.params:
+                new_data = self.func(prev_data, *self.params)
+            else:
+                new_data = self.func(prev_data)
+        except:
+            new_data = prev_data
+            new_data.add_info("an error occurred while executing the user function '{!r}'".format(self.func))
+        else:
+            new_data.add_info("called function: {!r}".format(self.func))
+            if self.params:
+                new_data.add_info("additional parameters provided: {:s}"
+                                  .format(', '.join((str(x) for x in self.params))))
+
+        return new_data
 
 
 @disruptor(tactics, dtype="COPY", weight=4,

@@ -1175,7 +1175,7 @@ class PDF_DataModel(DataModel):
                
         PDFObj.external_pdf_objs = gather_pdf_objects()
 
-        e_jpg = self.get_external_atom(dm_name='jpg', data_id='jpg_00')
+        e_jpg = self.get_external_atom(dm_name='jpg', data_id='JPG_00')
 
         PDFObj.jpg_node = e_jpg
 
@@ -1213,6 +1213,7 @@ if __name__ == "__main__":
 
     from framework.plumbing import *
     fmk = FmkPlumbing()
+    fmk.start()
 
     dm = data_model
     dm.load_data_model(fmk._name2dm)

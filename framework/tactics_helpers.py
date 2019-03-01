@@ -58,24 +58,14 @@ class Tactics(object):
             for name, attrs in self.get_disruptors_list(dtype).items():
                 attrs['obj'].set_exportable_fmk_ops(fmkops)
 
-    # @property
-    # def knowledge_source(self):
-    #     return self._knowledge_source
-    #
-    # @knowledge_source.setter
-    # def knowledge_source(self, val):
-    #     self._knowledge_source = val
-    #     for dtype in self.generator_types:
-    #         for name, attrs in self.get_generators_list(dtype).items():
-    #             attrs['obj'].knowledge_source = val
-    #     for dtype in self.disruptor_types:
-    #         for name, attrs in self.get_disruptors_list(dtype).items():
-    #             attrs['obj'].knowledge_source = val
+    @staticmethod
+    def scenario_ref_from(scenario):
+        return 'SC_' + scenario.name.upper()
 
     def register_scenarios(self, *scenarios):
         for sc in scenarios:
             dyn_generator_from_scenario.scenario = sc
-            dmaker_type = 'SC_' + sc.name.upper()
+            dmaker_type = self.scenario_ref_from(sc)
             gen_cls_name = 'g_' + sc.name.lower()
             gen = dyn_generator_from_scenario(gen_cls_name, (DynGeneratorFromScenario,), {})()
             self.register_new_generator(gen_cls_name, gen, weight=1, dmaker_type=dmaker_type,
@@ -384,58 +374,6 @@ class Tactics(object):
                   " \_ weight: %d\n" % self.get_generator_weight(dmaker_type, generator_name) + \
                   " \_ valid data: %r\n" % self.get_generator_validness(dmaker_type, generator_name)
               )
-
-
-class UI(object):
-    '''
-    Once initialized, attributes cannot be modified
-    '''
-    def __init__(self, **kwargs):
-        self._inputs = {}
-        for k, v in kwargs.items():
-            self._inputs[k] = v
-
-    # for python2 compatibility
-    def __nonzero__(self):
-        return bool(self._inputs)
-
-    # for python3 compatibility
-    def __bool__(self):
-        return bool(self._inputs)
-
-    def get_inputs(self):
-        return self._inputs
-
-    def is_attrs_defined(self, *names):
-        for n in names:
-            if n not in self._inputs:
-                return False
-        return True
-
-    def set_user_inputs(self, user_inputs):
-        assert isinstance(user_inputs, dict)
-        self._inputs = user_inputs
-
-    def check_conformity(self, valid_args):
-        for arg in self._inputs:
-            if arg not in valid_args:
-                return False, arg
-        return True, None
-
-    def __getattr__(self, name):
-        if name in self._inputs:
-            return self._inputs[name]
-        else:
-            return None
-
-    def __str__(self):
-        if self._inputs:
-            ui = '['
-            for k, v in self._inputs.items():
-                ui += "{:s}={!r},".format(k, v)
-            return ui[:-1]+']'
-        else:
-            return '[ ]'
 
 
 def _user_input_conformity(self, user_input, _args_desc):
@@ -986,7 +924,7 @@ class DynGeneratorFromScenario(Generator):
         cbkops = CallBackOps()
         for desc in self.step.periodic_to_set:
             cbkops.add_operation(CallBackOps.Add_PeriodicData, id=id(desc),
-                                 param=desc.data, period=desc.period)
+                                 param=desc, period=desc.period)
 
         for periodic_id in self.step.periodic_to_clear:
             cbkops.add_operation(CallBackOps.Del_PeriodicData, id=periodic_id)

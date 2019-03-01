@@ -29,6 +29,7 @@ import collections
 class FeedbackSource(object):
 
     def __init__(self, src, subref=None, reliability=None, related_tg=None):
+        self._subref = subref
         self._name = str(src) if subref is None else str(src) + ' - ' + str(subref)
         self._obj = src
         self._reliability = reliability

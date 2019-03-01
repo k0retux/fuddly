@@ -21,9 +21,13 @@
 #
 ################################################################################
 
+from __future__ import print_function
+
 import functools
 
 from framework.knowledge.information import *
+from libs.utils import Term
+
 import libs.debug_facility as dbg
 
 if dbg.KNOW_DEBUG:
@@ -56,29 +60,45 @@ MID_SIMILAR = SimilarityMeasure(level=8)
 
 
 class FeedbackHandler(object):
-    '''
+    """
     A feedback handler extract information from binary data.
-    '''
+    """
 
-    def notify_data_sending(self, data_list, timestamp, target):
-        '''
+    def __init__(self, new_window=False, new_window_title=None, xterm_prg_name='x-terminal-emulator'):
+        """
+        Args:
+            new_window: If `True`, a new terminal emulator is created, enabling the decoder to use
+              it for display via the methods `print()` and `print_nl()`
+
+            xterm_prg_name: name of the terminal emulator program to be started
+        """
+        self._new_window = new_window
+        self._new_window_title = new_window_title
+        self._xterm_prg_name = xterm_prg_name
+        self._s = None
+        self.term = None
+
+    def notify_data_sending(self, current_dm, data_list, timestamp, target):
+        """
         *** To be overloaded ***
 
         This function is called when data have been sent. It enables to process feedback relatively
         to previously sent data.
 
         Args:
+            current_dm (:class:`framework.data_model.DataModel`): current loaded DataModel
             data_list (list): list of :class:`framework.data.Data` that were sent
             timestamp (datetime): date when data was sent
             target (Target): target to which data was sent
-        '''
+        """
         pass
 
-    def extract_info_from_feedback(self, source, timestamp, content, status):
-        '''
+    def extract_info_from_feedback(self, current_dm, source, timestamp, content, status):
+        """
         *** To be overloaded ***
 
         Args:
+            current_dm (:class:`framework.data_model.DataModel`): current loaded DataModel
             source (:class:`framework.knowledge.feedback_collector.FeedbackSource`): source of the feedback
             timestamp (datetime): date of reception of the feedback
             content (bytes): binary data to process
@@ -86,11 +106,11 @@ class FeedbackHandler(object):
 
         Returns:
             Info: a set of :class:`.information.Info` or only one
-        '''
+        """
         return None
 
     def estimate_last_data_impact_uniqueness(self):
-        '''
+        """
         *** To be overloaded ***
 
         Estimate the similarity of the consequences triggered by the current data sending
@@ -99,10 +119,42 @@ class FeedbackHandler(object):
 
         Returns:
             SimilarityMeasure: provide an estimation of impact similarity
-        '''
+        """
         return UNIQUE
 
-    def process_feedback(self, source, timestamp, content, status):
+    def _start(self):
+        self._s = ''
+        if self._new_window:
+            nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
+            self.term = Term(name=nm, xterm_prg_name=self._xterm_prg_name,
+                             keepterm=True)
+            self.term.start()
+
+    def _stop(self):
+        self._s = None
+        if self._new_window and self.term is not None:
+            self.term.stop()
+
+    def print(self, msg):
+        if self._new_window:
+            self.term.print(msg)
+        else:
+            print(msg)
+
+    def print_nl(self, msg):
+        if self._new_window:
+            self.term.print_nl(msg)
+        else:
+            print(msg)
+
+    def collect_data(self, s):
+        self._s += s
+
+    def flush_collector(self):
+        self.print(self._s)
+        self._s = ''
+
+    def process_feedback(self, current_dm, source, timestamp, content, status):
         info_set = set()
         truncated_content = None if content is None else content[:60]
 
@@ -113,7 +165,7 @@ class FeedbackHandler(object):
               '   content: {!r} ...\n'
               '    status: {!s}'.format(source, timestamp, truncated_content, status))
 
-        info = self.extract_info_from_feedback(source, timestamp, content, status)
+        info = self.extract_info_from_feedback(current_dm, source, timestamp, content, status)
         if info is not None:
             if isinstance(info, list):
                 for i in info:
@@ -126,7 +178,7 @@ class FeedbackHandler(object):
 
 class TestFbkHandler(FeedbackHandler):
 
-    def extract_info_from_feedback(self, source, timestamp, content, status):
+    def extract_info_from_feedback(self, current_dm, source, timestamp, content, status):
         if content is None:
             return None
         elif b'Linux' in content:

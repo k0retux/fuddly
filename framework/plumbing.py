@@ -38,6 +38,8 @@ import datetime
 import time
 import signal
 
+from functools import wraps
+
 from framework.database import FeedbackGate
 from framework.knowledge.feedback_collector import FeedbackSource
 from framework.error_handling import *
@@ -146,8 +148,9 @@ class EnforceOrder(object):
 
     current_state = None
 
-    def __init__(self, accepted_states=[], final_state=None,
+    def __init__(self, accepted_states=None, final_state=None,
                  initial_func=False, always_callable=False, transition=None):
+        accepted_states = [] if accepted_states is None else accepted_states
         if initial_func:
             self.accepted_states = accepted_states + [None]
         else:
@@ -157,7 +160,7 @@ class EnforceOrder(object):
         self.transition = transition
 
     def __call__(self, func):
-        
+        @wraps(func)
         def wrapped_func(*args, **kargs):
             if not self.always_callable and EnforceOrder.current_state not in self.accepted_states:
                 print(colorize("[INVALID CALL] function '%s' cannot be called in the state '%r'!" \
@@ -179,7 +182,7 @@ class EnforceOrder(object):
 class FmkTask(threading.Thread):
 
     def __init__(self, name, func, arg, period=None,
-                 error_func=lambda x: x, cleanup_func=lambda x: None):
+                 error_func=lambda x: x, cleanup_func=lambda: None):
         threading.Thread.__init__(self)
         self._name = name
         self._func = func
@@ -219,8 +222,13 @@ class FmkPlumbing(object):
     Defines the methods to operate every sub-systems of fuddly
     '''
 
-    def __init__(self, exit_on_error=False, debug_mode=False):
+    def __init__(self, exit_on_error=False, debug_mode=False, quiet=False):
         self._debug_mode = debug_mode
+        self._exit_on_error = exit_on_error
+        self._quiet = quiet
+
+        self.prj_list = []
+        self.dm_list = []
 
         self._prj = None
         self.dm = None
@@ -233,35 +241,12 @@ class FmkPlumbing(object):
 
         self.mon = None
 
-        self.prj_list = []
-        self.dm_list = []
-
-        self._hc_timeout = {}  # health-check tiemout, further initialized as a dict (tg -> hc_timeout)
-        self._hc_timeout_max = None
-
         self.__started = False
         self.__first_loading = True
 
-        self._current_sent_date = None
-
-        self.error = False
-        self.fmk_error = []
-        self._sending_error = None
-        self._stop_sending = None
-
-        self.__tg_enabled = False
-        self.__prj_to_be_reloaded = False
-        self._dm_to_be_reloaded = False
-
         self._exportable_fmk_ops = ExportableFMKOps(self)
-
-        self._generic_tactics = framework.generic_data_makers.tactics
-        self._generic_tactics.set_exportable_fmk_ops(self._exportable_fmk_ops)
-
-        self._tactics = None
-
-        self.import_text_reg = re.compile('(.*?)(#####)', re.S)
-        self.check_clone_re = re.compile('(.*)#(\w{1,20})')
+        self._name2dm = {}
+        self._name2prj = {}
 
         self._prj_dict = {}
         self.__st_dict = {}
@@ -276,11 +261,35 @@ class FmkPlumbing(object):
         self.__dyngenerators_created = {}
         self.__dynamic_generator_ids = {}
 
-        self._name2dm = {}
-        self._name2prj = {}
-
         self._task_list = {}
         self._task_list_lock = threading.Lock()
+
+        self._hc_timeout = {}  # health-check tiemout, further initialized as a dict (tg -> hc_timeout)
+        self._hc_timeout_max = None
+
+        self._current_sent_date = None
+
+        self.error = False
+        self.fmk_error = []
+        self._sending_error = None
+        self._stop_sending = None
+
+        self.__tg_enabled = False
+        self.__prj_to_be_reloaded = False
+        self._dm_to_be_reloaded = False
+
+        self._generic_tactics = framework.generic_data_makers.tactics
+        self._generic_tactics.set_exportable_fmk_ops(self._exportable_fmk_ops)
+
+        self._tactics = None
+
+    def __str__(self):
+        return 'Fuddly FmK'
+
+    @EnforceOrder(initial_func=True)
+    def start(self):
+        self.import_text_reg = re.compile('(.*?)(#####)', re.S)
+        self.check_clone_re = re.compile('(.*)#(\w{1,20})')
 
         self.config = config(self, path=[config_folder])
         def save_config():
@@ -307,31 +316,35 @@ class FmkPlumbing(object):
 
         self.import_successfull = True
         self.get_data_models()
-        if exit_on_error and not self.import_successfull:
+        if self._exit_on_error and not self.import_successfull:
             self.fmkDB.stop()
             raise DataModelDefinitionError('Error with some DM imports')
 
         self.get_projects()
-        if exit_on_error and not self.import_successfull:
+        if self._exit_on_error and not self.import_successfull:
             self.fmkDB.stop()
             raise ProjectDefinitionError('Error with some Project imports')
 
-        print(colorize(FontStyle.BOLD + '='*44 + '[ Fuddly Data Folder Information ]==\n',
-                       rgb=Color.FMKINFOGROUP))
+        if not self._quiet:
+            print(colorize(FontStyle.BOLD + '='*44 + '[ Fuddly Data Folder Information ]==\n',
+                           rgb=Color.FMKINFOGROUP))
 
-        if hasattr(gr, 'new_fuddly_data_folder'):
+        if not self._quiet and hasattr(gr, 'new_fuddly_data_folder'):
             print(colorize(FontStyle.BOLD + \
                            ' *** New Fuddly Data Folder Has Been Created ***\n',
                            rgb=Color.FMKINFO_HLIGHT))
 
-        print(colorize(' --> path: {:s}'.format(gr.fuddly_data_folder),
-                       rgb=Color.FMKINFO))
-        print(colorize(' --> contains: - fmkDB.db, logs, imported/exported data, ...\n'
-                       '               - user projects and user data models',
-                       rgb=Color.FMKSUBINFO))
+        if not self._quiet:
+            print(colorize(' --> path: {:s}'.format(gr.fuddly_data_folder),
+                           rgb=Color.FMKINFO))
+            print(colorize(' --> contains: - fmkDB.db, logs, imported/exported data, ...\n'
+                           '               - user projects and user data models',
+                           rgb=Color.FMKSUBINFO))
 
-    def __str__(self):
-        return 'Fuddly FmK'
+    @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
+    def stop(self):
+        self._stop_fmk_plumbing()
+        self.fmkDB.stop()
 
     @property
     def prj(self):
@@ -461,18 +474,15 @@ class FmkPlumbing(object):
             self._cleanup_all_dmakers()
 
             orig_dm = self.dm
-            for idx, dm_ref in enumerate(copy.copy(dm_list)):
-                if isinstance(dm_ref, str):
-                    dm_name = dm_ref
-                    dm_obj = self.get_data_model_by_name(dm_ref)
-                else:
-                    dm_name = dm_ref.name
-                    dm_obj = dm_ref
+            for dm_name in dm_list:
+                assert isinstance(dm_name, str)
+                # we always take the DM from self.dm_list, as self.__dm_rld_args_dict[self.dm][1]
+                # could have obsolete references
+                dm_obj = self.get_data_model_by_name(dm_name)
 
                 name_list.append(dm_name)
                 self.dm = dm_obj
                 ok = self._reload_dm()
-                dm_list[idx] = self.dm
 
                 if not ok:
                     self.dm = orig_dm
@@ -495,12 +505,6 @@ class FmkPlumbing(object):
                 self.__add_data_model(dm_params['dm'], dm_params['tactics'],
                                       dm_params['dm_rld_args'], reload_dm=True)
                 self.__dyngenerators_created[dm_params['dm']] = False
-                try:
-                    i = self.dm_list.index(self.dm)
-                except ValueError:
-                    pass
-                else:
-                    self.dm_list[i] = dm_params['dm']
                 self.dm = dm_params['dm']
             else:
                 return False
@@ -652,7 +656,7 @@ class FmkPlumbing(object):
         return ret
 
     @EnforceOrder(initial_func=True, final_state='get_projs')
-    def get_data_models(self):
+    def get_data_models(self, fmkDB_update=True):
 
         data_models = collections.OrderedDict()
         def populate_data_models(path):
@@ -683,11 +687,13 @@ class FmkPlumbing(object):
 
         rexp_strategy = re.compile("(.*)_strategy\.py$")
 
-        print(colorize(FontStyle.BOLD + "="*63+"[ Data Models ]==", rgb=Color.FMKINFOGROUP))
+        if not self._quiet:
+            print(colorize(FontStyle.BOLD + "="*63+"[ Data Models ]==", rgb=Color.FMKINFOGROUP))
 
         for dname, file_list in data_models.items():
-            print(colorize(">>> Look for Data Models within '%s' directory" % dname,
-                           rgb=Color.FMKINFOSUBGROUP))
+            if not self._quiet:
+                print(colorize(">>> Look for Data Models within '%s' directory" % dname,
+                               rgb=Color.FMKINFOSUBGROUP))
             prefix = dname.replace(os.sep, '.') + '.'
             for f in file_list:
                 res = rexp_strategy.match(f)
@@ -701,14 +707,16 @@ class FmkPlumbing(object):
                                               dm_params['dm_rld_args'],
                                               reload_dm=False)
                         self.__dyngenerators_created[dm_params['dm']] = False
-                        # populate FMK DB
-                        self._fmkDB_insert_dm_and_dmakers(dm_params['dm'].name, dm_params['tactics'])
+                        if fmkDB_update:
+                            # populate FMK DB
+                            self._fmkDB_insert_dm_and_dmakers(dm_params['dm'].name, dm_params['tactics'])
                     else:
                         self.import_successfull = False
 
-        self.fmkDB.insert_data_model(Database.DEFAULT_DM_NAME)
-        self.fmkDB.insert_dmaker(Database.DEFAULT_DM_NAME, Database.DEFAULT_GTYPE_NAME,
-                                 Database.DEFAULT_GEN_NAME, True, True)
+        if fmkDB_update:
+            self.fmkDB.insert_data_model(Database.DEFAULT_DM_NAME)
+            self.fmkDB.insert_dmaker(Database.DEFAULT_DM_NAME, Database.DEFAULT_GTYPE_NAME,
+                                     Database.DEFAULT_GEN_NAME, True, True)
 
     def __import_dm(self, prefix, name, reload_dm=False):
 
@@ -725,6 +733,9 @@ class FmkPlumbing(object):
                 exec('import ' + prefix + name)
                 exec('import ' + prefix + name + '_strategy')
         except:
+            if self._quiet:
+                return None
+
             if reload_dm:
                 print(colorize("*** Problem during reload of '%s.py' and/or '%s_strategy.py' ***" % (name, name), rgb=Color.ERROR))
             else:
@@ -743,12 +754,14 @@ class FmkPlumbing(object):
             try:
                 dm_params['dm'] = eval(prefix + name + '.data_model')
             except:
-                print(colorize("*** ERROR: '%s.py' shall contain a global variable 'data_model' ***" % (name), rgb=Color.ERROR))
+                if not self._quiet:
+                    print(colorize("*** ERROR: '%s.py' shall contain a global variable 'data_model' ***" % (name), rgb=Color.ERROR))
                 return None
             try:
                 dm_params['tactics'] = eval(prefix + name + '_strategy' + '.tactics')
             except:
-                print(colorize("*** ERROR: '%s_strategy.py' shall contain a global variable 'tactics' ***" % (name), rgb=Color.ERROR))
+                if not self._quiet:
+                    print(colorize("*** ERROR: '%s_strategy.py' shall contain a global variable 'tactics' ***" % (name), rgb=Color.ERROR))
                 return None
 
             try:
@@ -769,10 +782,11 @@ class FmkPlumbing(object):
                 dm_params['dm'].name = name
             self._name2dm[dm_params['dm'].name] = dm_params['dm']
 
-            if reload_dm:
-                print(colorize("*** Data Model '%s' updated ***" % dm_params['dm'].name, rgb=Color.DATA_MODEL_LOADED))
-            else:
-                print(colorize("*** Found Data Model: '%s' ***" % dm_params['dm'].name, rgb=Color.FMKSUBINFO))
+            if not self._quiet:
+                if reload_dm:
+                    print(colorize("*** Data Model '%s' updated ***" % dm_params['dm'].name, rgb=Color.DATA_MODEL_LOADED))
+                else:
+                    print(colorize("*** Found Data Model: '%s' ***" % dm_params['dm'].name, rgb=Color.FMKSUBINFO))
 
             return dm_params
 
@@ -803,10 +817,8 @@ class FmkPlumbing(object):
         self.__dm_rld_args_dict[data_model] = dm_rld_args
 
 
-
-
     @EnforceOrder(accepted_states=['get_projs'], final_state='20_load_prj')
-    def get_projects(self):
+    def get_projects(self, fmkDB_update=True):
 
         projects = collections.OrderedDict()
         def populate_projects(path):
@@ -837,11 +849,13 @@ class FmkPlumbing(object):
 
         rexp_proj = re.compile("(.*)_proj\.py$")
 
-        print(colorize(FontStyle.BOLD + "="*66+"[ Projects ]==", rgb=Color.FMKINFOGROUP))
+        if not self._quiet:
+            print(colorize(FontStyle.BOLD + "="*66+"[ Projects ]==", rgb=Color.FMKINFOGROUP))
 
         for dname, file_list in projects.items():
-            print(colorize(">>> Look for Projects within '%s' Directory" % dname,
-                           rgb=Color.FMKINFOSUBGROUP))
+            if not self._quiet:
+                print(colorize(">>> Look for Projects within '%s' Directory" % dname,
+                               rgb=Color.FMKINFOSUBGROUP))
             prefix = dname.replace(os.sep, '.') + '.'
             for f in file_list:
                 res = rexp_proj.match(f)
@@ -853,7 +867,8 @@ class FmkPlumbing(object):
                     self._add_project(prj_params['project'], prj_params['target'],
                                       prj_params['logger'], prj_params['prj_rld_args'],
                                       reload_prj=False)
-                    self.fmkDB.insert_project(prj_params['project'].name)
+                    if fmkDB_update:
+                        self.fmkDB.insert_project(prj_params['project'].name)
                 else:
                     self.import_successfull = False
 
@@ -870,6 +885,9 @@ class FmkPlumbing(object):
             else:
                 exec('import ' + prefix + name + '_proj')
         except:
+            if self._quiet:
+                return None
+
             if reload_prj:
                 print(colorize("*** Problem during reload of '%s_proj.py' ***" % (name), rgb=Color.ERROR))
             else:
@@ -888,7 +906,8 @@ class FmkPlumbing(object):
             try:
                 prj_params['project'] = eval(prefix + name + '_proj' + '.project')
             except:
-                print(colorize("*** ERROR: '%s_proj.py' shall contain a global variable 'project' ***" % (name), rgb=Color.ERROR))
+                if not self._quiet:
+                    print(colorize("*** ERROR: '%s_proj.py' shall contain a global variable 'project' ***" % (name), rgb=Color.ERROR))
                 return None
 
             try:
@@ -932,10 +951,11 @@ class FmkPlumbing(object):
                 prj_params['project'].name = name
             self._name2prj[prj_params['project'].name] = prj_params['project']
 
-            if reload_prj:
-                print(colorize("*** Project '%s' updated ***" % prj_params['project'].name, rgb=Color.FMKSUBINFO))
-            else:
-                print(colorize("*** Found Project: '%s' ***" % prj_params['project'].name, rgb=Color.FMKSUBINFO))
+            if not self._quiet:
+                if reload_prj:
+                    print(colorize("*** Project '%s' updated ***" % prj_params['project'].name, rgb=Color.FMKSUBINFO))
+                else:
+                    print(colorize("*** Found Project: '%s' ***" % prj_params['project'].name, rgb=Color.FMKSUBINFO))
 
             return prj_params
 
@@ -1076,6 +1096,9 @@ class FmkPlumbing(object):
                 self.mon.wait_for_probe_initialization()
                 self.prj.start()
 
+                if self.prj.project_scenarios:
+                    self._generic_tactics.register_scenarios(*self.prj.project_scenarios)
+
                 if need_monitoring:
                     time.sleep(0.5)
                     self.monitor_probes(force_record=True)
@@ -1090,6 +1113,12 @@ class FmkPlumbing(object):
 
     def _stop_fmk_plumbing(self):
         self.flush_errors()
+
+        if self.prj and self.prj.project_scenarios:
+            for sc_ref in [Tactics.scenario_ref_from(sc) for sc in self.prj.project_scenarios]:
+                if sc_ref in self._generic_tactics.generators:
+                    del self._generic_tactics.generators[sc_ref]
+
         if self._is_started():
             if self.is_target_enabled():
                 self.log_target_residual_feedback()
@@ -1112,12 +1141,6 @@ class FmkPlumbing(object):
             self._stop()
 
             signal.signal(signal.SIGINT, sig_int_handler)
-
-
-    @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
-    def exit_fmk(self):
-        self._stop_fmk_plumbing()
-        self.fmkDB.stop()
 
     @EnforceOrder(accepted_states=['25_load_dm','S1','S2'])
     def load_targets(self, tg_ids):
@@ -1298,8 +1321,6 @@ class FmkPlumbing(object):
             self._tactics.clear_disruptor_clones()
 
         self._tactics = self.__st_dict[dm]
-        if self.prj.project_scenarios:
-            self._tactics.register_scenarios(*self.prj.project_scenarios)
 
         self.mon = self.__monitor_dict[prj]
         self.mon.set_targets(self.targets)
@@ -1397,7 +1418,7 @@ class FmkPlumbing(object):
                 else:
                     new_tactics.disruptors[k] = v
             for k, v in tactics.generators.items():
-                if k in new_tactics.disruptors:
+                if k in new_tactics.generators:
                     raise ValueError("the generator '{:s}' exists already".format(k))
                 else:
                     new_tactics.generators[k] = v
@@ -1409,8 +1430,9 @@ class FmkPlumbing(object):
 
         if reload_dm or not is_dm_name_exists:
             self.fmkDB.insert_data_model(new_dm.name)
+            dm_name_list = [dm.name for dm in dm_list]
             self.__add_data_model(new_dm, new_tactics,
-                                  [None, dm_list],
+                                  dm_rld_args=[None, dm_name_list],
                                   reload_dm=reload_dm)
 
             # In this case DynGens have already been generated through
@@ -1426,6 +1448,7 @@ class FmkPlumbing(object):
 
         self.dm = new_dm
         self.prj.set_data_model(self.dm)
+
         for tg in self.targets.values():
             tg.set_data_model(self.dm)
         if self.mon:
@@ -1556,7 +1579,7 @@ class FmkPlumbing(object):
     def set_fuzz_delay(self, delay, do_record=False):
         if delay >= 0 or delay == -1:
             self._delay = delay
-            self.lg.log_fmk_info('Fuzz delay = {:.1f}s'.format(self._delay), do_record=do_record)
+            self.lg.log_fmk_info('Fuzz delay = {:.2f}s'.format(self._delay), do_record=do_record)
             return True
         else:
             self.lg.log_fmk_info('Wrong delay value!', do_record=False)
@@ -1610,9 +1633,12 @@ class FmkPlumbing(object):
             # This case occurs in self._do_sending_and_logging_init()
             # if the Target has not defined a feedback_timeout (like the EmptyTarget)
             if tg_id is None:
+                for tg in self.targets.values():
+                    tg.set_feedback_timeout(None)
                 self._recompute_health_check_timeout(timeout, max_sending_delay, do_show=do_show)
             else:
                 tg = self.targets[tg_id]
+                tg.set_feedback_timeout(None)
                 self._recompute_health_check_timeout(timeout, tg.sending_delay, target=tg, do_show=do_show)
 
         elif timeout >= 0:
@@ -1736,6 +1762,7 @@ class FmkPlumbing(object):
         return data_list
 
     def _do_after_sending_data(self, data_list):
+        self._recovered_tgs = None
         self._handle_data_callbacks(data_list, hook=HOOK.after_sending)
         self.prj.notify_data_sending(data_list, self._current_sent_date, self.targets)
 
@@ -1756,8 +1783,10 @@ class FmkPlumbing(object):
         blocked_data = list(filter(lambda x: x.is_blocked(), data_list))
         data_list = list(filter(lambda x: not x.is_blocked(), data_list))
 
-        user_interrupt, go_on = self._collect_residual_feedback(cond1=(self._burst_countdown == self._burst),
-                                                                cond2=(not blocked_data))
+        if self._burst_countdown == self._burst:
+            user_interrupt, go_on = self._collect_residual_feedback(force_mode=False)
+        else:
+            user_interrupt, go_on = False, True
 
         if blocked_data:
             self._handle_data_callbacks(blocked_data, hook=HOOK.after_fbk)
@@ -1770,59 +1799,53 @@ class FmkPlumbing(object):
         else:
             raise TargetFeedbackError
 
-    def collect_residual_feedback(self):
-        if self._collect_residual_feedback(True, True)[0]:
+    def collect_residual_feedback(self, timeout=0):
+        if self._collect_residual_feedback(force_mode=True, timeout=timeout)[0]:
             raise UserInterruption
 
-    def _collect_residual_feedback(self, cond1, cond2):
+    def _collect_residual_feedback(self, force_mode=False, timeout=0):
         # If feedback_timeout = 0 then we don't consider residual feedback.
         # We try to avoid unnecessary latency in this case, as well as
         # to avoid retrieving some feedback that could be a trigger for sending the next data
         # (e.g., with a NetworkTarget in server_mode + wait_for_client)
         targets_to_retrieve_fbk = {}
-        do_residual_fbk_gathering = False
+        do_residual_tg_fbk_gathering = False
         for tg_id, tg in self.targets.items():
-            cond = True if tg.feedback_timeout is None else tg.feedback_timeout > 0
+            cond = True if tg.feedback_timeout is None or force_mode else tg.feedback_timeout > 0
             if cond:
-                do_residual_fbk_gathering = True
+                do_residual_tg_fbk_gathering = True
                 targets_to_retrieve_fbk[tg_id] = tg
 
-        go_on = True
+        tg_ready = True
+        log_no_error = True
         fbk_timeout = {}
         user_interrupt = False
-        if cond1 and do_residual_fbk_gathering:
+        if do_residual_tg_fbk_gathering:
             # log residual just before sending new data to avoid
             # polluting feedback logs of the next emission
-            if cond2:
-                for tg in targets_to_retrieve_fbk.values():
-                    fbk_timeout[tg] = tg.feedback_timeout
-                # we change feedback timeout as the targets could use it to determine if they are
-                # ready to accept new data (check_target_readiness). For instance, the NetworkTarget
-                # launch a thread when collect_feedback_without_sending() is called for a duration
-                # of 'feedback_timeout'.
-                self.set_feedback_timeout(0, do_show=False)
 
             collected = False
             for tg in targets_to_retrieve_fbk.values():
-                if tg.collect_feedback_without_sending():
+                if tg.collect_pending_feedback(timeout=timeout):
+                    self._recovered_tgs = None
                     collected = True
 
             if collected:
                 # We have to make sure the targets are ready for sending data after
                 # collecting feedback.
-                ret = self.check_target_readiness()
+                ftimeout = None if timeout == 0 else timeout + 0.1
+                ret = self.check_target_readiness(forced_timeout=ftimeout)
                 user_interrupt = ret == -2
+                tg_ready = ret >= 0
 
-            go_on = self.log_target_residual_feedback()
-
-            if cond2:
-                for tg_id, tg in targets_to_retrieve_fbk.items():
-                    self.set_feedback_timeout(fbk_timeout[tg], tg_id=tg_id, do_show=False)
+            log_no_error = self.log_target_residual_feedback()
 
             for tg in targets_to_retrieve_fbk.values():
                 tg.cleanup()
 
         self.monitor_probes(prefix='Probe Status Before Sending Data')
+
+        go_on = tg_ready and log_no_error
 
         return user_interrupt, go_on
 
@@ -1988,7 +2011,11 @@ class FmkPlumbing(object):
 
                     final_data_tg_ids = self._vtg_to_tg(data)
                     for idx, obj in op[CallBackOps.Add_PeriodicData].items():
-                        data_desc, period = obj
+                        periodic_obj, period = obj
+                        data_desc = periodic_obj.data
+                        if periodic_obj.vtg_ids_list:
+                            final_data_tg_ids = self._vtg_to_tg(data, vtg_ids_list=periodic_obj.vtg_ids_list)
+
                         if isinstance(data_desc, DataProcess):
                             # In this case each time we send the periodic we walk through the process
                             # (thus, sending a new data each time)
@@ -2020,24 +2047,31 @@ class FmkPlumbing(object):
 
         return new_data_list
 
-    def _vtg_to_tg(self, data):
+    def _vtg_to_tg(self, data, vtg_ids_list=None):
         mapping = self.prj.scenario_target_mapping.get(data.scenario_dependence, None)
-        if data.tg_ids is None:
+        vtg_ids = data.tg_ids if vtg_ids_list is None else vtg_ids_list
+        if vtg_ids is None:
             tg_ids = mapping.get(None, self._tg_ids[0]) if mapping else self._tg_ids[0]
             tg_ids = [tg_ids]
         else:
             if mapping:
-                tg_ids = [mapping.get(tg_id, tg_id) for tg_id in data.tg_ids]
+                tg_ids = [mapping.get(tg_id, tg_id) for tg_id in vtg_ids]
             else:
-                tg_ids = data.tg_ids
+                tg_ids = vtg_ids
 
         valid_tg_ids = []
         for i in tg_ids:
             if i not in self._tg_ids:
-                self.set_error("WARNING: An access attempt occurs on a disabled target: '({:d}) {!s}' "
-                               "It will be redirected to the first enabled target."
-                               .format(i, self.get_available_targets()[i]),
-                                     code=Error.FmkWarning)
+                try:
+                    requested_tg_id = self.get_available_targets()[i]
+                except IndexError:
+                    self.set_error("WARNING: The provided target number '{:d}' does not exist ".format(i),
+                                   code=Error.FmkWarning)
+                else:
+                    self.set_error("WARNING: An access attempt occurs on a disabled target: '({:d}) {!s}' "
+                                   "It will be redirected to the first enabled target."
+                                   .format(i, requested_tg_id),
+                                   code=Error.FmkWarning)
                 i = self._tg_ids[0]
                 if self._debug_mode:
                     raise ValueError('Access attempt occurs on a disabled target')
@@ -2049,7 +2083,7 @@ class FmkPlumbing(object):
         data = self._handle_data_desc(data_desc)
         if data is not None:
             for tg in [self.targets[tg_id] for tg_id in tg_ids]:
-                tg.send_data_sync(data)
+                tg.send_data_sync(data, from_fmk=False)
         else:
             self.set_error(msg="Data descriptor handling returned 'None'!", code=Error.UserCodeError)
             raise DataProcessTermination
@@ -2121,11 +2155,19 @@ class FmkPlumbing(object):
         # means the previous feedback entries are obsolete.
         self.fmkDB.flush_current_feedback()
 
-        if len(data_list) > 1:
-            # the provided data_list can be changed after having called self._send_data()
-            multiple_data = True
-        else:
-            multiple_data = False
+        if self._burst_countdown == self._burst:
+            try:
+                max_fbk_timeout = max([tg.feedback_timeout for tg in self.targets.values()
+                                       if tg.feedback_timeout is not None])
+            except ValueError:
+                # empty list
+                max_fbk_timeout = 0
+            for tg in self.targets.values():
+                if tg not in self._currently_used_targets:
+                    tg.collect_pending_feedback(timeout=max_fbk_timeout)
+
+        # the provided data_list can be changed after having called self._send_data()
+        multiple_data = len(data_list) > 1
 
         if self._wkspace_enabled:
             for idx, dt in zip(range(len(data_list)), data_list):
@@ -2227,10 +2269,10 @@ class FmkPlumbing(object):
 
                     tg = self.targets[tg_id]
                     tg.add_pending_data(d)
-                    used_targets.append(tg)
+                    if tg not in used_targets:
+                        used_targets.append(tg)
 
-            seen = set()
-            self._currently_used_targets = [x for x in used_targets if not (x in seen or seen.add(x))]
+            self._currently_used_targets = used_targets
 
             for tg in self._currently_used_targets:
                 try:
@@ -2396,22 +2438,24 @@ class FmkPlumbing(object):
         self._current_sent_date = self.lg.start_new_log_entry(preamble=p)
 
     @EnforceOrder(accepted_states=['S2'])
-    def log_target_feedback(self):
+    def log_target_feedback(self, residual=False):
         collected_err, err_detected2 = None, False
         ok = True
         if self.__tg_enabled:
-            if self._burst > 1:
-                p = "::[ END BURST ]::\n"
+            if residual:
+                p = "*** RESIDUAL TARGET FEEDBACK ***"
+                e = "********************************"
             else:
-                p = None
+                p = "::[ END BURST ]::\n" if self._burst > 1 else None
+                e = None
             try:
-                collected_err = self.lg.log_collected_feedback(preamble=p)
+                collected_err = self.lg.log_collected_feedback(preamble=p, epilogue=e)
             except NotImplementedError:
                 pass
 
             for tg in self.targets.values():
                 err_detected1 = collected_err.get(tg, False) if collected_err else False
-                err_detected2 = self._log_directly_retrieved_target_feedback(tg=tg, preamble=p)
+                err_detected2 = self._log_directly_retrieved_target_feedback(tg=tg, preamble=p, epilogue=e)
                 go_on = self._recover_target(tg) if err_detected1 or err_detected2 else True
                 if not go_on:
                     ok = False
@@ -2420,25 +2464,7 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def log_target_residual_feedback(self):
-        collected_err, err_detected2 = None, False
-        ok = True
-        if self.__tg_enabled:
-            p = "*** RESIDUAL TARGET FEEDBACK ***"
-            e = "********************************"
-            try:
-                collected_err = self.lg.log_collected_feedback(preamble=p, epilogue=e)
-            except NotImplementedError:
-                pass
-
-            for tg in self.targets.values():
-                err_detected1 = collected_err.get(tg, False) if collected_err else False
-                err_detected2 = self._log_directly_retrieved_target_feedback(tg=tg,
-                                                                             preamble=p, epilogue=e)
-                go_on = self._recover_target(tg) if err_detected1 or err_detected2 else True
-                if not go_on:
-                    ok = False
-
-        return ok
+        return self.log_target_feedback(residual=True)
 
     def _log_directly_retrieved_target_feedback(self, tg, preamble=None, epilogue=None):
         """
@@ -2478,7 +2504,7 @@ class FmkPlumbing(object):
         return err_detected
 
     @EnforceOrder(accepted_states=['S2'])
-    def check_target_readiness(self):
+    def check_target_readiness(self, forced_timeout=None):
 
         if self.__tg_enabled:
             t0 = datetime.datetime.now()
@@ -2486,6 +2512,7 @@ class FmkPlumbing(object):
             signal.signal(signal.SIGINT, sig_int_handler)
             ret = 0
             tg = None
+            hc_timeout = self._hc_timeout_max if forced_timeout is None else forced_timeout
 
             # Wait until the target is ready or timeout expired
             try:
@@ -2493,7 +2520,7 @@ class FmkPlumbing(object):
                     while not tg.is_target_ready_for_new_data():
                         time.sleep(0.005)
                         now = datetime.datetime.now()
-                        if (now - t0).total_seconds() > self._hc_timeout_max:
+                        if (now - t0).total_seconds() > hc_timeout:
                             self.lg.log_target_feedback_from(
                                 source=FeedbackSource(self),
                                 content='*** Timeout! The target {!s} does not seem to be ready.'
@@ -3776,7 +3803,7 @@ class FmkShell(cmd.Cmd):
                 cont = input(msg)
             cont = cont.upper()
             if cont == 'Y' or cont == '':
-                self.fz.exit_fmk()
+                self.fz.stop()
                 return True
             else:
                 return False
@@ -4646,7 +4673,7 @@ class FmkShell(cmd.Cmd):
         '''
         Collect the residual feedback (received by the target and the probes)
         '''
-        self.fz.collect_residual_feedback()
+        self.fz.collect_residual_feedback(timeout=3)
         return False
 
 
@@ -5487,7 +5514,7 @@ class FmkShell(cmd.Cmd):
         return False
 
     def do_quit(self, line):
-        self.fz.exit_fmk()
+        self.fz.stop()
         return True
 
 

@@ -35,7 +35,7 @@ from framework.value_types import VT
 from framework.node import Env
 from framework.data_model import DataModel
 from framework.tactics_helpers import DataMaker
-from framework.scenario import ScenarioEnv
+from framework.scenario import Scenario, ScenarioEnv
 
 class Project(object):
 
@@ -78,7 +78,7 @@ class Project(object):
 
     def notify_data_sending(self, data_list, timestamp, target):
         for fh in self._fbk_handlers:
-            fh.notify_data_sending(data_list, timestamp, target)
+            fh.notify_data_sending(self.dm, data_list, timestamp, target)
 
     def trigger_feedback_handlers(self, source, timestamp, content, status):
         if not self._fbk_processing_enabled:
@@ -96,7 +96,7 @@ class Project(object):
                 continue
 
             for fh in self._fbk_handlers:
-                info = fh.process_feedback(*fbk_tuple)
+                info = fh.process_feedback(self.dm, *fbk_tuple)
                 if info:
                     self.knowledge_source.add_information(info)
 
@@ -124,8 +124,14 @@ class Project(object):
     def set_data_model(self, dm):
         self.dm = dm
 
-    def map_targets_to_scenario(self, scenario_name, target_mapping):
-        self.scenario_target_mapping[scenario_name] = target_mapping
+    def map_targets_to_scenario(self, scenario, target_mapping):
+        if isinstance(scenario, (list, tuple)):
+            for sc in scenario:
+                name = sc.name if isinstance(sc, Scenario) else sc
+                self.scenario_target_mapping[name] = target_mapping
+        else:
+            name = scenario.name if isinstance(scenario, Scenario) else scenario
+            self.scenario_target_mapping[name] = target_mapping
 
     def reset_target_mappings(self):
         self.scenario_target_mapping = {}
@@ -159,6 +165,9 @@ class Project(object):
         DataMaker.knowledge_source = self.knowledge_source
         ScenarioEnv.knowledge_source = self.knowledge_source
 
+        for fh in self._fbk_handlers:
+            fh._start()
+
         if self._fbk_processing_enabled:
             self._run_fbk_handling_thread = True
             self._feedback_fifo = queue.Queue()
@@ -179,6 +188,9 @@ class Project(object):
             if self._feedback_processing_thread:
                 self._feedback_processing_thread.join()
             self._feedback_fifo = None
+
+        for fh in self._fbk_handlers:
+            fh._stop()
 
     def get_operator(self, name):
         try:

@@ -29,9 +29,6 @@ from framework.value_types import *
 class HTTPModel(DataModel):
     name = 'HTTP'
 
-    def create_node_from_raw_data(self, data, idx, filename):
-        pass
-
     def build_data_model(self):
 
         OCTET = "\x00-\xFF"         # any 8-bit sequence of data

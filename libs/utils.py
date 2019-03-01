@@ -21,11 +21,60 @@
 #
 ################################################################################
 
+from __future__ import print_function
+
 import os
 import sys
 import subprocess
 import re
 import inspect
+import uuid
+
+
+class Term(object):
+
+    def __init__(self, name=None, keepterm=False, xterm_args=None, xterm_prg_name='x-terminal-emulator'):
+        self.name = name
+        self.keepterm = keepterm
+        self.xterm_args = xterm_args
+        self.xterm_prg_name = xterm_prg_name
+
+    def start(self):
+        self.pipe_path = os.sep + os.path.join('tmp', 'fuddly_term_'+str(uuid.uuid4()))
+        if not os.path.exists(self.pipe_path):
+            os.mkfifo(self.pipe_path)
+        self.cmd = [self.xterm_prg_name]
+        if self.name is not None:
+            self.cmd.extend(['-title',self.name])
+        if self.xterm_args:
+            self.cmd.extend(self.xterm_args)
+        if self.keepterm:
+            self.cmd.append('--hold')
+        self.cmd.extend(['-e', 'tail -f {:s}'.format(self.pipe_path)])
+        self._p = None
+
+    def _launch_term(self):
+        self._p = subprocess.Popen(self.cmd)
+
+    def stop(self):
+        if not self.keepterm and self._p is not None and self._p.poll() is None:
+            self._p.kill()
+        self._p = None
+        try:
+            os.remove(self.pipe_path)
+        except FileNotFoundError:
+            pass
+
+    def print(self, s, newline=False):
+        s += '\n' if newline else ''
+        if self._p is None or self._p.poll() is not None:
+            self._launch_term()
+        with open(self.pipe_path, "w") as input_desc:
+            input_desc.write(s)
+
+    def print_nl(self, s):
+        self.print(s, newline=True)
+
 
 def ensure_dir(f):
     d = os.path.dirname(f)
