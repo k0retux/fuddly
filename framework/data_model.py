@@ -57,54 +57,6 @@ class DataModel(object):
         """
         pass
 
-
-    def create_node_from_raw_data(self, data, idx, filename):
-        """
-        If your data model is able to absorb raw data, do it here.  This
-        function is called for each files (with the right extension)
-        present in ``imported_data/<data_model_name>``.
-
-        Args:
-            filename (str): name of the imported file
-            data (bytes): file content
-            idx (int): index of the imported file
-
-        Returns:
-            :class:`framework.node.Node`: a modeled data (atom) or ``None``
-
-        """
-        return Node('RAW_{:s}'.format(filename[:-len(self.file_extension)-1]),
-                    values=[data])
-
-    def decode(self, data, atom_name=None, abs_csts=AbsFullCsts()):
-
-        self._final_msg = ''
-        def accumulate(msg):
-            self._final_msg += msg
-
-        if atom_name is None:
-            atom_name = list(self._dm_hashtable.keys())[0]
-
-        try:
-            atom = self.get_atom(atom_name)
-        except ValueError:
-            msg = colorize("\n*** ERROR: provided atom name is unknown: '{:s}'".format(atom_name),
-                           rgb=Color.ERROR)
-            return msg
-
-        status, off, size, name = atom.absorb(data, constraints=abs_csts)
-
-        if status == AbsorbStatus.FullyAbsorbed:
-            accumulate('\n')
-            atom.show(log_func=accumulate, display_title=False)
-        else:
-            accumulate(colorize("\n*** DECODING ERROR [atom used: '{:s}'] ***", rgb=Color.ERROR).format(atom_name))
-            accumulate('\nAbsorption Status: {!r}, {:d}, {:d}'.format(status, off, size))
-            accumulate('\n \_ length of original data: {:d}'.format(len(data)))
-            accumulate('\n \_ remaining: {!r}'.format(data[size:size+1000]))
-
-        return self._final_msg
-
     def validation_tests(self):
         """
         Optional test cases to validate the correct behavior of the data model
@@ -116,6 +68,133 @@ class DataModel(object):
 
         return True
 
+    def _atom_absorption_additional_actions(self, atom):
+        """
+        Called by .create_atom_from_raw_data(). Should be overloaded if specific actions need to be
+        performed on the atoms created from imported raw data
+
+        Args:
+            atom: Atom that are going to be registered after being absorbed from raw data
+
+        Returns:
+            An atom and a short description of the actions
+
+        """
+        return atom, ''
+
+    def create_atom_from_raw_data(self, data, idx, filename):
+        """
+        This function is called for each files (with the right extension)
+        present in ``imported_data/<data_model_name>`` and absorb their content
+        by leveraging the atoms of the data model registered for absorption or if none are
+        registered, wrap their content in a :class:`framework.node.Node`.
+
+        Args:
+            filename (str): name of the imported file
+            data (bytes): file content
+            idx (int): index of the imported file
+
+        Returns:
+            An atom or ``None``
+
+        """
+        if self._default_atom_for_abs:
+            atom, abs_csts = self._default_atom_for_abs
+            nm = '{:s}_{:0>2d}'.format(self.name.upper(), idx)
+            atom_for_abs = self._backend(atom).atom_copy(atom, new_name=nm)
+
+            status, off, size, name = atom_for_abs.absorb(data, constraints=abs_csts)
+
+            print('{:s} Absorb Status: {!r}, {:d}, {:d}'.format(nm, status, off, size))
+            print(' \_ length of original data: {:d}'.format(len(data)))
+            print(' \_ remaining: {!r}'.format(data[size:size+1000]))
+
+            if status == AbsorbStatus.FullyAbsorbed:
+                print("--> Create {:s} from files in '{:s}{:s}' directory"
+                      .format(nm, gr.imported_data_folder, self.name))
+                atom_for_abs, msg = self._atom_absorption_additional_actions(atom_for_abs)
+                if msg:
+                    print("     |_ {!s}".format(msg))
+                return atom_for_abs
+            else:
+                return None
+        else:
+            return Node('RAW_{:s}'.format(filename[:-len(self.file_extension)-1]),
+                        values=[data])
+
+
+    def register_atom_for_absorption(self, atom, absorb_constraints=AbsFullCsts(),
+                                     decoding_scope=None):
+        """
+        Register an atom that will be used by the DataModel when an operation requiring data absorption
+        is performed, like self.decode().
+
+        Args:
+            atom: Atom to register for absorption
+            absorb_constraints: Constraints to be used for the absorption
+            decoding_scope: Should be either an atom name or a list of the atom name that can be
+              absorbed by the registered atom. If set to None, the atom will be the default one
+              used for absorption operation if no other nodes exist with a specific scope.
+
+        """
+
+        if self._atoms_for_abs is None:
+            self._atoms_for_abs = {}
+        atom_name, prepared_atom = self._backend(atom).prepare_atom(atom)
+        if decoding_scope is None:
+            decoding_scope = [atom_name]
+            self._default_atom_for_abs = (prepared_atom, absorb_constraints)
+        elif isinstance(decoding_scope, str):
+            decoding_scope = [decoding_scope]
+
+        assert isinstance(decoding_scope, (list, tuple))
+
+        for atom_name in decoding_scope:
+            self._atoms_for_abs[atom_name] = (prepared_atom, absorb_constraints)
+
+
+    def decode(self, data, atom_name=None, requested_abs_csts=None, colorized=True):
+        self._decoded_data = ''
+
+        def accumulate(msg):
+            self._decoded_data += msg
+
+        if atom_name is None and self._default_atom_for_abs:
+            atom, abs_csts = self._default_atom_for_abs
+            atom_for_abs = self._backend(atom).atom_copy(atom)
+            atom_name = atom.name
+        elif atom_name is None:
+            atom_name = list(self._dm_hashtable.keys())[0]
+            atom_for_abs = self.get_atom(atom_name)
+            abs_csts = AbsFullCsts()
+        else:
+            try:
+                if self._atoms_for_abs and atom_name in self._atoms_for_abs:
+                    atom_for_abs, abs_csts = self.get_atom_for_absorption(atom_name)
+                else:
+                    atom_for_abs = self.get_atom(atom_name)
+                    abs_csts = AbsFullCsts()
+            except ValueError:
+                msg = colorize("\n*** ERROR: provided atom name is unknown: '{:s}' ***".format(atom_name),
+                               rgb=Color.ERROR)
+                return msg
+
+        abs_csts_to_apply = abs_csts if requested_abs_csts is None else requested_abs_csts
+
+        status, off, size, name = atom_for_abs.absorb(data, constraints=abs_csts_to_apply)
+
+        if status == AbsorbStatus.FullyAbsorbed:
+            accumulate('\n')
+            atom_for_abs.show(log_func=accumulate, display_title=False, pretty_print=colorized)
+        else:
+            accumulate(colorize("\n*** DECODING ERROR [atom used: '{:s}'] ***", rgb=Color.ERROR)
+                       .format(atom_for_abs.name))
+            accumulate('\nAbsorption Status: {!r}, {:d}, {:d}'.format(status, off, size))
+            accumulate('\n \_ length of original data: {:d}'.format(len(data)))
+            accumulate('\n \_ remaining: {!r}'.format(data[size:size+1000]))
+
+        return self._decoded_data
+
     def cleanup(self):
         pass
 
@@ -124,6 +203,9 @@ class DataModel(object):
         self._dm_db = None
         self._built = False
         self._dm_hashtable = {}
+        self._atoms_for_abs = None
+        self._default_atom_for_abs= None
+        self._decoded_data = None
 
     def _backend(self, atom):
         if isinstance(atom, (Node, dict)):
@@ -145,7 +227,15 @@ class DataModel(object):
             atom = self._dm_hashtable[hash_key]
             return self._backend(atom).atom_copy(atom, new_name=name)
         else:
-            raise ValueError('Requested data does not exist!')
+            raise ValueError('Requested atom does not exist!')
+
+
+    def get_atom_for_absorption(self, hash_key):
+        if hash_key in self._atoms_for_abs:
+            atom, abs_csts = self._atoms_for_abs[hash_key]
+            return self._backend(atom).atom_copy(atom), abs_csts
+        else:
+            raise ValueError('Requested atom does not exist!')
 
     def get_external_atom(self, dm_name, data_id, name=None):
         dm = self._dm_db[dm_name]
@@ -194,7 +284,7 @@ class DataModel(object):
                              subdir=None, path=None, filename=None):
 
         if absorber is None:
-            absorber = self.create_node_from_raw_data
+            absorber = self.create_atom_from_raw_data
 
         if extension is None:
             extension = self.file_extension
@@ -246,19 +336,6 @@ class NodeBackend(object):
     def __init__(self, data_model):
         self._dm = data_model
         self._confs = set()
-        # self._knowledge_source = None
-
-    # @property
-    # def knowledge_source(self):
-    #     return self._knowledge_source
-    #
-    # @knowledge_source.setter
-    # def knowledge_source(self, src):
-    #     self._knowledge_source = src
-    #
-    # def update_knowledge_source(self, atom):
-    #     if self.knowledge_source is not None:
-    #         atom.env.knowledge_source = self.knowledge_source
 
     def merge_with(self, node_backend):
         self._confs = self._confs.union(node_backend._confs)
@@ -303,7 +380,6 @@ class NodeBackend(object):
         if not existing_env:
             atom.set_env(Env())
         atom.env.set_data_model(self._dm)
-        # self.update_knowledge_source(atom)
 
     def get_all_confs(self):
         return sorted(self._confs)

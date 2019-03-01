@@ -72,8 +72,8 @@ group.add_argument('--info-by-ids', nargs=2, metavar=('FIRST_DATA_ID','LAST_DATA
                    help='''Display information on all the data included within the specified
                    data ID range''')
 
-group.add_argument('--with-fbk', action='store_true', help='Display full feedback (expect --data-id)')
-group.add_argument('--with-data', action='store_true', help='Display data content (expect --data-id)')
+group.add_argument('-wf', '--with-fbk', action='store_true', help='Display full feedback (expect --data-id)')
+group.add_argument('-wd', '--with-data', action='store_true', help='Display data content (expect --data-id)')
 group.add_argument('--without-fmkinfo', action='store_true',
                    help='Do not display fmkinfo (expect --data-id)')
 group.add_argument('--without-analysis', action='store_true',
@@ -84,12 +84,21 @@ group.add_argument('--limit', type=int, default=None,
 group.add_argument('--raw', action='store_true', help='Display data and feedback in raw format')
 
 group = parser.add_argument_group('Fuddly Decoding')
-group.add_argument('--decoder', metavar='DATAMODEL_NAME',
-                   help="Decode feedback with the decoder of the Data Model specified")
-group.add_argument('--atom', metavar='ATOM_NAME',
-                   help="Atom of the Data Model to be used for decoding the sent data")
+group.add_argument('-dd', '--decode-data', action='store_true',
+                   help='Decode sent data based on the data model used for the selected '
+                        'data ID or the atome name provided by --atom')
+group.add_argument('-df', '--decode-fbk', action='store_true',
+                   help='Decode feedback based on the data model used for the selected '
+                        'data ID or the atome name provided by --fbk-atom')
+group.add_argument('--data-atom', metavar='ATOM_NAME',
+                   help="Atom of the data model to be used for decoding the sent data. "
+                        "If not provided, the name of the sent data will be used.")
 group.add_argument('--fbk-atom', metavar='ATOM_NAME',
-                   help="Atom of the Data Model to be used for decoding feedback")
+                   help="Atom of the data model to be used for decoding feedback. "
+                        "If not provided, the default data model decoder will be used (if one exists), "
+                        "or the name of the first registered atom in the data model")
+group.add_argument('--force-fbk-decoder', metavar='DATA_MODEL_NAME',
+                   help="Decode feedback with the decoder of the data model specified")
 
 group = parser.add_argument_group('Fuddly Database Operations')
 group.add_argument('--export-data', nargs=2, metavar=('FIRST_DATA_ID','LAST_DATA_ID'), type=int,
@@ -187,9 +196,11 @@ if __name__ == "__main__":
     remove_data = args.remove_data
     remove_one_data = args.remove_one_data
 
-    decoder = args.decoder
-    atom = args.atom
-    fbk_atom = args.fbk_atom
+    decode_data = args.decode_data
+    decode_fbk = args.decode_fbk
+    forced_fbk_decoder = args.force_fbk_decoder
+    data_atom_name = args.data_atom
+    fbk_atom_name = args.fbk_atom
 
     impact_analysis = args.data_with_impact
     raw_impact_analysis = args.data_with_impact_raw
@@ -199,22 +210,17 @@ if __name__ == "__main__":
     add_analysis = args.add_analysis
     disprove_impact = args.disprove_impact
 
-    if decoder:
+    if decode_data or decode_fbk:
         from framework.plumbing import *
         fmk = FmkPlumbing(quiet=True)
-        dm_list = fmk.dm_list
+        dm_list = copy.copy(fmk.dm_list)
         fmk.exit_fmk()
-        fbk_decoder_func = None
-        decoder_func = None
-        for dm in fmk.dm_list:
-            if dm.name == decoder:
-                dm.load_data_model(fmk._name2dm)
-                decoder_func = functools.partial(dm.decode, atom_name=atom)
-                fbk_decoder_func = functools.partial(dm.decode, atom_name=fbk_atom)
-                break
+        decoding_hints = (fmk._name2dm,
+                          decode_data, decode_fbk,
+                          data_atom_name, fbk_atom_name, forced_fbk_decoder)
     else:
-        fbk_decoder_func = None
-        decoder_func = None
+        dm_list = None
+        decoding_hints = None
 
     fmkdb = Database(fmkdb_path=fmkdb)
     ok = fmkdb.start()
@@ -266,7 +272,7 @@ if __name__ == "__main__":
                                 with_analysis=not without_analysis,
                                 fbk_src=fbk_src,
                                 limit_data_sz=limit_data_sz, raw=raw_data, page_width=page_width,
-                                colorized=colorized, fbk_decoder=fbk_decoder_func, data_decoder=decoder_func)
+                                colorized=colorized, decoding_hints=decoding_hints, dm_list=dm_list)
 
     elif data_info_by_date is not None:
 
@@ -277,7 +283,7 @@ if __name__ == "__main__":
                                         with_fmkinfo=not without_fmkinfo, fbk_src=fbk_src,
                                         prj_name=prj_name,
                                         limit_data_sz=limit_data_sz, raw=raw_data, page_width=page_width,
-                                        colorized=colorized, fbk_decoder=fbk_decoder_func, data_decoder=decoder_func)
+                                        colorized=colorized, decoding_hints=decoding_hints, dm_list=dm_list)
 
     elif data_info_by_range is not None:
 
@@ -288,7 +294,7 @@ if __name__ == "__main__":
                                          with_fmkinfo=not without_fmkinfo, fbk_src=fbk_src,
                                          prj_name=prj_name,
                                          limit_data_sz=limit_data_sz, raw=raw_data, page_width=page_width,
-                                         colorized=colorized, fbk_decoder=fbk_decoder_func, data_decoder=decoder_func)
+                                         colorized=colorized, decoding_hints=decoding_hints, dm_list=dm_list)
 
     elif export_data is not None or export_one_data is not None:
 

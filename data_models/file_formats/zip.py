@@ -33,25 +33,6 @@ class ZIP_DataModel(DataModel):
     file_extension = 'zip'
     name = 'zip'
 
-    def create_node_from_raw_data(self, data, idx, filename):
-        
-        nm = 'ZIP_{:0>2d}'.format(idx)
-        pkzip = self.pkzip.get_clone(nm, new_env=True)
-        pkzip.set_current_conf('ABS', recursive=True)
-        status, off, size, name = pkzip.absorb(data, constraints=AbsNoCsts(size=True,struct=True))
-        # pkzip.show(raw_limit=400)
-
-        print('{:s} Absorb Status: {!r}, {:d}, {:d}, {:s}'.format(nm, status, off, size, name))
-        print(' \_ length of original zip: {:d}'.format(len(data)))
-        print(' \_ remaining: {!r}'.format(data[size:size+1000]))
-
-        if status == AbsorbStatus.FullyAbsorbed:
-            print("--> Create {:s} from provided ZIP samples.".format(nm))
-            return pkzip
-        else:
-            return None
-
-
     def build_data_model(self):
 
         MIN_FILE = 1
@@ -333,12 +314,15 @@ class ZIP_DataModel(DataModel):
               ]}
         ]}
 
-
         mb = NodeBuilder(delayed_jobs=True)
-        self.pkzip = mb.create_graph_from_desc(zip_desc)
+        pkzip = mb.create_graph_from_desc(zip_desc)
 
-        self.register(self.pkzip)
+        self.register(pkzip)
 
+        pkzip_abs = pkzip.get_clone(new_env=True)
+        pkzip_abs.set_current_conf('ABS', recursive=True)
+        self.register_atom_for_absorption(pkzip_abs,
+                                          absorb_constraints=AbsNoCsts(size=True, struct=True))
 
 data_model = ZIP_DataModel()
 

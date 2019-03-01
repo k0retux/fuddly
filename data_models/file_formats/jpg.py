@@ -49,26 +49,13 @@ class JPG_DataModel(DataModel):
     file_extension = 'jpg'
     name = 'jpg'
 
-    def create_node_from_raw_data(self, data, idx, filename):
-        nm = 'jpg_{:0>2d}'.format(idx)
-        jpg = self.jpg.get_clone(nm, new_env=True)
-        jpg.set_current_conf('ABS', recursive=True)
-        status, off, size, name = jpg.absorb(data, constraints=AbsNoCsts(size=True, struct=True,
-                                                                         contents=True))
-
-        print('{:s} Absorb Status: {!r}, {:d}, {:d}, {:s}'.format(nm, status, off, size, name))
-        print(' \_ length of original jpg: {:d}'.format(len(data)))
-        print(' \_ remaining: {!r}'.format(data[size:size+1000]))
-
-        if status == AbsorbStatus.FullyAbsorbed:
-            x = jpg['.*/SOF_hdr/X'].get_raw_value()
-            y = jpg['.*/SOF_hdr/Y'].get_raw_value()
-            d_priv = {'height':y, 'width':x}
-            jpg.set_private(d_priv)
-            print("--> Create {:s} from provided JPG sample [x:{:d}, y:{:d}].".format(nm, x, y))
-            return jpg
-        else:
-            return None
+    def _atom_absorption_additional_actions(self, atom):
+        x = atom['.*/SOF_hdr/X'].get_raw_value()
+        y = atom['.*/SOF_hdr/Y'].get_raw_value()
+        d_priv = {'height':y, 'width':x}
+        atom.set_private(d_priv)
+        msg = "add private data: size [x:{:d}, y:{:d}]".format(x, y)
+        return atom, msg
 
     def build_data_model(self):
 
@@ -170,9 +157,15 @@ class JPG_DataModel(DataModel):
          ]}
 
         mb = NodeBuilder(delayed_jobs=True)
-        self.jpg = mb.create_graph_from_desc(jpg_desc)
+        jpg = mb.create_graph_from_desc(jpg_desc)
 
-        self.register(self.jpg)
+        self.register(jpg)
+
+        jpg_abs = jpg.get_clone(new_env=True)
+        jpg_abs.set_current_conf('ABS', recursive=True)
+        self.register_atom_for_absorption(jpg_abs,
+                                          absorb_constraints=AbsNoCsts(size=True, struct=True,
+                                                                       contents=True))
 
 
 data_model = JPG_DataModel()

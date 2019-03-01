@@ -31,22 +31,6 @@ class PNG_DataModel(DataModel):
     file_extension = 'png'
     name = 'png'
 
-    def create_node_from_raw_data(self, data, idx, filename):
-        nm = 'PNG_{:0>2d}'.format(idx)
-        png = self.png.get_clone(nm, new_env=True)
-        status, off, size, name = png.absorb(data, constraints=AbsNoCsts(size=True))
-
-        print('{:s} Absorb Status: {!r}, {:d}, {:d}, {:s}'.format(nm, status, off, size, name))
-        print(' \_ length of original png: {:d}'.format(len(data)))
-        print(' \_ remaining: {!r}'.format(data[size:size+1000]))
-
-        if status == AbsorbStatus.FullyAbsorbed:
-            print("--> Create {:s} from provided PNG samples.".format(nm))
-            return png
-        else:
-            return None
-
-
     def build_data_model(self):
 
         png_simple_desc = \
@@ -119,9 +103,10 @@ class PNG_DataModel(DataModel):
 
 
         mb = NodeBuilder()
-        self.png = mb.create_graph_from_desc(png_desc)
+        png = mb.create_graph_from_desc(png_desc)
 
-        self.register(self.png)
+        self.register(png)
+        self.register_atom_for_absorption(png, absorb_constraints=AbsNoCsts(size=True))
 
 
 data_model = PNG_DataModel()

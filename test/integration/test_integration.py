@@ -3252,7 +3252,7 @@ class TestDataModel(unittest.TestCase):
         dm = fmk.get_data_model_by_name('zip')
         dm.build_data_model()
 
-        abszip = dm.pkzip.get_clone('ZIP')
+        abszip = dm.get_atom('ZIP')
         abszip.set_current_conf('ABS', recursive=True)
 
         # We generate a ZIP file from the model only (no real ZIP file)

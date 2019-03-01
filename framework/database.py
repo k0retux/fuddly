@@ -515,7 +515,7 @@ class Database(object):
     def display_data_info(self, data_id, with_data=False, with_fbk=False, with_fmkinfo=True,
                           with_analysis=True,
                           fbk_src=None, limit_data_sz=None, page_width=100, colorized=True,
-                          raw=False, fbk_decoder=None, data_decoder=None):
+                          raw=False, decoding_hints=None, dm_list=None):
 
         colorize = self._get_color_function(colorized)
 
@@ -571,6 +571,33 @@ class Database(object):
             "WHERE DATA_ID == {data_id:d} "
             "ORDER BY DATE ASC;".format(data_id=data_id)
         )
+
+        def search_dm(data_model_name):
+            for dm in dm_list:
+                if dm.name == data_model_name:
+                    dm.load_data_model(load_arg)
+                    return dm.decode
+            else:
+                print(colorize("*** ERROR: No available data model matching this database entry "
+                               "[requested data model: '{:s}'] ***".format(data_model_name),
+                               rgb=Color.ERROR))
+                return None
+
+        decode_data = False
+        decode_fbk = False
+        decoder_func = None
+        fbk_decoder_func = None
+        if decoding_hints is not None:
+            load_arg, decode_data, decode_fbk, user_atom_name, user_fbk_atom_name, forced_fbk_decoder = decoding_hints
+            decoder_func = search_dm(dm_name)
+            if decoder_func is None:
+                decode_data, decode_fbk = False, False
+            if forced_fbk_decoder:
+                fbk_decoder_func = search_dm(forced_fbk_decoder)
+                if fbk_decoder_func is None:
+                    decode_fbk = False
+            else:
+                fbk_decoder_func = decoder_func
 
         line_pattern = '-' * page_width
         data_id_pattern = " Data ID #{:d} ".format(data_id)
@@ -726,8 +753,9 @@ class Database(object):
         msg = ''
         if with_data:
             msg += colorize("\n Sent Data:\n", rgb=Color.FMKINFOGROUP)
-            if data_decoder:
-                msg += data_decoder(data_content)
+            if decode_data:
+                atom_name = data_type.lower() if user_atom_name is None else user_atom_name
+                msg += decoder_func(data_content, atom_name=atom_name, colorized=colorized)
             else:
                 data_content = gr.unconvert_from_internal_repr(data_content)
                 data_content = self._handle_binary_content(data_content, sz_limit=limit_data_sz, raw=raw,
@@ -746,8 +774,8 @@ class Database(object):
                 msg += colorize(")", rgb=Color.FMKINFOGROUP)
                 msg += colorize(" = {!s}".format(status), rgb=Color.FMKSUBINFO)
                 if content:
-                    if fbk_decoder:
-                        msg += fbk_decoder(content)
+                    if decode_fbk:
+                        msg += fbk_decoder_func(content, atom_name=user_fbk_atom_name, colorized=colorized)
                     else:
                         content = gr.unconvert_from_internal_repr(content)
                         content = self._handle_binary_content(content, sz_limit=limit_data_sz, raw=raw,
@@ -784,7 +812,7 @@ class Database(object):
                                   with_analysis=True,
                                   fbk_src=None, prj_name=None,
                                   limit_data_sz=None, raw=False, page_width=100, colorized=True,
-                                  fbk_decoder=None, data_decoder=None):
+                                  decoding_hints=None, dm_list=None):
         colorize = self._get_color_function(colorized)
 
         if prj_name:
@@ -809,7 +837,7 @@ class Database(object):
                                        fbk_src=fbk_src,
                                        limit_data_sz=limit_data_sz, raw=raw, page_width=page_width,
                                        colorized=colorized,
-                                       fbk_decoder=fbk_decoder, data_decoder=data_decoder)
+                                       decoding_hints=decoding_hints, dm_list=dm_list)
         else:
             print(colorize("*** ERROR: No data found between {!s} and {!s} ***".format(start, end),
                            rgb=Color.ERROR))
@@ -818,7 +846,7 @@ class Database(object):
                                    with_analysis=True,
                                    fbk_src=None, prj_name=None,
                                    limit_data_sz=None, raw=False, page_width=100, colorized=True,
-                                   fbk_decoder=None, data_decoder=None):
+                                   decoding_hints=None, dm_list=None):
 
         colorize = self._get_color_function(colorized)
 
@@ -843,7 +871,7 @@ class Database(object):
                                        fbk_src=fbk_src,
                                        limit_data_sz=limit_data_sz, raw=raw, page_width=page_width,
                                        colorized=colorized,
-                                       fbk_decoder=fbk_decoder, data_decoder=data_decoder)
+                                       decoding_hints=decoding_hints, dm_list=dm_list)
         else:
             print(colorize("*** ERROR: No data found between {!s} and {!s} ***".format(first_id,
                                                                                        last_id),
