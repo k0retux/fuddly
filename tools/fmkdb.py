@@ -213,8 +213,8 @@ if __name__ == "__main__":
     if decode_data or decode_fbk:
         from framework.plumbing import *
         fmk = FmkPlumbing(quiet=True)
+        fmk.get_data_models(fmkDB_update=False)
         dm_list = copy.copy(fmk.dm_list)
-        fmk.exit_fmk()
         decoding_hints = (fmk._name2dm,
                           decode_data, decode_fbk,
                           data_atom_name, fbk_atom_name, forced_fbk_decoder)

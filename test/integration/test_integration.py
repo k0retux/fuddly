@@ -45,6 +45,7 @@ from test import ignore_data_model_specifics, run_long_tests, exit_on_import_err
 def setUpModule():
     global fmk, dm, results
     fmk = FmkPlumbing(exit_on_error=exit_on_import_error, debug_mode=True)
+    fmk.start()
     fmk.run_project(name='tuto', dm_name='example')
     dm = example.data_model
     results = collections.OrderedDict()
@@ -52,7 +53,7 @@ def setUpModule():
 
 def tearDownModule():
     global fmk
-    fmk.exit_fmk()
+    fmk.stop()
 
 
 ######## Tests cases begins Here ########

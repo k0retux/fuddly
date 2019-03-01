@@ -1213,6 +1213,7 @@ if __name__ == "__main__":
 
     from framework.plumbing import *
     fmk = FmkPlumbing()
+    fmk.start()
 
     dm = data_model
     dm.load_data_model(fmk._name2dm)

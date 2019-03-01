@@ -224,7 +224,11 @@ class FmkPlumbing(object):
 
     def __init__(self, exit_on_error=False, debug_mode=False, quiet=False):
         self._debug_mode = debug_mode
+        self._exit_on_error = exit_on_error
         self._quiet = quiet
+
+        self.prj_list = []
+        self.dm_list = []
 
         self._prj = None
         self.dm = None
@@ -237,35 +241,12 @@ class FmkPlumbing(object):
 
         self.mon = None
 
-        self.prj_list = []
-        self.dm_list = []
-
-        self._hc_timeout = {}  # health-check tiemout, further initialized as a dict (tg -> hc_timeout)
-        self._hc_timeout_max = None
-
         self.__started = False
         self.__first_loading = True
 
-        self._current_sent_date = None
-
-        self.error = False
-        self.fmk_error = []
-        self._sending_error = None
-        self._stop_sending = None
-
-        self.__tg_enabled = False
-        self.__prj_to_be_reloaded = False
-        self._dm_to_be_reloaded = False
-
         self._exportable_fmk_ops = ExportableFMKOps(self)
-
-        self._generic_tactics = framework.generic_data_makers.tactics
-        self._generic_tactics.set_exportable_fmk_ops(self._exportable_fmk_ops)
-
-        self._tactics = None
-
-        self.import_text_reg = re.compile('(.*?)(#####)', re.S)
-        self.check_clone_re = re.compile('(.*)#(\w{1,20})')
+        self._name2dm = {}
+        self._name2prj = {}
 
         self._prj_dict = {}
         self.__st_dict = {}
@@ -280,11 +261,35 @@ class FmkPlumbing(object):
         self.__dyngenerators_created = {}
         self.__dynamic_generator_ids = {}
 
-        self._name2dm = {}
-        self._name2prj = {}
-
         self._task_list = {}
         self._task_list_lock = threading.Lock()
+
+        self._hc_timeout = {}  # health-check tiemout, further initialized as a dict (tg -> hc_timeout)
+        self._hc_timeout_max = None
+
+        self._current_sent_date = None
+
+        self.error = False
+        self.fmk_error = []
+        self._sending_error = None
+        self._stop_sending = None
+
+        self.__tg_enabled = False
+        self.__prj_to_be_reloaded = False
+        self._dm_to_be_reloaded = False
+
+        self._generic_tactics = framework.generic_data_makers.tactics
+        self._generic_tactics.set_exportable_fmk_ops(self._exportable_fmk_ops)
+
+        self._tactics = None
+
+    def __str__(self):
+        return 'Fuddly FmK'
+
+    @EnforceOrder(initial_func=True)
+    def start(self):
+        self.import_text_reg = re.compile('(.*?)(#####)', re.S)
+        self.check_clone_re = re.compile('(.*)#(\w{1,20})')
 
         self.config = config(self, path=[config_folder])
         def save_config():
@@ -311,33 +316,35 @@ class FmkPlumbing(object):
 
         self.import_successfull = True
         self.get_data_models()
-        if exit_on_error and not self.import_successfull:
+        if self._exit_on_error and not self.import_successfull:
             self.fmkDB.stop()
             raise DataModelDefinitionError('Error with some DM imports')
 
         self.get_projects()
-        if exit_on_error and not self.import_successfull:
+        if self._exit_on_error and not self.import_successfull:
             self.fmkDB.stop()
             raise ProjectDefinitionError('Error with some Project imports')
 
-        if not quiet:
+        if not self._quiet:
             print(colorize(FontStyle.BOLD + '='*44 + '[ Fuddly Data Folder Information ]==\n',
                            rgb=Color.FMKINFOGROUP))
 
-        if not quiet and hasattr(gr, 'new_fuddly_data_folder'):
+        if not self._quiet and hasattr(gr, 'new_fuddly_data_folder'):
             print(colorize(FontStyle.BOLD + \
                            ' *** New Fuddly Data Folder Has Been Created ***\n',
                            rgb=Color.FMKINFO_HLIGHT))
 
-        if not quiet:
+        if not self._quiet:
             print(colorize(' --> path: {:s}'.format(gr.fuddly_data_folder),
                            rgb=Color.FMKINFO))
             print(colorize(' --> contains: - fmkDB.db, logs, imported/exported data, ...\n'
                            '               - user projects and user data models',
                            rgb=Color.FMKSUBINFO))
 
-    def __str__(self):
-        return 'Fuddly FmK'
+    @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
+    def stop(self):
+        self._stop_fmk_plumbing()
+        self.fmkDB.stop()
 
     @property
     def prj(self):
@@ -649,7 +656,7 @@ class FmkPlumbing(object):
         return ret
 
     @EnforceOrder(initial_func=True, final_state='get_projs')
-    def get_data_models(self):
+    def get_data_models(self, fmkDB_update=True):
 
         data_models = collections.OrderedDict()
         def populate_data_models(path):
@@ -700,14 +707,16 @@ class FmkPlumbing(object):
                                               dm_params['dm_rld_args'],
                                               reload_dm=False)
                         self.__dyngenerators_created[dm_params['dm']] = False
-                        # populate FMK DB
-                        self._fmkDB_insert_dm_and_dmakers(dm_params['dm'].name, dm_params['tactics'])
+                        if fmkDB_update:
+                            # populate FMK DB
+                            self._fmkDB_insert_dm_and_dmakers(dm_params['dm'].name, dm_params['tactics'])
                     else:
                         self.import_successfull = False
 
-        self.fmkDB.insert_data_model(Database.DEFAULT_DM_NAME)
-        self.fmkDB.insert_dmaker(Database.DEFAULT_DM_NAME, Database.DEFAULT_GTYPE_NAME,
-                                 Database.DEFAULT_GEN_NAME, True, True)
+        if fmkDB_update:
+            self.fmkDB.insert_data_model(Database.DEFAULT_DM_NAME)
+            self.fmkDB.insert_dmaker(Database.DEFAULT_DM_NAME, Database.DEFAULT_GTYPE_NAME,
+                                     Database.DEFAULT_GEN_NAME, True, True)
 
     def __import_dm(self, prefix, name, reload_dm=False):
 
@@ -808,10 +817,8 @@ class FmkPlumbing(object):
         self.__dm_rld_args_dict[data_model] = dm_rld_args
 
 
-
-
     @EnforceOrder(accepted_states=['get_projs'], final_state='20_load_prj')
-    def get_projects(self):
+    def get_projects(self, fmkDB_update=True):
 
         projects = collections.OrderedDict()
         def populate_projects(path):
@@ -860,7 +867,8 @@ class FmkPlumbing(object):
                     self._add_project(prj_params['project'], prj_params['target'],
                                       prj_params['logger'], prj_params['prj_rld_args'],
                                       reload_prj=False)
-                    self.fmkDB.insert_project(prj_params['project'].name)
+                    if fmkDB_update:
+                        self.fmkDB.insert_project(prj_params['project'].name)
                 else:
                     self.import_successfull = False
 
@@ -1133,12 +1141,6 @@ class FmkPlumbing(object):
             self._stop()
 
             signal.signal(signal.SIGINT, sig_int_handler)
-
-
-    @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
-    def exit_fmk(self):
-        self._stop_fmk_plumbing()
-        self.fmkDB.stop()
 
     @EnforceOrder(accepted_states=['25_load_dm','S1','S2'])
     def load_targets(self, tg_ids):
@@ -3801,7 +3803,7 @@ class FmkShell(cmd.Cmd):
                 cont = input(msg)
             cont = cont.upper()
             if cont == 'Y' or cont == '':
-                self.fz.exit_fmk()
+                self.fz.stop()
                 return True
             else:
                 return False
@@ -5512,7 +5514,7 @@ class FmkShell(cmd.Cmd):
         return False
 
     def do_quit(self, line):
-        self.fz.exit_fmk()
+        self.fz.stop()
         return True
 
 

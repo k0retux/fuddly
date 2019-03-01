@@ -23,6 +23,8 @@ running the ``<root of fuddly>/fuddly_shell.py`` script.
       :linenos:
 
        fmk = FmkPlumbing()
+       fmk.start()
+
        shell = FmkShell("Fuddly Shell", fmk)
        shell.cmdloop()
 
@@ -1027,7 +1029,7 @@ you have the ``xtermcolor`` python library):
    :linenos:
 
    # And to terminate fuddly properly 
-   fmk.exit_fmk()
+   fmk.stop()
 
 
 For more information on how to manually make modification on data,
