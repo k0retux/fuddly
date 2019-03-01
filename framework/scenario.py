@@ -238,7 +238,7 @@ class Step(object):
         self.feedback_mode = fbk_mode
 
         self._scenario_env = None
-        self._periodic_data = set_periodic
+        self._periodic_data = list(set_periodic) if set_periodic else None
         if clear_periodic:
             self._periodic_data_to_remove = []
             for p in clear_periodic:
@@ -576,6 +576,16 @@ class Step(object):
             return desc
         else:
             return 'No periodic to set'
+
+    def get_periodic_ref(self):
+        if self.is_periodic_set():
+            ref = id(self._periodic_data)
+        elif self.is_periodic_cleared():
+            ref = id(self._periodic_data_to_remove)
+        else:
+            ref = None
+
+        return ref
 
     def __hash__(self):
         return id(self)
@@ -958,13 +968,13 @@ class Scenario(object):
 
             def graph_periodic(step, node_list):
                 if (step.is_periodic_set() or step.is_periodic_cleared()) \
-                        and step._periodic_data not in node_list:
+                        and step.get_periodic_ref() not in node_list:
                     id_node = str(id(step))
-                    id_periodic = str(id(step._periodic_data))
+                    id_periodic = str(step.get_periodic_ref())
                     graph.node(id_periodic, label=step.get_periodic_description(),
                            shape='record', style='filled', color='black', fillcolor='palegreen',
                            fontcolor='black', fontsize='8')
-                    node_list.append(step._periodic_data)
+                    node_list.append(step.get_periodic_ref())
                     graph.edge(id_node, id_periodic, arrowhead='dot') # headport='se', tailport='nw')
 
             step_color = current_color if init_step is current_step else 'black'
