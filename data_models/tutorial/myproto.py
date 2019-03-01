@@ -63,7 +63,7 @@ class MyProto_DataModel(DataModel):
                              'contents': UINT32_be()},
                             {'name': 'content',
                              'sync_size_with': 'len',
-                             'contents': String(min_sz=20, max_sz=50, alphabet='éùijklm:;!',
+                             'contents': String(min_sz=20, max_sz=50, alphabet=u'éùijklm:;!',
                                                 codec='latin-1')},
                             {'name': 'crc32',
                              'contents': CRC(vt=UINT32_be),
