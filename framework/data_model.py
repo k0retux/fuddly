@@ -154,10 +154,14 @@ class DataModel(object):
 
 
     def decode(self, data, atom_name=None, requested_abs_csts=None, colorized=True):
-        self._decoded_data = ''
 
-        def accumulate(msg):
-            self._decoded_data += msg
+        class Accumulator:
+            content = ''
+            def accumulate(self, msg):
+                self.content += msg
+
+        a = Accumulator()
+        accumulate = a.accumulate
 
         if atom_name is None and self._default_atom_for_abs:
             atom, abs_csts = self._default_atom_for_abs
@@ -193,7 +197,7 @@ class DataModel(object):
             accumulate('\n \_ length of original data: {:d}'.format(len(data)))
             accumulate('\n \_ remaining: {!r}'.format(data[size:size+1000]))
 
-        return self._decoded_data
+        return a.content
 
     def cleanup(self):
         pass

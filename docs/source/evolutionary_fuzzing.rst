@@ -13,8 +13,8 @@ classic methods but also on the feedback retrieved from the targets. In this con
 is the only one instantiated the traditional way. The ones that follow are spawned using five steps:
 
 #. **Fitness score computation**: each test case, member of the current population, is given a
-   score which is function of some metrics (impact on the target, diversity, and so on). These
-   features are calculated by the element in charge of the monitoring aspects.
+   score which is function of some metrics (impact on the target, diversity, and so on), which are
+   calculated by the entity in charge of the monitoring aspects.
 
 #. **Probabilities of survival association**: depending on the score computed in the previous step, a probability
    of survival is associated to each individual.
@@ -24,7 +24,7 @@ is the only one instantiated the traditional way. The ones that follow are spawn
 #. **Mutation**: aims to modify a little bit each individuals (flip some bits for instance) to find local optimums.
 
 #. **Cross-over**: on the contrary, involves huge changes in order to find other optimums. It combines the test cases
-   that are still alive in order to generate even better solutions. This process can be used to compensate the kills
+   that are still alive in order to generate even better solutions. This process is also used to compensate the kills
    done in step 3.
 
 .. _evolutionary-process-image:
@@ -35,7 +35,7 @@ is the only one instantiated the traditional way. The ones that follow are spawn
    Evolutionary process
 
 
-The implementation within Fuddly can be divided into three main components:
+The implementation within ``Fuddly`` is divided into three main components:
 
 * A :class:`framework.evolutionary_helpers.Population` class that is composed of
   :class:`framework.evolutionary_helpers.Individual` instances. Each individual represents a data to be sent.
@@ -51,15 +51,15 @@ The implementation within Fuddly can be divided into three main components:
 User interface
 ==============
 
-An evolutionary process can be configurable by extending the
+An evolutionary process can be configured by extending the
 :class:`framework.evolutionary_helpers.Population` and :class:`framework.evolutionary_helpers.Individual`
 abstract classes. These elements describe the contract that needs to be satisfied in order for the evolutionary process
-to get running. In general, the methods :meth:`_initialize()` and :meth:`reset()` can be
+to get running. Basically, the methods :meth:`_initialize()` and :meth:`reset()` can be
 used to initialize the first population, :meth:`evolve()` to get the population to the next generation
 and :meth:`is_final()` to specify a stop criteria.
 
 As these are very generic, they bring a lot of flexibility but require some work.
-To address this issue, ``fuddly`` also proposes a default implementation that describes the classic approach
+To address this issue, ``Fuddly`` also proposes a default implementation that describes the classic approach
 introduced in the previous section. Each step is expressed using one of the
 :class:`framework.evolutionary_helpers.DefaultPopulation` methods. The evolution stops when the population extincts
 or if a maximum number of generation exceeds.
@@ -86,7 +86,7 @@ contains 3-tuples. Each one has to provide:
   :class:`framework.evolutionary_helpers.EvolutionaryScenariosFactory` in order to instantiate the appropriate
   population object.
 
-Here under is provided an example to setup an evolutionary scenario:
+Here under is provided an example to setup an evolutionary scenario (defined in ``tuto_strategy.py``):
 
 .. code-block:: python
 
@@ -95,8 +95,25 @@ Here under is provided an example to setup an evolutionary scenario:
 
    tactics = Tactics()
    evolutionary_scenarios = [("EVOL",
-                             DefaultPopulation,
-                             {'model': 'SEPARATOR', 'size': 10, 'max_generation_nb': 10})]
+                              DefaultPopulation,
+                             {'init_process': [('SEPARATOR', UI(random=True)), 'tTYPE'],
+                              'size': 10,
+                              'max_generation_nb': 10})]
+
+
+Once loaded from ``Fuddly``, the evolutionary scenarios are available like any other scenarios.
+In this case, a generator named ``SC_EVOL`` will be created. After each call to it,
+the evolutionary process will progress and a new test case will be produced.
+
+Note that the :class:`framework.evolutionary_helpers.DefaultPopulation` is used with this scenario.
+It expects three parameters:
+
+- The first one describe the process to follow to generate the data in the initial population
+  (refer to the API documentation for more information). In the example,
+  we use the generator ``SEPARATOR`` to produce data compliant to the model in a randome way, then we
+  apply the disruptor ``tTYPE``.
+- The second specify the size of the population.
+- The third is a criteria to stop the evolutionary process. It provides the maximum number of generation to reach
 
 
 .. _ef:crossover-disruptors:

@@ -4,6 +4,7 @@ from framework.global_resources import *
 from framework.scenario import *
 from framework.data import Data
 from framework.value_types import *
+from framework.evolutionary_helpers import *
 
 tactics = Tactics()
 
@@ -242,6 +243,11 @@ sc_tuto_ex4 = Scenario('ex4', anchor=init, reinit_anchor=reinit)
 
 tactics.register_scenarios(sc_tuto_ex1, sc_tuto_ex2, sc_tuto_ex3, sc_tuto_ex4,
                            sc4, sc5, sc_test, sc_test2, sc_test3, sc_test4)
+
+evolutionary_scenarios = [("EVOL", DefaultPopulation,
+                           {'init_process': [('SEPARATOR', UI(random=True)), 'tTYPE'],
+                            'size': 10,
+                            'max_generation_nb': 10})]
 
 @generator(tactics, gtype="CBK")
 class g_test_callback_01(Generator):

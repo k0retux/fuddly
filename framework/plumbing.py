@@ -1876,13 +1876,15 @@ class FmkPlumbing(object):
                     seed = Data(seed_node)
                     seed.generate_info_from_content(original_data=original_data)
 
-            elif data_desc.seed is not None and not isinstance(data_desc.seed, Data):
+            elif isinstance(data_desc.seed, Data):
+                seed = data_desc.seed
+                seed.generate_info_from_content(original_data=original_data)
+            elif data_desc.seed is None:
+                seed = None
+            else:
                 self.set_error(msg='DataProcess object contains an unrecognized seed type!',
                                    code=Error.UserCodeError)
                 return None
-            else:
-                seed = data_desc.seed
-                seed.generate_info_from_content(original_data=original_data)
 
             if resolve_dataprocess or data_desc.outcomes is None:
                 data = self.get_data(data_desc.process, data_orig=seed)
