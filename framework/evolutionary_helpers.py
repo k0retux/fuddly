@@ -235,11 +235,11 @@ class EvolutionaryScenariosFactory(object):
 
         population = population_cls(fmk, **args)
 
-        def cbk_after(env, current_step, next_step, fbk):
+        def cbk_after(env, current_step, next_step, fbk_gate):
             print("Callback after")
 
             # set the feedback of the last played individual
-            population[population.index - 1].feedback = fbk
+            population[population.index - 1].feedback = list(fbk_gate)
 
             return True
 
