@@ -54,7 +54,9 @@ class Project(object):
         self.scenario_target_mapping = None
         self.reset_target_mappings()
 
+        self._fmkops = None
         self.project_scenarios = None
+        self.evol_processes = None
         self.targets = None
         self.dm = None
         self.operators = {}
@@ -124,6 +126,9 @@ class Project(object):
     def set_data_model(self, dm):
         self.dm = dm
 
+    def set_exportable_fmk_ops(self, fmkops):
+        self._fmkops = fmkops
+
     def map_targets_to_scenario(self, scenario, target_mapping):
         if isinstance(scenario, (list, tuple)):
             for sc in scenario:
@@ -137,10 +142,16 @@ class Project(object):
         self.scenario_target_mapping = {}
 
     def register_scenarios(self, *scenarios):
-        self.project_scenarios = scenarios
+        if self.project_scenarios is None:
+            self.project_scenarios = []
+        self.project_scenarios += scenarios
+
+    def register_evolutionary_processes(self, *processes):
+        if self.evol_processes is None:
+            self.evol_processes = []
+        self.evol_processes += processes
 
     def register_operator(self, name, obj):
-
         if name in self.operators:
             print("\n*** /!\\ ERROR: The operator name '{:s}' is already used\n".format(name))
             raise ValueError

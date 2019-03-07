@@ -76,34 +76,35 @@ or if a maximum number of generation exceeds.
   other disruptor could have been chosen (those introduced by the evolutionary fuzzing are described in
   the next section).
 
-Finally, to make an evolutionary scenario available, it needs to be registered inside a ``*_strategy.py`` file.
-To do so, an ``evolutionary_scenarios`` variable has to be created. This variable is an array that
-contains 3-tuples. Each one has to provide:
+Finally, to make an evolutionary process available to the framework, it has to be registered at project
+level (meaning inside a ``*_proj.py`` file), through :meth:`framework.Project.register_evolutionary_process`.
+This method expects processes in the form of 3-tuples containing:
 
-* a name for the evolutionary scenario that will be created;
+* a name for the scenario that will implement the evolutionary process;
 * a class that inherits from :class:`framework.evolutionary_helpers.Population`;
 * and parameters that will be passed to the
   :class:`framework.evolutionary_helpers.EvolutionaryScenariosFactory` in order to instantiate the appropriate
   population object.
 
-Here under is provided an example to setup an evolutionary scenario (defined in ``tuto_strategy.py``):
+Here under is provided an example to register an evolutionary process (defined in ``tuto_proj.py``):
 
 .. code-block:: python
 
-   from framework.evolutionary_helpers import *
-   from framework.tactics_helpers import *
+    from framework.evolutionary_helpers import DefaultPopulation
 
-   tactics = Tactics()
-   evolutionary_scenarios = [("EVOL",
-                              DefaultPopulation,
-                             {'init_process': [('SEPARATOR', UI(random=True)), 'tTYPE'],
-                              'size': 10,
-                              'max_generation_nb': 10})]
+    project.register_evolutionary_processes(
+        ('evol',
+         DefaultPopulation,
+         {'init_process': [('SEPARATOR', UI(random=True)), 'tTYPE'],
+          'size': 10,
+          'max_generation_nb': 10})
+    )
 
 
-Once loaded from ``Fuddly``, the evolutionary scenarios are available like any other scenarios.
-In this case, a generator named ``SC_EVOL`` will be created. After each call to it,
-the evolutionary process will progress and a new test case will be produced.
+Once loaded from ``Fuddly``, ``Scenario`` are created from registered evolutionary processes, which are callable
+(like any other scenarios) through their associated ``Generator``. In our example, only one process is
+registered and will lead to the creation of the generator ``SC_EVOL``.
+After each call to it, the evolutionary process will progress and a new test case will be produced.
 
 Note that the :class:`framework.evolutionary_helpers.DefaultPopulation` is used with this scenario.
 It expects three parameters:
