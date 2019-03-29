@@ -6007,7 +6007,8 @@ class Node(object):
 
     def show(self, conf=None, verbose=True, print_name_func=None, print_contents_func=None,
              print_raw_func=None, print_nonterm_func=None, print_type_func=None, alpha_order=False,
-             raw_limit=None, log_func=sys.stdout.write, pretty_print=True, display_title=True):
+             raw_limit=None, log_func=sys.stdout.write, pretty_print=True, display_title=True,
+             display_gen_node=True):
 
         if print_name_func is None:
             print_name_func = self._print_name
@@ -6086,6 +6087,8 @@ class Node(object):
 
         nodes_nb = len(l)
 
+        unindent_generated_node = False
+
         if verbose:
             prev_depth = 0
             for n, i in zip(l, range(nodes_nb)):
@@ -6117,6 +6120,10 @@ class Node(object):
                 else:
                     graph_deco = ''
 
+                if unindent_generated_node:
+                    # depth always >=1
+                    depth -= 1
+
                 if depth == 0:
                     indent_nonterm = ''
                     indent_spc = ''
@@ -6146,7 +6153,9 @@ class Node(object):
                     else:
                         indent_spc = prefix + ' |  ' + '    '
 
-                prev_depth = depth
+                if unindent_generated_node:
+                    unindent_generated_node = False
+                    depth += 1
 
                 if node.is_term(conf_tmp):
                     raw = node._tobytes()
@@ -6180,14 +6189,19 @@ class Node(object):
                     else:
                         print_raw_func("\_raw: {:s}".format(repr(raw)), log_func=log_func, pretty_print=pretty_print)
                 else:
-                    print_nonterm_func("{:s}[{:d}] {:s}".format(indent_nonterm, depth, name), nl=False,
-                                       log_func=log_func, pretty_print=pretty_print)
-                    if isinstance(node.c[conf_tmp], NodeInternals_GenFunc):
-                        args = get_args(node, conf_tmp)
-                        print_nonterm_func(' [{:s} | node_args: {:s}]'.format(node_type, args),
-                                           nl=False, log_func=log_func, pretty_print=pretty_print)
-                        self._print(graph_deco, rgb=Color.ND_DUPLICATED, style=FontStyle.BOLD,
-                                    log_func=log_func, pretty_print=pretty_print)
+                    is_gen_node = isinstance(node.c[conf_tmp], NodeInternals_GenFunc)
+                    if (is_gen_node and display_gen_node) or not is_gen_node:
+                        print_nonterm_func("{:s}[{:d}] {:s}".format(indent_nonterm, depth, name), nl=False,
+                                           log_func=log_func, pretty_print=pretty_print)
+                    if is_gen_node:
+                        if display_gen_node:
+                            args = get_args(node, conf_tmp)
+                            print_nonterm_func(' [{:s} | node_args: {:s}]'.format(node_type, args),
+                                               nl=False, log_func=log_func, pretty_print=pretty_print)
+                            self._print(graph_deco, rgb=Color.ND_DUPLICATED, style=FontStyle.BOLD,
+                                        log_func=log_func, pretty_print=pretty_print)
+                        else:
+                            unindent_generated_node = True
                     else:
                         print_nonterm_func(' [{:s}]'.format(node_type), nl=False, log_func=log_func, pretty_print=pretty_print)
                         if node.is_nonterm(conf_tmp) and node.encoder is not None:
