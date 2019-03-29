@@ -285,11 +285,20 @@ class SyncExistenceObj(SyncObj):
 
 
 class NodeCondition(object):
-    '''
+    """
     Base class for every node-related conditions. (Note that NodeCondition
     may be copied many times. If some attributes need to be fully copied,
     handle this through __copy__() overriding).
-    '''
+    """
+
+    def _check_int(self, val, gt_val=None, lt_val=None):
+        result = True
+        if gt_val is not None:
+            result = val >= gt_val
+        if lt_val is not None:
+            result = val <= lt_val
+        return result
+
     def check(self, node):
         raise NotImplementedError
 
@@ -339,54 +348,64 @@ class RawCondition(NodeCondition):
 
 class IntCondition(NodeCondition):
 
-    def __init__(self, val=None, neg_val=None):
-        '''
+    def __init__(self, val=None, neg_val=None, gt_val=None, lt_val=None):
+        """
         Args:
           val (int/:obj:`list` of int): integer(s) that satisfies the condition
-          neg_val (int/:obj:`list` of int): integer(s) that does NOT satisfy the condition
-        '''
-        assert((val is not None and neg_val is None) or (val is None and neg_val is not None))
-        if val is not None:
-            self.positive_mode = True
-            self.val = val
-        elif neg_val is not None:
-            self.positive_mode = False
-            self.val = neg_val
+          neg_val (int/:obj:`list` of int): integer(s) that does NOT satisfy the condition (AND clause)
+          gt_val (int): condition met if greater than or equal to this value (AND clause)
+          lt_val (int): condition met if lesser than or equal to this value (AND clause)
+        """
+        assert val is not None or neg_val is not None or gt_val is not None or lt_val is not None
+
+        self.val = val
+        self.neg_val = neg_val
+        self.gt_val = gt_val
+        self.lt_val = lt_val
 
     def check(self, node):
+
         if node.is_genfunc():
             node = node.generated_node
 
         assert node.is_typed_value(subkind=fvt.INT)
 
-        if isinstance(self.val, (tuple, list)):
-            if self.positive_mode:
-                result = node.get_current_raw_val() in self.val
-            else:
-                result = node.get_current_raw_val() not in self.val
-        else:
-            assert(isinstance(self.val, int))
-            if self.positive_mode:
-                result = node.get_current_raw_val() == self.val
-            else:
-                result = node.get_current_raw_val() != self.val
+        curr_val = node.get_current_raw_val()
 
-        return result
+        result = True
+
+        if self.val is not None:
+            if isinstance(self.val, (tuple, list)):
+                result = curr_val in self.val
+            else:
+                result = curr_val == self.val
+
+        if self.neg_val is not None:
+            if isinstance(self.neg_val, (tuple, list)):
+                result = result and curr_val not in self.neg_val
+            else:
+                result = result and curr_val != self.val
+
+        return result and self._check_int(curr_val, gt_val=self.gt_val, lt_val=self.lt_val)
 
 
 class BitFieldCondition(NodeCondition):
 
-    def __init__(self, sf, val=None, neg_val=None):
-        '''
+    def __init__(self, sf, val=None, neg_val=None, gt_val=None, lt_val=None):
+        """
         Args:
           sf (int/:obj:`list` of int): subfield(s) of the BitField() on which the condition apply
           val (int/:obj:`list` of int/:obj:`list` of :obj:`list` of int): integer(s) that
             satisfies the condition(s)
           neg_val (int/:obj:`list` of int/:obj:`list` of :obj:`list` of int): integer(s) that
-            does NOT satisfy the condition(s)
-        '''
+            does NOT satisfy the condition(s) (AND clause)
+          gt_val (int/:obj:`list` of int/:obj:`list` of :obj:`list` of int): condition met if
+            subfield(s) greater than or equal to values in this field (AND clause)
+          lt_val (int/:obj:`list` of int/:obj:`list` of :obj:`list` of int): condition met if
+            subfield(s) lesser than or equal to values in this field (AND clause)
+        """
 
-        assert(val is not None or neg_val is not None)
+        assert val is not None or neg_val is not None or gt_val is not None or lt_val is not None
 
         if isinstance(sf, (tuple, list)):
             assert(len(sf) != 0)
@@ -406,14 +425,17 @@ class BitFieldCondition(NodeCondition):
         self.sf = sf
 
         for sf in self.sf:
-            assert(sf is not None)
-
+            assert sf is not None
 
         self.val = val if val is not None else [None for _ in self.sf]
         self.neg_val = neg_val if neg_val is not None else [None for _ in self.sf]
 
-        for v, nv in zip(self.val, self.neg_val):
-            assert(v is not None or nv is not None)
+        if val is not None or neg_val is not None:
+            for v, nv in zip(self.val, self.neg_val):
+                assert v is not None or nv is not None
+
+        self.gt_val = gt_val if gt_val is not None else [None for _ in self.sf]
+        self.lt_val = lt_val if lt_val is not None else [None for _ in self.sf]
 
 
     def check(self, node):
@@ -422,20 +444,21 @@ class BitFieldCondition(NodeCondition):
 
         assert(node.is_typed_value(subkind=fvt.BitField))
 
-        for sf, val, neg_val in zip(self.sf, self.val, self.neg_val):
+        result = True
+        for sf, val, neg_val, gt_val, lt_val in zip(self.sf, self.val, self.neg_val, self.gt_val, self.lt_val):
+            curr_val = node.get_subfield(idx=sf)
             if val is not None:
                 if not isinstance(val, (tuple, list)):
                     val = [val]
-                result = node.get_subfield(idx=sf) in val
-            else:
+                result = result and curr_val in val
+            if neg_val is not None:
                 if not isinstance(neg_val, (tuple, list)):
                     neg_val = [neg_val]
-                result = node.get_subfield(idx=sf) not in neg_val
-            if not result:
-                return False
+                result = result and curr_val not in neg_val
 
-        return True
+            result = result and self._check_int(curr_val, gt_val=gt_val, lt_val=lt_val)
 
+        return result
 
 
 class NodeCustomization(object):

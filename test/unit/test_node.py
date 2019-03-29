@@ -67,14 +67,6 @@ class TestBitFieldCondition(unittest.TestCase):
         condition = BitFieldCondition(sf=sf, val=val, neg_val=neg_val)
         self.assertFalse(condition.check(TestBitFieldCondition.node))
 
-    def test_true_val_has_priority(self):
-        condition = BitFieldCondition(sf=0, val=[0, 4, 5], neg_val=[0, 4, 5])
-        self.assertTrue(condition.check(TestBitFieldCondition.node))
-
-    def test_false_val_has_priority(self):
-        condition = BitFieldCondition(sf=0, val=[3, 4, 5], neg_val=[3, 4, 5])
-        self.assertFalse(condition.check(TestBitFieldCondition.node))
-
     @ddt.data((None, [2, 3]), ([1], 1), ((1,), 2),
           ([1], [2, 1, 4]), ((1,), (2, 1, 4)),
           ([1, 2], [1]))
@@ -84,7 +76,6 @@ class TestBitFieldCondition(unittest.TestCase):
         self.assertRaises(Exception, BitFieldCondition, sf=sf, neg_val=val)
 
     @ddt.data((1, None, None), (None, 2, 3),
-          ([1, 2], [1, None], [2, None]),
           ([1, 2], [1, 2], [[1, 2, 3, 4]]),
           ([1, 2], [1, 2, 3, 4], [[1, 2]]))
     @ddt.unpack
