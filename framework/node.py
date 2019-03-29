@@ -299,49 +299,54 @@ class NodeCondition(object):
             result = val <= lt_val
         return result
 
+    def _check_inclusion(self, curr_val, val=None, neg_val=None):
+        result = True
+        if val is not None:
+            if isinstance(val, (tuple, list)):
+                result = curr_val in val
+            else:
+                result = curr_val == val
+        if neg_val is not None:
+            if isinstance(neg_val, (tuple, list)):
+                result = result and curr_val not in neg_val
+            else:
+                result = result and curr_val != neg_val
+        return result
+
     def check(self, node):
         raise NotImplementedError
 
 
 class RawCondition(NodeCondition):
 
-    def __init__(self, val=None, neg_val=None):
-        '''
+    def __init__(self, val=None, neg_val=None, cond_func=None):
+        """
         Args:
           val (bytes/:obj:`list` of bytes): value(s) that satisfies the condition
-          neg_val (bytes/:obj:`list` of bytes): value(s) that does NOT satisfy the condition
-        '''
-        assert((val is not None and neg_val is None) or (val is None and neg_val is not None))
-        if val is not None:
-            self.positive_mode = True
-            self._handle_cond(val)
-        elif neg_val is not None:
-            self.positive_mode = False
-            self._handle_cond(neg_val)
+          neg_val (bytes/:obj:`list` of bytes): value(s) that does NOT satisfy the condition (AND clause)
+          cond_func: function that takes the node value and return a boolean
+        """
+        self.val = self._handle_cond(val) if val is not None else None
+        self.neg_val = self._handle_cond(neg_val) if neg_val is not None else None
+        self.cond_func = cond_func
 
     def _handle_cond(self, val):
         if isinstance(val, (tuple, list)):
-            self.val = []
+            normed_val = []
             for v in val:
-                self.val.append(convert_to_internal_repr(v))
+                normed_val.append(convert_to_internal_repr(v))
         else:
-            self.val = convert_to_internal_repr(val)
+            normed_val = convert_to_internal_repr(val)
+        return normed_val
 
     def check(self, node):
         node_val = node._tobytes()
         if Node.DEFAULT_DISABLED_VALUE:
             node_val = node_val.replace(Node.DEFAULT_DISABLED_VALUE, b'')
 
-        if self.positive_mode:
-            if isinstance(self.val, (tuple, list)):
-                result = node_val in self.val
-            else:
-                result = node_val == self.val
-        else:
-            if isinstance(self.val, (tuple, list)):
-                result = node_val not in self.val
-            else:
-                result = node_val != self.val
+        result = self._check_inclusion(node_val, val=self.val, neg_val=self.neg_val)
+        if self.cond_func:
+            result = result and self.cond_func(node_val)
 
         return result
 
@@ -372,19 +377,7 @@ class IntCondition(NodeCondition):
 
         curr_val = node.get_current_raw_val()
 
-        result = True
-
-        if self.val is not None:
-            if isinstance(self.val, (tuple, list)):
-                result = curr_val in self.val
-            else:
-                result = curr_val == self.val
-
-        if self.neg_val is not None:
-            if isinstance(self.neg_val, (tuple, list)):
-                result = result and curr_val not in self.neg_val
-            else:
-                result = result and curr_val != self.val
+        result = self._check_inclusion(curr_val, val=self.val, neg_val=self.neg_val)
 
         return result and self._check_int(curr_val, gt_val=self.gt_val, lt_val=self.lt_val)
 

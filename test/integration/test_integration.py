@@ -2258,6 +2258,33 @@ class TestNodeFeatures(unittest.TestCase):
 
         self.assertEqual(params['result'], raw)
 
+    @ddt.data(
+        {'opcode_val': ['Test'], 'val': None, 'cond_func': lambda x: x.startswith(b'Te'),
+         'result': b'Test[cond_checked]'},
+        {'opcode_val': ['Tst'], 'val': None, 'cond_func': lambda x: x.startswith(b'Te'),
+         'result': b'Tst'},
+    )
+    def test_exist_rawcondition(self, params):
+        cond_desc = \
+            {'name': 'exist_cond',
+             'contents': [
+                 {'name': 'opcode',
+                  'determinist': True,
+                  'contents': String(values=params['opcode_val'])},
+
+                 {'name': 'type',
+                  'exists_if': (RawCondition(val=params['val'], cond_func=params.get('cond_func')),
+                                'opcode'),
+                  'contents': String(values=['[cond_checked]'])},
+             ]}
+
+        node = NodeBuilder().create_graph_from_desc(cond_desc)
+
+        raw = node.to_bytes()
+        print('{} (len: {})'.format(raw, len(raw)))
+
+        self.assertEqual(params['result'], raw)
+
 
     def test_generalized_exist_cond(self):
 
