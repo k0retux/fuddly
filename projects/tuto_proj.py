@@ -30,6 +30,7 @@ from framework.knowledge.information import *
 from framework.knowledge.feedback_handler import TestFbkHandler
 from framework.scenario import *
 from framework.global_resources import UI
+from framework.evolutionary_helpers import DefaultPopulation
 
 project = Project()
 project.default_dm = ['mydf', 'myproto']
@@ -173,6 +174,15 @@ sc_proj2 = sc_proj1.clone('proj2')
 sc_proj2.set_user_context(UI(prj='proj2'))
 
 project.register_scenarios(sc_proj1, sc_proj2)
+
+### EVOLUTIONNARY PROCESS EXAMPLE ###
+
+project.register_evolutionary_processes(
+    ('evol', DefaultPopulation,
+     {'init_process': [('SEPARATOR', UI(random=True)), 'tTYPE'],
+      'size': 10,
+      'max_generation_nb': 10})
+)
 
 ### OPERATOR DEFINITION ###
 

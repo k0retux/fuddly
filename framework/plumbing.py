@@ -377,7 +377,7 @@ class FmkPlumbing(object):
         self.error = False
         self.fmk_error = []
 
-    def __reset_fmk_internals(self, reset_existing_seed=True):
+    def _reset_fmk_internals(self, reset_existing_seed=True):
         self.cleanup_all_dmakers(reset_existing_seed)
         # Warning: fuzz delay is not set to 0 by default in order to have a time frame
         # where SIGINT is accepted from user
@@ -496,14 +496,14 @@ class FmkPlumbing(object):
             self._cleanup_all_dmakers()
             self.dm.cleanup()
 
-            dm_params = self.__import_dm(prefix, name, reload_dm=True)
+            dm_params = self._import_dm(prefix, name, reload_dm=True)
             if dm_params is not None:
                 if self.dm in self.__dynamic_generator_ids:
                     del self.__dynamic_generator_ids[self.dm]
                 if self.dm in self.__dyngenerators_created:
                     del self.__dyngenerators_created[self.dm]
-                self.__add_data_model(dm_params['dm'], dm_params['tactics'],
-                                      dm_params['dm_rld_args'], reload_dm=True)
+                self._add_data_model(dm_params['dm'], dm_params['tactics'],
+                                     dm_params['dm_rld_args'], reload_dm=True)
                 self.__dyngenerators_created[dm_params['dm']] = False
                 self.dm = dm_params['dm']
             else:
@@ -561,10 +561,10 @@ class FmkPlumbing(object):
                 self._reload_dm()
                 self._init_fmk_internals_step1(prj_params['project'], self.dm)
             else:
-                dm_params = self.__import_dm(dm_prefix, dm_name, reload_dm=True)
+                dm_params = self._import_dm(dm_prefix, dm_name, reload_dm=True)
                 if dm_params is not None:
-                    self.__add_data_model(dm_params['dm'], dm_params['tactics'],
-                                          dm_params['dm_rld_args'], reload_dm=True)
+                    self._add_data_model(dm_params['dm'], dm_params['tactics'],
+                                         dm_params['dm_rld_args'], reload_dm=True)
                     self.__dyngenerators_created[dm_params['dm']] = False
                     self._init_fmk_internals_step1(prj_params['project'], dm_params['dm'])
 
@@ -701,11 +701,11 @@ class FmkPlumbing(object):
                     continue
                 name = res.group(1)
                 if name + '.py' in file_list:
-                    dm_params = self.__import_dm(prefix, name)
+                    dm_params = self._import_dm(prefix, name)
                     if dm_params is not None:
-                        self.__add_data_model(dm_params['dm'], dm_params['tactics'],
-                                              dm_params['dm_rld_args'],
-                                              reload_dm=False)
+                        self._add_data_model(dm_params['dm'], dm_params['tactics'],
+                                             dm_params['dm_rld_args'],
+                                             reload_dm=False)
                         self.__dyngenerators_created[dm_params['dm']] = False
                         if fmkDB_update:
                             # populate FMK DB
@@ -718,7 +718,7 @@ class FmkPlumbing(object):
             self.fmkDB.insert_dmaker(Database.DEFAULT_DM_NAME, Database.DEFAULT_GTYPE_NAME,
                                      Database.DEFAULT_GEN_NAME, True, True)
 
-    def __import_dm(self, prefix, name, reload_dm=False):
+    def _import_dm(self, prefix, name, reload_dm=False):
 
         try:
             if reload_dm:
@@ -764,18 +764,6 @@ class FmkPlumbing(object):
                     print(colorize("*** ERROR: '%s_strategy.py' shall contain a global variable 'tactics' ***" % (name), rgb=Color.ERROR))
                 return None
 
-            try:
-                evol_scs = eval(prefix + name + '_strategy' + '.evolutionary_scenarios')
-            except:
-                pass
-            else:
-                built_evol_scs = []
-                for evol_sc in evol_scs:
-                    built_evol_sc = EvolutionaryScenariosFactory.build(self._exportable_fmk_ops, *evol_sc)
-                    built_evol_scs.append(built_evol_sc)
-
-                dm_params['tactics'].register_scenarios(*built_evol_scs)
-
             dm_params['tactics'].set_exportable_fmk_ops(self._exportable_fmk_ops)
 
             if dm_params['dm'].name is None:
@@ -791,8 +779,8 @@ class FmkPlumbing(object):
             return dm_params
 
 
-    def __add_data_model(self, data_model, strategy, dm_rld_args,
-                         reload_dm=False):
+    def _add_data_model(self, data_model, strategy, dm_rld_args,
+                        reload_dm=False):
 
         if data_model.name not in map(lambda x: x.name, self.dm_list):
             self.dm_list.append(data_model)
@@ -909,6 +897,13 @@ class FmkPlumbing(object):
                 if not self._quiet:
                     print(colorize("*** ERROR: '%s_proj.py' shall contain a global variable 'project' ***" % (name), rgb=Color.ERROR))
                 return None
+            else:
+                prj = prj_params['project']
+                prj.set_exportable_fmk_ops(self._exportable_fmk_ops)
+                if prj.evol_processes:
+                    for proc in prj.evol_processes:
+                        built_evol_sc = EvolutionaryScenariosFactory.build(self._exportable_fmk_ops, *proc)
+                        prj.register_scenarios(built_evol_sc)
 
             try:
                 logger = eval(prefix + name + '_proj' + '.logger')
@@ -1271,7 +1266,7 @@ class FmkPlumbing(object):
         for dm in self.dm_list:
             yield dm
 
-    def __iter_data_models(self):
+    def _iter_data_models(self):
         for dm in self.dm_list:
             yield dm
 
@@ -1279,7 +1274,7 @@ class FmkPlumbing(object):
     def show_data_models(self):
         print(colorize(FontStyle.BOLD + '\n-=[ Data Models ]=-\n', rgb=Color.INFO))
         idx = 0
-        for dm in self.__iter_data_models():
+        for dm in self._iter_data_models():
             if dm is self.dm:
                 print(colorize(FontStyle.BOLD + '[{:d}] {!s}'.format(idx, dm.name), rgb=Color.SELECTED))
             else:
@@ -1331,7 +1326,7 @@ class FmkPlumbing(object):
     def _init_fmk_internals_step2(self, prj, dm):
         self._recompute_current_generators()
         # need the logger active
-        self.__reset_fmk_internals()
+        self._reset_fmk_internals()
 
 
     def _recompute_current_generators(self):
@@ -1341,7 +1336,7 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
     def get_data_model_by_name(self, name):
-        for model in self.__iter_data_models():
+        for model in self._iter_data_models():
             if model.name == name:
                 ret = model
                 break
@@ -1431,9 +1426,9 @@ class FmkPlumbing(object):
         if reload_dm or not is_dm_name_exists:
             self.fmkDB.insert_data_model(new_dm.name)
             dm_name_list = [dm.name for dm in dm_list]
-            self.__add_data_model(new_dm, new_tactics,
-                                  dm_rld_args=[None, dm_name_list],
-                                  reload_dm=reload_dm)
+            self._add_data_model(new_dm, new_tactics,
+                                 dm_rld_args=[None, dm_name_list],
+                                 reload_dm=reload_dm)
 
             # In this case DynGens have already been generated through
             # the reloading of the included DMs
@@ -1696,7 +1691,7 @@ class FmkPlumbing(object):
             self.set_feedback_mode(Target.FBK_WAIT_FULL_TIME, tg_id=tg_id, do_record=do_record, do_show=do_show)
 
     # Used to introduce some delay after sending data
-    def __delay_fuzzing(self):
+    def _delay_fuzzing(self):
         '''
         return False if the user want to stop fuzzing (action possible if
         delay is set to -1)
@@ -1876,13 +1871,15 @@ class FmkPlumbing(object):
                     seed = Data(seed_node)
                     seed.generate_info_from_content(original_data=original_data)
 
-            elif data_desc.seed is not None and not isinstance(data_desc.seed, Data):
+            elif isinstance(data_desc.seed, Data):
+                seed = data_desc.seed
+                seed.generate_info_from_content(original_data=original_data)
+            elif data_desc.seed is None:
+                seed = None
+            else:
                 self.set_error(msg='DataProcess object contains an unrecognized seed type!',
                                    code=Error.UserCodeError)
                 return None
-            else:
-                seed = data_desc.seed
-                seed.generate_info_from_content(original_data=original_data)
 
             if resolve_dataprocess or data_desc.outcomes is None:
                 data = self.get_data(data_desc.process, data_orig=seed)
@@ -2213,7 +2210,7 @@ class FmkPlumbing(object):
         self._do_after_feedback_retrieval(data_list)
 
         if cont0:
-            cont0 = self.__delay_fuzzing()
+            cont0 = self._delay_fuzzing()
 
         return cont0 and cont1 and cont2
 
@@ -2598,7 +2595,7 @@ class FmkPlumbing(object):
         self.lg.log_comment(comments)
 
     @EnforceOrder(accepted_states=['S2'])
-    def __register_in_data_bank(self, data_orig, data):
+    def _register_in_data_bank(self, data_orig, data):
         self.__db_idx += 1
         self.__data_bank[self.__db_idx] = (data_orig, data)
 
@@ -2613,7 +2610,7 @@ class FmkPlumbing(object):
             if dm_name != Database.DEFAULT_DM_NAME:
                 dm = self.get_data_model_by_name(dm_name)
                 data.set_data_model(dm)
-            self.__register_in_data_bank(None, data)
+            self._register_in_data_bank(None, data)
 
     def _log_fmk_info(self, msg):
         if self.lg:
@@ -2657,12 +2654,7 @@ class FmkPlumbing(object):
             entry = self.__data_bank[i]
             yield entry
 
-    def __iter_data_bank(self):
-        for i in self.__data_bank:
-            entry = self.__data_bank[i]
-            yield entry
-
-    def __show_entry(self, data_orig, data):
+    def _show_entry(self, data_orig, data):
         if data_orig != None:
             self.lg.print_console('|_ IN  < ', rgb=Color.SUBINFO)
             self.lg.print_console(data_orig, nl_before=False)
@@ -2730,7 +2722,7 @@ class FmkPlumbing(object):
             msg = '===[ {:d} ]==='.format(idx)
             msg += '='*(max(80-len(msg),0))
             self.lg.print_console(msg, rgb=Color.INFO)
-            self.__show_entry(*entry)
+            self._show_entry(*entry)
 
         self.lg.print_console('\n', nl_before=False)
 
@@ -2744,7 +2736,7 @@ class FmkPlumbing(object):
         self.lg.print_console("-=[ Workspace ]=-\n", rgb=Color.INFO, style=FontStyle.BOLD)
 
         for data_orig, data in self.__current:
-            self.__show_entry(data_orig, data)
+            self._show_entry(data_orig, data)
 
         self.lg.print_console('\n', nl_before=False)
 
@@ -2780,7 +2772,7 @@ class FmkPlumbing(object):
 
                 data = Data(obj.group(1)[:-1])
 
-                self.__register_in_data_bank(None, data)
+                self._register_in_data_bank(None, data)
                 text = text[len(obj.group(0))+1:]
                 
     @EnforceOrder(accepted_states=['S2'])
@@ -2804,7 +2796,7 @@ class FmkPlumbing(object):
 
         if self.__current:
             for data_orig, data in self.__current:
-                self.__register_in_data_bank(data_orig, data)
+                self._register_in_data_bank(data_orig, data)
 
     @EnforceOrder(accepted_states=['S2'])
     def register_last_in_data_bank(self):
@@ -2814,7 +2806,7 @@ class FmkPlumbing(object):
 
         if self.__current:
             data_orig, data = self.__current[-1]
-            self.__register_in_data_bank(data_orig, data)
+            self._register_in_data_bank(data_orig, data)
 
     @EnforceOrder(accepted_states=['S2'])
     def show_operators(self):
@@ -2823,7 +2815,7 @@ class FmkPlumbing(object):
         self.lg.print_console('')
         for o in operators:
             self.lg.print_console(o, rgb=Color.SUBINFO)
-            desc = self.__dmaker_desc_str(self.prj.get_operator(o))
+            desc = self._dmaker_desc_str(self.prj.get_operator(o))
             self.lg.print_console(desc, limit_output=False)
 
         self.lg.print_console('\n\n', nl_before=False)
@@ -2846,7 +2838,7 @@ class FmkPlumbing(object):
             self.set_error('Invalid operator', code=Error.InvalidOp)
             return False
 
-        self.__reset_fmk_internals(reset_existing_seed=(not use_existing_seed))
+        self._reset_fmk_internals(reset_existing_seed=(not use_existing_seed))
 
         try:
             ok = operator._start(self._exportable_fmk_ops, self.dm, self.mon, self.targets, self.lg, user_input)
@@ -2968,7 +2960,7 @@ class FmkPlumbing(object):
                 if linst.is_instruction_set(LastInstruction.RecordData):
                     for dt in data_list:
                         dt.make_recordable()
-                        self.__register_in_data_bank(None, dt)
+                        self._register_in_data_bank(None, dt)
 
                 if multiple_data:
                     self._log_data(data_list, verbose=verbose)
@@ -3022,7 +3014,7 @@ class FmkPlumbing(object):
                         tg.cleanup()
 
                 # Delay introduced after logging data
-                if not self.__delay_fuzzing():
+                if not self._delay_fuzzing():
                     exit_operator = True
                     self.lg.log_fmk_info("Operator will shutdown because waiting has been cancelled by the user")
 
@@ -3032,7 +3024,7 @@ class FmkPlumbing(object):
             self._handle_user_code_exception('Operator has crashed during its stop() method')
             return False
 
-        self.__reset_fmk_internals(reset_existing_seed=(not use_existing_seed))
+        self._reset_fmk_internals(reset_existing_seed=(not use_existing_seed))
 
         return True
 
@@ -3585,7 +3577,7 @@ class FmkPlumbing(object):
         print_dmaker(l2, 'Generic')
 
 
-    def __chunk_lines(self, string, length):
+    def _chunk_lines(self, string, length):
         l = string.split(' ')
         chk_list = []
         full_line = ''
@@ -3601,11 +3593,11 @@ class FmkPlumbing(object):
             chk_list[-1] = (chk_list[-1])[:-1]
         return chk_list
 
-    def __dmaker_desc_str(self, obj):
+    def _dmaker_desc_str(self, obj):
 
         def _make_str(k, v):
             desc, default, arg_type = v
-            l = self.__chunk_lines(desc, 60)
+            l = self._chunk_lines(desc, 60)
             k_len = len(k)
             prefix_len = len('\n    |_ ') + 3 - len("desc: ")
             prefix = '\n    |_ ' + colorize(k, rgb=Color.INFO_ALT) +  \
@@ -3664,7 +3656,7 @@ class FmkPlumbing(object):
                     msg = "  name: %s (weight: %d, valid: %r)" % \
                         (name, self._tactics.get_generator_weight(dt, name),
                          self._tactics.get_generator_validness(dt, name))
-                    msg += self.__dmaker_desc_str(self._tactics.get_generator_obj(dt, name))
+                    msg += self._dmaker_desc_str(self._tactics.get_generator_obj(dt, name))
                     self.lg.print_console(msg, limit_output=False)
 
         if gen_generators:
@@ -3677,7 +3669,7 @@ class FmkPlumbing(object):
                     msg = "  name: %s (weight: %d, valid: %r)" % \
                         (name, self._generic_tactics.get_generator_weight(dt, name),
                          self._generic_tactics.get_generator_validness(dt, name))
-                    msg += self.__dmaker_desc_str(self._generic_tactics.get_generator_obj(dt, name))
+                    msg += self._dmaker_desc_str(self._generic_tactics.get_generator_obj(dt, name))
                     self.lg.print_console(msg, limit_output=False)
 
         self.lg.print_console('\n', nl_before=False)
@@ -3712,7 +3704,7 @@ class FmkPlumbing(object):
                               .format(self._tactics.get_disruptor_weight(dmt, name),
                                       self._tactics.get_disruptor_validness(dmt, name))
                     msg += ' ' + colorize("[{:s}]".format(dis_type), rgb=Color.INFO_ALT)
-                    msg += self.__dmaker_desc_str(dis_obj)
+                    msg += self._dmaker_desc_str(dis_obj)
                     self.lg.print_console(msg, limit_output=False)
 
         if gen_disruptors:
@@ -3732,7 +3724,7 @@ class FmkPlumbing(object):
                               .format(self._generic_tactics.get_disruptor_weight(dmt, name),
                                       self._generic_tactics.get_disruptor_validness(dmt, name))
                     msg += ' ' + colorize("[{:s}]".format(dis_type), rgb=Color.INFO_ALT)
-                    msg += self.__dmaker_desc_str(dis_obj)
+                    msg += self._dmaker_desc_str(dis_obj)
                     self.lg.print_console(msg, limit_output=False)
 
         self.lg.print_console('\n', nl_before=False)

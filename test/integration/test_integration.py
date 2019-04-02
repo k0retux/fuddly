@@ -26,6 +26,7 @@ from __future__ import print_function
 
 import sys
 import unittest
+import ddt
 
 import ddt
 
@@ -1768,7 +1769,9 @@ class TestModelWalker(unittest.TestCase):
         self.assertIn(idx, [542])
 
 
+@ddt.ddt
 class TestNodeFeatures(unittest.TestCase):
+
     @classmethod
     def setUpClass(cls):
         pass
@@ -2217,6 +2220,71 @@ class TestNodeFeatures(unittest.TestCase):
         result = b"A3T\x0f\xa0\x00\n$ and_OK $$ or_OK $"
 
         self.assertEqual(result, raw)
+
+
+    @ddt.data(
+        # gt_val test cases
+        {'opcode_val': [5], 'val': None, 'gt_val': 4, 'result': b'\x05[cond_checked]'},
+        {'opcode_val': [5], 'val': None, 'gt_val': 5, 'result': b'\x05[cond_checked]'},
+        {'opcode_val': [5], 'val': [5, 6], 'gt_val': 4, 'result': b'\x05[cond_checked]'},
+        {'opcode_val': [5], 'val': [6, 7], 'gt_val': 4, 'result': b'\x05'},
+        {'opcode_val': [5], 'val': 5, 'gt_val': 6, 'result': b'\x05'},
+        # lt_val test cases
+        {'opcode_val': [5], 'val': None, 'lt_val': 6, 'result': b'\x05[cond_checked]'},
+        {'opcode_val': [5], 'val': None, 'lt_val': 5, 'result': b'\x05[cond_checked]'},
+        {'opcode_val': [5], 'val': [4, 5], 'lt_val': 6, 'result': b'\x05[cond_checked]'},
+        {'opcode_val': [5], 'val': [3, 4], 'lt_val': 6, 'result': b'\x05'},
+        {'opcode_val': [5], 'val': 5, 'lt_val': 4, 'result': b'\x05'},
+    )
+    def test_exist_intcondition(self, params):
+        cond_desc = \
+            {'name': 'exist_cond',
+             'contents': [
+                 {'name': 'opcode',
+                  'determinist': True,
+                  'contents': UINT8(values=params['opcode_val'])},
+
+                 {'name': 'type',
+                  'exists_if': (IntCondition(val=params['val'], gt_val=params.get('gt_val'),
+                                             lt_val=params.get('lt_val')),
+                                'opcode'),
+                  'contents': String(values=['[cond_checked]'])},
+             ]}
+
+        node = NodeBuilder().create_graph_from_desc(cond_desc)
+
+        raw = node.to_bytes()
+        print('{} (len: {})'.format(raw, len(raw)))
+
+        self.assertEqual(params['result'], raw)
+
+    @ddt.data(
+        {'opcode_val': ['Test'], 'val': None, 'cond_func': lambda x: x.startswith(b'Te'),
+         'result': b'Test[cond_checked]'},
+        {'opcode_val': ['Tst'], 'val': None, 'cond_func': lambda x: x.startswith(b'Te'),
+         'result': b'Tst'},
+    )
+    def test_exist_rawcondition(self, params):
+        cond_desc = \
+            {'name': 'exist_cond',
+             'contents': [
+                 {'name': 'opcode',
+                  'determinist': True,
+                  'contents': String(values=params['opcode_val'])},
+
+                 {'name': 'type',
+                  'exists_if': (RawCondition(val=params['val'], cond_func=params.get('cond_func')),
+                                'opcode'),
+                  'contents': String(values=['[cond_checked]'])},
+             ]}
+
+        node = NodeBuilder().create_graph_from_desc(cond_desc)
+
+        raw = node.to_bytes()
+        print('{} (len: {})'.format(raw, len(raw)))
+
+        self.assertEqual(params['result'], raw)
+
 
     def test_generalized_exist_cond(self):
 

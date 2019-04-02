@@ -45,7 +45,7 @@ Let's begin with a simple example that interconnect 3 steps in a loop without an
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 4, 9, 13, 18, 20
+   :emphasize-lines: 4, 9, 20, 22
 
     from framework.tactics_helpers import Tactics
     from framework.scenario import *
@@ -55,16 +55,18 @@ Let's begin with a simple example that interconnect 3 steps in a loop without an
     periodic1 = Periodic(Data('Periodic (5s)\n'), period=5)
     periodic2 = Periodic(Data('One Shot\n'), period=None)
 
-    step1 = Step('exist_cond', fbk_timeout=2, set_periodic=[periodic1, periodic2])
-    step2 = Step('separator', fbk_timeout=5)
-    step3 = Step('off_gen', fbk_timeout=2, clear_periodic=[periodic1])
+    step1 = Step('exist_cond', fbk_timeout=1, set_periodic=[periodic1, periodic2],
+                 do_before_sending=before_sending_cbk, vtg_ids=0)
+    step2 = Step('separator', fbk_timeout=2, clear_periodic=[periodic1], vtg_ids=1)
+    step3 = NoDataStep(clear_periodic=[periodic2])
+    step4 = Step('off_gen', fbk_timeout=0)
 
     step1.connect_to(step2)
-    step2.connect_to(step3)
-    step3.connect_to(step1)
+    step2.connect_to(step3, cbk_after_fbk=cbk_transition1)
+    step3.connect_to(step4)
+    step4.connect_to(step1, cbk_after_sending=cbk_transition2)
 
-    sc1 = Scenario('ex1')
-    sc1.set_anchor(step1)
+    sc1 = Scenario('ex1', anchor=step1, user_context=UI(switch=False))
 
     tactics.register_scenarios(sc1)
 
@@ -85,31 +87,50 @@ which is usually used to register the data makers (`disruptors` or
 `generators`) specific to a data model (refer to :ref:`tuto:disruptors` for details), but also used
 to register scenarios as shown in line 20.
 
-From line 9 to 11 we define 3 :class:`framework.scenario.Step`:
+From line 9 to 13 we define 4 :class:`framework.scenario.Step`:
 
 - The first one commands the framework to send a data of type ``exist_cond`` (which is the name of a data registered
   in the data model ``mydf``) as well as starting 2 tasks (threaded entities of the framework) that
   will emit each one a specific data. The first one will send the specified string every 5 seconds
-  while the other one will send another string only once. Finally, the step sets also the maximum
+  while the other one will send another string only once.
+  Additionaly, the callback ``before_sending_cbk`` is set and will be triggered when the framework
+  will reach this step (callbacks are discussed in a later section).
+  Note that the step sets also the maximum
   time duration that ``Fuddly`` should respect for collecting the feedback from the target (feedback
   timeout). This timeout is actually handled by the ``Target`` object, which may decide to respect it
   or not. For instance the ``NetworkTarget`` respect it while the ``EmptyTarget`` (default target)
   do not. Note that the feedback mode (refer to :ref:`targets`) is also supported and can be set
   through the parameter ``fbk_mode``.
+  Finally, the parameter ``vtg_ids`` is used to allows interacting in a multi-targets environment
+  (this topic is detailed in :ref:`multi-target-scenario`). In this case it asks to send the data to the target
+  referenced by the virtual ID 0.
 
 - The second step commands the framework to send a data of type ``separator`` and change the
-  feedback timeout to 5.
+  feedback timeout to 2. Additionally, it requests the framework to stop the first periodic task, and
+  asks it to send its data to the target referenced by the virtual ID 1.
 
-- The third step requests to send a data of type ``off_gen`` and change back the feedback timeout to
-  2. Additionally it commands the framework to stop the periodic task which is currently running.
+- The third step do nothing except requesting the framework to stop the second periodic task.
+
+- The fourth step requests to send a data of type ``off_gen`` and change back the feedback timeout to
+  0. Additionally it commands the framework to stop the periodic task which is currently running.
 
 .. note:: The feedback timeout will directly influence the time that seperates the execution of
    each step
 
-The linking of these steps is carried out from the line 13 to 15. Then in line 17,
+The linking of these steps is carried out from the line 15 to 18. Some callbacks are defined and are
+explained in a later section. Then in line 20,
 a :class:`framework.scenario.Scenario` object is created with the name ``ex1`` which is used by ``Fuddly``
 for naming the `generator` that implements this scenario. It prefixes it with the string ``SC_`` leading to
 the name ``SC_EX1``. The `scenario` is then linked to the initial `step` in line 18.
+
+.. note::
+   The ``user_context`` parameter of the Scenario class used in line 20 allows to provide parameters
+   to Steps and callbacks of
+   the scenario (through the ``ScenarioEnv`` object shared between them and described in a later section).
+
+   This parameter can be filled with any object. Anyway, the preferable object class to use is
+   :class:`framework.global_resources.UI` which is the container class also used to pass parameters
+   to ``Generators`` and ``Disruptors``.
 
 The execution of this scenario will follow the pattern::
 
@@ -119,13 +140,11 @@ The execution of this scenario will follow the pattern::
     \--> periodic2 ...                   [periodic2 stopped]    \--> periodic2 ...
 
 
-You can play with this scenario by loading the ``tuto`` project with the third ``Target`` which expects
-a client listening on a TCP socket bound to the port 12345::
+You can play with this scenario by loading the ``tuto`` project with the ``TestTarget`` 7 and 8 (useful
+to provide arbitrary feedback)::
 
-  [fuddly term]>> run_project tuto 3
+  [fuddly term]>> run_project tuto 7 8
   [fuddly term]>> send_loop 10 SC_EX1
-
-  [another term]# nc -k -l 12345
 
 If you want to visualize your scenario, you can issue the following command
 (``[FMT]`` is optional and can be ``xdot``, ``pdf``, ``png``, ...)::
@@ -357,8 +376,7 @@ service for instance. This is illustrated in the following example in the lines 
     step3.connect_to(step4)
     step4.connect_to(FinalStep())
 
-    sc2 = Scenario('ex2')
-    sc2.set_anchor(step1)
+    sc2 = Scenario('ex2', anchor=step1)
 
 In line 25 a :class:`framework.scenario.FinalStep` (a step with its ``final`` attribute set to `True`)
 is used to terminate the scenario as well as all the associated periodic tasks that are still running.
@@ -393,10 +411,10 @@ a callback that rules the routing decision.
    :linenos:
 
     def routing_decision(env, current_step, next_step):
-        if hasattr(env, 'switch'):
+        if env.user_context.switch:
             return False
         else:
-            env.switch = False
+            env.user_context.switch = True
             return True
 
     anchor = Step('exist_cond')
@@ -408,9 +426,7 @@ a callback that rules the routing decision.
     option1.connect_to(anchor)
     option2.connect_to(anchor)
 
-    sc3 = Scenario('ex3')
-    sc3.set_anchor(anchor)
-
+    sc3 = Scenario('ex3', anchor=anchor, user_context=UI(switch=False))
 
 The execution of this scenario will follow the pattern::
 

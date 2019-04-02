@@ -285,108 +285,120 @@ class SyncExistenceObj(SyncObj):
 
 
 class NodeCondition(object):
-    '''
+    """
     Base class for every node-related conditions. (Note that NodeCondition
     may be copied many times. If some attributes need to be fully copied,
     handle this through __copy__() overriding).
-    '''
+    """
+
+    def _check_int(self, val, gt_val=None, lt_val=None):
+        result = True
+        if gt_val is not None:
+            result = val >= gt_val
+        if lt_val is not None:
+            result = val <= lt_val
+        return result
+
+    def _check_inclusion(self, curr_val, val=None, neg_val=None):
+        result = True
+        if val is not None:
+            if isinstance(val, (tuple, list)):
+                result = curr_val in val
+            else:
+                result = curr_val == val
+        if neg_val is not None:
+            if isinstance(neg_val, (tuple, list)):
+                result = result and curr_val not in neg_val
+            else:
+                result = result and curr_val != neg_val
+        return result
+
     def check(self, node):
         raise NotImplementedError
 
 
 class RawCondition(NodeCondition):
 
-    def __init__(self, val=None, neg_val=None):
-        '''
+    def __init__(self, val=None, neg_val=None, cond_func=None):
+        """
         Args:
           val (bytes/:obj:`list` of bytes): value(s) that satisfies the condition
-          neg_val (bytes/:obj:`list` of bytes): value(s) that does NOT satisfy the condition
-        '''
-        assert((val is not None and neg_val is None) or (val is None and neg_val is not None))
-        if val is not None:
-            self.positive_mode = True
-            self._handle_cond(val)
-        elif neg_val is not None:
-            self.positive_mode = False
-            self._handle_cond(neg_val)
+          neg_val (bytes/:obj:`list` of bytes): value(s) that does NOT satisfy the condition (AND clause)
+          cond_func: function that takes the node value and return a boolean
+        """
+        self.val = self._handle_cond(val) if val is not None else None
+        self.neg_val = self._handle_cond(neg_val) if neg_val is not None else None
+        self.cond_func = cond_func
 
     def _handle_cond(self, val):
         if isinstance(val, (tuple, list)):
-            self.val = []
+            normed_val = []
             for v in val:
-                self.val.append(convert_to_internal_repr(v))
+                normed_val.append(convert_to_internal_repr(v))
         else:
-            self.val = convert_to_internal_repr(val)
+            normed_val = convert_to_internal_repr(val)
+        return normed_val
 
     def check(self, node):
         node_val = node._tobytes()
         if Node.DEFAULT_DISABLED_VALUE:
             node_val = node_val.replace(Node.DEFAULT_DISABLED_VALUE, b'')
 
-        if self.positive_mode:
-            if isinstance(self.val, (tuple, list)):
-                result = node_val in self.val
-            else:
-                result = node_val == self.val
-        else:
-            if isinstance(self.val, (tuple, list)):
-                result = node_val not in self.val
-            else:
-                result = node_val != self.val
+        result = self._check_inclusion(node_val, val=self.val, neg_val=self.neg_val)
+        if self.cond_func:
+            result = result and self.cond_func(node_val)
 
         return result
 
 
 class IntCondition(NodeCondition):
 
-    def __init__(self, val=None, neg_val=None):
-        '''
+    def __init__(self, val=None, neg_val=None, gt_val=None, lt_val=None):
+        """
         Args:
           val (int/:obj:`list` of int): integer(s) that satisfies the condition
-          neg_val (int/:obj:`list` of int): integer(s) that does NOT satisfy the condition
-        '''
-        assert((val is not None and neg_val is None) or (val is None and neg_val is not None))
-        if val is not None:
-            self.positive_mode = True
-            self.val = val
-        elif neg_val is not None:
-            self.positive_mode = False
-            self.val = neg_val
+          neg_val (int/:obj:`list` of int): integer(s) that does NOT satisfy the condition (AND clause)
+          gt_val (int): condition met if greater than or equal to this value (AND clause)
+          lt_val (int): condition met if lesser than or equal to this value (AND clause)
+        """
+        assert val is not None or neg_val is not None or gt_val is not None or lt_val is not None
+
+        self.val = val
+        self.neg_val = neg_val
+        self.gt_val = gt_val
+        self.lt_val = lt_val
 
     def check(self, node):
+
         if node.is_genfunc():
             node = node.generated_node
 
         assert node.is_typed_value(subkind=fvt.INT)
 
-        if isinstance(self.val, (tuple, list)):
-            if self.positive_mode:
-                result = node.get_current_raw_val() in self.val
-            else:
-                result = node.get_current_raw_val() not in self.val
-        else:
-            assert(isinstance(self.val, int))
-            if self.positive_mode:
-                result = node.get_current_raw_val() == self.val
-            else:
-                result = node.get_current_raw_val() != self.val
+        curr_val = node.get_current_raw_val()
 
-        return result
+        result = self._check_inclusion(curr_val, val=self.val, neg_val=self.neg_val)
+
+        return result and self._check_int(curr_val, gt_val=self.gt_val, lt_val=self.lt_val)
 
 
 class BitFieldCondition(NodeCondition):
 
-    def __init__(self, sf, val=None, neg_val=None):
-        '''
+    def __init__(self, sf, val=None, neg_val=None, gt_val=None, lt_val=None):
+        """
         Args:
           sf (int/:obj:`list` of int): subfield(s) of the BitField() on which the condition apply
           val (int/:obj:`list` of int/:obj:`list` of :obj:`list` of int): integer(s) that
             satisfies the condition(s)
           neg_val (int/:obj:`list` of int/:obj:`list` of :obj:`list` of int): integer(s) that
-            does NOT satisfy the condition(s)
-        '''
+            does NOT satisfy the condition(s) (AND clause)
+          gt_val (int/:obj:`list` of int/:obj:`list` of :obj:`list` of int): condition met if
+            subfield(s) greater than or equal to values in this field (AND clause)
+          lt_val (int/:obj:`list` of int/:obj:`list` of :obj:`list` of int): condition met if
+            subfield(s) lesser than or equal to values in this field (AND clause)
+        """
 
-        assert(val is not None or neg_val is not None)
+        assert val is not None or neg_val is not None or gt_val is not None or lt_val is not None
 
         if isinstance(sf, (tuple, list)):
             assert(len(sf) != 0)
@@ -406,14 +418,17 @@ class BitFieldCondition(NodeCondition):
         self.sf = sf
 
         for sf in self.sf:
-            assert(sf is not None)
-
+            assert sf is not None
 
         self.val = val if val is not None else [None for _ in self.sf]
         self.neg_val = neg_val if neg_val is not None else [None for _ in self.sf]
 
-        for v, nv in zip(self.val, self.neg_val):
-            assert(v is not None or nv is not None)
+        if val is not None or neg_val is not None:
+            for v, nv in zip(self.val, self.neg_val):
+                assert v is not None or nv is not None
+
+        self.gt_val = gt_val if gt_val is not None else [None for _ in self.sf]
+        self.lt_val = lt_val if lt_val is not None else [None for _ in self.sf]
 
 
     def check(self, node):
@@ -422,20 +437,21 @@ class BitFieldCondition(NodeCondition):
 
         assert(node.is_typed_value(subkind=fvt.BitField))
 
-        for sf, val, neg_val in zip(self.sf, self.val, self.neg_val):
+        result = True
+        for sf, val, neg_val, gt_val, lt_val in zip(self.sf, self.val, self.neg_val, self.gt_val, self.lt_val):
+            curr_val = node.get_subfield(idx=sf)
             if val is not None:
                 if not isinstance(val, (tuple, list)):
                     val = [val]
-                result = node.get_subfield(idx=sf) in val
-            else:
+                result = result and curr_val in val
+            if neg_val is not None:
                 if not isinstance(neg_val, (tuple, list)):
                     neg_val = [neg_val]
-                result = node.get_subfield(idx=sf) not in neg_val
-            if not result:
-                return False
+                result = result and curr_val not in neg_val
 
-        return True
+            result = result and self._check_int(curr_val, gt_val=gt_val, lt_val=lt_val)
 
+        return result
 
 
 class NodeCustomization(object):
@@ -6007,7 +6023,8 @@ class Node(object):
 
     def show(self, conf=None, verbose=True, print_name_func=None, print_contents_func=None,
              print_raw_func=None, print_nonterm_func=None, print_type_func=None, alpha_order=False,
-             raw_limit=None, log_func=sys.stdout.write, pretty_print=True, display_title=True):
+             raw_limit=None, log_func=sys.stdout.write, pretty_print=True, display_title=True,
+             display_gen_node=True):
 
         if print_name_func is None:
             print_name_func = self._print_name
@@ -6086,6 +6103,8 @@ class Node(object):
 
         nodes_nb = len(l)
 
+        unindent_generated_node = False
+
         if verbose:
             prev_depth = 0
             for n, i in zip(l, range(nodes_nb)):
@@ -6117,6 +6136,10 @@ class Node(object):
                 else:
                     graph_deco = ''
 
+                if unindent_generated_node:
+                    # depth always >=1
+                    depth -= 1
+
                 if depth == 0:
                     indent_nonterm = ''
                     indent_spc = ''
@@ -6146,7 +6169,9 @@ class Node(object):
                     else:
                         indent_spc = prefix + ' |  ' + '    '
 
-                prev_depth = depth
+                if unindent_generated_node:
+                    unindent_generated_node = False
+                    depth += 1
 
                 if node.is_term(conf_tmp):
                     raw = node._tobytes()
@@ -6180,14 +6205,19 @@ class Node(object):
                     else:
                         print_raw_func("\_raw: {:s}".format(repr(raw)), log_func=log_func, pretty_print=pretty_print)
                 else:
-                    print_nonterm_func("{:s}[{:d}] {:s}".format(indent_nonterm, depth, name), nl=False,
-                                       log_func=log_func, pretty_print=pretty_print)
-                    if isinstance(node.c[conf_tmp], NodeInternals_GenFunc):
-                        args = get_args(node, conf_tmp)
-                        print_nonterm_func(' [{:s} | node_args: {:s}]'.format(node_type, args),
-                                           nl=False, log_func=log_func, pretty_print=pretty_print)
-                        self._print(graph_deco, rgb=Color.ND_DUPLICATED, style=FontStyle.BOLD,
-                                    log_func=log_func, pretty_print=pretty_print)
+                    is_gen_node = isinstance(node.c[conf_tmp], NodeInternals_GenFunc)
+                    if (is_gen_node and display_gen_node) or not is_gen_node:
+                        print_nonterm_func("{:s}[{:d}] {:s}".format(indent_nonterm, depth, name), nl=False,
+                                           log_func=log_func, pretty_print=pretty_print)
+                    if is_gen_node:
+                        if display_gen_node:
+                            args = get_args(node, conf_tmp)
+                            print_nonterm_func(' [{:s} | node_args: {:s}]'.format(node_type, args),
+                                               nl=False, log_func=log_func, pretty_print=pretty_print)
+                            self._print(graph_deco, rgb=Color.ND_DUPLICATED, style=FontStyle.BOLD,
+                                        log_func=log_func, pretty_print=pretty_print)
+                        else:
+                            unindent_generated_node = True
                     else:
                         print_nonterm_func(' [{:s}]'.format(node_type), nl=False, log_func=log_func, pretty_print=pretty_print)
                         if node.is_nonterm(conf_tmp) and node.encoder is not None:

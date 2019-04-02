@@ -8,7 +8,6 @@ from framework.value_types import *
 tactics = Tactics()
 
 def cbk_transition1(env, current_step, next_step, feedback):
-    assert env is not None
     if not feedback:
         print("\n\nNo feedback retrieved. Let's wait for another turn")
         current_step.make_blocked()
@@ -32,21 +31,18 @@ def cbk_transition1(env, current_step, next_step, feedback):
         return True
 
 def cbk_transition2(env, current_step, next_step):
-    assert env is not None
-    if hasattr(env, 'switch'):
+    if env.user_context.switch:
         return False
     else:
-        env.switch = False
+        env.user_context.switch = True
         return True
 
 def before_sending_cbk(env, step):
-    assert env is not None
     print('\n--> Action executed before sending any data on step {:d} [desc: {!s}]'.format(id(step), step))
     step.content.show()
     return True
 
 def before_data_processing_cbk(env, step):
-    assert env is not None
     print('\n--> Action executed before data processing on step {:d} [desc: {!s}]'.format(id(step), step))
     if step.content is not None:
         step.content.show()
@@ -61,7 +57,7 @@ step1 = Step('exist_cond', fbk_timeout=1, set_periodic=[periodic1, periodic2],
              do_before_sending=before_sending_cbk, vtg_ids=0)
 step2 = Step('separator', fbk_timeout=2, clear_periodic=[periodic1], vtg_ids=1)
 empty = NoDataStep(clear_periodic=[periodic2])
-step4 = Step('off_gen', fbk_timeout=0, step_desc='overriding the auto-description!')
+step4 = Step('off_gen', fbk_timeout=0)
 
 step1_copy = copy.copy(step1) # for scenario 2
 step2_copy = copy.copy(step2) # for scenario 2
@@ -71,7 +67,7 @@ step2.connect_to(empty, cbk_after_fbk=cbk_transition1)
 empty.connect_to(step4)
 step4.connect_to(step1, cbk_after_sending=cbk_transition2)
 
-sc_tuto_ex1 = Scenario('ex1', anchor=step1)
+sc_tuto_ex1 = Scenario('ex1', anchor=step1, user_context=UI(switch=False))
 
 ### SCENARIO 2 ###
 step4 = Step(DataProcess(process=['tTYPE#2'], seed='shape'))
@@ -97,7 +93,7 @@ anchor.connect_to(option2)
 option1.connect_to(anchor)
 option2.connect_to(anchor)
 
-sc_tuto_ex3 = Scenario('ex3', anchor=anchor)
+sc_tuto_ex3 = Scenario('ex3', anchor=anchor, user_context=UI(switch=False))
 
 ### SCENARIO 4 & 5 ###
 dp = DataProcess(['tTYPE#NOREG'], seed='exist_cond', auto_regen=False)

@@ -114,18 +114,21 @@ class DefaultIndividual(Individual):
 class DefaultPopulation(Population):
     """ Provide a default implementation of the Population base class """
 
-    def _initialize(self, model, size=100, max_generation_nb=50):
+    def _initialize(self, init_process, size=100, max_generation_nb=50):
         """
             Configure the population
 
             Args:
-                model (string): individuals that compose this population will be built using this model
+                init_process (string): individuals that compose this population will be built using
+                  the provided process. The generic form for a process is:
+                  ``[action_1, (action_2, UI_2), ... action_n]``
+                  where ``action_N`` can be either: ``dmaker_type_N`` or ``(dmaker_type_N, dmaker_name_N)``
                 size (integer): size of the population to manipulate
                 max_generation_nb (integer): criteria used to stop the evolution process
         """
         Population._initialize(self)
 
-        self.MODEL = model
+        self.DATA_PROCESS = init_process
         self.SIZE = size
         self.MAX_GENERATION_NB = max_generation_nb
 
@@ -139,12 +142,10 @@ class DefaultPopulation(Population):
 
         # individuals initialization
         for _ in range(0, self.SIZE):
-            data = self._fmk.get_data([self.MODEL])
+            data = self._fmk.get_data(self.DATA_PROCESS)
             if data is None:
                 raise PopulationError
             node = data.content
-            node.make_random(recursive=True)
-            node.freeze()
             self._individuals.append(DefaultIndividual(self._fmk, node))
 
     def _compute_scores(self):
@@ -234,11 +235,11 @@ class EvolutionaryScenariosFactory(object):
 
         population = population_cls(fmk, **args)
 
-        def cbk_after(env, current_step, next_step, fbk):
+        def cbk_after(env, current_step, next_step, fbk_gate):
             print("Callback after")
 
             # set the feedback of the last played individual
-            population[population.index - 1].feedback = fbk
+            population[population.index - 1].feedback = list(fbk_gate)
 
             return True
 
