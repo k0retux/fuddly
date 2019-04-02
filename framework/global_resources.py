@@ -31,7 +31,7 @@ import framework
 from libs.utils import ensure_dir, ensure_file
 
 
-fuddly_version = '0.27.1'
+fuddly_version = '0.27.2'
 
 framework_folder = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 # framework_folder = os.path.dirname(framework.__file__)
