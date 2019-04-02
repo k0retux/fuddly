@@ -352,33 +352,6 @@ And if you want to stop the execution before the normal termination (which could
 the ``finite`` parameter has not been set), then you have to issue a ``SIGINT`` signal to ``fuddly`` via
 ``Ctrl-C`` for instance.
 
-.. note::
-   Each data you send and all the related information (the way the data has been built,
-   the feedback from the target, and so on) are stored within the ``fuddly`` database
-   (an SQLite database located at ``~/fuddly_data/fmkdb.db``). They all get a unique ID,
-   starting from 1 and increasing by 1 each time a data is sent.
-
-   To interact with the database a convenient script is provided (``<root of fuddly>/tools/fmkdb.py``).
-   Let's say you want to look at all the information
-   that have been recorded for one of the data you sent, with the ID 4. The following
-   command will display a synthesis of what you want::
-
-      ./tools/fmkdb.py -i 4
-
-   And if you want to get all information, issue the following::
-
-      ./tools/fmkdb.py -i 4 --with-data --with-fbk
-
-   You can also request information on all data sent between two dates. For instance the
-   following command will display all data information that have been recorded between
-   25th January 2016 (11:30) and 26th January 2016::
-
-      ./tools/fmkdb.py --info-by-date 2016/01/25-11:30 2016/01/26
-
-   For further information refer to the help by issuing::
-
-      ./tools/fmkdb.py -h
-
 
 .. _tuto:dmaker-chain:
 
@@ -1276,49 +1249,40 @@ inherits from the :class:`framework.data_model.DataModel` class,
 as seen in line 5. The definition of the data types of a data format
 will be written in python within the method
 :meth:`framework.data_model.DataModel.build_data_model()`.  In
-the previous listing, the data types are represented by ``d1``, ``d2``
+the previous listing, the data types (also called *atoms*) are represented by ``d1``, ``d2``
 and ``d3``. Once defined, they should be registered within the data
 model, by calling
 :func:`framework.data_model.DataModel.register()` on them.
 
-.. note:: If you want to import data samples complying to your data
-          model:
-	  
-	  - First, you have to overwrite the method
-            :meth:`framework.data_model.DataModel.absorb` in
-            order to perform the operations for absorbing the samples
-            (refer to :ref:`tuto:dm-absorption`). This method is
-            called for each file found in ``~/fuddly_data/imported_data/mydf/``, and
-            should return a modeled data.
+.. note::
+   If you want to import data samples that comply with your data model:
 
-	  - Then, you have to perform the import manually within the
-            method
-            :meth:`framework.data_model.DataModel.build_data_model()`
-            by calling the method
-            :meth:`framework.data_model.DataModel.import_file_contents()`
-            which returns a dictionary with every imported data samples.
+   - Add your samples there: ``~/fuddly_data/imported_data/<NAME of DM>/``
 
-	  The following code illustrates that:
+   - Within the method :meth:`framework.data_model.DataModel.build_data_model()`, and once you defined
+     your atoms, call the method :meth:`framework.data_model.DataModel.register_atom_for_absorption()`
+     to register the atom that will be used to model your samples. (To perform this action the framework
+     leverages the node absorption mechanism -- :ref:`tuto:dm-absorption`.)
+     For a usage example, refer to the ZIP data model.
 
-	  .. code-block:: python
-	     :linenos:
+   - Finally, the next time you load your data model, you will have your samples *absorbed* and available
+     through specific Generators automatically created for you.
 
-	     class MyDF_DataModel(DataModel):
-		file_extension = 'myd'
-		name = 'overload_default_name_if_you_wish'
+   If you need more flexibility in this sample absorption process, you should overwrite
+   the method :meth:`framework.data_model.DataModel._atom_absorption_additional_actions()` as illsutrated
+   by the JPG data model.
 
-		def absorb(self, data, idx):
-		    dtype = self.dtype.get_clone('DTYPE_{:0>2d}'.format(idx))
-		    status, off, size, name = dtype.absorb(data)
-		    return dtype if status == AbsorbStatus.FullyAbsorbed else None
+.. note::
+   The method :meth:`framework.data_model.DataModel.register_atom_for_absorption()` is also leveraged
+   by the decoding feature of the class :class:`framework.data_model.DataModel`, which is implemented
+   by the method :meth:`framework.data_model.DataModel.decode()`.
 
-		def build_data_model(self):
-		    # Definition of the data type: dtype
-		    self.dtype = ...
+   Indeed, the decoding feature will look for a valid atom for performing the absorption of the
+   provided binary string in order to be able to decode it. And this search depends on the atoms you
+   registered.
 
-		    dtype_dict = self.import_file_contents(extension='dtype')
-
-		    self.register(*dtype_dict.values())
+   The data model decoding feature can be used for different purposes. It is leveraged for instance
+   by the ``Fmkdb`` toolkit (refer to :ref:`data-analysis`).
 
 
 For briefly demonstrating part of fuddly features to describe data

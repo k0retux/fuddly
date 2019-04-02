@@ -20,6 +20,8 @@ Contents:
 
    data_manip
 
+   data_analysis
+
    scenario
 
    knowledge
