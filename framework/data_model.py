@@ -82,17 +82,35 @@ class DataModel(object):
         """
         return atom, ''
 
+
+    def _create_atom_from_raw_data_specific(self, data, idx, filename):
+        """
+        Overload this method when creating a node from binary strings need more actions than
+        performing a node absorption.
+
+        Args:
+            data (bytes): file content
+            idx (int): index of the imported file
+            filename (str): name of the imported file
+
+        Returns:
+            An atom or ``None``
+        """
+        raise NotImplementedError
+
+
     def create_atom_from_raw_data(self, data, idx, filename):
         """
         This function is called for each files (with the right extension)
         present in ``imported_data/<data_model_name>`` and absorb their content
         by leveraging the atoms of the data model registered for absorption or if none are
-        registered, wrap their content in a :class:`framework.node.Node`.
+        registered, either call the method _create_atom_from_raw_data_specific() if it is defined or
+        wrap their content in a :class:`framework.node.Node`.
 
         Args:
-            filename (str): name of the imported file
             data (bytes): file content
             idx (int): index of the imported file
+            filename (str): name of the imported file
 
         Returns:
             An atom or ``None``
@@ -119,9 +137,11 @@ class DataModel(object):
             else:
                 return None
         else:
-            return Node('RAW_{:s}'.format(filename[:-len(self.file_extension)-1]),
-                        values=[data])
-
+            try:
+                return self._create_atom_from_raw_data_specific(data, idx, filename)
+            except NotImplementedError:
+                return Node('RAW_{:s}'.format(filename[:-len(self.file_extension)-1]),
+                            values=[data])
 
     def register_atom_for_absorption(self, atom, absorb_constraints=AbsFullCsts(),
                                      decoding_scope=None):
@@ -151,7 +171,6 @@ class DataModel(object):
 
         for atom_name in decoding_scope:
             self._atoms_for_abs[atom_name] = (prepared_atom, absorb_constraints)
-
 
     def decode(self, data, atom_name=None, requested_abs_csts=None, colorized=True):
 

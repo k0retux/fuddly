@@ -85,17 +85,17 @@ def ensure_file(f):
     if not os.path.isfile(f):
         open(f, 'a').close()
 
-def chunk_lines(string, length):
+def chunk_lines(string, length, prefix=''):
     l = string.split(' ')
     chk_list = []
     full_line = ''
     for wd in l:
         full_line += wd + ' '
         if len(full_line) > (length - 1):
-            chk_list.append(full_line)
+            chk_list.append(prefix+full_line)
             full_line = ''
     if full_line:
-        chk_list.append(full_line)
+        chk_list.append(prefix+full_line)
     # remove last space char
     if chk_list:
         chk_list[-1] = (chk_list[-1])[:-1]

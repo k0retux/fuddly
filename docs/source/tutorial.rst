@@ -491,8 +491,6 @@ can see on lines 16 & 19.
 		:align:   center
 		:scale: 60%
 
-
-
 .. note::
    Parameters are given to data makers
    (generators/disruptors) through a tuple wrapped with the characters
@@ -1255,7 +1253,7 @@ model, by calling
 :func:`framework.data_model.DataModel.register()` on them.
 
 .. note::
-   If you want to import data samples that comply with your data model:
+   In the frame of your data model if you want to instantiate atoms from samples:
 
    - Add your samples there: ``~/fuddly_data/imported_data/<NAME of DM>/``
 
@@ -1271,6 +1269,13 @@ model, by calling
    If you need more flexibility in this sample absorption process, you should overwrite
    the method :meth:`framework.data_model.DataModel._atom_absorption_additional_actions()` as illsutrated
    by the JPG data model.
+
+   Finally, if you need even more flexibility in order to create atoms from samples, because
+   node absorption is not satisfactory in your context, then you could overload the method
+   :meth:`framework.data_model.DataModel._create_atom_from_raw_data_specific()`.
+   Refer to the JSON data model for an illustration, where this method is overloaded in order to create
+   either atoms that represent JSON schemas or atoms that model some JSON data; depending on the JSON
+   files provided in ``~/fuddly_data/imported_data/json``.
 
 .. note::
    The method :meth:`framework.data_model.DataModel.register_atom_for_absorption()` is also leveraged
