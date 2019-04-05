@@ -49,6 +49,7 @@ from framework.error_handling import *
 import framework.value_types as fvt
 
 import libs.debug_facility as dbg
+from libs.utils import chunk_lines
 
 DEBUG = dbg.DM_DEBUG
 
@@ -4504,8 +4505,8 @@ class NodeSemantics(object):
     To be used while defining a data model as a means to associate
     semantics to an Node.
     '''
-    def __init__(self, attrs=[]):
-        self.__attrs = attrs
+    def __init__(self, attrs=None):
+        self.__attrs = attrs if isinstance(attrs, (list, tuple)) else [attrs]
 
     def add_attributes(self, attrs):
         self.__attrs += attrs
@@ -4764,8 +4765,9 @@ class Node(object):
 
     def __init__(self, name, base_node=None, copy_dico=None, ignore_frozen_state=False,
                  accept_external_entanglement=False, acceptance_set=None,
-                 subnodes=None, values=None, value_type=None, vt=None, new_env=False):
-        '''
+                 subnodes=None, values=None, value_type=None, vt=None, new_env=False,
+                 description=None):
+        """
         Args:
           name (str): Name of the node. Every children node of a node shall have a unique name.
             Useful to look for specific nodes within a graph.
@@ -4791,12 +4793,14 @@ class Node(object):
           new_env (bool): [If `base_node` provided] If True, the `base_node` attached :class:`Env()`
            will be copied. Otherwise, the same will be used. If `ignore_frozen_state` is True, a
            new :class:`Env()` will be used.
-        '''
+          description (str): textual description of the node
+        """
 
         assert '/' not in name  # '/' is a reserved character
 
         self.internals = {}
         self.name = name
+        self.description = description
         self.env = None
 
         self.entangled_nodes = None
@@ -4900,7 +4904,8 @@ class Node(object):
                      copy_dico=None, ignore_frozen_state=False,
                      accept_external_entanglement=False, acceptance_set=None,
                      preserve_node=True):
-        '''Set the contents of the node based on the one provided within
+        """
+        Set the contents of the node based on the one provided within
         `base_node`. This method performs a deep copy of `base_node`,
         but some parameters can change the behavior of the copy.
 
@@ -4923,8 +4928,9 @@ class Node(object):
 
         Returns:
           dict: For each subnodes of `base_node` (keys), reference the corresponding subnodes within the new node.
-        '''
+        """
 
+        self.description = base_node.description
         self._post_freeze_handler = base_node._post_freeze_handler
         
         if self.internals:
@@ -6140,6 +6146,8 @@ class Node(object):
                     # depth always >=1
                     depth -= 1
 
+                junction_sym = ' \__'
+                junction_sym_len = len(junction_sym)
                 if depth == 0:
                     indent_nonterm = ''
                     indent_spc = ''
@@ -6158,8 +6166,8 @@ class Node(object):
                             prefix = ' |  ' + prefix
                         else:
                             prefix = '    ' + prefix
-                    indent_nonterm = prefix + ' \__'
-                    indent_term = prefix + ' \__'
+                    indent_nonterm = prefix + junction_sym
+                    indent_term = prefix + junction_sym
 
                     # l[i+1][1].depth is not reliable in case the node is used at different level
                     if i == nodes_nb-1 or depth != l[i+1][0].count('/'):
@@ -6172,6 +6180,8 @@ class Node(object):
                 if unindent_generated_node:
                     unindent_generated_node = False
                     depth += 1
+
+                node_desc_lines = chunk_lines(node.description, length=80, prefix=': ') if node.description else None
 
                 if node.is_term(conf_tmp):
                     raw = node._tobytes()
@@ -6194,6 +6204,15 @@ class Node(object):
                                     log_func=log_func, pretty_print=pretty_print)
                     self._print(graph_deco, rgb=Color.ND_DUPLICATED, style=FontStyle.BOLD,
                                 log_func=log_func, pretty_print=pretty_print)
+
+                    if node_desc_lines:
+                        indent_desc = indent_nonterm[:-junction_sym_len] + ' |  ' + \
+                                      ' '*len('({:d}) '.format(depth))
+                        for d in node_desc_lines:
+                            print_nonterm_func("{:s}".format(indent_desc), nl=False, log_func=log_func, pretty_print=pretty_print)
+                            self._print(d, rgb=Color.SUBINFO, style=FontStyle.BOLD,
+                                        log_func=log_func, pretty_print=pretty_print)
+
                     if val is not None:
                         print_nonterm_func("{:s}  ".format(indent_spc), nl=False, log_func=log_func, pretty_print=pretty_print)
                         print_contents_func("\_ {:s}".format(val), log_func=log_func, pretty_print=pretty_print)
@@ -6230,6 +6249,17 @@ class Node(object):
                                         nl=False, log_func=log_func, pretty_print=pretty_print)
                         self._print(graph_deco, rgb=Color.ND_DUPLICATED, style=FontStyle.BOLD,
                                     log_func=log_func, pretty_print=pretty_print)
+
+                    if node.description:
+                        if depth == 0:
+                            indent_desc = indent_nonterm +' |  '
+                        else:
+                            indent_desc = indent_nonterm[:-junction_sym_len]+' '*junction_sym_len+' |  '
+                        for d in node_desc_lines:
+                            print_nonterm_func("{:s}".format(indent_desc), nl=False, log_func=log_func, pretty_print=pretty_print)
+                            self._print(d, rgb=Color.SUBINFO, style=FontStyle.BOLD,
+                                        log_func=log_func, pretty_print=pretty_print)
+
 
         else:
             for name, node in l:

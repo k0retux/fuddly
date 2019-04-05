@@ -45,7 +45,7 @@ class NodeBuilder(object):
     valid_keys = [
         # generic description keys
         'name', 'contents', 'qty', 'clone', 'type', 'alt', 'conf',
-        'custo_set', 'custo_clear', 'evolution_func',
+        'custo_set', 'custo_clear', 'evolution_func', 'description',
         # NonTerminal description keys
         'weight', 'shape_type', 'section_type', 'duplicate_mode', 'weights',
         'separator', 'prefix', 'suffix', 'unique',
@@ -522,6 +522,9 @@ class NodeBuilder(object):
 
 
     def _handle_common_attr(self, node, desc, conf):
+        param = desc.get('description', None)
+        if param is not None:
+            node.description = param
         vals = desc.get('specific_fuzzy_vals', None)
         if vals is not None:
             if not node.is_typed_value(conf=conf):

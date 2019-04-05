@@ -58,6 +58,10 @@ contents
   Note that for defining a *function node* and not a generator node,
   you have to state the type attribute to ``MH.Leaf``.
 
+description
+  Textual description of the node. Note this information is shown by the method
+  :meth:`framework.node.Node.show()`.
+
 qty
   Specify the amount of nodes to generate from the description, or a
   tuple ``(min, max)`` specifying the minimum (which can be 0) and the
