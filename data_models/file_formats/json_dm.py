@@ -6,6 +6,7 @@ from framework.dmhelpers.json import json_model_builder, json_builder
 
 class JSON_DataModel(DataModel):
 
+    name = 'json'
     file_extension = 'json'
 
     def _create_atom_from_raw_data_specific(self, data, idx, filename):
