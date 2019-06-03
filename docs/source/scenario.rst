@@ -433,6 +433,27 @@ The execution of this scenario will follow the pattern::
   anchor --> option1 --> anchor --> option2 --> anchor --> option2 --> ...
 
 
+In addition to the callbacks, a transition can be guarded by booleans linked to specific conditions.
+They have to be specified as parameters of the method :meth:`framework.scenario.Step.connect_to`.
+The current defined condition is:
+
+ - `DataProcess completed` (parameter is ``dp_completed_guard``): which means, for a step hosting
+   a :class:`framework.scenario.DataProcess`, that if no more data can be issued by it the
+   condition is satisfied, and thus the transition can be crossed.
+   This is illustrated by the following example:
+
+    .. code-block:: python
+       :linenos:
+
+        step1 = Step(DataProcess(process=['tTYPE'], seed='4tg1'))
+        step2 = Step(DataProcess(process=['tTYPE#2'], seed='4tg2'))
+
+        step1.connect_to(step2, dp_completed_guard=True)
+        step2.connect_to(FinalStep(), dp_completed_guard=True)
+
+        sc_proj3 = Scenario('proj3', anchor=step1)
+
+
 .. _sc:dataprocess:
 
 Data Generation Process

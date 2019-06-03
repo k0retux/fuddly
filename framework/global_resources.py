@@ -348,3 +348,4 @@ class HOOK(Enum):
     before_sending_step2 = 3
     after_sending = 4
     after_fbk = 5
+    final = 6

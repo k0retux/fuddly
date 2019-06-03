@@ -173,7 +173,16 @@ sc_proj1 = Scenario('proj1', anchor=open_step, user_context=UI(prj='proj1'))
 sc_proj2 = sc_proj1.clone('proj2')
 sc_proj2.set_user_context(UI(prj='proj2'))
 
-project.register_scenarios(sc_proj1, sc_proj2)
+
+step1 = Step(DataProcess(process=['tTYPE'], seed='4tg1'))
+step2 = Step(DataProcess(process=['tTYPE#2'], seed='4tg2'))
+
+step1.connect_to(step2, dp_completed_guard=True)
+step2.connect_to(FinalStep(), dp_completed_guard=True)
+
+sc_proj3 = Scenario('proj3', anchor=step1)
+
+project.register_scenarios(sc_proj1, sc_proj2, sc_proj3)
 
 ### EVOLUTIONNARY PROCESS EXAMPLE ###
 

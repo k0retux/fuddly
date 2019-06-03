@@ -1785,6 +1785,7 @@ class FmkPlumbing(object):
 
         if blocked_data:
             self._handle_data_callbacks(blocked_data, hook=HOOK.after_fbk)
+            self._handle_data_callbacks(blocked_data, hook=HOOK.final)
             self.fmkDB.flush_current_feedback()
 
         if user_interrupt:
@@ -1847,6 +1848,7 @@ class FmkPlumbing(object):
 
     def _do_after_feedback_retrieval(self, data_list):
         self._handle_data_callbacks(data_list, hook=HOOK.after_fbk)
+        self._handle_data_callbacks(data_list, hook=HOOK.final)
         self.fmkDB.flush_current_feedback()
 
     def _do_after_dmaker_data_retrieval(self, data):
@@ -1901,6 +1903,7 @@ class FmkPlumbing(object):
                 data = data_desc.outcomes
 
             if data is None:
+                data_desc.dp_completed = True
                 self.set_error(msg='Data creation process has yielded!',
                                code=Error.DPHandOver)
                 return None
@@ -1950,6 +1953,9 @@ class FmkPlumbing(object):
                 new_data_list.append(data)
                 continue
 
+            if hook == HOOK.final:
+                continue
+
             new_data = data
             data_tg_ids = data.tg_ids if data.tg_ids is not None else [self._tg_ids[0]]
 
@@ -1989,7 +1995,6 @@ class FmkPlumbing(object):
                                     first_step = False
                                     data_tmp.copy_callback_from(data)
                                 data_tmp.tg_ids = vtg_ids
-                                data_tmp.scenario_dependence = data.scenario_dependence
                                 new_data.append(data_tmp)
                             else:
                                 # We mark the data unusable in order to make sending methods
@@ -1998,7 +2003,9 @@ class FmkPlumbing(object):
                                 # within a scenario step.
                                 newd = Data()
                                 newd.tg_ids = vtg_ids
-                                newd.scenario_dependence = data.scenario_dependence
+                                newd.set_basic_attributes(from_data=data)
+                                if not data.on_error_handover_to_user:
+                                    newd.copy_callback_from(data)
                                 newd.make_unusable()
                                 new_data = [newd]
                                 break
@@ -2142,9 +2149,13 @@ class FmkPlumbing(object):
             return False
 
         if data_list is None:
-            # In this case, some data callbacks have triggered to block the emission of
-            # what was in data_list. We go on because this is a normal behavior (especially in the
-            # context of Scenario() execution).
+            # In this case:
+            # - either some data callbacks have triggered to block the emission of
+            #   what was in data_list and we go on because this is a normal behavior (especially
+            #   in the context of Scenario() execution).
+            # - or the framework is requested to go on even if there are no data to send (e.g., a
+            #   DataProcess of a Scenario has completed and it exists a transition for that condition
+            #   in the scenario).
             return True
 
         # All feedback entries that are available for relevant framework users (scenario
@@ -2245,10 +2256,20 @@ class FmkPlumbing(object):
 
             self._stop_sending = False
             if data_list[0].is_unusable():
-                self.set_error("_send_data(): A DataProcess has yielded. No more data to send.",
-                               code=Error.NoMoreData)
                 self.mon.notify_error()
-                self._stop_sending = True
+                if data_list[0].on_error_handover_to_user:
+                    # We ask the framework to stop its current sending task and to give the
+                    # control back to the end user.
+                    self._stop_sending = True
+                    self.set_error("_send_data(): A DataProcess has yielded. No more data to send."
+                                   " We give control back to the end user.",
+                                   code=Error.NoMoreData)
+                else:
+                    self.set_error("_send_data(): A DataProcess has yielded. No more data to send."
+                                   " We are asked to go on silently with the next steps, if any.",
+                                   code=Error.NoMoreData)
+                    self._handle_data_callbacks(data_list, hook=HOOK.final)
+
                 return None
 
             self._setup_new_sending()

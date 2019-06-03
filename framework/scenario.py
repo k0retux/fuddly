@@ -65,6 +65,9 @@ class DataProcess(object):
         self.feedback_timeout = None
         self.feedback_mode = None
         self.vtg_ids = vtg_ids
+
+        self.dp_completed = False
+
         self._process = [process]
         self._process_idx = 0
         self._blocked = False
@@ -211,10 +214,20 @@ class Step(object):
               If ``None``, the outcomes will be sent to the first target that has been enabled.
               If ``data_desc`` is a list, this parameter should be a list where each item is the ``vtg_ids``
               of the corresponding item in the ``data_desc`` list.
+            transition_on_dp_complete (bool):
+              this attribute is set
+              to ``True`` by the framework.
+
         """
 
         self.final = final
         self.valid = valid
+
+        # In the context of a step hosting a DataProcess, if the latter is completed, meaning that all
+        # the registered processes are exhausted (data makers have yielded), then if a transition for this
+        # condition has been defined (this attribute will be set to True), the scenario will walk through it.
+        self.transition_on_dp_complete = False
+
         self._step_desc = step_desc
         self._transitions = []
         self._do_before_data_processing = do_before_data_processing
@@ -278,16 +291,23 @@ class Step(object):
     def set_scenario_env(self, env):
         self._scenario_env = env
 
-    def connect_to(self, step, cbk_after_sending=None, cbk_after_fbk=None, prepend=False):
+    def connect_to(self, step, dp_completed_guard=False, cbk_after_sending=None, cbk_after_fbk=None, prepend=False):
         if isinstance(self, NoDataStep):
             assert cbk_after_sending is None
-        tr = Transition(step,
-                        cbk_after_sending=cbk_after_sending,
-                        cbk_after_fbk=cbk_after_fbk)
-        if prepend:
-            self._transitions.insert(0, tr)
+
+        if dp_completed_guard:
+            assert cbk_after_sending is None and cbk_after_fbk is None
+            self.transition_on_dp_complete = True
+            self._transitions.insert(0, Transition(step, dp_completed_guard=dp_completed_guard))
+
         else:
-            self._transitions.append(tr)
+            tr = Transition(step,
+                            cbk_after_sending=cbk_after_sending,
+                            cbk_after_fbk=cbk_after_fbk)
+            if prepend:
+                self._transitions.insert(0, tr)
+            else:
+                self._transitions.append(tr)
 
     def do_before_data_processing(self):
         if self._do_before_data_processing is not None:
@@ -627,9 +647,10 @@ class NoDataStep(Step):
 
 class Transition(object):
 
-    def __init__(self, step, cbk_after_sending=None, cbk_after_fbk=None):
+    def __init__(self, step, dp_completed_guard=False, cbk_after_sending=None, cbk_after_fbk=None):
         self._scenario_env = None
         self._step = step
+        self.dp_completed_guard = dp_completed_guard
         self._callbacks = {}
         if cbk_after_sending:
             self._callbacks[HOOK.after_sending] = cbk_after_sending
@@ -697,10 +718,13 @@ class Transition(object):
         return self._crossable
 
     def __str__(self):
-        desc = ''
-        for k, v in self._callbacks.items():
-            desc += str(k) + '\n' + v.__name__ + '()\n'
-        desc = desc[:-1]
+        if self.dp_completed_guard:
+            desc = 'DP completed?'
+        else:
+            desc = ''
+            for k, v in self._callbacks.items():
+                desc += str(k) + '\n' + v.__name__ + '()\n'
+            desc = desc[:-1]
 
         return desc
 

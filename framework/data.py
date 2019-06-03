@@ -201,45 +201,58 @@ class Data(object):
 
     _empty_data_backend = EmptyBackend()
 
-    def __init__(self, data=None, altered=False, tg_ids=None):
-        self.altered = altered
-        self._backend = None
+    def __init__(self, content=None, altered=False, tg_ids=None):
 
-        self._type = None
         self._data_id = None
-        self._recordable = False
-        self._unusable = False
-        self._blocked = False
 
-        self.feedback_timeout = None
-        self.feedback_mode = None
+        self.set_basic_attributes()
+        self.altered = altered
 
         self.info_list = []
         self.info = {}
+        self._history = None
 
-        self.scenario_dependence = None
+        self.tg_ids = tg_ids  # targets ID
 
         # callback related
         self._callbacks = {}
         self._pending_ops = {}
 
-        self._history = None
+        if content is None:
+            self._backend = self._empty_data_backend
+        elif isinstance(content, Node):
+            self._backend = NodeBackend(content)
+        else:
+            self._backend = RawBackend(content)
+
+    def set_basic_attributes(self, from_data=None):
+        self._backend = None if from_data is None else from_data._backend
+        self._type = None if from_data is None else from_data._type
+
+        self.feedback_timeout = None if from_data is None else from_data.feedback_timeout
+        self.feedback_mode = None if from_data is None else from_data.feedback_mode
+
+        self.altered = False if from_data is None else from_data.altered
+
+        self._recordable = False if from_data is None else from_data._recordable
+        self._unusable = False if from_data is None else from_data._unusable
 
         # Used to provide information on the origin of the Data().
         # If it comes from a scenario _origin point to the related scenario.
-        self._origin = None
+        self._origin = None if from_data is None else from_data._origin
 
-        self.tg_ids = tg_ids  # targets ID
+        self._blocked = False if from_data is None else from_data._blocked
+
+        self.scenario_dependence = None if from_data is None else from_data.scenario_dependence
+
+        # If True, the data will not interrupt the framework while processing
+        # the data even if the data is unusable, The framework will just go on
+        # to its next task without handing over to the end user.
+        # Used especially by the Scenario Infrastructure.
+        self.on_error_handover_to_user = True if from_data is None else from_data.on_error_handover_to_user
 
         # This attribute is set to True when the Data content has been retrieved from the fmkDB
-        self.from_fmkdb = False
-
-        if data is None:
-            self._backend = self._empty_data_backend
-        elif isinstance(data, Node):
-            self._backend = NodeBackend(data)
-        else:
-            self._backend = RawBackend(data)
+        self.from_fmkdb = False if from_data is None else from_data.from_fmkdb
 
     @property
     def content(self):
@@ -322,7 +335,7 @@ class Data(object):
         dmaker_name = self._backend.data_maker_name
 
         if original_data is not None:
-            self.altered = original_data.altered
+            self.set_basic_attributes(from_data=original_data)
             if original_data.origin is not None:
                 self.add_info("Data instantiated from: {!s}".format(original_data.origin))
             if original_data.info:
@@ -348,14 +361,6 @@ class Data(object):
         initial_generator_info = [dmaker_type, dmaker_name, None]
         self.set_initial_dmaker(initial_generator_info)
         self.set_history([initial_generator_info])
-
-    def copy_info_from(self, data):
-        print(self.info_list, self.info, self._type, self._history)
-        print(data.info_list, data.info, data._type, data._history)
-        self.info_list = data.info_list
-        self.info = data.info
-        self._type = data._type
-        self._history = data._history
 
     def add_info(self, info_str):
         self.info_list.append(info_str)
@@ -448,6 +453,8 @@ class Data(object):
                 self._pending_ops[hook] = []
             if cbk_ops is not None:
                 self._pending_ops[hook].append(cbk_ops.get_operations())
+                if cbk_ops.is_flag_set(CallBackOps.ForceDataHandling):
+                    self.on_error_handover_to_user = False
                 if cbk_ops.is_flag_set(CallBackOps.RemoveCB):
                     del new_cbks[cbk_id]
                 if cbk_ops.is_flag_set(CallBackOps.StopProcessingCB):
@@ -505,6 +512,7 @@ class CallBackOps(object):
     # Flags
     RemoveCB = 1 # If True, remove this callback after execution
     StopProcessingCB = 2 # If True, any callback following this one won't be processed
+    ForceDataHandling = 3
 
     # Instructions
     Add_PeriodicData = 10  # ask for sending periodically a data
@@ -512,7 +520,7 @@ class CallBackOps(object):
     Set_FbkTimeout = 21  # set the time duration for feedback gathering for the further data sending
     Replace_Data = 30  # replace the data by another one
 
-    def __init__(self, remove_cb=False, stop_process_cb=False):
+    def __init__(self, remove_cb=False, stop_process_cb=False, ignore_no_data=False):
         self.instr = {
             CallBackOps.Add_PeriodicData: {},
             CallBackOps.Del_PeriodicData: [],
@@ -521,7 +529,8 @@ class CallBackOps(object):
         }
         self.flags = {
             CallBackOps.RemoveCB: remove_cb,
-            CallBackOps.StopProcessingCB: stop_process_cb
+            CallBackOps.StopProcessingCB: stop_process_cb,
+            CallBackOps.ForceDataHandling: ignore_no_data
             }
 
     def set_flag(self, name):
