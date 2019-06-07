@@ -225,6 +225,8 @@ class Data(object):
         else:
             self._backend = RawBackend(content)
 
+        self._type = (self._backend.data_maker_type, self._backend.data_maker_name, None)
+
     def set_basic_attributes(self, from_data=None):
         self._backend = None if from_data is None else from_data._backend
         self._type = None if from_data is None else from_data._type
@@ -330,17 +332,17 @@ class Data(object):
     def is_recordable(self):
         return self._recordable
 
-    def generate_info_from_content(self, original_data=None, origin=None, additional_info=None):
+    def generate_info_from_content(self, data=None, origin=None, additional_info=None):
         dmaker_type = self._backend.data_maker_type
         dmaker_name = self._backend.data_maker_name
 
-        if original_data is not None:
-            self.set_basic_attributes(from_data=original_data)
-            if original_data.origin is not None:
-                self.add_info("Data instantiated from: {!s}".format(original_data.origin))
-            if original_data.info:
+        if data is not None:
+            self.set_basic_attributes(from_data=data)
+            if data.origin is not None:
+                self.add_info("Data instantiated from: {!s}".format(data.origin))
+            if data.info:
                 info_bundle_to_remove = []
-                for key, info_bundle in original_data.info.items():
+                for key, info_bundle in data.info.items():
                     info_bundle_to_remove.append(key)
                     for chunk in info_bundle:
                         for info in chunk:
@@ -352,10 +354,12 @@ class Data(object):
         elif origin is not None:
             self.add_info("Data instantiated from: {!s}".format(origin))
         else:
-            pass
+            return
+
         if additional_info is not None:
             for info in additional_info:
                 self.add_info(info)
+
         self.remove_info_from(dmaker_type, dmaker_name)
         self.bind_info(dmaker_type, dmaker_name)
         initial_generator_info = [dmaker_type, dmaker_name, None]
@@ -394,7 +398,7 @@ class Data(object):
             info_l = self.info[key]
         except KeyError:
             print("\n*** The key " \
-                      "({:s}, {:s}) does not exist! ***\n".format(dmaker_type, data_maker_name))
+                      "({:s}, {:s}) does not exist! ***".format(dmaker_type, data_maker_name))
             print("self.info contents: ", self.info)
             return
 
@@ -406,6 +410,9 @@ class Data(object):
 
     def get_history(self):
         return self._history
+
+    def reset_history(self):
+        self._history= None
 
     def get_length(self):
         return self._backend.get_length()
@@ -562,3 +569,131 @@ class CallBackOps(object):
 
     def get_operations(self):
         return self.instr
+
+
+class DataProcess(object):
+    def __init__(self, process, seed=None, tg_ids=None, auto_regen=False):
+        """
+        Describe a process to generate a data.
+
+        Args:
+            process (list): List of disruptors (possibly complemented by parameters) to apply to
+              a ``seed``. However, if the list begin with a generator, the disruptor chain will apply
+              to the outcome of the generator. The generic form for a process is:
+              ``[action_1, (action_2, generic_UI_2, specific_UI_2), ... action_n]``
+              where ``action_N`` can be either: ``dmaker_type_N`` or ``(dmaker_type_N, dmaker_name_N)``
+            seed: (Optional) Can be a registered :class:`framework.data_model.Node` name or
+              a :class:`framework.data_model.Data`. Will be provided to the first disruptor in
+              the disruptor chain (described by the parameter ``process``) if it does not begin
+              with a generator.
+            tg_ids (list): Virtual ID list of the targets to which the outcomes of this data process will be sent.
+              If ``None``, the outcomes will be sent to the first target that has been enabled.
+              In the context of scenario, it embeds virtual IDs.
+            auto_regen (boolean): If ``True``, the data process will be in a state requesting the framework to
+              rerun the data maker chain after a disruptor yielded (meaning it is exhausted with
+              the data provided to it).
+              It will make the chain going on with new data coming either from the first
+              non-exhausted disruptor (preceding the exhausted one), or from the generator if
+              all disruptors are exhausted.
+              If ``False``, the data process won't be in this state and the
+              framework won't rerun the data maker chain once a disruptor yield.
+              It means the framework will alert about this issue to the end-user, or when used
+              within a Scenario, it will redirect the decision to the scenario itself (this condition
+              may trigger a transition in the scenario).
+        """
+        self.seed = seed
+        self.auto_regen = auto_regen
+        self.auto_regen_cpt = 0
+        self.outcomes = None
+        self.feedback_timeout = None
+        self.feedback_mode = None
+        self.tg_ids = tg_ids
+
+        self.dp_completed = False
+
+        self._process = [process]
+        self._process_idx = 0
+        self._blocked = False
+
+    def append_new_process(self, process):
+        """
+        Append a new process to the list.
+        """
+        self._process.append(process)
+
+    def next_process(self):
+        if self._process_idx == len(self._process) - 1:
+            self._process_idx = 0
+            return False
+        else:
+            self._process_idx += 1
+            return True
+
+    def reset(self):
+        self.auto_regen_cpt = 0
+        self.outcomes = None
+        self._process_idx = 0
+
+    @property
+    def process(self):
+        return self._process[self._process_idx]
+
+    @process.setter
+    def process(self, value):
+        self._process[self._process_idx] = value
+
+    @property
+    def process_qty(self):
+        return len(self._process)
+
+    def make_blocked(self):
+        self._blocked = True
+        if self.outcomes is not None:
+            self.outcomes.make_blocked()
+
+    def make_free(self):
+        self._blocked = False
+        if self.outcomes is not None:
+            self.outcomes.make_free()
+
+    def formatted_str(self, oneliner=False):
+        desc = ''
+        suffix = ', proc=' if oneliner else '\n'
+        if None in self._process:
+            suffix = ', no process ' if oneliner else ' '
+
+        if isinstance(self.seed, str):
+            desc += "seed='" + self.seed + "'" + suffix
+        elif isinstance(self.seed, Data):
+            if isinstance(self.seed.content, Node):
+                seed_str = self.seed.content.name
+            else:
+                seed_str = "Data('{!s}'...)".format(self.seed.to_str()[:10])
+            desc += "seed='{:s}'".format(seed_str) + suffix
+        else:
+            desc += suffix[2:]
+
+        for proc in self._process:
+            if proc is None:
+                break
+            for d in proc:
+                if isinstance(d, (list, tuple)):
+                    desc += '{!s}/'.format(d[0])
+                else:
+                    assert isinstance(d, str)
+                    desc += '{!s}/'.format(d)
+            desc = desc[:-1]
+            desc += ',' if oneliner else '\n'
+        desc = desc[:-1] # if oneliner else desc[:-1]
+
+        return desc
+
+    def __repr__(self):
+        return self.formatted_str(oneliner=True)
+
+    def __copy__(self):
+        new_datap = type(self)(self.process)
+        new_datap.__dict__.update(self.__dict__)
+        new_datap._process = copy.copy(self._process)
+        new_datap.reset()
+        return new_datap

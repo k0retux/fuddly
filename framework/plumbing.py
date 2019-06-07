@@ -40,6 +40,7 @@ import signal
 
 from functools import wraps
 
+from framework.data import Data, DataProcess
 from framework.database import FeedbackGate
 from framework.knowledge.feedback_collector import FeedbackSource
 from framework.error_handling import *
@@ -51,8 +52,6 @@ from framework.project import *
 from framework.scenario import *
 from framework.tactics_helpers import *
 from framework.target_helpers import *
-from framework.targets.local import LocalTarget
-from framework.targets.printer import PrinterTarget
 from framework.cosmetics import aligned_stdout
 from framework.config import config, config_dot_proxy
 from libs.utils import *
@@ -96,7 +95,7 @@ class ExportableFMKOps(object):
         self.load_data_model = fmk.load_data_model
         self.load_multiple_data_model = fmk.load_multiple_data_model
         self.reload_all = fmk.reload_all
-        self.get_data = fmk.get_data
+        self.get_data = fmk.process_data
         self.unregister_task = fmk._unregister_task
 
 class FmkFeedback(object):
@@ -288,7 +287,6 @@ class FmkPlumbing(object):
 
     @EnforceOrder(initial_func=True)
     def start(self):
-        self.import_text_reg = re.compile('(.*?)(#####)', re.S)
         self.check_clone_re = re.compile('(.*)#(\w{1,20})')
 
         self.config = config(self, path=[config_folder])
@@ -372,6 +370,11 @@ class FmkPlumbing(object):
 
     def is_ok(self):
         return not self.error
+
+    def show_and_flush_errors(self):
+        err_list = self.get_error()
+        for e in err_list:
+            print(colorize("    (_ [#{err!s:s}]: {msg:s} _)".format(err=e, msg=e.msg), rgb=e.color))
 
     def flush_errors(self):
         self.error = False
@@ -1854,11 +1857,12 @@ class FmkPlumbing(object):
     def _do_after_dmaker_data_retrieval(self, data):
         self._handle_data_callbacks([data], hook=HOOK.after_dmaker_production)
 
-    def _handle_data_desc(self, data_desc, resolve_dataprocess=True, original_data=None):
+    def _handle_data_desc(self, data_desc, resolve_dataprocess=True, original_data=None,
+                          save_generator_seed=False):
 
         if isinstance(data_desc, Data):
             data = data_desc
-            data.generate_info_from_content(original_data=original_data)
+            data.generate_info_from_content(data=original_data)
 
         elif isinstance(data_desc, DataProcess):
             if isinstance(data_desc.seed, str):
@@ -1871,32 +1875,39 @@ class FmkPlumbing(object):
                     return None
                 else:
                     seed = Data(seed_node)
-                    seed.generate_info_from_content(original_data=original_data)
+                    seed.generate_info_from_content(data=original_data)
 
             elif isinstance(data_desc.seed, Data):
                 seed = data_desc.seed
-                seed.generate_info_from_content(original_data=original_data)
+                seed.generate_info_from_content(data=original_data)
             elif data_desc.seed is None:
                 seed = None
             else:
-                self.set_error(msg='DataProcess object contains an unrecognized seed type!',
-                                   code=Error.UserCodeError)
+                self.set_error(msg='DataProcess object contains an unrecognized seed'
+                                   ' type {!r}'.format(data_desc.seed),
+                               code=Error.UserCodeError)
                 return None
 
             if resolve_dataprocess or data_desc.outcomes is None:
-                data = self.get_data(data_desc.process, data_orig=seed)
-                if data is None and data_desc.auto_regen:
-                    data_desc.auto_regen_cpt += 1
-                if data is None:
-                    other_process = data_desc.next_process()
-                    if other_process or data_desc.auto_regen:
-                        data = self.get_data(data_desc.process, data_orig=seed)
-                        if data is None and data_desc.process_qty > 1:
-                            for i in range(data_desc.process_qty-1):
-                                data_desc.next_process()
-                                data = self.get_data(data_desc.process, data_orig=seed)
-                                if data is not None:
-                                    break
+                if data_desc.process is None:
+                    data = seed
+                else:
+                    data = self.process_data(data_desc.process, seed=seed,
+                                             save_gen_seed=save_generator_seed)
+                    if data is None and data_desc.auto_regen:
+                        data_desc.auto_regen_cpt += 1
+                    if data is None:
+                        other_process = data_desc.next_process()
+                        if other_process or data_desc.auto_regen:
+                            data = self.process_data(data_desc.process, seed=seed,
+                                                     save_gen_seed=save_generator_seed)
+                            if data is None and data_desc.process_qty > 1:
+                                for i in range(data_desc.process_qty-1):
+                                    data_desc.next_process()
+                                    data = self.process_data(data_desc.process, seed=seed,
+                                                             save_gen_seed=save_generator_seed)
+                                    if data is not None:
+                                        break
 
                 data_desc.outcomes = data
             else:
@@ -1908,7 +1919,7 @@ class FmkPlumbing(object):
                                code=Error.DPHandOver)
                 return None
 
-            data.tg_ids = data_desc.vtg_ids
+            data.tg_ids = data_desc.tg_ids
 
         elif isinstance(data_desc, str):
             try:
@@ -1919,7 +1930,7 @@ class FmkPlumbing(object):
                 return None
             else:
                 data = Data(node)
-                data.generate_info_from_content(original_data=original_data)
+                data.generate_info_from_content(data=original_data)
                 if original_data is not None:
                     data.tg_ids = original_data.tg_ids
         else:
@@ -2122,18 +2133,65 @@ class FmkPlumbing(object):
         self._cleanup_tasks()
 
     @EnforceOrder(accepted_states=['S2'])
-    def send_data_and_log(self, data_list, original_data=None, verbose=False):
+    def process_data_and_send(self, data_desc=None, id_from_fmkdb=None, id_from_db=None,
+                              max_loop=1, tg_ids=None,
+                              verbose=False,
+                              save_generator_seed=False):
 
-        orig_data_provided = original_data is not None
+        assert data_desc is not None or id_from_fmkdb is not None or id_from_db is not None
+        assert id_from_fmkdb is None or id_from_db is None
+
+        if id_from_fmkdb is not None:
+            data = self.fmkdb_fetch_data(start_id=id_from_fmkdb, end_id=id_from_fmkdb)
+            if data is None:
+                return False
+
+        elif id_from_db is not None:
+            data = self.get_from_data_bank(id_from_db)
+            if data is None:
+                return False
+
+        if data_desc is not None:
+            if id_from_fmkdb is not None:
+                assert isinstance(data_desc, DataProcess)
+                data_desc.seed = data
+            elif id_from_db is not None:
+                assert isinstance(data_desc, DataProcess)
+                data_desc.seed = data
+
+            data_desc = data_desc if isinstance(data_desc, list) else [data_desc]
+            cpt = 0
+            while cpt < max_loop or max_loop == -1:
+                cpt += 1
+                data_list = []
+                for d_desc in data_desc:
+                    data = self._handle_data_desc(d_desc, resolve_dataprocess=True,
+                                                  save_generator_seed=save_generator_seed)
+                    if data is None:
+                        data = Data()
+                        data.make_unusable()
+                    if tg_ids:
+                        data.tg_ids = tg_ids
+                    data_list.append(data)
+
+                go_on = self.send_data_and_log(data_list, verbose=verbose)
+                if not go_on:
+                    return True
+        else:
+            cpt = 0
+            while cpt < max_loop or max_loop == -1:
+                cpt += 1
+                go_on = self.send_data_and_log(data, verbose=verbose)
+                if not go_on:
+                    return True
+
+        return True
+
+    @EnforceOrder(accepted_states=['S2'])
+    def send_data_and_log(self, data_list, verbose=False):
 
         if isinstance(data_list, Data):
             data_list = [data_list]
-            if orig_data_provided:
-                original_data = [original_data]
-        elif isinstance(data_list, list):
-            assert original_data is None or isinstance(original_data, (list, tuple))
-        else:
-            raise ValueError
 
         try:
             data_list = self._do_sending_and_logging_init(data_list)
@@ -2178,16 +2236,8 @@ class FmkPlumbing(object):
         multiple_data = len(data_list) > 1
 
         if self._wkspace_enabled:
-            for idx, dt in zip(range(len(data_list)), data_list):
-                if orig_data_provided:
-                    self.__current.append((original_data[idx], dt))
-                else:
-                    self.__current.append((None, dt))
-
-        if orig_data_provided:
-            for dt_orig in original_data:
-                if dt_orig is not None:
-                    dt_orig.make_recordable()
+            for idx, dt in enumerate(data_list):
+                self.__current.append(dt)
 
         for dt in data_list:
             dt.make_recordable()
@@ -2197,11 +2247,9 @@ class FmkPlumbing(object):
         cont0 = self.check_target_readiness() >= 0
 
         if multiple_data:
-            self._log_data(data_list, original_data=original_data,
-                           verbose=verbose)
+            self._log_data(data_list, verbose=verbose)
         else:
-            orig = original_data[0] if orig_data_provided else None
-            self._log_data(data_list[0], original_data=orig, verbose=verbose)
+            self._log_data(data_list[0], verbose=verbose)
 
         cont1 = True
         cont2 = True
@@ -2317,7 +2365,7 @@ class FmkPlumbing(object):
 
 
     @EnforceOrder(accepted_states=['S2'])
-    def _log_data(self, data_list, original_data=None, verbose=False):
+    def _log_data(self, data_list, verbose=False):
 
         if self.__tg_enabled:
 
@@ -2331,15 +2379,8 @@ class FmkPlumbing(object):
             self._recovered_tgs = None
             gen = self.__current_gen
 
-            if original_data is None:
-                orig_data_provided = False
-            else:
-                orig_data_provided = True
-
             if isinstance(data_list, Data):
                 data_list = [data_list]
-                if orig_data_provided:
-                    original_data = [original_data]
                 multiple_data = False
             elif isinstance(data_list, list):
                 multiple_data = True
@@ -2371,10 +2412,6 @@ class FmkPlumbing(object):
                     num = 0
 
                 if dt_mk_h is not None:
-                    if orig_data_provided:
-                        self.lg.log_orig_data(original_data[idx])
-                    else:
-                        self.lg.log_orig_data(None)
 
                     for dmaker_type, data_maker_name, user_input in dt_mk_h:
                         num += 1
@@ -2616,12 +2653,16 @@ class FmkPlumbing(object):
         self.lg.log_comment(comments)
 
     @EnforceOrder(accepted_states=['S2'])
-    def _register_in_data_bank(self, data_orig, data):
-        self.__db_idx += 1
-        self.__data_bank[self.__db_idx] = (data_orig, data)
+    def register_in_data_bank(self, data):
+        if isinstance(data, Data):
+            data = [data]
+        for d in data:
+            self.__db_idx += 1
+            self.__data_bank[self.__db_idx] = d
 
     @EnforceOrder(accepted_states=['S2'])
     def fmkdb_fetch_data(self, start_id=1, end_id=-1):
+        data_list = []
         for record in self.fmkDB.fetch_data(start_id=start_id, end_id=end_id):
             data_id, content, dtype, dmk_name, dm_name = record
             data = Data(content)
@@ -2631,7 +2672,14 @@ class FmkPlumbing(object):
             if dm_name != Database.DEFAULT_DM_NAME:
                 dm = self.get_data_model_by_name(dm_name)
                 data.set_data_model(dm)
-            self._register_in_data_bank(None, data)
+            data_list.append(data)
+
+        if not data_list:
+            data_list = None
+        elif len(data_list) == 1:
+            data_list = data_list[0]
+
+        return data_list
 
     def _log_fmk_info(self, msg):
         if self.lg:
@@ -2665,22 +2713,16 @@ class FmkPlumbing(object):
         try:
             entry = self.__data_bank[i]
         except KeyError:
-            return None, None
+            return None
 
         return entry
 
     @EnforceOrder(accepted_states=['S2'])
     def iter_data_bank(self):
         for i in self.__data_bank:
-            entry = self.__data_bank[i]
-            yield entry
+            yield self.__data_bank[i]
 
-    def _show_entry(self, data_orig, data):
-        if data_orig != None:
-            self.lg.print_console('|_ IN  < ', rgb=Color.SUBINFO)
-            self.lg.print_console(data_orig, nl_before=False)
-        else:
-            self.lg.print_console('|_ !IN', rgb=Color.SUBINFO)
+    def _show_entry(self, data):
 
         gen = self.__current_gen
 
@@ -2743,7 +2785,7 @@ class FmkPlumbing(object):
             msg = '===[ {:d} ]==='.format(idx)
             msg += '='*(max(80-len(msg),0))
             self.lg.print_console(msg, rgb=Color.INFO)
-            self._show_entry(*entry)
+            self._show_entry(entry)
 
         self.lg.print_console('\n', nl_before=False)
 
@@ -2756,46 +2798,11 @@ class FmkPlumbing(object):
 
         self.lg.print_console("-=[ Workspace ]=-\n", rgb=Color.INFO, style=FontStyle.BOLD)
 
-        for data_orig, data in self.__current:
-            self._show_entry(data_orig, data)
+        for data in self.__current:
+            self._show_entry(data)
 
         self.lg.print_console('\n', nl_before=False)
 
-    @EnforceOrder(accepted_states=['S2'])
-    def dump_db_to_file(self, f):
-        if f:
-            try:
-                pickle.dump(self.__data_bank, f)
-            except (pickle.PicklingError, TypeError):
-                print("*** ERROR: Can't pickle the data bank!")
-                print('-'*60)
-                traceback.print_exc(file=sys.stdout)
-                print('-'*60)
-
-    @EnforceOrder(accepted_states=['S2'])
-    def load_db_from_file(self, f):
-        if f:
-            self.__data_bank = pickle.load(f)
-            self.__idx = len(self.__data_bank)
-
-    @EnforceOrder(accepted_states=['S2'])
-    def load_db_from_text_file(self, f):
-        if f:
-            text = f.read()
-
-            self.__data_bank = {}
-            self.__idx = 0
-
-            while True:
-                obj = self.import_text_reg.match(text)
-                if obj is None:
-                    break
-
-                data = Data(obj.group(1)[:-1])
-
-                self._register_in_data_bank(None, data)
-                text = text[len(obj.group(0))+1:]
-                
     @EnforceOrder(accepted_states=['S2'])
     def empty_data_bank(self):
         self.__data_bank = {}
@@ -2816,8 +2823,8 @@ class FmkPlumbing(object):
             return
 
         if self.__current:
-            for data_orig, data in self.__current:
-                self._register_in_data_bank(data_orig, data)
+            for data in self.__current:
+                self.register_in_data_bank(data)
 
     @EnforceOrder(accepted_states=['S2'])
     def register_last_in_data_bank(self):
@@ -2826,8 +2833,7 @@ class FmkPlumbing(object):
             return
 
         if self.__current:
-            data_orig, data = self.__current[-1]
-            self._register_in_data_bank(data_orig, data)
+            self.register_in_data_bank(self.__current[-1])
 
     @EnforceOrder(accepted_states=['S2'])
     def show_operators(self):
@@ -2909,8 +2915,7 @@ class FmkPlumbing(object):
                     if action_list is None:
                         data = orig
                     else:
-                        data = self.get_data(action_list, data_orig=orig,
-                                             save_seed=use_existing_seed)
+                        data = self.process_data(action_list, seed=orig, save_gen_seed=use_existing_seed)
                     if data:
                         data.tg_ids = tg_ids
 
@@ -2930,7 +2935,7 @@ class FmkPlumbing(object):
                                         change_list.append((e.context, idx))
                                     retry = True
                                 else:
-                                    self.set_error('Unrecoverable error in get_data() method!',
+                                    self.set_error('Unrecoverable error in process_data() method!',
                                                    code=Error.UnrecoverableError)
                                     return False
 
@@ -2981,7 +2986,7 @@ class FmkPlumbing(object):
                 if linst.is_instruction_set(LastInstruction.RecordData):
                     for dt in data_list:
                         dt.make_recordable()
-                        self._register_in_data_bank(None, dt)
+                        self.register_in_data_bank(dt)
 
                 if multiple_data:
                     self._log_data(data_list, verbose=verbose)
@@ -3050,7 +3055,7 @@ class FmkPlumbing(object):
         return True
 
     @EnforceOrder(accepted_states=['S2'])
-    def get_data(self, action_list, data_orig=None, valid_gen=False, save_seed=False):
+    def process_data(self, action_list, seed=None, valid_gen=False, save_gen_seed=False):
         '''
         @action_list shall have a format compatible with what follows:
         [(action_1, UserInput_1), ...,
@@ -3081,14 +3086,11 @@ class FmkPlumbing(object):
         clone_dmaker = self._tactics.clone_generator
         clone_gen_dmaker = self._generic_tactics.clone_generator
 
-        if data_orig != None:
-            data = copy.copy(data_orig)
-            initial_generator_info = data_orig.get_initial_dmaker()
-            # print('\n***')
-            # print(data_orig.get_history(), data_orig.info_list, data_orig.info)
-            data.generate_info_from_content(original_data=data_orig)
+        if seed != None:
+            data = copy.copy(seed)
+            initial_generator_info = seed.get_initial_dmaker()
+            # data.generate_info_from_content(data=seed)
             history = data.get_history()
-            # print(history, data_orig.info_list, data_orig.info)
             if history:
                 for h_entry in history:
                     l.append(h_entry)
@@ -3277,7 +3279,7 @@ class FmkPlumbing(object):
                         else:
                             data = dmaker_obj.generate_data(self.dm, self.mon,
                                                             self.targets)
-                            if save_seed and dmaker_obj.produced_seed is None:
+                            if save_gen_seed and dmaker_obj.produced_seed is None:
                                 # Usefull to replay from the beginning a modelwalking sequence
                                 dmaker_obj.produced_seed = Data(data.get_content(do_copy=True))
                         invalid_data = not self._is_data_valid(data)
@@ -4395,24 +4397,6 @@ class FmkShell(cmd.Cmd):
         self.fz.disable_wkspace()
         return False
 
-    def do_send_valid(self, line):
-        '''
-        Build a data in multiple step from a valid source
-        |_ syntax: send_valid <generator_type> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
-            |_ Note: generator_type shall have at least one valid generator
-        '''
-        ret = self.do_send(line, valid_gen=True)
-        return ret
-
-    def do_send_loop_valid(self, line):
-        '''
-        Execute the 'send_valid' command in a loop
-        |_ syntax: send_loop_valid <#loop> <generator_type> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
-            |_ Note: generator_type shall have at least one valid generator
-        '''
-        ret = self.do_send_loop(line, valid_gen=True)
-        return ret
-
     def do_send_loop_keepseed(self, line):
         '''
         Execute the 'send' command in a loop and save the seed
@@ -4590,6 +4574,7 @@ class FmkShell(cmd.Cmd):
                 tg_ids = tg_ids[::-1]
                 args = args[:-len(tg_ids)]
 
+        tg_ids = tg_ids if tg_ids else None
         return args, tg_ids
 
     def do_reload_data_model(self, line):
@@ -4690,7 +4675,7 @@ class FmkShell(cmd.Cmd):
         return False
 
 
-    def do_send(self, line, valid_gen=False, verbose=False):
+    def do_send(self, line, verbose=False):
         '''
         Carry out multiple fuzzing steps in sequence
         |_ syntax: send <generator_type> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
@@ -4705,20 +4690,13 @@ class FmkShell(cmd.Cmd):
 
         args, tg_ids = self._retrieve_tg_ids(args)
 
-        t = self.__parse_instructions(args)
-        if t is None:
+        actions = self.__parse_instructions(args)
+        if actions is None:
             self.__error_msg = "Syntax Error!"
             return False
 
-        data = self.fz.get_data(t, valid_gen=valid_gen)
-        if data is None:
-            return False
-
-        if tg_ids:
-            data.tg_ids = tg_ids
-        self.fz.send_data_and_log(data, verbose=verbose)
-
-        self.__error = False
+        self.__error = not self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
+                                                         verbose=verbose)
         return False
 
 
@@ -4731,7 +4709,7 @@ class FmkShell(cmd.Cmd):
         return ret
 
 
-    def do_send_loop(self, line, valid_gen=False, use_existing_seed=False):
+    def do_send_loop(self, line, use_existing_seed=False):
         '''
         Execute the 'send' command in a loop
         |_ syntax: send_loop <#loop> <generator_type> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
@@ -4756,8 +4734,8 @@ class FmkShell(cmd.Cmd):
         except ValueError:
             return False
 
-        t = self.__parse_instructions(args)
-        if t is None:
+        actions = self.__parse_instructions(args)
+        if actions is None:
             self.__error_msg = "Syntax Error!"
             return False
 
@@ -4771,20 +4749,11 @@ class FmkShell(cmd.Cmd):
                     }
 
         with aligned_stdout(**kwargs):
-            # for i in range(nb):
-            cpt = 0
-            while cpt < max_loop or max_loop == -1:
-                cpt += 1
-                data = self.fz.get_data(t, valid_gen=valid_gen, save_seed=use_existing_seed)
-                if data is None:
-                    return False
-                if tg_ids:
-                    data.tg_ids = tg_ids
-                cont = self.fz.send_data_and_log(data)
-                if not cont:
-                    break
 
-        self.__error = False
+            self.__error = not self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
+                                                             max_loop=max_loop,
+                                                             save_generator_seed=use_existing_seed)
+
         return False
 
 
@@ -4807,16 +4776,9 @@ class FmkShell(cmd.Cmd):
             self.__error_msg = "Syntax Error!"
             return False
 
-        action = [((t[0], args[1]), t[1])]
-        data = self.fz.get_data(action)
-        if data is None:
-            return False
+        actions = [((t[0], args[1]), t[1])]
 
-        if tg_ids:
-            data.tg_ids = tg_ids
-        self.fz.send_data_and_log(data)
-
-        self.__error = False
+        self.__error = not self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids))
         return False
 
 
@@ -4839,12 +4801,12 @@ class FmkShell(cmd.Cmd):
         except ValueError:
             return False
 
-        t = self.__parse_instructions([args[1]])[0]
-        if t is None:
+        actions = self.__parse_instructions([args[1]])[0]
+        if actions is None:
             self.__error_msg = "Syntax Error!"
             return False
 
-        action = [((t[0], args[2]), t[1])]
+        action = [((actions[0], args[2]), actions[1])]
 
         conf = self.config.send_loop.aligned_options
         kwargs = {
@@ -4856,18 +4818,10 @@ class FmkShell(cmd.Cmd):
                     }
 
         with aligned_stdout(**kwargs):
-            for i in range(nb):
-                data = self.fz.get_data(action)
-                if data is None:
-                    return False
+            self.__error = not self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
+                                                             max_loop=nb)
 
-                if tg_ids:
-                    data.tg_ids = tg_ids
-                self.fz.send_data_and_log(data)
-
-        self.__error = False
         return False
-
 
 
     def do_multi_send(self, line):
@@ -4888,7 +4842,7 @@ class FmkShell(cmd.Cmd):
         except:
             loop_count = 1
 
-        actions_list = []
+        dp_list = []
 
         idx = 0
         while True:
@@ -4914,58 +4868,58 @@ class FmkShell(cmd.Cmd):
                 self.__error_msg = "Syntax Error!"
                 return False
 
-            actions_list.append((actions, tg_ids))
+            dp_list.append(DataProcess(actions, tg_ids=tg_ids))
 
-        prev_data_list = None
-        exhausted_data_cpt = 0
-        exhausted_data = {}
-        nb_data = len(actions_list)
-
-        for i in range(loop_count):
-            data_list = []
-
-            for j in range(nb_data):
-                if j not in exhausted_data:
-                    exhausted_data[j] = False
-
-                if not exhausted_data[j]:
-                    action_seq, tg_ids = actions_list[j]
-                    data = self.fz.get_data(action_seq)
-                    if tg_ids and data is not None:
-                        data.tg_ids = tg_ids
-                else:
-                    if prev_data_list is not None:
-                        data = prev_data_list[j]
-                    else:
-                        self.__error_msg = 'The loop has terminated too soon! (number of exhausted data: %d)' % exhausted_data_cpt
-                        return False
-
-                if data is None and exhausted_data_cpt < nb_data:
-                    exhausted_data_cpt += 1
-                    if prev_data_list is not None:
-                        data = prev_data_list[j]
-                        exhausted_data[j] = True
-                    else:
-                        self.__error_msg = 'The loop has terminated too soon! (number of exhausted data: %d)' % exhausted_data_cpt
-                        return False
-
-                    if exhausted_data[j] and exhausted_data_cpt >= nb_data:
-                        self.__error_msg = 'The loop has terminated because all data are exhausted ' \
-                            '(number of exhausted data: %d)' % exhausted_data_cpt
-                        return False
-                
-                data_list.append(data)
-
-            prev_data_list = data_list
-
-            self.fz.send_data_and_log(data_list)
-
-        if exhausted_data_cpt > 0:
-            print("\nThe loop has terminated normally, but it remains non exhausted " \
-                  "data (number of exhausted data: %d)" % exhausted_data_cpt)
-
-        self.__error = False
+        self.__error = not self.fz.process_data_and_send(dp_list, max_loop=loop_count)
         return False
+
+        # prev_data_list = None
+        # exhausted_data_cpt = 0
+        # exhausted_data = {}
+        # nb_data = len(dp_list)
+        #
+        # for i in range(loop_count):
+        #     data_list = []
+        #
+        #     for j in range(nb_data):
+        #         if j not in exhausted_data:
+        #             exhausted_data[j] = False
+        #
+        #         if not exhausted_data[j]:
+        #             action_seq, tg_ids = dp_list[j]
+        #             data = self.fz.process_data(action_seq)
+        #             if tg_ids and data is not None:
+        #                 data.tg_ids = tg_ids
+        #         else:
+        #             if prev_data_list is not None:
+        #                 data = prev_data_list[j]
+        #             else:
+        #                 self.__error_msg = 'The loop has terminated too soon! (number of exhausted data: %d)' % exhausted_data_cpt
+        #                 return False
+        #
+        #         if data is None and exhausted_data_cpt < nb_data:
+        #             exhausted_data_cpt += 1
+        #             if prev_data_list is not None:
+        #                 data = prev_data_list[j]
+        #                 exhausted_data[j] = True
+        #             else:
+        #                 self.__error_msg = 'The loop has terminated too soon! (number of exhausted data: %d)' % exhausted_data_cpt
+        #                 return False
+        #
+        #             if exhausted_data[j] and exhausted_data_cpt >= nb_data:
+        #                 self.__error_msg = 'The loop has terminated because all data are exhausted ' \
+        #                     '(number of exhausted data: %d)' % exhausted_data_cpt
+        #                 return False
+        #
+        #         data_list.append(data)
+        #
+        #     prev_data_list = data_list
+        #
+        #     self.fz.send_data_and_log(data_list)
+        #
+        # if exhausted_data_cpt > 0:
+        #     print("\nThe loop has terminated normally, but it remains non exhausted " \
+        #           "data (number of exhausted data: %d)" % exhausted_data_cpt)
 
     def do_set_feedback_timeout(self, line):
         '''
@@ -5129,10 +5083,11 @@ class FmkShell(cmd.Cmd):
         return False
 
     def do_replay_db(self, line):
-        '''
-        Replay data from the Data Bank and optionnaly apply new disruptors on it
-        |_ syntax: replay_db i<idx_from_db> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
-        '''
+        """
+        Replay data from the FmkDB or the Data Bank and optionnaly apply new disruptors on it
+        |_ syntax for FmkDB: replay_db f<idx_from_db> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
+        |_ syntax for DBank: replay_db d<idx_from_db> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
+        """
 
         self.__error = True
 
@@ -5144,40 +5099,41 @@ class FmkShell(cmd.Cmd):
             return False
 
         try:
-            idx = int(args.pop(0)[1:])
+            full_id = args.pop(0)
+            idx = int(full_id[1:])
+            if full_id[0] == 'f':
+                id_from_fmkdb = idx
+                id_from_db = None
+            elif full_id[0] == 'd':
+                id_from_fmkdb = None
+                id_from_db = idx
+            else:
+                raise ValueError
+
         except ValueError:
             return False
 
-        data_orig, data = self.fz.get_from_data_bank(idx)
-        if data is None:
-            return False
-
         if args_len > 1:
-            data_orig = data
-
-            t = self.__parse_instructions(args)
-            if t is None:
+            actions = self.__parse_instructions(args)
+            if actions is None:
                 self.__error_msg = "Syntax Error!"
                 return False
 
-            data = self.fz.get_data(t, data_orig=data)
-            if data is None:
-                return False
+        else:
+            actions = None
 
-        self.__error = False
-
-        if tg_ids:
-            data.tg_ids = tg_ids
-        self.fz.send_data_and_log(data, original_data=data_orig)
-
+        self.__error = not self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
+                                                         id_from_fmkdb=id_from_fmkdb,
+                                                         id_from_db=id_from_db)
         return False
 
 
     def do_replay_db_loop(self, line):
-        '''
+        """
         Loop ( Replay data from the Data Bank and optionnaly apply new disruptors on it )
-        |_ syntax: replay_db_loop <#loop> i<idx_from_db> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
-        '''
+        |_ syntax for FmkDB: replay_db_loop <#loop> f<idx_from_db> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
+        |_ syntax for DBank: replay_db_loop <#loop> d<idx_from_db> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
+        """
 
         self.__error = True
 
@@ -5191,39 +5147,32 @@ class FmkShell(cmd.Cmd):
 
         try:
             nb = int(args.pop(0))
-            idx = int(args.pop(0)[1:])
+            full_id = args.pop(0)
+            idx = int(full_id[1:])
+            if full_id[0] == 'f':
+                id_from_fmkdb = idx
+                id_from_db = None
+            elif full_id[0] == 'd':
+                id_from_fmkdb = None
+                id_from_db = idx
+            else:
+                raise ValueError
+
         except ValueError:
             return False
 
-        data_orig, data = self.fz.get_from_data_bank(idx)
-        if data is None:
-            return False
-
         if args_len > 2:
-            data_orig = data
-
-            t = self.__parse_instructions(args)
-            if t is None:
+            actions = self.__parse_instructions(args)
+            if actions is None:
                 self.__error_msg = "Syntax Error!"
                 return False
-
-            for i in range(nb):
-                new_data = self.fz.get_data(t, data_orig=data)
-                if new_data is None:
-                    return False
-
-                if tg_ids:
-                    new_data.tg_ids = tg_ids
-                self.fz.send_data_and_log(new_data, original_data=data_orig)
-
         else:
-            for i in range(nb):
-                if tg_ids:
-                    data.tg_ids = tg_ids
-                self.fz.send_data_and_log(data, original_data=data_orig)
+            actions = None
 
-        self.__error = False
-
+        self.__error = not self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
+                                                         id_from_fmkdb=id_from_fmkdb,
+                                                         id_from_db=id_from_db,
+                                                         max_loop=nb)
         return False
 
 
@@ -5243,10 +5192,8 @@ class FmkShell(cmd.Cmd):
             self.__error_msg = "the Data Bank is empty"
             return False
 
-        for data_orig, data in self.fz.iter_data_bank():
-            if tg_ids:
-                data.tg_ids = tg_ids
-            self.fz.send_data_and_log(data, original_data=data_orig)
+        for data in self.fz.iter_data_bank():
+            self.fz.process_data_and_send(data, tg_ids=tg_ids)
 
         return False
 
@@ -5257,7 +5204,7 @@ class FmkShell(cmd.Cmd):
         '''
         self.__error = True
 
-        data_orig, data = self.fz.get_last_data()
+        data = self.fz.get_last_data()
         if data is None:
             return False
 
@@ -5272,7 +5219,7 @@ class FmkShell(cmd.Cmd):
         '''
         self.__error = True
 
-        data_orig, data = self.fz.get_last_data()
+        data = self.fz.get_last_data()
         if data is None:
             return False
 
@@ -5318,7 +5265,7 @@ class FmkShell(cmd.Cmd):
 
         self.__error = True
 
-        data_orig, data = self.fz.get_last_data()
+        data = self.fz.get_last_data()
         if data is None:
             return False
 
@@ -5326,23 +5273,16 @@ class FmkShell(cmd.Cmd):
 
         if line:
             args = line.split()
-            data_orig = data
             args, tg_ids = self._retrieve_tg_ids(args)
 
-            t = self.__parse_instructions(args)
-            if t is None:
+            actions = self.__parse_instructions(args)
+            if actions is None:
                 self.__error_msg = "Syntax Error!"
                 return False
+        else:
+            actions = None
 
-            data = self.fz.get_data(t, data_orig=data)
-            if data is None:
-                return False
-
-        self.__error = False
-
-        if tg_ids:
-            data.tg_ids = tg_ids
-        self.fz.send_data_and_log(data, original_data=data_orig)
+        self.__error = not self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids, seed=data))
 
         return False
 
@@ -5365,11 +5305,7 @@ class FmkShell(cmd.Cmd):
         line = ''.join(args)
 
         if line:
-            data = Data(line)
-
-            if tg_ids:
-                data.tg_ids = tg_ids
-            self.fz.send_data_and_log(data, None)
+            self.fz.process_data_and_send(Data(line), tg_ids=tg_ids)
         else:
             self.__error = True
 
@@ -5398,9 +5334,7 @@ class FmkShell(cmd.Cmd):
                 self.__error = True
                 return False
 
-            if tg_ids:
-                data.tg_ids = tg_ids
-            self.fz.send_data_and_log(data, None)
+            self.fz.process_data_and_send(data, tg_ids=tg_ids)
         else:
             self.__error = True
 
@@ -5449,7 +5383,8 @@ class FmkShell(cmd.Cmd):
             sid = 1
             eid = -1
 
-        self.fz.fmkdb_fetch_data(start_id=sid, end_id=eid)
+        data_list = self.fz.fmkdb_fetch_data(start_id=sid, end_id=eid)
+        self.fz.register_in_data_bank(data_list)
 
         self.__error = False
         return False
@@ -5463,59 +5398,6 @@ class FmkShell(cmd.Cmd):
         '''Enable FmkDB recording'''
         self.fz.disable_fmkdb()
         return False
-
-    def do_dump_db_to_file(self, line):
-        '''
-        Dump the Data Bank to a file in pickle format
-        |_ syntax: dump_db_to_file <filename>
-        '''
-
-        if line:
-            arg = line.split()[0]
-
-            f = open(arg, 'wb')
-            self.fz.dump_db_to_file(f)
-            f.close()
-        else:
-            self.__error = True
-
-        return False
-
-
-    def do_load_db_from_file(self, line):
-        '''
-        Load a previous saved Data Bank from a file
-        |_ syntax: load_db_from_file <filename>
-        '''
-
-        if line:
-            arg = line.split()[0]
-
-            f = open(arg, 'rb')
-            self.fz.load_db_from_file(f)
-            f.close()
-        else:
-            self.__error = True
-
-        return False
-
-    def do_load_db_from_text_file(self, line):
-        '''
-        Load a previous saved Data Bank from a file
-        |_ syntax: load_db_from_text_file <filename>
-        '''
-
-        if line:
-            arg = line.split()[0]
-
-            f = open(arg, 'r')
-            self.fz.load_db_from_text_file(f)
-            f.close()
-        else:
-            self.__error = True
-
-        return False
-
 
     def do_comment(self, line):
         if sys.version_info[0] == 2:

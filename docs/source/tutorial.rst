@@ -959,7 +959,7 @@ Here under some basic commands to start with:
    # cases and enforce the disruptor to strictly follow the ZIP structure
    # Finally truncate the output to 200 bytes
    action_list = [('tTYPE', UI(init=5, order=True)), ('SIZE', UI(sz=200))]
-   altered_data = fmk.get_data(action_list, data_orig=Data(dt))
+   altered_data = fmk.process_data(action_list, seed=Data(dt))
 
    # Send this new data and look at the actions that perform tTYPE and
    # SIZE through the console or the logs
@@ -2029,7 +2029,7 @@ show the beginning of ``generic/standard_proj.py``:
    # project.default_dm = 'mydf'
 
    logger = Logger(record_data=False, explicit_data_recording=False,
-		   export_orig=False, export_raw_data=False)
+		    export_raw_data=False)
 
    printer1_tg = PrinterTarget(tmpfile_ext='.png')
    printer1_tg.set_target_ip('127.0.0.1')

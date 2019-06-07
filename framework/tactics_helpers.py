@@ -708,12 +708,12 @@ class DynGeneratorFromScenario(Generator):
         data_desc = step.data_desc
         if isinstance(data_desc[0], str) \
                 or (isinstance(data_desc[0], Data) and data_desc[0].content is not None):
-            dp = sc.DataProcess(process=['tTYPE#{:d}'.format(self._step_num)], seed=data_desc[0],
+            dp = DataProcess(process=['tTYPE#{:d}'.format(self._step_num)], seed=data_desc[0],
                                 auto_regen=True)
             dp.append_new_process([('tSTRUCT#{:d}'.format(self._step_num), UI(init=1, deep=True))])
             data_desc[0] = dp
             step.data_desc = data_desc
-        elif isinstance(data_desc[0], sc.DataProcess):
+        elif isinstance(data_desc[0], DataProcess):
             proc = copy.copy(data_desc[0].process)
             proc2 = copy.copy(data_desc[0].process)
             proc.append('tTYPE#{:d}'.format(self._step_num))
@@ -722,7 +722,7 @@ class DynGeneratorFromScenario(Generator):
             data_desc[0].append_new_process(proc2)
             data_desc[0].auto_regen = True
         elif isinstance(data_desc[0], Data):
-            dp = sc.DataProcess(process=['C#{:d}'.format(self._step_num)], seed=data_desc[0],
+            dp = DataProcess(process=['C#{:d}'.format(self._step_num)], seed=data_desc[0],
                                 auto_regen=True)
             data_desc[0] = dp
             step.data_desc = data_desc
@@ -739,7 +739,7 @@ class DynGeneratorFromScenario(Generator):
         if self._prev_func is not None:
             self._prev_func(env, step)
         data_desc = step.data_desc[0]
-        assert isinstance(data_desc, sc.DataProcess)
+        assert isinstance(data_desc, DataProcess)
         if data_desc.auto_regen_cpt > 0:
             data_desc.auto_regen_cpt = 0
             self._data_fuzz_change_step = True
@@ -883,7 +883,7 @@ class DynGeneratorFromScenario(Generator):
                 if self.tr_selected is None:
                     if tr.dp_completed_guard:
                         for d_desc in self.step.data_desc:
-                            if isinstance(d_desc, sc.DataProcess) and d_desc.dp_completed:
+                            if isinstance(d_desc, DataProcess) and d_desc.dp_completed:
                                 d_desc.dp_completed = False
                                 self.tr_selected = tr
                                 self.tr_selected_idx = idx

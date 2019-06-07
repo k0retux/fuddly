@@ -3499,7 +3499,8 @@ class TestDataModelHelpers(unittest.TestCase):
 
         data_sizes = [211, 149, 184]
         for i in range(100):
-            data = fmk.get_data(['XML5', ('tWALK', UI(path='xml5/command/start-tag/content/attr1/cmd_val'))])
+            data = fmk.process_data(
+                ['XML5', ('tWALK', UI(path='xml5/command/start-tag/content/attr1/cmd_val'))])
             if data is None:
                 break
             assert len(data.to_bytes()) == data_sizes[i]
@@ -3513,7 +3514,8 @@ class TestDataModelHelpers(unittest.TestCase):
 
         specific_cases_checked = False
         for i in range(100):
-            data = fmk.get_data(['XML5', ('tTYPE', UI(path='xml5/command/LOGIN/start-tag/content/attr1/val'))])
+            data = fmk.process_data(
+                ['XML5', ('tTYPE', UI(path='xml5/command/LOGIN/start-tag/content/attr1/val'))])
             if data is None:
                 break
             node_to_check = data.content['xml5/command/LOGIN/start-tag/content/attr1/val']
@@ -3554,10 +3556,10 @@ class TestFMK(unittest.TestCase):
             print("\n\n---[ Tested Disruptor %r ]---" % dis)
             if dis == 'EXT':
                 act = [dmaker_type, (dis, UI(cmd='/bin/cat', file_mode=True))]
-                d = fmk.get_data(act)
+                d = fmk.process_data(act)
             else:
                 act = [dmaker_type, dis]
-                d = fmk.get_data(act)
+                d = fmk.process_data(act)
             if d is not None:
                 fmk._log_data(d)
                 print("\n---[ Pretty Print ]---\n")
@@ -3570,7 +3572,7 @@ class TestFMK(unittest.TestCase):
 
     def test_separator_disruptor(self):
         for i in range(100):
-            d = fmk.get_data(['SEPARATOR', 'tSEP'])
+            d = fmk.process_data(['SEPARATOR', 'tSEP'])
             if d is None:
                 break
             fmk._setup_new_sending()
@@ -3592,7 +3594,7 @@ class TestFMK(unittest.TestCase):
         act = [('EXIST_COND', UI(determinist=True)), 'tWALK', 'tSTRUCT']
         for i in range(4):
             for j in range(10):
-                d = fmk.get_data(act)
+                d = fmk.process_data(act)
                 if d is None:
                     print('--> Exiting (need new input)')
                     break
@@ -3613,7 +3615,7 @@ class TestFMK(unittest.TestCase):
         idx = 0
         act = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', UI(deep=True))]
         for j in range(10):
-            d = fmk.get_data(act)
+            d = fmk.process_data(act)
             if d is None:
                 print('--> Exiting (need new input)')
                 break
@@ -3635,7 +3637,7 @@ class TestFMK(unittest.TestCase):
 
         act = ['OFF_GEN', ('tTYPE', UI(runs_per_node=1))]
         for j in range(100):
-            d = fmk.get_data(act)
+            d = fmk.process_data(act)
             if d is None:
                 print('--> Exiting (need new input)')
                 break
@@ -3689,7 +3691,7 @@ class TestFMK(unittest.TestCase):
 
         base_qty = 0
         for i in range(100):
-            data = fmk.get_data(['SC_NO_REGEN'])
+            data = fmk.process_data(['SC_NO_REGEN'])
             data_list = fmk._send_data([data])  # needed to make the scenario progress
             if not data_list:
                 base_qty = i
@@ -3708,7 +3710,7 @@ class TestFMK(unittest.TestCase):
         print('\n*** test scenario SC_AUTO_REGEN via _send_data()')
 
         for i in range(base_qty * 3):
-            data = fmk.get_data(['SC_AUTO_REGEN'])
+            data = fmk.process_data(['SC_AUTO_REGEN'])
             data_list = fmk._send_data([data])
             if not data_list:
                 raise ValueError
@@ -3721,7 +3723,7 @@ class TestFMK(unittest.TestCase):
 
         base_qty = 0
         for i in range(100):
-            data = fmk.get_data(['SC_NO_REGEN'])
+            data = fmk.process_data(['SC_NO_REGEN'])
             go_on = fmk.send_data_and_log([data])
             if not go_on:
                 base_qty = i
@@ -3742,7 +3744,7 @@ class TestFMK(unittest.TestCase):
         print('\n*** test scenario SC_AUTO_REGEN via send_data_and_log()')
 
         for i in range(base_qty * 3):
-            data = fmk.get_data(['SC_AUTO_REGEN'])
+            data = fmk.process_data(['SC_AUTO_REGEN'])
             go_on = fmk.send_data_and_log([data])
             if not go_on:
                 raise ValueError
@@ -3763,7 +3765,7 @@ class TestFMK(unittest.TestCase):
         now = datetime.datetime.now()
         for i in range(10):
             prev_data = data
-            data = fmk.get_data(['SC_EX1'])
+            data = fmk.process_data(['SC_EX1'])
             ok = fmk.send_data_and_log([data])  # needed to make the scenario progress
             if not ok:
                 raise ValueError
@@ -3778,7 +3780,7 @@ class TestFMK(unittest.TestCase):
         data = None
         steps = []
         for i in range(4):
-            data = fmk.get_data(['SC_EX2'])
+            data = fmk.process_data(['SC_EX2'])
             if i == 3:
                 self.assertTrue(data is None)
             if data is not None:
@@ -3800,7 +3802,7 @@ class TestFMK(unittest.TestCase):
     def test_scenario_infra_03(self):
         steps = []
         for i in range(6):
-            data = fmk.get_data(['SC_EX3'])
+            data = fmk.process_data(['SC_EX3'])
             steps.append(data.origin.current_step)
             ok = fmk.send_data_and_log([data])  # needed to make the scenario progress
             if not ok:
@@ -3823,7 +3825,7 @@ class TestFMK(unittest.TestCase):
             steps = []
             scenario = None
             for i in range(iter_num):
-                data = fmk.get_data([name])
+                data = fmk.process_data([name])
                 if i == 1:
                     scenario = data.origin
                 steps.append(data.origin.current_step)

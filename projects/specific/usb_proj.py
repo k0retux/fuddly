@@ -31,7 +31,7 @@ from framework.node import *
 project = Project()
 project.default_dm = 'usb'
 
-logger = Logger('bin', record_data=False, explicit_data_recording=True, export_orig=False)
+logger = Logger('bin', record_data=False, explicit_data_recording=True)
 
 rpyc_module = True
 try:

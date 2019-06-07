@@ -304,7 +304,7 @@ criteria based on which you want to perform the search, you should use:
      fmk = FmkPlumbing()
      fmk.run_project(name='tuto')
 
-     data = fmk.get_data(['EX'])    # Return a Data container on the data model example
+     data = fmk.process_data(['EX'])    # Return a Data container on the data model example
      data.content.freeze()
 
      ic = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
@@ -431,7 +431,7 @@ it if you like ;).
 
     usb_str = fmk.dm.get_external_atom(dm_name='usb', data_id='STR')
 
-    data = fmk.get_data(['EX'])      # Return a Data container on the data model example
+    data = fmk.process_data(['EX'])      # Return a Data container on the data model example
 
     data.content['ex/data0'] = usb_str  # Perform the substitution
 

@@ -28,7 +28,7 @@ from framework.tactics_helpers import *
 from framework.global_resources import UI
 from framework.scenario import *
 from framework.error_handling import ExtinctPopulationError, PopulationError
-
+from framework.data import DataProcess
 
 class Population(object):
     """ Population to be used within an evolutionary scenario """
@@ -104,7 +104,7 @@ class DefaultIndividual(Individual):
         self.probability_of_survival = None  # between 0 and 1
 
     def mutate(self, nb):
-        data = self._fmk.get_data([('C', UI(nb=nb))], data_orig=Data(self.node))
+        data = self._fmk.process_data([('C', UI(nb=nb))], seed=Data(self.node))
         if data is None:
             raise PopulationError
         assert isinstance(data.content, Node)
@@ -142,7 +142,7 @@ class DefaultPopulation(Population):
 
         # individuals initialization
         for _ in range(0, self.SIZE):
-            data = self._fmk.get_data(self.DATA_PROCESS)
+            data = self._fmk.process_data(self.DATA_PROCESS)
             if data is None:
                 raise PopulationError
             node = data.content
@@ -190,7 +190,7 @@ class DefaultPopulation(Population):
 
 
             while True:
-                data = self._fmk.get_data([('tCOMB', UI(node=ind_2))], data_orig=Data(ind_1))
+                data = self._fmk.process_data([('tCOMB', UI(node=ind_2))], seed=Data(ind_1))
                 if data is None or data.is_unusable():
                     break
                 else:

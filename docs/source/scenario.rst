@@ -438,7 +438,7 @@ They have to be specified as parameters of the method :meth:`framework.scenario.
 The current defined condition is:
 
  - `DataProcess completed` (parameter is ``dp_completed_guard``): which means, for a step hosting
-   a :class:`framework.scenario.DataProcess`, that if no more data can be issued by it the
+   a :class:`framework.data.DataProcess`, that if no more data can be issued by it the
    condition is satisfied, and thus the transition can be crossed.
    This is illustrated by the following example:
 
@@ -466,14 +466,14 @@ is described by a `data descriptor` which can be:
 
 - a :class:`framework.data.Data`;
 
-- a :class:`framework.scenario.DataProcess`.
+- a :class:`framework.data.DataProcess`.
 
 
-A :class:`framework.scenario.DataProcess` is composed of a chain of generators and/or disruptors
+A :class:`framework.data.DataProcess` is composed of a chain of generators and/or disruptors
 (with or without parameters) and optionally a ``seed`` on which the chain of disruptor will be applied to (if no
 generator is provided at the start of the chain).
 
-A :class:`framework.scenario.DataProcess` can trigger the end of the scenario if a disruptor in the
+A :class:`framework.data.DataProcess` can trigger the end of the scenario if a disruptor in the
 chain yields (meaning it has terminated its job with the provided data: it is *exhausted*).
 If you prefer that the scenario goes on, then
 you have to set the ``auto_regen`` parameter to ``True``. In such a case, when the step embedding
@@ -481,8 +481,8 @@ the data process will be reached again, the framework will rerun the chain. This
 the exhausted disruptor and make new data available to it (by pulling data from preceding data makers
 in the chain or by using the *seed* again).
 
-Additional *data maker chains* can be added to a :class:`framework.scenario.DataProcess` thanks to
-:meth:`framework.scenario.DataProcess.append_new_process`. Switching from the current process to the
+Additional *data maker chains* can be added to a :class:`framework.data.DataProcess` thanks to
+:meth:`framework.data.DataProcess.append_new_process`. Switching from the current process to the
 next one is carried out when the current one is interrupted by a yielding disruptor.
 Note that in the case the data process has its
 ``auto_regen`` parameter set to ``True``, the current interrupted chain won't be rerun until every other
@@ -491,7 +491,7 @@ chain has also get a chance to be executed.
 .. seealso:: Refer to :ref:`tuto:dmaker-chain` for more information on disruptor chaining.
 
 .. note:: It follows the same pattern as the instructions that can set a virtual operator
-   (:ref:`tuto:operator`). It is actually what the method :meth:`framework.plumbing.FmkPlumbing.get_data`
+   (:ref:`tuto:operator`). It is actually what the method :meth:`framework.plumbing.FmkPlumbing.process_data`
    takes as parameters.
 
 Here under examples of steps leveraging the different ways to describe their data to send.

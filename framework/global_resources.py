@@ -269,7 +269,7 @@ class Error(object):
     FmkWarning = -6
     OperationCancelled = -7
 
-    # FmkPlumbing.get_data() error code
+    # FmkPlumbing.process_data() error code
     CloneError = -10
     InvalidDmaker = -11
     HandOver = -12

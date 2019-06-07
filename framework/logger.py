@@ -37,16 +37,16 @@ from libs.utils import ensure_dir
 import framework.global_resources as gr
 
 class Logger(object):
-    '''
+    """
     The Logger is used for keeping the history of the communication
     with the Target. The methods are used by the framework, but can
     also be leveraged by an Operator.
-    '''
+    """
 
     fmkDB = None
 
     def __init__(self, name=None, prefix='', record_data=False, explicit_data_recording=False,
-                 export_orig=True, export_raw_data=True, console_display_limit=800,
+                 export_raw_data=True, console_display_limit=800,
                  enable_file_logging=False):
         '''
         Args:
@@ -59,7 +59,6 @@ class Logger(object):
             Such notification is possible when the framework call its method
             :meth:`framework.operator_helpers.Operator.do_after_all()`, where the Operator can take its decision
             after the observation of the target feedback and/or probes outputs.
-          export_orig (bool): If True, will also log the original data on which disruptors have been called.
           export_raw_data (bool): If True, will log the data as it is, without trying to interpret it
             as human readable text.
           console_display_limit (int): maximum amount of characters to display on the console at once.
@@ -71,7 +70,6 @@ class Logger(object):
         self.p = prefix
         self.__record_data = record_data
         self.__explicit_data_recording = explicit_data_recording
-        self.__export_orig = export_orig
         self._console_display_limit = console_display_limit
 
         now = datetime.datetime.now()
@@ -189,7 +187,6 @@ class Logger(object):
     def reset_current_state(self):
         self._current_data = None
         self._current_group_id = None
-        self._current_orig_data_id = None
         self._current_size = None
         self._current_ack_dates = None
         self._current_dmaker_list= []
@@ -224,13 +221,7 @@ class Logger(object):
 
                 self._current_data.set_data_id(last_data_id)
 
-                if self._current_orig_data_id is not None:
-                    self.fmkDB.insert_steps(last_data_id, 1, None, None,
-                                            self._current_orig_data_id,
-                                            None, None)
-                    step_id_start = 2
-                else:
-                    step_id_start = 1
+                step_id_start = 1
 
                 for step_id, dmaker in enumerate(self._current_dmaker_list, start=step_id_start):
                     dmaker_type, dmaker_name, user_input = dmaker
@@ -499,47 +490,6 @@ class Logger(object):
             self._current_ack_dates = {tg_ref: date}
         else:
             self._current_ack_dates[tg_ref] = date
-
-    def log_orig_data(self, data):
-
-        exportable = False if data is None else data.is_recordable()
-
-        if self.__explicit_data_recording and not exportable:
-            return False
-
-        if data is not None:
-            self._current_orig_data_id = data.get_data_id()
-
-        if self.__export_orig and not self.__record_data:
-            if data is None:
-                msgs = ("### No Original Data",)
-            else:
-                msgs = ("### Original Data:", data)
-
-            for msg in msgs:
-                self.log_fn(msg, rgb=Color.LOGSECTION)
-
-            ret = True
-
-        elif self.__export_orig:
-
-            if data is None:
-                ret = False
-            else:
-                ffn = self._export_data_func(data)
-                if ffn:
-                    self.log_fn("### Original data is stored in the file:", rgb=Color.DATAINFO)
-                    self.log_fn(ffn)
-                    ret = True
-                else:
-                    self.print_console("ERROR: saving data in an extenal file has failed!",
-                                       nl_before=True, rgb=Color.ERROR)
-                    ret = False
-
-        else:
-            ret = False
-
-        return ret
 
     def log_data(self, data, verbose=False):
 

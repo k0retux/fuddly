@@ -33,7 +33,7 @@ project.default_dm = ['mydf','jpg']
 # If you only want one default DM, provide its name directly as follows:
 # project.default_dm = 'mydf'
 
-logger = Logger('standard', record_data=False, explicit_data_recording=True, export_orig=False,
+logger = Logger('standard', record_data=False, explicit_data_recording=True,
                 enable_file_logging=False)
 
 printer1_tg = PrinterTarget(tmpfile_ext='.png')

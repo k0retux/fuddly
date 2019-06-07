@@ -31,13 +31,14 @@ from framework.knowledge.feedback_handler import TestFbkHandler
 from framework.scenario import *
 from framework.global_resources import UI
 from framework.evolutionary_helpers import DefaultPopulation
+from framework.data import DataProcess
 
 project = Project()
 project.default_dm = ['mydf', 'myproto']
 
 project.map_targets_to_scenario('ex1', {0: 7, 1: 8, None: 8})
 
-logger = Logger(record_data=False, explicit_data_recording=False, export_orig=False,
+logger = Logger(record_data=False, explicit_data_recording=False,
                 export_raw_data=False, enable_file_logging=False)
 
 ### KNOWLEDGE ###
