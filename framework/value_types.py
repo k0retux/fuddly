@@ -299,7 +299,8 @@ class String(VT_Alt):
     def __init__(self, values=None, size=None, min_sz=None,
                  max_sz=None, determinist=True, codec='latin-1',
                  extra_fuzzy_list=None, absorb_regexp=None,
-                 alphabet=None, min_encoded_sz=None, max_encoded_sz=None, encoding_arg=None):
+                 alphabet=None, min_encoded_sz=None, max_encoded_sz=None, encoding_arg=None,
+                 values_desc=None):
 
         """
         Initialize the String
@@ -327,6 +328,9 @@ class String(VT_Alt):
             alphabet: The alphabet to use for generating data, in case no ``values`` is
               provided. Also use during absorption to validate the contents. It is
               checked if there is no ``values``.
+            values_desc (dict): Dictionary that maps string values to their descriptions (character
+              strings). Leveraged for display purpose. Even if provided, all values do not need to
+              be described.
             min_encoded_sz: Only relevant for subclasses that leverage the encoding infrastructure.
               Enable to provide the minimum legitimate size for an encoded string.
             max_encoded_sz: Only relevant for subclasses that leverage the encoding infrastructure.
@@ -345,6 +349,10 @@ class String(VT_Alt):
         self.values_copy = None
         self.values_fuzzy = None
         self.values_save = None
+
+        self.values_desc = values_desc
+        if self.values_desc and not isinstance(self.values_desc, dict):
+            raise ValueError('@values_desc should be a dictionary')
 
         self.is_values_provided = None
 
@@ -1027,6 +1035,12 @@ class String(VT_Alt):
         if self.drawn_val is None:
             self.get_value()
 
+        if self.values_desc:
+            desc = self.values_desc.get(self.drawn_val)
+            desc = '' if desc is None else ", desc='" + desc + "'"
+        else:
+            desc = ''
+
         if self.encoded_string or self.codec not in [self.ASCII, self.LATIN_1]:
             dec = self.drawn_val
             sz = len(dec)
@@ -1035,9 +1049,9 @@ class String(VT_Alt):
             dec = dec.decode(self.codec, 'replace')
             if sys.version_info[0] == 2:
                 dec = dec.encode('latin-1')
-            return dec + ' [decoded, sz={!s}, codec={!s}]'.format(len(dec), self.codec)
+            return dec + ' [decoded, sz={!s}, codec={!s}{:s}]'.format(len(dec), self.codec, desc)
         else:
-            return 'codec={!s}'.format(self.codec)
+            return 'codec={!s}{:s}'.format(self.codec, desc)
 
 
 class INT(VT):

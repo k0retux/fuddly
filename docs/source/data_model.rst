@@ -743,6 +743,10 @@ following parameters:
   provided. Also use during absorption to validate the contents. It is
   checked if there is no ``values``.
 
+``values_desc`` [optional, default value: **None**]
+  Dictionary that maps string values to their descriptions (character strings). Leveraged for
+  display purpose. Even if provided, all values do not need to be described.
+
 ``max_encoded_sz`` [optional, default value: **None**]
   Only relevant for subclasses that leverage the encoding infrastructure.
   Enable to provide the maximum legitimate size for an encoded string.
