@@ -3330,6 +3330,50 @@ class NodeInternals_NonTerm(NodeInternals):
                         if n is old:
                             sublist[idx] = new
 
+    def add(self, node, min=1, max=1, after=None, before=None, idx=None):
+        assert (after is not None and before is None and idx is None) or \
+            (before is not None and after is None and idx is None) or \
+            (idx is not None and before is None and after is None) or \
+            (after is None and before is None and idx is None)
+
+        self.subnodes_set.add(node)
+        self.subnodes_attrs[node] = (min, max)
+
+        if after is not None:
+            pivot = after
+        elif before is not None:
+            pivot = before
+        else:
+            pivot = None
+
+        insert_before = after is None
+
+        for weight, lnode_list in split_with(lambda x: isinstance(x, int), self.subnodes_order):
+            for delim, sublist in self.__iter_csts(lnode_list[0]):
+                if delim[:3] == 'u=+' or delim[:3] == 's=+':
+                    for w, etp in split_with(lambda x: isinstance(x, int), sublist[1]):
+                        if pivot is None:
+                            etp.insert(idx if idx is not None else len(etp), node)
+                        else:
+                            for i, n in enumerate(etp):
+                                if n is pivot:
+                                    idx = i if insert_before else i+1
+                                    etp.insert(idx, node)
+                                    break
+                else:
+                    if pivot is None:
+                        sublist.insert(idx if idx is not None else len(sublist), node)
+                    else:
+                        for i, n in enumerate(sublist):
+                            if n is pivot:
+                                idx = i if insert_before else i+1
+                                sublist.insert(idx, node)
+                                break
+
+        self.unfreeze(recursive=False, dont_change_state=False,
+                      only_generators=False, reevaluate_constraints=False)
+        self.get_subnodes_with_csts()
+
     def _parse_node_desc(self, node_desc):
         mini, maxi = self.subnodes_attrs[node_desc]
         return node_desc, mini, maxi

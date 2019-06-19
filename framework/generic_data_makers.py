@@ -23,6 +23,8 @@
 
 import types
 import subprocess
+import uuid
+
 from copy import *
 
 from framework.node import *
@@ -1459,3 +1461,63 @@ class d_shallow_copy(Disruptor):
 
         return prev_data
 
+@disruptor(tactics, dtype="ADD", weight=4,
+           args={'path': ('Graph path to select the node on which ' \
+                          'the disruptor should apply.', None, str),
+                 'after': ('If True, the addition will be done after the selected nodes. Otherwise, '
+                           'it will be done before.',
+                          True, bool),
+                 'atom': ('Name of the atom to add within the retrieved input. It is mutually '
+                         'exclusive with @raw',
+                          None, str),
+                 'raw': ('Raw value to add within the retrieved input. It is mutually '
+                         'exclusive with @atom.',
+                         b'', (bytes,str)),
+                 'name': ('If provided, the added node will have this name.',
+                          None, str)
+                 })
+class d_add_data(Disruptor):
+    """
+    Add some data within the retrieved input.
+    """
+    def setup(self, dm, user_input):
+        if self.atom and self.raw:
+            return False
+        return True
+
+    def disrupt_data(self, dm, target, prev_data):
+        prev_content = prev_data.content
+        if isinstance(prev_content, bytes):
+            prev_content = Node('raw', values=[prev_content])
+        assert isinstance(prev_content, Node)
+
+        if self.atom is not None:
+            try:
+                obj = dm.get_atom(self.atom)
+            except:
+                prev_data.add_info("An error occurred while retrieving the atom named '{:s}'".format(self.atom))
+                return prev_data
+        else:
+            obj = Node('raw{}'.format(uuid.uuid1()), values=[self.raw])
+
+        if self.name is not None:
+            obj.name = self.name
+
+        if self.path:
+            nt_node_path = self.path[:self.path.rfind('/')]
+            try:
+                nt_node = prev_content[nt_node_path]
+                pivot = prev_content[self.path]
+                print(nt_node_path, self.path)
+            except:
+                prev_data.add_info('An error occurred while handling @path')
+                return prev_data
+
+            if self.after:
+                nt_node.add(obj, after=pivot)
+            else:
+                nt_node.add(obj, before=pivot)
+        else:
+            prev_content.add(obj)
+
+        return prev_data
