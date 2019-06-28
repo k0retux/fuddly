@@ -2613,7 +2613,7 @@ class NodeInternals_NonTerm(NodeInternals):
         return current_comp
 
     @staticmethod
-    def _get_next_heavier_component(comp_list, excluded_idx=[]):
+    def _get_next_heavier_component(comp_list, excluded_idx):
         current_weight = -1
         for idx, weight, comp in split_verbose_with(lambda x: isinstance(x, int), comp_list):
             if idx in excluded_idx:
@@ -2629,7 +2629,7 @@ class NodeInternals_NonTerm(NodeInternals):
             return current_comp, current_idx
 
     @staticmethod
-    def _get_next_random_component(comp_list, excluded_idx=[], seed=None):
+    def _get_next_random_component(comp_list, excluded_idx, seed=None):
         total_weight = 0
         for idx, weight, comp in split_verbose_with(lambda x: isinstance(x, int), comp_list):
             if idx in excluded_idx:
@@ -2890,8 +2890,9 @@ class NodeInternals_NonTerm(NodeInternals):
 
 
     def get_subnodes_with_csts(self):
-        '''Generate the structure of the non terminal node.
-        '''
+        """
+        Generate the structure of the non terminal node.
+        """
 
         # In this case we return directly the frozen state
         if self.frozen_node_list is not None:
@@ -3331,6 +3332,23 @@ class NodeInternals_NonTerm(NodeInternals):
                             sublist[idx] = new
 
     def add(self, node, min=1, max=1, after=None, before=None, idx=None):
+        """
+        This method add a new node to this non-terminal. The location and the quantity can be configured
+        through the parameters.
+
+        Args:
+            node (Node): The node to add
+            min: The minimum number of repetition of this node within the non-terminal node
+            max: The maximum number of repetition of this node within the non-terminal node
+            after: If not None, it should be the node (within the non-terminal) *after* which
+              the new node will be inserted.
+            before: If not None, it should be the node (within the non-terminal) *before* which
+              the new node will be inserted.
+            idx: If not None, it should provide the position in the list of subnodes where the new
+              node will be inserted.
+
+        """
+
         assert (after is not None and before is None and idx is None) or \
             (before is not None and after is None and idx is None) or \
             (idx is not None and before is None and after is None) or \
@@ -3348,31 +3366,61 @@ class NodeInternals_NonTerm(NodeInternals):
 
         insert_before = after is None
 
-        for weight, lnode_list in split_with(lambda x: isinstance(x, int), self.subnodes_order):
-            for delim, sublist in self.__iter_csts(lnode_list[0]):
+        def add_to_node_list(new_node, node_list, index, with_attrs=False):
+            node_cpt = 0
+            for delim, sublist in self.__iter_csts(node_list):
                 if delim[:3] == 'u=+' or delim[:3] == 's=+':
                     for w, etp in split_with(lambda x: isinstance(x, int), sublist[1]):
-                        if pivot is None:
-                            etp.insert(idx if idx is not None else len(etp), node)
+                        if pivot is None and node_cpt == index:
+                            etp.insert(index, [new_node, min, max] if with_attrs else new_node)
                         else:
-                            for i, n in enumerate(etp):
+                            for i, ndesc in enumerate(etp):
+                                n, _, _ = self._get_node_and_attrs_from(ndesc)
                                 if n is pivot:
-                                    idx = i if insert_before else i+1
-                                    etp.insert(idx, node)
+                                    index = i if insert_before else i + 1
+                                    ndesc = [new_node, min, max] if with_attrs else new_node
+                                    etp.insert(index, ndesc)
                                     break
+                        node_cpt += 1
                 else:
-                    if pivot is None:
-                        sublist.insert(idx if idx is not None else len(sublist), node)
+                    if pivot is None and node_cpt == index:
+                        sublist.insert(index, [new_node, min, max] if with_attrs else new_node)
                     else:
-                        for i, n in enumerate(sublist):
+                        for i, ndesc in enumerate(sublist):
+                            n, _, _ = self._get_node_and_attrs_from(ndesc)
                             if n is pivot:
-                                idx = i if insert_before else i+1
-                                sublist.insert(idx, node)
+                                index = i if insert_before else i + 1
+                                ndesc = [new_node, min, max] if with_attrs else new_node
+                                sublist.insert(index, ndesc)
                                 break
+                    node_cpt += 1
 
-        self.unfreeze(recursive=False, dont_change_state=False,
-                      only_generators=False, reevaluate_constraints=False)
-        self.get_subnodes_with_csts()
+        for weight, lnode_list in split_with(lambda x: isinstance(x, int), self.subnodes_order):
+            if pivot is None and idx is None:
+                lnode_list[0].append(['u>', [node]])
+                continue
+            add_to_node_list(node, lnode_list[0], idx, with_attrs=False)
+
+        if self.expanded_nodelist:
+            for node_list in self.expanded_nodelist:
+                if pivot is None and idx is None:
+                    node_list.append(['u>', [[node, min, max]]])
+                    continue
+                # for expanded_nodelist min/max info are included in the list
+                add_to_node_list(node, node_list, idx, with_attrs=True)
+
+        if self.frozen_node_list:
+            if pivot is not None:
+                idx = self.frozen_node_list.index(pivot)
+                idx = idx if insert_before else idx+1
+            elif idx is None:
+                idx = len(self.frozen_node_list)
+            else:
+                pass
+
+            for _ in range(min):
+                self.frozen_node_list.insert(idx, node)
+
 
     def _parse_node_desc(self, node_desc):
         mini, maxi = self.subnodes_attrs[node_desc]
@@ -6313,7 +6361,6 @@ class Node(object):
     def __lt__(self, other):
         return self.depth < other.depth
 
-
     def __hash__(self):
         return id(self)
 
@@ -6370,6 +6417,10 @@ class Node(object):
                                                            constraints=AbsNoCsts())
                     if status != AbsorbStatus.FullyAbsorbed:
                         raise ValueError
+
+    def update(self, node_update_dict):
+        for node_ref, new_value in node_update_dict.items():
+            self[node_ref] = new_value
 
     def __getattr__(self, name):
         internals = self.__getattribute__('internals')[self.current_conf]

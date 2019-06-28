@@ -430,7 +430,7 @@ GENERIC_ARGS = {
     'runs_per_node': ('maximum number of test cases for a single node (-1 means until the end)', -1, int),
     'clone_node': ('if True the dmaker will always return a copy ' \
                    'of the node. (for stateless diruptors dealing with ' \
-                   'big data it can be usefull to it to False)', True, bool)
+                   'big data it can be usefull to set it to False)', True, bool)
 }
 
 def modelwalker_inputs_handling_helper(dmaker):

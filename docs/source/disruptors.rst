@@ -292,26 +292,26 @@ Reference:
 Parameters:
   .. code-block:: none
 
-  parameters:
-    |_ path
-    |      | desc: Graph path to select the node on which the disruptor should
-    |      |       apply.
-    |      | default: None [type: str]
-    |_ after
-    |      | desc: If True, the addition will be done after the selected nodes.
-    |      |       Otherwise, it will be done before.
-    |      | default: True [type: bool]
-    |_ atom
-    |      | desc: Name of the atom to add within the retrieved input. It is mutually
-    |      |       exclusive with @raw
-    |      | default: None [type: str]
-    |_ raw
-    |      | desc: Raw value to add within the retrieved input. It is mutually
-    |      |       exclusive with @atom.
-    |      | default: b'' [type: bytes, str]
-    |_ name
-    |      | desc: If provided, the added node will have this name.
-    |      | default: None [type: str]
+      parameters:
+        |_ path
+        |      | desc: Graph path to select the node on which the disruptor should
+        |      |       apply.
+        |      | default: None [type: str]
+        |_ after
+        |      | desc: If True, the addition will be done after the selected node.
+        |      |       Otherwise, it will be done before.
+        |      | default: True [type: bool]
+        |_ atom
+        |      | desc: Name of the atom to add within the retrieved input. It is mutually
+        |      |       exclusive with @raw
+        |      | default: None [type: str]
+        |_ raw
+        |      | desc: Raw value to add within the retrieved input. It is mutually
+        |      |       exclusive with @atom.
+        |      | default: b'' [type: bytes, str]
+        |_ name
+        |      | desc: If provided, the added node will have this name.
+        |      | default: None [type: str]
 
 
 OP - Perform Operations on Nodes
@@ -385,7 +385,7 @@ Parameters:
         |_ clone_node
         |      | desc: If True the dmaker will always return a copy of the node. (For
         |      |       stateless disruptors dealing with big data it can be useful
-        |      |       to it to False.)
+        |      |       to set it to False.)
         |      | default: False [type: bool]
 
 

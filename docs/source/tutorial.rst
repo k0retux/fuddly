@@ -180,24 +180,24 @@ issuing the following command:
    *** Target initialization: (0) EmptyTarget [ID: 307144] ***
    *** Monitor is started ***
 
-   *** [ Fuzz delay = 0 ] ***
+   *** [ Sending delay = 0.00s ] ***
    *** [ Number of data sent in burst = 1 ] ***
-   *** [ Target health-check timeout = 10 ] ***
-   >> 
+   *** [ Target EmptyTarget [ID: 241984] health-check timeout = 10.0s ] ***
+   >>
 
 
 .. note::
    Note that just after the project is launched, some internal parameters
    are displayed, namely:
 
-   - The fuzzing delay, which allows you to set a minimum delay between
+   - The sending delay, which allows you to set a minimum delay between
      two data emission. (Can be changed through the command
      ``set_delay``).
    - The maximum number of data that will be sent in burst, thus
-     ignoring the fuzzing delay. (Can be changed through the command
+     ignoring the sending delay. (Can be changed through the command
      ``set_burst``)
    - The timeout value for checking target's health. (Can be changed
-     through the command ``set_health_timeout``)
+     through the command ``set_health_check_timeout``)
 
 Finally, you may prefer to directly launch your project thanks to
 the command ``run_project``. Indeed, by using it, you will automatically trigger the commands we
@@ -877,17 +877,18 @@ will need to issue the following commands:
    from framework.plumbing import *
 
    fmk = FmkPlumbing()
+   fmk.start()
 
 From now on you can use ``fuddly`` through the
 object ``fmk``. Every commands defined by ``Fuddly Shell`` (refer to
 :ref:`tuto:start-fuzzshell`) are backed by a method of the class
 :class:`framework.plumbing.FmkPlumbing`.
 
-Here under some basic commands to start with:
+Here under some basic commands to launch the project ``tuto``, a virtual testing target and the
+``ZIP`` data model:
 
 .. code-block:: python
    :linenos:
-
 
    # To show the available projects
    fmk.show_projects()
@@ -895,14 +896,17 @@ Here under some basic commands to start with:
    # Contains the list of all the Project objects available
    fmk.prj_list
 
-   # Load the ``standard`` project by name
-   fmk.load_project(name='standard')
+   # Load the ``tuto`` project by name
+   fmk.load_project(name='tuto')
+
+   # Reference to the currently launched project, in our case ``tuto``
+   fmk.prj
 
    # Show available targets for this project
    fmk.show_targets()
 
-   # Select the target with ID ``3``
-   fmk.load_targets(3)
+   # Select the target with ID ``7``
+   fmk.load_targets(7)
 
    # To show all the available data models
    fmk.show_data_models()
@@ -919,15 +923,64 @@ Here under some basic commands to start with:
    # Launch the project and all the related components
    fmk.launch()
 
-   # Reference to the currently launched project, in our case ``standard``
-   fmk.prj
+.. note::
+   The previous commands used to load a project, targets and data models can be factorized
+   in one line thanks to the following command::
 
-   # To launch the ``standard`` project with the target number ``3``
-   # and the ZIP data model in one line
-   fmk.run_project(name='standard', tg=3, dm_name='zip')
+      # To launch the ``tuto`` project with the targets ID ``7`` and ``8``
+      # and the ZIP data model in one line
+      fmk.run_project(name='tuto', tg_ids=[7,8], dm_name='zip')
+
+You can also change the timeout value used to retrieved feedback from the targets, as well as
+tuning the way this value has to be considered (a maximum value or a strict time slice).
+
+.. code-block:: python
+   :linenos:
+
+   fmk.set_feedback_timeout(1, tg_id=7)
+   fmk.set_feedback_mode(Target.FBK_WAIT_UNTIL_RECV, tg_id=7)
+   fmk.set_feedback_timeout(2, tg_id=8)
+   fmk.set_feedback_mode(Target.FBK_WAIT_FULL_TIME, tg_id=8)
+
+The effect of this commands is summarized in a specific screen that can be displayed by issuing the
+command ``fmk.show_fmk_internals()``::
+
+
+   -=[ FMK Internals ]=-
+
+     [ General Information ]
+                     FmkDB enabled: True
+                 Workspace enabled: True
+                     Sending delay: 0.0
+      Number of data sent in burst: 1
+    Target(s) health-check timeout: 4.0
+
+     [ Target Specific Information - (7) TestTarget [ID: 792104] ]
+                  Feedback timeout: 1
+                     Feedback mode: Wait until the target has sent something back to us
+
+     [ Target Specific Information - (8) TestTarget [ID: 792160] ]
+                  Feedback timeout: 2
+                     Feedback mode: Wait for the full time slot allocated for feedback retrieval
+
+
+Other commands allowing you to perform some user code changes either in the project file or
+the data models and take them into account without restarting fuddly:
+
+.. code-block:: python
+   :linenos:
 
    # Reload all sub-systems and data model definitions and choose the target ``0``
    fmk.reload_all(tg_num=0)
+
+   # Reload the data model definitions
+   fmk.reload_dm()
+
+Then, when everything is loaded, the following commands is an example on how target interaction
+can be performed:
+
+.. code-block:: python
+   :linenos:
 
    # Show a list of the registered data type within the data model
    fmk.show_atom_identifiers()
@@ -964,48 +1017,68 @@ Here under some basic commands to start with:
    # Send this new data and look at the actions that perform tTYPE and
    # SIZE through the console or the logs
    fmk.send_data_and_log(altered_data)
-   
 
 The last command will display something like this (with some color if
 you have the ``xtermcolor`` python library):
 
 .. code-block:: none
 
-   ========[ 2 ]==[ 11/09/2015 - 20:06:56 ]=======================
-   ### Target ack received at: None
-   ### Initial Generator (currently disabled):
-    |- generator type: None | generator name: None | User input: None
-     ...
+   ====[ 3 ]==[ 27/06/2019 - 12:07:19 ]============================================
    ### Step 1:
-    |- disruptor type: tTYPE | disruptor name: d_fuzz_typed_nodes | User input: G=[init=5], S=[order=True]
+    |- disruptor type: tTYPE | disruptor name: sd_fuzz_typed_nodes | User input: [init=5,order=True]
     |- data info:
-       |_ model walking index: 5
-       |_  |_ run: 1 / -1 (max)
+       |_ model walking index: 4
+       |_  |_ run: 4 / -1 (max)
        |_ current fuzzed node:     ZIP_00/file_list/file/header/common_attrs/version_needed
-       |_  |_ value type:         <framework.value_types.Fuzzy_INT16 object at 0x7efe52da4c90>
-       |_  |_ original node value: 1400 (ascii: )
-       |_  |_ corrupt node value:  0080 (ascii: �)
+       |_  |_ value type:          <framework.value_types.UINT16_le object at 0x7f2bcd49b160>
+       |_  |_ original node value (hex): b'1403'
+       |_  |                    (ascii): b'\x14\x03'
+       |_  |_ corrupt node value  (hex): b'0000'
+       |_                       (ascii): b'\x00\x00'
    ### Step 2:
-    |- disruptor type: SIZE | disruptor name: d_max_size | User input: G=None, S=[sz=200]
+    |- disruptor type: SIZE | disruptor name: d_max_size | User input: [sz=200]
     |- data info:
-       |_ orig node length: 1054002
+       |_ orig node length: 595
        |_ right truncation
        |_ new node length: 200
    ### Data size: 200 bytes
    ### Emitted data is stored in the file:
-   ./exported_data/zip/2015_09_11_200656_00.zip
+   [...]/fuddly_data/exported_data/zip/2019_06_27_120719_00.zip
+   ### FmkDB Data ID: 542
 
+   ### Ack from 'TestTarget [ID: 725768]' received at: 2019-06-27 12:07:19.071751
+   ### Feedback from 'TestTarget [ID: 725768]' (status=0):
+   CRC error
+
+The previous commands can be factorized through the method
+:meth:`framework.plumbing.FmkPlumbing.process_data_and_send()`
+
+For instance fuzzing the targets 7 and 8 simultaneously (that handle ZIP format) until exhaustion
+of test cases can be done thanks to the following lines:
 
 .. code-block:: python
    :linenos:
 
-   # And to terminate fuddly properly 
-   fmk.stop()
+    # Hereunder the chosen fuzzing follow a 2-step approach:
+    # 1- the disruptor tTYPE is called on the seed and starts from the 5th test case
+    # 2- a trailer payload is added at the end of what is generated previsouly
 
+    dp = DataProcess([('tTYPE', UI(deep=True, init=5)),
+                      ('ADD', UI(raw='This is added at the end'))],
+                     seed='ZIP_00')
+
+    fmk.process_data_and_send(dp, max_loop=-1, tg_ids=[7,8])
+
+We did not discuss all the methods available from :class:`framework.plumbing.FmkPlumbing`but you
+should now be more familiar with :class:`framework.plumbing.FmkPlumbing` and go on with its exploration.
+
+Finally, in order to exit the framework, the following method should be called (otherwise,
+various threads would block the correct termination of the framework)::
+
+   fmk.stop()
 
 For more information on how to manually make modification on data,
 refer to the section :ref:`tuto:disruptors`
-
 
 
 Implementing a Data Model and Defining a Project Environment

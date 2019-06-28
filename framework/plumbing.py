@@ -85,8 +85,8 @@ def is_python_file(fname):
 class ExportableFMKOps(object):
 
     def __init__(self, fmk):
-        self.set_fuzz_delay = fmk.set_fuzz_delay
-        self.set_fuzz_burst = fmk.set_fuzz_burst
+        self.set_sending_delay = fmk.set_sending_delay
+        self.set_sending_burst_counter = fmk.set_sending_burst_counter
         self.set_health_check_timeout = fmk.set_health_check_timeout
         self.cleanup_all_dmakers = fmk.cleanup_all_dmakers
         self.cleanup_dmaker = fmk.cleanup_dmaker
@@ -384,8 +384,8 @@ class FmkPlumbing(object):
         self.cleanup_all_dmakers(reset_existing_seed)
         # Warning: fuzz delay is not set to 0 by default in order to have a time frame
         # where SIGINT is accepted from user
-        self.set_fuzz_delay(self.config.defvalues.fuzz.delay)
-        self.set_fuzz_burst(self.config.defvalues.fuzz.burst)
+        self.set_sending_delay(self.config.defvalues.fuzz.delay)
+        self.set_sending_burst_counter(self.config.defvalues.fuzz.burst)
         for tg in self.targets.values():
             self._recompute_health_check_timeout(tg.feedback_timeout, tg.sending_delay, target=tg)
 
@@ -1218,7 +1218,7 @@ class FmkPlumbing(object):
         print(colorize('  [ General Information ]', rgb=Color.INFO))
         print(colorize('                  FmkDB enabled: ', rgb=Color.SUBINFO) + repr(self.fmkDB.enabled))
         print(colorize('              Workspace enabled: ', rgb=Color.SUBINFO) + repr(self._wkspace_enabled))
-        print(colorize('                     Fuzz delay: ', rgb=Color.SUBINFO) + str(self._delay))
+        print(colorize('                  Sending delay: ', rgb=Color.SUBINFO) + str(self._delay))
         print(colorize('   Number of data sent in burst: ', rgb=Color.SUBINFO) + str(self._burst))
         print(colorize(' Target(s) health-check timeout: ', rgb=Color.SUBINFO) + str(self._hc_timeout_max))
 
@@ -1574,17 +1574,17 @@ class FmkPlumbing(object):
         self._wkspace_enabled = False
 
     @EnforceOrder(accepted_states=['S1','S2'])
-    def set_fuzz_delay(self, delay, do_record=False):
+    def set_sending_delay(self, delay, do_record=False):
         if delay >= 0 or delay == -1:
             self._delay = delay
-            self.lg.log_fmk_info('Fuzz delay = {:.2f}s'.format(self._delay), do_record=do_record)
+            self.lg.log_fmk_info('Sending delay = {:.2f}s'.format(self._delay), do_record=do_record)
             return True
         else:
             self.lg.log_fmk_info('Wrong delay value!', do_record=False)
             return False
 
     @EnforceOrder(accepted_states=['S1','S2'])
-    def set_fuzz_burst(self, val, do_record=False):
+    def set_sending_burst_counter(self, val, do_record=False):
         if val >= 1:
             self._burst = int(val)
             self._burst_countdown = self._burst
@@ -1694,7 +1694,7 @@ class FmkPlumbing(object):
             self.set_feedback_mode(Target.FBK_WAIT_FULL_TIME, tg_id=tg_id, do_record=do_record, do_show=do_show)
 
     # Used to introduce some delay after sending data
-    def _delay_fuzzing(self):
+    def _delay_sending(self):
         '''
         return False if the user want to stop fuzzing (action possible if
         delay is set to -1)
@@ -1825,7 +1825,7 @@ class FmkPlumbing(object):
 
             collected = False
             for tg in targets_to_retrieve_fbk.values():
-                if tg.collect_pending_feedback(timeout=timeout):
+                if tg.collect_unsolicited_feedback(timeout=timeout):
                     self._recovered_tgs = None
                     collected = True
 
@@ -2137,6 +2137,31 @@ class FmkPlumbing(object):
                               max_loop=1, tg_ids=None,
                               verbose=False,
                               save_generator_seed=False):
+        """
+        Send data to the selected targets. These data can follow a specific processing before
+        being emitted. The latter depends on what is provided in `data_desc`.
+
+
+        Args:
+            data_desc: Can be either a :class:`framework.data.DataProcess`, a :class:`framework.data.Data`,
+              the name (str) of an atom of the loaded data models, or a list of the previous types.
+            id_from_fmkdb: Data can be fetched from the FmkDB and send directly to the targets or be
+              used as the seed of a DataProcess if such object is provided in `data_desc`.
+            id_from_db: Data can be fetched from the Data Bank and send directly to the targets or be
+              used as the seed of a DataProcess if such object is provided in `data_desc`.
+            max_loop: Maximum number of iteration. -1 one means "infinite" or until some criteria occurs
+              (e.g., a disruptor has exhausted, the end-user issued Ctrl-C, ...)
+            tg_ids: Target ID or list of the Target IDs on which data will be sent. If provided
+              it will supersede the `tg_ids` parameter of any DataProcess provided in `data_desc`
+            verbose: Pretty print the sent data
+            save_generator_seed: If random Generators are used, the generated data will be internally saved
+              and will be reused next time this generator will be called, until
+              FmkPlumbing.cleanup_dmaker(... reset_existing_seed=True) is called on this Generator.
+
+        Returns:
+            The list of data that have been sent. `None` if nothing was sent due to some error.
+
+        """
 
         assert data_desc is not None or id_from_fmkdb is not None or id_from_db is not None
         assert id_from_fmkdb is None or id_from_db is None
@@ -2144,12 +2169,12 @@ class FmkPlumbing(object):
         if id_from_fmkdb is not None:
             data = self.fmkdb_fetch_data(start_id=id_from_fmkdb, end_id=id_from_fmkdb)
             if data is None:
-                return False
+                return None
 
         elif id_from_db is not None:
             data = self.get_from_data_bank(id_from_db)
             if data is None:
-                return False
+                return None
 
         if data_desc is not None:
             if id_from_fmkdb is not None:
@@ -2161,6 +2186,7 @@ class FmkPlumbing(object):
 
             data_desc = data_desc if isinstance(data_desc, list) else [data_desc]
             cpt = 0
+            data_to_send = []
             while cpt < max_loop or max_loop == -1:
                 cpt += 1
                 data_list = []
@@ -2174,18 +2200,23 @@ class FmkPlumbing(object):
                         data.tg_ids = tg_ids
                     data_list.append(data)
 
+                data_to_send += data_list
                 go_on = self.send_data_and_log(data_list, verbose=verbose)
                 if not go_on:
-                    return True
+                    break
+
         else:
             cpt = 0
+            data_to_send = []
             while cpt < max_loop or max_loop == -1:
                 cpt += 1
+                data_to_send.append(data)
                 go_on = self.send_data_and_log(data, verbose=verbose)
                 if not go_on:
-                    return True
+                    break
 
-        return True
+        return data_to_send
+
 
     @EnforceOrder(accepted_states=['S2'])
     def send_data_and_log(self, data_list, verbose=False):
@@ -2221,6 +2252,13 @@ class FmkPlumbing(object):
         # means the previous feedback entries are obsolete.
         self.fmkDB.flush_current_feedback()
 
+        # For loaded Target()s not currently stimulated (i.e., ._send_data() not triggered on them)
+        # we also want to get data that may have been sent by the associated real targets. So that
+        # after the sending operation we get
+        # a full snapshot of the feedback coming from all the loaded Target()s.
+        # Note: Feedback retrieved from a real target has to be provided to the framework through
+        # the associated Target object either after Target.send_data()
+        # is called or when Target.collect_unsolicited_feedback() is called.
         if self._burst_countdown == self._burst:
             try:
                 max_fbk_timeout = max([tg.feedback_timeout for tg in self.targets.values()
@@ -2230,7 +2268,7 @@ class FmkPlumbing(object):
                 max_fbk_timeout = 0
             for tg in self.targets.values():
                 if tg not in self._currently_used_targets:
-                    tg.collect_pending_feedback(timeout=max_fbk_timeout)
+                    tg.collect_unsolicited_feedback(timeout=max_fbk_timeout)
 
         # the provided data_list can be changed after having called self._send_data()
         multiple_data = len(data_list) > 1
@@ -2255,7 +2293,7 @@ class FmkPlumbing(object):
         cont2 = True
         # That means this is the end of a burst
         if self._burst_countdown == self._burst:
-            cont1 = self.log_target_feedback()
+            cont1 = self.retrieve_and_log_target_feedback()
 
         self.mon.notify_target_feedback_retrieval()
         self.mon.wait_for_probe_status_retrieval()
@@ -2269,7 +2307,7 @@ class FmkPlumbing(object):
         self._do_after_feedback_retrieval(data_list)
 
         if cont0:
-            cont0 = self._delay_fuzzing()
+            cont0 = self._delay_sending()
 
         return cont0 and cont1 and cont2
 
@@ -2493,7 +2531,7 @@ class FmkPlumbing(object):
         self._current_sent_date = self.lg.start_new_log_entry(preamble=p)
 
     @EnforceOrder(accepted_states=['S2'])
-    def log_target_feedback(self, residual=False):
+    def retrieve_and_log_target_feedback(self, residual=False):
         collected_err, err_detected2 = None, False
         ok = True
         if self.__tg_enabled:
@@ -2519,7 +2557,7 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def log_target_residual_feedback(self):
-        return self.log_target_feedback(residual=True)
+        return self.retrieve_and_log_target_feedback(residual=True)
 
     def _log_directly_retrieved_target_feedback(self, tg, preamble=None, epilogue=None):
         """
@@ -2572,7 +2610,7 @@ class FmkPlumbing(object):
             # Wait until the target is ready or timeout expired
             try:
                 for tg in self.targets.values():
-                    while not tg.is_target_ready_for_new_data():
+                    while not tg.is_target_ready():
                         time.sleep(0.005)
                         now = datetime.datetime.now()
                         if (now - t0).total_seconds() > hc_timeout:
@@ -2901,7 +2939,7 @@ class FmkPlumbing(object):
                 self.cleanup_all_dmakers(reset_existing_seed=False)
 
             if operation.is_flag_set(Operation.Stop):
-                self.log_target_feedback()
+                self.retrieve_and_log_target_feedback()
                 break
             else:
                 retry = False
@@ -3004,7 +3042,7 @@ class FmkPlumbing(object):
 
                 # Target fbk is logged only at the end of a burst
                 if self._burst_countdown == self._burst:
-                    cont1 = self.log_target_feedback()
+                    cont1 = self.retrieve_and_log_target_feedback()
 
                 self.mon.notify_target_feedback_retrieval()
                 self.mon.wait_for_probe_status_retrieval()
@@ -3040,7 +3078,7 @@ class FmkPlumbing(object):
                         tg.cleanup()
 
                 # Delay introduced after logging data
-                if not self._delay_fuzzing():
+                if not self._delay_sending():
                     exit_operator = True
                     self.lg.log_fmk_info("Operator will shutdown because waiting has been cancelled by the user")
 
@@ -3056,15 +3094,15 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def process_data(self, action_list, seed=None, valid_gen=False, save_gen_seed=False):
-        '''
-        @action_list shall have a format compatible with what follows:
-        [(action_1, UserInput_1), ...,
-         (action_n, UserInput_n)]
+        """
 
-        [action_1, (action_2, UserInput_2), ... action_n]
+        Args:
+          action_list (list): Shall have a format compatible with what follows
+            [(action_1, UserInput_1), ..., (action_n, UserInput_n)]
+            [action_1, (action_2, UserInput_2), ... action_n]
+            where action_N can be either: dmaker_type_N or (dmaker_type_N, dmaker_name_N)
 
-        where action_N can be either: dmaker_type_N or (dmaker_type_N, dmaker_name_N)
-        '''
+        """
 
         l = []
         action_list = action_list[:]
@@ -4695,8 +4733,8 @@ class FmkShell(cmd.Cmd):
             self.__error_msg = "Syntax Error!"
             return False
 
-        self.__error = not self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
-                                                         verbose=verbose)
+        self.__error = self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
+                                                     verbose=verbose) is None
         return False
 
 
@@ -4750,9 +4788,9 @@ class FmkShell(cmd.Cmd):
 
         with aligned_stdout(**kwargs):
 
-            self.__error = not self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
-                                                             max_loop=max_loop,
-                                                             save_generator_seed=use_existing_seed)
+            self.__error = self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
+                                                         max_loop=max_loop,
+                                                         save_generator_seed=use_existing_seed) is None
 
         return False
 
@@ -4778,7 +4816,7 @@ class FmkShell(cmd.Cmd):
 
         actions = [((t[0], args[1]), t[1])]
 
-        self.__error = not self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids))
+        self.__error = self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids)) is None
         return False
 
 
@@ -4818,8 +4856,8 @@ class FmkShell(cmd.Cmd):
                     }
 
         with aligned_stdout(**kwargs):
-            self.__error = not self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
-                                                             max_loop=nb)
+            self.__error = self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
+                                                         max_loop=nb) is None
 
         return False
 
@@ -4870,7 +4908,7 @@ class FmkShell(cmd.Cmd):
 
             dp_list.append(DataProcess(actions, tg_ids=tg_ids))
 
-        self.__error = not self.fz.process_data_and_send(dp_list, max_loop=loop_count)
+        self.__error = self.fz.process_data_and_send(dp_list, max_loop=loop_count) is None
         return False
 
         # prev_data_list = None
@@ -5024,7 +5062,7 @@ class FmkShell(cmd.Cmd):
             return False
         try:
             delay = float(args[0])
-            self.fz.set_fuzz_delay(delay)
+            self.fz.set_sending_delay(delay)
         except:
             return False
 
@@ -5050,7 +5088,7 @@ class FmkShell(cmd.Cmd):
             return False
         try:
             val = float(args[0])
-            self.fz.set_fuzz_burst(val)
+            self.fz.set_sending_burst_counter(val)
         except:
             return False
 
@@ -5085,8 +5123,8 @@ class FmkShell(cmd.Cmd):
     def do_replay_db(self, line):
         """
         Replay data from the FmkDB or the Data Bank and optionnaly apply new disruptors on it
-        |_ syntax for FmkDB: replay_db f<idx_from_db> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
-        |_ syntax for DBank: replay_db d<idx_from_db> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
+        |_ syntax for FmkDB: replay_db f<entry_idx> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
+        |_ syntax for DBank: replay_db d<entry_idx> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
         """
 
         self.__error = True
@@ -5122,9 +5160,9 @@ class FmkShell(cmd.Cmd):
         else:
             actions = None
 
-        self.__error = not self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
-                                                         id_from_fmkdb=id_from_fmkdb,
-                                                         id_from_db=id_from_db)
+        self.__error = self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
+                                                     id_from_fmkdb=id_from_fmkdb,
+                                                     id_from_db=id_from_db) is None
         return False
 
 
@@ -5169,10 +5207,10 @@ class FmkShell(cmd.Cmd):
         else:
             actions = None
 
-        self.__error = not self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
-                                                         id_from_fmkdb=id_from_fmkdb,
-                                                         id_from_db=id_from_db,
-                                                         max_loop=nb)
+        self.__error = self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
+                                                     id_from_fmkdb=id_from_fmkdb,
+                                                     id_from_db=id_from_db,
+                                                     max_loop=nb) is None
         return False
 
 
@@ -5282,7 +5320,7 @@ class FmkShell(cmd.Cmd):
         else:
             actions = None
 
-        self.__error = not self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids, seed=data))
+        self.__error = self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids, seed=data)) is None
 
         return False
 
@@ -5290,7 +5328,7 @@ class FmkShell(cmd.Cmd):
     def do_send_raw(self, line):
         '''
         Send raw data
-        |_ syntax: send_raw <data>
+        |_ syntax: send_raw <data> [targetID1 ... targetIDN]
         '''
 
         self.__error_msg = "Syntax Error!"
@@ -5314,7 +5352,7 @@ class FmkShell(cmd.Cmd):
     def do_send_eval(self, line):
         '''
         Send python-evaluation of the parameter <data>
-        |_ syntax: send_eval <data>
+        |_ syntax: send_eval <data> [targetID1 ... targetIDN]
         '''
         self.__error_msg = "Syntax Error!"
         args = line.split()
@@ -5340,6 +5378,34 @@ class FmkShell(cmd.Cmd):
 
         return False
 
+    def do_register_db(self, line):
+        """
+        Register in the data bank the python-evaluation of the parameter <data>
+        This can then be used as a seed in a disruptors chain
+        |_ syntax: register_db <data>
+        """
+        self.__error_msg = "Syntax Error!"
+        args = line.split()
+        args_len = len(args)
+
+        if args_len < 1:
+            self.__error = True
+            return False
+
+        line = ''.join(args)
+
+        if line:
+            try:
+                data = Data(eval(line))
+            except:
+                self.__error = True
+                return False
+
+            self.fz.register_in_data_bank(data)
+        else:
+            self.__error = True
+
+        return False
 
     def do_register_wkspace(self, line):
         '''Register the workspace to the Data Bank'''

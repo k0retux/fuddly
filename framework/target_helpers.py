@@ -30,9 +30,14 @@ from libs.external_modules import *
 class TargetStuck(Exception): pass
 
 class Target(object):
-    '''
-    Class abstracting the target we interact with.
-    '''
+    """
+    Class abstracting the real target we interact with.
+
+    About feedback:
+    Feedback retrieved from a real target has to be provided to the user (i.e., the framework) through
+    either after Target.send_data() is called or when Target.collect_unsolicited_feedback() is called.
+
+    """
     feedback_timeout = None
     sending_delay = 0
 
@@ -44,7 +49,7 @@ class Target(object):
     fbk_wait_until_recv_msg = 'Wait until the target has sent something back to us'
 
     _feedback_mode = None
-    supported_feedback_mode = []
+    supported_feedback_mode = [FBK_WAIT_FULL_TIME, FBK_WAIT_UNTIL_RECV]
 
     _logger = None
     _probes = None
@@ -53,6 +58,8 @@ class Target(object):
     _altered_data_queued = None
 
     _pending_data = None
+
+    _last_sending_date = None
 
     @staticmethod
     def get_fbk_mode_desc(fbk_mode, short=False):
@@ -136,12 +143,33 @@ class Target(object):
 
 
     def is_target_ready_for_new_data(self):
-        '''
-        The FMK busy wait on this method() before sending a new data.
-        This method should take into account feedback timeout (that is the maximum
-        time duration for gathering feedback from the target)
-        '''
+        """
+        To be overloaded if the target needs some time (for conditions to occur) before data can be sent.
+        Note: The FMK busy wait on this method() before sending a new data.
+        """
         return True
+
+
+    def is_target_ready(self):
+        """
+        The FMK busy wait on this method() before sending a new data.
+        This method take into account feedback timeout (that is the maximum
+        time duration for gathering feedback from the target) and the feedback mode
+        """
+        if not self.is_target_ready_for_new_data():
+            return False
+        else:
+            if self._last_sending_date is None or self.feedback_timeout is None:
+                # At init, if nothing has been sent self._last_sending_date is None.
+                # self.feedback_timeout is None when not set, meaning we don't care.
+                return True
+            now = datetime.datetime.now()
+            if self._feedback_mode == self.FBK_WAIT_FULL_TIME:
+                return (now - self._last_sending_date).total_seconds() > self.feedback_timeout
+            elif self._feedback_mode == self.FBK_WAIT_UNTIL_RECV:
+                return True
+            else:
+                return True
 
     def get_last_target_ack_date(self):
         '''
@@ -175,10 +203,11 @@ class Target(object):
         '''
         return None
 
-    def collect_pending_feedback(self, timeout=0):
+    def collect_unsolicited_feedback(self, timeout=0):
         """
-        If overloaded, it can be used by the framework to retrieve additional feedback from the
-        target without sending any new data.
+        If overloaded, it should collect any data from the associated real target that may be sent
+        without solicitation (i.e. without any data sent to it through) and make it available through
+        the method .get_feedback()
 
         Args:
             timeout: Maximum delay before returning from feedback collecting
@@ -270,6 +299,7 @@ class Target(object):
             if data is not None:
                 self._altered_data_queued = data.altered
             self.send_data(data, from_fmk=from_fmk)
+        self._last_sending_date = datetime.datetime.now()
 
     def send_multiple_data_sync(self, data_list, from_fmk=False):
         '''
@@ -280,6 +310,7 @@ class Target(object):
             if data_list is not None:
                 self._altered_data_queued = data_list[0].altered
             self.send_multiple_data(data_list, from_fmk=from_fmk)
+        self._last_sending_date = datetime.datetime.now()
 
     def add_probe(self, probe):
         if self._probes is None:
@@ -302,24 +333,12 @@ class EmptyTarget(Target):
     _feedback_mode = Target.FBK_WAIT_FULL_TIME
     supported_feedback_mode = [Target.FBK_WAIT_FULL_TIME, Target.FBK_WAIT_UNTIL_RECV]
 
-    def __init__(self, enable_feedback=True):
+    def __init__(self):
         Target.__init__(self)
-        self._feedback_enabled = enable_feedback
-        self._sending_time = None
 
     def send_data(self, data, from_fmk=False):
-        if self._feedback_enabled:
-            self._sending_time = datetime.datetime.now()
+        pass
 
     def send_multiple_data(self, data_list, from_fmk=False):
-        if self._feedback_enabled:
-            self._sending_time = datetime.datetime.now()
-
-    def is_target_ready_for_new_data(self):
-        if self._feedback_enabled and self.feedback_timeout is not None and \
-                self._sending_time is not None:
-            return (datetime.datetime.now() - self._sending_time).total_seconds() > self.feedback_timeout
-        else:
-            return True
-
+        pass
 

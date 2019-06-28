@@ -1330,7 +1330,7 @@ class d_operate_on_nodes(Disruptor):
                              'needed', None, dict),
                  'clone_node': ('If True the dmaker will always return a copy ' \
                                 'of the node. (For stateless disruptors dealing with ' \
-                                'big data it can be useful to it to False.)', False, bool)})
+                                'big data it can be useful to set it to False.)', False, bool)})
 class d_modify_nodes(Disruptor):
     """
     Perform modifications on the provided data. Two ways are possible:
@@ -1372,10 +1372,10 @@ class d_modify_nodes(Disruptor):
 
                 for n in l:
                     status, off, size, name = n.absorb(new_value, constraints=new_csts)
-                    self._add_info(prev_data, n, status, size)
+                    self._add_info(prev_data, n, new_value, status, size)
             else:
                 status, off, size, name = prev_content.absorb(new_value, constraints=new_csts)
-                self._add_info(prev_data, prev_content, status, size)
+                self._add_info(prev_data, prev_content, new_value, status, size)
 
         prev_content.freeze()
 
@@ -1386,11 +1386,11 @@ class d_modify_nodes(Disruptor):
         prev_data.altered = True
         return prev_data
 
-    def _add_info(self, prev_data, n, status, size):
-        val_len = len(self.value)
+    def _add_info(self, prev_data, n, new_value, status, size):
+        val_len = len(new_value)
         prev_data.add_info("changed node:     {!s}".format(n.name))
         prev_data.add_info("absorption status: {!s}".format(status))
-        prev_data.add_info("value provided:   {!s}".format(truncate_info(self.value)))
+        prev_data.add_info("value provided:   {!s}".format(truncate_info(new_value)))
         prev_data.add_info("__ length:         {:d}".format(val_len))
         if status != AbsorbStatus.FullyAbsorbed:
             prev_data.add_info("absorbed size:     {:d}".format(size))
@@ -1428,7 +1428,8 @@ class d_call_function(Disruptor):
                 new_data = self.func(prev_data)
         except:
             new_data = prev_data
-            new_data.add_info("an error occurred while executing the user function '{!r}'".format(self.func))
+            new_data.add_info("An error occurred while executing the user function '{!r}':".format(self.func))
+            new_data.add_info(traceback.format_exc())
         else:
             new_data.add_info("called function: {!r}".format(self.func))
             if self.params:
@@ -1464,7 +1465,7 @@ class d_shallow_copy(Disruptor):
 @disruptor(tactics, dtype="ADD", weight=4,
            args={'path': ('Graph path to select the node on which ' \
                           'the disruptor should apply.', None, str),
-                 'after': ('If True, the addition will be done after the selected nodes. Otherwise, '
+                 'after': ('If True, the addition will be done after the selected node. Otherwise, '
                            'it will be done before.',
                           True, bool),
                  'atom': ('Name of the atom to add within the retrieved input. It is mutually '
@@ -1488,7 +1489,14 @@ class d_add_data(Disruptor):
     def disrupt_data(self, dm, target, prev_data):
         prev_content = prev_data.content
         if isinstance(prev_content, bytes):
-            prev_content = Node('raw', values=[prev_content])
+            prev_content = Node('wrapper', subnodes=[Node('raw', values=[prev_content])])
+            prev_content.set_env(Env())
+            prev_content.freeze()
+        elif isinstance(prev_content, Node) and prev_content.is_term():
+            prev_content = Node('wrapper', subnodes=[prev_content])
+            prev_content.set_env(Env())
+            prev_content.freeze()
+
         assert isinstance(prev_content, Node)
 
         if self.atom is not None:
@@ -1519,5 +1527,7 @@ class d_add_data(Disruptor):
                 nt_node.add(obj, before=pivot)
         else:
             prev_content.add(obj)
+            prev_data.update_from(prev_content)
+            # prev_content.show()
 
         return prev_data

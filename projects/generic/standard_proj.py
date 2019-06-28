@@ -97,7 +97,7 @@ class Op1(Operator):
         self.init_gen_len = len(self.gen_ids)
         self.current_gen_id = self.gen_ids.pop(0)
 
-        # fmk_ops.set_fuzz_delay(5)
+        # fmk_ops.set_sending_delay(5)
         return True
 
     def stop(self, fmk_ops, dm, monitor, target, logger):

@@ -521,6 +521,8 @@ class String(VT_Alt):
         if self.values is None:
             self.values = []
 
+        if val in self.values:
+            self.values.remove(val)
         self.values.insert(0, val)
 
         self.reset_state()
@@ -1286,6 +1288,8 @@ class INT(VT):
             if constraints[AbsCsts.Contents]:
                 if orig_val not in self.values:
                     raise ValueError('contents not valid!')
+            if orig_val in self.values:
+                self.values.remove(orig_val)
             self.values.insert(0, orig_val)
             self.values_copy = copy.copy(self.values)
         elif self.maxi is None and self.mini is None:
@@ -2413,6 +2417,8 @@ class BitField(VT_Alt):
             else:
                 if constraints[AbsCsts.Contents] and val not in values:
                     raise ValueError("Value for subfield number {:d} does not match the constraints!".format(i+1))
+                if val in values:
+                    values.remove(val)
                 values.insert(insert_idx, val)
 
             if first_pass:

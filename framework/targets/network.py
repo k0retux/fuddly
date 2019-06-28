@@ -1074,7 +1074,7 @@ class NetworkTarget(Target):
 
         if data_refs[sockets[0]][0] is None:
             # We check the data to send. If it is None, we only collect feedback from the sockets.
-            # This is used by self.collect_pending_feedback()
+            # This is used by self.collect_unsolicited_feedback()
             if fbk_sockets is None:
                 assert fbk_ids is None
                 assert fbk_lengths is None
@@ -1235,7 +1235,7 @@ class NetworkTarget(Target):
 
         return self._custom_data_handling_before_emission(new_data_list)
 
-    def collect_pending_feedback(self, timeout=0):
+    def collect_unsolicited_feedback(self, timeout=0):
         self._flush_feedback_delay = timeout
         self.send_multiple_data_sync(None, from_fmk=True)
         return True

@@ -315,6 +315,16 @@ framework.knowledge.information module
    :special-members:
    :exclude-members: __dict__, __weakref__
 
+
+framework.plumbing module
+-------------------------
+
+.. automodule:: framework.plumbing
+   :members:
+   :undoc-members:
+   :exclude-members: __dict__, __weakref__, FmkShell, EnforceOrder, ExportableFMKOps, FmkFeedback, is_python_file
+
+
 ..
    framework.plumbing module
    -----------------------

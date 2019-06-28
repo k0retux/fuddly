@@ -470,8 +470,8 @@ class Logger(object):
 
         self.log_fn(" |- data info:", rgb=Color.DATAINFO)
         for msg in data_info:
-            if len(msg) > 400:
-                msg = msg[:400] + ' ...'
+            if len(msg) > self._console_display_limit:
+                msg = msg[:self._console_display_limit] + ' ...'
 
             self.log_fn('    |_ ' + msg, rgb=Color.DATAINFO)
 

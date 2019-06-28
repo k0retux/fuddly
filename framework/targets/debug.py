@@ -30,8 +30,8 @@ from framework.basic_primitives import rand_string
 
 class TestTarget(Target):
 
-    _feedback_mode = None
-    supported_feedback_mode = [Target.FBK_WAIT_UNTIL_RECV]
+    _feedback_mode = Target.FBK_WAIT_UNTIL_RECV
+    supported_feedback_mode = [Target.FBK_WAIT_UNTIL_RECV, Target.FBK_WAIT_FULL_TIME]
     _last_ack_date = None
 
     def __init__(self, recover_ratio=100, fbk_samples=None):

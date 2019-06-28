@@ -302,10 +302,12 @@ criteria based on which you want to perform the search, you should use:
      from framework.value_types import *
 
      fmk = FmkPlumbing()
+     fmk.start()
+
      fmk.run_project(name='tuto')
 
-     data = fmk.process_data(['EX'])    # Return a Data container on the data model example
-     data.content.freeze()
+     ex_node = fmk.dm.get_atom('ex')
+     ex_node.freeze()
 
      ic = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
                                 node_kinds=[NodeInternals_TypedValue],
@@ -314,14 +316,21 @@ criteria based on which you want to perform the search, you should use:
 
      sc = NodeSemanticsCriteria(mandatory_criteria=['sem1', 'sem2'])
 
-     data.content.get_reachable_nodes(internals_criteria=ic, semantics_criteria=sc,
-                                   owned_conf='alt2')
+     ex_node.get_reachable_nodes(internals_criteria=ic, semantics_criteria=sc,
+                                 owned_conf='alt2')
 
   Obviously, you don't need all these criteria for retrieving such node. It's only for
   exercise.
 
   .. note:: For abstracting away the data model from the rest of the framework, ``fuddly`` uses the
-     specific class :meth:`framework.data.Data` which acts as a data container.
+     specific class :class:`framework.data.Data` which acts as a data container.
+     Thus, while interacting with the different part of the framework, Node-based data
+     (or string-based data) should be encapsulated
+     in a :class:`framework.data.Data` object.
+
+     For instance ``Data(ex_node)`` will create an object that encapsulate ``ex_node``.
+     Accessing the node again is done through the property :attr:`framework.data.Data.content`
+
 
 
 The Node Dictionary Interface
@@ -431,11 +440,11 @@ it if you like ;).
 
     usb_str = fmk.dm.get_external_atom(dm_name='usb', data_id='STR')
 
-    data = fmk.process_data(['EX'])      # Return a Data container on the data model example
+    ex_node = fmk.dm.get_atom('ex')
 
-    data.content['ex/data0'] = usb_str  # Perform the substitution
+    ex_node['ex/data0'] = usb_str  # Perform the substitution
 
-    data.show()                      # Data.show() will call .show() on the embedded node
+    ex_node.show()                      # Data.show() will call .show() on the embedded node
 
 
 The result is shown below:
@@ -445,9 +454,72 @@ The result is shown below:
    :scale:   100 %
 
 
-.. warning:: Releasing constraints (like a CRC, an offset, a length, ...) of an altered
+.. note:: Releasing constraints (like a CRC, an offset, a length, ...) of an altered
    data can be useful if you want ``fuddly`` to automatically recomputes the constraint for you and
    still comply to the model. Refer to :ref:`dmanip:freeze`.
+
+
+You can also add subnodes to non-terminal nodes through the usage of :meth:`framework.node.NodeInternals_NonTerm.add()`.
+For instance the following code snippet will add a new node after the node ``data2``.
+
+.. code-block:: python
+   :linenos:
+
+   data2_node = ex_node['ex/data_group/data2']
+   ex_node['ex/data_group$'].add(Node('my_node', values=['New node added']),
+                                 after=data2_node)
+
+Thus, if ``ex_node`` before the modification is::
+
+   [0] ex [NonTerm]
+    \__(1) ex/data0 [String] size=4B
+    |        \_ codec=iso8859-1
+    |        \_raw: b'Plip'
+    \__[1] ex/data_group [NonTerm]
+    |   \__[2] ex/data_group/len [GenFunc | node_args: ex/data_group/data1]
+    |   |   \__(3) ex/data_group/len/cts [UINT8] size=1B
+    |   |            \_ 5 (0x5)
+    |   |            \_raw: b'\x05'
+    |   \__(2) ex/data_group/data1 [String] size=5B
+    |   |        \_ codec=iso8859-1
+    |   |        \_raw: b'Test!'
+    |   \__(2) ex/data_group/data2 [UINT16_be] size=2B
+    |   |        \_ 10 (0xA)
+    |   |        \_raw: b'\x00\n'
+    |   \__(2) ex/data_group/data3 [UINT8] size=1B
+    |            \_ 30 (0x1E)
+    |            \_raw: b'\x1e'
+    \__(1) ex/data4 [String] size=3B
+             \_ codec=iso8859-1
+             \_raw: b'Red'
+
+
+After the modification it will be::
+
+   [0] ex [NonTerm]
+    \__(1) ex/data0 [String] size=4B
+    |        \_ codec=iso8859-1
+    |        \_raw: b'Plip'
+    \__[1] ex/data_group [NonTerm]
+    |   \__[2] ex/data_group/len [GenFunc | node_args: ex/data_group/data1]
+    |   |   \__(3) ex/data_group/len/cts [UINT8] size=1B
+    |   |            \_ 5 (0x5)
+    |   |            \_raw: b'\x05'
+    |   \__(2) ex/data_group/data1 [String] size=5B
+    |   |        \_ codec=iso8859-1
+    |   |        \_raw: b'Test!'
+    |   \__(2) ex/data_group/data2 [UINT16_be] size=2B
+    |   |        \_ 10 (0xA)
+    |   |        \_raw: b'\x00\n'
+    |   \__(2) ex/data_group/my_node [String] size=14B
+    |   |        \_ codec=iso8859-1
+    |   |        \_raw: b'New node added'
+    |   \__(2) ex/data_group/data3 [UINT8] size=1B
+    |            \_ 30 (0x1E)
+    |            \_raw: b'\x1e'
+    \__(1) ex/data4 [String] size=3B
+             \_ codec=iso8859-1
+             \_raw: b'Red'
 
 
 .. _dmanip:prop:

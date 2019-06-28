@@ -47,7 +47,7 @@ def setUpModule():
     global fmk, dm, results
     fmk = FmkPlumbing(exit_on_error=exit_on_import_error, debug_mode=True)
     fmk.start()
-    fmk.run_project(name='tuto', dm_name='example')
+    fmk.run_project(name='tuto', dm_name=['mydf', 'example'])
     dm = example.data_model
     results = collections.OrderedDict()
     fmk.prj.reset_knowledge()
@@ -2799,6 +2799,63 @@ class TestNode_NonTerm(unittest.TestCase):
 
         self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
         self.assertEqual(raw_data, raw_data_abs)
+
+    def test_node_addition(self):
+
+        # Notes:
+        # Current test cases are agnostic to differences between min and max value as the NT nodes are
+        # in determinist mode, meaning that we only see the usage of min qty in the current test cases.
+
+        new_node_min_qty = 2
+        new_node_max_qty = 2
+
+        print('\n*** Test Case 1 ***\n')
+
+        ex_node = fmk.dm.get_atom('ex')
+        ex_node.show()
+        new_node = Node('my_node2', values=['New node added!!!!'])
+        data2_node = ex_node['ex/data_group/data2']
+        ex_node['ex/data_group'].add(new_node, after=data2_node, min=new_node_min_qty, max=new_node_max_qty)
+        ex_node.show()
+
+        nt_node = ex_node['ex/data_group']
+        self.assertEqual(nt_node.get_subnode_idx(new_node),
+                         nt_node.get_subnode_idx(ex_node['ex/data_group/data2'])+1)
+
+        ex_node.unfreeze()
+        ex_node.show()
+        self.assertEqual(nt_node.get_subnode_idx(new_node),
+                         nt_node.get_subnode_idx(ex_node['ex/data_group/data2:3'])+1)
+
+        print('\n*** Test Case 2 ***\n')
+
+        ex_node = fmk.dm.get_atom('ex')
+        ex_node.show()
+        new_node = Node('my_node2', values=['New node added!!!!'])
+        ex_node['ex/data_group'].add(new_node, idx=0, min=new_node_min_qty, max=new_node_max_qty)
+        ex_node.show()
+
+        nt_node = ex_node['ex/data_group']
+        self.assertEqual(nt_node.get_subnode_idx(new_node), 0)
+
+        ex_node.unfreeze()
+        ex_node.show()
+        self.assertEqual(nt_node.get_subnode_idx(new_node), 0)
+
+        print('\n*** Test Case 3 ***\n')
+
+        ex_node = fmk.dm.get_atom('ex')
+        ex_node.show()
+        new_node = Node('my_node2', values=['New node added!!!!'])
+        ex_node['ex/data_group'].add(new_node, idx=None, min=new_node_min_qty, max=new_node_max_qty)
+        ex_node.show()
+
+        nt_node = ex_node['ex/data_group']
+        self.assertEqual(nt_node.get_subnode_idx(new_node), nt_node.get_subnode_qty()-new_node_min_qty)
+
+        ex_node.unfreeze()
+        ex_node.show()
+        self.assertEqual(nt_node.get_subnode_idx(new_node), nt_node.get_subnode_qty()-new_node_min_qty)
 
 
 class TestNode_TypedValue(unittest.TestCase):
