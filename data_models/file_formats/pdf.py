@@ -1310,9 +1310,9 @@ if __name__ == "__main__":
     with open(gr.workspace_folder + 'TEST_FUZZING_PDF-orig' + '.pdf', 'wb') as f:
         f.write(val)
 
-    leaf0 = pdf.get_node_by_path('PDF.*leaf_0-0$').to_bytes()
+    leaf0 = pdf.get_first_node_by_path('PDF.*leaf_0-0$').to_bytes()
     pdf.set_current_conf('ALT', root_regexp='PDF.*leaf_0-0$')
-    leaf1 = pdf.get_node_by_path('PDF.*leaf_0-0$').to_bytes()
+    leaf1 = pdf.get_first_node_by_path('PDF.*leaf_0-0$').to_bytes()
 
     print(leaf0)
     print(leaf1)

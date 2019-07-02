@@ -4551,9 +4551,9 @@ class NodeInternals_NonTerm(NodeInternals):
             if self.separator is not None:
                 iterable.add(self.separator.node)
 
-        for idx, e in enumerate(iterable):
-            e._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False,
-                                 clone_idx=idx)
+        for idx, node in enumerate(iterable):
+            node._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False,
+                                    clone_idx=idx)
 
     def set_size_from_constraints(self, size, encoded_size):
         # not supported
@@ -4894,6 +4894,8 @@ class Node(object):
         self.name = name
         self.description = description
         self.env = None
+
+        self._paths_htable = None
 
         self.entangled_nodes = None
 
@@ -5643,8 +5645,27 @@ class Node(object):
 
     def get_reachable_nodes(self, internals_criteria=None, semantics_criteria=None,
                             owned_conf=None, conf=None, path_regexp=None, exclude_self=False,
-                            respect_order=False, relative_depth=-1, top_node=None, ignore_fstate=False):
-        
+                            respect_order=False, top_node=None, ignore_fstate=False,
+                            relative_depth=-1):
+        """
+
+        Args:
+            internals_criteria:
+            semantics_criteria:
+            owned_conf:
+            conf:
+            path_regexp:
+            exclude_self:
+            respect_order:
+            top_node:
+            ignore_fstate:
+            relative_depth: For internal use only
+
+        Returns:
+
+        """
+
+
         def __compliant(node, config, top_node):
             if node is top_node and exclude_self:
                 return False
@@ -5663,7 +5684,7 @@ class Node(object):
                 cond2 = True
 
             if path_regexp is not None:
-                paths = node.get_all_paths_from(top_node)
+                paths = node.get_all_paths_from(top_node, flush_cache=False)
                 for p in paths:
                     if re.search(path_regexp, p):
                         cond3 = True
@@ -5678,10 +5699,6 @@ class Node(object):
 
         def get_reachable_nodes_rec(node, config, rdepth, top_node):
             s = []
-            # if respect_order:
-            #     s = []
-            # else:
-            #     s = set()
 
             if config == None:
                 config = self.current_conf
@@ -5694,13 +5711,9 @@ class Node(object):
 
             internal = node.internals[config]
 
-            if node.is_conf_existing(owned_conf) or (owned_conf == None):
+            if (owned_conf == None) or node.is_conf_existing(owned_conf):
                 if __compliant(node, config, top_node):
                     s.append(node)
-                    # if respect_order:
-                    #     s.append(node)
-                    # else:
-                    #     s.add(node)
 
             if rdepth <= -1 or rdepth > 0:
                 s2 = internal.get_child_nodes_by_attr(internals_criteria=internals_criteria,
@@ -5715,21 +5728,18 @@ class Node(object):
                     for e in s2:
                         if e not in s:
                             s.append(e)
-                    # if respect_order:
-                    #     for e in s2:
-                    #         if e not in s:
-                    #             s.append(e)
-                    # else:
-                    #     s = s.union(s2)
 
             return s
 
-        if top_node is None:
-            nodes = get_reachable_nodes_rec(node=self, config=conf, rdepth=relative_depth,
-                                            top_node=self)
-        else:
-            nodes = get_reachable_nodes_rec(node=self, config=conf, rdepth=relative_depth,
-                                            top_node=top_node)
+        top_node = self if top_node is None else top_node
+        if relative_depth == -1:
+            top_node._paths_htable = None
+
+        nodes = get_reachable_nodes_rec(node=self, config=conf, rdepth=relative_depth,
+                                        top_node=top_node)
+
+        if relative_depth == -1:
+            top_node._paths_htable = None
 
         if respect_order:
             return nodes
@@ -5765,29 +5775,47 @@ class Node(object):
         return ret
 
 
-    def get_node_by_path(self, path_regexp=None, path=None, conf=None):
-        '''
-        The set of nodes that is used to perform the search include
-        the node itself and all the subnodes behind it.
-        '''
-        if path is None:
-            assert(path_regexp is not None)
-            # Find *one* Node whose path match the regexp
-            for n, e in self.iter_paths(conf=conf):
-                if re.search(path_regexp, n):
-                    ret = e
-                    break
-            else:
-                ret = None
-        else:
-            htable = self.get_all_paths(conf=conf)
-            # Find the Node through exact path
-            try:
-                ret = htable[path]
-            except KeyError:
-                ret = None
+    def iter_nodes_by_path(self, path_regexp, conf=None, flush_cache=True):
+        """
+        iterate over all the nodes that match the `path_regexp` parameter.
 
-        return ret
+        Note: the set of nodes that is used to perform the search include
+        the node itself and all the subnodes behind it.
+
+        Args:
+            path_regexp (str): path regexp of the requested nodes
+            conf (str): Node configuration to use for the search
+            flush_cache (bool): If False, and a previous search has been performed, the outcomes will
+               be used for this one, which will improve the performance.
+
+        Returns:
+            generator of the nodes that match the path regexp
+
+        """
+        for p, node in self.iter_paths(conf=conf, flush_cache=flush_cache):
+            if re.search(path_regexp, p):
+                yield node
+
+
+    def get_first_node_by_path(self, path_regexp, conf=None, flush_cache=True):
+        """
+        Return the first Node that match the `path_regexp` parameter.
+
+        Args:
+            path_regexp (str): path regexp of the requested nodes
+            conf (str): Node configuration to use for the search
+            flush_cache (bool): If False, and a previous search has been performed, the outcomes will
+               be used for this one, which will improve the performance.
+
+        Returns:
+            Node: the first Node that match the path regexp
+        """
+        try:
+            node = next(self.iter_nodes_by_path(path_regexp=path_regexp, conf=conf, flush_cache=flush_cache))
+        except StopIteration:
+            node = None
+
+        return node
 
 
     def _get_all_paths_rec(self, pname, htable, conf, recursive, first=True, clone_idx=0):
@@ -5808,50 +5836,56 @@ class Node(object):
         internal.get_child_all_path(name, htable, conf=next_conf, recursive=recursive)
 
 
-    def get_all_paths(self, conf=None, recursive=True, depth_min=None, depth_max=None):
+    def get_all_paths(self, conf=None, recursive=True, depth_min=None, depth_max=None, flush_cache=True):
         """
         Returns:
             dict: the keys are either a 'path' or a tuple ('path', int) when the path already
               exists (case of the same node used more than once within the same non-terminal)
         """
-        htable = collections.OrderedDict()
-        self._get_all_paths_rec('', htable, conf, recursive=recursive)
+
+        if flush_cache or self._paths_htable is None:
+            self._paths_htable = collections.OrderedDict()
+            self._get_all_paths_rec('', self._paths_htable, conf, recursive=recursive)
 
         if depth_min is not None or depth_max is not None:
             depth_min = int(depth_min) if depth_min is not None else 0
             depth_max = int(depth_max) if depth_max is not None else -1
-            paths = copy.copy(htable)
-            for k in paths:
+            paths = copy.copy(self._paths_htable)
+            for k in self._paths_htable.keys():
                 depth = len(k.split('/'))
                 if depth < depth_min:
-                    del htable[k]
+                    del paths[k]
                 elif depth_max != -1 and depth > depth_max:
-                    del htable[k]
-                
-        return htable
+                    del paths[k]
+        else:
+            paths = self._paths_htable
 
-    def iter_paths(self, conf=None, recursive=True, depth_min=None, depth_max=None, only_paths=False):
+        return paths
+
+    def iter_paths(self, conf=None, recursive=True, depth_min=None, depth_max=None, only_paths=False,
+                   flush_cache=True):
+
         htable = self.get_all_paths(conf=conf, recursive=recursive, depth_min=depth_min,
-                                    depth_max=depth_max)
+                                    depth_max=depth_max, flush_cache=flush_cache)
         for path, node in htable.items():
             if isinstance(path, tuple):
                 yield path[0] if only_paths else (path[0], node)
             else:
                 yield path if only_paths else (path, node)
 
-    def get_path_from(self, node, conf=None):
-        for n, e in node.iter_paths(conf=conf):
-            if e == self:
-                return n
+    def get_path_from(self, node, conf=None, flush_cache=True):
+        for path, nd in node.iter_paths(conf=conf, flush_cache=flush_cache):
+            if nd == self:
+                return path
         else:
             return None
 
 
-    def get_all_paths_from(self, node, conf=None):
+    def get_all_paths_from(self, node, conf=None, flush_cache=True):
         l = []
-        for n, e in node.iter_paths(conf=conf):
-            if e == self:
-                l.append(n)
+        for path, nd in node.iter_paths(conf=conf, flush_cache=flush_cache):
+            if nd == self:
+                l.append(path)
         return l
 
     def set_env(self, env):
@@ -6060,22 +6094,22 @@ class Node(object):
         conf = self.__check_conf(conf)
         return self.internals[conf].pretty_print(max_size=max_size)
 
-    def get_nodes_names(self, conf=None, verbose=False, terminal_only=False):
+    def get_nodes_names(self, conf=None, verbose=False, terminal_only=False, flush_cache=True):
         l = []
-        for n, e in self.iter_paths(conf=conf):
+        for path, node in self.iter_paths(conf=conf, flush_cache=flush_cache):
             if terminal_only:
-                conf = e.__check_conf(conf)
-                if not e.is_term(conf):
+                conf = node.__check_conf(conf)
+                if not node.is_term(conf):
                     continue
 
             if verbose:
-                l.append((n, e.depth, e._tobytes()))
+                l.append((path, node.depth, node._tobytes()))
             else:
-                l.append((n, e.depth))
+                l.append((path, node.depth))
 
-            if e.env is None:
-                print(n + ' (' + str(e.depth) + ')' + ' ' + str(e.env))
-                print('Node value: ', e._tobytes())
+            if node.env is None:
+                print(path + ' (' + str(node.depth) + ')' + ' ' + str(node.env))
+                print('Node value: ', node._tobytes())
                 print("The 'env' attr of this Node is NONE")
                 raise ValueError
 
@@ -6188,7 +6222,7 @@ class Node(object):
         self.freeze()
 
         l = []
-        for n, e in self.iter_paths(conf=conf):
+        for n, e in self.iter_paths(conf=conf, flush_cache=True):
             l.append((n, e))
 
         if alpha_order:
@@ -6373,7 +6407,7 @@ class Node(object):
     def __getitem__(self, key):
         # self._get_value()
         if isinstance(key, str):
-            return self.get_node_by_path(key)
+            return self.get_first_node_by_path(key)
         elif isinstance(key, NodeInternalsCriteria):
             return self.get_reachable_nodes(internals_criteria=key)
         elif isinstance(key, NodeSemanticsCriteria):

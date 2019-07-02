@@ -253,7 +253,7 @@ Search for Nodes in a Graph
 Searching a graph for specific nodes can be performed in basically two ways. Depending on the
 criteria based on which you want to perform the search, you should use:
 
-- :meth:`framework.node.Node.get_node_by_path`: will retrieve the first node that match the
+- :meth:`framework.node.Node.iter_nodes_by_path`: iterator that walk through all the nodes that match the
   *graph path*---you provide as a parameter---from the node on which the method is called (or
   ``None`` if nothing is found). The syntax defined to represent paths is similar to the one of
   filesystem paths. Each path are represented by a python string, where node names are
@@ -262,9 +262,10 @@ criteria based on which you want to perform the search, you should use:
 
       'ex/data_group/len'
 
-  You can also use a regexp to describe a path. Also, if you need to retrieve all the nodes
-  matching a path regexp you should use the following method.
+  Note the path provided is interpreted as a regexp.
 
+- :meth:`framework.node.Node.get_first_node_by_path`: use the previous iterator to provide the first
+  node that match the *graph path* or ``None`` if nothing is found
 
 - :meth:`framework.node.Node.get_reachable_nodes`: It is the more flexible primitive that
   enables to perform a search based on syntactic and/or semantic criteria. It can take several
@@ -290,6 +291,9 @@ criteria based on which you want to perform the search, you should use:
 
   + ``owned_conf``: The name of a node configuration (refer to :ref:`dmanip:conf`) that
     the targeted nodes own.
+
+  .. note:: If the search is only path-based, :meth:`framework.node.Node.iter_nodes_by_path` is the
+     preferable solution as it is more efficient.
 
   The following code snippet illustrates the use of such criteria for retrieving all the nodes
   coming from the ``data2`` description (refer to :ref:`dmanip:entangle`):
@@ -351,7 +355,7 @@ As a ``key``, you can provide:
 - A *path regexp* (where the node on which the method is called is considered as the root) to the
   node you want to reach. If multiple nodes match the path regexp, the first one will be returned
   (or ``None`` if the path match nothing). It is equivalent to calling
-  :meth:`framework.node.Node.get_node_by_path` on the node and providing the parameter
+  :meth:`framework.node.Node.get_first_node_by_path` on the node and providing the parameter
   ``path_regexp`` with your path.
 
   The following python code snippet illustrate the access to the node named ``len`` to
@@ -363,7 +367,7 @@ As a ``key``, you can provide:
       rnode['ex/data_group/len'].to_bytes()
 
       # same as:
-      rnode.get_node_by_path('ex/data_group/len').to_bytes()
+      rnode.get_first_node_by_path('ex/data_group/len').to_bytes()
 
 
 - A :class:`framework.node.NodeInternalsCriteria` that match the internal

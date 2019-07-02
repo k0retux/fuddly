@@ -69,6 +69,203 @@ class TestBasics(unittest.TestCase):
     def setUp(self):
         pass
 
+    def test_alt_conf(self):
+
+        print('\n### TEST 8: set_current_conf()')
+
+        node_ex1 = dm.get_atom('EX1')
+
+        node_ex1.show()
+
+        print('\n*** test 8.0:')
+
+        res01 = True
+        l = sorted(node_ex1.get_nodes_names())
+        for k in l:
+            print(k)
+            if 'EX1' != k[0][:len('EX1')]:
+                res01 = False
+                break
+
+        l2 = sorted(node_ex1.get_nodes_names(conf='ALT'))
+        for k in l2:
+            print(k)
+            if 'EX1' != k[0][:len('EX1')]:
+                res01 = False
+                break
+
+        self.assertTrue(res01)
+
+        res02 = False
+        for k in l2:
+            if 'MARK2' in k[0]:
+                for k in l2:
+                    if 'MARK3' in k[0]:
+                        res02 = True
+                        break
+                break
+
+        self.assertTrue(res02)
+
+        print('\n*** test 8.1:')
+
+        res1 = True
+
+        msg = node_ex1.to_bytes(conf='ALT')
+        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg:
+            res1 = False
+        print(msg)
+        node_ex1.unfreeze_all()
+        msg = node_ex1.to_bytes(conf='ALT')
+        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg:
+            res1 = False
+        print(msg)
+        node_ex1.unfreeze_all()
+        msg = node_ex1.to_bytes()
+        if b' ~(..)~ ' in msg or b' ~(X)~ ' in msg:
+            res1 = False
+        print(msg)
+        node_ex1.unfreeze_all()
+        msg = node_ex1.to_bytes(conf='ALT')
+        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg:
+            res1 = False
+        print(msg)
+        node_ex1.unfreeze_all()
+
+        self.assertTrue(res1)
+
+        print('\n*** test 8.2:')
+
+        print('\n***** test 8.2.0: subparts:')
+
+        node_ex1 = dm.get_atom('EX1')
+
+        res2 = True
+
+        print(node_ex1.to_bytes())
+
+        node_ex1.set_current_conf('ALT', root_regexp=None)
+
+        nonascii_test_str = u'\u00c2'.encode(internal_repr_codec)
+
+        node_ex1.unfreeze_all()
+        msg = node_ex1.to_bytes()
+        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or nonascii_test_str not in msg:
+            res2 = False
+        print(msg)
+        node_ex1.unfreeze_all()
+        msg = node_ex1.to_bytes()
+        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or nonascii_test_str not in msg:
+            res2 = False
+        print(msg)
+
+        node_ex1.set_current_conf('MAIN', reverse=True, root_regexp=None)
+
+        node_ex1.unfreeze_all()
+        msg = node_ex1.to_bytes()
+        if b' ~(..)~ ' in msg or b' ~(X)~ ' in msg or b'[<]' in msg or nonascii_test_str in msg:
+            res2 = False
+        print(msg)
+
+        node_ex1 = dm.get_atom('EX1')
+
+        node_ex1.set_current_conf('ALT', root_regexp='(TC)|(TC_.*)/KV')
+        node_ex1.set_current_conf('ALT', root_regexp='TUX$')
+
+        node_ex1.unfreeze_all()
+        msg = node_ex1.to_bytes()
+        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or nonascii_test_str not in msg:
+            res2 = False
+        print(msg)
+
+        self.assertTrue(res2)
+
+        print('\n***** test 8.2.1: subparts equality:')
+
+        val1 = node_ex1.get_first_node_by_path('TUX$').to_bytes()
+        val2 = node_ex1.get_first_node_by_path('CONCAT$').to_bytes()
+        print(b' @ ' + val1 + b' @ ')
+        print(val2)
+
+        res21 = b' @ ' + val1 + b' @ ' == val2
+
+        self.assertTrue(res21)
+
+        print('\n*** test 8.3:')
+
+        node_ex1 = dm.get_atom('EX1')
+
+        res3 = True
+        l = sorted(node_ex1.get_nodes_names(conf='ALT'))
+        for k in l:
+            print(k)
+            if 'EX1' != k[0][:len('EX1')]:
+                res3 = False
+                break
+
+        self.assertTrue(res3)
+
+        print('\n*** test 8.4:')
+
+        print(node_ex1.to_bytes())
+        res4 = True
+        l = sorted(node_ex1.get_nodes_names())
+        for k in l:
+            print(k)
+            if 'EX1' != k[0][:len('EX1')]:
+                res4 = False
+                break
+
+        self.assertTrue(res4)
+
+        print('\n*** test 8.5:')
+
+        node_ex1 = dm.get_atom('EX1')
+
+        res5 = True
+        node_ex1.unfreeze_all()
+        msg = node_ex1.get_first_node_by_path('TUX$').to_bytes(conf='ALT', recursive=False)
+        if b' ~(..)~ ' not in msg or b' ~(X)~ ' in msg:
+            res5 = False
+        print(msg)
+
+        node_ex1.unfreeze_all()
+        msg = node_ex1.get_first_node_by_path('TUX$').to_bytes(conf='ALT', recursive=True)
+        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg:
+            res5 = False
+        print(msg)
+
+        self.assertTrue(res5)
+
+        print('\n*** test 8.6:')
+
+        node_ex1 = dm.get_atom('EX1')
+
+        # attr3 = Elt_Attributes(defaults=False)
+        # attr3.conform_to_nonterm_node()
+        # attr3.enable_conf('ALT')
+
+        # node_kind3 = [NodeInternals_NonTerm]
+
+        crit = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
+                                     node_kinds=[NodeInternals_NonTerm])
+
+        node_ex1.unfreeze_all()
+
+        tux2 = dm.get_atom('TUX')
+        l = tux2.get_reachable_nodes(internals_criteria=crit, owned_conf='ALT')
+
+        for e in l:
+            print(e.get_path_from(tux2))
+
+        if len(l) == 4:
+            res6 = True
+        else:
+            res6 = False
+
+        self.assertTrue(res6)
+
+
     def test_01(self):
 
         # print('\n### TEST 0: generate one EX1 ###')
@@ -162,37 +359,21 @@ class TestBasics(unittest.TestCase):
         res = val1 != val2
         results['test4'] = res
 
-        print('\n### TEST 5: test get_node_by_path() ###')
-
-        print('\n*** test 5.1: get_node_by_path() with exact path')
+        print('\n### TEST 5: test get_first_node_by_path() ###')
 
         tux2 = dm.get_atom('TUX')
 
-        print('* Shall return None:')
-        val1 = tux2.get_node_by_path(path='EX1')
-        val2 = tux2.get_node_by_path(path='CONCAT')
-        print(val1)
-        print(val2)
+        print('\n*** test 5.2: call 3 times get_first_node_by_path()')
 
-        print('* Shall not return None:')
-        val3 = tux2.get_node_by_path('TUX/TX')
-        val4 = tux2.get_node_by_path('TUX/TC')
-        print(val3)
-        print(val4)
-
-        res1 = val1 == None and val2 == None and val3 != None and val4 != None
-
-        print('\n*** test 5.2: call 3 times get_node_by_path()')
-
-        print('name: %s, result: %s' % ('TUX', tux2.get_node_by_path('TUX').get_path_from(tux2)))
-        print('name: %s, result: %s' % ('TX', tux2.get_node_by_path('TX').get_path_from(tux2)))
-        print('name: %s, result: %s' % ('KU', tux2.get_node_by_path('KU', conf='ALT').get_path_from(tux2)))
+        print('name: %s, result: %s' % ('TUX', tux2.get_first_node_by_path('TUX').get_path_from(tux2)))
+        print('name: %s, result: %s' % ('TX', tux2.get_first_node_by_path('TX').get_path_from(tux2)))
+        print('name: %s, result: %s' % ('KU', tux2.get_first_node_by_path('KU', conf='ALT').get_path_from(tux2)))
         print('name: %s, result: %s' % (
-        'MARK3', tux2.get_node_by_path('MARK3', conf='ALT').get_path_from(tux2, conf='ALT')))
+        'MARK3', tux2.get_first_node_by_path('MARK3', conf='ALT').get_path_from(tux2, conf='ALT')))
 
-        print('\n*** test 5.3: call get_node_by_path() with real regexp')
+        print('\n*** test 5.3: call get_first_node_by_path() with real regexp')
 
-        print('--> ' + tux2.get_node_by_path('TX.*KU').get_path_from(tux2))
+        print('--> ' + tux2.get_first_node_by_path('TX.*KU').get_path_from(tux2))
 
         print('\n*** test 5.4: call get_reachable_nodes()')
 
@@ -213,9 +394,9 @@ class TestBasics(unittest.TestCase):
         else:
             res2 = False
 
-        print(res1, res2)
+        print(res2)
 
-        results['test5'] = res1 and res2
+        results['test5'] = res2
 
         print('\n### TEST 6: get_reachable_nodes()')
 
@@ -269,7 +450,7 @@ class TestBasics(unittest.TestCase):
 
         print('*** junk test:')
 
-        tux2.get_node_by_path('TUX$').cc.change_subnodes_csts([('u=+', 'u>'), ('u=.', 'u>')])
+        tux2.get_first_node_by_path('TUX$').cc.change_subnodes_csts([('u=+', 'u>'), ('u=.', 'u>')])
         print(tux2.to_bytes())
 
         print('\n*** test 7.1:')
@@ -376,197 +557,18 @@ class TestBasics(unittest.TestCase):
 
         results['test7'] = res1 and res2 and res3
 
-        print('\n### TEST 8: set_current_conf()')
-
-        node_ex1 = dm.get_atom('EX1')
-
-        print('\n*** test 8.0:')
-
-        res01 = True
-        l = sorted(node_ex1.get_nodes_names())
-        for k in l:
-            print(k)
-            if 'EX1' != k[0][:len('EX1')]:
-                res01 = False
-                break
-
-        l2 = sorted(node_ex1.get_nodes_names(conf='ALT'))
-        for k in l2:
-            print(k)
-            if 'EX1' != k[0][:len('EX1')]:
-                res01 = False
-                break
-
-        res02 = False
-        for k in l2:
-            if 'MARK2' in k[0]:
-                for k in l2:
-                    if 'MARK3' in k[0]:
-                        res02 = True
-                        break
-                break
-
-        res0 = res01 and res02
-
-        print('\n*** test 8.1:')
-
-        res1 = True
-
-        msg = node_ex1.to_bytes(conf='ALT')
-        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg:
-            res1 = False
-        print(msg)
-        node_ex1.unfreeze_all()
-        msg = node_ex1.to_bytes(conf='ALT')
-        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg:
-            res1 = False
-        print(msg)
-        node_ex1.unfreeze_all()
-        msg = node_ex1.to_bytes()
-        if b' ~(..)~ ' in msg or b' ~(X)~ ' in msg:
-            res1 = False
-        print(msg)
-        node_ex1.unfreeze_all()
-        msg = node_ex1.to_bytes(conf='ALT')
-        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg:
-            res1 = False
-        print(msg)
-        node_ex1.unfreeze_all()
-
-        print('\n*** test 8.2:')
-
-        print('\n***** test 8.2.0: subparts:')
-
-        node_ex1 = dm.get_atom('EX1')
-
-        res2 = True
-
-        print(node_ex1.to_bytes())
-
-        node_ex1.set_current_conf('ALT', root_regexp=None)
-
-        nonascii_test_str = u'\u00c2'.encode(internal_repr_codec)
-
-        node_ex1.unfreeze_all()
-        msg = node_ex1.to_bytes()
-        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or nonascii_test_str not in msg:
-            res2 = False
-        print(msg)
-        node_ex1.unfreeze_all()
-        msg = node_ex1.to_bytes()
-        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or nonascii_test_str not in msg:
-            res2 = False
-        print(msg)
-
-        node_ex1.set_current_conf('MAIN', reverse=True, root_regexp=None)
-
-        node_ex1.unfreeze_all()
-        msg = node_ex1.to_bytes()
-        if b' ~(..)~ ' in msg or b' ~(X)~ ' in msg or b'[<]' in msg or nonascii_test_str in msg:
-            res2 = False
-        print(msg)
-
-        node_ex1 = dm.get_atom('EX1')
-
-        node_ex1.set_current_conf('ALT', root_regexp='(TC)|(TC_.*)/KV')
-        node_ex1.set_current_conf('ALT', root_regexp='TUX$')
-
-        node_ex1.unfreeze_all()
-        msg = node_ex1.to_bytes()
-        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg or b'[<]' not in msg or nonascii_test_str not in msg:
-            res2 = False
-        print(msg)
-
-        print('\n***** test 8.2.1: subparts equality:')
-
-        val1 = node_ex1.get_node_by_path('TUX$').to_bytes()
-        val2 = node_ex1.get_node_by_path('CONCAT$').to_bytes()
-        print(b' @ ' + val1 + b' @ ')
-        print(val2)
-
-        res21 = b' @ ' + val1 + b' @ ' == val2
-
-        print(res2, res21)
-
-        print('\n*** test 8.3:')
-
-        node_ex1 = dm.get_atom('EX1')
-
-        res3 = True
-        l = sorted(node_ex1.get_nodes_names(conf='ALT'))
-        for k in l:
-            print(k)
-            if 'EX1' != k[0][:len('EX1')]:
-                res3 = False
-                break
-
-        print('\n*** test 8.4:')
-
-        print(node_ex1.to_bytes())
-        res4 = True
-        l = sorted(node_ex1.get_nodes_names())
-        for k in l:
-            print(k)
-            if 'EX1' != k[0][:len('EX1')]:
-                res4 = False
-                break
-
-        print('\n*** test 8.5:')
-
-        node_ex1 = dm.get_atom('EX1')
-
-        res5 = True
-        node_ex1.unfreeze_all()
-        msg = node_ex1.get_node_by_path('TUX$').to_bytes(conf='ALT', recursive=False)
-        if b' ~(..)~ ' not in msg or b' ~(X)~ ' in msg:
-            res5 = False
-        print(msg)
-
-        node_ex1.unfreeze_all()
-        msg = node_ex1.get_node_by_path('TUX$').to_bytes(conf='ALT', recursive=True)
-        if b' ~(..)~ ' not in msg or b' ~(X)~ ' not in msg:
-            res5 = False
-        print(msg)
-
-        print('\n*** test 8.6:')
-
-        node_ex1 = dm.get_atom('EX1')
-
-        # attr3 = Elt_Attributes(defaults=False)
-        # attr3.conform_to_nonterm_node()
-        # attr3.enable_conf('ALT')
-
-        # node_kind3 = [NodeInternals_NonTerm]
-
-        crit = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
-                                     node_kinds=[NodeInternals_NonTerm])
-
-        node_ex1.unfreeze_all()
-
-        l = tux2.get_reachable_nodes(internals_criteria=crit, owned_conf='ALT')
-
-        for e in l:
-            print(e.get_path_from(tux2))
-
-        if len(l) == 4:
-            res6 = True
-        else:
-            res6 = False
-
-        print('Results:')
-        print(res0, res1, res2, res21, res3, res4, res5, res6)
-
-        results['test8'] = res0 and res1 and res2 and res21 and res3 and res4 and res5 and res6
+        #test8 converted
 
         print('\n### TEST 9: test the constraint type: =+(w1,w2,...)\n' \
               '--> can be False in really rare case')
 
+        nonascii_test_str = u'\u00c2'.encode(internal_repr_codec)
         node_ex1 = dm.get_atom('EX1')
 
         res = True
         for i in range(20):
             node_ex1.unfreeze_all()
-            msg = node_ex1.get_node_by_path('TUX$').to_bytes(conf='ALT', recursive=True)
+            msg = node_ex1.get_first_node_by_path('TUX$').to_bytes(conf='ALT', recursive=True)
             if b' ~(..)~ TUX ~(..)~ ' not in msg:
                 res = False
                 break
@@ -601,7 +603,7 @@ class TestBasics(unittest.TestCase):
         print(msg)
 
         node_ex1.unfreeze_all()
-        msg = node_ex1.get_node_by_path('TUX$').to_bytes(conf='ALT', recursive=False)
+        msg = node_ex1.get_first_node_by_path('TUX$').to_bytes(conf='ALT', recursive=False)
         if b'[<]' in msg or nonascii_test_str in msg or b' ~(..)~ TUX ~(..)~ ' not in msg:
             res1 = False
         print(msg)
@@ -640,7 +642,7 @@ class TestBasics(unittest.TestCase):
         print(msg)
 
         node_ex1.unfreeze_all()
-        msg = node_ex1.get_node_by_path('TUX$').to_bytes(conf='ALT', recursive=False)
+        msg = node_ex1.get_first_node_by_path('TUX$').to_bytes(conf='ALT', recursive=False)
         if b'___' in msg:
             res3 = False
         print(msg)
@@ -814,7 +816,7 @@ class TestMisc(unittest.TestCase):
             evt.unfreeze()
             print(evt.to_bytes())
 
-        evt.get_node_by_path('Pre').make_random()
+        evt.get_first_node_by_path('Pre').make_random()
 
         print('******')
 
@@ -2095,11 +2097,11 @@ class TestNodeFeatures(unittest.TestCase):
         self.assertEqual(len(msg), size)
         self.assertTrue(self.helper1_called)
         self.assertTrue(self.helper2_called)
-        self.assertEqual(top.get_node_by_path("top/middle2/str10").to_bytes(), b'THE_END')
+        self.assertEqual(top.get_first_node_by_path("top/middle2/str10").to_bytes(), b'THE_END')
 
         # Because constraints are untighten on this node, its nominal
         # size of 4 is set to 5 when absorbing b'COOL!'
-        self.assertEqual(top.get_node_by_path("top/middle1/cool").to_bytes(), b'COOL!')
+        self.assertEqual(top.get_first_node_by_path("top/middle1/cool").to_bytes(), b'COOL!')
 
         self.assertEqual(status2, AbsorbStatus.FullyAbsorbed)
 
@@ -2575,7 +2577,7 @@ class TestNodeFeatures(unittest.TestCase):
         self.assertEqual(result, raw)
 
 
-    def test_search_primitive(self):
+    def test_search_primitive_01(self):
 
         data = fmk.dm.get_external_atom(dm_name='mydf', data_id='exist_cond')
         data.freeze()
@@ -2607,6 +2609,75 @@ class TestNodeFeatures(unittest.TestCase):
 
         # corrupted_data.unfreeze(recursive=True, reevaluate_constraints=True)
         # corrupted_data.show()
+
+    def test_search_primitive_02(self):
+
+        ex_node = fmk.dm.get_atom('ex')
+        ex_node.show()
+
+        n = ex_node.get_first_node_by_path('ex/data_group/data1')
+        print('\n*** node', n.name)
+
+
+        ic = NodeInternalsCriteria(required_csts=[SyncScope.Existence])
+
+        def exec_search(**kwargs):
+            l1 = ex_node.get_reachable_nodes(**kwargs)
+            print("\n*** Number of node(s) found: {:d} ***".format(len(l1)))
+
+            res = []
+            for n in l1:
+                print(' |_ ' + n.name)
+                res.append(n.name)
+
+            return res
+
+        exec_search(path_regexp='^ex/data_group/data.*')
+
+        l = ex_node['data_group/data1'].get_all_paths_from(ex_node)
+        print(l)
+
+
+    def test_performance(self):
+
+        ex_node = fmk.dm.get_atom('ex')
+        ex_node.show()
+
+        t0 = datetime.datetime.now()
+        for _ in range(30):
+            l0 = list(ex_node.iter_nodes_by_path(path_regexp='.*', flush_cache=True))
+        now = datetime.datetime.now()
+        print('\n*** Execution time of .iter_nodes_by_path(flush_cache=True): {}'.format((now - t0).total_seconds()))
+
+        for n in l0:
+            print(n.name)
+
+        t0 = datetime.datetime.now()
+        for _ in range(30):
+            l1 = list(ex_node.iter_nodes_by_path(path_regexp='.*', flush_cache=False))
+        now = datetime.datetime.now()
+        print('\n*** Execution time of .iter_nodes_by_path(flush_cache=False): {}'.format((now - t0).total_seconds()))
+
+        for n in l1:
+            print(n.name)
+
+        t0 = datetime.datetime.now()
+        for _ in range(30):
+            nd = ex_node.get_first_node_by_path(path_regexp='.*', flush_cache=False)
+        now = datetime.datetime.now()
+        print('\n*** Execution time of .get_first_node_by_path(flush_cache=False): {}'.format((now - t0).total_seconds()))
+
+        t0 = datetime.datetime.now()
+        for _ in range(30):
+            l2 = ex_node.get_reachable_nodes(path_regexp='.*', respect_order=True)
+        now = datetime.datetime.now()
+        print('\n*** Execution time of .get_reachable_nodes: {}'.format((now - t0).total_seconds()))
+
+        for n in l2:
+            print(n.name)
+
+        self.assertEqual(l0, l1)
+        self.assertEqual(l1, l2)
 
 
 class TestNode_NonTerm(unittest.TestCase):

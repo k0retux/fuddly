@@ -40,9 +40,9 @@ class example_02(Generator):
 
     def setup(self, dm, user_input):
         self.tux = dm.get_atom('TUX')
-        self.tux_h = self.tux.get_node_by_path('TUX/h$')
-        self.tx = self.tux.get_node_by_path('TUX/TX$')
-        self.tc = self.tux.get_node_by_path('TUX/TC$')
+        self.tux_h = self.tux.get_first_node_by_path('TUX/h$')
+        self.tx = self.tux.get_first_node_by_path('TUX/TX$')
+        self.tc = self.tux.get_first_node_by_path('TUX/TC$')
 
         self.delim = Node('DELIM', values=[' [@] '])
 
@@ -85,7 +85,7 @@ class t_fuzz_tve_01(Disruptor):
 
         prev_content = prev_data.content
         if isinstance(prev_content, Node):
-            prev_content.get_node_by_path('TVE.*EVT1$').set_frozen_value(val)
+            prev_content.get_first_node_by_path('TVE.*EVT1$').set_frozen_value(val)
 
         else:
             print('DONT_PROCESS_THIS_KIND_OF_DATA')

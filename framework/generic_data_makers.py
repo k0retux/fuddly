@@ -711,7 +711,7 @@ class sd_crossover(SwapperDisruptor):
 
                     parent_path = current_path[:-current_path[::-1].find('/') - 1]
                     children_nb = self._count_brothers(index, parent_path)
-                    if children_nb == self.node.get_node_by_path(parent_path).cc.get_subnode_qty():
+                    if children_nb == self.node.get_first_node_by_path(parent_path).cc.get_subnode_qty():
                         self._merge_brothers(index, parent_path, children_nb)
                         change = True
                         index += 1
@@ -760,8 +760,8 @@ class sd_crossover(SwapperDisruptor):
         swap_nb = len(source.shared) if len(source.shared) < len(param.shared) else len(param.shared)
 
         for i in range(swap_nb):
-            node_1 = source.node.get_node_by_path(path=source.shared[i])
-            node_2 = param.node.get_node_by_path(path=param.shared[i])
+            node_1 = source.node.get_first_node_by_path(source.shared[i])
+            node_2 = param.node.get_first_node_by_path(param.shared[i])
             self._swap_nodes(node_1, node_2)
 
 
@@ -842,7 +842,7 @@ class d_call_external_program(Disruptor):
     def disrupt_data(self, dm, target, prev_data):
         prev_content = prev_data.content
         if self.path and isinstance(prev_content, Node):
-            node = prev_content.get_node_by_path(path_regexp=self.path)
+            node = prev_content.get_first_node_by_path(path_regexp=self.path)
             if node is None:
                 prev_data.add_info('INVALID INPUT')
                 return prev_data
@@ -1007,7 +1007,7 @@ class d_max_size(Disruptor):
         prev_content = prev_data.content
         if isinstance(prev_content, Node):
             if self.path is not None:
-                node = prev_content.get_node_by_path(self.path)
+                node = prev_content.get_first_node_by_path(self.path)
                 if node is None:
                     node = prev_content
             else:
