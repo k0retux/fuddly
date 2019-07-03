@@ -1665,8 +1665,8 @@ class TestModelWalker(unittest.TestCase):
         data.freeze()
         data.show()
 
-        print('\norig value: ' + repr(data['smscmd/TP-DCS'].to_bytes()))
-        # self.assertEqual(data['smscmd/TP-DCS'].to_bytes(), b'\xF6')
+        print('\norig value: ' + repr(data['smscmd/TP-DCS'][0].to_bytes()))
+        # self.assertEqual(data['smscmd/TP-DCS'][0].to_bytes(), b'\xF6')
 
         corrupt_table = {
             1: b'\x06',
@@ -1684,16 +1684,16 @@ class TestModelWalker(unittest.TestCase):
         # tn_consumer.set_node_interest(internals_criteria=ic)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, tn_consumer,
                                                                     make_determinist=True, max_steps=7):
-            print(colorize('\n[%d] ' % idx + repr(rnode['smscmd/TP-DCS$'].to_bytes()), rgb=Color.INFO))
+            print(colorize('\n[%d] ' % idx + repr(rnode['smscmd/TP-DCS$'][0].to_bytes()), rgb=Color.INFO))
             print('node name: ' + consumed_node.name)
             print('original value:  {!s} ({!s})'.format(binascii.b2a_hex(orig_node_val),
                                                         bin(struct.unpack('B', orig_node_val)[0])))
             print('corrupted value: {!s} ({!s})'.format(binascii.b2a_hex(consumed_node.to_bytes()),
                                                         bin(struct.unpack('B', consumed_node.to_bytes())[0])))
-            print('result: {!s} ({!s})'.format(binascii.b2a_hex(rnode['smscmd/TP-DCS$'].to_bytes()),
-                                               bin(struct.unpack('B', rnode['smscmd/TP-DCS$'].to_bytes())[0])))
-            rnode['smscmd/TP-DCS$'].show()
-            self.assertEqual(rnode['smscmd/TP-DCS'].to_bytes(), corrupt_table[idx])
+            print('result: {!s} ({!s})'.format(binascii.b2a_hex(rnode['smscmd/TP-DCS$'][0].to_bytes()),
+                                               bin(struct.unpack('B', rnode['smscmd/TP-DCS$'][0].to_bytes())[0])))
+            rnode['smscmd/TP-DCS$'][0].show()
+            self.assertEqual(rnode['smscmd/TP-DCS'][0].to_bytes(), corrupt_table[idx])
 
     def test_AltConfConsumer_1(self):
         simple = self.dm.get_atom('Simple')
@@ -1827,19 +1827,19 @@ class TestNodeFeatures(unittest.TestCase):
         d3 = d.get_clone()
 
         d.freeze()
-        d['.*/value$'].unfreeze()
+        d['.*/value$'][0].unfreeze()
         d_raw = d.to_bytes()
         d.show()
 
         d2.freeze()
-        d2['.*/value$'].unfreeze()
-        d2['.*/value$'].freeze()
+        d2['.*/value$'][0].unfreeze()
+        d2['.*/value$'][0].freeze()
         d2_raw = d2.to_bytes()
         d2.show()
 
         d3.freeze()
-        d3['.*/value$'].unfreeze()
-        d3['.*/len$'].unfreeze()
+        d3['.*/value$'][0].unfreeze()
+        d3['.*/len$'][0].unfreeze()
         d3_raw = d3.to_bytes()
         d3.show()
 
@@ -2109,9 +2109,9 @@ class TestNodeFeatures(unittest.TestCase):
         del self.helper2_called
 
         print('\n*** test __getitem__() ***\n')
-        print(top["top/middle2"])
+        print(top["top/middle2"][0])
         print('\n***\n')
-        print(repr(top["top/middle2"]))
+        print(repr(top["top/middle2"][0]))
 
     def test_show(self):
 
@@ -2634,8 +2634,30 @@ class TestNodeFeatures(unittest.TestCase):
 
         exec_search(path_regexp='^ex/data_group/data.*')
 
-        l = ex_node['data_group/data1'].get_all_paths_from(ex_node)
+        l = ex_node['data_group/data1'][0].get_all_paths_from(ex_node)
         print(l)
+
+
+    def test_search_primitive_03(self):
+        test_node = fmk.dm.get_atom('TestNode')
+        test_node.show()
+
+        rexp = 'TestNode/middle/(USB_desc/|val2$)'
+
+        l = test_node[rexp]
+        for n in l:
+            print('Node name: {}, value: {}'.format(n.name, n.to_bytes()))
+
+        test_node[rexp] = Node('ignored_name', values=['TEST'])
+        test_node.show()
+
+        self.assertEqual(len(l), 4)
+
+        for n in l:
+            print('Node name: {}, value: {}'.format(n.name, n.to_bytes()))
+            self.assertEqual(n.to_bytes(), b'TEST')
+
+        self.assertEqual(test_node['Unknown path'], None)
 
 
     def test_performance(self):
@@ -2855,8 +2877,8 @@ class TestNode_NonTerm(unittest.TestCase):
         node.show()
         print('\nData:')
         print(node.to_bytes())
-        self.assertEqual(struct.unpack('B', node['enc/enc_data/len$'].to_bytes())[0],
-                         len(node['enc/enc_data/data1$'].get_raw_value()))
+        self.assertEqual(struct.unpack('B', node['enc/enc_data/len$'][0].to_bytes())[0],
+                         len(node['enc/enc_data/data1$'][0].get_raw_value()))
 
         raw_data = b'Plop\x8c\xd6/\x06x\x9cc\raHe(f(aPd\x00\x00\x0bv\x01\xc7Blue'
         status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
@@ -2885,28 +2907,28 @@ class TestNode_NonTerm(unittest.TestCase):
         ex_node = fmk.dm.get_atom('ex')
         ex_node.show()
         new_node = Node('my_node2', values=['New node added!!!!'])
-        data2_node = ex_node['ex/data_group/data2']
-        ex_node['ex/data_group'].add(new_node, after=data2_node, min=new_node_min_qty, max=new_node_max_qty)
+        data2_node = ex_node['ex/data_group/data2'][0]
+        ex_node['ex/data_group'][0].add(new_node, after=data2_node, min=new_node_min_qty, max=new_node_max_qty)
         ex_node.show()
 
-        nt_node = ex_node['ex/data_group']
+        nt_node = ex_node['ex/data_group'][0]
         self.assertEqual(nt_node.get_subnode_idx(new_node),
-                         nt_node.get_subnode_idx(ex_node['ex/data_group/data2'])+1)
+                         nt_node.get_subnode_idx(ex_node['ex/data_group/data2'][0])+1)
 
         ex_node.unfreeze()
         ex_node.show()
         self.assertEqual(nt_node.get_subnode_idx(new_node),
-                         nt_node.get_subnode_idx(ex_node['ex/data_group/data2:3'])+1)
+                         nt_node.get_subnode_idx(ex_node['ex/data_group/data2:3'][0])+1)
 
         print('\n*** Test Case 2 ***\n')
 
         ex_node = fmk.dm.get_atom('ex')
         ex_node.show()
         new_node = Node('my_node2', values=['New node added!!!!'])
-        ex_node['ex/data_group'].add(new_node, idx=0, min=new_node_min_qty, max=new_node_max_qty)
+        ex_node['ex/data_group'][0].add(new_node, idx=0, min=new_node_min_qty, max=new_node_max_qty)
         ex_node.show()
 
-        nt_node = ex_node['ex/data_group']
+        nt_node = ex_node['ex/data_group'][0]
         self.assertEqual(nt_node.get_subnode_idx(new_node), 0)
 
         ex_node.unfreeze()
@@ -2918,10 +2940,10 @@ class TestNode_NonTerm(unittest.TestCase):
         ex_node = fmk.dm.get_atom('ex')
         ex_node.show()
         new_node = Node('my_node2', values=['New node added!!!!'])
-        ex_node['ex/data_group'].add(new_node, idx=None, min=new_node_min_qty, max=new_node_max_qty)
+        ex_node['ex/data_group'][0].add(new_node, idx=None, min=new_node_min_qty, max=new_node_max_qty)
         ex_node.show()
 
-        nt_node = ex_node['ex/data_group']
+        nt_node = ex_node['ex/data_group'][0]
         self.assertEqual(nt_node.get_subnode_idx(new_node), nt_node.get_subnode_qty()-new_node_min_qty)
 
         ex_node.unfreeze()
@@ -3037,8 +3059,8 @@ class TestNode_TypedValue(unittest.TestCase):
         node_abs.set_env(Env())
 
         node.show()
-        self.assertEqual(struct.unpack('B', node['enc/len$'].to_bytes())[0],
-                         len(node['enc/user_data$'].get_raw_value()))
+        self.assertEqual(struct.unpack('B', node['enc/len$'][0].to_bytes())[0],
+                         len(node['enc/user_data$'][0].get_raw_value()))
 
         raw_data = b'\x0CHell\xC3\xBC World!***' + \
                    b'x\x9c\xf3H\xcd\xc9\xf9\xa3\x10\x9e_\x94\x93\xa2\x08\x00 \xb1\x04\xcb'
@@ -3329,7 +3351,7 @@ class TestDataModel(unittest.TestCase):
                 retr_off = struct.unpack('B', raw[-1])[0]
             print('\nRetrieved offset is: %d' % retr_off)
 
-            int_idx = d['off_gen/body$'].get_subnode_idx(d['off_gen/body/int'])
+            int_idx = d['off_gen/body$'][0].get_subnode_idx(d['off_gen/body/int'][0])
             off = int_idx * 3 + 10  # +10 for 'prefix' delta
             self.assertEqual(off, retr_off)
 
@@ -3475,7 +3497,7 @@ class TestDataModel(unittest.TestCase):
         self.assertEqual(zip_buff, abs_buff)
 
         # abszip.show()
-        flen_before = len(abszip['ZIP/file_list/file/data'].to_bytes())
+        flen_before = len(abszip['ZIP/file_list/file/data'][0].to_bytes())
         print('file data len before: ', flen_before)
 
         off_before = abszip['ZIP/cdir/cdir_hdr:2/file_hdr_off']
@@ -3483,17 +3505,17 @@ class TestDataModel(unittest.TestCase):
         if off_before is not None:
             # Make modification of the ZIP and verify that some other ZIP
             # fields are automatically updated
-            off_before = off_before.to_bytes()
+            off_before = off_before[0].to_bytes()
             print('offset before:', off_before)
-            csz_before = abszip['ZIP/file_list/file/header/common_attrs/compressed_size'].to_bytes()
+            csz_before = abszip['ZIP/file_list/file/header/common_attrs/compressed_size'][0].to_bytes()
             print('compressed_size before:', csz_before)
 
-            abszip['ZIP/file_list/file/header/common_attrs/compressed_size'].set_current_conf('MAIN')
+            abszip['ZIP/file_list/file/header/common_attrs/compressed_size'][0].set_current_conf('MAIN')
 
             NEWVAL = b'TEST'
-            print(abszip['ZIP/file_list/file/data'].absorb(NEWVAL, constraints=AbsNoCsts()))
+            print(abszip['ZIP/file_list/file/data'][0].absorb(NEWVAL, constraints=AbsNoCsts()))
 
-            flen_after = len(abszip['ZIP/file_list/file/data'].to_bytes())
+            flen_after = len(abszip['ZIP/file_list/file/data'][0].to_bytes())
             print('file data len after: ', flen_after)
 
             abszip.unfreeze(only_generators=True)
@@ -3502,9 +3524,9 @@ class TestDataModel(unittest.TestCase):
             # print('\n******\n')
             # abszip.show()
 
-            off_after = abszip['ZIP/cdir/cdir_hdr:2/file_hdr_off'].to_bytes()
+            off_after = abszip['ZIP/cdir/cdir_hdr:2/file_hdr_off'][0].to_bytes()
             print('offset after: ', off_after)
-            csz_after = abszip['ZIP/file_list/file/header/common_attrs/compressed_size'].to_bytes()
+            csz_after = abszip['ZIP/file_list/file/header/common_attrs/compressed_size'][0].to_bytes()
             print('compressed_size after:', csz_after)
 
             # Should not be equal in the general case
@@ -3646,7 +3668,7 @@ class TestDataModelHelpers(unittest.TestCase):
                 ['XML5', ('tTYPE', UI(path='xml5/command/LOGIN/start-tag/content/attr1/val'))])
             if data is None:
                 break
-            node_to_check = data.content['xml5/command/LOGIN/start-tag/content/attr1/val']
+            node_to_check = data.content['xml5/command/LOGIN/start-tag/content/attr1/val'][0]
             if node_to_check.to_bytes() == b'None':
                 # one case should trigger this condition
                 specific_cases_checked = True

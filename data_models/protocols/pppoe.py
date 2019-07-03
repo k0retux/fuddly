@@ -35,10 +35,10 @@ class PPPOE_DataModel(DataModel):
 
         def cycle_tags(tag):
             tag.freeze()
-            if tag['.*/type'].get_current_raw_val() == 0x102:
-                tag['.*/type'].unfreeze()
+            if tag['.*/type'][0].get_current_raw_val() == 0x102:
+                tag['.*/type'][0].unfreeze()
                 tag.freeze()
-            tag['.*/type'].unfreeze()
+            tag['.*/type'][0].unfreeze()
             tag.unfreeze(reevaluate_constraints=True)
             return tag
 
@@ -124,18 +124,18 @@ class PPPOE_DataModel(DataModel):
         tag_node = mb.create_graph_from_desc(tag_desc)
 
         tag_service_name = tag_node.get_clone('tag_sn')
-        tag_service_name['.*/type'].set_values(value_type=UINT16_be(values=[0x0101]))
+        tag_service_name['.*/type'][0].set_values(value_type=UINT16_be(values=[0x0101]))
 
         tag_host_uniq = tag_node.get_clone('tag_host_uniq')
-        tag_host_uniq['.*/type'].set_values(value_type=UINT16_be(values=[0x0103]))
+        tag_host_uniq['.*/type'][0].set_values(value_type=UINT16_be(values=[0x0103]))
 
         tag_host_uniq_pads = tag_host_uniq.get_clone()
 
         tag_ac_name = tag_node.get_clone('tag_ac_name') # Access Concentrator Name
-        tag_ac_name['.*/type'].set_values(value_type=UINT16_be(values=[0x0102]))
+        tag_ac_name['.*/type'][0].set_values(value_type=UINT16_be(values=[0x0102]))
 
         tag_sn_error = tag_node.get_clone('tag_sn_error')  # Service Name Error
-        tag_sn_error['.*/type'].set_values(value_type=UINT16_be(values=[0x0202]))
+        tag_sn_error['.*/type'][0].set_values(value_type=UINT16_be(values=[0x0202]))
 
         tag_service_name_pads = tag_service_name.get_clone()
         tag_node_pads = tag_node.get_clone()
@@ -258,21 +258,21 @@ class PPPOE_DataModel(DataModel):
         # pppoe_msg.make_random(recursive=True)
 
         padi = pppoe_msg.get_clone('padi')
-        padi['.*/mac_dst'].set_values(value_type=String(values=[u'\xff\xff\xff\xff\xff\xff']))
-        padi['.*/code'].set_values(value_type=UINT8(values=[0x9]))
+        padi['.*/mac_dst'][0].set_values(value_type=String(values=[u'\xff\xff\xff\xff\xff\xff']))
+        padi['.*/code'][0].set_values(value_type=UINT8(values=[0x9]))
 
         pado = pppoe_msg.get_clone('pado')
-        pado['.*/code'].set_values(value_type=UINT8(values=[0x7]))
-        # pado['.*/code'].clear_attr(MH.Attr.Mutable)
+        pado['.*/code'][0].set_values(value_type=UINT8(values=[0x7]))
+        # pado['.*/code'][0].clear_attr(MH.Attr.Mutable)
 
         padr = pppoe_msg.get_clone('padr')
-        padr['.*/code'].set_values(value_type=UINT8(values=[0x19]))
+        padr['.*/code'][0].set_values(value_type=UINT8(values=[0x19]))
 
         pads = pppoe_msg.get_clone('pads')
-        pads['.*/code'].set_values(value_type=UINT8(values=[0x65]))
+        pads['.*/code'][0].set_values(value_type=UINT8(values=[0x65]))
 
         padt = pppoe_msg.get_clone('padt')
-        padt['.*/code'].set_values(value_type=UINT8(values=[0xa7]))
+        padt['.*/code'][0].set_values(value_type=UINT8(values=[0xa7]))
 
         self.register(pppoe_msg, padi, pado, padr, pads, padt, tag_host_uniq)
 

@@ -6407,11 +6407,14 @@ class Node(object):
     def __getitem__(self, key):
         # self._get_value()
         if isinstance(key, str):
-            return self.get_first_node_by_path(key)
+            node_list = list(self.iter_nodes_by_path(key))
+            return node_list if node_list else None
         elif isinstance(key, NodeInternalsCriteria):
-            return self.get_reachable_nodes(internals_criteria=key)
+            node_list = self.get_reachable_nodes(internals_criteria=key)
+            return node_list if node_list else None
         elif isinstance(key, NodeSemanticsCriteria):
-            return self.get_reachable_nodes(semantics_criteria=key)
+            node_list = self.get_reachable_nodes(semantics_criteria=key)
+            return node_list if node_list else None
         else:
             raise ValueError
 

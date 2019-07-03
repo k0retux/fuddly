@@ -1514,9 +1514,8 @@ class d_add_data(Disruptor):
         if self.path:
             nt_node_path = self.path[:self.path.rfind('/')]
             try:
-                nt_node = prev_content[nt_node_path]
-                pivot = prev_content[self.path]
-                print(nt_node_path, self.path)
+                nt_node = prev_content[nt_node_path][0]
+                pivot = prev_content[self.path][0]
             except:
                 prev_data.add_info('An error occurred while handling @path')
                 return prev_data

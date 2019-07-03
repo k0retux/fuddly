@@ -557,6 +557,10 @@ def COPY_VALUE(path, depth=None, vt=None,
                 base_node = node
 
             tg_node = base_node[self.path]
+            if tg_node is None:
+                raise ValueError('incorrect path: {}'.format(self.path))
+            else:
+                tg_node = tg_node[0]
 
             if tg_node.is_nonterm():
                 n = Node('cts', base_node=tg_node, ignore_frozen_state=False)

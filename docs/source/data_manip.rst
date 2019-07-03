@@ -353,10 +353,12 @@ following operation are possible on a node:
 As a ``key``, you can provide:
 
 - A *path regexp* (where the node on which the method is called is considered as the root) to the
-  node you want to reach. If multiple nodes match the path regexp, the first one will be returned
-  (or ``None`` if the path match nothing). It is equivalent to calling
-  :meth:`framework.node.Node.get_first_node_by_path` on the node and providing the parameter
-  ``path_regexp`` with your path.
+  nodes you want to reach. A list of the nodes will be returned for the reading operation
+  (or ``None`` if the path match nothing), and
+  for the writing operation all the matching nodes will get the new value.
+  The reading operation is equivalent to calling
+  :meth:`framework.node.Node.iter_nodes_by_path` on the node and providing the parameter
+  ``path_regexp`` with your path (except the method will return a python generator instead of a list).
 
   The following python code snippet illustrate the access to the node named ``len`` to
   retrieve its byte string representation:
@@ -364,7 +366,7 @@ As a ``key``, you can provide:
    .. code-block:: python
       :linenos:
 
-      rnode['ex/data_group/len'].to_bytes()
+      rnode['ex/data_group/len'][0].to_bytes()
 
       # same as:
       rnode.get_first_node_by_path('ex/data_group/len').to_bytes()
@@ -469,9 +471,9 @@ For instance the following code snippet will add a new node after the node ``dat
 .. code-block:: python
    :linenos:
 
-   data2_node = ex_node['ex/data_group/data2']
-   ex_node['ex/data_group$'].add(Node('my_node', values=['New node added']),
-                                 after=data2_node)
+   data2_node = ex_node['ex/data_group/data2'][0]
+   ex_node['ex/data_group$'][0].add(Node('my_node', values=['New node added']),
+                                    after=data2_node)
 
 Thus, if ``ex_node`` before the modification is::
 
@@ -621,17 +623,17 @@ In what follows, we illustrate some node configuration change based on our data 
     rnode.freeze()   # We consider there is at least 2 'data2' nodes
 
     # We change the configuration of the second 'data2' node
-    rnode['ex/data_group/data2:2'].set_current_conf('alt1', ignore_entanglement=True)
-    rnode['ex/data_group/data2:2'].unfreeze()
+    rnode['ex/data_group/data2:2'][0].set_current_conf('alt1', ignore_entanglement=True)
+    rnode['ex/data_group/data2:2'][0].unfreeze()
 
     rnode.show()
 
     # We change back 'data2:2' to the default configuration
-    rnode['ex/data_group/data2:2'].set_current_conf('MAIN', ignore_entanglement=True)
+    rnode['ex/data_group/data2:2'][0].set_current_conf('MAIN', ignore_entanglement=True)
     # We change the configuration of the first 'data2' node
-    rnode['ex/data_group/data2'].set_current_conf('alt1', ignore_entanglement=True)
+    rnode['ex/data_group/data2'][0].set_current_conf('alt1', ignore_entanglement=True)
     # This time we unfreeze directly the parent node
-    rnode['ex/data_group$'].unfreeze(dont_change_state=True)
+    rnode['ex/data_group$'][0].unfreeze(dont_change_state=True)
 
     rnode.show()
 

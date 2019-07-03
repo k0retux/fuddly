@@ -19,7 +19,7 @@ and let ``fuddly`` recalculate every constraints for you.
     abszip.set_current_conf('ABS', recursive=True)
     abszip.absorb(zip_buff, constraints=AbsNoCsts(size=True,struct=True)
 
-    abszip['ZIP/file_list/file:2/data'].absorb(b'TEST', constraints=AbsNoCsts())
+    abszip['ZIP/file_list/file:2/data'][0].absorb(b'TEST', constraints=AbsNoCsts())
     abszip.unfreeze(only_generators=True)
     abszip.get_value()
 

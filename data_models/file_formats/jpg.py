@@ -50,8 +50,8 @@ class JPG_DataModel(DataModel):
     name = 'jpg'
 
     def _atom_absorption_additional_actions(self, atom):
-        x = atom['.*/SOF_hdr/X'].get_raw_value()
-        y = atom['.*/SOF_hdr/Y'].get_raw_value()
+        x = atom['.*/SOF_hdr/X'][0].get_raw_value()
+        y = atom['.*/SOF_hdr/Y'][0].get_raw_value()
         d_priv = {'height':y, 'width':x}
         atom.set_private(d_priv)
         msg = "add private data: size [x:{:d}, y:{:d}]".format(x, y)
