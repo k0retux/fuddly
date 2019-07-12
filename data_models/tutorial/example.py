@@ -33,6 +33,9 @@ from framework.value_types import *
 from framework.basic_primitives import *
 
 class Example_DataModel(DataModel):
+    """
+    Obsolete DM, used only in non-regression test suite
+    """
 
     def build_data_model(self):
 
@@ -329,8 +332,7 @@ class Example_DataModel(DataModel):
                 ])
 
 
-        self.register(node_ex1, tux, typed_node, e_nonterm, e_simple,
-                            val1_middle, middle)
+        self.register(node_ex1, tux, typed_node, e_nonterm, e_simple, val1_middle, middle)
 
 
 

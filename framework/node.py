@@ -6400,7 +6400,7 @@ class Node(object):
 
     def __str__(self):
         # NEVER return something with self._tobytes() as side
-        # effects are not welcomed
+        # effects are not welcome
         return repr(self)
 
 

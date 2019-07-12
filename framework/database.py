@@ -533,11 +533,11 @@ class Database(object):
             "ORDER BY STEP_ID ASC;".format(data_id=data_id)
         )
 
-        if not steps:
-            print(colorize("*** BUG with data ID '{:d}' (data should always have at least 1 step) "
-                           "***".format(data_id),
-                           rgb=Color.ERROR))
-            return
+        # if not steps:
+        #     print(colorize("*** BUG with data ID '{:d}' (data should always have at least 1 step) "
+        #                    "***".format(data_id),
+        #                    rgb=Color.ERROR))
+        #     return
 
         if fbk_src:
             feedback = self.execute_sql_statement(
@@ -661,37 +661,38 @@ class Database(object):
             return msg
 
 
-        msg = ''
-        first_pass = True
-        prefix_sz = 7
-        name_sep_sz = len(data_type)
-        for _, _, dmk_type, _, _, _, _ in steps:
-            dmk_type_sz = 0 if dmk_type is None else len(dmk_type)
-            name_sep_sz = dmk_type_sz if dmk_type_sz > name_sep_sz else name_sep_sz
-        sid = 1
-        for _, step_id, dmk_type, dmk_name, id_src, ui, info in steps:
-            if first_pass:
-                if dmk_type is None:
-                    assert (id_src is not None)
-                    continue
-                else:
-                    first_pass = False
-                msg += colorize("\n Step #{:d}:".format(sid), rgb=Color.FMKINFOGROUP)
-                if dmk_type != data_type:
-                    msg += colorize("\n  |_ Generator: ", rgb=Color.FMKINFO)
-                    msg += colorize(str(data_type), rgb=Color.FMKSUBINFO)
-                    sid += 1
+        if steps:
+            msg = ''
+            first_pass = True
+            prefix_sz = 7
+            name_sep_sz = len(data_type)
+            for _, _, dmk_type, _, _, _, _ in steps:
+                dmk_type_sz = 0 if dmk_type is None else len(dmk_type)
+                name_sep_sz = dmk_type_sz if dmk_type_sz > name_sep_sz else name_sep_sz
+            sid = 1
+            for _, step_id, dmk_type, dmk_name, id_src, ui, info in steps:
+                if first_pass:
+                    if dmk_type is None:
+                        assert (id_src is not None)
+                        continue
+                    else:
+                        first_pass = False
                     msg += colorize("\n Step #{:d}:".format(sid), rgb=Color.FMKINFOGROUP)
-                    msg += handle_dmaker('Disruptor', info, dmk_type, dmk_name, len(data_type), ui)
+                    if dmk_type != data_type:
+                        msg += colorize("\n  |_ Generator: ", rgb=Color.FMKINFO)
+                        msg += colorize(str(data_type), rgb=Color.FMKSUBINFO)
+                        sid += 1
+                        msg += colorize("\n Step #{:d}:".format(sid), rgb=Color.FMKINFOGROUP)
+                        msg += handle_dmaker('Disruptor', info, dmk_type, dmk_name, len(data_type), ui)
+                    else:
+                        msg += handle_dmaker('Generator', info, dmk_type, dmk_name, name_sep_sz, ui,
+                                             id_src=id_src)
                 else:
-                    msg += handle_dmaker('Generator', info, dmk_type, dmk_name, name_sep_sz, ui,
-                                         id_src=id_src)
-            else:
-                msg += colorize("\n Step #{:d}:".format(sid), rgb=Color.FMKINFOGROUP)
-                msg += handle_dmaker('Disruptor', info, dmk_type, dmk_name, name_sep_sz, ui)
-            sid += 1
-        msg += colorize('\n' + line_pattern, rgb=Color.NEWLOGENTRY)
-        prt(msg)
+                    msg += colorize("\n Step #{:d}:".format(sid), rgb=Color.FMKINFOGROUP)
+                    msg += handle_dmaker('Disruptor', info, dmk_type, dmk_name, name_sep_sz, ui)
+                sid += 1
+            msg += colorize('\n' + line_pattern, rgb=Color.NEWLOGENTRY)
+            prt(msg)
 
         msg = ''
         for idx, info in enumerate(analysis_records, start=1):

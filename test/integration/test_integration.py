@@ -69,11 +69,11 @@ class TestBasics(unittest.TestCase):
     def setUp(self):
         pass
 
-    def test_alt_conf(self):
+    def test_node_alt_conf(self):
 
         print('\n### TEST 8: set_current_conf()')
 
-        node_ex1 = dm.get_atom('EX1')
+        node_ex1 = fmk.dm.get_atom('EX1')
 
         node_ex1.show()
 
@@ -138,7 +138,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n***** test 8.2.0: subparts:')
 
-        node_ex1 = dm.get_atom('EX1')
+        node_ex1 = fmk.dm.get_atom('EX1')
 
         res2 = True
 
@@ -167,7 +167,7 @@ class TestBasics(unittest.TestCase):
             res2 = False
         print(msg)
 
-        node_ex1 = dm.get_atom('EX1')
+        node_ex1 = fmk.dm.get_atom('EX1')
 
         node_ex1.set_current_conf('ALT', root_regexp='(TC)|(TC_.*)/KV')
         node_ex1.set_current_conf('ALT', root_regexp='TUX$')
@@ -193,7 +193,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 8.3:')
 
-        node_ex1 = dm.get_atom('EX1')
+        node_ex1 = fmk.dm.get_atom('EX1')
 
         res3 = True
         l = sorted(node_ex1.get_nodes_names(conf='ALT'))
@@ -220,7 +220,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 8.5:')
 
-        node_ex1 = dm.get_atom('EX1')
+        node_ex1 = fmk.dm.get_atom('EX1')
 
         res5 = True
         node_ex1.unfreeze_all()
@@ -239,7 +239,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 8.6:')
 
-        node_ex1 = dm.get_atom('EX1')
+        node_ex1 = fmk.dm.get_atom('EX1')
 
         # attr3 = Elt_Attributes(defaults=False)
         # attr3.conform_to_nonterm_node()
@@ -266,34 +266,36 @@ class TestBasics(unittest.TestCase):
         self.assertTrue(res6)
 
 
-    def test_01(self):
+    def test_node_paths(self):
 
-        # print('\n### TEST 0: generate one EX1 ###')
-        #
-        node_ex1 = dm.get_atom('EX1')
+        print('\n### TEST 12: get_all_path() test')
+
+        print('\n*** test 12.1:')
+
+        node_ex1 = fmk.dm.get_atom('EX1')
+        for i in node_ex1.iter_paths(only_paths=True):
+            print(i)
+
+        print('\n******\n')
+
+        node_ex1.get_value()
+        for i in node_ex1.iter_paths(only_paths=True):
+            print(i)
+
+        print('\n******\n')
+
+        node_ex1.unfreeze_all()
+        node_ex1.get_value()
+        for i in node_ex1.iter_paths(only_paths=True):
+            print(i)
+
+
+        node_ex1 = fmk.dm.get_atom('EX1')
 
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
         l = node_ex1.get_value()
         hk = list(node_ex1.iter_paths(only_paths=True))
-        # print(l)
-        #
-        # print('\n\n ####### \n\n')
-        #
-        # print(l[0])
-        # print(b' @ ' + b''.join(flatten(l[1])) + b' @ ')
-        # print(l[1])
-        #
-        # print('\n\n ####### \n\n')
-        #
-        #
-        # res1 = b' @ ' + b''.join(flatten(l[1])) + b' @ ' == l[0]
-        # print('*** Is the concatenation (first list element) correct? %r' % res1)
-        #
-        # res2 = len(b''.join(flatten(l[1]))) == int(l[2])
-        # print('*** Is length of the concatenation correct? %r' % res2)
-        #
-        # results['test0'] = res1 and res2
 
         print('\n### TEST 1: cross check self.node.get_all_paths().keys() and get_nodes_names() ###')
 
@@ -307,7 +309,7 @@ class TestBasics(unittest.TestCase):
         for k in l:
             print(k)
 
-        res1 = len(hk) == len(l)
+        self.assertEqual(len(hk), len(l))
 
         res2 = False
         for i in range(len(hk)):
@@ -317,7 +319,7 @@ class TestBasics(unittest.TestCase):
         else:
             res2 = True
 
-        results['test1'] = res1 and res2
+        self.assertTrue(res2)
 
         print('\n### TEST 2: generate two different EX1 ###')
 
@@ -329,7 +331,7 @@ class TestBasics(unittest.TestCase):
         print(node_ex1.get_value())
         val2 = node_ex1.to_bytes()
 
-        results['test2'] = val1 != val2
+        self.assertTrue(val1 != val2)
 
         print('\n### TEST 3: generate 4 identical TUX (with last one flatten) ###')
 
@@ -344,8 +346,7 @@ class TestBasics(unittest.TestCase):
 
         print(repr(tux.to_bytes()))
 
-        res = val1 == val2 and val1 == val3
-        results['test3'] = res
+        self.assertTrue(val1 == val2 and val1 == val3)
 
         print('\n### TEST 4: generate 2 different flatten TUX ###')
 
@@ -356,14 +357,16 @@ class TestBasics(unittest.TestCase):
         val2 = repr(tux.to_bytes())
         print(val2)
 
-        res = val1 != val2
-        results['test4'] = res
+        self.assertTrue(val1 != val2)
 
-        print('\n### TEST 5: test get_first_node_by_path() ###')
+
+    def test_node_search_by_path_01(self):
+
+        print('\n### Test get_first_node_by_path() ###')
 
         tux2 = dm.get_atom('TUX')
 
-        print('\n*** test 5.2: call 3 times get_first_node_by_path()')
+        print('\n*** 1: call 3 times get_first_node_by_path()')
 
         print('name: %s, result: %s' % ('TUX', tux2.get_first_node_by_path('TUX').get_path_from(tux2)))
         print('name: %s, result: %s' % ('TX', tux2.get_first_node_by_path('TX').get_path_from(tux2)))
@@ -371,20 +374,20 @@ class TestBasics(unittest.TestCase):
         print('name: %s, result: %s' % (
         'MARK3', tux2.get_first_node_by_path('MARK3', conf='ALT').get_path_from(tux2, conf='ALT')))
 
-        print('\n*** test 5.3: call get_first_node_by_path() with real regexp')
+        print('\n*** 2: call get_first_node_by_path() with real regexp')
 
         print('--> ' + tux2.get_first_node_by_path('TX.*KU').get_path_from(tux2))
 
-        print('\n*** test 5.4: call get_reachable_nodes()')
+        print('\n*** 3: call get_reachable_nodes()')
 
-        node_ex1 = dm.get_atom('EX1')
+        node_ex1 = fmk.dm.get_atom('EX1')
         l = node_ex1.get_reachable_nodes(path_regexp='TUX')
         for i in l:
             print(i.get_path_from(node_ex1))
 
         print('\n')
 
-        node_ex1 = dm.get_atom('EX1')
+        node_ex1 = fmk.dm.get_atom('EX1')
         l = node_ex1.get_reachable_nodes(path_regexp='T[XC]/KU')
         for i in l:
             print(i.get_path_from(node_ex1))
@@ -394,11 +397,14 @@ class TestBasics(unittest.TestCase):
         else:
             res2 = False
 
-        print(res2)
+        self.assertTrue(res2)
 
-        results['test5'] = res2
+    def test_node_search_misc_01(self):
 
         print('\n### TEST 6: get_reachable_nodes()')
+
+        node_ex1 = fmk.dm.get_atom('EX1')
+        tux2 = dm.get_atom('TUX')
 
         for e in sorted(tux2.get_nodes_names()):
             print(e)
@@ -414,7 +420,7 @@ class TestBasics(unittest.TestCase):
 
         l2 = tux2.get_reachable_nodes(internals_criteria=c2)
 
-        res61 = len(l2) > len(l1)
+        self.assertTrue(len(l2) > len(l1))
 
         print('len(l1): %d, len(l2): %d' % (len(l1), len(l2)))
 
@@ -428,6 +434,8 @@ class TestBasics(unittest.TestCase):
                 res62 = True
                 break
 
+        self.assertTrue(res62)
+
         # l = tux2.get_reachable_nodes(node_kinds=[NodeInternals_NonTerm], conf='ALT')
         # for k in l:
         #     print(k.get_path_from(tux2, conf='ALT'))
@@ -440,13 +448,15 @@ class TestBasics(unittest.TestCase):
         print("*** %d Func Node found" % len(l3))
         print(l3)
 
-        res63 = len(l3) == 2
+        self.assertTrue(len(l3) == 2)
 
-        print(res61, res62, res63)
 
-        results['test6'] = res61 and res62 and res63
+    def test_node_search_and_update(self):
 
         print('\n### TEST 7: get_reachable_nodes() and change_subnodes_csts()')
+
+        node_ex1 = fmk.dm.get_atom('EX1')
+        tux2 = dm.get_atom('TUX')
 
         print('*** junk test:')
 
@@ -488,6 +498,8 @@ class TestBasics(unittest.TestCase):
             if val != 0:
                 res1 = False
 
+        self.assertTrue(res1)
+
         print('> l2:')
 
         l2 = tux2.get_reachable_nodes(internals_criteria=crit)
@@ -496,13 +508,12 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 7.2:')
 
-        res2 = len(l2) == len(l1)
-        print('len(l2) == len(l1)? %r' % res2)
+        self.assertEqual(len(l2), len(l1))
 
         print('\n*** test 7.3:')
 
         tux = dm.get_atom('TUX')
-        l1 = tux.get_reachable_nodes(internals_criteria=crit)
+        l1 = tux.get_reachable_nodes(internals_criteria=crit, respect_order=True)
         c_l1 = []
         for e in l1:
             order, attrs = e.cc.get_subnodes_csts_copy()
@@ -515,7 +526,7 @@ class TestBasics(unittest.TestCase):
 
             e.set_subnodes_full_format(order, attrs)
 
-        l2 = tux.get_reachable_nodes(internals_criteria=crit)
+        l2 = tux.get_reachable_nodes(internals_criteria=crit, respect_order=True)
         c_l2 = []
         for e in l2:
             orig = e.cc.get_subnodes_csts_copy()
@@ -526,69 +537,18 @@ class TestBasics(unittest.TestCase):
             print('\n')
             c_l2.append(csts2)
 
-        zip_l = zip(c_l1, c_l2)
-
-        test = 1
-        for zl1, zl2 in zip_l:
-
-            for ze1, ze2 in zip(zl1, zl2):
-                test = (ze1 > ze2) - (ze1 < ze2)
-                if test != 0:
-                    print(ze1)
-                    print('########')
-                    print(ze2)
-                    print('########')
-                    break
-
-        if test != 0:
-            res3 = False
-        else:
-            res3 = True
+        self.assertEqual((c_l1 > c_l2) - (c_l1 < c_l2), 0)
 
 
-            #    val = cmp(c_l1, c_l2)
-        val = (c_l1 > c_l2) - (c_l1 < c_l2)
-        if val != 0:
-            res3 = False
-        else:
-            res3 = True
-
-        print(res1, res2, res3)
-
-        results['test7'] = res1 and res2 and res3
-
-        #test8 converted
-
-        print('\n### TEST 9: test the constraint type: =+(w1,w2,...)\n' \
-              '--> can be False in really rare case')
+    def test_node_alternate_conf(self):
 
         nonascii_test_str = u'\u00c2'.encode(internal_repr_codec)
-        node_ex1 = dm.get_atom('EX1')
-
-        res = True
-        for i in range(20):
-            node_ex1.unfreeze_all()
-            msg = node_ex1.get_first_node_by_path('TUX$').to_bytes(conf='ALT', recursive=True)
-            if b' ~(..)~ TUX ~(..)~ ' not in msg:
-                res = False
-                break
-                # print(msg)
-
-        results['test9'] = res
-
-        print('\n### TEST 10: test fuzzing primitives')
-
-        print('\n*** test 10.1: fuzz_data_tree()')
-
-        node_ex1 = dm.get_atom('EX1')
-        fuzz_data_tree(node_ex1)
-        node_ex1.get_value()
 
         print('\n### TEST 11: test terminal Node alternate conf')
 
         print('\n*** test 11.1: value type Node')
 
-        node_ex1 = dm.get_atom('EX1')
+        node_ex1 = fmk.dm.get_atom('EX1')
 
         res1 = True
         msg = node_ex1.to_bytes(conf='ALT')
@@ -608,6 +568,8 @@ class TestBasics(unittest.TestCase):
             res1 = False
         print(msg)
 
+        self.assertTrue(res1)
+
         print('\n*****\n')
 
         crit = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
@@ -620,14 +582,11 @@ class TestBasics(unittest.TestCase):
         for e in l:
             print(e.get_path_from(node_ex1))
 
-        if len(l) == 10:
-            res2 = True
-        else:
-            res2 = False
+        self.assertEqual(len(l), 10)
 
         print('\n*** test 11.2: func type Node')
 
-        node_ex1 = dm.get_atom('EX1')
+        node_ex1 = fmk.dm.get_atom('EX1')
 
         res3 = True
         msg = node_ex1.to_bytes(conf='ALT')
@@ -647,37 +606,40 @@ class TestBasics(unittest.TestCase):
             res3 = False
         print(msg)
 
-        print(res1, res2, res3)
-        results['test11'] = res1 and res2 and res3
+        self.assertTrue(res3)
 
-        print('\n### TEST 12: get_all_path() test')
 
-        print('\n*** test 12.1:')
+    def test_fuzzing_primitives(self):
+        print('\n### TEST 10: test fuzzing primitives')
 
-        node_ex1 = dm.get_atom('EX1')
-        for i in node_ex1.iter_paths(only_paths=True):
-            print(i)
+        print('\n*** test 10.1: fuzz_data_tree()')
 
-        print('\n******\n')
+        node_ex1 = fmk.dm.get_atom('EX1')
+        node_ex1.show()
 
-        node_ex1.get_value()
-        for i in node_ex1.iter_paths(only_paths=True):
-            print(i)
+        fuzz_data_tree(node_ex1)
+        node_ex1.show()
 
-        print('\n******\n')
 
-        node_ex1.unfreeze_all()
-        node_ex1.get_value()
-        for i in node_ex1.iter_paths(only_paths=True):
-            print(i)
+    def test_node_nt_pick_section(self):
+        print('\n### TEST 9: test the constraint type: =+(w1,w2,...)\n' \
+              '--> can be False in really rare case')
 
-        print('\n### SUMMARY ###')
+        nonascii_test_str = u'\u00c2'.encode(internal_repr_codec)
+        node_ex1 = fmk.dm.get_atom('EX1')
 
-        for k, v in results.items():
-            print('is %s OK? %r' % (k, v))
+        res = True
+        for i in range(20):
+            node_ex1.unfreeze_all()
+            msg = node_ex1.get_first_node_by_path('TUX$').to_bytes(conf='ALT', recursive=True)
+            if b' ~(..)~ TUX ~(..)~ ' not in msg:
+                res = False
+                break
+                # print(msg)
 
-        for v in results.values():
-            self.assertTrue(v)
+        self.assertTrue(res)
+
+
 
 
 class TestMisc(unittest.TestCase):
@@ -2577,7 +2539,7 @@ class TestNodeFeatures(unittest.TestCase):
         self.assertEqual(result, raw)
 
 
-    def test_search_primitive_01(self):
+    def test_node_search_primitive_01(self):
 
         data = fmk.dm.get_external_atom(dm_name='mydf', data_id='exist_cond')
         data.freeze()
@@ -2610,7 +2572,7 @@ class TestNodeFeatures(unittest.TestCase):
         # corrupted_data.unfreeze(recursive=True, reevaluate_constraints=True)
         # corrupted_data.show()
 
-    def test_search_primitive_02(self):
+    def test_node_search_primitive_02(self):
 
         ex_node = fmk.dm.get_atom('ex')
         ex_node.show()
@@ -2638,7 +2600,7 @@ class TestNodeFeatures(unittest.TestCase):
         print(l)
 
 
-    def test_search_primitive_03(self):
+    def test_node_search_primitive_03(self):
         test_node = fmk.dm.get_atom('TestNode')
         test_node.show()
 
@@ -2660,7 +2622,7 @@ class TestNodeFeatures(unittest.TestCase):
         self.assertEqual(test_node['Unknown path'], None)
 
 
-    def test_performance(self):
+    def test_node_search_performance(self):
 
         ex_node = fmk.dm.get_atom('ex')
         ex_node.show()
