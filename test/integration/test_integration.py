@@ -28,13 +28,9 @@ import sys
 import unittest
 import ddt
 
-import ddt
-
 sys.path.append('.')
 
 from framework.value_types import *
-
-import data_models.tutorial.example as example
 
 from framework.fuzzing_primitives import *
 from framework.plumbing import *
@@ -44,13 +40,202 @@ from framework.encoders import *
 from test import ignore_data_model_specifics, run_long_tests, exit_on_import_error
 
 def setUpModule():
-    global fmk, dm, results
+    global fmk, dm, results, node_nterm, node_simple, node_typed
+
     fmk = FmkPlumbing(exit_on_error=exit_on_import_error, debug_mode=True)
     fmk.start()
-    fmk.run_project(name='tuto', dm_name=['mydf', 'example'])
-    dm = example.data_model
+    fmk.run_project(name='tuto', dm_name=['mydf'])
+    # dm = example.data_model
     results = collections.OrderedDict()
     fmk.prj.reset_knowledge()
+
+    ### Node graph: TVE ###
+
+    evt1 = Node('EVT1')
+    evt1.set_values(value_type=SINT16_be(values=[-4]))
+    evt1.set_fuzz_weight(10)
+
+    evt2 = Node('EVT2')
+    evt2.set_values(value_type=UINT16_le(min=50, max=2**16-1))
+    # evt2.set_values(value_type=UINT16_le())
+    evt2.set_fuzz_weight(9)
+
+    sep1 = Node('sep1', values=["+"])
+    sep2 = Node('sep2', values=["*"])
+
+    sub1 = Node('SUB1')
+    sub1.set_subnodes_with_csts([
+            1, ['u>', [sep1, 3], [evt1, 2], [sep1, 3]]
+            ])
+
+    sp = Node('S', values=[' '])
+
+    ssub = Node('SSUB')
+    ssub.set_subnodes_basic([sp, evt2, sp])
+
+    sub2 = Node('SUB2')
+    sub2.set_subnodes_with_csts([
+            1, ['u>', [sep2, 3], [ssub, 1], [sep2, 3]]
+            ])
+
+    sep = Node('sep', values=['   -=||=-   '])
+    prefix = Node('Pre', values=['[1] ', '[2] ', '[3] ', '[4] '])
+    prefix.make_determinist()
+
+    te3 = Node('EVT3')
+    te3.set_values(value_type=BitField(subfield_sizes=[4,4], endian=VT.LittleEndian,
+                                       subfield_values=[[0x5, 0x6], [0xF, 0xC]]))
+    te3.set_fuzz_weight(8)
+
+    te4 = Node('EVT4')
+    te4.set_values(value_type=BitField(subfield_sizes=[4,4], endian=VT.LittleEndian,
+                                       subfield_val_extremums=[[4, 8], [3, 15]]))
+    te4.set_fuzz_weight(7)
+
+    te5 = Node('EVT5')
+    te5.set_values(value_type=INT_str(values=[9]))
+    te5.cc.set_specific_fuzzy_values([666])
+    te5.set_fuzz_weight(6)
+
+    te6 = Node('EVT6')
+    vt = BitField(subfield_limits=[2,6,8,10], subfield_values=[[4,2,1],[2,15,16,3],[2,3,0],[1]],
+                  padding=0, lsb_padding=True, endian=VT.LittleEndian)
+    te6.set_values(value_type=vt)
+    te6.set_fuzz_weight(5)
+
+    te7 = Node('EVT7')
+    vt = BitField(subfield_sizes=[4,4,4],
+                  subfield_values=[[4,2,1], None, [2,3,0]],
+                  subfield_val_extremums=[None, [3, 15], None],
+                  padding=0, lsb_padding=False, endian=VT.BigEndian)
+    te7.set_values(value_type=vt)
+    te7.set_fuzz_weight(4)
+
+    suffix = Node('suffix', subnodes=[sep, te3, sep, te4, sep, te5, sep, te6, sep, te7])
+
+    typed_node = Node('TVE', subnodes=[prefix, sub1, sep, sub2, suffix])
+
+    ### Node Graph: Simple ###
+
+    tval1_bottom = Node('TV1_bottom')
+    vt = UINT16_be(values=[1,2,3,4,5,6])
+
+    tval1_bottom.set_values(value_type=vt)
+    tval1_bottom.make_determinist()
+
+    sep_bottom = Node('sep_bottom', values=[' .. '])
+    sep_bottom_alt = Node('sep_bottom_alt', values=[' ;; '])
+
+    tval2_bottom = Node('TV2_bottom')
+    vt = UINT16_be(values=[0x42,0x43,0x44])
+    tval2_bottom.set_values(value_type=vt)
+
+    alt_tag = Node('AltTag', values=[' |AltTag| ', ' +AltTag+ '])
+    alt_tag_cpy = alt_tag.get_clone('AltTag_cpy')
+
+    bottom = Node('Bottom_NT')
+    bottom.set_subnodes_with_csts([
+            1, ['u>', [sep_bottom, 1], [tval1_bottom, 1], [sep_bottom, 1], [tval2_bottom, 1]]
+            ])
+
+    val1_bottom2 = Node('V1_bottom2', values=['=BOTTOM_2=', '**BOTTOM_2**', '~~BOTTOM_2~~'])
+    val1_bottom2.add_conf('ALT')
+    val1_bottom2.set_values(['=ALT_BOTTOM_2=', '**ALT_BOTTOM_2**', '~~ALT_BOTTOM_2~~', '__ALT_BOTTOM_2__'], conf='ALT')
+    val1_bottom2.add_conf('ALT_2')
+    val1_bottom2.set_values(['=2ALT2_BOTTOM_2=', '**2ALT2_BOTTOM_2**', '~~2ALT2_BOTTOM_2~~'], conf='ALT_2')
+    val1_bottom2.set_fuzz_weight(2)
+
+    val1_bottom2_cpy = val1_bottom2.get_clone('V1_bottom2_cpy')
+
+    bottom2 = Node('Bottom_2_NT')
+    bottom2.set_subnodes_with_csts([
+            5, ['u>', [sep_bottom, 1], [val1_bottom2, 1]],
+            1, ['u>', [sep_bottom_alt, 1], [val1_bottom2_cpy, 2], [sep_bottom_alt, 1]]
+            ])
+    bottom2.add_conf('ALT')
+    bottom2.set_subnodes_with_csts([
+            5, ['u>', [alt_tag, 1], [val1_bottom2, 1], [alt_tag, 1]],
+            1, ['u>', [alt_tag_cpy, 2], [val1_bottom2_cpy, 2], [alt_tag_cpy, 2]]
+            ], conf='ALT')
+
+    tval2_bottom3 = Node('TV2_bottom3')
+    vt = UINT32_be(values=[0xF, 0x7])
+    tval2_bottom3.set_values(value_type=vt)
+    bottom3 = Node('Bottom_3_NT')
+    bottom3.set_subnodes_with_csts([
+            1, ['u>', [sep_bottom, 1], [tval2_bottom3, 1]]
+            ])
+
+    val1_middle = Node('V1_middle', values=['=MIDDLE=', '**MIDDLE**', '~~MIDDLE~~'])
+    sep_middle = Node('sep_middle', values=[' :: '])
+    alt_tag2 = Node('AltTag-Mid', values=[' ||AltTag-Mid|| ', ' ++AltTag-Mid++ '])
+
+    val1_middle_cpy1 = val1_middle.get_clone('V1_middle_cpy1')
+    val1_middle_cpy2 = val1_middle.get_clone('V1_middle_cpy2')
+
+    middle = Node('Middle_NT')
+    middle.set_subnodes_with_csts([
+            5, ['u>', [val1_middle, 1], [sep_middle, 1], [bottom, 1]],
+            3, ['u>', [val1_middle_cpy1, 2], [sep_middle, 1], [bottom2, 1]],
+            1, ['u>', [val1_middle_cpy2, 3], [sep_middle, 1], [bottom3, 1]]
+            ])
+    middle.add_conf('ALT')
+    middle.set_subnodes_with_csts([
+            5, ['u>', [alt_tag2, 1], [val1_middle, 1], [sep_middle, 1], [bottom, 1], [alt_tag2, 1]]
+            ], conf='ALT')
+
+    val1_top = Node('V1_top', values=['=TOP=', '**TOP**', '~~TOP~~'])
+    sep_top = Node('sep_top', values=[' -=|#|=- ', ' -=|@|=- '])
+
+    prefix1 = Node('prefix1', values=[" ('_') ", " (-_-) ", " (o_o) "])
+    prefix2 = Node('prefix2', values=[" |X| ", " |Y| ", " |Z| "])
+
+    e_simple = Node('Simple')
+    e_simple.set_subnodes_with_csts([
+            1, ['u>', [prefix1, 1], [prefix2, 1], [sep_top, 1], [val1_top, 1], [sep_top, 1], [middle, 1]]
+            ])
+
+    ### Node Graph: NonTerm ###
+
+    e = Node('TV2')
+    vt = UINT16_be(values=[1,2,3,4,5,6])
+    e.set_values(value_type=vt)
+    sep3 = Node('sep3', values=[' # '])
+    nt = Node('Bottom_NT')
+    nt.set_subnodes_with_csts([
+            1, ['u>', [e, 1], [sep3, 1], [e, 1]]
+            ])
+
+    sep = Node('sep', values=[' # '])
+    sep2 = Node('sep2', values=[' -|#|- '])
+
+    e_val1 = Node('V1', values=['A', 'B', 'C'])
+    e_val1_cpy = e_val1.get_clone('V1_cpy')
+    e_typedval1 = Node('TV1', value_type=UINT16_be(values=[1,2,3,4,5,6]))
+    e_val2 = Node('V2', values=['X', 'Y', 'Z'])
+    e_val3 = Node('V3', values=['<', '>'])
+
+    e_val_random = Node('Rnd', values=['RANDOM'])
+    e_val_random2 = Node('Rnd2', values=['RANDOM'])
+
+    e_nonterm = Node('NonTerm')
+    e_nonterm.set_subnodes_with_csts([
+            100, ['u>', [e_val1, 1, 6], [sep, 1], [e_typedval1, 1, 6],
+                  [sep2, 1],
+                  'u=+(2,3,3)', [e_val1_cpy, 1], [e_val2, 1, 3], [e_val3, 1],
+                  'u>', [sep2, 1],
+                  'u=..', [e_val1, 1, 6], [sep, 1], [e_typedval1, 1, 6]],
+            50, ['u>', [e_val_random, 0, 1], [sep, 1], [nt, 1]],
+            90, ['u>', [e_val_random2, 3]]
+            ])
+
+
+    node_simple = e_simple
+    node_simple.set_env(Env())
+    node_nterm = e_nonterm
+    node_nterm.set_env(Env())
+    node_typed = typed_node
+    node_typed.set_env(Env())
 
 def tearDownModule():
     global fmk
@@ -63,8 +248,116 @@ def tearDownModule():
 class TestBasics(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.dm = example.data_model
-        cls.dm.load_data_model(fmk._name2dm)
+
+        tx = Node('TX')
+        tx_h = Node('h', values=['/TX'])
+
+        ku = Node('KU')
+        kv = Node('KV')
+
+        ku_h = Node('KU_h', values=[':KU:'])
+        kv_h = Node('KV_h', values=[':KV:'])
+
+        tux_subparts_1 = ['POWN', 'TAILS', 'WORLD1', 'LAND321']
+        tux_subparts_2 = ['YYYY', 'ZZZZ', 'XXXX']
+        ku.set_values(tux_subparts_1)
+        kv.set_values(tux_subparts_2)
+
+
+        tux_subparts_3 = ['[<]MARCHONS', '[<]TESTONS']
+        kv.add_conf('ALT')
+        kv.set_values(tux_subparts_3, conf='ALT')
+
+        tux_subparts_4 = [u'[\u00c2]PLIP', u'[\u00c2]GLOUP']
+        ku.add_conf('ALT')
+        ku.set_values(value_type=String(values=tux_subparts_4, codec='utf8'), conf='ALT')
+
+        idx = Node('IDX')
+        idx.set_values(value_type=SINT16_be(min=4,max=40))
+
+        tx.set_subnodes_basic([tx_h, idx, ku_h, ku, kv_h, kv])
+        tx_cpy = tx.get_clone('TX_cpy')
+
+        tc = Node('TC')
+        tc_h = Node('h', values=['/TC'])
+
+        ku2 = Node('KU', base_node=ku)
+        kv2 = Node('KV', base_node=kv)
+
+        ku_h2 = Node('KU_h', base_node=ku_h)
+        kv_h2 = Node('KV_h', base_node=kv_h)
+
+        tc.set_subnodes_basic([tc_h, ku_h2, ku2, kv_h2, kv2])
+
+
+        mark3 = Node('MARK3', values=[' ~(X)~ '])
+
+        tc.add_conf('ALT')
+        tc.set_subnodes_basic([mark3, tc_h, ku2, kv_h2], conf='ALT')
+        tc_cpy1= tc.get_clone('TC_cpy1')
+        tc_cpy2= tc.get_clone('TC_cpy2')
+
+        mark = Node('MARK', values=[' [#] '])
+
+        idx2 = Node('IDX2', base_node=idx)
+        tux = Node('TUX')
+        tux_h = Node('h', values=['TUX'])
+
+        # set 'mutable' attribute to False
+        tux_h.clear_attr(NodeInternals.Mutable)
+        tux_h_cpy = tux_h.get_clone('h_cpy')
+
+        tux.set_subnodes_with_csts([
+            100, ['u>', [tux_h, 1], [idx2, 1], [mark, 1],
+                  'u=+(1,2)', [tc_cpy2, 2], [tx_cpy, 1, 2],
+                  'u>', [mark, 1], [tx, 1], [tc_cpy1, 1],
+                  'u=..', [tux_h, 1], [idx2, 1]],
+
+            1, ['u>', [mark, 1],
+                's=..', [tux_h_cpy, 1, 3], [tc, 3],
+                'u>', [mark, 1], [tx, 1], [idx2, 1]],
+
+            15, ['u>', [mark, 1],
+                 'u=.', [tux_h_cpy, 1, 3], [tc, 3],
+                 'u=.', [mark, 1], [tx, 1], [idx2, 1]]
+            ])
+
+
+        mark2 = Node('MARK2', values=[' ~(..)~ '])
+
+        tux.add_conf('ALT')
+        tux.set_subnodes_with_csts(
+            [1, ['u>', [mark2, 1],
+                 'u=+(4000,1)', [tux_h, 1], [mark, 1],
+                 'u>', [mark2, 1],
+                 'u=.', [tux_h, 1], [tc, 10],
+                 'u>', [mark, 1], [tx, 1], [idx2, 1]]
+             ], conf='ALT')
+
+        concat = Node('CONCAT')
+        length = Node('LEN')
+        node_ex1 = Node('EX1')
+
+        fct = lambda x: b' @ ' + x + b' @ '
+        concat.set_func(fct, tux)
+
+        if sys.version_info[0] > 2:
+            fct = lambda x: b'___' + bytes(chr(x[1]), internal_repr_codec) + b'___'
+        else:
+            fct = lambda x: b'___' + x[1] + b'___'
+
+        concat.add_conf('ALT')
+        concat.set_func(fct, tux, conf='ALT')
+
+        fct2 = lambda x: len(x)
+        length.set_func(fct2, tux)
+
+        node_ex1.set_subnodes_basic([concat, tux, length])
+        node_ex1.set_env(Env())
+
+        cls.node_tux = tux.get_clone()
+        cls.node_ex1 = node_ex1
+
 
     def setUp(self):
         pass
@@ -73,7 +366,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n### TEST 8: set_current_conf()')
 
-        node_ex1 = fmk.dm.get_atom('EX1')
+        node_ex1 = self.node_ex1.get_clone()  # fmk.dm.get_atom('EX1')
 
         node_ex1.show()
 
@@ -138,7 +431,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n***** test 8.2.0: subparts:')
 
-        node_ex1 = fmk.dm.get_atom('EX1')
+        node_ex1 = self.node_ex1.get_clone()
 
         res2 = True
 
@@ -167,7 +460,7 @@ class TestBasics(unittest.TestCase):
             res2 = False
         print(msg)
 
-        node_ex1 = fmk.dm.get_atom('EX1')
+        node_ex1 = self.node_ex1.get_clone()
 
         node_ex1.set_current_conf('ALT', root_regexp='(TC)|(TC_.*)/KV')
         node_ex1.set_current_conf('ALT', root_regexp='TUX$')
@@ -193,7 +486,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 8.3:')
 
-        node_ex1 = fmk.dm.get_atom('EX1')
+        node_ex1 = self.node_ex1.get_clone()
 
         res3 = True
         l = sorted(node_ex1.get_nodes_names(conf='ALT'))
@@ -220,7 +513,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 8.5:')
 
-        node_ex1 = fmk.dm.get_atom('EX1')
+        node_ex1 = self.node_ex1.get_clone()
 
         res5 = True
         node_ex1.unfreeze_all()
@@ -239,7 +532,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 8.6:')
 
-        node_ex1 = fmk.dm.get_atom('EX1')
+        node_ex1 = self.node_ex1.get_clone()
 
         # attr3 = Elt_Attributes(defaults=False)
         # attr3.conform_to_nonterm_node()
@@ -252,7 +545,7 @@ class TestBasics(unittest.TestCase):
 
         node_ex1.unfreeze_all()
 
-        tux2 = dm.get_atom('TUX')
+        tux2 = self.node_tux.get_clone()
         l = tux2.get_reachable_nodes(internals_criteria=crit, owned_conf='ALT')
 
         for e in l:
@@ -272,7 +565,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 12.1:')
 
-        node_ex1 = fmk.dm.get_atom('EX1')
+        node_ex1 = self.node_ex1.get_clone()
         for i in node_ex1.iter_paths(only_paths=True):
             print(i)
 
@@ -290,7 +583,7 @@ class TestBasics(unittest.TestCase):
             print(i)
 
 
-        node_ex1 = fmk.dm.get_atom('EX1')
+        node_ex1 = self.node_ex1.get_clone()
 
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
@@ -335,7 +628,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n### TEST 3: generate 4 identical TUX (with last one flatten) ###')
 
-        tux = dm.get_atom('TUX')
+        tux = self.node_tux.get_clone()
 
         val1 = tux.get_value()
         print(val1)
@@ -364,7 +657,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n### Test get_first_node_by_path() ###')
 
-        tux2 = dm.get_atom('TUX')
+        tux2 = self.node_tux.get_clone()
 
         print('\n*** 1: call 3 times get_first_node_by_path()')
 
@@ -380,14 +673,14 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** 3: call get_reachable_nodes()')
 
-        node_ex1 = fmk.dm.get_atom('EX1')
+        node_ex1 = self.node_ex1.get_clone()
         l = node_ex1.get_reachable_nodes(path_regexp='TUX')
         for i in l:
             print(i.get_path_from(node_ex1))
 
         print('\n')
 
-        node_ex1 = fmk.dm.get_atom('EX1')
+        node_ex1 = self.node_ex1.get_clone()
         l = node_ex1.get_reachable_nodes(path_regexp='T[XC]/KU')
         for i in l:
             print(i.get_path_from(node_ex1))
@@ -403,8 +696,8 @@ class TestBasics(unittest.TestCase):
 
         print('\n### TEST 6: get_reachable_nodes()')
 
-        node_ex1 = fmk.dm.get_atom('EX1')
-        tux2 = dm.get_atom('TUX')
+        node_ex1 = self.node_ex1.get_clone()
+        tux2 = self.node_tux.get_clone()
 
         for e in sorted(tux2.get_nodes_names()):
             print(e)
@@ -455,8 +748,8 @@ class TestBasics(unittest.TestCase):
 
         print('\n### TEST 7: get_reachable_nodes() and change_subnodes_csts()')
 
-        node_ex1 = fmk.dm.get_atom('EX1')
-        tux2 = dm.get_atom('TUX')
+        node_ex1 = self.node_ex1.get_clone()
+        tux2 = self.node_tux.get_clone()
 
         print('*** junk test:')
 
@@ -467,7 +760,7 @@ class TestBasics(unittest.TestCase):
 
         print('> l1:')
 
-        tux2 = dm.get_atom('TUX')
+        tux2 = self.node_tux.get_clone()
         # attr = Elt_Attributes(defaults=False)
         # attr.conform_to_nonterm_node()
 
@@ -512,7 +805,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 7.3:')
 
-        tux = dm.get_atom('TUX')
+        tux = self.node_tux.get_clone()
         l1 = tux.get_reachable_nodes(internals_criteria=crit, respect_order=True)
         c_l1 = []
         for e in l1:
@@ -548,7 +841,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 11.1: value type Node')
 
-        node_ex1 = fmk.dm.get_atom('EX1')
+        node_ex1 = self.node_ex1.get_clone()
 
         res1 = True
         msg = node_ex1.to_bytes(conf='ALT')
@@ -586,7 +879,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 11.2: func type Node')
 
-        node_ex1 = fmk.dm.get_atom('EX1')
+        node_ex1 = self.node_ex1.get_clone()
 
         res3 = True
         msg = node_ex1.to_bytes(conf='ALT')
@@ -614,7 +907,7 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** test 10.1: fuzz_data_tree()')
 
-        node_ex1 = fmk.dm.get_atom('EX1')
+        node_ex1 = self.node_ex1.get_clone()
         node_ex1.show()
 
         fuzz_data_tree(node_ex1)
@@ -626,7 +919,7 @@ class TestBasics(unittest.TestCase):
               '--> can be False in really rare case')
 
         nonascii_test_str = u'\u00c2'.encode(internal_repr_codec)
-        node_ex1 = fmk.dm.get_atom('EX1')
+        node_ex1 = self.node_ex1.get_clone()
 
         res = True
         for i in range(20):
@@ -645,19 +938,23 @@ class TestBasics(unittest.TestCase):
 class TestMisc(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.dm = example.data_model
-        cls.dm.load_data_model(fmk._name2dm)
+        pass
 
     def setUp(self):
         pass
 
-    def _loop_nodes(self, node, cpt=20, criteria_func=None, transform=lambda x: x):
+    def _loop_nodes(self, node, cpt=20, criteria_func=None, transform=lambda x: x,
+                    result_vector=None):
         stop_loop = False
         for i in range(cpt):
             if stop_loop:
                 break
             node.unfreeze()
-            print("[#%d] %r" % (i, transform(node.to_bytes())))
+            val = transform(node.to_bytes())
+            print("[#%d] %r" % (i, val))
+            if result_vector and i < len(result_vector):
+                print('*** Check value with result_vector[{}]'.format(i))
+                self.assertEqual(val, result_vector[i])
             if node.env.exhausted_node_exists():
                 for e in node.env.get_exhausted_nodes():
                     criteria_func(e)
@@ -674,7 +971,7 @@ class TestMisc(unittest.TestCase):
         '''
         unfreeze(dont_change_state)
         '''
-        simple = self.dm.get_atom('Simple')
+        simple = node_simple.get_clone()
 
         simple.make_determinist(recursive=True)
         for i in range(15):
@@ -693,7 +990,7 @@ class TestMisc(unittest.TestCase):
         self.assertTrue(res1)
 
     def test_TypedNode_1(self):
-        evt = dm.get_atom('TVE')
+        evt = node_typed.get_clone()
         evt.get_value()
 
         print('=======[ PATHS ]========')
@@ -718,7 +1015,7 @@ class TestMisc(unittest.TestCase):
 
         print('')
 
-        evt = dm.get_atom('TVE')
+        evt = node_typed.get_clone()
         evt.make_finite(all_conf=True, recursive=True)
         evt.make_determinist(all_conf=True, recursive=True)
         evt.show()
@@ -767,31 +1064,10 @@ class TestMisc(unittest.TestCase):
 
         self.assertTrue(turn_nb_list == good_list, msg=msg)
 
-    def test_Node_Attr_01(self):
-        '''
-        Value Node make_random()/make_determinist()
-        TODO: NEED assertion
-        '''
-        evt = dm.get_atom('TVE')
-
-        for i in range(10):
-            evt.unfreeze()
-            print(evt.to_bytes())
-
-        evt.get_first_node_by_path('Pre').make_random()
-
-        print('******')
-
-        for i in range(10):
-            evt.unfreeze()
-            print(evt.to_bytes())
-
-            # self.assertEqual(idx, )
 
     def test_NonTerm_Attr_01(self):
         '''
         make_determinist()/finite() on NonTerm Node
-        TODO: NEED assertion
         '''
         loop_count = 50
 
@@ -799,7 +1075,7 @@ class TestMisc(unittest.TestCase):
 
         print('\n -=[ determinist & finite (loop count: %d) ]=- \n' % loop_count)
 
-        nt = dm.get_atom('NonTerm')
+        nt = node_nterm.get_clone()
         nt.make_finite(all_conf=True, recursive=True)
         nt.make_determinist(all_conf=True, recursive=True)
         nb = self._loop_nodes(nt, loop_count, criteria_func=crit_func)
@@ -808,21 +1084,21 @@ class TestMisc(unittest.TestCase):
 
         print('\n -=[ determinist & infinite (loop count: %d) ]=- \n' % loop_count)
 
-        nt = dm.get_atom('NonTerm')
+        nt = node_nterm.get_clone()
         nt.make_infinite(all_conf=True, recursive=True)
         nt.make_determinist(all_conf=True, recursive=True)
         self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
         print('\n -=[ random & infinite (loop count: %d) ]=- \n' % loop_count)
 
-        nt = dm.get_atom('NonTerm')
+        nt = node_nterm.get_clone()
         # nt.make_infinite(all_conf=True, recursive=True)
         nt.make_random(all_conf=True, recursive=True)
         self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
         print('\n -=[ random & finite (loop count: %d) ]=- \n' % loop_count)
 
-        nt = dm.get_atom('NonTerm')
+        nt = node_nterm.get_clone()
         nt.make_finite(all_conf=True, recursive=True)
         nt.make_random(all_conf=True, recursive=True)
         nb = self._loop_nodes(nt, loop_count, criteria_func=crit_func)
@@ -832,7 +1108,7 @@ class TestMisc(unittest.TestCase):
     def test_BitField_Attr_01(self):
         '''
         make_determinist()/finite() on BitField Node
-        TODO: NEED assertion
+        TODO: need more assertion
         '''
 
         loop_count = 80
@@ -842,7 +1118,8 @@ class TestMisc(unittest.TestCase):
         t = BitField(subfield_limits=[2, 6, 10, 12],
                      subfield_values=[[4, 2, 1], [2, 15, 16, 3], None, [1]],
                      subfield_val_extremums=[None, None, [3, 11], None],
-                     padding=0, lsb_padding=True, endian=VT.LittleEndian)
+                     padding=0, lsb_padding=True, endian=VT.LittleEndian,
+                     determinist=True)
         node = Node('BF', value_type=t)
         node.set_env(Env())
         node.make_random(all_conf=True, recursive=True)
@@ -853,7 +1130,8 @@ class TestMisc(unittest.TestCase):
         node_copy = Node('BF_copy', base_node=node, ignore_frozen_state=True)
         node_copy.set_env(Env())
         node_copy.make_determinist(all_conf=True, recursive=True)
-        self._loop_nodes(node_copy, loop_count, criteria_func=lambda x: True, transform=binascii.b2a_hex)
+        self._loop_nodes(node_copy, loop_count, criteria_func=lambda x: True, transform=binascii.b2a_hex,
+                         result_vector=[b'a04c', b'904c', b'd04f'])
 
         print('\n -=[ determinist & finite (loop count: %d) ]=- \n' % loop_count)
 
@@ -861,7 +1139,8 @@ class TestMisc(unittest.TestCase):
         node_copy2.set_env(Env())
         node_copy2.make_determinist(all_conf=True, recursive=True)
         node_copy2.make_finite(all_conf=True, recursive=True)
-        self._loop_nodes(node_copy2, loop_count, criteria_func=lambda x: True, transform=binascii.b2a_hex)
+        it_df = self._loop_nodes(node_copy2, loop_count, criteria_func=lambda x: True, transform=binascii.b2a_hex,
+                                 result_vector=[b'a04c', b'904c', b'd04f'])
 
         print('\n -=[ random & finite (loop count: %d) ]=- \n' % loop_count)
 
@@ -869,7 +1148,10 @@ class TestMisc(unittest.TestCase):
         node_copy3.set_env(Env())
         node_copy3.make_random(all_conf=True, recursive=True)
         node_copy3.make_finite(all_conf=True, recursive=True)
-        self._loop_nodes(node_copy3, loop_count, criteria_func=lambda x: True, transform=binascii.b2a_hex)
+        it_rf = self._loop_nodes(node_copy3, loop_count, criteria_func=lambda x: True, transform=binascii.b2a_hex)
+
+        self.assertEqual(it_df, it_rf)
+        self.assertEqual(it_df, 12)
 
     def test_BitField(self):
 
@@ -1249,73 +1531,17 @@ class TestMisc(unittest.TestCase):
         self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
         self.assertEqual(size, len(msg))
 
-    def test_MISC(self):
-        '''
-        TODO: assertion + purpose
-        '''
-        loop_count = 20
-
-        e = Node('VT1')
-        vt = UINT16_be(values=[1, 2, 3, 4, 5, 6])
-        e.set_values(value_type=vt)
-        e.set_env(Env())
-        e.make_determinist(all_conf=True, recursive=True)
-        e.make_finite(all_conf=True, recursive=True)
-        self._loop_nodes(e, loop_count, criteria_func=lambda x: True)
-
-        e2 = Node('VT2', base_node=e, ignore_frozen_state=True)
-        e2.set_env(Env())
-        e2.make_determinist(all_conf=True, recursive=True)
-        e2.make_finite(all_conf=True, recursive=True)
-        self._loop_nodes(e2, loop_count, criteria_func=lambda x: True)
-
-        print('\n****\n')
-
-        sep = Node('sep', values=[' # '])
-        nt = Node('NT')
-        nt.set_subnodes_with_csts([
-            1, ['u>', [e, 3], [sep, 1], [e2, 2]]
-        ])
-        nt.set_env(Env())
-
-        self._loop_nodes(nt, loop_count, criteria_func=lambda x: True)
-
-        print('\n****\n')
-
-        v = dm.get_atom('V1_middle')
-        v.make_finite()
-
-        e = Node('NT')
-        e.set_subnodes_with_csts([
-            1, ['u>', [v, 2]]
-        ])
-        e.set_env(Env())
-        e.make_determinist(recursive=True)
-        self._loop_nodes(e, loop_count, criteria_func=lambda x: True)
-
-        print('\n****\n')
-
-        self._loop_nodes(e, loop_count, criteria_func=lambda x: True)
-
-        print('\n****\n')
-
-        e = dm.get_atom('Middle_NT')
-        e.make_finite(all_conf=True, recursive=True)
-        e.make_determinist(all_conf=True, recursive=True)
-        self._loop_nodes(e, loop_count, criteria_func=lambda x: x.name == 'Middle_NT')
-
 
 class TestModelWalker(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.dm = example.data_model
-        cls.dm.load_data_model(fmk._name2dm)
+        pass
 
     def setUp(self):
         pass
 
     def test_NodeConsumerStub_1(self):
-        nt = self.dm.get_atom('Simple')
+        nt = node_simple.get_clone()
         default_consumer = NodeConsumerStub()
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
                                                                     max_steps=200):
@@ -1323,7 +1549,7 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 49)
 
     def test_NodeConsumerStub_2(self):
-        nt = self.dm.get_atom('Simple')
+        nt = node_simple.get_clone()
         default_consumer = NodeConsumerStub(max_runs_per_node=-1, min_runs_per_node=2)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
                                                                     max_steps=200):
@@ -1331,7 +1557,7 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 35)
 
     def test_BasicVisitor(self):
-        nt = self.dm.get_atom('Simple')
+        nt = node_simple.get_clone()
         default_consumer = BasicVisitor(respect_order=True)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
                                                                     max_steps=200):
@@ -1339,7 +1565,7 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 37)
 
         print('***')
-        nt = self.dm.get_atom('Simple')
+        nt = node_simple.get_clone()
         default_consumer = BasicVisitor(respect_order=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
                                                                     max_steps=200):
@@ -1349,7 +1575,7 @@ class TestModelWalker(unittest.TestCase):
     def test_NonTermVisitor(self):
         print('***')
         idx = 0
-        simple = self.dm.get_atom('Simple')
+        simple = node_simple.get_clone()
         nonterm_consumer = NonTermVisitor(respect_order=True)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True,
                                                                     max_steps=20):
@@ -1358,7 +1584,7 @@ class TestModelWalker(unittest.TestCase):
 
         print('***')
         idx = 0
-        simple = self.dm.get_atom('Simple')
+        simple = node_simple.get_clone()
         nonterm_consumer = NonTermVisitor(respect_order=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True,
                                                                     max_steps=20):
@@ -1585,7 +1811,7 @@ class TestModelWalker(unittest.TestCase):
 
 
     def test_TypedNodeDisruption_1(self):
-        nt = self.dm.get_atom('Simple')
+        nt = node_simple.get_clone()
         tn_consumer = TypedNodeDisruption()
         ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         tn_consumer.set_node_interest(internals_criteria=ic)
@@ -1595,7 +1821,7 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 21)
 
     def test_TypedNodeDisruption_2(self):
-        nt = self.dm.get_atom('Simple')
+        nt = node_simple.get_clone()
         tn_consumer = TypedNodeDisruption(max_runs_per_node=3, min_runs_per_node=3)
         ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         tn_consumer.set_node_interest(internals_criteria=ic)
@@ -1609,7 +1835,7 @@ class TestModelWalker(unittest.TestCase):
         Test case similar to test_TermNodeDisruption_1() but with more
         powerfull TypedNodeDisruption.
         '''
-        nt = self.dm.get_atom('Simple')
+        nt = node_simple.get_clone()
         tn_consumer = TypedNodeDisruption(max_runs_per_node=1)
         # ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         # tn_consumer.set_node_interest(internals_criteria=ic)
@@ -1658,7 +1884,7 @@ class TestModelWalker(unittest.TestCase):
             self.assertEqual(rnode['smscmd/TP-DCS'][0].to_bytes(), corrupt_table[idx])
 
     def test_AltConfConsumer_1(self):
-        simple = self.dm.get_atom('Simple')
+        simple = node_simple.get_clone()
         consumer = AltConfConsumer(max_runs_per_node=-1, min_runs_per_node=-1)
         consumer.set_node_interest(owned_confs=['ALT'])
 
@@ -1668,7 +1894,7 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 15)
 
     def test_AltConfConsumer_2(self):
-        simple = self.dm.get_atom('Simple')
+        simple = node_simple.get_clone()
         consumer = AltConfConsumer(max_runs_per_node=2, min_runs_per_node=1)
         consumer.set_node_interest(owned_confs=['ALT'])
 
@@ -1678,7 +1904,7 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 8)
 
     def test_AltConfConsumer_3(self):
-        simple = self.dm.get_atom('Simple')
+        simple = node_simple.get_clone()
         consumer = AltConfConsumer(max_runs_per_node=-1, min_runs_per_node=-1)
         consumer.set_node_interest(owned_confs=['ALT', 'ALT_2'])
 
@@ -1688,7 +1914,7 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 24)
 
     def test_AltConfConsumer_4(self):
-        simple = self.dm.get_atom('Simple')
+        simple = node_simple.get_clone()
         consumer = AltConfConsumer(max_runs_per_node=-1, min_runs_per_node=-1)
         consumer.set_node_interest(owned_confs=['ALT_2', 'ALT'])
 
