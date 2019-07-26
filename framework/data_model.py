@@ -381,7 +381,7 @@ class NodeBackend(object):
                 print('-'*60)
                 traceback.print_exc(file=sys.stdout)
                 print('-'*60)
-                msg = "*** ERROR: problem encountered with the '{desc:s}' descriptor!".format(desc=desc_name)
+                msg = "*** ERROR: problem encountered with the '{desc!s}' descriptor!".format(desc=desc_name)
                 raise UserWarning(msg)
 
         if atom.env is None:

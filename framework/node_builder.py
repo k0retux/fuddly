@@ -1175,7 +1175,7 @@ class RegexParser(StateMachine):
                 elif ctx.input in ('(', '['):
                     raise InconvertibilityError()
                 elif ctx.input == '-':
-                    raise InvalidRangeError()
+                    return self.machine.BeforeRange
                 elif ctx.input == ']':
                     raise EmptyAlphabetError()
                 elif ctx.input == '\\':
@@ -1211,8 +1211,11 @@ class RegexParser(StateMachine):
                 pass
 
             def advance(self, ctx):
-                if ctx.input in ('?', '*', '+', '{', '}', '(', ')', '[', ']', '|', '-', None):
+                if ctx.input in ('?', '*', '+', '{', '}', '(', ')', '[', '|', '-', None):
                     raise InvalidRangeError()
+                elif ctx.input == ']':
+                    ctx.append_to_alphabet('-')
+                    return self.machine.Final
                 elif ctx.input == '\\':
                     return self.machine.EscapeAfterRange
                 else:

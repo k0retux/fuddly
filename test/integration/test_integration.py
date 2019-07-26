@@ -45,7 +45,6 @@ def setUpModule():
     fmk = FmkPlumbing(exit_on_error=exit_on_import_error, debug_mode=True)
     fmk.start()
     fmk.run_project(name='tuto', dm_name=['mydf'])
-    # dm = example.data_model
     results = collections.OrderedDict()
     fmk.prj.reset_knowledge()
 
