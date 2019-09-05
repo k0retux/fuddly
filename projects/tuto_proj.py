@@ -30,7 +30,7 @@ from framework.knowledge.information import *
 from framework.knowledge.feedback_handler import TestFbkHandler
 from framework.scenario import *
 from framework.global_resources import UI
-from framework.evolutionary_helpers import DefaultPopulation
+from framework.evolutionary_helpers import DefaultPopulation, CrossoverHelper
 from framework.data import DataProcess
 
 project = Project()
@@ -187,11 +187,23 @@ project.register_scenarios(sc_proj1, sc_proj2, sc_proj3)
 
 ### EVOLUTIONNARY PROCESS EXAMPLE ###
 
+init_dp1 = DataProcess([('tTYPE', UI(fuzz_mag=0.2))], seed='exist_cond')
+init_dp1.append_new_process([('tSTRUCT', UI(deep=True))])
+
+init_dp2 = DataProcess([('tTYPE#2', UI(fuzz_mag=0.2))], seed='exist_cond')
+init_dp2.append_new_process([('tSTRUCT#2', UI(deep=True))])
+
 project.register_evolutionary_processes(
-    ('evol', DefaultPopulation,
-     {'init_process': [('SEPARATOR', UI(random=True)), 'tTYPE'],
-      'size': 10,
-      'max_generation_nb': 10})
+    ('evol1', DefaultPopulation,
+     {'init_process': init_dp1,
+      'max_size': 80,
+      'max_generation_nb': 3,
+      'crossover_algo': CrossoverHelper.crossover_algo1}),
+    ('evol2', DefaultPopulation,
+     {'init_process': init_dp2,
+      'max_size': 80,
+      'max_generation_nb': 3,
+      'crossover_algo': CrossoverHelper.get_configured_crossover_algo2()})
 )
 
 ### OPERATOR DEFINITION ###

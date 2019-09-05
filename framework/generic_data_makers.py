@@ -48,23 +48,25 @@ tactics = Tactics()
 #######################
 
 @generator(tactics, gtype='POPULATION', weight=1,
-           args={'population': ('The population to iterate over.', None, Population)})
+           args={'population': ('The population to iterate over.', None, Population),
+                 'track': ('Keep trace of the changes that occurred on data, generation after generation',
+                           False, bool)}
+           )
 class g_population(Generator):
     """ Walk through the given population """
     def setup(self, dm, user_input):
         assert self.population is not None
-
         self.population.reset()
-
+        self._pop_sz = self.population.size()
+        self._curr_generation = self.population.generation
         return True
 
     def generate_data(self, dm, monitor, target):
         reset = False
 
         try:
-            data = Data(self.population.next().node)
+            data = self.population.next().data
         except StopIteration:
-
             # all individuals of the current population have been sent
 
             if self.population.is_final():
@@ -72,6 +74,8 @@ class g_population(Generator):
             else:
                 try:
                     self.population.evolve()
+                    self._pop_sz = self.population.size()
+                    self._curr_generation = self.population.generation
                 except ExtinctPopulationError:
                     reset = True
                 else:
@@ -81,6 +85,10 @@ class g_population(Generator):
             data = Data()
             data.make_unusable()
             self.need_reset()
+
+        data.add_info('Generation: {}, Population size: {}'.format(self._curr_generation, self._pop_sz))
+        data.add_info('Data index in the population: {}'.format(self.population.index))
+        data.take_info_ownership(keep_previous_info=self.track)
 
         return data
 
@@ -626,190 +634,6 @@ class sd_struct_constraints(StatefulDisruptor):
         data.altered = True
 
         return data
-
-
-# ADAPTED FOR THE EVOLUTIONARY PROCESS #
-
-class SwapperDisruptor(StatefulDisruptor):
-    """
-    Merge two nodes to produce two children
-    """
-
-    def _swap_nodes(self, node_1, node_2):
-        node_2_copy = node_2.get_clone()
-        node_2.set_contents(node_1)
-        node_1.set_contents(node_2_copy)
-
-    def set_seed(self, prev_data):
-
-        self.count = 0  # number of sent element
-
-        prev_content = prev_data.content
-        assert isinstance(prev_content, Node)
-        prev_content.freeze(recursive=True)
-
-        if self.node is None:
-            self.node = prev_content.get_clone()
-
-    def disrupt_data(self, dm, target, data):
-
-        if self.count == 2:
-            data.make_unusable()
-            self.handover()
-
-        elif self.count == 1:
-            data.update_from(self.node)
-
-        self.count += 1
-        data.altered = True
-        return data
-
-
-@disruptor(tactics, dtype="tCROSS", weight=1,
-           args={'node': ('Node to crossover with.', None, Node),
-                 'percentage_to_share': ('Percentage of the base node to share.', 0.50, float)})
-class sd_crossover(SwapperDisruptor):
-    """
-    Makes two graphs share a certain percentages of their leaf nodes in order to produce two children
-    """
-
-    class Operand(object):
-
-        def __init__(self, node):
-            self.node = node
-
-            self.leafs = []
-
-            for path, node in self.node.iter_paths():
-                if node.is_term() and path not in self.leafs:
-                    self.leafs.append(path)
-
-            self.shared = None
-
-        def compute_sub_graphs(self, percentage):
-            random.shuffle(self.leafs)
-            self.shared = self.leafs[:int(round(len(self.leafs) * percentage))]
-            self.shared.sort()
-
-            change = True
-            while change:
-
-                change = False
-                index = 0
-                length = len(self.shared)
-
-                while index < length:
-
-                    current_path = self.shared[index]
-
-                    slash_index = current_path[::-1].find('/')
-
-                    # check if we are dealing with the root node
-                    if slash_index == -1:
-                        index += 1
-                        continue
-
-                    parent_path = current_path[:-current_path[::-1].find('/') - 1]
-                    children_nb = self._count_brothers(index, parent_path)
-                    if children_nb == self.node.get_first_node_by_path(parent_path).cc.get_subnode_qty():
-                        self._merge_brothers(index, parent_path, children_nb)
-                        change = True
-                        index += 1
-                        length = len(self.shared)
-                    else:
-                        index += children_nb
-
-        def _count_brothers(self, index, pattern):
-            count = 1
-            p = re.compile(u'^' + pattern + '($|/*)')
-            for i in range(index + 1, len(self.shared)):
-                if re.match(p, self.shared[i]) is not None:
-                    count += 1
-            return count
-
-        def _merge_brothers(self, index, pattern, length):
-            for _ in range(0, length, 1):
-                del self.shared[index]
-            self.shared.insert(index, pattern)
-
-    def setup(self, dm, user_input):
-        if self.percentage_to_share is None:
-            self.percentage_to_share = float(random.randint(3, 7)) / 10.0
-        elif not (0 < self.percentage_to_share < 1):
-            print("Invalid percentage, a float between 0 and 1 need to be provided")
-            return False
-
-        return True
-
-    def set_seed(self, prev_data):
-        prev_content = prev_data.content
-        if not isinstance(prev_content, Node):
-            prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
-            return prev_data
-
-        SwapperDisruptor.set_seed(self, prev_data)
-
-        source = self.Operand(prev_content)
-        source.compute_sub_graphs(self.percentage_to_share)
-        random.shuffle(source.shared)
-
-        param = self.Operand(self.node)
-        param.compute_sub_graphs(1.0 - self.percentage_to_share)
-        random.shuffle(param.shared)
-
-        swap_nb = len(source.shared) if len(source.shared) < len(param.shared) else len(param.shared)
-
-        for i in range(swap_nb):
-            node_1 = source.node.get_first_node_by_path(source.shared[i])
-            node_2 = param.node.get_first_node_by_path(param.shared[i])
-            self._swap_nodes(node_1, node_2)
-
-
-@disruptor(tactics, dtype="tCOMB", weight=1,
-           args={'node': ('Node to combine with.', None, Node)})
-class sd_combine(SwapperDisruptor):
-    """
-    Merge two nodes by swapping some roots' children
-    """
-
-    def setup(self, dm, user_input):
-        return True
-
-    def get_nodes(self, node):
-        while True:
-            nodes = [node] if node.is_term() else node.cc.frozen_node_list
-
-            if len(nodes) == 1 and not nodes[0].is_term():
-                node = nodes[0]
-            else:
-                break
-
-        return nodes
-
-    def set_seed(self, prev_data):
-
-        SwapperDisruptor.set_seed(self, prev_data)
-
-        prev_content = prev_data.content
-        if not isinstance(prev_content, Node):
-            prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
-            return prev_data
-
-        source = self.get_nodes(prev_content)
-        param = self.get_nodes(self.node)
-
-        if len(source) == 0 or len(param) == 0:
-            prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
-            return prev_data
-
-        swap_nb = len(source) if len(source) < len(param) else len(param)
-        swap_nb = int(math.ceil(swap_nb / 2.0))
-
-        random.shuffle(source)
-        random.shuffle(param)
-
-        for i in range(swap_nb):
-            self._swap_nodes(source[i], param[i])
 
 
 ########################

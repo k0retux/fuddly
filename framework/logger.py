@@ -473,7 +473,7 @@ class Logger(object):
             if len(msg) > self._console_display_limit:
                 msg = msg[:self._console_display_limit] + ' ...'
 
-            self.log_fn('    |_ ' + msg, rgb=Color.DATAINFO)
+            self.log_fn('    | ' + msg, rgb=Color.DATAINFO)
 
     def log_info(self, info):
         msg = "### Info: {:s}".format(info)

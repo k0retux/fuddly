@@ -176,6 +176,8 @@ class UI(object):
         else:
             return '[ ]'
 
+    __repr__ = __str__
+
     def __copy__(self):
         new_ui = type(self)()
         new_ui.__dict__.update(self.__dict__)

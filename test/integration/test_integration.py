@@ -3887,7 +3887,7 @@ class TestFMK(unittest.TestCase):
         print(gen_disruptors)
 
         for dis in gen_disruptors:
-            if dis in ['tCROSS']:
+            if dis in ['CROSS']:
                 continue
 
             print("\n\n---[ Tested Disruptor %r ]---" % dis)
@@ -4205,3 +4205,9 @@ class TestFMK(unittest.TestCase):
         self.assertEqual(scenario.env.cbk_true_cpt, 1)
         self.assertEqual(scenario.env.cbk_false_cpt, 4)
         self.assertEqual(str(steps[-1]), '4DEFAULT')
+
+    @unittest.skipIf(not run_long_tests, "Long test case")
+    def test_evolutionary_fuzzing(self):
+        fmk.reload_all(tg_ids=[7])
+        fmk.process_data_and_send(DataProcess(['SC_EVOL1']), verbose=False, max_loop=-1)
+        fmk.process_data_and_send(DataProcess(['SC_EVOL2']), verbose=False, max_loop=-1)

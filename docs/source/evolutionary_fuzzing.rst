@@ -72,9 +72,8 @@ or if a maximum number of generation exceeds.
 * :meth:`_compute_probability_of_survival()`: simply normalize fitness scores between 0 and 1.
 * :meth:`_kill()`: rolls the dices !
 * :meth:`_mutate()`: operates three bit flips on each individual using the stateless disruptor ``C``.
-* :meth:`_crossover()`: compensates the kills through the use of the stateful disruptor ``tCOMB``. Of course, any
-  other disruptor could have been chosen (those introduced by the evolutionary fuzzing are described in
-  the next section).
+* :meth:`_crossover()`: compensates the kills through the use of a crossover algorithm which
+  is configurable.
 
 Finally, to make an evolutionary process available to the framework, it has to be registered at project
 level (meaning inside a ``*_proj.py`` file), through :meth:`framework.Project.register_evolutionary_process`.
@@ -92,124 +91,75 @@ Here under is provided an example to register an evolutionary process (defined i
 
     from framework.evolutionary_helpers import DefaultPopulation
 
+    init_dp1 = DataProcess([('tTYPE', UI(fuzz_mag=0.2))], seed='exist_cond')
+    init_dp1.append_new_process([('tSTRUCT', UI(deep=True))])
+
     project.register_evolutionary_processes(
-        ('evol',
+        ('evol1',
          DefaultPopulation,
-         {'init_process': [('SEPARATOR', UI(random=True)), 'tTYPE'],
-          'size': 10,
-          'max_generation_nb': 10})
+         {'init_process': init_dp1,
+          'size': 80,
+          'max_generation_nb': 3,
+          'crossover_algo': CrossoverHelper.crossover_algo1})
     )
 
 
 Once loaded from ``Fuddly``, ``Scenario`` are created from registered evolutionary processes, which are callable
 (like any other scenarios) through their associated ``Generator``. In our example, only one process is
-registered and will lead to the creation of the generator ``SC_EVOL``.
+registered and will lead to the creation of the generator ``SC_EVOL1``.
 After each call to it, the evolutionary process will progress and a new test case will be produced.
 
 Note that the :class:`framework.evolutionary_helpers.DefaultPopulation` is used with this scenario.
-It expects three parameters:
+It expects the following parameters:
 
 - The first one describe the process to follow to generate the data in the initial population
   (refer to the API documentation for more information). In the example,
-  we use the generator ``SEPARATOR`` to produce data compliant to the model in a randome way, then we
-  apply the disruptor ``tTYPE``.
-- The second specify the size of the population.
+  the process enables to generate altered data from the data type ``exist_cond`` thanks to the
+  the disruptors ``tTYPE`` and ``tSTRUCT``.
+- The second specify the maximum size of the population.
 - The third is a criteria to stop the evolutionary process. It provides the maximum number of generation to reach
+- The fourth is the crossover algorithm to be used. You can either provide your own implementation
+  or use the ones available in :class:`framework.evolutionary_helpers.CrossoverHelper`. Refer to
+  :ref:`ef:crossover-algos` for more information.
 
 
-.. _ef:crossover-disruptors:
+.. _ef:crossover-algos:
 
-Specific disruptors
-===================
+Crossover Algorithms
+====================
 
-The evolutionary fuzzing introduces two stateful disruptors that can be used within the crossover operation.
+The evolutionary fuzzing introduces two crossover algorithms that can be used within the crossover operation.
 
-
-tCROSS - Randomly swap some leaf nodes
---------------------------------------
-
-Description:
-  Produce two children by making two graphs swap a given percentages of their leaf nodes.
-
-.. _sd-crossover-image:
-.. figure::  images/sd_crossover.png
-   :align:   center
-   :scale:   50 %
-
-   tCROSS example
-
-Reference:
-  :class:`framework.generic_data_makers.sd_crossover`
-
-Parameters:
-  .. code-block:: none
-
-   generic args:
-     |_ clone_node
-     |      | desc: if True the dmaker will always return a copy of the node. (for
-     |      |       stateless diruptors dealing with big data it can be usefull
-     |      |       to it to False)
-     |      | default: True [type: bool]
-     |_ init
-     |      | desc: make the model walker ignore all the steps until the provided
-     |      |       one
-     |      | default: 1 [type: int]
-     |_ max_steps
-     |      | desc: maximum number of steps (-1 means until the end)
-     |      | default: -1 [type: int]
-     |_ runs_per_node
-     |      | desc: maximum number of test cases for a single node (-1 means until
-     |      |       the end)
-     |      | default: -1 [type: int]
-   specific args:
-     |_ node
-     |      | desc: node to crossover with
-     |      | default: None [type: Node]
-     |_ percentage_to_share
-     |      | desc: percentage of the base node to share
-     |      | default: 0.50 [type: float]
-
-
-
-tCOMB - Randomly swap some root nodes' children
+Algo1 - Randomly swap some root nodes' children
 -----------------------------------------------
 
 Description:
   Produce two nodes by swapping some of the children of two given graphs roots.
 
 
-.. _sd-combine-image:
-.. figure::  images/sd_combine.png
+.. _algo1-image:
+.. figure::  images/crossover_algo1.png
    :align:   center
    :scale:   50 %
 
-   tCOMB example
+   Algo1 example
 
 
 Reference:
-  :class:`framework.generic_data_makers.sd_combine`
+  :meth:`framework.evolutionary_helpers.CrossoverHelper.crossover_algo1`
 
-Parameters:
-  .. code-block:: none
+Algo2 - Randomly swap some leaf nodes
+-------------------------------------
 
-   generic args:
-     |_ clone_node
-     |      | desc: if True the dmaker will always return a copy of the node. (for
-     |      |       stateless diruptors dealing with big data it can be usefull
-     |      |       to it to False)
-     |      | default: True [type: bool]
-     |_ init
-     |      | desc: make the model walker ignore all the steps until the provided
-     |      |       one
-     |      | default: 1 [type: int]
-     |_ max_steps
-     |      | desc: maximum number of steps (-1 means until the end)
-     |      | default: -1 [type: int]
-     |_ runs_per_node
-     |      | desc: maximum number of test cases for a single node (-1 means until
-     |      |       the end)
-     |      | default: -1 [type: int]
-   specific args:
-     |_ node
-     |      | desc: node to combine with
-     |      | default: None [type: Node]
+Description:
+  Produce two children by making two graphs swap a given percentages of their leaf nodes.
+
+.. _algo2-image:
+.. figure::  images/crossover_algo2.png
+   :align:   center
+   :scale:   50 %
+
+   Algo2 example
+
+Reference:
+  :meth:`framework.evolutionary_helpers.CrossoverHelper.get_configured_crossover_algo2`

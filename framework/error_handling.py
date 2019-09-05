@@ -30,6 +30,7 @@ class UserInterruption(Exception): pass
 
 class PopulationError(Exception): pass
 class ExtinctPopulationError(PopulationError): pass
+class CrossOverError(PopulationError): pass
 
 class DataModelDefinitionError(Exception): pass
 class ProjectDefinitionError(Exception): pass

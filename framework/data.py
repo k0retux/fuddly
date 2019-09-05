@@ -405,6 +405,28 @@ class Data(object):
         for info in info_l:
             yield info
 
+    def take_info_ownership(self, keep_previous_info=True):
+        if not keep_previous_info:
+            self.info = {}
+            return
+
+        if self.info:
+            legacy_info = self.info
+            self.info = {}
+            legacy_info_list = []
+            for key, info_container in legacy_info.items():
+                dmaker_type, data_maker_name = key
+                legacy_info_list.append('=== INFO FROM {} ==='.format(dmaker_type))
+                for info_l in info_container:
+                    info_l = ['| '+ m for m in info_l]
+                    legacy_info_list += info_l
+            if legacy_info_list and not self.info_list:
+                self.info_list = legacy_info_list
+            elif legacy_info_list and self.info_list:
+                self.info_list = legacy_info_list + self.info_list
+            else:
+                pass
+
     def set_history(self, hist):
         self._history = hist
 

@@ -4961,24 +4961,30 @@ class Node(object):
             else:
                 self.make_empty()
 
-    def get_clone(self, name=None, ignore_frozen_state=False, new_env=True):
-        '''Create a new node. To be used wihtin a graph-based data model.
-        
+    def get_clone(self, name=None, ignore_frozen_state=False, accept_external_entanglement=False,
+                  acceptance_set=None, new_env=True):
+        """Create a new node. To be used within a graph-based data model.
+
         Args:
           name (str): name of the new Node instance. If ``None`` the current name will be used.
           ignore_frozen_state (bool): if set to False, the clone function will produce
             a Node with the same state as the duplicated Node. Otherwise, the only the state won't be kept.
+          accept_external_entanglement (bool): refer to the corresponding Node parameter
+          acceptance_set (set): refer to the corresponding Node parameter
           new_env (bool): If True, the current :class:`Env()` will be copied.
             Otherwise, the same will be used.
 
         Returns:
           Node: duplicated Node object
-        '''
+        """
 
         if name is None:
             name = self.name
 
-        return Node(name, base_node=self, ignore_frozen_state=ignore_frozen_state, new_env=new_env)
+        return Node(name, base_node=self, ignore_frozen_state=ignore_frozen_state,
+                    accept_external_entanglement=accept_external_entanglement,
+                    acceptance_set=acceptance_set,
+                    new_env=new_env)
 
 
     def __copy__(self):
@@ -5117,26 +5123,26 @@ class Node(object):
                 elif acceptance_set is not None and e in acceptance_set:
                     intrics.add(e)
                 else:
-                    DEBUG = True
-                    # TOFIX: the dynamically created subnodes by a
-                    # Non terminal node, may have in their
-                    # entangled list some mirror subnodes from
-                    # another Non terminal node containing copies
-                    # of these subnodes, or maybe subnodes (not
-                    # removed) of the node in previous frozen
-                    # state
-                    if DEBUG:
-                        print("\n*** WARNING: detection of entangled node outside the current graph, " \
-                                  "whereas 'accept_external_entanglement' parameter is set to False!")
-                        print("[ accept_external_entanglement = %r, ignore_frozen_state = %r, current copied node: %s ]" \
-                                  % (accept_external_entanglement, ignore_frozen_state, self.name))
-                        print(' --> Node: ', node.name, repr(node))
-                        print(' --> Entangled with external node: ', e.name, repr(e))
-                        print(" --> Entangled nodes of node '%s':" % node.name)
-                        for e in node.entangled_nodes:
-                            print('  -', e.name, repr(e),
-                                  " [in node_dico.keys(): %r / .values(): %r]" % (e in node_dico, e in node_dico.values()))
-                        # raise ValueError
+                    pass
+                    # Note: If base_node has entangled nodes, chances are these entangled nodes are
+                    # not part of the current node-graph. Especially, if base node is a child node
+                    # of an NT-node with a `qty` attribute > 1, the siblings nodes are entangled
+                    # nodes outside of the current graph. Thus they just have to be ignored.
+                    # In other cases (not described here) where the entangled nodes outside of
+                    # the current node-graph needs to be cloned, the user should explicitly state it
+                    # through the usage of the parameter `accept_external_entanglement`
+                    # or `acceptance_set`.
+                    #
+                    # print("\n*** WARNING: detection of entangled node outside the current graph, " \
+                    #           "whereas 'accept_external_entanglement' parameter is set to False!")
+                    # print("[ accept_external_entanglement = %r, ignore_frozen_state = %r, current copied node: %s ]" \
+                    #           % (accept_external_entanglement, ignore_frozen_state, self.name))
+                    # print(' --> Node: ', node.name, repr(node))
+                    # print(' --> Entangled with external node: ', e.name, repr(e))
+                    # print(" --> Entangled nodes of node '%s':" % node.name)
+                    # for e in node.entangled_nodes:
+                    #     print('  -', e.name, repr(e),
+                    #           " [in node_dico.keys(): %r / .values(): %r]" % (e in node_dico, e in node_dico.values()))
 
             if node is base_node:
                 self.entangled_nodes = intrics

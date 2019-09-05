@@ -95,8 +95,9 @@ class ExportableFMKOps(object):
         self.load_data_model = fmk.load_data_model
         self.load_multiple_data_model = fmk.load_multiple_data_model
         self.reload_all = fmk.reload_all
-        self.get_data = fmk.process_data
+        self.process_data = fmk.process_data
         self.unregister_task = fmk._unregister_task
+        self.handle_data_desc = fmk.handle_data_desc
 
 class FmkFeedback(object):
     
@@ -287,7 +288,7 @@ class FmkPlumbing(object):
 
     @EnforceOrder(initial_func=True)
     def start(self):
-        self.check_clone_re = re.compile('(.*)#(\w{1,20})')
+        self.check_clone_re = re.compile('(.*)#(\w{1,30})')
 
         self.config = config(self, path=[config_folder])
         def save_config():
@@ -1145,6 +1146,7 @@ class FmkPlumbing(object):
         return self._load_targets(tg_ids)
 
     def _load_targets(self, tg_ids):
+        tg_ids = [tg_ids] if isinstance(tg_ids, int) else tg_ids
         for tg_id in tg_ids:
             if tg_id >= len(self.__target_dict[self.prj]):
                 self.set_error('The provided target number does not exist!',
@@ -1857,8 +1859,8 @@ class FmkPlumbing(object):
     def _do_after_dmaker_data_retrieval(self, data):
         self._handle_data_callbacks([data], hook=HOOK.after_dmaker_production)
 
-    def _handle_data_desc(self, data_desc, resolve_dataprocess=True, original_data=None,
-                          save_generator_seed=False):
+    def handle_data_desc(self, data_desc, resolve_dataprocess=True, original_data=None,
+                         save_generator_seed=False):
 
         if isinstance(data_desc, Data):
             data = data_desc
@@ -1998,9 +2000,9 @@ class FmkPlumbing(object):
                         new_data = []
                         first_step = True
                         for d_desc, vtg_ids in zip(data_desc, vtg_ids_list):
-                            data_tmp = self._handle_data_desc(d_desc,
-                                                              resolve_dataprocess=resolve_dataprocess,
-                                                              original_data=data)
+                            data_tmp = self.handle_data_desc(d_desc,
+                                                             resolve_dataprocess=resolve_dataprocess,
+                                                             original_data=data)
                             if data_tmp is not None:
                                 if first_step:
                                     first_step = False
@@ -2037,9 +2039,9 @@ class FmkPlumbing(object):
                             periodic_data = data_desc
                             func = functools.partial(self._send_periodic, final_data_tg_ids)
                         else:
-                            periodic_data = self._handle_data_desc(data_desc,
-                                                                   resolve_dataprocess=resolve_dataprocess,
-                                                                   original_data=data)
+                            periodic_data = self.handle_data_desc(data_desc,
+                                                                  resolve_dataprocess=resolve_dataprocess,
+                                                                  original_data=data)
                             targets = [self.targets[x] for x in final_data_tg_ids]
                             func = [tg.send_data_sync for tg in targets]
 
@@ -2095,7 +2097,7 @@ class FmkPlumbing(object):
         return valid_tg_ids
 
     def _send_periodic(self, tg_ids, data_desc):
-        data = self._handle_data_desc(data_desc)
+        data = self.handle_data_desc(data_desc)
         if data is not None:
             for tg in [self.targets[tg_id] for tg_id in tg_ids]:
                 tg.send_data_sync(data, from_fmk=False)
@@ -2191,8 +2193,8 @@ class FmkPlumbing(object):
                 cpt += 1
                 data_list = []
                 for d_desc in data_desc:
-                    data = self._handle_data_desc(d_desc, resolve_dataprocess=True,
-                                                  save_generator_seed=save_generator_seed)
+                    data = self.handle_data_desc(d_desc, resolve_dataprocess=True,
+                                                 save_generator_seed=save_generator_seed)
                     if data is None:
                         data = Data()
                         data.make_unusable()
@@ -3188,6 +3190,8 @@ class FmkPlumbing(object):
                 if parsed is not None:
                     cloned_dmaker_type = parsed.group(1)
                     dmaker_type = parsed.group(0)
+
+                    print('\n*** {} {}'.format(cloned_dmaker_type, dmaker_type))
 
                     err_msg = "Can't clone: invalid generator/disruptor IDs (%s)" % dmaker_ref
 
@@ -4789,7 +4793,7 @@ class FmkShell(cmd.Cmd):
         with aligned_stdout(**kwargs):
 
             self.__error = self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
-                                                         max_loop=max_loop,
+                                                         max_loop=max_loop, verbose=True,
                                                          save_generator_seed=use_existing_seed) is None
 
         return False
