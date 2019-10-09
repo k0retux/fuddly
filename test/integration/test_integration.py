@@ -97,7 +97,7 @@ def setUpModule():
     te5.set_fuzz_weight(6)
 
     te6 = Node('EVT6')
-    vt = BitField(subfield_limits=[2,6,8,10], subfield_values=[[4,2,1],[2,15,16,3],[2,3,0],[1]],
+    vt = BitField(subfield_limits=[2,6,8,10], subfield_values=[[2,1],[2,15,3],[2,3,0],[1]],
                   padding=0, lsb_padding=True, endian=VT.LittleEndian)
     te6.set_values(value_type=vt)
     te6.set_fuzz_weight(5)
@@ -951,12 +951,13 @@ class TestMisc(unittest.TestCase):
             node.unfreeze()
             val = transform(node.to_bytes())
             print("[#%d] %r" % (i, val))
+            # node.show()
             if result_vector and i < len(result_vector):
                 print('*** Check value with result_vector[{}]'.format(i))
                 self.assertEqual(val, result_vector[i])
             if node.env.exhausted_node_exists():
                 for e in node.env.get_exhausted_nodes():
-                    criteria_func(e)
+                    # criteria_func(e)
                     if criteria_func(e):
                         print('--> exhausted node: ', e.name)
                         stop_loop = True
@@ -1047,6 +1048,7 @@ class TestMisc(unittest.TestCase):
                                                                                       orig_node_val))
                 print('  node corrupted value:   (hexlified) {0!s:s}, {0!s:s}'.format(binascii.hexlify(node.to_bytes()),
                                                                                       node.to_bytes()))
+                # node.show()
             else:
                 turn_nb_list.append(i)
                 print('\n--> Fuzzing terminated!\n')
@@ -1115,10 +1117,10 @@ class TestMisc(unittest.TestCase):
         print('\n -=[ random & infinite (loop count: %d) ]=- \n' % loop_count)
 
         t = BitField(subfield_limits=[2, 6, 10, 12],
-                     subfield_values=[[4, 2, 1], [2, 15, 16, 3], None, [1]],
+                     subfield_values=[[2, 1], [2, 15, 3], None, [1]],
                      subfield_val_extremums=[None, None, [3, 11], None],
                      padding=0, lsb_padding=True, endian=VT.LittleEndian,
-                     determinist=True)
+                     determinist=True, show_padding=True)
         node = Node('BF', value_type=t)
         node.set_env(Env())
         node.make_random(all_conf=True, recursive=True)
@@ -1130,7 +1132,7 @@ class TestMisc(unittest.TestCase):
         node_copy.set_env(Env())
         node_copy.make_determinist(all_conf=True, recursive=True)
         self._loop_nodes(node_copy, loop_count, criteria_func=lambda x: True, transform=binascii.b2a_hex,
-                         result_vector=[b'a04c', b'904c', b'd04f'])
+                         result_vector=[b'a04c', b'904c', b'e04f'])
 
         print('\n -=[ determinist & finite (loop count: %d) ]=- \n' % loop_count)
 
@@ -1139,7 +1141,7 @@ class TestMisc(unittest.TestCase):
         node_copy2.make_determinist(all_conf=True, recursive=True)
         node_copy2.make_finite(all_conf=True, recursive=True)
         it_df = self._loop_nodes(node_copy2, loop_count, criteria_func=lambda x: True, transform=binascii.b2a_hex,
-                                 result_vector=[b'a04c', b'904c', b'd04f'])
+                                 result_vector=[b'a04c', b'904c', b'e04f'])
 
         print('\n -=[ random & finite (loop count: %d) ]=- \n' % loop_count)
 
@@ -1251,16 +1253,18 @@ class TestMisc(unittest.TestCase):
 
         # Note that 4 in subfield 1 and 16 in subfield 2 are ignored
         # --> 6 different values are output before looping
-        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_values=[[4, 2, 1], [2, 15, 16, 3], [2, 3, 0], [1]],
+        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_values=[[2, 1], [2, 15, 3], [2, 3, 0], [1]],
                      padding=0, lsb_padding=True, endian=VT.LittleEndian, determinist=True)
         for i in range(30):
             val = binascii.b2a_hex(t.get_value())
             print('*** [%d] ' % i, val)
+            print(t.pretty_print(), ' --> ', t.get_current_raw_val())
 
         print('\n********\n')
 
         val = collections.OrderedDict()
         t.switch_mode()
+        print(t.subfield_vals)
         for i in range(30):
             val[i] = binascii.b2a_hex(t.get_value())
             print(t.pretty_print(), ' --> ', t.get_current_raw_val())
@@ -1268,8 +1272,8 @@ class TestMisc(unittest.TestCase):
 
         print(list(val.values())[:15])
         self.assertEqual(list(val.values())[:15],
-                         [b'c062', b'0062', b'4062', b'806f', b'8060', b'8063', b'8061',
-                          b'8064', b'806e', b'8072', b'8042', b'8052', b'80e2', b'8022', b'80a2'])
+                         [b'c042', b'0042', b'4042', b'804f', b'8040', b'8043', b'8041', b'8044',
+                          b'804e', b'8072', b'8052', b'80c2', b'8002', b'8082', b'c042'])
 
         print('\n********\n')
 
@@ -1308,31 +1312,39 @@ class TestMisc(unittest.TestCase):
                      subfield_values=[None, None, None, [3]],
                      padding=0, lsb_padding=False, endian=VT.BigEndian, determinist=True)
 
-        val = {}
+        val = collections.OrderedDict()
         for i in range(30):
             val[i] = binascii.b2a_hex(t.get_value())
             print('*** [%d] ' % i, val[i])
+            print(t.pretty_print(), ' --> ', t.get_current_raw_val())
             if t.is_exhausted():
                 break
 
-        if val[0] != b'0311' or val[1] != b'0312' or val[2] != b'0316' or val[3] != b'031a' \
-                or val[4] != b'031e' or val[5] != b'0322' or val[6] != b'0326' or val[7] != b'032a' \
-                or val[8] != b'032e' or val[9] != b'0332' or val[10] != b'0372' or val[11] != b'03b2' or val[
-            12] != b'03f2':
-            raise ValueError
+        print(list(val.values())[:15])
+        self.assertEqual(list(val.values())[:15],
+                         [b'0311', b'0312', b'0315', b'0319', b'031d', b'0321', b'0325', b'0329',
+                          b'032d', b'0331', b'0351', b'0391', b'03d1'])
 
         print('\n********\n')
         t.reset_state()
 
-        print(binascii.b2a_hex(t.get_value()))
-        print(binascii.b2a_hex(t.get_value()))
+        val1 = t.get_value()
+        val2 = t.get_value()
+        print(binascii.b2a_hex(val1))
+        print(binascii.b2a_hex(val2))
         print('--> rewind')
         t.rewind()
-        print(binascii.b2a_hex(t.get_value()))
+        val3 = t.get_value()
+        print(binascii.b2a_hex(val3))
+        self.assertEqual(val2, val3)
         print('--> rewind')
         t.rewind()
-        print(binascii.b2a_hex(t.get_value()))
-        print(binascii.b2a_hex(t.get_value()))
+        val4 = t.get_value()
+        val5 = t.get_value()
+        print(binascii.b2a_hex(val4))
+        print(binascii.b2a_hex(val5))
+        self.assertEqual(val2, val4)
+        self.assertEqual(val5, b'\x03\x15')
 
         print('\n********\n')
 
@@ -1341,30 +1353,48 @@ class TestMisc(unittest.TestCase):
         for i in range(30):
             val = binascii.b2a_hex(t.get_value())
             print('*** [%d] ' % i, val)
+            print(t.pretty_print(), ' --> ', t.get_current_raw_val())
             if t.is_exhausted():
                 break
 
         print('\n********\n')
-
-        print('--> rewind')
+        print('--> rewind when exhausted')
         t.rewind()
-        print(binascii.b2a_hex(t.get_value()))
-        print(binascii.b2a_hex(t.get_value()))
-        print(binascii.b2a_hex(t.get_value()))
+        t.rewind()
+        t.rewind()
+        t.rewind()
+        val1 = t.get_value()
+        val2 = t.get_value()
+        val3 = t.get_value()
+        val4 = t.get_value()
+        print(binascii.b2a_hex(val1))
+        print(binascii.b2a_hex(val2))
+        print(binascii.b2a_hex(val3))
+        print(binascii.b2a_hex(val4))
+
+        self.assertEqual([val1, val2, val3, val4],
+                         [b'\x03\x31', b'\x03\x51', b'\x03\x91', b'\x03\xd1'])
 
         print('\n******** Fuzzy mode\n')
         t.reset_state()
         t.switch_mode()
 
-        print(binascii.b2a_hex(t.get_value()))
-        print(binascii.b2a_hex(t.get_value()))
+        val1 = t.get_value()
+        val2 = t.get_value()
+        print(binascii.b2a_hex(val1))
+        print(binascii.b2a_hex(val2))
         print('--> rewind')
         t.rewind()
-        print(binascii.b2a_hex(t.get_value()))
+        val3 = t.get_value()
+        print(binascii.b2a_hex(val3))
+        self.assertEqual(val2, val3)
         print('--> rewind')
         t.rewind()
-        print(binascii.b2a_hex(t.get_value()))
-        print(binascii.b2a_hex(t.get_value()))
+        val4 = t.get_value()
+        val5 = t.get_value()
+        print(binascii.b2a_hex(val4))
+        print(binascii.b2a_hex(val5))
+        self.assertEqual(val2, val4)
 
         print('\n********\n')
 
@@ -1379,11 +1409,22 @@ class TestMisc(unittest.TestCase):
 
         print('\n********\n')
 
-        print('--> rewind')
+        print('--> rewind when exhausted')
         t.rewind()
-        print(binascii.b2a_hex(t.get_value()))
-        print(binascii.b2a_hex(t.get_value()))
-        print(binascii.b2a_hex(t.get_value()))
+        t.rewind()
+        t.rewind()
+        t.rewind()
+        val1 = t.get_value()
+        val2 = t.get_value()
+        val3 = t.get_value()
+        val4 = t.get_value()
+        print(binascii.b2a_hex(val1))
+        print(binascii.b2a_hex(val2))
+        print(binascii.b2a_hex(val3))
+        print(binascii.b2a_hex(val4))
+
+        self.assertEqual([val1, val2, val3, val4],
+                         [b'\x03\xd1', b'\x03\x51', b'\x00\x11', b'\x02\x11'])
 
     def test_BitField_various_features(self):
 
@@ -1473,25 +1514,28 @@ class TestMisc(unittest.TestCase):
                       subfield_val_extremums=[None, [14, 15], None],
                       padding=1, endian=VT.BigEndian, lsb_padding=True)
         bfield_1 = Node('bfield_1', value_type=vt)
-        # bfield.set_env(Env())
+        bfield_1.set_env(Env())
 
         vt = BitField(subfield_sizes=[4, 4, 4],
                       subfield_values=[[3, 2, 0xe, 1], None, [10, 13, 3]],
                       subfield_val_extremums=[None, [14, 15], None],
                       padding=0, endian=VT.BigEndian, lsb_padding=True)
         bfield_2 = Node('bfield_2', value_type=vt)
+        bfield_2.set_env(Env())
 
         vt = BitField(subfield_sizes=[4, 4, 4],
                       subfield_values=[[3, 2, 0xe, 1], None, [10, 13, 3]],
                       subfield_val_extremums=[None, [14, 15], None],
                       padding=1, endian=VT.BigEndian, lsb_padding=False)
         bfield_3 = Node('bfield_3', value_type=vt)
+        bfield_3.set_env(Env())
 
         vt = BitField(subfield_sizes=[4, 4, 4],
                       subfield_values=[[3, 2, 0xe, 1], None, [10, 13, 3]],
                       subfield_val_extremums=[None, [14, 15], None],
                       padding=0, endian=VT.BigEndian, lsb_padding=False)
         bfield_4 = Node('bfield_4', value_type=vt)
+        bfield_4.set_env(Env())
 
         # '?\xef' (\x3f\xe0) + padding 0b1111
         msg = struct.pack('>H', 0x3fe0 + 0b1111)
@@ -1955,7 +1999,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of confs: %d' % idx, rgb=Color.INFO))
 
-        self.assertIn(idx, [542])
+        self.assertIn(idx, [527])
 
 
 @ddt.ddt

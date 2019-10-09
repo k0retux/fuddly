@@ -98,7 +98,7 @@ Here under is provided an example to register an evolutionary process (defined i
         ('evol1',
          DefaultPopulation,
          {'init_process': init_dp1,
-          'size': 80,
+          'max_size': 80,
           'max_generation_nb': 3,
           'crossover_algo': CrossoverHelper.crossover_algo1})
     )

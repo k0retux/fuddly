@@ -1785,9 +1785,9 @@ class BitField(VT_Alt):
 
     def __init__(self, subfield_limits=None, subfield_sizes=None,
                  subfield_values=None, subfield_val_extremums=None,
-                 padding=0, lsb_padding=True,
+                 padding=0, lsb_padding=True, show_padding=False,
                  endian=VT.BigEndian, determinist=True,
-                 subfield_descs=None, defaults=None):
+                 subfield_descs=None, subfield_value_descs=None, defaults=None):
 
         VT_Alt.__init__(self)
 
@@ -1803,8 +1803,10 @@ class BitField(VT_Alt):
         self.endian = endian
         self.padding = padding
         self.lsb_padding = lsb_padding
+        self.show_padding = show_padding
 
         self.subfield_descs = None
+        self.subfield_value_descs = None
         self.subfield_limits = []
         self.subfield_sizes = []
         self.subfield_vals = None
@@ -1812,15 +1814,18 @@ class BitField(VT_Alt):
         self.subfield_extrems = None
         self.subfield_extrems_save = None
         self.subfield_fuzzy_vals = []
-        self.current_idx = None
+        self.current_subfield = None
         self.idx = None
         self.idx_inuse = None
         self.set_bitfield(sf_values=subfield_values, sf_val_extremums=subfield_val_extremums,
                           sf_limits=subfield_limits, sf_sizes=subfield_sizes,
-                          sf_descs=subfield_descs, sf_defaults=defaults)
+                          sf_descs=subfield_descs, sf_val_descs=subfield_value_descs,
+                          sf_defaults=defaults)
 
     def make_private(self, forget_current_state):
-        # no need to copy self.default (that should not be modified)
+        # subfield_defaults, subfield_descs and subfield_value_descs are not made private
+        # as it is not meant to be modified outside of .set_bitfield() which completely change the BitField
+        # object and thus will definitely remove the dependencies to the original BitField.
         self.subfield_limits = copy.deepcopy(self.subfield_limits)
         self.subfield_sizes = copy.deepcopy(self.subfield_sizes)
         self.subfield_vals = copy.deepcopy(self.subfield_vals)
@@ -1836,10 +1841,6 @@ class BitField(VT_Alt):
 
     def reset_state(self):
         self._reset_idx()
-        for i, default in enumerate(self.subfield_defaults):
-            if default is not None:
-                mini, _ = self.subfield_extrems[i]
-                self.idx[i] = default - mini
         self.drawn_val = None
         self.__count_of_possible_values = None
         self.exhausted = False
@@ -1850,22 +1851,30 @@ class BitField(VT_Alt):
             self.switch_mode()
 
     def _reset_idx(self, reset_idx_inuse=True):
-        self.current_idx = 0
-        self.idx = [1 for i in self.subfield_limits]
-        if not self._fuzzy_mode:
-            self.idx[0] = 0
+        self.current_subfield = 0
+        if self._fuzzy_mode:
+            self.idx = [1 for i in self.subfield_limits]
+        else:
+            self.idx = [0 for i in self.subfield_limits]
+            for i, default in enumerate(self.subfield_defaults):
+                if default is not None:
+                    if self.subfield_extrems[i] is None:
+                        self.idx[i] = self.subfield_vals[i].index(default)
+                    else:
+                        mini, _ = self.subfield_extrems[i]
+                        self.idx[i] = default - mini
         # initially we don't make copy, as it will be copied anyway
         # during .get_value()
         if reset_idx_inuse:
             self.idx_inuse = self.idx
         
     def set_subfield(self, idx, val):
-        '''
+        """
         Args:
           idx (int): subfield index, from 0 (low significant subfield) to nb_subfields-1
             (specific index -1 is used to choose the last subfield).
           val (int): new value for the subfield
-        '''
+        """
         if idx == -1:
             idx = len(self.subfield_sizes) - 1
         assert(self.is_compatible(val, self.subfield_sizes[idx]))
@@ -1886,6 +1895,55 @@ class BitField(VT_Alt):
 
         self.current_val_update_pending = True
 
+    def change_subfield(self, idx, values=None, extremums=None):
+        """
+        Change the constraints on a given subfield.
+
+        Args:
+          idx (int): subfield index, from 0 (low significant subfield) to nb_subfields-1
+            (specific index -1 is used to choose the last subfield).
+          values (list): new values for the subfield (remove previous value list or remove previous
+            extremums if no value list was used for this subfield)
+          extremums (list): new extremums for the subfield (remove previous extremums or remove
+            previous value list if no extremums were used for this subfield)
+        """
+        if idx == -1:
+            idx = len(self.subfield_sizes) - 1
+
+        if values is not None:
+            for v in values:
+                assert self.is_compatible(v, self.subfield_sizes[idx])
+            self.subfield_extrems[idx] = None
+            if self.subfield_extrems_save is not None:
+                self.subfield_extrems_save[idx] = None
+            self.subfield_vals[idx] = copy.copy(values)
+            if self._fuzzy_mode:
+                self.subfield_vals_save = self.subfield_vals
+            if self.subfield_defaults[idx] not in values:
+                self.subfield_defaults[idx] = None
+                self.idx_inuse[idx] = self.idx[idx] = 0
+            else:
+                self.idx_inuse[idx] = self.idx[idx] = self.subfield_vals[idx].index(self.subfield_defaults[idx])
+        elif extremums is not None:
+            assert len(extremums) == 2 and extremums[0] <= extremums[1]
+            assert self.is_compatible(extremums[0], self.subfield_sizes[idx])
+            assert self.is_compatible(extremums[1], self.subfield_sizes[idx])
+            self.subfield_vals[idx] = None
+            if self.subfield_vals_save is not None:
+                self.subfield_vals_save[idx] = None
+            self.subfield_extrems[idx] = copy.copy(extremums)
+            if self._fuzzy_mode:
+                self.subfield_extrems_save = self.subfield_extrems
+            if self.subfield_defaults[idx] < extremums[0] or self.subfield_defaults[idx] > extremums[1]:
+                self.subfield_defaults[idx] = None
+                self.idx_inuse[idx] = self.idx[idx] = 0
+            else:
+                self.idx_inuse[idx] = self.idx[idx] = self.subfield_defaults[idx] - extremums[0]
+        else:
+            raise ValueError
+
+        self.current_val_update_pending = True
+
 
     def get_subfield(self, idx):
         if idx == -1:
@@ -1902,7 +1960,7 @@ class BitField(VT_Alt):
 
         
     def set_bitfield(self, sf_values=None, sf_val_extremums=None, sf_limits=None, sf_sizes=None,
-                     sf_descs=None, sf_defaults=None):
+                     sf_descs=None, sf_val_descs=None, sf_defaults=None):
 
         if sf_limits is not None:
             self.subfield_limits = copy.copy(sf_limits)
@@ -1928,6 +1986,9 @@ class BitField(VT_Alt):
             assert(len(self.subfield_limits) == len(sf_descs))
             self.subfield_descs = copy.copy(sf_descs)
 
+        if sf_val_descs is not None:
+            self.subfield_value_descs = copy.copy(sf_val_descs)
+
         if sf_defaults is not None:
             assert len(sf_defaults) == len(self.subfield_limits)
             self.subfield_defaults = copy.copy(sf_defaults)
@@ -1941,8 +2002,6 @@ class BitField(VT_Alt):
             self.padding_size = 0
         else:
             self.padding_size = 8 - (self.size % 8)
-
-        self._reset_idx()
 
         self.subfield_vals = []
         self.subfield_extrems = []
@@ -1962,11 +2021,10 @@ class BitField(VT_Alt):
                 for v in values:
                     if self.is_compatible(v, size):
                         l.append(v)
-                default = self.subfield_defaults[idx]
-                if default is not None:
-                    assert default in l
-                    l.remove(default)
-                    l.insert(self.idx[idx], default)
+                    else:
+                        s = 'value "{:d}" is out of range for the subfield {:d} [size: {:d} bit(s)]'\
+                            .format(v, idx, size)
+                        raise ValueError(s)
                 self.subfield_vals.append(l)
                 self.subfield_extrems.append(None)
             else:
@@ -1976,7 +2034,7 @@ class BitField(VT_Alt):
                         assert(mini != maxi)
                         self.subfield_extrems.append([mini, maxi])
                     else:
-                        s = '*** ERROR: builtins.min({:d}) / builtins.max({:d}) values are out of range!'.format(mini, maxi)
+                        s = 'builtins.min({:d}) / builtins.max({:d}) values are out of range'.format(mini, maxi)
                         raise ValueError(s)
                     self.subfield_vals.append(None)
                 else:
@@ -1984,12 +2042,18 @@ class BitField(VT_Alt):
                     self.subfield_extrems.append([mini, maxi])
                     self.subfield_vals.append(None)
 
-                default = self.subfield_defaults[idx]
-                if default is not None:
-                    self.idx[idx] = default - mini
-
             self.subfield_fuzzy_vals.append(None)
             prev_lim = lim
+
+        for i, default in enumerate(self.subfield_defaults):
+            if default is not None:
+                if self.subfield_extrems[i] is None:
+                    assert default in self.subfield_vals[i]
+                else:
+                    mini, maxi = self.subfield_extrems[i]
+                    assert mini <= default <= maxi
+
+        self._reset_idx()
 
 
     @property
@@ -2057,10 +2121,29 @@ class BitField(VT_Alt):
                 desc_extension = bitfield.subfield_descs
             elif self.subfield_descs is not None and bitfield.subfield_descs is None:
                 desc_extension = [None for i in bitfield.subfield_limits]
+            else:
+                desc_extension = bitfield.subfield_descs
             if rightside:
                 self.subfield_descs += desc_extension
             else:
                 self.subfield_descs = desc_extension + self.subfield_descs
+
+        if self.subfield_value_descs is not None or bitfield.subfield_value_descs is not None:
+            if self.subfield_value_descs is None:
+                self.subfield_value_descs = {}
+            desc_ext = {} if bitfield.subfield_value_descs is None else bitfield.subfield_value_descs
+
+            if rightside:
+                offset = len(self.subfield_sizes)
+                for k, v in desc_ext.items():
+                    self.subfield_value_descs[k+offset] = v
+            else:
+                offset = len(bitfield.subfield_sizes)
+                new_dict = {}
+                for k, v in self.subfield_value_descs.items():
+                    new_dict[k+offset] = v
+                new_dict.update(desc_ext)
+                self.subfield_value_descs = new_dict
 
         if rightside:
             self.subfield_sizes += bitfield.subfield_sizes
@@ -2103,8 +2186,18 @@ class BitField(VT_Alt):
     def set_size_from_constraints(self, size=None, encoded_size=None):
         raise DataModelDefinitionError
 
-
     def pretty_print(self, max_size=None):
+
+        if self.subfield_value_descs is None:
+            def value_desc(subfield_idx, val):
+                return ''
+        else:
+            def value_desc(subfield_idx, val):
+                if subfield_idx in self.subfield_value_descs:
+                    desc = self.subfield_value_descs[subfield_idx].get(val)
+                    return '' if desc is None else ' [' + desc + ']'
+                else:
+                    return ''
 
         current_raw_val = self.get_current_raw_val()
 
@@ -2128,12 +2221,14 @@ class BitField(VT_Alt):
 
             if values is None:
                 mini, maxi = extrems
-                string += bin(mini+self.idx_inuse[i])[2:].zfill(sz)
+                val = mini+self.idx_inuse[i]
             else:
                 index = 0 if len(values) == 1 else self.idx_inuse[i]
-                string += bin(values[index])[2:].zfill(sz)
+                val = values[index]
 
-        if self.padding_size != 0:
+            string += bin(val)[2:].zfill(sz) + value_desc(i, val)
+
+        if self.padding_size != 0 and self.show_padding:
             if self.padding == 1:
                 # in the case the padding has been modified, following an absorption,
                 # to something not standard because of AbsCsts.Contents == False,
@@ -2148,6 +2243,10 @@ class BitField(VT_Alt):
 
         else:
             string += ' |-)'
+
+
+        if not self.show_padding and self.lsb_padding:
+            current_raw_val = current_raw_val >> self.padding_size
 
         return string + ' ' + str(current_raw_val)
 
@@ -2178,9 +2277,11 @@ class BitField(VT_Alt):
             l = []
             self.subfield_fuzzy_vals[idx] = l
 
-            # we substract 1 because after a get_value() call idx is incremented in advance
+            # we substract 1 because after a get_value() call, self.idx is incremented in advance
             # max is needed because self.idx[0] is equal to 0 in this case
-            curr_idx = builtins.max(self.idx[idx]-1, 0)
+            # curr_idx = builtins.max(self.idx[idx]-1, 0)
+
+            curr_idx = self.idx_inuse[idx]
 
             curr_values = self.subfield_vals[idx]
             if curr_values is not None:
@@ -2190,7 +2291,8 @@ class BitField(VT_Alt):
                 current = mini + curr_idx
 
             # append first a normal value, as it will be used as a
-            # reference when the other fields are fuzzed
+            # reference when the other fields are fuzzed.
+            # self._reset_idx() will init self.idx accordingly to avoid nominal value in fuzz mode
             l.append(current)
 
             if self.subfield_extrems[idx] is not None:
@@ -2276,43 +2378,43 @@ class BitField(VT_Alt):
     count_of_possible_values = property(fget=__compute_total_possible_values)
 
     def rewind(self):
-        if self.current_idx > 0 and not self.exhausted:
-            if self.idx[self.current_idx] > 1:
-                self.idx[self.current_idx] -= 1
-            elif self.idx[self.current_idx] == 1:
-                self.current_idx -= 1
+        def sf_possible_values(sf_index):
+            vals = self.subfield_vals[sf_index]
+            if vals is not None:
+                return len(vals)
             else:
-                ValueError
+                mini, maxi = self.subfield_extrems[sf_index]
+                return maxi - mini + 1
 
-        elif self.exhausted:
-            assert(self.current_idx == 0)
-            for i in range(len(self.subfield_limits)):
-                if self.subfield_vals[i] is None:
-                    last = self.subfield_extrems[i][1] - self.subfield_extrems[i][0]
-                else:
-                    last = len(self.subfield_vals[i]) - 1
-                self.idx[i] = last
-
-            self.current_idx = len(self.subfield_limits) - 1
-
-        elif self.current_idx == 0:
-            if self.idx[self.current_idx] > 1:
-                self.idx[self.current_idx] -= 1
-            elif self.idx[self.current_idx] == 1:
-                if not self._fuzzy_mode:
-                    self.idx[self.current_idx] = 0
+        if not self.exhausted:
+            if self.idx[self.current_subfield] > 1:
+                self.idx[self.current_subfield] -= 1
+            elif self.idx[self.current_subfield] == 1:
+                if self.current_subfield > 0:
+                    self.current_subfield -= 1
+                    self.idx[self.current_subfield] = sf_possible_values(self.current_subfield) - 1
+            elif self.idx[self.current_subfield] == 0:
+                if self.current_subfield > 0:
+                    self.current_subfield -= 1
+                    self.idx[self.current_subfield] = sf_possible_values(self.current_subfield) - 1
             else:
                 pass
 
+            if self.exhaustion_cpt > 0:
+                # meaning this is not the first value, thus the previous code had an effect
+                self.exhaustion_cpt = self.count_of_possible_values-1
+
         else:
-            pass
+            assert self.current_subfield == 0
+            last_sf = len(self.subfield_limits) - 1
+            self.current_subfield = last_sf
+            self.idx[last_sf] = sf_possible_values(last_sf) - 1
+            self.exhausted = False
+            self.exhaustion_cpt = self.count_of_possible_values-1
+            if sf_possible_values(self.current_subfield) == 1:
+                self.rewind()
 
         self.drawn_val = None
-        
-        if self.exhausted:
-            self.exhausted = False
-            self.exhaustion_cpt = 0
-
 
     def _read_value_from(self, blob, size, endian, constraints):
         """
@@ -2397,8 +2499,6 @@ class BitField(VT_Alt):
 
         self.drawn_val, orig_val = self._read_value_from(blob, self.nb_bytes, self.endian, constraints)
 
-        insert_idx = 0
-        first_pass = True
         limits = self.subfield_limits[:-1]
         limits.insert(0, 0)
         for lim, sz, values, extrems, i in zip(limits, self.subfield_sizes, self.subfield_vals,
@@ -2418,12 +2518,9 @@ class BitField(VT_Alt):
                 if constraints[AbsCsts.Contents] and val not in values:
                     raise ValueError("Value for subfield number {:d} does not match the constraints!".format(i+1))
                 if val in values:
-                    values.remove(val)
-                values.insert(insert_idx, val)
-
-            if first_pass:
-                first_pass = False
-                insert_idx = 1
+                    self.idx[i] = values.index(val)
+                else:
+                    values.insert(self.idx[i], val)
 
         return blob, off, self.nb_bytes
 
@@ -2469,49 +2566,66 @@ class BitField(VT_Alt):
 
         val = 0
         prev_lim = 0
-        update_current_idx = False
+        update_current_subfield = False
+
+        # Avoid value redundancy when walking through the possible values
+        # do our best when default value are used (without impacting perfo)
+        if self.current_subfield > 0 and not self._fuzzy_mode:
+            default = self.subfield_defaults[self.current_subfield]
+            if default is None:
+                vals = self.subfield_vals[self.current_subfield]
+                if vals is not None:
+                    if len(vals) > 1 and self.idx[self.current_subfield] == 0:
+                        self.idx[self.current_subfield] = 1
+                    else:
+                        pass
+                else:
+                    if self.idx[self.current_subfield] == 0:
+                        self.idx[self.current_subfield] = 1
+                    else:
+                        pass
+
+            else:
+                if self.subfield_vals[self.current_subfield] is not None:
+                    default_idx = self.subfield_vals[self.current_subfield].index(default)
+                    if self.idx[self.current_subfield] == default_idx \
+                            and default_idx+1 < len(self.subfield_vals[self.current_subfield]):
+                        self.idx[self.current_subfield] += 1
+                    else:
+                        pass
+                else:
+                    min, max = self.subfield_extrems[self.current_subfield]
+                    if self.idx[self.current_subfield] == default - min and default < max:
+                        self.idx[self.current_subfield] += 1
+                    else:
+                        pass
 
         self.idx_inuse = copy.copy(self.idx)
 
         for lim, values, extrems, i in zip(self.subfield_limits, self.subfield_vals, self.subfield_extrems,
                                              range(len(self.subfield_limits))):
             if self.determinist:
-                if i == self.current_idx:
+                if i == self.current_subfield:
+                    index = self.idx[self.current_subfield]
                     if values is None:
                         mini, maxi = extrems
-                        v = mini + self.idx[self.current_idx]
+                        v = mini + index
                         if v >= maxi:
-                            update_current_idx = True
+                            update_current_subfield = True
                         else:
-                            self.idx[self.current_idx] += 1
+                            self.idx[self.current_subfield] += 1
+                        self.idx_inuse[self.current_subfield] = index
                         val += v << prev_lim
                     else:
-                        if len(values) == 1:
-                            index = 0
-                        else:
-                            index = self.idx[self.current_idx]
                         if index >= len(values) - 1:
-                            update_current_idx = True
+                            update_current_subfield = True
                         else:
-                            self.idx[self.current_idx] += 1
-                        self.idx_inuse[self.current_idx] = index
+                            self.idx[self.current_subfield] += 1
+                        self.idx_inuse[self.current_subfield] = index
                         val += values[index] << prev_lim
                 else:
-                    if self._fuzzy_mode:
-                        cursor = 0
-                    else:
-                        if values is not None and len(values) == 1:
-                            cursor = 0
-                        else:
-                            if i > self.current_idx and self.subfield_defaults[i] is None:
-                                # Note on the use of builtins.max(): in the
-                                # case of values, idx is always > 1,
-                                # whereas when it is extrems, idx can
-                                # be 0.
-                                cursor = builtins.max(self.idx[i] - 1, 0)
-                            else:
-                                cursor = self.idx[i]
-                    self.idx_inuse[i] = cursor
+                    default = self.subfield_defaults[i]
+                    cursor = self.idx_inuse[i] = default if default is not None else 0
                     if values is None:
                         mini, maxi = extrems
                         val += (mini + cursor) << prev_lim
@@ -2544,23 +2658,23 @@ class BitField(VT_Alt):
                 self.exhausted = False
 
 
-        if update_current_idx:
+        if update_current_subfield:
             self.exhausted = False
 
-            self.current_idx += 1
-            if self.current_idx >= len(self.idx):
+            self.current_subfield += 1
+            if self.current_subfield >= len(self.idx):
                 self._reset_idx(reset_idx_inuse=False)
                 self.exhausted = True
             else:
                 while True:
-                    if self.subfield_vals[self.current_idx] is None:
-                        last = self.subfield_extrems[self.current_idx][1] - self.subfield_extrems[self.current_idx][0]
+                    if self.subfield_vals[self.current_subfield] is None:
+                        last = self.subfield_extrems[self.current_subfield][1] - self.subfield_extrems[self.current_subfield][0]
                     else:
-                        last = len(self.subfield_vals[self.current_idx]) - 1
+                        last = len(self.subfield_vals[self.current_subfield]) - 1
 
-                    if self.idx[self.current_idx] > last:
-                        self.current_idx += 1
-                        if self.current_idx >= len(self.idx):
+                    if self.idx[self.current_subfield] >= last:
+                        self.current_subfield += 1
+                        if self.current_subfield >= len(self.idx):
                             self._reset_idx(reset_idx_inuse=False)
                             self.exhausted = True
                             break

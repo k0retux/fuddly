@@ -856,9 +856,7 @@ parameters:
   (refer to :ref:`dm:node_prop_keywords`).
 
 ``defaults`` [optional, default value: **None**]
-  List of default value for each sub-field. Used only when the related sub-field is
-  not described through ``subfield_values``. If ``subfield_values`` describes the related
-  sub-field, then a ``None`` item should be inserted at the corresponding position in the list.
+  List of default value for each sub-field.
 
 ``subfield_descs`` [optional, default value: **None**]
   List of descriptions (character strings) for each sub-field. To
@@ -866,6 +864,11 @@ parameters:
   others. This parameter is used for display purpose. Look at the
   following examples for usage.
 
+``subfield_value_descs`` [optional, default value: **None**]
+  Dictionary providing descriptions (character strings) for values in each sub-field. More precisely,
+  the dictionary maps subfield indexes to other dictionaries whose provides the mapping between values and
+  descriptions. Leveraged for display purpose. Even if provided, all values do not need to be described.
+  Look at the following examples for usage.
 
 Let's take the following examples to make ``BitField`` usage
 obvious. On the first one, we specify the sub-fields of the
@@ -901,7 +904,7 @@ session.
 On the second example we specify the sub-fields of the ``BitField`` by
 their sizes. And the other parameters are described in the same way as
 the first example. We additionally specify the parameter
-``subfield_descs``. Look at the output for the differences.
+``subfield_descs`` and ``subfield_value_descs``. Look at the output for the differences.
 
 .. code-block:: python
    :linenos:
@@ -911,13 +914,14 @@ the first example. We additionally specify the parameter
 		 subfield_values=[[4,2,1], None, [10,13]],
 		 subfield_val_extremums=[None, [14, 15], None],
 		 padding=0, lsb_padding=False, endian=VT.BigEndian,
-		 subfield_descs=['first', None, 'last'])
+		 subfield_descs=['first', None, 'last'],
+		 subfield_value_descs={0:{4:'optionA',2:'optionB'}})
 
     t.pretty_print()
 
     # output of the previous call:
     #
-    #     (+|padding: 0000 |2(last): 1101 |1: 1111 |0(first): 0100 |-) 2788
+    #     (+|padding: 0000 |2(last): 1101 |1: 1111 |0(first): 0100 [optionA] |-) 2788
 
 
 .. seealso:: Methods are defined to help for modifying a

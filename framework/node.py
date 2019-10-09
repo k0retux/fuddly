@@ -5009,8 +5009,8 @@ class Node(object):
         `base_node`. This method performs a deep copy of `base_node`,
         but some parameters can change the behavior of the copy.
 
-        .. note:: python deepcopy() is not used for perfomance reason
-          (10 to 20 times slower).
+        .. note:: python deepcopy() is not used for performance reason
+          (10 to 20 times slower) and as it does not work for all cases.
 
         Args:
           base_node (Node): (Optional) Used as a template to create the new node.
