@@ -80,6 +80,7 @@ class MH(object):
             MutableClone = NonTermCusto.MutableClone
             FrozenCopy = NonTermCusto.FrozenCopy
             CollapsePadding = NonTermCusto.CollapsePadding
+            DelayCollapsing = NonTermCusto.DelayCollapsing
 
         # Generator node (leaf) custo
         class Gen:

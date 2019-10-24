@@ -505,11 +505,13 @@ class NonTermCusto(NodeCustomization):
     MutableClone = 1
     FrozenCopy = 2
     CollapsePadding = 3
+    DelayCollapsing = 4
 
     _custo_items = {
         MutableClone: True,
         FrozenCopy: True,
-        CollapsePadding: False
+        CollapsePadding: False,
+        DelayCollapsing: False
     }
 
     @property
@@ -523,6 +525,10 @@ class NonTermCusto(NodeCustomization):
     @property
     def collapse_padding_mode(self):
         return self._custo_items[self.CollapsePadding]
+
+    @property
+    def delay_collapsing(self):
+        return self._custo_items[self.DelayCollapsing]
 
 
 class GenFuncCusto(NodeCustomization):
@@ -3105,7 +3111,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
         def handle_encoding(list_to_enc):
 
-            if self.custo.collapse_padding_mode:
+            if self.custo.collapse_padding_mode and not self.custo.delay_collapsing:
                 list_to_enc = list(flatten(list_to_enc))
                 if list_to_enc and isinstance(list_to_enc[0], bytes):
                     return list_to_enc
@@ -3866,11 +3872,16 @@ class NodeInternals_NonTerm(NodeInternals):
             first_pass = True
 
             if self.custo.collapse_padding_mode:
-                consumed_bits = 0
-                byte_aligned = None
+                if hasattr(self, '_private_collapse_mode'):  # TODO: remove ugliness
+                    consumed_bits, byte_aligned = self._private_collapse_mode
+                else:
+                    consumed_bits = 0
+                    byte_aligned = None
 
             # Iterate over all sub-components of the component node_list
             for delim, sublist in self.__iter_csts(node_list):
+
+                blob_update_pending = False  # reserved for collapse_padding_mode usage
 
                 if delim[1] == '>':
 
@@ -3878,11 +3889,10 @@ class NodeInternals_NonTerm(NodeInternals):
                         abort = False
                         base_node, min_node, max_node = self._parse_node_desc(node_desc)
 
-                        if self.custo.collapse_padding_mode:
+                        vt = base_node.get_value_type() if base_node.is_typed_value() else None
+                        if self.custo.collapse_padding_mode and isinstance(vt, fvt.BitField):
 
-                            vt = base_node.get_value_type()
-                            if not isinstance(vt, fvt.BitField) \
-                                    or min_node != 1 \
+                            if min_node != 1 \
                                     or max_node != 1 \
                                     or self.separator is not None \
                                     or postponed_node_desc:
@@ -3966,10 +3976,14 @@ class NodeInternals_NonTerm(NodeInternals):
                                 consumed_bits = 0 if consumed_bits == 8 else consumed_bits%8
 
                                 # if vt is byte-aligned, then the consumed_size is correct
+                                # otherwise we decrease it
                                 if vt.padding_size != 0 and consumed_bits > 0:
                                     consumed_size -= 1
 
+                                blob_update_pending = True
+                                # if we reach the end we should update the blob
                                 if idx == len(sublist) - 1:
+                                    blob_update_pending = False
                                     blob = blob[consumed_size:]
 
                         elif base_node.is_attr_set(NodeInternals.Abs_Postpone):
@@ -3981,12 +3995,32 @@ class NodeInternals_NonTerm(NodeInternals):
                             continue
 
                         else:
+                            if self.custo.collapse_padding_mode:
+                                bnode_to_be_cleaned = False
+                                aligned = consumed_bits%8 == 0
+                                if blob_update_pending and aligned:
+                                    # When some Bitfield were collapsed in the NT sublist
+                                    # but in this sublist other nodes are not Bitfield.
+                                    # Thus, we need to update the blob and reinit
+                                    # the "collapse_mode state" for a potential future collapse
+                                    blob_update_pending = False
+                                    blob = blob[consumed_size:]
+                                    consumed_bits = 0
+                                    byte_aligned = None
+                                elif not aligned:
+                                    bnode_to_be_cleaned = True
+                                    conf = base_node._check_conf(conf)
+                                    base_node.c[conf]._private_collapse_mode = (consumed_bits, byte_aligned)
+
                             # pending_upper_postpone = pending_postpone_desc
                             abort, blob, consumed_size, consumed_nb, postponed_sent_back = \
                                 _try_absorption_with(base_node, min_node, max_node,
                                                      blob, consumed_size,
                                                      postponed_node_desc,
                                                      pending_upper_postpone=pending_postpone_desc)
+                            if self.custo.collapse_padding_mode and bnode_to_be_cleaned:
+                                bnode_to_be_cleaned = False
+                                del base_node.c[conf]._private_collapse_mode
 
                         # In this case max_node is 0
                         if abort is None:
@@ -5304,7 +5338,7 @@ class Node(object):
     '''Property linked to `self.internals` (read only)'''
 
     def conf(self, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         return self.internals[conf]
     
     def get_internals_backup(self):
@@ -5323,7 +5357,7 @@ class Node(object):
         self.entangled_nodes = backup.entangled_nodes
         self._delayed_jobs_called = backup._delayed_jobs_called
 
-    def __check_conf(self, conf):
+    def _check_conf(self, conf):
         if conf is None:
             conf = self.current_conf
         elif not self.is_conf_existing(conf):
@@ -5331,15 +5365,15 @@ class Node(object):
         return conf
 
     def is_genfunc(self, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         return isinstance(self.internals[conf], NodeInternals_GenFunc)
 
     def is_func(self, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         return isinstance(self.internals[conf], NodeInternals_Func)
 
     def is_typed_value(self, conf=None, subkind=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         resp = isinstance(self.internals[conf], NodeInternals_TypedValue)
         if resp and subkind is not None:
             resp = (self.internals[conf].get_current_subkind() == subkind) or \
@@ -5347,16 +5381,16 @@ class Node(object):
         return resp
 
     def is_nonterm(self, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         return isinstance(self.internals[conf], NodeInternals_NonTerm)
 
     def is_term(self, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         return issubclass(self.internals[conf].__class__, NodeInternals_Term)
 
 
     def compliant_with(self, internals_criteria=None, semantics_criteria=None, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
 
         if internals_criteria:
             cond1 = self.internals[conf].match(internals_criteria)
@@ -5420,7 +5454,7 @@ class Node(object):
 
     def set_subnodes_basic(self, node_list, conf=None, ignore_entanglement=False, separator=None,
                            preserve_node=True):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
 
         new_internals = NodeInternals_NonTerm()
         if preserve_node:
@@ -5437,7 +5471,7 @@ class Node(object):
 
     def set_subnodes_with_csts(self, wlnode_list, conf=None, ignore_entanglement=False, separator=None,
                                preserve_node=True):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
 
         new_internals = NodeInternals_NonTerm()
         if preserve_node:
@@ -5452,7 +5486,7 @@ class Node(object):
 
 
     def set_subnodes_full_format(self, subnodes_order, subnodes_attrs, conf=None, separator=None, preserve_node=True):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
 
         new_internals = NodeInternals_NonTerm()
         if preserve_node:
@@ -5466,7 +5500,7 @@ class Node(object):
 
     def set_values(self, values=None, value_type=None, conf=None, ignore_entanglement=False,
                    preserve_node=True):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
 
         new_internals = NodeInternals_TypedValue()
         if preserve_node:
@@ -5493,7 +5527,7 @@ class Node(object):
     def set_func(self, func, func_node_arg=None, func_arg=None,
                  conf=None, ignore_entanglement=False, provide_helpers=False,
                  preserve_node=True):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
 
         new_internals = NodeInternals_Func()
         if preserve_node:
@@ -5513,7 +5547,7 @@ class Node(object):
     def set_generator_func(self, gen_func, func_node_arg=None,
                            func_arg=None, conf=None, ignore_entanglement=False,
                            provide_helpers=False, preserve_node=True):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
 
         new_internals = NodeInternals_GenFunc()
         if preserve_node:
@@ -5529,11 +5563,11 @@ class Node(object):
 
 
     def make_empty(self, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         self.internals[conf] = NodeInternals_Empty()
         
     def is_empty(self, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         return isinstance(self.internals[conf], NodeInternals_Empty)
 
     def absorb(self, blob, constraints=AbsCsts(), conf=None, pending_postpone_desc=None):
@@ -5550,15 +5584,15 @@ class Node(object):
         return status, off, sz, self.name
 
     def set_absorb_helper(self, helper, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         self.internals[conf].set_absorb_helper(helper)
 
     def enforce_absorb_constraints(self, csts, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         self.internals[conf].enforce_absorb_constraints(csts)
 
     def set_size_from_constraints(self, size=None, encoded_size=None, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         self.internals[conf].set_size_from_constraints(size=size, encoded_size=encoded_size)
 
     # Does not affect function/generator Nodes
@@ -5596,11 +5630,11 @@ class Node(object):
             self.internals[c].set_clone_info(info, node)
 
     def make_synchronized_with(self, scope, node=None, param=None, sync_obj=None, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         self.internals[conf].set_node_sync(scope=scope, node=node, param=param, sync_obj=sync_obj)
 
     def synchronized_with(self, scope, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         val = self.internals[conf].get_node_sync(scope)
         return val
 
@@ -5627,15 +5661,15 @@ class Node(object):
             self.internals[conf].clear_child_attr(name, conf=next_conf, recursive=recursive)
 
     def is_attr_set(self, name, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         return self.internals[conf].is_attr_set(name)
 
     def set_private(self, val, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         self.internals[conf].set_private(val)
 
     def get_private(self, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         return self.internals[conf].get_private()
 
     def set_semantics(self, sem):
@@ -5903,7 +5937,7 @@ class Node(object):
         return self.env
 
     def freeze(self, conf=None, recursive=True, return_node_internals=False):
-        
+
         ret = self._get_value(conf=conf, recursive=recursive,
                               return_node_internals=return_node_internals)
 
@@ -5967,11 +6001,11 @@ class Node(object):
         self._post_freeze_handler = func
 
     def is_exhausted(self, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         return self.internals[conf].is_exhausted()
 
     def is_frozen(self, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         return self.internals[conf].is_frozen()
 
     def reset_state(self, recursive=False, exclude_self=False, conf=None, ignore_entanglement=False):
@@ -6049,7 +6083,7 @@ class Node(object):
         return val
 
     def set_frozen_value(self, value, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
 
         if self.is_term(conf):
             value = convert_to_internal_repr(value)
@@ -6058,7 +6092,7 @@ class Node(object):
             raise ValueError
 
     def fix_synchronized_nodes(self, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         self.internals[conf].synchronize_nodes(self)
 
     def unfreeze(self, conf=None, recursive=True, dont_change_state=False,
@@ -6097,14 +6131,14 @@ class Node(object):
 
 
     def pretty_print(self, max_size=None, conf=None):
-        conf = self.__check_conf(conf)
+        conf = self._check_conf(conf)
         return self.internals[conf].pretty_print(max_size=max_size)
 
     def get_nodes_names(self, conf=None, verbose=False, terminal_only=False, flush_cache=True):
         l = []
         for path, node in self.iter_paths(conf=conf, flush_cache=flush_cache):
             if terminal_only:
-                conf = node.__check_conf(conf)
+                conf = node._check_conf(conf)
                 if not node.is_term(conf):
                     continue
 
@@ -6248,7 +6282,7 @@ class Node(object):
             for n, i in zip(l, range(nodes_nb)):
                 name, node = n
 
-                conf_tmp = node.__check_conf(conf)
+                conf_tmp = node._check_conf(conf)
                 if isinstance(node.c[conf_tmp], NodeInternals_TypedValue):
                     node_type = node.c[conf_tmp].get_value_type().__class__.__name__
                 else:

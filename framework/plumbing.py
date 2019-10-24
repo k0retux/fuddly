@@ -4751,7 +4751,7 @@ class FmkShell(cmd.Cmd):
         return ret
 
 
-    def do_send_loop(self, line, use_existing_seed=False):
+    def do_send_loop(self, line, use_existing_seed=False, verbose=False):
         '''
         Execute the 'send' command in a loop
         |_ syntax: send_loop <#loop> <generator_type> [disruptor_type_1 ... disruptor_type_n] [targetID1 ... targetIDN]
@@ -4793,11 +4793,21 @@ class FmkShell(cmd.Cmd):
         with aligned_stdout(**kwargs):
 
             self.__error = self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
-                                                         max_loop=max_loop, verbose=True,
+                                                         max_loop=max_loop, verbose=verbose,
                                                          save_generator_seed=use_existing_seed) is None
 
         return False
 
+    def do_send_loop_verbose(self, line):
+        """
+        Execute the 'send' command in a loop and save the seed
+        |_ syntax: send_loopv <#loop> <generator_type> [disruptor_type_1 ... disruptor_type_n]  [targetID1 ... targetIDN]
+
+        Notes:
+            - To loop indefinitely use -1 for #loop. To stop the loop use Ctrl+C
+        """
+        ret = self.do_send_loop(line, use_existing_seed=True, verbose=True)
+        return ret
 
     def do_send_with(self, line):
         '''

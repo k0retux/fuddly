@@ -154,18 +154,49 @@ custo_set, custo_clear
 
   - ``MH.Custo.NTerm.CollapsePadding``: By default, this mode is *disabled*.
     When enabled, every time two adjacent ``BitField`` 's (within its scope) are found, they
-    will be merged in order to remove any padding in between. This is done
+    will be merged in order to remove any padding in-between. This is done
     "recursively" until any inner padding is removed.
 
     .. note::
       To be compatible with an *absorption* operation, the non-terminal set with this
       customization should comply with the following requirements:
 
-      - It shall only contains ``BitField`` 's (which implies that no *separators* shall be used)
       - The ``lsb_padding`` parameter shall be set to ``True`` on every related ``BitField`` 's.
       - The ``endian`` parameter shall be set to ``VT.BigEndian`` on every related ``BitField`` 's.
       - the ``qty`` keyword should not be used on the children except if it is equal to ``1``,
         or ``(1,1)``.
+
+  - ``MH.Custo.NTerm.DelayCollapsing``: By default, this mode is *disabled*.
+    To be used in
+    conjunction with ``MH.Custo.NTerm.CollapsePadding`` when the collapse operation should not
+    be performed in the current non-terminal node but in the parent node.
+    Refer to the code snippet below for an example:
+
+    .. code-block:: python
+
+        {'name': 'request',
+         'custo_set': MH.Custo.NTerm.CollapsePadding,
+         'contents': [
+             {'name': 'header',
+              'contents': BitField(subfield_sizes=[3,1], endian=VT.BigEndian,
+                                   subfield_val_extremums=[[0,7], [0,1]])},
+
+             {'name': 'payload',
+              'custo_set': [MH.Custo.NTerm.CollapsePadding, MH.Custo.NTerm.DelayCollapsing],
+              'contents': [
+                  {'name': 'status',
+                   'contents': BitField(subfield_sizes=[1,3], endian=VT.BigEndian,
+                                        subfield_values=[None,[0,1,2]])},
+                  {'name': 'count',
+                   'contents': UINT16_be()}
+               ]},
+
+               # [...]
+          }
+
+    Without this mode, when resolving the `request` node to get the byte-string
+    the `payload` subnode will be resolved too early and will produce a byte-string without
+    any collapse operation.
 
   For *generator* node, the customizable behavior modes are:
 

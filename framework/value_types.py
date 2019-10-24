@@ -1539,7 +1539,9 @@ class INT(VT):
                 val = self.__class__.maxi
                 ok = False
             if self.values is not None:
-                self.values.append(val)
+                if val in self.values:
+                    self.values.remove(val)
+                self.values.insert(0, val)
                 self.values_copy = copy.copy(self.values)
             else:
                 self.idx = val - self.mini_gen
