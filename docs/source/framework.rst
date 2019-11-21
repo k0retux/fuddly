@@ -322,7 +322,17 @@ framework.plumbing module
 .. automodule:: framework.plumbing
    :members:
    :undoc-members:
-   :exclude-members: __dict__, __weakref__, FmkShell, EnforceOrder, ExportableFMKOps, FmkFeedback, is_python_file
+   :exclude-members: __dict__, __weakref__, FmkShell, EnforceOrder, FmkFeedback, is_python_file
+
+
+libs.utils module
+-----------------
+
+.. automodule:: libs.utils
+    :members:
+    :undoc-members:
+    :show-inheritance: __dict__, __weakref__
+
 
 
 ..

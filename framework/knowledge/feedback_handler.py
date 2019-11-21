@@ -77,8 +77,9 @@ class FeedbackHandler(object):
         self._xterm_prg_name = xterm_prg_name
         self._s = None
         self.term = None
+        self.fmkops = None
 
-    def notify_data_sending(self, current_dm, data_list, timestamp, target):
+    def notify_data_sending(self, current_dm, data_list, timestamp, targets):
         """
         *** To be overloaded ***
 
@@ -89,7 +90,7 @@ class FeedbackHandler(object):
             current_dm (:class:`framework.data_model.DataModel`): current loaded DataModel
             data_list (list): list of :class:`framework.data.Data` that were sent
             timestamp (datetime): date when data was sent
-            target (Target): target to which data was sent
+            targets (list): list of targets to which data was sent
         """
         pass
 
@@ -122,7 +123,13 @@ class FeedbackHandler(object):
         """
         return UNIQUE
 
-    def _start(self):
+    def start(self, current_dm):
+        pass
+
+    def stop(self):
+        pass
+
+    def _start(self, current_dm):
         self._s = ''
         if self._new_window:
             nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
@@ -130,10 +137,14 @@ class FeedbackHandler(object):
                              keepterm=True)
             self.term.start()
 
+        self.start(current_dm)
+
     def _stop(self):
         self._s = None
         if self._new_window and self.term is not None:
             self.term.stop()
+
+        self.stop()
 
     def print(self, msg):
         if self._new_window:

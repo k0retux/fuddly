@@ -4057,12 +4057,12 @@ class TestFMK(unittest.TestCase):
         myop = fmk.get_operator(name='MyOp')
         fmk.launch_operator('MyOp')
 
-        fbk = fmk.feedback_gate.get_feedback_from(myop)[0]['content']
+        fbk = fmk.last_feedback_gate.get_feedback_from(myop)[0]['content']
         print(fbk)
         self.assertIn(b'You win!', fbk)
 
         fmk.launch_operator('MyOp')
-        fbk = fmk.feedback_gate.get_feedback_from(myop)[0]['content']
+        fbk = fmk.last_feedback_gate.get_feedback_from(myop)[0]['content']
         print(fbk)
         self.assertIn(b'You loose!', fbk)
 

@@ -26,7 +26,8 @@ import os
 import re
 import math
 import threading
-from datetime import datetime
+import copy
+from datetime import datetime, timedelta
 
 import framework.global_resources as gr
 import libs.external_modules as em
@@ -53,15 +54,16 @@ def regexp_bin(expr, item):
 
 class FeedbackGate(object):
 
-    def __init__(self, database):
+    def __init__(self, database, only_last_entries=True):
         """
         Args:
             database (Database): database to be associated with
         """
         self.db = database
+        self.last_fbk_entries = only_last_entries
 
     def __iter__(self):
-        for item in self.db.iter_last_feedback_entries():
+        for item in self.db.iter_feedback_entries(last=self.last_fbk_entries):
             yield item
 
     def get_feedback_from(self, source):
@@ -69,7 +71,7 @@ class FeedbackGate(object):
             source = FeedbackSource(source)
 
         try:
-            fbk = self.db.last_feedback[source]
+            fbk = self.db.last_feedback[source] if self.last_fbk_entries else self.db.feedback_trail[source]
         except KeyError:
             raise
         else:
@@ -91,7 +93,7 @@ class FeedbackGate(object):
                 - the 4-uplet: (source, status, timestamp, content) if `source` is `None`
 
         """
-        for item in self.db.iter_last_feedback_entries(source=source):
+        for item in self.db.iter_feedback_entries(last=self.last_fbk_entries, source=source):
             yield item
 
     def sources_names(self):
@@ -103,15 +105,20 @@ class FeedbackGate(object):
             list: names of the feedback sources
 
         """
-        return [str(fs) for fs in self.db.last_feedback.keys()]
+        fbk_db = self.db.last_feedback if self.last_fbk_entries else self.db.feedback_trail
+        return [str(fs) for fs in fbk_db.keys()]
+
+    @property
+    def size(self):
+        return len(list(self.db.iter_feedback_entries(last=self.last_fbk_entries)))
 
     # for python2 compatibility
     def __nonzero__(self):
-        return bool(self.db.last_feedback)
+        return bool(self.db.last_feedback if self.last_fbk_entries else self.db.feedback_trail)
 
     # for python3 compatibility
     def __bool__(self):
-        return bool(self.db.last_feedback)
+        return bool(self.db.last_feedback if self.last_fbk_entries else self.db.feedback_trail)
 
 
 class Database(object):
@@ -137,6 +144,9 @@ class Database(object):
         self.current_project = None
 
         self.last_feedback = {}
+        self.feedback_trail = {}  # store feedback entries for self.feedback_trail_time_window
+        self.feedback_trail_init_ts = None
+        self.feedback_trail_time_window = 10 # in seconds
 
         self._data_id = None
 
@@ -320,9 +330,12 @@ class Database(object):
     def disable(self):
         self.enabled = False
 
+    def flush_feedback(self):
+        self.last_feedback = {}
+        self.feedback_trail = {}
+
     def flush_current_feedback(self):
         self.last_feedback = {}
-        self.last_feedback_sources_names = {}
 
     def execute_sql_statement(self, sql_stmt, params=None):
         return self.submit_sql_stmt(sql_stmt, params=params, outcome_type=Database.OUTCOME_DATA)
@@ -394,19 +407,32 @@ class Database(object):
 
     def insert_feedback(self, data_id, source, timestamp, content, status_code=None):
 
+        if self.feedback_trail_init_ts is None:
+            self.feedback_trail_init_ts = timestamp
+
+        # timestamp could be None, in this case we ignore the following condition
+        if timestamp is not None and \
+                timestamp - self.feedback_trail_init_ts > timedelta(seconds=self.feedback_trail_time_window):
+            self.feedback_trail = {}
+            self.feedback_trail_init_ts = timestamp
+
         if not isinstance(source, FeedbackSource):
             source = FeedbackSource(source)
 
         if source not in self.last_feedback:
             self.last_feedback[source] = []
 
-        self.last_feedback[source].append(
-            {
-                'timestamp': timestamp,
-                'content': content,
-                'status': status_code
-            }
-        )
+        if source not in self.feedback_trail:
+            self.feedback_trail[source] = []
+
+        fbk_entry = {
+            'timestamp': timestamp,
+            'content': content,
+            'status': status_code
+        }
+
+        self.last_feedback[source].append(fbk_entry)
+        self.feedback_trail[source].append(fbk_entry)
 
         if self.current_project:
             self.current_project.trigger_feedback_handlers(source, timestamp, content, status_code)
@@ -423,17 +449,19 @@ class Database(object):
         err_msg = 'while inserting a value into table FEEDBACK!'
         self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
 
-    def iter_last_feedback_entries(self, source=None):
-        last_fbk = self.last_feedback.items()
+
+    def iter_feedback_entries(self, last=True, source=None):
+        feedback = copy.copy(self.last_feedback if last else self.feedback_trail)
         if source is None:
-            for src, fbks in last_fbk:
+            for src, fbks in feedback.items():
                 for item in fbks:
                     status = item['status']
                     ts = item['timestamp']
                     content = item['content']
                     yield src, status, ts, content
         else:
-            for item in self.last_feedback[source]:
+            fbk_from_src = self.last_feedback[source] if last else self.feedback_trail[source]
+            for item in fbk_from_src:
                 status = item['status']
                 ts = item['timestamp']
                 content = item['content']

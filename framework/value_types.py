@@ -1086,7 +1086,7 @@ class INT(VT):
         self.determinist = determinist
         self.exhausted = False
         self.drawn_val = None
-        self.default = None
+        self.default = default
         self._specific_fuzzy_vals = None
         self.values_desc = values_desc
 
@@ -1173,11 +1173,16 @@ class INT(VT):
     def make_private(self, forget_current_state):
         # no need to copy self.default (that should not be modified)
         if forget_current_state:
-            self.values_copy = copy.copy(self.values)
-            self.idx = 0
+            self.values = copy.copy(self.values)
+            self.values_copy = None #copy.copy(self.values)
+            if self.default is not None and self.values is None:
+                self.idx = self.default - self.mini_gen
+            else:
+                self.idx = 0
             self.exhausted = False
             self.drawn_val = None
         else:
+            self.values = copy.copy(self.values)
             self.values_copy = copy.copy(self.values_copy)
 
     def copy_attrs_from(self, vt):
@@ -1523,7 +1528,7 @@ class INT(VT):
         return struct.pack(self.cformat, val), sz
 
     def reset_state(self):
-        if self.default is not None:
+        if self.default is not None and self.values is None:
             self.idx = self.default - self.mini_gen
         else:
             self.idx = 0
@@ -2526,6 +2531,15 @@ class BitField(VT_Alt):
 
         return blob, off, self.nb_bytes
 
+    def update_raw_value(self, val):
+        enc_sz = (val.bit_length() + 7) // 8
+        if self.nb_bytes < enc_sz:
+            raise ValueError
+        if self.lsb_padding:
+            val = val << self.padding_size
+        endianess = 'big' if self.endian == VT.BigEndian else 'little'
+        blob = val.to_bytes(self.nb_bytes, endianess)
+        self.do_absorb(blob, AbsNoCsts())
 
     def do_revert_absorb(self):
         '''

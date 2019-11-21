@@ -177,7 +177,8 @@ class Project(object):
         ScenarioEnv.knowledge_source = self.knowledge_source
 
         for fh in self._fbk_handlers:
-            fh._start()
+            fh.fmkops = self._fmkops
+            fh._start(self.dm)
 
         if self._fbk_processing_enabled:
             self._run_fbk_handling_thread = True

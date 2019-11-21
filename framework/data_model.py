@@ -172,7 +172,8 @@ class DataModel(object):
         for atom_name in decoding_scope:
             self._atoms_for_abs[atom_name] = (prepared_atom, absorb_constraints)
 
-    def decode(self, data, atom_name=None, requested_abs_csts=None, colorized=True):
+    def decode(self, data, atom_name=None, requested_abs_csts=None, colorized=True,
+               return_atom=False):
 
         class Accumulator:
             content = ''
@@ -215,8 +216,9 @@ class DataModel(object):
             accumulate('\nAbsorption Status: {!r}, {:d}, {:d}'.format(status, off, size))
             accumulate('\n \_ length of original data: {:d}'.format(len(data)))
             accumulate('\n \_ remaining: {!r}'.format(data[size:size+1000]))
+            atom_for_abs = None
 
-        return a.content
+        return (atom_for_abs, a.content) if return_atom else a.content
 
     def cleanup(self):
         pass

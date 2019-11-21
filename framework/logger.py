@@ -46,7 +46,7 @@ class Logger(object):
     fmkDB = None
 
     def __init__(self, name=None, prefix='', record_data=False, explicit_data_recording=False,
-                 export_raw_data=True, console_display_limit=800,
+                 export_raw_data=True, term_display_limit=800, enable_term_display=True,
                  enable_file_logging=False):
         '''
         Args:
@@ -61,8 +61,9 @@ class Logger(object):
             after the observation of the target feedback and/or probes outputs.
           export_raw_data (bool): If True, will log the data as it is, without trying to interpret it
             as human readable text.
-          console_display_limit (int): maximum amount of characters to display on the console at once.
+          term_display_limit (int): maximum amount of characters to display on the terminal at once.
             If this threshold is overrun, the message to print on the console will be truncated.
+          enable_term_display (bool): If True, information will be displayed on the terminal
           prefix (str): prefix to use for printing on the console.
           enable_file_logging (bool): If True, file logging will be enabled.
         '''
@@ -70,7 +71,7 @@ class Logger(object):
         self.p = prefix
         self.__record_data = record_data
         self.__explicit_data_recording = explicit_data_recording
-        self._console_display_limit = console_display_limit
+        self._term_display_limit = term_display_limit
 
         now = datetime.datetime.now()
         self.__prev_export_date = now.strftime("%Y%m%d_%H%M%S")
@@ -82,6 +83,8 @@ class Logger(object):
 
         self._tg_fbk = []
         self._tg_fbk_lck = threading.Lock()
+
+        self.display_on_term = enable_term_display
 
         def init_logfn(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
                        do_record=True):
@@ -427,7 +430,7 @@ class Logger(object):
     def start_new_log_entry(self, preamble=''):
         self.__idx += 1
         self._current_sent_date = datetime.datetime.now()
-        now = self._current_sent_date.strftime("%d/%m/%Y - %H:%M:%S")
+        now = self._current_sent_date.strftime("%d/%m/%Y - %H:%M:%S.%f")
         msg = "====[ {:d} ]==[ {:s} ]====".format(self.__idx, now)
         msg += '='*(max(80-len(msg),0))
         self.log_fn(msg, rgb=Color.NEWLOGENTRY, style=FontStyle.BOLD)
@@ -470,8 +473,8 @@ class Logger(object):
 
         self.log_fn(" |- data info:", rgb=Color.DATAINFO)
         for msg in data_info:
-            if len(msg) > self._console_display_limit:
-                msg = msg[:self._console_display_limit] + ' ...'
+            if len(msg) > self._term_display_limit:
+                msg = msg[:self._term_display_limit] + ' ...'
 
             self.log_fn('    | ' + msg, rgb=Color.DATAINFO)
 
@@ -577,8 +580,11 @@ class Logger(object):
     def print_console(self, msg, nl_before=True, nl_after=False, rgb=None, style=None,
                       raw_limit=None, limit_output=True):
 
+        if not self.display_on_term:
+            return
+
         if raw_limit is None:
-            raw_limit = self._console_display_limit
+            raw_limit = self._term_display_limit
 
         p = '\n' if nl_before else ''
         s = '\n' if nl_after else ''

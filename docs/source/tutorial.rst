@@ -2140,8 +2140,9 @@ and optionally:
 - targets (referenced by a variable ``targets``, :ref:`targets-def`)
 - scenarios (:ref:`scenario-infra`) that can be registered into a project through the method
   :meth:`framework.project.Project.register_scenarios`
-- probes (:ref:`tuto:probes`).
-- operators (:ref:`tuto:operator`).
+- probes (:ref:`tuto:probes`)
+- tasks (:ref:`tuto:tasks`)
+- operators (:ref:`tuto:operator`)
 
 A default data model or a list of data models can be added to the
 project through its attribute ``default_dm``. ``fuddly`` will use this
@@ -2613,3 +2614,46 @@ it returns, by setting a negative status and some feedback on it.
 .. note:: Setting a negative status through
    :class:`framework.operator_helpers.LastInstruction` will make ``fuddly`` act the same
    as for a negative status from a probe. In addition, the operator will be shutdown.
+
+.. _tuto:tasks:
+
+Defining Tasks
+++++++++++++++
+
+Contrary to probes (:ref:`tuto:probes`), Tasks are not sequenced by the framework, they run asynchronously.
+They can be periodic or one-shot and their logic need to be defined entirely by the user.
+They can be started either when a target is launched (see below) or by a step of a scenario (refer to :ref:`sc:steps`).
+
+To implement the logic of the task, you need to inherit from :class:`libs.utils.Task` and to
+implement the :meth:`__call__` method. This method is then called either once or with a period that
+is specified in the constructor.
+When run by the framework this task has some attributes automatically filled that you can leverage
+in your logic:
+
+- :attr:`libs.utils.Task.feedback_gate`: provide an access to the last 10 seconds of feedback.
+  (:class:`framework.database.FeedbackGate`)
+- :attr:`libs.utils.Task.dm`: current loaded data model.
+- :attr:`libs.utils.Task.targets`: enabled targets.
+- :attr:`libs.utils.Task.fmkops`: provide access to some framework operations
+  (:class:`framework.plumbing.ExportableFMKOps`).
+
+Moreover, you could also print some information in another terminal window dedicated to the task.
+For such case, you should set the parameter ``new_window`` of the :class:`libs.utils.Task` constructor to
+``True``, then use a specific API composed of :meth:`libs.utils.Task.print` and :meth:`libs.utils.Task.print_nl`.
+
+Like with probes (:ref:`tuto:probes`), you can associate tasks to ``targets`` in order to execute
+them when a target is enabled. But they need to be instantiated first (while probes are only referenced
+by class name).
+Thus, for instance, if you want to run one or more tasks when a target ``A`` is enabled by the framework
+you have to put in the project ``targets`` list, a tuple containing first the target itself, then
+all the needed instantiated tasks.
+
+Here under an example with the target ``A`` associated to a task of class name ``myTask``, and
+the target ``B`` without tasks:
+
+.. code-block:: python
+   :linenos:
+
+   targets = [(A, myTask()), B]
+
+.. note:: You can mix probes and tasks

@@ -90,7 +90,7 @@ to register scenarios as shown in line 20.
 From line 9 to 13 we define 4 :class:`framework.scenario.Step`:
 
 - The first one commands the framework to send a data of type ``exist_cond`` (which is the name of a data registered
-  in the data model ``mydf``) as well as starting 2 tasks (threaded entities of the framework) that
+  in the data model ``mydf``) as well as starting 2 periodic tasks (threaded entities of the framework) that
   will emit each one a specific data. The first one will send the specified string every 5 seconds
   while the other one will send another string only once.
   Additionaly, the callback ``before_sending_cbk`` is set and will be triggered when the framework
@@ -204,6 +204,12 @@ periodic tasks.
 
 .. seealso:: Refer to the section :ref:`sc:example` for practical information on how to use
   such features.
+
+A step can also start a periodic or a one-shot task whose content could be entirely specified by
+the user. This is done by providing a list of :class:`libs.utils.Task`
+to the parameter ``start_tasks``. And, in order to stop previously started periodic tasks,
+the parameter ``stop_tasks`` have to be filled with a list of references on the relevant
+periodic tasks. Details on tasks are provided here :ref:`tuto:tasks`.
 
 In addition to the features provided by a step, some user-defined callbacks can be associated to a
 step and executed while the framework is handling the step (that is generating data as specified
@@ -506,6 +512,13 @@ Here under examples of steps leveraging the different ways to describe their dat
    Step( DataProcess(process=['ZIP', 'tSTRUCT', ('SIZE', UI(sz=100))]) )
    Step( DataProcess(process=['C', 'tTYPE'], seed='enc') )
    Step( DataProcess(process=['C'], seed=Data('my seed')) )
+
+Steps may be configured to change the process of data generation. The following methods are defined
+for such purpose:
+
+- :meth:`framework.scenario.Step.make_blocked` and :meth:`framework.scenario.Step.make_free`
+- :meth:`framework.scenario.Step.set_dmaker_reset` and :meth:`framework.scenario.Step.clear_dmaker_reset`
+
 
 Finally, it is possible for a ``Step`` to describe multiple data to send at once;
 meaning the framework will be ordered to use :meth:`framework.target.Target.send_multiple_data`

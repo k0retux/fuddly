@@ -26,12 +26,16 @@ import subprocess
 import platform
 
 from framework.global_resources import *
-from framework.data import Data, DataProcess
+from framework.data import Data, DataProcess, DataAttr
 from framework.node import Node
 from framework.target_helpers import Target
 from libs.external_modules import *
-from libs.utils import find_file, retrieve_app_handler
+from libs.utils import find_file, retrieve_app_handler, Task
 
+if sys.version_info[0] > 2:
+    data_graph_desc_fstr = "Data('{!a}'...)"
+else:
+    data_graph_desc_fstr = "Data('{!s}'...)"
 
 class Periodic(object):
     def __init__(self, data, period=None, vtg_ids=None):
@@ -54,7 +58,7 @@ class Periodic(object):
             if isinstance(d.content, Node):
                 desc += d.content.name
             else:
-                desc += "Data('{!s}'...)".format(d.to_str()[:10])
+                desc += data_graph_desc_fstr.format(d.to_str()[:10])
         elif isinstance(d, str):
             desc += "{:s}".format(d.upper())
         else:
@@ -70,12 +74,12 @@ class Periodic(object):
         return desc
 
 
-
 class Step(object):
 
     def __init__(self, data_desc=None, final=False,
                  fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
+                 start_tasks=None, stop_tasks=None,
                  do_before_data_processing=None, do_before_sending=None,
                  valid=True, vtg_ids=None):
         """
@@ -104,6 +108,8 @@ class Step(object):
 
         self.final = final
         self.valid = valid
+
+        self.data_attrs = DataAttr()
 
         # In the context of a step hosting a DataProcess, if the latter is completed, meaning that all
         # the registered processes are exhausted (data makers have yielded), then if a transition for this
@@ -140,6 +146,15 @@ class Step(object):
                 self._periodic_data_to_remove.append(id(p))
         else:
             self._periodic_data_to_remove = None
+
+        self._tasks = list(start_tasks) if start_tasks else None
+        if stop_tasks:
+            self._tasks_to_stop = []
+            for t in stop_tasks:
+                self._tasks_to_stop.append(id(t))
+        else:
+            self._tasks_to_stop = None
+
 
     def _handle_data_desc(self, data_desc):
         self._atom = None
@@ -198,6 +213,9 @@ class Step(object):
     def do_before_sending(self):
         if self._do_before_sending is not None:
             self._do_before_sending(self._scenario_env, self)
+            return True
+        else:
+            return False
 
     def make_blocked(self):
         self._blocked = True
@@ -213,6 +231,20 @@ class Step(object):
 
     def is_blocked(self):
         return self._blocked
+
+    def set_dmaker_reset(self):
+        """
+        Request the framework to reset the data makers involved
+        in the step before processing them.
+        Relevant only when DataProcess are in use.
+        """
+        self.data_attrs.set(DataAttr.Reset_DMakers)
+
+    def clear_dmaker_reset(self):
+        """
+        Restore the state changed by .set_dmaker_reset()
+        """
+        self.data_attrs.clear(DataAttr.Reset_DMakers)
 
     def cleanup(self):
         for d in self._data_desc:
@@ -310,9 +342,9 @@ class Step(object):
     @content.setter
     def content(self, atom_list):
         if isinstance(atom_list, list):
-            self._data_desc = atom_list
+            self._data_desc = [Data(a) for a in atom_list]
         if isinstance(atom_list, Node):
-            self._data_desc = [atom_list]
+            self._data_desc = [Data(atom_list)]
         else:
             raise ValueError
 
@@ -367,6 +399,8 @@ class Step(object):
         if self._feedback_mode is not None:
             d.feedback_mode = self._feedback_mode
 
+        d.set_attributes_from(self.data_attrs)
+
         if self.vtg_ids_list:
             # Note in the case of self._data_desc contains multiple data, related
             # vtg_ids are retrieved directly from the Step in the Replace_Data callback.
@@ -398,6 +432,22 @@ class Step(object):
             for pid in self._periodic_data_to_remove:
                 yield pid
 
+    @property
+    def tasks_to_start(self):
+        if self._tasks is None:
+            return
+        else:
+            for t in self._tasks:
+                yield t
+
+    @property
+    def tasks_to_stop(self):
+        if self._tasks_to_stop is None:
+            return
+        else:
+            for tid in self._tasks_to_stop:
+                yield tid
+
 
     def set_transitions(self, transitions):
         self._transitions = transitions
@@ -414,7 +464,7 @@ class Step(object):
                     if self.__class__.__name__ != 'Step':
                         step_desc += '[' + self.__class__.__name__ + ']'
                     else:
-                        step_desc += d.content.name.upper() if isinstance(d.content, Node) else "Data('{!s}'...)".format(d.to_str()[:10])
+                        step_desc += d.content.name.upper() if isinstance(d.content, Node) else data_graph_desc_fstr.format(d.to_str()[:10])
                 elif isinstance(d, str):
                     step_desc += "{:s}".format(self._node_name[idx].upper())
                 else:
@@ -463,6 +513,12 @@ class Step(object):
     def is_periodic_cleared(self):
         return bool(self._periodic_data_to_remove)
 
+    def has_tasks_to_start(self):
+        return bool(self._tasks)
+
+    def has_tasks_to_stop(self):
+        return bool(self._tasks_to_stop)
+
     def get_periodic_description(self):
         # Note the provided string is dot/graphviz oriented.
         if self.is_periodic_set() or self.is_periodic_cleared():
@@ -479,11 +535,37 @@ class Step(object):
         else:
             return 'No periodic to set'
 
+    def get_tasks_description(self):
+        # Note the provided string is dot/graphviz oriented.
+        if self.has_tasks_to_start() or self.has_tasks_to_stop():
+            desc = '{'
+            if self.has_tasks_to_start():
+                for t in self.tasks_to_start:
+                    desc += 'START Task [{:s}]\l [{:s}]\l|'.format(str(id(t))[-6:], str(t))
+
+            if self.has_tasks_to_stop():
+                for t in self.tasks_to_stop:
+                    desc += 'STOP Task [{:s}]\l|'.format(str(t)[-6:])
+            desc = desc[:-1] + '}'
+            return desc
+        else:
+            return 'No tasks to start'
+
     def get_periodic_ref(self):
         if self.is_periodic_set():
             ref = id(self._periodic_data)
         elif self.is_periodic_cleared():
             ref = id(self._periodic_data_to_remove)
+        else:
+            ref = None
+
+        return ref
+
+    def get_tasks_ref(self):
+        if self.has_tasks_to_start():
+            ref = id(self._tasks)
+        elif self.has_tasks_to_stop():
+            ref = id(self._tasks_to_stop)
         else:
             ref = None
 
@@ -501,14 +583,19 @@ class Step(object):
         # their IDs (memory addr) are used for registration and cancellation
         new_step._periodic_data = copy.copy(self._periodic_data)
         new_step._periodic_data_to_remove = copy.copy(self._periodic_data_to_remove)
+        new_step._tasks = copy.copy(self._tasks)
+        new_step._tasks_to_stop = copy.copy(self._tasks_to_stop)
+        new_step._periodic_data_to_remove = copy.copy(self._periodic_data_to_remove)
         new_step._scenario_env = None  # we ignore the environment, a new one will be provided
         new_step._transitions = copy.copy(self._transitions)
+        new_step.data_attrs = copy.copy(self.data_attrs)
         return new_step
 
 
 class FinalStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
+                 start_tasks=None, stop_tasks=None,
                  do_before_data_processing=None, valid=True, vtg_ids=None):
         Step.__init__(self, final=True, do_before_data_processing=do_before_data_processing,
                       valid=valid, vtg_ids=vtg_ids)
@@ -516,10 +603,12 @@ class FinalStep(Step):
 class NoDataStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
+                 start_tasks=None, stop_tasks=None,
                  do_before_data_processing=None, valid=True, vtg_ids=None):
         Step.__init__(self, data_desc=Data(''), final=final,
                       fbk_timeout=fbk_timeout, fbk_mode=fbk_mode,
                       set_periodic=set_periodic, clear_periodic=clear_periodic,
+                      start_tasks=start_tasks, stop_tasks=stop_tasks,
                       step_desc=step_desc, do_before_data_processing=do_before_data_processing,
                       valid=valid, vtg_ids=vtg_ids)
         self.make_blocked()
@@ -691,8 +780,10 @@ viewer_filename = None
 
 class Scenario(object):
 
-    def __init__(self, name, anchor=None, reinit_anchor=None, user_context=None):
+    def __init__(self, name, anchor=None, reinit_anchor=None, user_context=None,
+                 user_args=None):
         self.name = name
+        self._user_args = user_args
         self._steps = None
         self._reinit_steps = None
         self._transitions = None
@@ -702,6 +793,7 @@ class Scenario(object):
         self._env.scenario = self
         self._env.user_context = user_context
         self._periodic_ids = set()
+        self._task_ids = set()
         self._current = None
         self._anchor = None
         self._reinit_anchor = None
@@ -730,14 +822,6 @@ class Scenario(object):
 
     def set_target(self, target):
         self._env.target = target
-
-    # @property
-    # def knowledge_source(self):
-    #     return self._env.knowledge_source
-    #
-    # @knowledge_source.setter
-    # def knowledge_source(self, val):
-    #     self._env.knowledge_source = val
 
     def _graph_setup(self, init_step, steps, transitions):
         for tr in init_step.transitions:
@@ -834,6 +918,11 @@ class Scenario(object):
         for pid in self._periodic_ids:
             yield pid
 
+    @property
+    def tasks_to_stop(self):
+        for tid in self._task_ids:
+            yield tid
+
 
     def _view_linux(self, filepath, graph_filename):
         """Open filepath in the user's preferred application (linux)."""
@@ -878,10 +967,21 @@ class Scenario(object):
                     id_node = str(id(step))
                     id_periodic = str(step.get_periodic_ref())
                     graph.node(id_periodic, label=step.get_periodic_description(),
-                           shape='record', style='filled', color='black', fillcolor='palegreen',
-                           fontcolor='black', fontsize='8')
+                               shape='record', style='filled', color='black', fillcolor='palegreen',
+                               fontcolor='black', fontsize='8')
                     node_list.append(step.get_periodic_ref())
                     graph.edge(id_node, id_periodic, arrowhead='dot') # headport='se', tailport='nw')
+
+            def graph_tasks(step, node_list):
+                if (step.has_tasks_to_start() or step.has_tasks_to_stop()) \
+                        and step.get_tasks_ref() not in node_list:
+                    id_node = str(id(step))
+                    id_tasks = str(step.get_tasks_ref())
+                    graph.node(id_tasks, label=step.get_tasks_description(),
+                               shape='record', style='filled', color='black', fillcolor='palegreen',
+                               fontcolor='black', fontsize='8')
+                    node_list.append(step.get_tasks_ref())
+                    graph.edge(id_node, id_tasks, arrowhead='dot') # headport='se', tailport='nw')
 
             step_color = current_color if init_step is current_step else 'black'
             if init_step.final or init_step is self._anchor:
@@ -898,6 +998,7 @@ class Scenario(object):
                        color=step_color, fillcolor=step_fillcolor)
             graph.node(str(id(init_step)), label=init_step.get_description())
             graph_periodic(init_step, node_list)
+            graph_tasks(init_step, node_list)
             for idx, tr in enumerate(init_step.transitions):
                 if tr.step not in node_list:
                     step_color = current_color if tr.step is current_step else 'black'
@@ -914,6 +1015,7 @@ class Scenario(object):
                                fillcolor=step_fillcolor, color=step_color)
                     graph.node(str(id(tr.step)), label=tr.step.get_description())
                     graph_periodic(tr.step, node_list)
+                    graph_tasks(tr.step, node_list)
                 if id(tr) not in edge_list:
                     graph.edge(str(id(init_step)), str(id(tr.step)), label='[{:d}] {!s}'.format(idx+1, tr))
                     edge_list.append(id(tr))
@@ -977,6 +1079,8 @@ class Scenario(object):
             init_step.set_transitions(new_transitions)
             for periodic in init_step.periodic_to_set:
                 new_sc._periodic_ids.add(id(periodic))
+            for task in init_step.tasks_to_start:
+                new_sc._task_ids.add(id(task))
 
             for tr in init_step.transitions:
                 tr.set_scenario_env(env)
@@ -996,6 +1100,7 @@ class Scenario(object):
         new_sc._env = copy.copy(self._env)
         new_sc._env.scenario = new_sc
         new_sc._periodic_ids = set()  # periodic ids are gathered only during graph_copy()
+        new_sc._task_ids = set()  # task ids are gathered only during graph_copy()
         if self._current is self._anchor:
             new_current = new_anchor = copy.copy(self._current)
         else:

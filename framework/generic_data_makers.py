@@ -47,6 +47,38 @@ tactics = Tactics()
 #     GENERATORS      #
 #######################
 
+@generator(tactics, gtype="GENP", weight=4,
+           args={'pattern': ('Pattern to be used for generating data', b'1234567890', bytes),
+                 'prefix': ('Prefix added to the pattern', b'', bytes),
+                 'suffix': ('Suffix replacing the end of the pattern', b'', bytes),
+                 'size': ('Size of the generated data.', None, int)
+                 })
+class g_generic_pattern(Generator):
+    """
+    Generate basic data based on a pattern and different parameters.
+    """
+    def setup(self, dm, user_input):
+        if not self.pattern:
+            return False
+        return True
+
+    def generate_data(self, dm, monitor, target):
+        if self.size is not None:
+            psize = len(self.pattern)
+            pattern = self.pattern * (self.size // psize) + self.pattern[:(self.size%psize)]
+            if self.prefix:
+                pattern = self.prefix + pattern[:-(len(self.prefix))]
+
+        else:
+            pattern = self.prefix+self.pattern
+
+        pattern = pattern[:-len(self.suffix)] + self.suffix
+        if self.size is not None and self.size < len(pattern):
+            pattern = pattern[:self.size]
+
+        return Data(pattern)
+
+
 @generator(tactics, gtype='POPULATION', weight=1,
            args={'population': ('The population to iterate over.', None, Population),
                  'track': ('Keep trace of the changes that occurred on data, generation after generation',
@@ -1146,7 +1178,7 @@ class d_operate_on_nodes(Disruptor):
 @disruptor(tactics, dtype="MOD", weight=4,
            args={'path': ('Graph path regexp to select nodes on which ' \
                           'the disruptor should apply.', None, str),
-                 'value': ('The new value to inject within the data.', '', str),
+                 'value': ('The new value to inject within the data.', b'', bytes),
                  'constraints': ('Constraints for the absorption of the new value.', AbsNoCsts(), AbsCsts),
                  'multi_mod': ('Dictionary of <path>:<item> pairs to change multiple nodes with '
                              'diferent values. <item> can be either only the new <value> or a '

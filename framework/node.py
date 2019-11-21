@@ -6479,9 +6479,11 @@ class Node(object):
             if isinstance(nodes, Node):
                 # Method defined by INT object (within TypedValue nodes)
                 nodes.update_raw_value(val)
+                nodes.unfreeze()
             else:
                 for n in nodes:
                     n.update_raw_value(val)
+                    n.unfreeze()
         else:
             if isinstance(nodes, Node):
                 status, off, size, name = nodes.absorb(convert_to_internal_repr(val),

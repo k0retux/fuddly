@@ -197,6 +197,54 @@ class EmptyBackend(DataBackend):
         return 0
 
 
+class AttrGroup(object):
+
+    def __init__(self, attrs_desc):
+        self._attrs = attrs_desc
+
+    def set(self, name):
+        if name not in self._attrs:
+            raise ValueError
+        self._attrs[name] = True
+
+    def clear(self, name):
+        if name not in self._attrs:
+            raise ValueError
+        self._attrs[name] = False
+
+    def is_set(self, name):
+        if name not in self._attrs:
+            raise ValueError
+        return self._attrs[name]
+
+    def copy_from(self, attr_group):
+        assert isinstance(attr_group, AttrGroup)
+        self._attrs = copy.copy(attr_group._attrs)
+
+    def __copy__(self):
+        new_attrgr = type(self)()
+        new_attrgr.__dict__.update(self.__dict__)
+        new_attrgr._attrs = copy.copy(self._attrs)
+        return new_attrgr
+
+
+class DataAttr(AttrGroup):
+
+    Reset_DMakers = 1
+
+    def __init__(self, attrs_to_set=None, attrs_to_clear=None):
+        iv = {
+            DataAttr.Reset_DMakers: False
+        }
+        AttrGroup.__init__(self, iv)
+        if attrs_to_set:
+            for a in attrs_to_set:
+                self.set(a)
+        if attrs_to_clear:
+            for a in attrs_to_clear:
+                self.clear(a)
+
+
 class Data(object):
 
     _empty_data_backend = EmptyBackend()
@@ -204,6 +252,7 @@ class Data(object):
     def __init__(self, content=None, altered=False, tg_ids=None):
 
         self._data_id = None
+        self._backend = None
 
         self.set_basic_attributes()
         self.altered = altered
@@ -228,7 +277,8 @@ class Data(object):
         self._type = (self._backend.data_maker_type, self._backend.data_maker_name, None)
 
     def set_basic_attributes(self, from_data=None):
-        self._backend = None if from_data is None else from_data._backend
+
+        self.attrs = DataAttr() if from_data is None else copy.copy(from_data.attrs)
         self._type = None if from_data is None else from_data._type
 
         self.feedback_timeout = None if from_data is None else from_data.feedback_timeout
@@ -255,6 +305,10 @@ class Data(object):
 
         # This attribute is set to True when the Data content has been retrieved from the fmkDB
         self.from_fmkdb = False if from_data is None else from_data.from_fmkdb
+
+    def set_attributes_from(self, attr_group):
+        assert isinstance(attr_group, DataAttr)
+        self.attrs = attr_group
 
     @property
     def content(self):
@@ -335,6 +389,7 @@ class Data(object):
     def generate_info_from_content(self, data=None, origin=None, additional_info=None):
         dmaker_type = self._backend.data_maker_type
         dmaker_name = self._backend.data_maker_name
+        initial_gen_user_input = None
 
         if data is not None:
             self.set_basic_attributes(from_data=data)
@@ -351,6 +406,8 @@ class Data(object):
                 for key in info_bundle_to_remove:
                     self.remove_info_from(*key)
 
+            initial_gen_user_input = data.get_initial_dmaker()[2]
+
         elif origin is not None:
             self.add_info("Data instantiated from: {!s}".format(origin))
         else:
@@ -362,7 +419,7 @@ class Data(object):
 
         self.remove_info_from(dmaker_type, dmaker_name)
         self.bind_info(dmaker_type, dmaker_name)
-        initial_generator_info = [dmaker_type, dmaker_name, None]
+        initial_generator_info = [dmaker_type, dmaker_name, initial_gen_user_input]
         self.set_initial_dmaker(initial_generator_info)
         self.set_history([initial_generator_info])
 
@@ -527,6 +584,7 @@ class Data(object):
         new_data._pending_ops = {}  # we do not copy pending_ops
         new_data._backend = copy.copy(self._backend)
         new_data._targets = copy.copy(self._targets)
+        new_data.attrs = copy.copy(self.attrs)
         return new_data
 
     def __str__(self):
@@ -546,6 +604,8 @@ class CallBackOps(object):
     # Instructions
     Add_PeriodicData = 10  # ask for sending periodically a data
     Del_PeriodicData = 11  # ask for stopping a periodic sending
+    Start_Task = 12  # ask for sending periodically a data
+    Stop_Task = 13  # ask for stopping a periodic sending
     Set_FbkTimeout = 21  # set the time duration for feedback gathering for the further data sending
     Replace_Data = 30  # replace the data by another one
 
@@ -553,6 +613,8 @@ class CallBackOps(object):
         self.instr = {
             CallBackOps.Add_PeriodicData: {},
             CallBackOps.Del_PeriodicData: [],
+            CallBackOps.Start_Task: {},
+            CallBackOps.Stop_Task: [],
             CallBackOps.Set_FbkTimeout: None,
             CallBackOps.Replace_Data: None
         }
@@ -577,7 +639,10 @@ class CallBackOps(object):
         if instr_type == CallBackOps.Add_PeriodicData:
             assert id is not None and param is not None
             self.instr[instr_type][id] = (param, period)
-        elif instr_type == CallBackOps.Del_PeriodicData:
+        elif instr_type == CallBackOps.Start_Task:
+            assert id is not None and param is not None
+            self.instr[instr_type][id] = (param, period)
+        elif instr_type == CallBackOps.Del_PeriodicData or instr_type == CallBackOps.Stop_Task:
             assert id is not None
             self.instr[instr_type].append(id)
         elif instr_type == CallBackOps.Set_FbkTimeout:
@@ -690,7 +755,7 @@ class DataProcess(object):
             if isinstance(self.seed.content, Node):
                 seed_str = self.seed.content.name
             else:
-                seed_str = "Data('{!s}'...)".format(self.seed.to_str()[:10])
+                seed_str = "Data('{!r}'...)".format(self.seed.to_str()[:10])
             desc += "seed='{:s}'".format(seed_str) + suffix
         else:
             desc += suffix[2:]

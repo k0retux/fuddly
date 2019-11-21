@@ -116,6 +116,7 @@ class SIMTarget(Target):
                 print('\nWARNING: Data does not contain a mobile number.')
         pdu = b''
         raw_data = data.to_bytes()
+        pdu_sz = len(raw_data)
         for c in raw_data:
             if sys.version_info[0] == 2:
                 c = ord(c)
@@ -123,8 +124,8 @@ class SIMTarget(Target):
         pdu = pdu.upper()
 
         pdu = b'00' + pdu + b"\x1a\r\n"
-
-        self.ser.write(b"AT+CMGS=23\r\n") # PDU mode
+        at_cmd = "AT+CMGS={:d}\r\n".format(pdu_sz-1).encode()
+        self.ser.write(at_cmd) # used for PDU mode
         time.sleep(self.delay_between_write)
         self.ser.write(pdu)
 

@@ -1,18 +1,61 @@
+.. _gen:generic-generators:
+
+Generic Data Makers
+*******************
+
+Generic Generators
+==================
+
+The current generic generators are presented within the following
+sections.
+
+GENP - Pattern Generation
+-------------------------
+
+Description:
+  Generate basic data based on a pattern and different parameters.
+
+Reference:
+  :class:`framework.generic_data_makers.g_generic_pattern`
+
+Parameters:
+    .. code-block:: none
+
+        |_ pattern
+        |      | desc: Pattern to be used for generating data
+        |      | default: b'1234567890' [type: bytes]
+        |_ prefix
+        |      | desc: Prefix added to the pattern
+        |      | default: b'' [type: bytes]
+        |_ suffix
+        |      | desc: Suffix replacing the end of the pattern
+        |      | default: b'' [type: bytes]
+        |_ size
+        |      | desc: Size of the generated data.
+        |      | default: None [type: int]
+
+
+POPULATION - Generator for Evolutionary Fuzzing
+-----------------------------------------------
+
+This generator is used only internally by the evolutionary fuzzing infrastructure.
+
+
 .. _dis:generic-disruptors:
 
 Generic Disruptors
-******************
+==================
 
 The current generic disruptors are presented within the following
 sections.
 
 Stateful Disruptors
-===================
+-------------------
 
 .. _dis:ttype:
 
 tTYPE - Advanced Alteration of Terminal Typed Node
---------------------------------------------------
+++++++++++++++++++++++++++++++++++++++++++++++++++
 
 Description:
   Perform alterations on typed nodes (one at a time) according to:
@@ -35,7 +78,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-      parameters:
         |_ init
         |      | desc: make the model walker ignore all the steps until the provided
         |      |       one
@@ -94,7 +136,7 @@ Parameters:
 
 
 tSTRUCT - Alter Data Structure
-------------------------------
+++++++++++++++++++++++++++++++
 
 Description:
   Perform constraints alteration (one at a time) on each node that depends on another one
@@ -112,7 +154,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ init
          |      | desc: make the model walker ignore all the steps until the provided
          |      |       one
@@ -145,7 +186,7 @@ Usage Example:
 
 
 tALT - Walk Through Alternative Node Configurations
----------------------------------------------------
++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 Description:
   Switch the configuration of each node, one by one, with the provided
@@ -157,7 +198,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ clone_node
          |      | desc: if True the dmaker will always return a copy of the node. (for
          |      |       stateless disruptors dealing with big data it can be useful
@@ -182,7 +222,7 @@ Parameters:
 
 
 tSEP - Alteration of Separator Node
------------------------------------
++++++++++++++++++++++++++++++++++++
 
 Description:
   Perform alterations on separators (one at a time). Each time a
@@ -196,7 +236,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ clone_node
          |      | desc: if True the dmaker will always return a copy of the node. (for
          |      |       stateless disruptors dealing with big data it can be useful
@@ -230,7 +269,7 @@ Parameters:
 
 
 tWALK - Walk Through a Data Model
----------------------------------
++++++++++++++++++++++++++++++++++
 
 Description:
   Walk through the provided data and for each visited node, iterates
@@ -243,7 +282,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-      parameters:
         |_ clone_node
         |      | desc: if True the dmaker will always return a copy of the node. (for
         |      |       stateless disruptors dealing with big data it can be useful
@@ -278,10 +316,10 @@ Parameters:
         |      | default: False [type: bool]
 
 Stateless Disruptors
-====================
+--------------------
 
 ADD - Add Data Within a Node
-----------------------------
+++++++++++++++++++++++++++++
 
 Description:
    Add some data within the retrieved input.
@@ -292,7 +330,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-      parameters:
         |_ path
         |      | desc: Graph path to select the node on which the disruptor should
         |      |       apply.
@@ -315,7 +352,7 @@ Parameters:
 
 
 OP - Perform Operations on Nodes
---------------------------------
+++++++++++++++++++++++++++++++++
 
 Description:
     Perform an operation on the nodes specified by the regexp path. @op is an operation that
@@ -328,7 +365,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-      parameters:
         |_ path
         |      | desc: Graph path regexp to select nodes on which the disruptor should
         |      |       apply.
@@ -348,7 +384,7 @@ Parameters:
 
 
 MOD - Modify Node Contents
---------------------------
+++++++++++++++++++++++++++
 
 Description:
     Perform modifications on the provided data. Two ways are possible:
@@ -365,7 +401,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-      parameters:
         |_ path
         |      | desc: Graph path regexp to select nodes on which the disruptor should
         |      |       apply.
@@ -390,7 +425,7 @@ Parameters:
 
 
 CALL - Call Function
---------------------
+++++++++++++++++++++
 
 Description:
     Call the function provided with the first parameter being the :class:`framework.data.Data`
@@ -407,7 +442,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-      parameters:
         |_ func
         |      | desc: The function that will be called with a node as its first parameter,
         |      |       and provided optionnaly with addtionnal parameters if @params
@@ -420,7 +454,7 @@ Parameters:
 
 
 NEXT - Next Node Content
-------------------------
+++++++++++++++++++++++++
 
 Description:
   Move to the next content of the nodes from input data or from only
@@ -434,7 +468,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-    parameters:
       |_ path
       |      | desc: graph path regexp to select nodes on which the disruptor should
       |      |       apply
@@ -451,7 +484,7 @@ Parameters:
 
 
 FIX - Fix Data Constraints
---------------------------
+++++++++++++++++++++++++++
 
 Description:
   Release constraints from input data or from only a piece of it (if
@@ -469,7 +502,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-    parameters:
       |_ path
       |      | desc: graph path regexp to select nodes on which the disruptor should
       |      |       apply
@@ -482,7 +514,7 @@ Parameters:
 
 
 ALT - Alternative Node Configuration
-------------------------------------
+++++++++++++++++++++++++++++++++++++
 
 Description:
   Switch to an alternate configuration.
@@ -493,7 +525,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ path
          |      | desc: graph path regexp to select nodes on which the disruptor should
          |      |       apply
@@ -510,7 +541,7 @@ Parameters:
 
 
 C - Node Corruption
--------------------
++++++++++++++++++++
 
 Description:
   Corrupt bits on some nodes of the data model.
@@ -521,7 +552,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ path
          |      | desc: graph path regexp to select nodes on which the disruptor should
          |      |       apply
@@ -539,7 +569,7 @@ Parameters:
 
 
 Cp - Corruption at Specific Position
-------------------------------------
+++++++++++++++++++++++++++++++++++++
 
 Description:
   Corrupt bit at a specific byte.
@@ -550,7 +580,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ new_val
          |      | desc: if provided change the selected byte with the new one
          |      | default: None [type: str]
@@ -563,7 +592,7 @@ Parameters:
 
 
 EXT - Make Use of an External Program
--------------------------------------
++++++++++++++++++++++++++++++++++++++
 
 Description:
   Call an external program to deal with the data.
@@ -574,7 +603,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ path
          |      | desc: graph path regexp to select nodes on which the disruptor should
          |      |       apply
@@ -589,7 +617,7 @@ Parameters:
 
 
 SIZE - Truncate
----------------
++++++++++++++++
 
 Description:
   Truncate the data (or part of the data) to the provided size.
@@ -600,7 +628,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ sz
          |      | desc: truncate the data (or part of the data) to the provided size
          |      | default: 10 [type: int]
@@ -611,7 +638,7 @@ Parameters:
 
 
 STRUCT - Shake Up Data Structure
---------------------------------
+++++++++++++++++++++++++++++++++
 
 Description:
   Disrupt the data model structure (replace ordered sections by
@@ -623,7 +650,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ path
          |      | desc: graph path regexp to select nodes on which the disruptor should
          |      |       apply
@@ -632,7 +658,7 @@ Parameters:
 
 
 COPY - Shallow Copy Data
-------------------------
+++++++++++++++++++++++++
 
 Description:
   Shallow copy of the input data, which means: ignore its frozen

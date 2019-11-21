@@ -240,3 +240,30 @@ Usage Example:
 
        tg = SIMTarget(serial_port='/dev/ttyUSB3', baudrate=115200, pin_code='0000'
                       targeted_tel_num='0123456789', zone='33')
+
+
+
+TestTarget
+==========
+
+Reference:
+  :class:`framework.targets.debug.TestTarget`
+
+Description:
+  This generic target enables you to stimulate a virtual target that could be useful for test
+  preparation for instance.
+  Some parameters enable to change the behavior of this target.
+
+Feedback:
+  This target could provide random feedback, or feedback chosen from a provided sample list, or
+  it could repeat the received data as its feedback.
+
+Supported Feedback Mode:
+  - :const:`framework.target_helpers.Target.FBK_WAIT_FULL_TIME`
+  - :const:`framework.target_helpers.Target.FBK_WAIT_UNTIL_RECV`
+
+Usage Example:
+   .. code-block:: python
+      :linenos:
+
+       tg = TestTarget(name='mytest_target', fbk_samples=['OK','ERROR'])

@@ -403,6 +403,9 @@ def _handle_user_inputs(dmaker, user_input):
                 assert(type(ui_val) in arg_type or ui_val is None)
             elif isinstance(arg_type, type):
                 assert(type(ui_val) == arg_type or issubclass(type(ui_val), arg_type) or ui_val is None)
+            elif arg_type is None:
+                # we ignore type verification
+                pass
             else:
                 raise ValueError
             if ui_val is None:
@@ -580,6 +583,8 @@ class dyn_generator_from_scenario(type):
     scenario = None
     def __init__(cls, name, bases, attrs):
         attrs['_args_desc'] = DynGeneratorFromScenario._args_desc
+        if dyn_generator_from_scenario.scenario._user_args:
+            attrs['_args_desc'].update(dyn_generator_from_scenario.scenario._user_args)
         type.__init__(cls, name, bases, attrs)
         cls.scenario = dyn_generator_from_scenario.scenario
 
@@ -629,6 +634,8 @@ class DynGeneratorFromScenario(Generator):
         self._cleanup_walking_attrs()
         for periodic_id in self.scenario.periodic_to_clear:
             fmkops.unregister_task(periodic_id, ign_error=True)
+        for task_id in self.scenario.tasks_to_stop:
+            fmkops.unregister_task(task_id, ign_error=True)
 
     def _cleanup_walking_attrs(self):
         self.tr_selected = None
@@ -823,6 +830,9 @@ class DynGeneratorFromScenario(Generator):
                 self._alteration_just_performed = False
 
         self.scenario.set_target(target)
+        if self.scenario._user_args:
+            for ua in self.scenario._user_args.keys():
+                setattr(self.scenario.env, str(ua), getattr(self, str(ua)))
         self.step = self.scenario.current_step
 
         self.step.do_before_data_processing()
@@ -837,9 +847,10 @@ class DynGeneratorFromScenario(Generator):
             else:
                 self.need_reset()
                 data = Data()
-                data.register_callback(self._callback_cleanup_periodic, hook=HOOK.after_dmaker_production)
+                # data.register_callback(self._callback_cleanup_periodic, hook=HOOK.after_dmaker_production)
                 data.make_unusable()
                 data.origin = self.scenario
+                data.scenario_dependence = self.scenario.name
                 return data
 
         data = self.step.get_data()
@@ -862,13 +873,6 @@ class DynGeneratorFromScenario(Generator):
         return data
 
 
-    def _callback_cleanup_periodic(self):
-        cbkops = CallBackOps()
-        for periodic_id in self.scenario.periodic_to_clear:
-            cbkops.add_operation(CallBackOps.Del_PeriodicData, id=periodic_id)
-        return cbkops
-
-
     def __handle_transition_callbacks(self, hook, feedback=None):
         for idx, tr in self.pending_tr_eval:
             if tr.run_callback(self.step, feedback=feedback, hook=hook):
@@ -884,7 +888,7 @@ class DynGeneratorFromScenario(Generator):
                     if tr.dp_completed_guard:
                         for d_desc in self.step.data_desc:
                             if isinstance(d_desc, DataProcess) and d_desc.dp_completed:
-                                d_desc.dp_completed = False
+                                # d_desc.dp_completed = False
                                 self.tr_selected = tr
                                 self.tr_selected_idx = idx
                                 break
@@ -916,21 +920,15 @@ class DynGeneratorFromScenario(Generator):
 
     def _callback_dispatcher_before_sending_step2(self):
         # Callback called after any data have been processed but not sent yet
-        self.step.do_before_sending()
+        did_something = self.step.do_before_sending()
 
         self.__handle_transition_callbacks(HOOK.before_sending_step2)
 
-        # We add again the operation CallBackOps.Replace_Data, because the step contents could have changed
         cbkops = CallBackOps()
-        cbkops.add_operation(CallBackOps.Replace_Data,
-                             param=(self.step.data_desc, self.step.vtg_ids_list))
-
-        for desc in self.step.periodic_to_set:
-            cbkops.add_operation(CallBackOps.Add_PeriodicData, id=id(desc),
-                                 param=desc, period=desc.period)
-
-        for periodic_id in self.step.periodic_to_clear:
-            cbkops.add_operation(CallBackOps.Del_PeriodicData, id=periodic_id)
+        if did_something:
+            # We add again the operation CallBackOps.Replace_Data, because the step contents could have changed
+            cbkops.add_operation(CallBackOps.Replace_Data,
+                                 param=(self.step.data_desc, self.step.vtg_ids_list))
 
         return cbkops
 
@@ -938,19 +936,29 @@ class DynGeneratorFromScenario(Generator):
         self.__handle_transition_callbacks(HOOK.after_sending)
 
     def _callback_dispatcher_after_fbk(self, fbk):
-        """This callback is always called by the framework"""
+        """
+        This callback is always called by the framework
+        It allows for a NoDataStep to perform actions (trigger periodic data, tasks, ...)
+        """
 
         self.__handle_transition_callbacks(HOOK.after_fbk, feedback=fbk)
 
-        # cbkops = CallBackOps()
-        # for desc in self.step.periodic_to_set:
-        #     cbkops.add_operation(CallBackOps.Add_PeriodicData, id=id(desc),
-        #                          param=desc, period=desc.period)
-        #
-        # for periodic_id in self.step.periodic_to_clear:
-        #     cbkops.add_operation(CallBackOps.Del_PeriodicData, id=periodic_id)
-        #
-        # return cbkops
+        cbkops = CallBackOps()
+        for desc in self.step.periodic_to_set:
+            cbkops.add_operation(CallBackOps.Add_PeriodicData, id=id(desc),
+                                 param=desc, period=desc.period)
+
+        for periodic_id in self.step.periodic_to_clear:
+            cbkops.add_operation(CallBackOps.Del_PeriodicData, id=periodic_id)
+
+        for desc in self.step.tasks_to_start:
+            cbkops.add_operation(CallBackOps.Start_Task, id=id(desc),
+                                 param=desc, period=desc.period)
+
+        for task_id in self.step.tasks_to_stop:
+            cbkops.add_operation(CallBackOps.Stop_Task, id=task_id)
+
+        return cbkops
 
     def _callback_dispatcher_final(self):
         if self.tr_selected is not None:

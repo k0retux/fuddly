@@ -97,7 +97,7 @@ class Pandaboard(Target):
             self.cnx.root.connect(conf_desc_str_list=[data.to_bytes()])
 
 
-    def is_target_ready_for_new_data(self):
+    def is_feedback_received(self):
         time.sleep(3)
         self.cnx.root.disconnect()
         time.sleep(1)

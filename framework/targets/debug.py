@@ -34,8 +34,8 @@ class TestTarget(Target):
     supported_feedback_mode = [Target.FBK_WAIT_UNTIL_RECV, Target.FBK_WAIT_FULL_TIME]
     _last_ack_date = None
 
-    def __init__(self, recover_ratio=100, fbk_samples=None, repeat_input=False):
-        Target.__init__(self)
+    def __init__(self, recover_ratio=100, fbk_samples=None, repeat_input=False, name=None):
+        Target.__init__(self, name)
         self._cpt = None
         self._recover_ratio = recover_ratio
         self._fbk_samples = fbk_samples
@@ -66,7 +66,7 @@ class TestTarget(Target):
         self._logger.collect_feedback(content=self._handle_fbk(data_list[0]),
                                       status_code=random.randint(-3, 3))
 
-    def is_target_ready_for_new_data(self):
+    def is_feedback_received(self):
         self._cpt += 1
         if self._cpt > 5 and random.choice([True, False]):
             self._cpt = 0

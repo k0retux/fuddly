@@ -519,7 +519,7 @@ class NetworkTarget(Target):
 
     def recover_target(self):
         t0 = datetime.datetime.now()
-        while not self.is_target_ready_for_new_data():
+        while not self.is_feedback_received():
             time.sleep(0.0001)
             now = datetime.datetime.now()
             if (now - t0).total_seconds() > self._recover_timeout:
@@ -1243,8 +1243,11 @@ class NetworkTarget(Target):
     def get_feedback(self):
         return self._feedback
 
-    def is_target_ready_for_new_data(self):
+    def is_feedback_received(self):
         return self._fbk_collector_to_launch_cpt == self._fbk_collector_finished_cpt
+
+    def is_target_ready_for_new_data(self):
+        return self.is_feedback_received()
 
     def _register_last_ack_date(self, ack_date):
         self._last_ack_date = ack_date

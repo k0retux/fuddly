@@ -38,6 +38,7 @@ class Target(object):
     either after Target.send_data() is called or when Target.collect_unsolicited_feedback() is called.
 
     """
+    name = None
     feedback_timeout = None
     sending_delay = 0
 
@@ -52,7 +53,7 @@ class Target(object):
     supported_feedback_mode = [FBK_WAIT_FULL_TIME, FBK_WAIT_UNTIL_RECV]
 
     _logger = None
-    _probes = None
+    _extensions = None
     _send_data_lock = threading.Lock()
 
     _altered_data_queued = None
@@ -60,6 +61,9 @@ class Target(object):
     _pending_data = None
 
     _last_sending_date = None
+
+    def __init__(self, name=None):
+        self.name = name
 
     @staticmethod
     def get_fbk_mode_desc(fbk_mode, short=False):
@@ -150,33 +154,19 @@ class Target(object):
         return True
 
 
-    def is_target_ready(self):
+    def is_feedback_received(self):
         """
-        The FMK busy wait on this method() before sending a new data.
-        This method take into account feedback timeout (that is the maximum
-        time duration for gathering feedback from the target) and the feedback mode
+        To be overloaded if the target implements FBK_WAIT_UNTIL_RECV mode, so that
+        it can informs the framework about feedback reception.
         """
-        if not self.is_target_ready_for_new_data():
-            return False
-        else:
-            if self._last_sending_date is None or self.feedback_timeout is None:
-                # At init, if nothing has been sent self._last_sending_date is None.
-                # self.feedback_timeout is None when not set, meaning we don't care.
-                return True
-            now = datetime.datetime.now()
-            if self._feedback_mode == self.FBK_WAIT_FULL_TIME:
-                return (now - self._last_sending_date).total_seconds() > self.feedback_timeout
-            elif self._feedback_mode == self.FBK_WAIT_UNTIL_RECV:
-                return True
-            else:
-                return True
+        return True
 
     def get_last_target_ack_date(self):
         '''
         If different from None the return value is used by the FMK to log the
         date of the target acknowledgment after a message has been sent to it.
 
-        [Note: If this method is overloaded, is_target_ready_for_new_data() should also be]
+        [Note: If this method is overloaded, is_feedback_received() should also be]
         '''
         return None
 
@@ -250,6 +240,10 @@ class Target(object):
     def fbk_wait_full_time_slot_mode(self):
         return self._feedback_mode == Target.FBK_WAIT_FULL_TIME
 
+    @property
+    def fbk_wait_until_recv_mode(self):
+        return self._feedback_mode == Target.FBK_WAIT_UNTIL_RECV
+
     def set_sending_delay(self, sending_delay):
         """
         Set the sending delay.
@@ -265,7 +259,8 @@ class Target(object):
         return self.__class__.__name__ + ' [' + self.get_description() + ']'
 
     def get_description(self):
-        return 'ID: ' + str(id(self))[-6:]
+        prefix = '{:s} | '.format(self.name) if self.name is not None else ''
+        return '{:s}ID: {:s}'.format(prefix, str(id(self))[-6:])
 
     def add_pending_data(self, data):
         with self._send_data_lock:
@@ -312,20 +307,20 @@ class Target(object):
             self.send_multiple_data(data_list, from_fmk=from_fmk)
         self._last_sending_date = datetime.datetime.now()
 
-    def add_probe(self, probe):
-        if self._probes is None:
-            self._probes = []
-        self._probes.append(probe)
+    def add_extensions(self, probe):
+        if self._extensions is None:
+            self._extensions = []
+        self._extensions.append(probe)
 
-    def remove_probes(self):
-        self._probes = None
+    def del_extensions(self):
+        self._extensions = None
 
     def is_processed_data_altered(self):
         return self._altered_data_queued
 
     @property
-    def probes(self):
-        return self._probes if self._probes is not None else []
+    def extensions(self):
+        return self._extensions if self._extensions is not None else []
 
 
 class EmptyTarget(Target):

@@ -66,6 +66,8 @@ class Term(object):
             pass
 
     def print(self, s, newline=False):
+        if not isinstance(s, str):
+            s = str(s)
         s += '\n' if newline else ''
         if self._p is None or self._p.poll() is not None:
             self._launch_term()
@@ -74,6 +76,69 @@ class Term(object):
 
     def print_nl(self, s):
         self.print(s, newline=True)
+
+
+class Task(object):
+
+    period = None
+    fmkops = None
+    feedback_gate = None
+    targets = None
+    dm = None
+
+    def __call__(self, args):
+        pass
+
+    def setup(self):
+        pass
+
+    def cleanup(self):
+        pass
+
+    def __init__(self, period=None,
+                 new_window=False, new_window_title=None, xterm_prg_name='x-terminal-emulator'):
+        self.period = period
+        self.fmkops = None
+        self.feedback_gate = None
+        self.targets = None
+        self.dm = None
+
+        self._new_window = new_window
+        self._new_window_title = new_window_title
+        self._xterm_prg_name = xterm_prg_name
+
+    def _setup(self):
+        if self._new_window:
+            nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
+            self.term = Term(name=nm, xterm_prg_name=self._xterm_prg_name,
+                             keepterm=True)
+            self.term.start()
+
+        self.setup()
+
+    def _cleanup(self):
+        self.cleanup()
+        if self._new_window and self.term is not None:
+            self.term.stop()
+
+    def __str__(self):
+        if self.period is None:
+            desc = 'Oneshot Task'
+        else:
+            desc = 'Periodic Task (period={}s)'.format(self.period)
+        return desc
+
+    def print(self, msg):
+        if self._new_window:
+            self.term.print(msg)
+        else:
+            print(msg)
+
+    def print_nl(self, msg):
+        if self._new_window:
+            self.term.print_nl(msg)
+        else:
+            print(msg)
 
 
 def ensure_dir(f):
