@@ -1283,6 +1283,7 @@ class INT(VT):
         self.orig_values = copy.copy(self.values)
         self.orig_values_copy = copy.copy(self.values_copy)
         self.orig_drawn_val = self.drawn_val
+        self.orig_idx = self.idx
 
         blob = blob[off:]
 
@@ -1338,6 +1339,7 @@ class INT(VT):
             self.values = self.orig_values
             self.values_copy = self.orig_values_copy
             self.drawn_val = self.orig_drawn_val
+            self.idx = self.orig_idx
 
     def do_cleanup_absorb(self):
         if hasattr(self, 'orig_drawn_val'):
@@ -1620,14 +1622,14 @@ class INT_str(INT):
     endian = VT.Native
     usable = True
 
-    regex_decimal = b'-?\d+'
+    regex_decimal = b'-?\d'
 
-    regex_upper_hex = b'-?[0123456789ABCDEF]+'
-    regex_lower_hex = b'-?[0123456789abcdef]+'
+    regex_upper_hex = b'-?[0123456789ABCDEF]'
+    regex_lower_hex = b'-?[0123456789abcdef]'
 
-    regex_octal = b'-?[01234567]+'
+    regex_octal = b'-?[01234567]'
 
-    regex_bin = b'-?[01]+'
+    regex_bin = b'-?[01]'
 
     fuzzy_values = [0, -1, -2**32, 2 ** 32 - 1, 2 ** 32]
     value_space_size = -1  # means infinite
@@ -1658,10 +1660,30 @@ class INT_str(INT):
         self._regex = vt._regex
 
     def _prepare_format_str(self, min_size, base, letter_case):
+
+        if self.maxi is not None:
+            max_val = self.maxi
+        elif self.values:
+            max_val = max(self.values)
+        else:
+            max_val = INT.GEN_MAX_INT
+
+        if self.mini is not None:
+            min_val = self.mini
+        elif self.values:
+            min_val = min(self.values)
+        else:
+            min_val = 0
+
+        self.max_digit = math.floor(math.log(abs(max_val), base))+1 if max_val != 0 else 1
+        self.min_digit = math.floor(math.log(abs(min_val), base))+1 if min_val != 0 else 1
         if min_size is not None:
+            self.min_digit = max(self.min_digit, min_size)
             format_str = '{:0' + str(min_size)
         else:
             format_str = '{:'
+
+        regex_prefix = '{{{},{}}}'.format(self.min_digit,self.max_digit).encode()
 
         if base == 10:
             format_str += '}'
@@ -1682,7 +1704,7 @@ class INT_str(INT):
         else:
             raise ValueError(self._base)
 
-        return (format_str, regex)
+        return (format_str, regex+regex_prefix)
 
 
     def get_fuzzed_vt_list(self):

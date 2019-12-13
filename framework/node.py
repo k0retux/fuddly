@@ -1007,24 +1007,26 @@ class NodeInternalsCriteria(object):
                  mandatory_custo=None, negative_custo=None,
                  required_csts=None, negative_csts=None):
 
-        self.mandatory_attrs = mandatory_attrs
-        self.negative_attrs = negative_attrs
-        self.mandatory_custo = mandatory_custo
-        self.negative_custo = negative_custo
-        self.node_kinds = node_kinds
-        self.negative_node_kinds = negative_node_kinds
-        self.node_subkinds = node_subkinds
-        self.negative_node_subkinds = negative_node_subkinds
+        self.mandatory_attrs = self._handle_user_input(mandatory_attrs)
+        self.negative_attrs = self._handle_user_input(negative_attrs)
+        self.mandatory_custo = self._handle_user_input(mandatory_custo)
+        self.negative_custo = self._handle_user_input(negative_custo)
+        self.node_kinds = self._handle_user_input(node_kinds)
+        self.negative_node_kinds = self._handle_user_input(negative_node_kinds)
+        self.node_subkinds = self._handle_user_input(node_subkinds)
+        self.negative_node_subkinds = self._handle_user_input(negative_node_subkinds)
         self._node_constraints = None
         if required_csts is not None:
-            assert(isinstance(required_csts, list))
-            for cst in required_csts:
+            req_csts = self._handle_user_input(required_csts)
+            for cst in req_csts:
                 self.set_node_constraint(cst, True)
         if negative_csts is not None:
-            assert(isinstance(negative_csts, list))
-            for cst in negative_csts:
+            neg_csts = self._handle_user_input(negative_csts)
+            for cst in neg_csts:
                 self.set_node_constraint(cst, False)
 
+    def _handle_user_input(self, crit):
+        return crit if crit is None or isinstance(crit, (list,tuple)) else [crit]
 
     def extend(self, ic):
         crit = ic.mandatory_attrs
@@ -1572,12 +1574,14 @@ class NodeInternals_GenFunc(NodeInternals):
         if self._generated_node is not None:
             self._generated_node._reset_depth(parent_depth=self.pdepth)
 
-    def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria, owned_conf, conf, path_regexp, 
-                               exclude_self, respect_order, relative_depth, top_node, ignore_fstate):
+    def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria, owned_conf, conf, path_regexp,
+                                exclude_self, respect_order, relative_depth, top_node, ignore_fstate,
+                                resolve_generator=False):
         return self.generated_node.get_reachable_nodes(internals_criteria, semantics_criteria, owned_conf, conf,
                                                        path_regexp=path_regexp, exclude_self=False,
                                                        respect_order=respect_order, relative_depth=relative_depth,
-                                                       top_node=top_node, ignore_fstate=ignore_fstate)
+                                                       top_node=top_node, ignore_fstate=ignore_fstate,
+                                                       resolve_generator=resolve_generator)
 
     def set_child_current_conf(self, node, conf, reverse, ignore_entanglement):
         if self.custo.forward_conf_change_mode:
@@ -1586,9 +1590,10 @@ class NodeInternals_GenFunc(NodeInternals):
                                                conf, reverse,
                                                ignore_entanglement=ignore_entanglement)
 
-    def get_child_all_path(self, name, htable, conf, recursive):
+    def get_child_all_path(self, name, htable, conf, recursive, resolve_generator=False):
         if self.env is not None:
-            self.generated_node._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False)
+            self.generated_node._get_all_paths_rec(name, htable, conf, recursive=recursive,
+                                                   first=False, resolve_generator=resolve_generator)
         else:
             # If self.env is None, that means that a node graph is not fully constructed
             # thus we avoid a freeze side-effect (by resolving 'generated_node') of the
@@ -1758,13 +1763,14 @@ class NodeInternals_Term(NodeInternals):
         pass
 
     def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria, owned_conf, conf, path_regexp,
-                               exclude_self, respect_order, relative_depth, top_node, ignore_fstate):
+                                exclude_self, respect_order, relative_depth, top_node, ignore_fstate,
+                                resolve_generator=False):
         return None
 
     def set_child_current_conf(self, node, conf, reverse, ignore_entanglement):
         pass
 
-    def get_child_all_path(self, name, htable, conf, recursive):
+    def get_child_all_path(self, name, htable, conf, recursive, resolve_generator=False):
         pass
 
 
@@ -4535,7 +4541,8 @@ class NodeInternals_NonTerm(NodeInternals):
             e._reset_depth(depth)
 
     def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria, owned_conf, conf, path_regexp,
-                               exclude_self, respect_order, relative_depth, top_node, ignore_fstate):
+                               exclude_self, respect_order, relative_depth, top_node, ignore_fstate,
+                               resolve_generator=False):
 
         if self.frozen_node_list is not None and not ignore_fstate:
             iterable = self.frozen_node_list
@@ -4557,7 +4564,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                           path_regexp=path_regexp,
                                           exclude_self=False, respect_order=respect_order,
                                           relative_depth=relative_depth, top_node=top_node,
-                                          ignore_fstate=ignore_fstate)
+                                          ignore_fstate=ignore_fstate, resolve_generator=resolve_generator)
 
             if respect_order:
                 for e in nlist:
@@ -4577,7 +4584,7 @@ class NodeInternals_NonTerm(NodeInternals):
             node._set_subtrees_current_conf(e, conf, reverse, ignore_entanglement=ignore_entanglement)
 
 
-    def get_child_all_path(self, name, htable, conf, recursive):
+    def get_child_all_path(self, name, htable, conf, recursive, resolve_generator=False):
         if self.frozen_node_list is not None:
             iterable = self.frozen_node_list
         else:
@@ -4587,7 +4594,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
         for idx, node in enumerate(iterable):
             node._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False,
-                                    clone_idx=idx)
+                                    resolve_generator=resolve_generator, clone_idx=idx)
 
     def set_size_from_constraints(self, size, encoded_size):
         # not supported
@@ -4633,6 +4640,9 @@ class NodeSemantics(object):
     '''
     def __init__(self, attrs=None):
         self.__attrs = attrs if isinstance(attrs, (list, tuple)) else [attrs]
+
+    def __str__(self):
+        return str(self.__attrs)
 
     def add_attributes(self, attrs):
         self.__attrs += attrs
@@ -4755,17 +4765,20 @@ class NodeSemanticsCriteria(object):
                 self.__negative = []
             self.__negative.extend(crit)
 
+    def _handle_user_input(self, crit):
+        return crit if crit is None or isinstance(crit, (list,tuple)) else [crit]
+
     def set_exclusive_criteria(self, criteria):
-        self.__exclusive = criteria
+        self.__exclusive = self._handle_user_input(criteria)
 
     def set_mandatory_criteria(self, criteria):
-        self.__mandatory = criteria
+        self.__mandatory = self._handle_user_input(criteria)
 
     def set_optionalbut1_criteria(self, criteria):
-        self.__optionalbut1 = criteria
+        self.__optionalbut1 = self._handle_user_input(criteria)
 
     def set_negative_criteria(self, criteria):
-        self.__negative = criteria
+        self.__negative = self._handle_user_input(criteria)
 
     def get_exclusive_criteria(self):
         return self.__exclusive
@@ -5686,6 +5699,7 @@ class Node(object):
     def get_reachable_nodes(self, internals_criteria=None, semantics_criteria=None,
                             owned_conf=None, conf=None, path_regexp=None, exclude_self=False,
                             respect_order=False, top_node=None, ignore_fstate=False,
+                            resolve_generator=False,
                             relative_depth=-1):
         """
 
@@ -5699,6 +5713,9 @@ class Node(object):
             respect_order:
             top_node:
             ignore_fstate:
+            resolve_generator: if `True`, the generator nodes will be resolved in order to perform
+              the search within. But there will be side-effects on the graph, because
+              some parts of the graph could end up frozen if they are used as generator parameters.
             relative_depth: For internal use only
 
         Returns:
@@ -5724,7 +5741,8 @@ class Node(object):
                 cond2 = True
 
             if path_regexp is not None:
-                paths = node.get_all_paths_from(top_node, flush_cache=False)
+                paths = node.get_all_paths_from(top_node, flush_cache=False,
+                                                resolve_generator=resolve_generator)
                 for p in paths:
                     if re.search(path_regexp, p):
                         cond3 = True
@@ -5750,6 +5768,8 @@ class Node(object):
                 config = node.current_conf
 
             internal = node.internals[config]
+            if not resolve_generator and isinstance(internal, NodeInternals_GenFunc):
+                return s
 
             if (owned_conf == None) or node.is_conf_existing(owned_conf):
                 if __compliant(node, config, top_node):
@@ -5763,7 +5783,8 @@ class Node(object):
                                                       exclude_self=False,
                                                       respect_order=respect_order,
                                                       relative_depth = rdepth - 1,
-                                                      top_node=top_node, ignore_fstate=ignore_fstate)
+                                                      top_node=top_node, ignore_fstate=ignore_fstate,
+                                                      resolve_generator=resolve_generator)
                 if s2:
                     for e in s2:
                         if e not in s:
@@ -5815,7 +5836,7 @@ class Node(object):
         return ret
 
 
-    def iter_nodes_by_path(self, path_regexp, conf=None, flush_cache=True):
+    def iter_nodes_by_path(self, path_regexp, conf=None, flush_cache=True, resolve_generator=False):
         """
         iterate over all the nodes that match the `path_regexp` parameter.
 
@@ -5832,12 +5853,12 @@ class Node(object):
             generator of the nodes that match the path regexp
 
         """
-        for p, node in self.iter_paths(conf=conf, flush_cache=flush_cache):
+        for p, node in self.iter_paths(conf=conf, flush_cache=flush_cache, resolve_generator=resolve_generator):
             if re.search(path_regexp, p):
                 yield node
 
 
-    def get_first_node_by_path(self, path_regexp, conf=None, flush_cache=True):
+    def get_first_node_by_path(self, path_regexp, conf=None, flush_cache=True, resolve_generator=False):
         """
         Return the first Node that match the `path_regexp` parameter.
 
@@ -5851,14 +5872,16 @@ class Node(object):
             Node: the first Node that match the path regexp
         """
         try:
-            node = next(self.iter_nodes_by_path(path_regexp=path_regexp, conf=conf, flush_cache=flush_cache))
+            node = next(self.iter_nodes_by_path(path_regexp=path_regexp, conf=conf, flush_cache=flush_cache,
+                                                resolve_generator=resolve_generator))
         except StopIteration:
             node = None
 
         return node
 
 
-    def _get_all_paths_rec(self, pname, htable, conf, recursive, first=True, clone_idx=0):
+    def _get_all_paths_rec(self, pname, htable, conf, recursive, first=True, resolve_generator=False,
+                           clone_idx=0):
 
         next_conf = conf if recursive else None
 
@@ -5873,11 +5896,19 @@ class Node(object):
         else:
             htable[name] = self
 
-        internal.get_child_all_path(name, htable, conf=next_conf, recursive=recursive)
+        if resolve_generator or not isinstance(internal, NodeInternals_GenFunc):
+            internal.get_child_all_path(name, htable, conf=next_conf, recursive=recursive,
+                                        resolve_generator=resolve_generator)
 
 
-    def get_all_paths(self, conf=None, recursive=True, depth_min=None, depth_max=None, flush_cache=True):
+    def get_all_paths(self, conf=None, recursive=True, depth_min=None, depth_max=None,
+                      resolve_generator=False, flush_cache=True):
         """
+        Args:
+            resolve_generator: if `True`, the generator nodes will be resolved in order to perform
+              the search within. But there will be side-effects on the graph, because
+              some parts of the graph could end up frozen if they are used as generator parameters.
+
         Returns:
             dict: the keys are either a 'path' or a tuple ('path', int) when the path already
               exists (case of the same node used more than once within the same non-terminal)
@@ -5885,7 +5916,8 @@ class Node(object):
 
         if flush_cache or self._paths_htable is None:
             self._paths_htable = collections.OrderedDict()
-            self._get_all_paths_rec('', self._paths_htable, conf, recursive=recursive)
+            self._get_all_paths_rec('', self._paths_htable, conf, recursive=recursive,
+                                    resolve_generator=resolve_generator)
 
         if depth_min is not None or depth_max is not None:
             depth_min = int(depth_min) if depth_min is not None else 0
@@ -5903,27 +5935,30 @@ class Node(object):
         return paths
 
     def iter_paths(self, conf=None, recursive=True, depth_min=None, depth_max=None, only_paths=False,
-                   flush_cache=True):
+                   resolve_generator=False, flush_cache=True):
 
         htable = self.get_all_paths(conf=conf, recursive=recursive, depth_min=depth_min,
-                                    depth_max=depth_max, flush_cache=flush_cache)
+                                    depth_max=depth_max, resolve_generator=resolve_generator,
+                                    flush_cache=flush_cache)
         for path, node in htable.items():
             if isinstance(path, tuple):
                 yield path[0] if only_paths else (path[0], node)
             else:
                 yield path if only_paths else (path, node)
 
-    def get_path_from(self, node, conf=None, flush_cache=True):
-        for path, nd in node.iter_paths(conf=conf, flush_cache=flush_cache):
+    def get_path_from(self, node, conf=None, flush_cache=True, resolve_generator=False):
+        for path, nd in node.iter_paths(conf=conf, flush_cache=flush_cache,
+                                        resolve_generator=resolve_generator):
             if nd == self:
                 return path
         else:
             return None
 
 
-    def get_all_paths_from(self, node, conf=None, flush_cache=True):
+    def get_all_paths_from(self, node, conf=None, flush_cache=True, resolve_generator=False):
         l = []
-        for path, nd in node.iter_paths(conf=conf, flush_cache=flush_cache):
+        for path, nd in node.iter_paths(conf=conf, flush_cache=flush_cache,
+                                        resolve_generator=resolve_generator):
             if nd == self:
                 l.append(path)
         return l
@@ -6262,7 +6297,7 @@ class Node(object):
         self.freeze()
 
         l = []
-        for n, e in self.iter_paths(conf=conf, flush_cache=True):
+        for n, e in self.iter_paths(conf=conf, flush_cache=True, resolve_generator=True):
             l.append((n, e))
 
         if alpha_order:
@@ -6348,6 +6383,10 @@ class Node(object):
                     depth += 1
 
                 node_desc_lines = chunk_lines(node.description, length=80, prefix=': ') if node.description else None
+                if node.semantics:
+                    if not node_desc_lines:
+                        node_desc_lines = []
+                    node_desc_lines.append(': semantics = '+str(node.semantics))
 
                 if node.is_term(conf_tmp):
                     raw = node._tobytes()
@@ -6445,7 +6484,6 @@ class Node(object):
 
 
     def __getitem__(self, key):
-        # self._get_value()
         if isinstance(key, str):
             node_list = list(self.iter_nodes_by_path(key))
             return node_list if node_list else None
@@ -6497,9 +6535,14 @@ class Node(object):
                     if status != AbsorbStatus.FullyAbsorbed:
                         raise ValueError
 
-    def update(self, node_update_dict):
+    def update(self, node_update_dict, stop_on_error=True):
         for node_ref, new_value in node_update_dict.items():
-            self[node_ref] = new_value
+            try:
+                self[node_ref] = new_value
+            except ValueError:
+                if stop_on_error:
+                    raise
+
 
     def __getattr__(self, name):
         internals = self.__getattribute__('internals')[self.current_conf]

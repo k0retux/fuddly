@@ -29,8 +29,8 @@ import framework.global_resources as gr
 import uuid
 
 
-def json_model_builder(node_name, schema, struct_mutable=True, determinist=True,
-                       ignore_pattern=False, codec='latin-1'):
+def json_model_builder(node_name, schema, struct_mutable=True, determinist=False,
+                       ignore_pattern=False, codec='latin-1', value_suffix='_value'):
     """
     Helper for modeling an JSON structure from a JSON schema.
 
@@ -85,7 +85,7 @@ def json_model_builder(node_name, schema, struct_mutable=True, determinist=True,
                  'set_attrs': MH.Attr.Separator, 'mutable': struct_mutable}
             ]
 
-            prop_value = json_model_builder(node_name=key + '_value', schema=value, determinist=determinist,
+            prop_value = json_model_builder(node_name=key + value_suffix, schema=value, determinist=determinist,
                                             codec=codec, struct_mutable=struct_mutable,
                                             ignore_pattern=ignore_pattern)
             prop.append(prop_value)
@@ -113,7 +113,7 @@ def json_model_builder(node_name, schema, struct_mutable=True, determinist=True,
 
     elif sc_type == 'string':
         min_len = schema.get('minLength')
-        max_len = schema.get('minLength', 30)
+        max_len = schema.get('maxLength', 30)
         pattern = schema.get('pattern')
         enum = schema.get('enum')
 
@@ -132,6 +132,8 @@ def json_model_builder(node_name, schema, struct_mutable=True, determinist=True,
             str_desc = \
                 {'name': ('string', uuid.uuid1()),
                  'contents': pattern}
+
+        str_desc['semantics'] = node_name[:-len(value_suffix)]
 
         sep_id = uuid.uuid1()
         node_desc = \
@@ -155,16 +157,19 @@ def json_model_builder(node_name, schema, struct_mutable=True, determinist=True,
 
         node_desc = \
             {'name': (node_name, uuid.uuid1()),
+             'semantics': node_name[:-len(value_suffix)],
              'contents': fvt.INT_str(min=mini, max=maxi)}
 
     elif sc_type == 'boolean':
         node_desc = \
             {'name': (node_name, uuid.uuid1()),
+             'semantics': node_name[:-len(value_suffix)],
              'contents': fvt.String(values=['true', 'false'])}
 
     elif sc_type == 'null':
         node_desc = \
             {'name': (node_name, uuid.uuid1()),
+             'semantics': node_name[:-len(value_suffix)],
              'contents': fvt.String(values=['null'])}
 
     elif sc_type == 'array':

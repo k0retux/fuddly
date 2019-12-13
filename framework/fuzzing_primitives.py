@@ -130,7 +130,8 @@ class ModelWalker(object):
 
 
     def _do_reset(self, node):
-        last_gen = self._root_node.get_reachable_nodes(internals_criteria=self.triglast_ic)
+        last_gen = self._root_node.get_reachable_nodes(internals_criteria=self.triglast_ic,
+                                                       resolve_generator=True)
         for n in last_gen:
             n.unfreeze(ignore_entanglement=True)
         node.unfreeze(recursive=False)
@@ -168,7 +169,8 @@ class ModelWalker(object):
 
                 # For each node we look for direct subnodes
                 fnodes = node.get_reachable_nodes(internals_criteria=self.ic, exclude_self=True,
-                                                  respect_order=self._consumer.respect_order, relative_depth=1)
+                                                  respect_order=self._consumer.respect_order,
+                                                  resolve_generator=True, relative_depth=1)
                 if DEBUG:
                     DEBUG_PRINT('--(2)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()), level=2)
                     for e in fnodes:
@@ -760,7 +762,8 @@ class TypedNodeDisruption(NodeConsumerStub):
     def preload(self, root_node):
         if not self._ignore_separator:
             ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Separator])
-            self.sep_list = set(map(lambda x: x.to_bytes(), root_node.get_reachable_nodes(internals_criteria=ic)))
+            self.sep_list = set(map(lambda x: x.to_bytes(),
+                                    root_node.get_reachable_nodes(internals_criteria=ic, resolve_generator=True)))
             self.sep_list = list(self.sep_list)
 
     def consume_node(self, node):
@@ -895,12 +898,12 @@ def fuzz_data_tree(top_node, paths_regexp=None):
                              node_kinds=[dm.NodeInternals_NonTerm])
 
     if paths_regexp:
-        node_list = top_node.get_reachable_nodes(path_regexp=paths_regexp)
+        node_list = top_node.get_reachable_nodes(path_regexp=paths_regexp, resolve_generator=True)
     else:
         node_list = [top_node]
 
     for node in node_list:
-        l = node.get_reachable_nodes(internals_criteria=c)
+        l = node.get_reachable_nodes(internals_criteria=c, resolve_generator=True)
         for e in l:
             e.cc.change_subnodes_csts([('*', 'u=.')])
 

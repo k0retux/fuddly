@@ -2898,7 +2898,7 @@ class TestNodeFeatures(unittest.TestCase):
 
         t0 = datetime.datetime.now()
         for _ in range(30):
-            l0 = list(ex_node.iter_nodes_by_path(path_regexp='.*', flush_cache=True))
+            l0 = list(ex_node.iter_nodes_by_path(path_regexp='.*', flush_cache=True, resolve_generator=True))
         now = datetime.datetime.now()
         print('\n*** Execution time of .iter_nodes_by_path(flush_cache=True): {}'.format((now - t0).total_seconds()))
 
@@ -2907,7 +2907,7 @@ class TestNodeFeatures(unittest.TestCase):
 
         t0 = datetime.datetime.now()
         for _ in range(30):
-            l1 = list(ex_node.iter_nodes_by_path(path_regexp='.*', flush_cache=False))
+            l1 = list(ex_node.iter_nodes_by_path(path_regexp='.*', flush_cache=False, resolve_generator=True))
         now = datetime.datetime.now()
         print('\n*** Execution time of .iter_nodes_by_path(flush_cache=False): {}'.format((now - t0).total_seconds()))
 
@@ -2916,13 +2916,13 @@ class TestNodeFeatures(unittest.TestCase):
 
         t0 = datetime.datetime.now()
         for _ in range(30):
-            nd = ex_node.get_first_node_by_path(path_regexp='.*', flush_cache=False)
+            nd = ex_node.get_first_node_by_path(path_regexp='.*', flush_cache=False, resolve_generator=True)
         now = datetime.datetime.now()
         print('\n*** Execution time of .get_first_node_by_path(flush_cache=False): {}'.format((now - t0).total_seconds()))
 
         t0 = datetime.datetime.now()
         for _ in range(30):
-            l2 = ex_node.get_reachable_nodes(path_regexp='.*', respect_order=True)
+            l2 = ex_node.get_reachable_nodes(path_regexp='.*', respect_order=True, resolve_generator=True)
         now = datetime.datetime.now()
         print('\n*** Execution time of .get_reachable_nodes: {}'.format((now - t0).total_seconds()))
 

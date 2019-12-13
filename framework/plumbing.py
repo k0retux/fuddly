@@ -3301,8 +3301,6 @@ class FmkPlumbing(object):
                     cloned_dmaker_type = parsed.group(1)
                     dmaker_type = parsed.group(0)
 
-                    print('\n*** {} {}'.format(cloned_dmaker_type, dmaker_type))
-
                     err_msg = "Can't clone: invalid generator/disruptor IDs (%s)" % dmaker_ref
 
                     if cloned_dmaker_type in specific_dmaker_types:

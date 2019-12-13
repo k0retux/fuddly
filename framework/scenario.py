@@ -373,7 +373,7 @@ class Step(object):
 
             for idx, d_desc in enumerate(self._data_desc):
                 if isinstance(d_desc, DataProcess):
-                    d.add_info(repr(d_desc))
+                    d.add_info('DP({:s})'.format(d_desc.formatted_str(oneliner=True)))
                 elif isinstance(d_desc, Data):
                     d.add_info('User-provided Data()')
                 else:
@@ -452,14 +452,14 @@ class Step(object):
     def set_transitions(self, transitions):
         self._transitions = transitions
 
-    def __str__(self):
+    def get_desc(self, oneliner=True):
         if self._step_desc:
             step_desc = self._step_desc
         else:
             step_desc = ''
             for idx, d in enumerate(self._data_desc):
                 if isinstance(d, DataProcess):
-                    step_desc += 'DP({:s})'.format(d.formatted_str(oneliner=True))
+                    step_desc += 'DP({:s})'.format(d.formatted_str(oneliner=oneliner))
                 elif isinstance(d, Data):
                     if self.__class__.__name__ != 'Step':
                         step_desc += '[' + self.__class__.__name__ + ']'
@@ -476,9 +476,12 @@ class Step(object):
 
         return step_desc
 
-    def get_description(self):
+    def __str__(self):
+        return self.get_desc(oneliner=True)
+
+    def get_full_description(self, oneliner=True):
         # Note the provided string is dot/graphviz oriented.
-        step_desc = str(self).replace('\n', '\\n') # for graphviz display in 'record' boxes
+        step_desc = self.get_desc(oneliner=oneliner).replace('\n', '\\n') # for graphviz display in 'record' boxes
 
         if self._do_before_sending is not None or self._do_before_data_processing is not None:
             if self._do_before_data_processing is None:
@@ -996,7 +999,7 @@ class Scenario(object):
                 step_fontcolor = current_fontcolor if init_step is current_step else 'black'
                 graph.attr('node', fontcolor=step_fontcolor, shape='record', style=step_style,
                        color=step_color, fillcolor=step_fillcolor)
-            graph.node(str(id(init_step)), label=init_step.get_description())
+            graph.node(str(id(init_step)), label=init_step.get_full_description(oneliner=False))
             graph_periodic(init_step, node_list)
             graph_tasks(init_step, node_list)
             for idx, tr in enumerate(init_step.transitions):
@@ -1013,7 +1016,7 @@ class Scenario(object):
                         step_style = 'rounded,dotted' if isinstance(tr.step, NoDataStep) else 'rounded,filled'
                         graph.attr('node', fontcolor=step_fontcolor, shape='record', style=step_style,
                                fillcolor=step_fillcolor, color=step_color)
-                    graph.node(str(id(tr.step)), label=tr.step.get_description())
+                    graph.node(str(id(tr.step)), label=tr.step.get_full_description(oneliner=False))
                     graph_periodic(tr.step, node_list)
                     graph_tasks(tr.step, node_list)
                 if id(tr) not in edge_list:
