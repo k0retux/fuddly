@@ -5716,6 +5716,10 @@ class Node(object):
             resolve_generator: if `True`, the generator nodes will be resolved in order to perform
               the search within. But there will be side-effects on the graph, because
               some parts of the graph could end up frozen if they are used as generator parameters.
+              If `False`, generator nodes won't be resolved, but they could already be in a
+              resolved state before this method is called on them. It means that no side effects
+              could result from the call of this method. And thus for this latter case,
+              the method works as if `resolve_generator` is set to `True`.
             relative_depth: For internal use only
 
         Returns:
@@ -5723,7 +5727,7 @@ class Node(object):
         """
 
 
-        def __compliant(node, config, top_node):
+        def __compliant(node, config, top_node, side_effect_risk):
             if node is top_node and exclude_self:
                 return False
 
@@ -5739,6 +5743,10 @@ class Node(object):
                     cond2 = node.semantics.match(semantics_criteria)
             else:
                 cond2 = True
+
+            if not resolve_generator and side_effect_risk:
+                # assert path_regexp is None
+                return cond1 and cond2
 
             if path_regexp is not None:
                 paths = node.get_all_paths_from(top_node, flush_cache=False,
@@ -5768,12 +5776,14 @@ class Node(object):
                 config = node.current_conf
 
             internal = node.internals[config]
-            if not resolve_generator and isinstance(internal, NodeInternals_GenFunc):
-                return s
+            side_effect_risk = not internal.is_frozen() and isinstance(internal, NodeInternals_GenFunc)
 
             if (owned_conf == None) or node.is_conf_existing(owned_conf):
-                if __compliant(node, config, top_node):
+                if __compliant(node, config, top_node, side_effect_risk=side_effect_risk):
                     s.append(node)
+
+            if not resolve_generator and side_effect_risk:
+                return s
 
             if rdepth <= -1 or rdepth > 0:
                 s2 = internal.get_child_nodes_by_attr(internals_criteria=internals_criteria,
@@ -5896,7 +5906,8 @@ class Node(object):
         else:
             htable[name] = self
 
-        if resolve_generator or not isinstance(internal, NodeInternals_GenFunc):
+        side_effect_risk = not internal.is_frozen() and isinstance(internal, NodeInternals_GenFunc)
+        if resolve_generator or not side_effect_risk:
             internal.get_child_all_path(name, htable, conf=next_conf, recursive=recursive,
                                         resolve_generator=resolve_generator)
 
@@ -5906,8 +5917,12 @@ class Node(object):
         """
         Args:
             resolve_generator: if `True`, the generator nodes will be resolved in order to perform
-              the search within. But there will be side-effects on the graph, because
+              the search within. But there could be side-effects on the graph, because
               some parts of the graph could end up frozen if they are used as generator parameters.
+              If `False`, generator nodes won't be resolved, but they could already be in a
+              resolved state before this method is called on them. It means that no side effects
+              could result from the call of this method. And thus for this latter case,
+              the method works as if `resolve_generator` is set to `True`.
 
         Returns:
             dict: the keys are either a 'path' or a tuple ('path', int) when the path already
