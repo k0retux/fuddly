@@ -95,20 +95,22 @@ class ModelWalker(object):
         for consumed_node, orig_node_val in gen:
             self._root_node.freeze()
 
-            if self._cpt >= self._initial_step:
-                self.consumed_node_path = consumed_node.get_path_from(self._root_node)
-                if self.consumed_node_path == None:
-                    # 'consumed_node_path' can be None if
-                    # consumed_node is not part of the frozen rnode
-                    # (it may however exist when rnode is not
-                    # frozen). This situation can trigger in some
-                    # specific situations related to the use of
-                    # existence conditions within a data model. Thus,
-                    # in this case we skip the just generated case as
-                    # nothing is visible.
-                    continue
+            self.consumed_node_path = consumed_node.get_path_from(self._root_node)
+            if self.consumed_node_path == None:
+                # 'consumed_node_path' can be None if
+                # consumed_node is not part of the frozen rnode
+                # (it may however exist when rnode is not
+                # frozen). This situation can trigger in some
+                # specific situations related to the use of
+                # existence conditions within a data model. Thus,
+                # in this case we skip the just generated case as
+                # nothing is visible.
+                continue
 
+            if self._cpt >= self._initial_step:
                 yield self._root_node, consumed_node, orig_node_val, self._cpt
+            else:
+                pass
 
             if self._max_steps != -1 and self._cpt >= (self._max_steps+self._initial_step-1):
                 self._cpt += 1
