@@ -1501,8 +1501,11 @@ class NodeInternals_GenFunc(NodeInternals):
             self._trigger_registered = False
             self.reset_generator()
         else:
-            self.generated_node.reset_state(recursive, exclude_self=exclude_self, conf=conf,
-                                           ignore_entanglement=ignore_entanglement)
+            if self._generated_node is not None:
+                self.generated_node.reset_state(recursive, exclude_self=exclude_self, conf=conf,
+                                                ignore_entanglement=ignore_entanglement)
+            else:
+                pass
 
     def is_exhausted(self):
         if self.is_attr_set(NodeInternals.Mutable) and self.is_attr_set(NodeInternals.Finite):
@@ -1513,13 +1516,13 @@ class NodeInternals_GenFunc(NodeInternals):
         elif self.is_attr_set(NodeInternals.Mutable) and not self.is_attr_set(NodeInternals.Finite):
             return False
         else:
-            return self.generated_node.is_exhausted()
+            return False if self._generated_node is None else self.generated_node.is_exhausted()
 
     def is_frozen(self):
         if self.is_attr_set(NodeInternals.Mutable):
             return self._generated_node is not None
         else:
-            return self.generated_node.is_frozen()
+            return None if self._generated_node is None else self.generated_node.is_frozen()
 
     def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False,
                  only_generators=False, reevaluate_constraints=False):
@@ -1532,9 +1535,12 @@ class NodeInternals_GenFunc(NodeInternals):
             self._trigger_registered = False
             self.reset_generator()
         else:
-            self.generated_node.unfreeze(conf, recursive=recursive, dont_change_state=dont_change_state,
-                                         ignore_entanglement=ignore_entanglement, only_generators=only_generators,
-                                         reevaluate_constraints=reevaluate_constraints)
+            if self._generated_node is not None:
+                self.generated_node.unfreeze(conf, recursive=recursive, dont_change_state=dont_change_state,
+                                             ignore_entanglement=ignore_entanglement, only_generators=only_generators,
+                                             reevaluate_constraints=reevaluate_constraints)
+            else:
+                pass
 
     def unfreeze_all(self, recursive=True, ignore_entanglement=False):
         # if self.is_attr_set(NodeInternals.Mutable):
@@ -1542,7 +1548,10 @@ class NodeInternals_GenFunc(NodeInternals):
             self._trigger_registered = False
             self.reset_generator()
         else:
-            self.generated_node.unfreeze_all(recursive=recursive, ignore_entanglement=ignore_entanglement)
+            if self._generated_node is not None:
+                self.generated_node.unfreeze_all(recursive=recursive, ignore_entanglement=ignore_entanglement)
+            else:
+                pass
 
     def reset_fuzz_weight(self, recursive):
         if recursive:
