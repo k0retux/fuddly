@@ -378,6 +378,12 @@ class Data(object):
     def is_unusable(self):
         return self._unusable
 
+    def has_node_content(self):
+        return isinstance(self._backend, NodeBackend)
+
+    def has_raw_content(self):
+        return isinstance(self._backend, RawBackend)
+
     # Only taken into account if the Logger has been set to
     # record data only when requested (explicit_data_recording == True)
     def make_recordable(self):

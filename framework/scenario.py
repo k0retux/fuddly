@@ -26,7 +26,7 @@ import subprocess
 import platform
 
 from framework.global_resources import *
-from framework.data import Data, DataProcess, DataAttr
+from framework.data import Data, DataProcess, DataAttr, NodeBackend
 from framework.node import Node
 from framework.target_helpers import Target
 from libs.external_modules import *
@@ -155,6 +155,8 @@ class Step(object):
         else:
             self._tasks_to_stop = None
 
+        self._stutter_cpt = None
+        self._stutter_max = None
 
     def _handle_data_desc(self, data_desc):
         self._atom = None
@@ -228,6 +230,19 @@ class Step(object):
         for d in self._data_desc:
             if isinstance(d, (Data, DataProcess)):
                 d.make_free()
+
+    def _stutter_cbk(self, env, current_step, next_step):
+        self._stutter_cpt += 1
+        if self._stutter_cpt > self._stutter_max:
+            self._stutter_cpt = 1
+            return False
+        else:
+            return True
+
+    def make_stutter(self, count):
+        self._stutter_cpt = 1
+        self._stutter_max = count
+        self.connect_to(self, cbk_after_sending=self._stutter_cbk)
 
     def is_blocked(self):
         return self._blocked
@@ -374,10 +389,9 @@ class Step(object):
             for idx, d_desc in enumerate(self._data_desc):
                 if isinstance(d_desc, DataProcess):
                     d.add_info('DP({:s})'.format(d_desc.formatted_str(oneliner=True)))
-                elif isinstance(d_desc, Data):
+                elif isinstance(d_desc, Data) and not d_desc.has_node_content():
                     d.add_info('User-provided Data()')
                 else:
-                    assert isinstance(d_desc, str)
                     d.add_info("Data Model: '{!s}'"
                                .format(self._scenario_env.dm.name))
                     d.add_info("Node Name: '{!s}'"
