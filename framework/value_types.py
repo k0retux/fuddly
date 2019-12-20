@@ -373,12 +373,10 @@ class String(VT_Alt):
 
     def make_private(self, forget_current_state):
         if forget_current_state:
-            if self.is_values_provided:
+            if self.is_values_provided and self.determinist:
                 self.values = copy.copy(self.values)
             else:
-                self._populate_values(force_max_enc_sz=self.max_enc_sz_provided,
-                                      force_min_enc_sz=self.min_enc_sz_provided)
-                self._ensure_enc_sizes_consistency()
+                self.values = None
             self.reset_state()
         else:
             self.values = copy.copy(self.values)
@@ -600,7 +598,13 @@ class String(VT_Alt):
             return blob
 
     def reset_state(self):
+        if not self.determinist:
+            self._populate_values(force_max_enc_sz=self.max_enc_sz_provided,
+                                  force_min_enc_sz=self.min_enc_sz_provided)
+            self._ensure_enc_sizes_consistency()
+
         self.values_copy = copy.copy(self.values)
+
         self.drawn_val = None
         if self.encoded_string:
             self.encoding_arg = copy.copy(self.encoding_arg)
