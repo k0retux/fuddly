@@ -33,6 +33,10 @@ Parameters:
         |_ size
         |      | desc: Size of the generated data.
         |      | default: None [type: int]
+        |_ eval
+        |      | desc: The pattern will be evaluated before being used. Note that the
+        |      |       evaluation shall result in a byte string.
+        |      | default: False [type: bool]
 
 
 POPULATION - Generator for Evolutionary Fuzzing

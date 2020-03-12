@@ -51,7 +51,9 @@ tactics = Tactics()
            args={'pattern': ('Pattern to be used for generating data', b'1234567890', bytes),
                  'prefix': ('Prefix added to the pattern', b'', bytes),
                  'suffix': ('Suffix replacing the end of the pattern', b'', bytes),
-                 'size': ('Size of the generated data.', None, int)
+                 'size': ('Size of the generated data.', None, int),
+                 'eval': ('The pattern will be evaluated before being used. Note that the evaluation '
+                          'shall result in a byte string.', False, bool)
                  })
 class g_generic_pattern(Generator):
     """
@@ -63,16 +65,28 @@ class g_generic_pattern(Generator):
         return True
 
     def generate_data(self, dm, monitor, target):
+        if self.eval:
+            try:
+                pattern = eval(self.pattern)
+            except:
+                data = Data()
+                # data.make_unusable()
+                data.add_info('Invalid expression provided in @pattern. It will be used without evaluation.')
+                return data
+        else:
+            pattern = self.pattern
+
         if self.size is not None:
-            psize = len(self.pattern)
-            pattern = self.pattern * (self.size // psize) + self.pattern[:(self.size%psize)]
+            psize = len(pattern)
+            pattern = pattern * (self.size // psize) + pattern[:(self.size%psize)]
             if self.prefix:
                 pattern = self.prefix + pattern[:-(len(self.prefix))]
 
         else:
-            pattern = self.prefix+self.pattern
+            pattern = self.prefix+pattern
 
-        pattern = pattern[:-len(self.suffix)] + self.suffix
+        if self.suffix:
+            pattern = pattern[:-len(self.suffix)] + self.suffix
         if self.size is not None and self.size < len(pattern):
             pattern = pattern[:self.size]
 
