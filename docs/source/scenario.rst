@@ -62,9 +62,9 @@ Let's begin with a simple example that interconnect 3 steps in a loop without an
     step4 = Step('off_gen', fbk_timeout=0)
 
     step1.connect_to(step2)
-    step2.connect_to(step3, cbk_after_fbk=cbk_transition1)
+    step2.connect_to(step3, cbk_after_fbk=check_answer)
     step3.connect_to(step4)
-    step4.connect_to(step1, cbk_after_sending=cbk_transition2)
+    step4.connect_to(step1, cbk_after_sending=check_switch)
 
     sc1 = Scenario('ex1', anchor=step1, user_context=UI(switch=False))
 
