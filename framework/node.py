@@ -5987,6 +5987,14 @@ class Node(object):
                 l.append(path)
         return l
 
+    def is_path_valid(self, path, resolve_generator=False):
+        htable = self.get_all_paths(resolve_generator=resolve_generator, flush_cache=True)
+        for p in htable.keys():
+            if re.match(path, p):
+                return True
+        else:
+            return False
+
     def set_env(self, env):
         self.env = env
         for c in self.internals:
