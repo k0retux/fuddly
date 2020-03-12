@@ -123,6 +123,17 @@ framework.targets.sim module
     :special-members:
     :exclude-members: __dict__, __weakref__
 
+framework.targets.ssh module
+----------------------------
+
+.. automodule:: framework.targets.ssh
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :private-members:
+    :special-members:
+    :exclude-members: __dict__, __weakref__
+
 framework.targets.printer module
 --------------------------------
 

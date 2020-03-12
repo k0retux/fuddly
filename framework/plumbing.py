@@ -1249,11 +1249,13 @@ class FmkPlumbing(object):
     @EnforceOrder(accepted_states=['S2'])
     def show_fmk_internals(self):
 
+        delay_str = str(self._delay) if self._delay >=0 else 'Step by step mode'
+
         print(colorize(FontStyle.BOLD + '\n-=[ FMK Internals ]=-\n', rgb=Color.INFO))
         print(colorize('  [ General Information ]', rgb=Color.INFO))
         print(colorize('                  FmkDB enabled: ', rgb=Color.SUBINFO) + repr(self.fmkDB.enabled))
         print(colorize('              Workspace enabled: ', rgb=Color.SUBINFO) + repr(self._wkspace_enabled))
-        print(colorize('                  Sending delay: ', rgb=Color.SUBINFO) + str(self._delay))
+        print(colorize('                  Sending delay: ', rgb=Color.SUBINFO) + delay_str)
         print(colorize('   Number of data sent in burst: ', rgb=Color.SUBINFO) + str(self._burst))
         print(colorize(' Target(s) health-check timeout: ', rgb=Color.SUBINFO) + str(self._hc_timeout_max))
 
@@ -1743,10 +1745,8 @@ class FmkPlumbing(object):
                 if self._delay == -1.0:
                     try:
                         signal.signal(signal.SIGINT, sig_int_handler)
-                        if sys.version_info[0] == 2:
-                            cont = raw_input("\n*** Press [ENTER] to continue ('q' to exit) ***\n")
-                        else:
-                            cont = input("\n*** Press [ENTER] to continue ('q' to exit) ***\n")
+                        cont = get_user_input(colorize("\n*** Press [ENTER] to continue ('q' to exit) ***\n",
+                                                       rgb=Color.PROMPT))
                         if cont == 'q':
                             ret = False
                     except KeyboardInterrupt:
@@ -3968,10 +3968,7 @@ class FmkShell(cmd.Cmd):
         if self._quit_shell:
             self._quit_shell = False
             msg = colorize(FontStyle.BOLD + "\nReally Quit? [Y/n]", rgb=Color.WARNING)
-            if sys.version_info[0] == 2:
-                cont = raw_input(msg)
-            else:
-                cont = input(msg)
+            cont = get_user_input(msg)
             cont = cont.upper()
             if cont == 'Y' or cont == '':
                 self.fz.stop()
@@ -5014,11 +5011,9 @@ class FmkShell(cmd.Cmd):
         while True:
             idx += 1
 
-            msg = "*** Data generation instructions [#{:d}] (type '!' when all instructions are provided):\n".format(idx)
-            if sys.version_info[0] == 2:
-                actions_str = raw_input(msg)
-            else:
-                actions_str = input(msg)
+            msg = "*** Data generation instructions [#{:d}] (type '!' " \
+                  "when all instructions are provided):\n# ".format(idx)
+            actions_str = get_user_input(colorize(msg, rgb=Color.PROMPT))
 
             if actions_str == '!':
                 print("*** Configuration terminated.")
@@ -5454,26 +5449,24 @@ class FmkShell(cmd.Cmd):
 
 
     def do_send_raw(self, line):
-        '''
+        """
         Send raw data
-        |_ syntax: send_raw <data> [targetID1 ... targetIDN]
-        '''
+        |_ syntax: send_raw [targetID1 ... targetIDN]
+
+        A prompt will then ask you to write your input
+        """
 
         self.__error_msg = "Syntax Error!"
         args = line.split()
-        args_len = len(args)
-
-        if args_len < 1:
+        args, tg_ids = self._retrieve_tg_ids(args)
+        if args:
             self.__error = True
             return False
 
-        args, tg_ids = self._retrieve_tg_ids(args)
-        line = ''.join(args)
+        data_str = get_user_input(colorize('*** Data to be sent without interpretation:\n# ',
+                                           rgb=Color.PROMPT))
 
-        if line:
-            self.fz.process_data_and_send(Data(line), tg_ids=tg_ids)
-        else:
-            self.__error = True
+        self.fz.process_data_and_send(Data(data_str), tg_ids=tg_ids)
 
         return False
 
@@ -5484,25 +5477,22 @@ class FmkShell(cmd.Cmd):
         '''
         self.__error_msg = "Syntax Error!"
         args = line.split()
-        args_len = len(args)
 
-        if args_len < 1:
+        args, tg_ids = self._retrieve_tg_ids(args)
+        if args:
             self.__error = True
             return False
 
-        args, tg_ids = self._retrieve_tg_ids(args)
-        line = ''.join(args)
+        data_str = get_user_input(colorize('*** Data to be sent after evaluation:\n# ',
+                                           rgb=Color.PROMPT))
 
-        if line:
-            try:
-                data = Data(eval(line))
-            except:
-                self.__error = True
-                return False
-
-            self.fz.process_data_and_send(data, tg_ids=tg_ids)
-        else:
+        try:
+            data = Data(eval(data_str))
+        except:
             self.__error = True
+            return False
+
+        self.fz.process_data_and_send(data, tg_ids=tg_ids)
 
         return False
 
@@ -5594,11 +5584,8 @@ class FmkShell(cmd.Cmd):
         return False
 
     def do_comment(self, line):
-        if sys.version_info[0] == 2:
-            comments = raw_input("*** Write your comments:\n")
-        else:
-            comments = input("*** Write your comments:\n")
-
+        comments = get_user_input(colorize("*** Write your comments:\n# ",
+                                           rgb=Color.PROMPT))
         self.fz.log_comment(comments)
         return False
 
