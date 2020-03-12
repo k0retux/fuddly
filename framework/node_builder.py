@@ -53,7 +53,7 @@ class NodeBuilder(object):
         # Generator/Function description keys
         'node_args', 'other_args', 'provide_helpers', 'trigger_last',
         # Typed-node description keys
-        'specific_fuzzy_vals',
+        'specific_fuzzy_vals', 'default',
         # Import description keys
         'import_from', 'data_id',
         # node properties description keys
@@ -531,6 +531,12 @@ class NodeBuilder(object):
                 raise DataModelDefinitionError("'specific_fuzzy_vals' is only usable with Typed-nodes."
                                                " [guilty node: '{:s}']".format(node.name))
             node.conf(conf).set_specific_fuzzy_values(vals)
+        def_val = desc.get('default', None)
+        if def_val is not None:
+            if not node.is_typed_value(conf=conf):
+                raise DataModelDefinitionError("'default' is only usable with Typed-nodes."
+                                               " [guilty node: '{:s}']".format(node.name))
+            node.set_frozen_value(def_val, conf=conf)
         param = desc.get('mutable', None)
         if param is not None:
             if param:

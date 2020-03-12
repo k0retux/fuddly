@@ -604,7 +604,11 @@ class Database(object):
             for dm in dm_list:
                 if dm.name == data_model_name:
                     dm.load_data_model(load_arg)
-                    return dm.decode
+
+                    def decode_wrapper(*args, **kwargs):
+                        return dm.decode(*args, **kwargs)[1]
+
+                    return decode_wrapper
             else:
                 print(colorize("*** ERROR: No available data model matching this database entry "
                                "[requested data model: '{:s}'] ***".format(data_model_name),
@@ -617,15 +621,16 @@ class Database(object):
         fbk_decoder_func = None
         if decoding_hints is not None:
             load_arg, decode_data, decode_fbk, user_atom_name, user_fbk_atom_name, forced_fbk_decoder = decoding_hints
-            decoder_func = search_dm(dm_name)
-            if decoder_func is None:
-                decode_data, decode_fbk = False, False
-            if forced_fbk_decoder:
-                fbk_decoder_func = search_dm(forced_fbk_decoder)
-                if fbk_decoder_func is None:
-                    decode_fbk = False
-            else:
-                fbk_decoder_func = decoder_func
+            if decode_data or decode_fbk:
+                decoder_func = search_dm(dm_name)
+                if decoder_func is None:
+                    decode_data = False
+            if decode_fbk:
+                if forced_fbk_decoder:
+                    fbk_decoder_func = search_dm(forced_fbk_decoder)
+                else:
+                    fbk_decoder_func = decoder_func
+                decode_fbk = fbk_decoder_func is not None
 
         line_pattern = '-' * page_width
         data_id_pattern = " Data ID #{:d} ".format(data_id)

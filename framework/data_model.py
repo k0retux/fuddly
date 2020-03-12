@@ -143,8 +143,8 @@ class DataModel(object):
                 return Node('RAW_{:s}'.format(filename[:-len(self.file_extension)-1]),
                             values=[data])
 
-    def register_atom_for_absorption(self, atom, absorb_constraints=AbsFullCsts(),
-                                     decoding_scope=None):
+    def register_atom_for_decoding(self, atom, absorb_constraints=AbsFullCsts(),
+                                   decoding_scope=None):
         """
         Register an atom that will be used by the DataModel when an operation requiring data absorption
         is performed, like self.decode().
@@ -152,9 +152,11 @@ class DataModel(object):
         Args:
             atom: Atom to register for absorption
             absorb_constraints: Constraints to be used for the absorption
-            decoding_scope: Should be either an atom name or a list of the atom name that can be
-              absorbed by the registered atom. If set to None, the atom will be the default one
-              used for absorption operation if no other nodes exist with a specific scope.
+            decoding_scope: Should be either an atom name that can be
+              absorbed by the registered atom, or a textual description of the scope, or
+              a list of the previous elements.
+              If set to None, the atom will be the default one
+              used for decoding operation if no other nodes exist with a specific scope.
 
         """
 
@@ -169,11 +171,23 @@ class DataModel(object):
 
         assert isinstance(decoding_scope, (list, tuple))
 
-        for atom_name in decoding_scope:
-            self._atoms_for_abs[atom_name] = (prepared_atom, absorb_constraints)
+        for scope in decoding_scope:
+            self._atoms_for_abs[scope] = (prepared_atom, absorb_constraints)
 
-    def decode(self, data, atom_name=None, requested_abs_csts=None, colorized=True,
-               return_atom=False):
+    def decode(self, data, scope=None, atom_name=None, requested_abs_csts=None, colorized=True):
+        """
+        Args:
+            data:
+            atom_name (str): requested atom name for the decoding (linked to self.register_atom_for_decoding)
+            scope (str): requested scope for the decoding (linked to self.register_atom_for_decoding)
+            requested_abs_csts:
+            colorized:
+
+        Returns:
+            tuple:
+              Node which is the result of the absorption or None and
+              Textual description of the result
+        """
 
         class Accumulator:
             content = ''
@@ -183,17 +197,19 @@ class DataModel(object):
         a = Accumulator()
         accumulate = a.accumulate
 
-        if atom_name is None and self._default_atom_for_abs:
+        if scope is None and atom_name is None and self._default_atom_for_abs:
             atom, abs_csts = self._default_atom_for_abs
             atom_for_abs = self._backend(atom).atom_copy(atom)
             atom_name = atom.name
-        elif atom_name is None:
+        elif scope is None and atom_name is None:
             atom_name = list(self._dm_hashtable.keys())[0]
             atom_for_abs = self.get_atom(atom_name)
             abs_csts = AbsFullCsts()
         else:
             try:
-                if self._atoms_for_abs and atom_name in self._atoms_for_abs:
+                if self._atoms_for_abs and scope in self._atoms_for_abs:
+                    atom_for_abs, abs_csts = self.get_atom_for_absorption(scope)
+                elif self._atoms_for_abs and atom_name in self._atoms_for_abs:
                     atom_for_abs, abs_csts = self.get_atom_for_absorption(atom_name)
                 else:
                     atom_for_abs = self.get_atom(atom_name)
@@ -218,7 +234,7 @@ class DataModel(object):
             accumulate('\n \_ remaining: {!r}'.format(data[size:size+1000]))
             atom_for_abs = None
 
-        return (atom_for_abs, a.content) if return_atom else a.content
+        return (atom_for_abs, a.content)
 
     def cleanup(self):
         pass

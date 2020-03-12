@@ -373,7 +373,7 @@ class String(VT_Alt):
 
     def make_private(self, forget_current_state):
         if forget_current_state:
-            if self.is_values_provided and self.determinist:
+            if self.is_values_provided:
                 self.values = copy.copy(self.values)
             else:
                 self.values = None
@@ -598,7 +598,8 @@ class String(VT_Alt):
             return blob
 
     def reset_state(self):
-        if not self.determinist:
+        if self.values is None:
+            assert not self.is_values_provided
             self._populate_values(force_max_enc_sz=self.max_enc_sz_provided,
                                   force_min_enc_sz=self.min_enc_sz_provided)
             self._ensure_enc_sizes_consistency()
@@ -624,10 +625,7 @@ class String(VT_Alt):
         if values is not None:
             for v in values:
                 sz = len(v)
-                if self.max_sz is not None:
-                    assert(self.max_sz >= sz >= self.min_sz)
-                else:
-                    assert(sz >= self.min_sz)
+                assert self.max_sz >= sz >= self.min_sz
 
     def set_description(self, values=None, size=None, min_sz=None,
                         max_sz=None, determinist=True, codec='latin-1',
@@ -698,13 +696,9 @@ class String(VT_Alt):
             self.max_sz = max_sz
             self.min_sz = 0
         elif values is not None:
-            sz = 0
-            for v in values:
-                length = len(v)
-                if length > sz:
-                    sz = length
-            self.max_sz = sz
-            self.min_sz = 0
+            sz_list = list(map(lambda x: len(x), values))
+            self.max_sz = builtins.max(sz_list)
+            self.min_sz = builtins.min(sz_list)
         elif max_encoded_sz is not None:
             # If we reach this condition, that means no size has been provided, we thus decide
             # an arbitrary default value for max_sz. Regarding absorption, this arbitrary choice will
@@ -715,6 +709,7 @@ class String(VT_Alt):
             self.min_sz = 0
             self.max_sz = self.DEFAULT_MAX_SZ
 
+        # needed if @values are provided (to serve as samples) as well as size-related parameters
         self._check_sizes(values)
 
         self.determinist = determinist

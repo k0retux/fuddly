@@ -1331,7 +1331,7 @@ model, by calling
    - Add your samples there: ``~/fuddly_data/imported_data/<NAME of DM>/``
 
    - Within the method :meth:`framework.data_model.DataModel.build_data_model()`, and once you defined
-     your atoms, call the method :meth:`framework.data_model.DataModel.register_atom_for_absorption()`
+     your atoms, call the method :meth:`framework.data_model.DataModel.register_atom_for_decoding()`
      to register the atom that will be used to model your samples. (To perform this action the framework
      leverages the node absorption mechanism -- :ref:`tuto:dm-absorption`.)
      For a usage example, refer to the ZIP data model.
@@ -1351,7 +1351,7 @@ model, by calling
    files provided in ``~/fuddly_data/imported_data/json``.
 
 .. note::
-   The method :meth:`framework.data_model.DataModel.register_atom_for_absorption()` is also leveraged
+   The method :meth:`framework.data_model.DataModel.register_atom_for_decoding()` is also leveraged
    by the decoding feature of the class :class:`framework.data_model.DataModel`, which is implemented
    by the method :meth:`framework.data_model.DataModel.decode()`.
 

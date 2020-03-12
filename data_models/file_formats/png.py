@@ -106,7 +106,7 @@ class PNG_DataModel(DataModel):
         png = mb.create_graph_from_desc(png_desc)
 
         self.register(png)
-        self.register_atom_for_absorption(png, absorb_constraints=AbsNoCsts(size=True))
+        self.register_atom_for_decoding(png, absorb_constraints=AbsNoCsts(size=True))
 
 
 data_model = PNG_DataModel()

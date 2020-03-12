@@ -163,8 +163,8 @@ class JPG_DataModel(DataModel):
 
         jpg_abs = jpg.get_clone(new_env=True)
         jpg_abs.set_current_conf('ABS', recursive=True)
-        self.register_atom_for_absorption(jpg_abs,
-                                          absorb_constraints=AbsNoCsts(size=True, struct=True,
+        self.register_atom_for_decoding(jpg_abs,
+                                        absorb_constraints=AbsNoCsts(size=True, struct=True,
                                                                        contents=True))
 
 

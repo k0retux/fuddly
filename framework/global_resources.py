@@ -123,6 +123,12 @@ def is_string_compatible(val):
     else:
         return False
 
+def get_user_input(msg):
+    if sys.version_info[0] == 2:
+        return raw_input(msg)
+    else:
+        return input(msg)
+
 # Generic container for user inputs
 
 class UI(object):

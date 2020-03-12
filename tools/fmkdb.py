@@ -68,7 +68,7 @@ group.add_argument('--info-by-date', nargs=2, metavar=('START','END'),
                    help='''Display information on data sent between START and END '''
                         '''(date format 'Year/Month/Day' or 'Year/Month/Day-Hour' or
                         'Year/Month/Day-Hour:Minute')''')
-group.add_argument('--info-by-ids', nargs=2, metavar=('FIRST_DATA_ID','LAST_DATA_ID'), type=int,
+group.add_argument('-ids', '--info-by-ids', nargs=2, metavar=('FIRST_DATA_ID','LAST_DATA_ID'), type=int,
                    help='''Display information on all the data included within the specified
                    data ID range''')
 
@@ -132,10 +132,8 @@ group.add_argument('--disprove-impact', nargs=2, metavar=('FIRST_ID', 'LAST_ID')
 
 def handle_confirmation():
     try:
-        if sys.version_info[0] == 2:
-            cont = raw_input("\n*** Press [ENTER] to continue ('C' to CANCEL) ***\n")
-        else:
-            cont = input("\n*** Press [ENTER] to continue ('C' to CANCEL) ***\n")
+        cont = get_user_input(colorize("\n*** Press [ENTER] to continue ('C' to CANCEL) ***\n",
+                                       rgb=Color.PROMPT))
     except KeyboardInterrupt:
         cont = 'c'
     except:
