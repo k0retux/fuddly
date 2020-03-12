@@ -179,6 +179,28 @@ Usage example:
      temporary files need to be created.
 
 
+SSHTarget
+=========
+
+Reference:
+  :class:`framework.targets.ssh.SSHTarget`
+
+Description:
+  This generic target enables you to interact with a remote target requiring an SSH connection.
+
+Feedback:
+  This target will automatically provide the results of the commands sent through SSH.
+
+Supported Feedback Mode:
+  - :const:`framework.target_helpers.Target.FBK_WAIT_FULL_TIME`
+  - :const:`framework.target_helpers.Target.FBK_WAIT_UNTIL_RECV`
+
+Usage Example:
+   .. code-block:: python
+      :linenos:
+
+       tg = SSHTarget(host='192.168.0.1', port=22, username='test', password='test')
+
 
 PrinterTarget
 =============

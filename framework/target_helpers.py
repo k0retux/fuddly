@@ -28,6 +28,7 @@ from framework.data import Data
 from libs.external_modules import *
 
 class TargetStuck(Exception): pass
+class TargetError(Exception): pass
 
 class Target(object):
     """
