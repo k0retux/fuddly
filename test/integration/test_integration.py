@@ -1055,9 +1055,8 @@ class TestMisc(unittest.TestCase):
                 break
 
         print('\nTurn number when Node has changed: %r, number of test cases: %d' % (turn_nb_list, i))
-        good_list = [1, 13, 25, 37, 49, 55, 61, 73, 85, 97, 109, 121, 133, 145, 157, 163, 175, 187,
-                     199, 208, 217, 233, 248]
-
+        good_list = [1, 14, 26, 38, 50, 56, 62, 74, 86, 98, 111, 123, 135, 147, 159, 165, 177, 189,
+                     201, 210, 219, 235, 250]
         msg = "If Fuzzy_<TypedValue>.values have been modified in size, the good_list should be updated.\n" \
               "If BitField are in random mode [currently put in determinist mode], the fuzzy_mode can produce more" \
               " or less value depending on drawn value when .get_value() is called (if the drawn value is" \
@@ -1724,6 +1723,7 @@ class TestModelWalker(unittest.TestCase):
             b' [!] ++++++++++ [!] ::IAA::AAA::AAA::AAA::>:: [!] ', # [8] could change has it is a random corrupt_bit
             b' [!] ++++++++++ [!] ::AAAA::AAA::AAA::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AA::AAA::AAA::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::AAA' + b'XXX'*100 + b'::AAA::AAA::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::\x00\x00\x00::AAA::AAA::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::A%n::AAA::AAA::AAA::>:: [!] ',
@@ -1743,9 +1743,10 @@ class TestModelWalker(unittest.TestCase):
             b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x01:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x80:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x7f:: [!] ',
-            b' [!] ++++++++++ [!] ::AAQ::AAA::>:: [!] ',  # [30] could change has it is a random corrupt_bit
+            b' [!] ++++++++++ [!] ::AAQ::AAA::>:: [!] ',  # [31] could change has it is a random corrupt_bit
             b' [!] ++++++++++ [!] ::AAAA::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AA::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::AAA' + b'XXX'*100 + b'::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::\x00\x00\x00::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::A%n::AAA::>:: [!] ',
@@ -1773,9 +1774,10 @@ class TestModelWalker(unittest.TestCase):
             b' [!] >>>>>>>>>> [!] ::\x01:: [!] ',
             b' [!] >>>>>>>>>> [!] ::\x80:: [!] ',
             b' [!] >>>>>>>>>> [!] ::\x7f:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::QAA::AAA::AAA::AAA::>:: [!] ', # [59] could change has it is a random corrupt_bit
+            b' [!] >>>>>>>>>> [!] ::QAA::AAA::AAA::AAA::>:: [!] ', # [61] could change has it is a random corrupt_bit
             b' [!] >>>>>>>>>> [!] ::AAAA::AAA::AAA::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AA::AAA::AAA::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA' + b'XXX'*100 + b'::AAA::AAA::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::\x00\x00\x00::AAA::AAA::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::A%n::AAA::AAA::AAA::>:: [!] ',
@@ -1795,9 +1797,10 @@ class TestModelWalker(unittest.TestCase):
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x01:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x80:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x7f:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAC::AAA::>:: [!] ', # [81] could change has it is a random corrupt_bit
+            b' [!] >>>>>>>>>> [!] ::AAC::AAA::>:: [!] ', # [84] could change has it is a random corrupt_bit
             b' [!] >>>>>>>>>> [!] ::AAAA::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AA::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA' + b'XXX'*100 + b'::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::\x00\x00\x00::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::A%n::AAA::>:: [!] ',
@@ -1829,10 +1832,10 @@ class TestModelWalker(unittest.TestCase):
                                                                     max_steps=200):
             val = rnode.to_bytes()
             print(colorize('[%d] ' % idx + repr(val), rgb=Color.INFO))
-            if idx not in [8, 30, 59, 81]:
+            if idx not in [8, 31, 61, 84]:
                 self.assertEqual(val, raw_vals[idx - 1])
 
-        self.assertEqual(idx, 102)  # should be even
+        self.assertEqual(idx, 106)  # should be even
 
         print('***')
         idx = 0
@@ -1885,7 +1888,7 @@ class TestModelWalker(unittest.TestCase):
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True,
                                                                     max_steps=-1):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 444)
+        self.assertEqual(idx, 479)
 
     def test_TypedNodeDisruption_BitfieldCollapse(self):
         '''
@@ -3909,7 +3912,7 @@ class TestDataModelHelpers(unittest.TestCase):
         else:
             raise ValueError
 
-        assert i == 22, 'number of test cases: {:d}'.format(i)
+        assert i == 23, 'number of test cases: {:d}'.format(i)
         assert specific_cases_checked
 
 class TestFMK(unittest.TestCase):
@@ -4086,7 +4089,7 @@ class TestFMK(unittest.TestCase):
 
         self.assertEqual(code_vector, ['DataUnusable', 'HandOver', 'DataUnusable', 'HandOver',
                                        'DPHandOver', 'NoMoreData'])
-        self.assertEqual(base_qty, 55)
+        self.assertEqual(base_qty, 59)
 
         print('\n*** test scenario SC_AUTO_REGEN via _send_data()')
 
@@ -4120,7 +4123,7 @@ class TestFMK(unittest.TestCase):
 
         self.assertEqual(code_vector, ['DataUnusable', 'HandOver', 'DataUnusable', 'HandOver',
                                        'DPHandOver', 'NoMoreData'])
-        self.assertEqual(base_qty, 55)
+        self.assertEqual(base_qty, 59)
 
         print('\n*** test scenario SC_AUTO_REGEN via send_data_and_log()')
 

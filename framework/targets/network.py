@@ -597,8 +597,8 @@ class NetworkTarget(Target):
             # this case exist when data are only sent through 'server_mode'-configured interfaces
             # (because self._send_data() is called through self._handle_target_connection())
             # or a connection error has occurred.
-            pass
-            # self._feedback_handled = True
+            if from_fmk:
+                self._fbk_collector_to_launch_cpt += 1
 
         if data_list is None:
             return
@@ -905,8 +905,8 @@ class NetworkTarget(Target):
                 with self._server_thread_lock:
                     self._last_client_hp2sock[(host, port)] = (clientsocket, address)
                     self._last_client_sock2hp[clientsocket] = (host, port)
-            if from_fmk:
-                self._fbk_collector_to_launch_cpt += 1
+            # if from_fmk:
+            #     self._fbk_collector_to_launch_cpt += 1
             connected_client_event.set()
             self._send_data([clientsocket], {clientsocket:(data, host, port, address)},
                             fbk_timeout=self.feedback_timeout, from_fmk=from_fmk,
@@ -1272,6 +1272,7 @@ class NetworkTarget(Target):
         return self._feedback
 
     def is_feedback_received(self):
+        # print('\n*** DBG network is fbk received: {} {}'.format(self._fbk_collector_to_launch_cpt, self._fbk_collector_finished_cpt))
         return self._fbk_collector_to_launch_cpt == self._fbk_collector_finished_cpt
 
     def is_target_ready_for_new_data(self):

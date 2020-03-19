@@ -2692,16 +2692,21 @@ class FmkPlumbing(object):
             else:
                 fbk_timeout = self._fbk_timeout_max
 
+            # print('\n*** DBG: wait for target - fbk timeout: {!r} - forced fbk timeout: {!r}'.format(fbk_timeout, forced_feedback_timeout))
+
             tg = None
             try:
                 # Wait for potential feedback from enabled targets
                 for tg in self.targets.values():
                     while True:
+                        # print('\n*** wait for target fbk busy loop')
                         if fbk_timeout == 0:
+                            # print('\n*** DBG exit fast path1')
                             break
                         fbk_received = tg.is_feedback_received()
                         if (tg.fbk_wait_until_recv_mode and fbk_received) or \
                                 (forced_feedback_timeout is not None and fbk_received):
+                            # print('\n*** DBG exit fast path2')
                             break
                         now = datetime.datetime.now()
                         if (now - t0).total_seconds() > fbk_timeout:
@@ -2716,25 +2721,25 @@ class FmkPlumbing(object):
                             break
                         time.sleep(0.005)
 
-                if forced_feedback_timeout is None:
-                    hc_timeout = self._hc_timeout_max
-                    # Wait until the target is ready to send data or timeout expired
-                    for tg in self.targets.values():
-                        while not tg.is_target_ready_for_new_data():
-                            time.sleep(0.005)
-                            now = datetime.datetime.now()
-                            if (now - t0).total_seconds() > hc_timeout:
-                                self.lg.log_target_feedback_from(
-                                    source=FeedbackSource(self),
-                                    content='*** Timeout! The target {!s} does not seem to be ready.'
-                                        .format(self.available_targets_desc[tg]),
-                                    status_code=-2,
-                                    timestamp=now
-                                )
-                                go_on = self._recover_target(tg)
-                                ret = 0 if go_on else -1
-                                # tg.cleanup()
-                                break
+                hc_timeout = self._hc_timeout_max
+                # Wait until the target is ready to send data or timeout expired
+                for tg in self.targets.values():
+                    while not tg.is_target_ready_for_new_data():
+                        # print('\n***DBG wait for target ready busy loop')
+                        time.sleep(0.005)
+                        now = datetime.datetime.now()
+                        if (now - t0).total_seconds() > hc_timeout:
+                            self.lg.log_target_feedback_from(
+                                source=FeedbackSource(self),
+                                content='*** Timeout! The target {!s} does not seem to be ready.'
+                                    .format(self.available_targets_desc[tg]),
+                                status_code=-2,
+                                timestamp=now
+                            )
+                            go_on = self._recover_target(tg)
+                            ret = 0 if go_on else -1
+                            # tg.cleanup()
+                            break
 
             except KeyboardInterrupt:
                 self.lg.log_comment("*** Waiting for target readiness has been cancelled by the user!\n")
