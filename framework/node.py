@@ -5898,6 +5898,23 @@ class Node(object):
 
         return node
 
+    def get_nodes_by_paths(self, path_list):
+        """
+        Provide a dictionnary of the nodes referenced by the paths provided in @path_list.
+        Keys of the dict are the paths provided in @path_list.
+
+        Args:
+            path_list: list of paths referencing nodes of interest
+
+        Returns:
+            dict: dictionary mapping path to nodes
+        """
+        node_dict = {}
+        for p in path_list:
+            node_dict[p] = self.get_first_node_by_path(path_regexp=p, flush_cache=False)
+
+        return node_dict
+
 
     def _get_all_paths_rec(self, pname, htable, conf, recursive, first=True, resolve_generator=False,
                            clone_idx=0):
@@ -6569,6 +6586,8 @@ class Node(object):
 
     def update(self, node_update_dict, stop_on_error=True):
         for node_ref, new_value in node_update_dict.items():
+            if new_value is None:
+                continue
             try:
                 self[node_ref] = new_value
             except ValueError:
