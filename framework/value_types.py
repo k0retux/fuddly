@@ -1895,14 +1895,30 @@ class BitField(VT_Alt):
         # during .get_value()
         if reset_idx_inuse:
             self.idx_inuse = self.idx
-        
+
+
+    def idx_from_desc(self, sf_desc):
+        if self.subfield_descs is None:
+            raise DataModelAccessError
+        try:
+            idx = self.subfield_descs.index(sf_desc)
+        except ValueError:
+            raise DataModelAccessError
+
+        return idx
+
     def set_subfield(self, idx, val):
         """
         Args:
-          idx (int): subfield index, from 0 (low significant subfield) to nb_subfields-1
+          idx: Either an integer which should be the subfield index,
+            from 0 (low significant subfield) to nb_subfields-1
             (specific index -1 is used to choose the last subfield).
+            Or a string which should be the description of the field.
           val (int): new value for the subfield
         """
+
+        if isinstance(idx, str):
+            idx = self.idx_from_desc(idx)
         if idx == -1:
             idx = len(self.subfield_sizes) - 1
         assert(self.is_compatible(val, self.subfield_sizes[idx]))
@@ -1935,6 +1951,8 @@ class BitField(VT_Alt):
           extremums (list): new extremums for the subfield (remove previous extremums or remove
             previous value list if no extremums were used for this subfield)
         """
+        if isinstance(idx, str):
+            idx = self.idx_from_desc(idx)
         if idx == -1:
             idx = len(self.subfield_sizes) - 1
 
@@ -1974,6 +1992,8 @@ class BitField(VT_Alt):
 
 
     def get_subfield(self, idx):
+        if isinstance(idx, str):
+            idx = self.idx_from_desc(idx)
         if idx == -1:
             idx = len(self.subfield_sizes) - 1
         if self.subfield_vals[idx] is None:
