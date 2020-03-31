@@ -165,7 +165,7 @@ class JPG_DataModel(DataModel):
         jpg_abs.set_current_conf('ABS', recursive=True)
         self.register_atom_for_decoding(jpg_abs,
                                         absorb_constraints=AbsNoCsts(size=True, struct=True,
-                                                                       contents=True))
+                                                                     content=True))
 
 
 data_model = JPG_DataModel()

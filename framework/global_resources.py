@@ -205,13 +205,15 @@ class AbsCsts(object):
     Contents = 2
     Regexp = 3
     Structure = 4
+    SimilarContent = 5
 
-    def __init__(self, size=True, contents=True, regexp=True, struct=True):
+    def __init__(self, size=True, content=True, regexp=True, struct=True, similar_content=False):
         self.constraints = {
             AbsCsts.Size: size,
-            AbsCsts.Contents: contents,
+            AbsCsts.Contents: content,
             AbsCsts.Regexp: regexp,
-            AbsCsts.Structure: struct
+            AbsCsts.Structure: struct,
+            AbsCsts.SimilarContent: similar_content  # for String-type nodes it means "case sensitive"
         }
 
     def __bool__(self):
@@ -248,8 +250,9 @@ class AbsCsts(object):
 
 class AbsNoCsts(AbsCsts):
 
-    def __init__(self, size=False, contents=False, regexp=False, struct=False):
-        AbsCsts.__init__(self, size=size, contents=contents, regexp=regexp, struct=struct)
+    def __init__(self, size=False, content=False, regexp=False, struct=False, similar_content=False):
+        AbsCsts.__init__(self, size=size, content=content, regexp=regexp, struct=struct,
+                         similar_content=similar_content)
 
     def __repr__(self):
         return 'AbsNoCsts()'
@@ -257,8 +260,9 @@ class AbsNoCsts(AbsCsts):
 
 class AbsFullCsts(AbsCsts):
 
-    def __init__(self, size=True, contents=True, regexp=True, struct=True):
-        AbsCsts.__init__(self, size=size, contents=contents, regexp=regexp, struct=struct)
+    def __init__(self, size=True, content=True, regexp=True, struct=True, similar_content=True):
+        AbsCsts.__init__(self, size=size, content=content, regexp=regexp, struct=struct,
+                         similar_content=similar_content)
 
     def __repr__(self):
         return 'AbsFullCsts()'

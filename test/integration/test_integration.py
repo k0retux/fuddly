@@ -1055,8 +1055,7 @@ class TestMisc(unittest.TestCase):
                 break
 
         print('\nTurn number when Node has changed: %r, number of test cases: %d' % (turn_nb_list, i))
-        good_list = [1, 14, 26, 38, 50, 56, 62, 74, 86, 98, 111, 123, 135, 147, 159, 165, 177, 189,
-                     201, 210, 219, 235, 250]
+        good_list = [1, 12, 22, 32, 42, 48, 54, 64, 74, 84, 95, 105, 115, 125, 135, 141, 151, 161, 171, 180, 189, 203, 218]
         msg = "If Fuzzy_<TypedValue>.values have been modified in size, the good_list should be updated.\n" \
               "If BitField are in random mode [currently put in determinist mode], the fuzzy_mode can produce more" \
               " or less value depending on drawn value when .get_value() is called (if the drawn value is" \
@@ -1720,22 +1719,6 @@ class TestModelWalker(unittest.TestCase):
             b' [!] ++++++++++ [!] ::\x01:: [!] ',
             b' [!] ++++++++++ [!] ::\x80:: [!] ',
             b' [!] ++++++++++ [!] ::\x7f:: [!] ',
-            b' [!] ++++++++++ [!] ::IAA::AAA::AAA::AAA::>:: [!] ', # [8] could change has it is a random corrupt_bit
-            b' [!] ++++++++++ [!] ::AAAA::AAA::AAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::::AAA::AAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AA::AAA::AAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA' + b'XXX'*100 + b'::AAA::AAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::\x00\x00\x00::AAA::AAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::A%n::AAA::AAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::A%s::AAA::AAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA' + b'%n' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA' + b'%s' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA' + b'\"%n\"' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA' + b'\"%s\"' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA' + b'\r\n' * 100 + b'::AAA::AAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::../../../../../../etc/password::AAA::AAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::..\\..\\..\\..\\..\\..\\Windows\\system.ini::AAA::AAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::AAA::AAA::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::?:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::=:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\xff:: [!] ',
@@ -1743,22 +1726,6 @@ class TestModelWalker(unittest.TestCase):
             b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x01:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x80:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x7f:: [!] ',
-            b' [!] ++++++++++ [!] ::AAQ::AAA::>:: [!] ',  # [31] could change has it is a random corrupt_bit
-            b' [!] ++++++++++ [!] ::AAAA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AA::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA' + b'XXX'*100 + b'::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::\x00\x00\x00::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::A%n::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::A%s::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA' + b'%n' * 400 + b'::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA' + b'%s' * 400 + b'::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA' + b'\"%n\"' * 400 + b'::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA' + b'\"%s\"' * 400 + b'::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA' + b'\r\n' * 100 + b'::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::../../../../../../etc/password::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::..\\..\\..\\..\\..\\..\\Windows\\system.ini::AAA::>:: [!] ',
-            b' [!] ++++++++++ [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::?:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::=:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::\xff:: [!] ',
@@ -1766,7 +1733,6 @@ class TestModelWalker(unittest.TestCase):
             b' [!] ++++++++++ [!] ::AAA::AAA::\x01:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::\x80:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::\x7f:: [!] ',
-
             b' [!] >>>>>>>>>> [!] ::?:: [!] ',
             b' [!] >>>>>>>>>> [!] ::=:: [!] ',
             b' [!] >>>>>>>>>> [!] ::\xff:: [!] ',
@@ -1774,22 +1740,6 @@ class TestModelWalker(unittest.TestCase):
             b' [!] >>>>>>>>>> [!] ::\x01:: [!] ',
             b' [!] >>>>>>>>>> [!] ::\x80:: [!] ',
             b' [!] >>>>>>>>>> [!] ::\x7f:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::QAA::AAA::AAA::AAA::>:: [!] ', # [61] could change has it is a random corrupt_bit
-            b' [!] >>>>>>>>>> [!] ::AAAA::AAA::AAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::::AAA::AAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AA::AAA::AAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA' + b'XXX'*100 + b'::AAA::AAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::\x00\x00\x00::AAA::AAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::A%n::AAA::AAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::A%s::AAA::AAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA' + b'%n' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA' + b'%s' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA' + b'\"%n\"' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA' + b'\"%s\"' * 400 + b'::AAA::AAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA' + b'\r\n' * 100 + b'::AAA::AAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::AAA::AAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::..\\..\\..\\..\\..\\..\\Windows\\system.ini::AAA::AAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::AAA::AAA::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::?:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::=:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\xff:: [!] ',
@@ -1797,45 +1747,33 @@ class TestModelWalker(unittest.TestCase):
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x01:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x80:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x7f:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAC::AAA::>:: [!] ', # [84] could change has it is a random corrupt_bit
-            b' [!] >>>>>>>>>> [!] ::AAAA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AA::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA' + b'XXX'*100 + b'::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::\x00\x00\x00::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::A%n::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::A%s::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA' + b'%n' * 400 + b'::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA' + b'%s' * 400 + b'::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA' + b'\"%n\"' * 400 + b'::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA' + b'\"%s\"' * 400 + b'::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA' + b'\r\n' * 100 + b'::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::../../../../../../etc/password::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::..\\..\\..\\..\\..\\..\\Windows\\system.ini::AAA::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::file%n%n%n%nname.txt::AAA::>:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::?:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::=:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::\xff:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x00:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x01:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x80:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x7f:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x7f:: [!] '
         ]
+
+        # Note that the result of the TC that performs a random bitflip could collide with the one
+        # playing on letter case, resulting in less test cases (at worst 4 less in total)
+        # In this case assert won't be validated
 
         tn_consumer = TypedNodeDisruption(respect_order=True, ignore_separator=True)
         ic = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
                                    negative_attrs=[NodeInternals.Separator],
                                    node_kinds=[NodeInternals_TypedValue],
-                                   negative_node_subkinds=[String])
+                                   negative_node_subkinds=[String, Filename])
         tn_consumer.set_node_interest(internals_criteria=ic)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, tn_consumer, make_determinist=True,
                                                                     max_steps=200):
             val = rnode.to_bytes()
-            print(colorize('[%d] ' % idx + repr(val), rgb=Color.INFO))
-            if idx not in [8, 31, 61, 84]:
-                self.assertEqual(val, raw_vals[idx - 1])
+            # print(colorize('{!r}'.format(val), rgb=Color.INFO))
+            print(colorize('[{:d}] {!r}'.format(idx, val), rgb=Color.INFO))
+            self.assertEqual(val, raw_vals[idx - 1])
 
-        self.assertEqual(idx, 106)  # should be even
+        self.assertEqual(idx, 42)
 
         print('***')
         idx = 0
@@ -1888,7 +1826,9 @@ class TestModelWalker(unittest.TestCase):
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True,
                                                                     max_steps=-1):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 479)
+        self.assertAlmostEqual(idx, 427, delta=1)
+        # almostequal because collision in String test cases can lead to less test cases
+        # (related to random bitflip test case that could collide with case_sensitive test case)
 
     def test_TypedNodeDisruption_BitfieldCollapse(self):
         '''
@@ -3085,7 +3025,7 @@ class TestNode_NonTerm(unittest.TestCase):
                  {'name': 'crc',
                   'contents': CRC(vt=UINT32_be, after_encoding=False),
                   'node_args': ['enc_data', 'data2'],
-                  'absorb_csts': AbsFullCsts(contents=False)},
+                  'absorb_csts': AbsFullCsts(content=False, similar_content=False)},
                  {'name': 'enc_data',
                   'encoder': GZIP_Enc(6),
                   'set_attrs': NodeInternals.Abs_Postpone,
@@ -3093,7 +3033,7 @@ class TestNode_NonTerm(unittest.TestCase):
                       {'name': 'len',
                        'contents': LEN(vt=UINT8, after_encoding=False),
                        'node_args': 'data1',
-                       'absorb_csts': AbsFullCsts(contents=False)},
+                       'absorb_csts': AbsFullCsts(content=False, similar_content=False)},
                       {'name': 'data1',
                        'contents': String(values=['Test!', 'Hello World!'], codec='utf-16-le')},
                   ]},
@@ -3193,6 +3133,34 @@ class TestNode_TypedValue(unittest.TestCase):
     def setUp(self):
         pass
 
+    def test_filename(self):
+
+        node1 = Node('fname', vt=Filename(values=['myfile.txt'], case_sensitive=False))
+        node1.set_env(Env())
+
+        node2 = Node('fname', vt=Filename(values=['myfile.txt'], case_sensitive=False, uri_parsing=True))
+        node2.set_env(Env())
+
+        node3 = Node('fname', vt=Filename(values=['base/myfile.txt'], case_sensitive=False))
+        node3.set_env(Env())
+
+        node4 = Node('fpath', vt=FolderPath(values=['base/myfolder'], case_sensitive=False))
+        node4.set_env(Env())
+
+        node_list = [(node1, 28),
+                     (node2, 20),
+                     (node3, 19),
+                     (node4, 19)]
+
+        for node, nb_tc in node_list:
+            tn_consumer = TypedNodeDisruption(fuzz_magnitude=1.0)
+            for rnode, consumed_node, orig_node_val, idx in ModelWalker(node, tn_consumer, make_determinist=True, max_steps=-1):
+                data = rnode.to_bytes()
+                sz = len(data)
+                print(colorize('[{:d}] ({:04d}) {!r}'.format(idx, sz, data), rgb=Color.INFO))
+
+            self.assertEqual(idx, nb_tc)
+
     def test_str_alphabet(self):
 
         alphabet1 = 'ABC'
@@ -3278,7 +3246,7 @@ class TestNode_TypedValue(unittest.TestCase):
                  {'name': 'len',
                   'contents': LEN(vt=UINT8, after_encoding=False),
                   'node_args': 'user_data',
-                  'absorb_csts': AbsFullCsts(contents=False)},
+                  'absorb_csts': AbsFullCsts(content=False, similar_content=False)},
                  {'name': 'user_data',
                   'contents': EncodedStr(values=data, codec='utf8')},
                  {'name': 'compressed_data',
@@ -3912,8 +3880,9 @@ class TestDataModelHelpers(unittest.TestCase):
         else:
             raise ValueError
 
-        assert i == 23, 'number of test cases: {:d}'.format(i)
-        assert specific_cases_checked
+        # number of test cases
+        self.assertEqual(i, 22)
+        self.assertTrue(specific_cases_checked)
 
 class TestFMK(unittest.TestCase):
     @classmethod
@@ -4089,7 +4058,7 @@ class TestFMK(unittest.TestCase):
 
         self.assertEqual(code_vector, ['DataUnusable', 'HandOver', 'DataUnusable', 'HandOver',
                                        'DPHandOver', 'NoMoreData'])
-        self.assertEqual(base_qty, 59)
+        self.assertEqual(base_qty, 51)
 
         print('\n*** test scenario SC_AUTO_REGEN via _send_data()')
 
@@ -4123,7 +4092,7 @@ class TestFMK(unittest.TestCase):
 
         self.assertEqual(code_vector, ['DataUnusable', 'HandOver', 'DataUnusable', 'HandOver',
                                        'DPHandOver', 'NoMoreData'])
-        self.assertEqual(base_qty, 59)
+        self.assertEqual(base_qty, 51)
 
         print('\n*** test scenario SC_AUTO_REGEN via send_data_and_log()')
 

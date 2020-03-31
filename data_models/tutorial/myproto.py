@@ -44,7 +44,7 @@ class MyProto_DataModel(DataModel):
              {'name': 'init',
               'exists_if': (BitFieldCondition(sf=1, val=[1]), 'header'),
               'contents': TIMESTAMP("%H:%M:%S"),
-              'absorb_csts': AbsFullCsts(contents=False)},
+              'absorb_csts': AbsFullCsts(content=False, similar_content=False)},
 
              {'name': 'register',
               'custo_clear': MH.Custo.NTerm.FrozenCopy,

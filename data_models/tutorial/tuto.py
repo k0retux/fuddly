@@ -193,10 +193,10 @@ class MyDF_DataModel(DataModel):
          'shape_type': MH.Ordered,
          'contents': [
              {'name': 'opcode',
-              'contents': String(values=['A1', 'A2', 'A3'], determinist=True)},
+              'contents': String(values=['A1', 'A2', 'A3'], determinist=True, case_sensitive=False)},
 
              {'name': 'command_A1',
-              'contents': String(values=['AAA', 'BBBB', 'CCCCC']),
+              'contents': String(values=['AAA', 'BBBB', 'CCCCC'], case_sensitive=False),
               'exists_if': (RawCondition('A1'), 'opcode'),
               'qty': 3},
 
@@ -226,11 +226,11 @@ class MyDF_DataModel(DataModel):
               ]},
 
              {'name': 'A31_payload',
-              'contents': String(values=['$ A31_OK $', '$ A31_KO $'], determinist=False),
+              'contents': String(values=['$ A31_OK $', '$ A31_KO $'], determinist=False, case_sensitive=False),
               'exists_if': (BitFieldCondition(sf=2, val=[6,12]), 'A3_subopcode')},
 
              {'name': 'A32_payload',
-              'contents': String(values=['$ A32_VALID $', '$ A32_INVALID $'], determinist=False),
+              'contents': String(values=['$ A32_VALID $', '$ A32_INVALID $'], determinist=False, case_sensitive=False),
               'exists_if': (BitFieldCondition(sf=[0, 1, 2], val=[[500, 501], [1, 2], 5]), 'A3_subopcode')}
          ]}
 
@@ -298,12 +298,12 @@ class MyDF_DataModel(DataModel):
 
              {'name': 'tstamp',
               'contents': TIMESTAMP("%H%M%S"),
-              'absorb_csts': AbsCsts(contents=False)},
+              'absorb_csts': AbsCsts(content=False)},
 
              {'name': 'crc',
               'contents': CRC(UINT32_be),
               'node_args': ['tstamp', 'int32_qty'],
-              'absorb_csts': AbsCsts(contents=False)}
+              'absorb_csts': AbsCsts(content=False)}
 
          ]}
 
@@ -368,7 +368,7 @@ class MyDF_DataModel(DataModel):
              {'name': 'crc',
               'contents': CRC(vt=UINT32_be, after_encoding=False),
               'node_args': ['enc_data', 'data2'],
-              'absorb_csts': AbsFullCsts(contents=False) },
+              'absorb_csts': AbsFullCsts(content=False, similar_content=False)},
              {'name': 'enc_data',
               'encoder': GZIP_Enc(6),
               'set_attrs': [NodeInternals.Abs_Postpone],
@@ -376,7 +376,7 @@ class MyDF_DataModel(DataModel):
                  {'name': 'len',
                   'contents': LEN(vt=UINT8, after_encoding=False),
                   'node_args': 'data1',
-                  'absorb_csts': AbsFullCsts(contents=False)},
+                  'absorb_csts': AbsFullCsts(content=False, similar_content=False)},
                  {'name': 'data1',
                   'contents': String(values=['Test!', 'Hello World!'], codec='utf-16-le') },
               ]},
@@ -398,7 +398,7 @@ class MyDF_DataModel(DataModel):
                   'mutable': False,
                   'contents': LEN(vt=UINT8, after_encoding=False),
                   'node_args': 'data1',
-                  'absorb_csts': AbsFullCsts(contents=False)},
+                  'absorb_csts': AbsFullCsts(content=False, similar_content=False)},
 
                  {'name': 'data1',
                   'contents': String(values=['Test!', 'Hello World!']) },

@@ -320,13 +320,15 @@ class NodeCondition(object):
 
 class RawCondition(NodeCondition):
 
-    def __init__(self, val=None, neg_val=None, cond_func=None):
+    def __init__(self, val=None, neg_val=None, cond_func=None, case_sensitive=True):
         """
         Args:
           val (bytes/:obj:`list` of bytes): value(s) that satisfies the condition
           neg_val (bytes/:obj:`list` of bytes): value(s) that does NOT satisfy the condition (AND clause)
           cond_func: function that takes the node value and return a boolean
+          case_sensitive: if False, ignore case for performing comparison
         """
+        self.case_sensitive = case_sensitive
         self.val = self._handle_cond(val) if val is not None else None
         self.neg_val = self._handle_cond(neg_val) if neg_val is not None else None
         self.cond_func = cond_func
@@ -335,16 +337,22 @@ class RawCondition(NodeCondition):
         if isinstance(val, (tuple, list)):
             normed_val = []
             for v in val:
-                normed_val.append(convert_to_internal_repr(v))
+                normed_v = convert_to_internal_repr(v) if self.case_sensitive else convert_to_internal_repr(v).lower()
+                normed_val.append(normed_v)
         else:
             normed_val = convert_to_internal_repr(val)
+            normed_val = normed_val if self.case_sensitive else normed_val.lower()
+
         return normed_val
 
     def check(self, node):
         node_val = node._tobytes()
+
         if Node.DEFAULT_DISABLED_VALUE:
             node_val = node_val.replace(Node.DEFAULT_DISABLED_VALUE, b'')
 
+        if not self.case_sensitive:
+            node_val = node_val.lower()
         result = self._check_inclusion(node_val, val=self.val, neg_val=self.neg_val)
         if self.cond_func:
             result = result and self.cond_func(node_val)

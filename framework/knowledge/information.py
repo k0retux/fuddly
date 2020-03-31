@@ -110,6 +110,8 @@ class InformationCollector(object):
 
     def add_information(self, info, initial_trust_value=0):
         assert info is not None
+        if isinstance(info, Info):
+            info = [info]
 
         try:
             for i in info:

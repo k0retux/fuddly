@@ -813,6 +813,8 @@ Below the different currently defined string types:
 - :class:`framework.value_types.Filename`: Filename. Similar to the type
   ``String``, but some disruptors like ``tTYPE`` will generate more specific
   test cases.
+- :class:`framework.value_types.FolderPath`: FolderPath. Similar to the type
+  ``Filename``, but generated test cases are slightly different.
 - :class:`framework.value_types.GZIP`: ``String`` compressed with ``zlib``. The parameter
   ``encoding_arg`` is used to specify the level of compression (0-9).
 - :class:`framework.value_types.GSM7bitPacking`: ``String`` encoded in conformity

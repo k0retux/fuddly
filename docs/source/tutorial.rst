@@ -1658,8 +1658,13 @@ Currently, there is four kinds of constraints:
   attributes are specified within a terminal node---this constraint
   control it.
  
-``contents``
+``content``
   Only the values specified in the data model are accepted
+
+``similar_content``
+  This constraint is a lighter version of ``content``. It allows values similar to the one defined
+  in the data model to be accepted in absorption operations. This is especially leveraged by
+  String() to distinguish case sensitive from case incensitive strings.
 
 ``regexp``
   This constraint control if regular expression---that some terminal
