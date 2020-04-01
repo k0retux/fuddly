@@ -58,6 +58,11 @@ contents
   Note that for defining a *function node* and not a generator node,
   you have to state the type attribute to ``MH.Leaf``.
 
+default
+  Default value for the node. Only compatible with typed nodes
+  (:class:`framework.node.NodeInternals_TypedValue`). It is directly linked to the
+  ``default`` parameter of each type constructor. Refer to :ref:`vt:value-types` for more information.
+
 description
   Textual description of the node. Note this information is shown by the method
   :meth:`framework.node.Node.show()`.
@@ -402,7 +407,6 @@ encoder
 Keywords to Describe Generator Node
 -----------------------------------
 
-
 node_args
   List of node parameters to be provided to a *generator* node or a
   *function* node.
@@ -664,7 +668,8 @@ following parameters:
   Maximum valid value for the node backed by this *Integer object*.
 
 ``default`` [optional, default value: **None**]
-  If ``values`` is not provided, this value if provided will be used as the default one.
+  If not None, this value will be provided by default at first
+  when :meth:`framework.value_types.INT.get_value()` is called.
 
 ``determinist`` [default value: **True**]
   If set to ``True`` generated values will be in a deterministic
@@ -719,6 +724,8 @@ For :class:`framework.value_types.INT_str`, additional parameters are available:
 ``reverse`` [optional, default value: **False**]
   Reverse the order of the string if set to ``True``.
 
+
+
 String
 ------
 
@@ -758,6 +765,14 @@ following parameters:
 ``codec`` [default value: **'latin-1'**]
   Codec to use for encoding the string (e.g., 'latin-1', 'utf8').
   Note that depending on the charset, additional fuzzing cases are defined.
+
+``case_sensitive`` [default value: **True**]
+  If the string is set to be case sensitive then specific additional
+  test cases will be generated in fuzzing mode.
+
+``default`` [optional, default value: **None**]
+  If not None, this value will be provided by default at first
+  when :meth:`framework.value_types.String.get_value()` is called.
 
 ``extra_fuzzy_list`` [optional, default value: **None**]
   During data generation, if this parameter is specified with some
@@ -888,8 +903,10 @@ parameters:
   to do it at the node level by using the data model keyword ``determinist``
   (refer to :ref:`dm:node_prop_keywords`).
 
-``defaults`` [optional, default value: **None**]
-  List of default value for each sub-field.
+``default`` [optional, default value: **None**]
+  If not None, it should be the list of default value for each sub-field.
+  They will be provided by default at first
+  when :meth:`framework.value_types.BitField.get_value()` is called.
 
 ``subfield_descs`` [optional, default value: **None**]
   List of descriptions (character strings) for each sub-field. To

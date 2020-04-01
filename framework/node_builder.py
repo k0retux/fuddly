@@ -536,7 +536,7 @@ class NodeBuilder(object):
             if not node.is_typed_value(conf=conf):
                 raise DataModelDefinitionError("'default' is only usable with Typed-nodes."
                                                " [guilty node: '{:s}']".format(node.name))
-            node.set_frozen_value(def_val, conf=conf)
+            node.set_default_value(def_val, conf=conf)
         param = desc.get('mutable', None)
         if param is not None:
             if param:

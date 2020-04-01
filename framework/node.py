@@ -1662,6 +1662,13 @@ class NodeInternals_Term(NodeInternals):
     def _set_frozen_value(self, val):
         self.frozen_node = val
 
+    def _set_default_value(self, val):
+        self.frozen_node = None
+        self._set_default_value_specific(val)
+
+    def _set_default_value_specific(self):
+        raise NotImplementedError
+
     def _get_value(self, conf=None, recursive=True, return_node_internals=False):
 
         if self.frozen_node is not None:
@@ -1808,6 +1815,9 @@ class NodeInternals_TypedValue(NodeInternals_Term):
             self.value_type.make_random()
         return True
 
+    def _set_default_value_specific(self, val):
+        self.value_type.set_default_value(val)
+
     def import_value_type(self, value_type):
         self.value_type = value_type
         # if self.env is not None:
@@ -1816,12 +1826,6 @@ class NodeInternals_TypedValue(NodeInternals_Term):
             self.value_type.make_determinist()
         else:
             self.value_type.make_random()
-
-    # @NodeInternals.env.setter
-    # def env(self, env):
-    #     NodeInternals.env.fset(self, env)
-    #     if self.value_type is not None and self.env is not None:
-    #         self.value_type.knowledge_source = self.env.knowledge_source
 
     def has_subkinds(self):
         return True
@@ -6028,6 +6032,12 @@ class Node(object):
     def get_env(self):
         return self.env
 
+
+    def walk(self, conf=None, recursive=True):
+        self.unfreeze(conf=conf, recursive=recursive)
+        self.freeze(conf=conf, recursive=recursive)
+
+
     def freeze(self, conf=None, recursive=True, return_node_internals=False):
 
         ret = self._get_value(conf=conf, recursive=recursive,
@@ -6180,6 +6190,14 @@ class Node(object):
         if self.is_term(conf):
             value = convert_to_internal_repr(value)
             self.internals[conf]._set_frozen_value(value)
+        else:
+            raise ValueError
+
+    def set_default_value(self, value, conf=None):
+        conf = self._check_conf(conf)
+
+        if self.is_term(conf):
+            self.internals[conf]._set_default_value(value)
         else:
             raise ValueError
 

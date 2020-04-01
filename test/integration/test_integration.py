@@ -533,12 +533,6 @@ class TestBasics(unittest.TestCase):
 
         node_ex1 = self.node_ex1.get_clone()
 
-        # attr3 = Elt_Attributes(defaults=False)
-        # attr3.conform_to_nonterm_node()
-        # attr3.enable_conf('ALT')
-
-        # node_kind3 = [NodeInternals_NonTerm]
-
         crit = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
                                      node_kinds=[NodeInternals_NonTerm])
 
@@ -1152,7 +1146,7 @@ class TestMisc(unittest.TestCase):
         self.assertEqual(it_df, it_rf)
         self.assertEqual(it_df, 12)
 
-    def test_BitField(self):
+    def test_BitField_Node(self):
 
         loop_count = 20
         e_bf = Node('BF')
@@ -3132,6 +3126,145 @@ class TestNode_TypedValue(unittest.TestCase):
 
     def setUp(self):
         pass
+
+    def test_bitfield(self):
+
+        bf = BitField(subfield_sizes=[4, 4, 4],
+                      subfield_values=[[4, 2, 1], None, [10, 11, 15]],
+                      subfield_val_extremums=[None, [5, 9], None],
+                      padding=0, lsb_padding=False, endian=VT.BigEndian,
+                      defaults=[2,8,15])
+        node = Node('BF', vt=bf)
+        node.set_env(Env())
+
+        node_abs = node.get_clone()
+
+        node.show()
+        b1 = node.to_bytes()
+
+        node.set_default_value([1,5,11])
+        node.show()
+        b2 = node.to_bytes()
+
+        self.assertEqual(b1, b'\x0f\x82')
+        self.assertEqual(b2, b'\x0b\x51')
+
+        raw_data = b'\x0f\x74'
+        status, _, _, _ = node_abs.absorb(raw_data, constraints=AbsFullCsts())
+        self.assertTrue(status, AbsorbStatus.FullyAbsorbed)
+
+        node_abs.show()
+        b3 = node_abs.to_bytes()
+        node_abs.reset_state()
+        b4 = node_abs.to_bytes()
+
+        self.assertEqual(b3, b'\x0f\x74')
+        self.assertEqual(b4, b'\x0f\x74')
+
+    def test_integer(self):
+        node = Node('Int1', vt=UINT8(min=9, max=40, determinist=True, default=21))
+        node.set_env(Env())
+
+        node.show()
+        i1 = node.get_raw_value()
+
+        node.set_default_value(35)
+        i2 = node.get_raw_value()
+        node.walk()
+        i3 = node.get_raw_value()
+
+        node.reset_state()
+        i4 = node.get_raw_value()
+
+        print('\n***', i1, i2, i3, i4)
+
+        self.assertEqual(i1, 21)
+        self.assertEqual(i2, 35)
+        self.assertNotEqual(i3, 35)
+        self.assertEqual(i4, 35)
+
+        node = Node('Int2', vt=UINT8(values=[9,10,21,32,40], determinist=True, default=21))
+        node.set_env(Env())
+
+        node_abs = node.get_clone()
+
+        node.show()
+        i1 = node.get_raw_value()
+
+        self.assertRaises(DataModelDefinitionError, node.set_default_value, 35)
+
+        node.set_default_value(32)
+        i2 = node.get_raw_value()
+
+        print('\n***', i1, i2)
+
+        self.assertEqual(i1, 21)
+        self.assertEqual(i2, 32)
+
+        raw_data = b'\x28'  # == 40
+        status, _, _, _ = node_abs.absorb(raw_data, constraints=AbsFullCsts())
+        self.assertTrue(status, AbsorbStatus.FullyAbsorbed)
+
+        node_abs.show()
+        i3 = node_abs.get_raw_value()
+        node_abs.reset_state()
+        i4 = node_abs.get_raw_value()
+
+        self.assertEqual(i3, 40)
+        self.assertEqual(i4, 40)
+
+
+    def test_str_basics(self):
+        node = Node('test', vt=String(min_sz=2, max_sz=100, alphabet='ABCDEFGH', default='CAFE'))
+        node.set_env(Env())
+        str0 = node.to_str()
+
+        node.set_default_value('BABA')
+
+        str1 = node.to_str()
+        node.walk()
+        str2 = node.to_str()
+        node.reset_state()
+        str3 = node.to_str()
+        node.walk()
+        node.walk()
+        node.reset_state()
+        str4 = node.to_str()
+
+        print('*** node.to_str():\n{}\n{}\n{}\n{}\n{}'.format(str0, str1, str2, str3, str4))
+
+        self.assertEqual(str0, 'CAFE')
+        self.assertEqual(str1, 'BABA')
+        self.assertEqual(str3, 'BABA')
+        self.assertEqual(str4, 'BABA')
+        self.assertNotEqual(str2, 'BABA')
+
+        node = Node('test', vt=String(values=['ABC', 'GAG'], min_sz=2, max_sz=100, alphabet='ABCDEFGH', default='CAFE'))
+        node.set_env(Env())
+
+        node_abs = node.get_clone()
+
+        str0 = node.to_str()
+        node.walk()
+        str1 = node.to_str()
+
+        print('*** node.to_str():\n{}\n{}'.format(str0,str1)) #, str1, str2, str3, str4))
+
+        self.assertEqual(str0, 'CAFE')
+        self.assertEqual(str1, 'ABC')
+
+        raw_data = b'FACE'
+        status, _, _, _ = node_abs.absorb(raw_data, constraints=AbsFullCsts())
+        self.assertTrue(status, AbsorbStatus.FullyAbsorbed)
+
+        node_abs.show()
+        str2 = node_abs.to_str()
+        node_abs.reset_state()
+        str3 = node_abs.to_str()
+
+        self.assertEqual(str2, 'FACE')
+        self.assertEqual(str3, 'FACE')
+
 
     def test_filename(self):
 
