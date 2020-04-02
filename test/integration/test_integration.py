@@ -3365,12 +3365,15 @@ class TestNode_TypedValue(unittest.TestCase):
 
     def test_encoded_str_1(self):
 
-        class EncodedStr(String):
+        class MyEncoder(Encoder):
             def encode(self, val):
                 return val + b'***'
 
             def decode(self, val):
                 return val[:-3]
+
+        @from_encoder(MyEncoder)
+        class EncodedStr(String): pass
 
         data = ['Test!', u'Hell\u00fc World!']
         enc_desc = \
@@ -3427,39 +3430,6 @@ class TestNode_TypedValue(unittest.TestCase):
         gsm_enc = gsm_t.encode(msg)
         gsm_dec = gsm_t.decode(gsm_enc)
         self.assertEqual(msg, gsm_dec)
-
-        # msg = u'où ça'.encode(internal_repr_codec) #' b'o\xf9 \xe7a'
-        # vtype = UTF16_LE(max_sz=20)
-        # enc = vtype.encode(msg)
-        # dec = vtype.decode(enc)
-        # self.assertEqual(msg, dec)
-        #
-        # msg = u'où ça'.encode(internal_repr_codec)
-        # vtype = UTF16_BE(max_sz=20)
-        # enc = vtype.encode(msg)
-        # dec = vtype.decode(enc)
-        # self.assertEqual(msg, dec)
-        #
-        # msg = u'où ça'.encode(internal_repr_codec)
-        # vtype = UTF8(max_sz=20)
-        # enc = vtype.encode(msg)
-        # dec = vtype.decode(enc)
-        # self.assertEqual(msg, dec)
-        #
-        # msg = u'où ça'.encode(internal_repr_codec)
-        # vtype = Codec(max_sz=20, encoding_arg=None)
-        # enc = vtype.encode(msg)
-        # dec = vtype.decode(enc)
-        # self.assertEqual(msg, dec)
-        #
-        # msg = u'où ça'.encode(internal_repr_codec)
-        # vtype = Codec(max_sz=20, encoding_arg='utf_32')
-        # enc = vtype.encode(msg)
-        # dec = vtype.decode(enc)
-        # self.assertEqual(msg, dec)
-        # utf32_enc = b"\xff\xfe\x00\x00o\x00\x00\x00\xf9\x00\x00\x00 " \
-        #             b"\x00\x00\x00\xe7\x00\x00\x00a\x00\x00\x00"
-        # self.assertEqual(enc, utf32_enc)
 
         msg = b'Hello World!' * 10
         vtype = GZIP(max_sz=20)

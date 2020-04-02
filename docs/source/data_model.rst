@@ -810,16 +810,16 @@ that enables to handle transparently any encoding scheme:
 - Some test cases may be defined on the encoding scheme itself.
 
 .. note::
-   To define a ``String`` subclass handling a specific encoding, you have to overload
-   the methods: :meth:`framework.value_types.String.encode` and :meth:`framework.value_types.String.decode`.
-   You may optionally overload: :meth:`framework.value_types.String.encoding_test_cases` if you want
-   to define encoding-related test cases. And if you need to initialize the encoding scheme you
-   should overload the method :meth:`framework.value_types.String.init_encoding_scheme`.
+   To define a ``String`` subclass handling a specific encoding, you first have to define
+   an encoder class that inherits from :class:`framework.encoders.Encoder` (you may also use an
+   existing one, if it fits your needs).
+   Then you have to create a subclass of String decorated by :func:`framework.value_types.from_encoder`
+   with your encoder class in parameter.
+   Additionally, you can overload :meth:`framework.value_types.String.encoding_test_cases` if you want
+   to implement specific test cases related to your encoding. They will be automatically added to
+   the set of test cases to be triggered by the disruptor ``tTYPE``.
 
-   Alternatively and preferably, you should define a subclass of :class:`framework.encoders.Encoder`
-   and then create a subclass of String decorated by :func:`framework.value_types.from_encoder`
-   with the your encoder subclass in parameter. By doing so, you enable your encoder to be also
-   usable by a non-terminal node.
+   Note that the encoder you defined can also be used by a non-terminal node (refer to :ref:`dm:pattern:encoder`).
 
 
 Below the different currently defined string types:

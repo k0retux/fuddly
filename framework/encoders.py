@@ -31,16 +31,16 @@ from framework.global_resources import *
 
 class Encoder(object):
     def __init__(self, encoding_arg=None):
-        self._encoding_arg = encoding_arg
+        self.encoding_arg = encoding_arg
         self.reset()
 
     def reset(self):
-        self.init_encoding_scheme(self._encoding_arg)
+        self.init_encoding_scheme(self.encoding_arg)
 
     def __copy__(self):
-        new_data = type(self)(self._encoding_arg)
+        new_data = type(self)(self.encoding_arg)
         new_data.__dict__.update(self.__dict__)
-        new_data.encoding_arg = copy.copy(self._encoding_arg)
+        new_data.encoding_arg = copy.copy(self.encoding_arg)
         return new_data
 
     def encode(self, val):
@@ -79,6 +79,7 @@ class Encoder(object):
             arg: provided through the `encoding_arg` parameter of the `String` constructor
         """
         pass
+
 
 class GZIP_Enc(Encoder):
 

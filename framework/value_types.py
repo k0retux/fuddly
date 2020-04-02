@@ -194,13 +194,19 @@ class String(VT_Alt):
     """
 
     DEFAULT_MAX_SZ = 10000
-    encoded_string = False
 
     ctrl_char_set = ''.join([chr(i) for i in range(0, 0x20)])+'\x7f'
     printable_char_set = ''.join([chr(i) for i in range(0x20, 0x7F)])
     extended_char_set = ''.join([CHR_compat(i) for i in range(0x80, 0x100)])
     non_ctrl_char = printable_char_set + extended_char_set
 
+    encoded_string = False
+
+    ### used by @from_encoder decorator ###
+    _encoder_cls = None
+    _encoder_obj = None
+    init_encoder = None
+    ###
 
     def subclass_specific_init(self, **kwargs):
         """
@@ -233,45 +239,6 @@ class String(VT_Alt):
 
         return None
 
-
-    def encode(self, val):
-        """
-        To be overloaded by a subclass that deals with encoding.
-        (Should be stateless.)
-
-        Args:
-            val (bytes): the value
-
-        Returns:
-            bytes: the encoded value
-        """
-        return val
-
-    def decode(self, val):
-        """
-        To be overloaded by a subclass that deals with encoding.
-        (Should be stateless.)
-
-        Args:
-            val (bytes): the encoded value
-
-        Returns:
-            bytes: the decoded value
-        """
-        return val
-
-    def init_encoding_scheme(self, arg):
-        """
-        To be optionally overloaded by a subclass that deals with encoding,
-        if encoding need to be initialized in some way. (called at init and
-        in :meth:`String.reset`)
-
-        Args:
-            arg: provided through the `encoding_arg` parameter of the `String` constructor
-
-        """
-        return
-
     def encoding_test_cases(self, current_val, max_sz, min_sz, min_encoded__sz, max_encoded_sz):
         """
         To be optionally overloaded by a subclass that deals with encoding
@@ -288,6 +255,21 @@ class String(VT_Alt):
             list: the list of encoded test cases
         """
         return None
+
+    def reset_encoder(self):
+        self._encoder_obj.reset()
+
+    def encode(self, val):
+        """
+        Exclusively overloaded by the decorator @from_encoder
+        """
+        return val
+
+    def decode(self, val):
+        """
+        Exclusively overloaded by the decorator @from_encoder
+        """
+        return val
 
     def __repr__(self):
         if DEBUG:
@@ -397,11 +379,10 @@ class String(VT_Alt):
         self.min_sz = None
         self.max_sz = None
 
-        if self.__class__.encode != String.encode:
+        if self._encoder_cls is not None:
             self.encoded_string = True
-            if not hasattr(self, 'encoding_arg'):
-                self.encoding_arg = encoding_arg
-            self.init_encoding_scheme(self.encoding_arg)
+            self._encoding_arg = encoding_arg
+            self.init_encoder()
 
         self.set_description(values=values, size=size, min_sz=min_sz,
                              max_sz=max_sz, determinist=determinist, codec=codec,
@@ -413,17 +394,18 @@ class String(VT_Alt):
         self.subclass_specific_init(**kwargs)
 
     def make_private(self, forget_current_state):
+        if self.encoded_string:
+            # we always forget current state of the encoder but it should not impact the current state
+            # of the String
+            self._encoding_arg = copy.copy(self._encoding_arg)
+            self.init_encoder()
+
         if forget_current_state:
-            if self.is_values_provided:
-                self.values = copy.copy(self.values)
-            else:
-                self.values = None
+            self.values = copy.copy(self.values) if self.is_values_provided else None
             self.reset_state()
         else:
             self.values = copy.copy(self.values)
             self.values_copy = copy.copy(self.values_copy)
-            if self.encoded_string:
-                self.encoding_arg = copy.copy(self.encoding_arg)
 
     def make_determinist(self):
         self.determinist = True
@@ -680,9 +662,9 @@ class String(VT_Alt):
         self.values_copy = copy.copy(self.values)
 
         self.drawn_val = None
+
         if self.encoded_string:
-            self.encoding_arg = copy.copy(self.encoding_arg)
-            self.init_encoding_scheme(self.encoding_arg)
+            self.reset_encoder()
 
     def rewind(self):
         sz_vlist_copy = len(self.values_copy)
@@ -1573,59 +1555,6 @@ class INT(VT):
         else:
             return False
 
-    # def set_value_list(self, new_list):
-    #     ret = False
-    #     if self.values:
-    #         l = list(filter(self.is_compatible, new_list))
-    #         if l:
-    #             self.values = l
-    #             self.values_copy = copy.copy(self.values)
-    #             self.idx = 0
-    #             ret = True
-    #
-    #     return ret
-
-    # def extend_value_list(self, new_list):
-    #     if self.values is not None:
-    #         l = list(filter(self.is_compatible, new_list))
-    #         if l:
-    #             values_enc = list(map(self._convert_value, self.values))
-    #
-    #             # We copy the list as it is a class attribute in
-    #             # Fuzzy_* classes, and we don't want to change the classes
-    #             # (as we modify the list contents and not the list itself)
-    #             self.values = list(self.values)
-    #
-    #             # we don't use a set to preserve the order
-    #             for v in l:
-    #                 # we check the converted value to avoid duplicated
-    #                 # values (negative and positive value coded the
-    #                 # same) --> especially usefull for the Fuzzy_INT class
-    #                 if self._convert_value(v) not in values_enc:
-    #                     self.values.insert(0, v)
-    #
-    #             self.idx = 0
-    #             self.values_copy = copy.copy(self.values)
-
-
-    # def remove_value_list(self, value_list):
-    #     if self.values is not None:
-    #         l = list(filter(self.is_compatible, value_list))
-    #         if l:
-    #             # We copy the list as it is a class attribute in
-    #             # Fuzzy_* classes, and we don't want to change the classes
-    #             # (as we modify the list contents and not the list itself)
-    #             self.values = list(self.values)
-    #
-    #             for v in l:
-    #                 try:
-    #                     self.values.remove(v)
-    #                 except ValueError:
-    #                     pass
-    #
-    #             self.idx = 0
-    #             self.values_copy = copy.copy(self.values)
-
     def get_value(self):
         if self.values is not None:
             if not self.values_copy:
@@ -1950,16 +1879,18 @@ class FolderPath(Filename):
 
 def from_encoder(encoder_cls, encoding_arg=None):
     def internal_func(string_subclass):
-        def new_meth(meth):
-            return meth if sys.version_info[0] > 2 else meth.im_func
-        string_subclass.encode = new_meth(encoder_cls.encode)
-        string_subclass.decode = new_meth(encoder_cls.decode)
-        string_subclass.init_encoding_scheme = new_meth(encoder_cls.init_encoding_scheme)
-        if encoding_arg is not None:
-            string_subclass.encoding_arg = encoding_arg
-        return string_subclass
-    return internal_func
+        def init_encoder(self):
+            self._encoder_obj = self._encoder_cls(self._encoding_arg)
+            self.encode = self._encoder_obj.encode
+            self.decode = self._encoder_obj.decode
 
+        string_subclass._encoder_cls = encoder_cls
+        string_subclass._encoder_arg = encoding_arg
+        string_subclass.init_encoder = init_encoder
+
+        return string_subclass
+
+    return internal_func
 
 @from_encoder(GZIP_Enc)
 class GZIP(String): pass
