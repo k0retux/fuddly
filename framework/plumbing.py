@@ -290,7 +290,7 @@ class FmkPlumbing(object):
         self._dm_to_be_reloaded = False
 
         self._generic_tactics = framework.generic_data_makers.tactics
-        self._generic_tactics.set_exportable_fmk_ops(self._exportable_fmk_ops)
+        self._generic_tactics.set_additional_info(self._exportable_fmk_ops)
 
         self._tactics = None
 
@@ -783,7 +783,8 @@ class FmkPlumbing(object):
                     print(colorize("*** ERROR: '%s_strategy.py' shall contain a global variable 'tactics' ***" % (name), rgb=Color.ERROR))
                 return None
 
-            dm_params['tactics'].set_exportable_fmk_ops(self._exportable_fmk_ops)
+            dm_params['tactics'].set_additional_info(fmkops=self._exportable_fmk_ops,
+                                                     related_dm=dm_params['dm'])
 
             if dm_params['dm'].name is None:
                 dm_params['dm'].name = name
@@ -3731,31 +3732,37 @@ class FmkPlumbing(object):
             self.lg.print_console('')
 
         self.lg.print_console('===[ Generator Types ]' + '='*58, rgb=Color.FMKINFOGROUP, nl_after=True)
-        l1 = []
-        for dt in self._tactics.generator_types:
-            l1.append(dt)
-        l1 = sorted(l1)
+
+        dmakers = {}
+        for dt, related_dm in self._tactics.generators_info():
+            if related_dm not in dmakers:
+                dmakers[related_dm] = []
+            dmakers[related_dm].append(dt)
+
+        for related_dm, dt_list in dmakers.items():
+            print_dmaker(dt_list, "Data Model: {}".format(related_dm.name))
 
         l2 = []
         for dt in self._generic_tactics.generator_types:
             l2.append(dt)
         l2 = sorted(l2)
-
-        print_dmaker(l1, 'Specific')
         print_dmaker(l2, 'Generic')
 
         self.lg.print_console('===[ Disruptor Types ]' + '='*58, rgb=Color.FMKINFOGROUP, nl_after=True)
-        l1 = []
-        for dmaker_type in self._tactics.disruptor_types:
-            l1.append(dmaker_type)
-        l1 = sorted(l1)
+
+        dmakers = {}
+        for dt, related_dm in self._tactics.disruptors_info():
+            if related_dm not in dmakers:
+                dmakers[related_dm] = []
+            dmakers[related_dm].append(dt)
+
+        for related_dm, dt_list in dmakers.items():
+            print_dmaker(dt_list, "Data Model: {}".format(related_dm.name))
 
         l2 = []
         for dmaker_type in self._generic_tactics.disruptor_types:
             l2.append(dmaker_type)
         l2 = sorted(l2)
-
-        print_dmaker(l1, 'Specific')
         print_dmaker(l2, 'Generic')
 
 

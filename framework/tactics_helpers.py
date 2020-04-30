@@ -38,6 +38,7 @@ XT_NAME_LIST_K = 1
 XT_CLS_LIST_K = 2
 XT_WEIGHT_K = 3
 XT_VALID_CLS_LIST_K = 4
+XT_RELATED_DM = 5
 
 class Tactics(object):
 
@@ -47,16 +48,23 @@ class Tactics(object):
         self.disruptor_clones = {}
         self.generator_clones = {}
         self._fmkops = None
-        # self._knowledge_source = None
+        self._related_dm = None
 
-    def set_exportable_fmk_ops(self, fmkops):
+    def set_additional_info(self, fmkops, related_dm=None):
         self._fmkops = fmkops
+        self._related_dm = related_dm
         for dtype in self.generator_types:
+            self.generators[dtype][XT_RELATED_DM] = related_dm
             for name, attrs in self.get_generators_list(dtype).items():
                 attrs['obj'].set_exportable_fmk_ops(fmkops)
+                if self._related_dm:
+                    attrs['obj'].related_dm_name = self._related_dm.name
         for dtype in self.disruptor_types:
+            self.disruptors[dtype][XT_RELATED_DM] = related_dm
             for name, attrs in self.get_disruptors_list(dtype).items():
                 attrs['obj'].set_exportable_fmk_ops(fmkops)
+                if self._related_dm:
+                    attrs['obj'].related_dm_name = self._related_dm.name
 
     @staticmethod
     def scenario_ref_from(scenario):
@@ -78,16 +86,22 @@ class Tactics(object):
             dict_var[dmaker_type][XT_CLS_LIST_K] = {}
             dict_var[dmaker_type][XT_WEIGHT_K] = 0
             dict_var[dmaker_type][XT_VALID_CLS_LIST_K] = {}
+            dict_var[dmaker_type][XT_RELATED_DM] = self._related_dm
 
         if name in dict_var[dmaker_type][XT_NAME_LIST_K]:
             print("\n*** /!\\ ERROR: The name '%s' is already used for the dmaker_type '%s'\n" % \
                       (name, dmaker_type))
             raise ValueError
 
+        if self._fmkops is not None:
+            obj.set_exportable_fmk_ops(self._fmkops)
+        if self._related_dm is not None:
+            obj.related_dm_name = self._related_dm.name
+
         dict_var[dmaker_type][XT_NAME_LIST_K][name] = {
             'obj': obj,
             'weight': weight,
-            'valid': False
+            'valid': False,
             }
 
         dict_var[dmaker_type][XT_CLS_LIST_K][obj] = name
@@ -99,9 +113,6 @@ class Tactics(object):
             dict_var[dmaker_type][XT_VALID_CLS_LIST_K][name] = \
                 dict_var[dmaker_type][XT_NAME_LIST_K][name]
 
-        if self._fmkops is not None:
-            obj.set_exportable_fmk_ops(self._fmkops)
-        # obj.knowledge_source = self.knowledge_source
 
     def register_new_disruptor(self, name, obj, weight, dmaker_type, valid=False):
         self.__register_new_data_maker(self.disruptors, name, obj,
@@ -197,6 +208,13 @@ class Tactics(object):
 
         return ret
 
+    def generators_info(self):
+        for gen_type, attrs in self.generators.items():
+            yield gen_type, attrs[XT_RELATED_DM]
+
+    def disruptors_info(self):
+        for dis_type, attrs in self.disruptors.items():
+            yield dis_type, attrs[XT_RELATED_DM]
 
     def get_disruptor_weight(self, dmaker_type, name):
         try:
@@ -459,10 +477,10 @@ class DataMaker(object):
     knowledge_source = None
     _modelwalker_user = False
     _args_desc = None
+    related_dm_name = None
 
     def __init__(self):
         self._fmkops = None
-        # self._knowledge_source = None
 
     def set_exportable_fmk_ops(self, fmkops):
         self._fmkops = fmkops
@@ -545,7 +563,6 @@ class Generator(DataMaker):
 
 class dyn_generator(type):
     data_id = ''
-    
     def __init__(cls, name, bases, attrs):
         attrs['_args_desc'] = DynGenerator._args_desc
         type.__init__(cls, name, bases, attrs)

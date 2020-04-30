@@ -247,6 +247,7 @@ class DataModel(object):
         self._atoms_for_abs = None
         self._default_atom_for_abs= None
         self._decoded_data = None
+        self._included_data_models = None
 
     def _backend(self, atom):
         if isinstance(atom, (Node, dict)):
@@ -256,6 +257,10 @@ class DataModel(object):
 
     def __str__(self):
         return self.name if self.name is not None else 'Unnamed'
+
+    @property
+    def included_models(self):
+        return self._included_data_models
 
     def register(self, *atom_list):
         for a in atom_list:
@@ -298,11 +303,15 @@ class DataModel(object):
             self._built = True
 
     def merge_with(self, data_model):
+        if self._included_data_models is None:
+            self._included_data_models = {}
+        self._included_data_models[data_model] = []
         for k, v in data_model._dm_hashtable.items():
             if k in self._dm_hashtable:
                 raise ValueError("the data ID {:s} exists already".format(k))
             else:
                 self._dm_hashtable[k] = v
+                self._included_data_models[data_model].append(k)
 
         self.node_backend.merge_with(data_model.node_backend)
 
