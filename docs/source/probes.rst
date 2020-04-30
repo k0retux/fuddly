@@ -51,7 +51,7 @@ SSH_Backend
 -----------
 
 Reference:
-  :class:`framework.monitor.SSH_Backend`
+  :class:`framework.comm_backends.SSH_Backend`
 
 Description:
   This generic backend enables you to interact with a monitored system through an
@@ -62,7 +62,7 @@ Serial_Backend
 --------------
 
 Reference:
-  :class:`framework.monitor.Serial_Backend`
+  :class:`framework.comm_backends.Serial_Backend`
 
 Description:
   This generic backend enables you to interact with a monitored system through an
@@ -72,7 +72,7 @@ Shell_Backend
 -------------
 
 Reference:
-  :class:`framework.monitor.Shell_Backend`
+  :class:`framework.comm_backends.Shell_Backend`
 
 Description:
   This generic backend enables you to interact with a local monitored system
@@ -104,3 +104,11 @@ Description:
   It can be done by specifying a ``threshold`` and/or a ``tolerance`` ratio.
 
 
+ProbeCmd
+--------
+
+Reference:
+  :class:`framework.monitor.ProbeCmd`
+
+Description:
+  Generic probe that enables you to execute shell commands and retrieve the output.

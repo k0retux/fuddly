@@ -202,6 +202,19 @@ framework.monitor module
    :special-members:
    :exclude-members: __dict__, __weakref__
 
+
+framework.comm_backends module
+------------------------------
+
+.. automodule:: framework.comm_backends
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
+
+
 framework.tactics_helpers module
 --------------------------------
 

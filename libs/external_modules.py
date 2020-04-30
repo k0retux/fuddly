@@ -136,6 +136,7 @@ try:
     import paramiko as ssh
 except ImportError:
     ssh_module = False
+    ssh = None
     print('WARNING [FMK]: python(3)-paramiko module is not installed! '
           'Should be installed for ssh-based monitoring.')
 

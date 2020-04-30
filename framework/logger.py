@@ -266,7 +266,7 @@ class Logger(object):
             else:
                 self._current_fmk_info.append((info, now))
 
-    def collect_feedback(self, content, status_code=None):
+    def collect_feedback(self, content, status_code=None, subref=None):
         """
         Used within the scope of the Logger feedback-collector infrastructure.
         If your target implement the interface :meth:`Target.get_feedback`, no need to
@@ -277,12 +277,13 @@ class Logger(object):
         Args:
             content: feedback record
             status_code (int): should be negative for error
+            subref (str): specific reference to distinguish internal log sources within the same caller
         """
         now = datetime.datetime.now()
         fbk_src = get_caller_object()
 
         with self._tg_fbk_lck:
-            self._tg_fbk.append((now, FeedbackSource(fbk_src), content, status_code))
+            self._tg_fbk.append((now, FeedbackSource(fbk_src, subref=subref), content, status_code))
 
     def shall_record(self):
         if self.last_data_recordable or not self.__explicit_data_recording:

@@ -27,23 +27,23 @@ import datetime
 import time
 import traceback
 import re
-import subprocess
-import select
 
+from framework.comm_backends import BackendError
 from libs.external_modules import *
 from framework.global_resources import *
-import framework.error_handling as eh
 
 
 class ProbeUser(object):
     timeout = 5.0
-    probe_init_timeout = 10.0
+    probe_init_timeout = 15.0
 
     def __init__(self, probe):
         self._probe = probe
         self._thread = None
         self._started_event = threading.Event()
         self._stop_event = threading.Event()
+        self._args = None
+        self._kwargs = None
 
     @property
     def probe(self):
@@ -53,6 +53,9 @@ class ProbeUser(object):
         if self.is_alive():
             raise RuntimeError
         self._clear()
+        self._args = args
+        self._kwargs = kwargs
+        # print('\n*** DBG start:', self._args, self._kwargs)
         self._thread = threading.Thread(target=self._run, name=self._probe.__class__.__name__,
                                         args=args, kwargs=kwargs)
         self._thread.daemon = True
@@ -60,6 +63,12 @@ class ProbeUser(object):
 
     def stop(self):
         self._stop_event.set()
+        try:
+            self._probe._stop(*self._args, **self._kwargs)
+        except:
+            self._handle_exception('during stop()')
+        finally:
+            self._thread = None
 
     def join(self, timeout=None):
         if self.is_alive():
@@ -379,12 +388,11 @@ class Monitor(object):
 
     def start_probe(self, probe, related_tg=None):
         probe_ref = self._get_probe_ref(probe)
+        self._related_tg = related_tg
         if probe_ref in self.probe_users:
             try:
-                if related_tg is None:
-                    self.probe_users[probe_ref].start(self._dm, self._targets, self._logger)
-                else:
-                    self.probe_users[probe_ref].start(self._dm, related_tg, self._logger)
+                tgs = self._targets if self._related_tg is None else self._related_tg
+                self.probe_users[probe_ref].start(self._dm, tgs, self._logger)
             except:
                 self.fmk_ops.set_error("Exception raised in probe '{:s}' start".format(probe_ref),
                                        code=Error.UserCodeError)
@@ -406,7 +414,8 @@ class Monitor(object):
 
     def stop_all_probes(self):
         for _, probe_user in self.probe_users.items():
-            probe_user.stop()
+            if probe_user.is_alive():
+                probe_user.stop()
         self._tg_from_probe = {}
         self._wait_for_specific_probes(ProbeUser, ProbeUser.join)
 
@@ -541,6 +550,7 @@ class Probe(object):
     def __init__(self, delay=1.0):
         self._status = ProbeStatus(0)
         self._delay = delay
+        self._started = False
 
     def __str__(self):
         return "Probe - {:s}".format(self.__class__.__name__)
@@ -563,12 +573,19 @@ class Probe(object):
         self._delay = delay
 
     def _start(self, dm, target, logger):
+        if self._started:
+            return
         logger.print_console("__ probe '{:s}' is starting __".format(self.__class__.__name__), nl_before=True, nl_after=True)
-        return self.start(dm, target, logger)
+        self._started = True # even if .start() fail, .stop() should be called to provide a chance for cleanup
+        ret = self.start(dm, target, logger)
+        return ret
 
     def _stop(self, dm, target, logger):
+        if not self._started:
+            return
         logger.print_console("__ probe '{:s}' is stopping __".format(self.__class__.__name__), nl_before=True, nl_after=True)
         self.stop(dm, target, logger)
+        self._started = False
 
     def start(self, dm, target, logger):
         """
@@ -671,264 +688,6 @@ class ProbeStatus(object):
         return self._now
 
 
-class Backend(object):
-
-    def __init__(self, codec='latin_1'):
-        """
-        Args:
-            codec (str): codec used by the monitored system to answer.
-        """
-        self._started = False
-        self.codec = codec
-        self._sync_lock = threading.Lock()
-
-    def start(self):
-        with self._sync_lock:
-            if not self._started:
-                self._started = True
-                self._start()
-
-    def stop(self):
-        with self._sync_lock:
-            if self._started:
-                self._started = False
-                self._stop()
-
-    def exec_command(self, cmd):
-        with self._sync_lock:
-            return self._exec_command(cmd)
-
-    def _exec_command(self, cmd):
-        raise NotImplementedError
-
-    def _start(self):
-        pass
-
-    def _stop(self):
-        pass
-
-
-class SSH_Backend(Backend):
-    """
-    Backend to execute command through a serial line.
-    """
-    def __init__(self, username, password, sshd_ip, sshd_port=22, codec='latin_1'):
-        """
-        Args:
-            sshd_ip (str): IP of the SSH server.
-            sshd_port (int): port of the SSH server.
-            username (str): username to connect with.
-            password (str): password related to the username.
-            codec (str): codec used by the monitored system to answer.
-        """
-        Backend.__init__(self, codec=codec)
-        if not ssh_module:
-            raise eh.UnavailablePythonModule('Python module for SSH is not available!')
-        self.sshd_ip = sshd_ip
-        self.sshd_port = sshd_port
-        self.username = username
-        self.password = password
-        self.client = None
-
-    def _start(self):
-        self.client = ssh.SSHClient()
-        self.client.set_missing_host_key_policy(ssh.AutoAddPolicy())
-        self.client.connect(self.sshd_ip, port=self.sshd_port,
-                            username=self.username,
-                            password=self.password)
-
-    def _stop(self):
-        self.client.close()
-
-    def _exec_command(self, cmd):
-        ssh_in, ssh_out, ssh_err = \
-            self.client.exec_command(cmd)
-
-        if ssh_err.read():
-            # the command does not exist on the system
-            raise BackendError('The command does not exist on the host')
-        else:
-            return ssh_out.read()
-
-
-class Serial_Backend(Backend):
-    """
-    Backend to execute command through a serial line.
-    """
-    def __init__(self, serial_port, baudrate=115200, bytesize=8, parity='N', stopbits=1,
-                 xonxoff=False, rtscts=False, dsrdtr=False,
-                 username=None, password=None, slowness_factor=5,
-                 cmd_notfound=b'command not found', codec='latin_1'):
-        """
-        Args:
-            serial_port (str): path to the tty device file. (e.g., '/dev/ttyUSB0')
-            baudrate (int): baud rate of the serial line.
-            bytesize (int): number of data bits. (5, 6, 7, or 8)
-            parity (str): parity checking. ('N', 'O, 'E', 'M', or 'S')
-            stopbits (int): number of stop bits. (1, 1.5 or 2)
-            xonxoff (bool): enable software flow control.
-            rtscts (bool): enable hardware (RTS/CTS) flow control.
-            dsrdtr (bool): enable hardware (DSR/DTR) flow control.
-            username (str): username to connect with. If None, no authentication step will be attempted.
-            password (str): password related to the username.
-            slowness_factor (int): characterize the slowness of the monitored system. The scale goes from
-              1 (fastest) to 10 (slowest). This factor is a base metric to compute the time to wait
-              for the authentication step to terminate (if `username` and `password` parameter are provided)
-              and other operations involving to wait for the monitored system.
-            cmd_notfound (bytes): pattern used to detect if the command does not exist on the
-              monitored system.
-            codec (str): codec used to send/receive information through the serial line
-        """
-        Backend.__init__(self, codec=codec)
-        if not serial_module:
-            raise eh.UnavailablePythonModule('Python module for Serial is not available!')
-
-        self.serial_port = serial_port
-        self.baudrate = baudrate
-        self.bytesize = bytesize
-        self.parity = parity
-        self.stopbits= stopbits
-        self.xonxoff = xonxoff
-        self.rtscts = rtscts
-        self.dsrdtr = dsrdtr
-        self.slowness_factor = slowness_factor
-        self.cmd_notfound = cmd_notfound
-        if sys.version_info[0] > 2:
-            self.username = bytes(username, self.codec)
-            self.password = bytes(password, self.codec)
-        else:
-            self.username = username
-            self.password = password
-
-        self.client = None
-
-    def _start(self):
-        self.ser = serial.Serial(self.serial_port, self.baudrate, bytesize=self.bytesize,
-                                 parity=self.parity, stopbits=self.stopbits,
-                                 xonxoff=self.xonxoff, dsrdtr=self.dsrdtr, rtscts=self.rtscts,
-                                 timeout=self.slowness_factor*0.1)
-        if self.username is not None:
-            assert self.password is not None
-            self.ser.flushInput()
-            self.ser.write(self.username+b'\r\n')
-            time.sleep(0.1)
-            self.ser.readline() # we read login echo
-            pass_prompt = self.ser.readline()
-            retry = 0
-            eot_sent = False
-            while pass_prompt.lower().find(b'password') == -1:
-                retry += 1
-                if retry > 3 and eot_sent:
-                    self.stop()
-                    raise BackendError('Unable to establish a connection with the serial line.')
-                elif retry > 3:
-                    # we send an EOT if ever the console was not in its initial state
-                    # (already logged, or with the password prompt, ...) when we first write on
-                    # the serial line.
-                    self.ser.write(b'\x04\r\n')
-                    time.sleep(self.slowness_factor*0.8)
-                    self.ser.flushInput()
-                    self.ser.write(self.username+b'\r\n')
-                    time.sleep(0.1)
-                    self.ser.readline() # we consume the login echo
-                    pass_prompt = self.ser.readline()
-                    retry = 0
-                    eot_sent = True
-                else:
-                    chunks = self._read_serial(duration=self.slowness_factor*0.2)
-                    pass_prompt = b''.join(chunks)
-            time.sleep(0.1)
-            self.ser.write(self.password+b'\r\n')
-            time.sleep(self.slowness_factor*0.7)
-
-    def _stop(self):
-        self.ser.write(b'\x04\r\n') # we send an EOT (Ctrl+D)
-        self.ser.close()
-
-    def _exec_command(self, cmd):
-        if not self.ser.is_open:
-            raise BackendError('Serial port not open')
-
-        if sys.version_info[0] > 2:
-            cmd = bytes(cmd, self.codec)
-        cmd += b'\r\n'
-        self.ser.flushInput()
-        self.ser.write(cmd)
-        time.sleep(0.1)
-        self.ser.readline() # we consume the 'writing echo' from the input
-        try:
-            result = self._read_serial(duration=self.slowness_factor*0.8)
-        except serial.SerialException:
-            raise BackendError('Exception while reading serial line')
-        else:
-            # We have to remove the new prompt line at the end.
-            # But in our testing environment, the two last entries had to be removed, namely
-            # 'prompt_line \r\n' and 'prompt_line ' !?
-            # print('\n*** DBG: ', result)
-            result = result[:-2]
-            ret = b''.join(result)
-            if ret.find(self.cmd_notfound) != -1:
-                raise BackendError('The command does not exist on the host')
-            else:
-                return ret
-
-    def _read_serial(self, duration):
-        result = []
-        t0 = datetime.datetime.now()
-        delta = -1
-        while delta < duration:
-            now = datetime.datetime.now()
-            delta = (now - t0).total_seconds()
-            res = self.ser.readline()
-            if res == b'':
-                break
-            result.append(res)
-        return result
-
-
-class Shell_Backend(Backend):
-    """
-    Backend to execute shell commands locally
-    """
-    def __init__(self, timeout=None, codec='latin_1'):
-        """
-        Args:
-            timeout (float): timeout in seconds for reading the result of the command
-            codec (str): codec used by the monitored system to answer.
-        """
-        Backend.__init__(self, codec=codec)
-        self._timeout = timeout
-        self._app = None
-
-    def _start(self):
-        pass
-
-    def _stop(self):
-        pass
-
-    def _exec_command(self, cmd):
-        self._app = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        ready_to_read, ready_to_write, in_error = \
-            select.select([self._app.stdout, self._app.stderr], [], [], self._timeout)
-
-        if in_error:
-            # the command does not exist on the system
-            raise BackendError('Issue with file descriptors')
-        elif ready_to_read:
-            if len(ready_to_read) == 2:
-                err = ready_to_read[1].read()
-                if err.strip():
-                    raise BackendError('ERROR: {!s}'.format(ready_to_read[1].read()))
-            if ready_to_read[0]:
-                return ready_to_read[0].read()
-            else:
-                raise BackendError('BUG')
-        else:
-            return b''
-
-
-class BackendError(Exception): pass
-
 class ProbePID(Probe):
     """
     Generic probe that enables you to monitor a process PID.
@@ -937,7 +696,7 @@ class ProbePID(Probe):
     :class:`Serial_Backend`).
 
     Attributes:
-        backend (Backend): backend to be used (e.g., :class:`SSH_Backend`).
+        backend (framework.comm_backends.Backend): backend to be used (e.g., :class:`SSH_Backend`).
         process_name (str): name of the process to monitor.
         max_attempts (int): maximum number of attempts for getting
           the process ID.
@@ -961,10 +720,12 @@ class ProbePID(Probe):
 
     def _get_pid(self, logger):
         try:
-            res = self.backend.exec_command(self.command_pattern.format(self.process_name))
+            chan_desc = self.backend.exec_command(self.command_pattern.format(self.process_name))
+            res = self.backend.read_output(chan_desc)
         except BackendError:
             fallback_cmd = 'ps a -opid,comm | grep {0:s}'.format(self.process_name)
-            res = self.backend.exec_command(fallback_cmd)
+            chan_desc = self.backend.exec_command(fallback_cmd)
+            res = self.backend.read_output(chan_desc)
             if sys.version_info[0] > 2:
                 res = res.decode(self.backend.codec)
             pid_list = res.split('\n')
@@ -1053,7 +814,7 @@ class ProbeMem(Probe):
     :class:`Serial_Backend`).
 
     Attributes:
-        backend (Backend): backend to be used (e.g., :class:`SSH_Backend`).
+        backend (framework.comm_backends.Backend): backend to be used (e.g., :class:`SSH_Backend`).
         process_name (str): name of the process to monitor.
         threshold (int): memory (RSS) threshold that the monitored process should not exceed.
           (dimension should be the same as what is provided by the `ps` command of the system
@@ -1079,7 +840,8 @@ class ProbeMem(Probe):
         Probe.__init__(self)
 
     def _get_mem(self):
-        res = self.backend.exec_command(self.command_pattern.format(self.process_name))
+        chan_desc = self.backend.exec_command(self.command_pattern.format(self.process_name))
+        res = self.backend.read_output(chan_desc)
 
         if sys.version_info[0] > 2:
             res = res.decode(self.backend.codec)
@@ -1159,6 +921,53 @@ class ProbeMem(Probe):
             # `tolerance` ratio should be exceeded again with the new saved_mem.
             self._saved_mem = self._max_mem
         self._max_mem = self._saved_mem
+
+
+class ProbeCmd(Probe):
+    """
+    Generic probe that enables you to execute shell commands and retrieve the output.
+
+    The monitoring can be done through different backend (e.g., :class:`SSH_Backend`,
+    :class:`Serial_Backend`).
+
+    Attributes:
+        backend (framework.comm_backends.Backend): backend to be used (e.g., :class:`SSH_Backend`).
+        init_command (str): ssh command to execute at init
+        recurrent_command (str): ssh command to execute at each probing
+    """
+    backend = None
+    init_command = None
+    recurrent_command = None
+
+    def __init__(self):
+        assert self.backend != None
+        self.chan_desc = None
+        Probe.__init__(self)
+
+    def start(self, dm, target, logger):
+        self.backend.start()
+        if self.init_command is not None:
+            try:
+                self.chan_desc = self.backend.exec_command(self.init_command)
+                data = self.backend.read_output(self.chan_desc)
+            except BackendError as err:
+                return ProbeStatus(-1, info=str(err))
+
+            return ProbeStatus(0, info=data)
+
+    def stop(self, dm, target, logger):
+        self.backend.stop()
+
+    def main(self, dm, target, logger):
+        try:
+            if self.recurrent_command is not None:
+                self.chan_desc = self.backend.exec_command(self.recurrent_command)
+            data = self.backend.read_output(self.chan_desc)
+        except BackendError as err:
+            return ProbeStatus(-1, info=str(err))
+
+        return ProbeStatus(0, info=data)
+
 
 def probe(project):
     def internal_func(probe_cls):

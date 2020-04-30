@@ -23,6 +23,7 @@
 
 import socket
 
+from framework.comm_backends import Serial_Backend
 from framework.plumbing import *
 from framework.targets.debug import TestTarget
 from framework.targets.network import NetworkTarget

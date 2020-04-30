@@ -23,6 +23,7 @@
 
 import socket
 
+from framework.comm_backends import Shell_Backend
 from framework.plumbing import *
 from framework.targets.local import LocalTarget
 from framework.targets.network import NetworkTarget
