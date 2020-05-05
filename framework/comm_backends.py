@@ -130,7 +130,7 @@ class SSH_Backend(Backend):
             ssh_in, ssh_out, ssh_err = self.client.exec_command(cmd, timeout=self.timeout, get_pty=self.get_pty)
         except ssh.ssh_exception.SSHException:
             raise BackendError('SSH connection not active anymore. Need {} reset'.format(self.__class__.__name__),
-                               status=-1)
+                               status=-3)
 
         return ssh_out, ssh_err
 
@@ -191,9 +191,9 @@ class SSH_Backend(Backend):
 
         if not data:
             if timeout:
-                raise BackendError('Read timeout', status=-2)
+                raise BackendError('Read timeout', status=-1)
             else:
-                raise BackendError('No more data to read', status=-4)
+                raise BackendError('No more data to read', status=-2)
 
         return data
 

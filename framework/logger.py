@@ -350,7 +350,7 @@ class Logger(object):
             bool: True if target feedback has been collected through logger infrastructure
               :meth:`Logger.collect_feedback`, False otherwise.
         """
-        error_detected = {}
+        collected_status = {}
 
         with self._tg_fbk_lck:
             fbk_list = self._tg_fbk
@@ -368,16 +368,12 @@ class Logger(object):
         for idx, fbk_record in enumerate(fbk_list):
             timestamp, fbk_src, fbk, status = fbk_record
             self._log_feedback(fbk_src, fbk, status, timestamp, record=record)
-
-            if status is not None and status < 0:
-                error_detected[fbk_src.obj] = True
-            else:
-                error_detected[fbk_src.obj] = False
+            collected_status[fbk_src.obj] = status
 
         if epilogue is not None:
             self.log_fn(epilogue, do_record=record, rgb=Color.FMKINFO)
 
-        return error_detected
+        return collected_status
 
 
     def log_target_feedback_from(self, source, content, status_code, timestamp,

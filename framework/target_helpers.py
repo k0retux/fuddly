@@ -53,6 +53,9 @@ class Target(object):
     _feedback_mode = None
     supported_feedback_mode = [FBK_WAIT_FULL_TIME, FBK_WAIT_UNTIL_RECV]
 
+    STATUS_THRESHOLD_FOR_RECOVERY = 0  # When a feedback status gathered by FmkPlumbing is
+                                       # strictly lesser than this value, .recover_target() will be called
+
     _logger = None
     _extensions = None
     _send_data_lock = threading.Lock()

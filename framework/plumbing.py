@@ -2119,7 +2119,7 @@ class FmkPlumbing(object):
 
                     for idx, obj in op[CallBackOps.Start_Task].items():
                         task_obj, period = obj
-                        self._create_fmktask_from_task(task_obj, task_ref= idx, period=period)
+                        self._create_fmktask_from_task(task_obj, task_ref=idx, period=period)
 
             if isinstance(new_data, list):
                 for newd in new_data:
@@ -2601,7 +2601,7 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def retrieve_and_log_target_feedback(self, residual=False):
-        collected_err, err_detected2 = None, False
+        collected_status, err_detected2 = None, False
         ok = True
         if self.__tg_enabled:
             if residual:
@@ -2611,12 +2611,17 @@ class FmkPlumbing(object):
                 p = "::[ END BURST ]::\n" if self._burst > 1 else None
                 e = None
             try:
-                collected_err = self.lg.log_collected_feedback(preamble=p, epilogue=e)
+                collected_status = self.lg.log_collected_feedback(preamble=p, epilogue=e)
             except NotImplementedError:
                 pass
 
             for tg in self.targets.values():
-                err_detected1 = collected_err.get(tg, False) if collected_err else False
+                if collected_status:
+                    status = collected_status.get(tg, tg.STATUS_THRESHOLD_FOR_RECOVERY)
+                    status = tg.STATUS_THRESHOLD_FOR_RECOVERY if status is None else status
+                    err_detected1 = status < tg.STATUS_THRESHOLD_FOR_RECOVERY
+                else:
+                    err_detected1 = False
                 err_detected2 = self._log_directly_retrieved_target_feedback(tg=tg, preamble=p, epilogue=e)
                 go_on = self._recover_target(tg) if err_detected1 or err_detected2 else True
                 if not go_on:
@@ -2638,12 +2643,12 @@ class FmkPlumbing(object):
         tg_fbk = tg.get_feedback()
         if tg_fbk is not None:
             err_code = tg_fbk.get_error_code()
-            if err_code is not None and err_code < 0:
+            if err_code is not None and err_code < tg.STATUS_THRESHOLD_FOR_RECOVERY:
                 err_detected = True
 
             if tg_fbk.has_fbk_collector():
                 for ref, fbk, status, tstamp in tg_fbk.iter_and_cleanup_collector():
-                    if status < 0:
+                    if status < tg.STATUS_THRESHOLD_FOR_RECOVERY:
                         err_detected = True
                     self.lg.log_target_feedback_from(source=FeedbackSource(tg, subref=ref),
                                                      content=fbk,

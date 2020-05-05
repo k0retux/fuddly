@@ -11,6 +11,8 @@ import framework.error_handling as eh
 
 class SSHTarget(Target):
 
+    STATUS_THRESHOLD_FOR_RECOVERY = -2
+
     def __init__(self, host='localhost', port=12345, bind_address=None,
                  username=None, password=None, pkey_path=None,
                  targeted_command=None, file_parameter_path=None,
@@ -110,7 +112,7 @@ class SSHTarget(Target):
                 if data:
                     self._logger.collect_feedback(content=data, status_code=0, subref='stdout')
             except BackendError as err:
-                self._logger.collect_feedback(content='{}'.format(err), status_code=-err.status,
+                self._logger.collect_feedback(content='{}'.format(err), status_code=err.status,
                                               subref='stdout')
 
         if self.read_stderr:
@@ -119,8 +121,8 @@ class SSHTarget(Target):
                 if data:
                     self._logger.collect_feedback(content=data, status_code=0, subref='stderr')
             except BackendError as err:
-                self._logger.collect_feedback(content='{}'.format(err), status_code=-err.status,
-                                              subref='stdout')
+                self._logger.collect_feedback(content='{}'.format(err), status_code=err.status,
+                                              subref='stderr')
 
     def is_feedback_received(self): # useless currently as no-threaded send_data
         return self._fbk_received
