@@ -161,6 +161,9 @@ class UI(object):
         assert isinstance(user_inputs, dict)
         self._inputs = user_inputs
 
+    def merge_with(self, user_inputs):
+        self._inputs.update(user_inputs._inputs)
+
     def check_conformity(self, valid_args):
         for arg in self._inputs:
             if arg not in valid_args:

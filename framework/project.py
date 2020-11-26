@@ -42,14 +42,13 @@ class Project(object):
     name = None
     default_dm = None
 
-    feedback_gate = None
-
     def __init__(self, enable_fbk_processing=True):
         self.monitor = Monitor()
         self._knowledge_source = InformationCollector()
         self._fbk_processing_enabled = enable_fbk_processing
         self._feedback_processing_thread = None
         self._fbk_handlers = []
+        self._fbk_handlers_disabled = False
 
         self.scenario_target_mapping = None
         self.reset_target_mappings()
@@ -78,12 +77,21 @@ class Project(object):
     def register_feedback_handler(self, fbk_handler):
         self._fbk_handlers.append(fbk_handler)
 
+    def disable_feedback_handlers(self):
+        self._fbk_handlers_disabled = True
+
+    def enable_feedback_handlers(self):
+        self._fbk_handlers_disabled = False
+
     def notify_data_sending(self, data_list, timestamp, target):
+        if self._fbk_handlers_disabled:
+            return
+
         for fh in self._fbk_handlers:
             fh.notify_data_sending(self.dm, data_list, timestamp, target)
 
     def trigger_feedback_handlers(self, source, timestamp, content, status):
-        if not self._fbk_processing_enabled:
+        if not self._fbk_processing_enabled or self._fbk_handlers_disabled:
             return
         self._feedback_fifo.put((source, timestamp, content, status))
 

@@ -53,7 +53,6 @@ from libs.utils import chunk_lines
 
 DEBUG = dbg.DM_DEBUG
 
-
 def split_with(predicate, iterable):
     l = []
     first = True
@@ -3740,7 +3739,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 if st == AbsorbStatus.Reject:
                     nb_absorbed = node_no-1
                     if DEBUG:
-                        print('REJECT: %s, size: %d, blob: %r ...' % (node.name, len(blob), blob[:4]))
+                        print('\nREJECT: %s, size: %d, blob: %r ...' % (node.name, len(blob), blob[:4]))
                     if min_node == 0:
                         # abort = False
                         break
@@ -6330,7 +6329,7 @@ class Node(object):
                     args += str(n.get_path_from(self, conf=conf))
                 else:
                     args += ', ' + str(n.get_path_from(self, conf=conf))
-            if args is '':
+            if args == '':
                 args = 'None'
             return args
 

@@ -2153,6 +2153,7 @@ class BitField(VT_Alt):
         self.subfield_vals_save = copy.deepcopy(self.subfield_vals_save)
         self.subfield_extrems = copy.deepcopy(self.subfield_extrems)
         self.subfield_extrems_save = copy.deepcopy(self.subfield_extrems_save)
+        self.subfield_defaults = copy.deepcopy(self.subfield_defaults)
         if forget_current_state:
             self.reset_state()
         else:

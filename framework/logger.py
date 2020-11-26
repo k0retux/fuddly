@@ -266,7 +266,7 @@ class Logger(object):
             else:
                 self._current_fmk_info.append((info, now))
 
-    def collect_feedback(self, content, status_code=None, subref=None):
+    def collect_feedback(self, content, status_code=None, subref=None, fbk_src=None):
         """
         Used within the scope of the Logger feedback-collector infrastructure.
         If your target implement the interface :meth:`Target.get_feedback`, no need to
@@ -278,9 +278,10 @@ class Logger(object):
             content: feedback record
             status_code (int): should be negative for error
             subref (str): specific reference to distinguish internal log sources within the same caller
+            fbk_src: [optional] source object of the feedback
         """
         now = datetime.datetime.now()
-        fbk_src = get_caller_object()
+        fbk_src = get_caller_object() if fbk_src is None else fbk_src
 
         with self._tg_fbk_lck:
             self._tg_fbk.append((now, FeedbackSource(fbk_src, subref=subref), content, status_code))
@@ -298,10 +299,13 @@ class Logger(object):
         fbk_cond = status_code is not None and status_code < 0
         hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
         body_color = Color.FEEDBACK_HLIGHT if fbk_cond else None
+        # now = timestamp.strftime("%d/%m/%Y - %H:%M:%S.%f")
         if not processed_feedback:
-            msg_hdr = "### Status from '{!s}': {!s}".format(source, status_code)
+            msg_hdr = "### Status from '{!s}': {!s} - received at {!s}".format(
+                source, status_code, timestamp)
         else:
-            msg_hdr = "### Feedback from '{!s}' (status={!s}):".format(source, status_code)
+            msg_hdr = "### Feedback from '{!s}' (status={!s}) - received at {!s}:".format(
+                source, status_code, timestamp)
         self.log_fn(msg_hdr, rgb=hdr_color, do_record=record)
         if processed_feedback:
             if isinstance(processed_feedback, list):
@@ -316,8 +320,10 @@ class Logger(object):
                 try:
                     data_id = self._last_data_IDs[source.related_tg]
                 except KeyError:
-                    print('\nWarning: The feedback source is related to a target to which nothing has been sent.'
-                          ' Retrieved feedback will not be attached to any data ID.')
+                    self.print_console(
+                        '*** Warning: The feedback source is related to a target to which nothing has been sent.'
+                        ' Retrieved feedback will not be attached to any data ID.',
+                        nl_before=True, rgb=Color.WARNING)
                     data_id = None
             else:
                 ids = self._last_data_IDs.values()
@@ -374,7 +380,6 @@ class Logger(object):
             self.log_fn(epilogue, do_record=record, rgb=Color.FMKINFO)
 
         return collected_status
-
 
     def log_target_feedback_from(self, source, content, status_code, timestamp,
                                  preamble=None, epilogue=None):

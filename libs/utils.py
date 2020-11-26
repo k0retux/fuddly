@@ -85,6 +85,7 @@ class Task(object):
     feedback_gate = None
     targets = None
     dm = None
+    prj = None
 
     def __call__(self, args):
         pass
@@ -95,13 +96,19 @@ class Task(object):
     def cleanup(self):
         pass
 
-    def __init__(self, period=None,
+    def __init__(self, period=None, init_delay=0,
                  new_window=False, new_window_title=None, xterm_prg_name='x-terminal-emulator'):
         self.period = period
+        self.init_delay = init_delay
         self.fmkops = None
         self.feedback_gate = None
         self.targets = None
         self.dm = None
+        self.prj = None
+        # When a task is used in the context of a FmkTask, this attribute is initialized to a
+        # threading event by the FmkTask. Then when set, it should be understood by the task that
+        # the framework want it to stop.
+        self.stop_event = None
 
         self._new_window = new_window
         self._new_window_title = new_window_title

@@ -190,17 +190,17 @@ class Step(object):
     def set_scenario_env(self, env):
         self._scenario_env = env
 
-    def connect_to(self, step, dp_completed_guard=False, cbk_after_sending=None, cbk_after_fbk=None, prepend=False):
+    def connect_to(self, obj, dp_completed_guard=False, cbk_after_sending=None, cbk_after_fbk=None, prepend=False):
         if isinstance(self, NoDataStep):
             assert cbk_after_sending is None
 
         if dp_completed_guard:
             assert cbk_after_sending is None and cbk_after_fbk is None
             self.transition_on_dp_complete = True
-            self._transitions.insert(0, Transition(step, dp_completed_guard=dp_completed_guard))
+            self._transitions.insert(0, Transition(obj, dp_completed_guard=dp_completed_guard))
 
         else:
-            tr = Transition(step,
+            tr = Transition(obj,
                             cbk_after_sending=cbk_after_sending,
                             cbk_after_fbk=cbk_after_fbk)
             if prepend:
@@ -635,9 +635,9 @@ class NoDataStep(Step):
 
 class Transition(object):
 
-    def __init__(self, step, dp_completed_guard=False, cbk_after_sending=None, cbk_after_fbk=None):
+    def __init__(self, obj, dp_completed_guard=False, cbk_after_sending=None, cbk_after_fbk=None):
         self._scenario_env = None
-        self._step = step
+        self._obj = obj
         self.dp_completed_guard = dp_completed_guard
         self._callbacks = {}
         if cbk_after_sending:
@@ -651,15 +651,25 @@ class Transition(object):
 
     @property
     def step(self):
-        return self._step
+        if isinstance(self._obj, Step):
+            return self._obj
+        elif isinstance(self._obj, Scenario):
+            return self._obj.anchor
+        else:
+            raise NotImplementedError
 
     @step.setter
     def step(self, value):
-        self._step = value
+        self._obj = value
 
-    def set_scenario_env(self, env):
+    def set_scenario_env(self, env, merge_user_contexts: bool = True):
         self._scenario_env = env
-        self._step.set_scenario_env(env)
+        if isinstance(self._obj, Step):
+            self._obj.set_scenario_env(env)
+        elif isinstance(self._obj, Scenario):
+            self._obj.set_scenario_env(env, merge_user_contexts=merge_user_contexts)
+        else:
+            raise NotImplementedError
 
     def register_callback(self, callback, hook=HOOK.after_fbk):
         assert isinstance(hook, HOOK)
@@ -720,7 +730,7 @@ class Transition(object):
         return id(self)
 
     def __copy__(self):
-        new_transition = type(self)(self._step)
+        new_transition = type(self)(self._obj)
         new_transition.__dict__.update(self.__dict__)
         new_transition._callbacks = copy.copy(self._callbacks)
         new_transition._callbacks_qty = new_transition._callbacks_pending
@@ -771,14 +781,6 @@ class ScenarioEnv(object):
     def user_context(self, val):
         self._context = val
 
-    # @property
-    # def knowledge_source(self):
-    #     return self._knowledge_source
-    #
-    # @knowledge_source.setter
-    # def knowledge_source(self, val):
-    #     self._knowledge_source = val
-
     def __copy__(self):
         new_env = type(self)()
         new_env.__dict__.update(self.__dict__)
@@ -799,6 +801,17 @@ class Scenario(object):
 
     def __init__(self, name, anchor=None, reinit_anchor=None, user_context=None,
                  user_args=None):
+        """
+        Note: only at copy the ScenarioEnv are propagated to the steps and transitions
+
+        Args:
+            name:
+            anchor:
+            reinit_anchor:
+            user_context:
+            user_args:
+        """
+
         self.name = name
         self._user_args = user_args
         self._steps = None
@@ -830,8 +843,15 @@ class Scenario(object):
     def reset(self):
         self._current = self._anchor
 
+    @property
+    def user_context(self):
+        return self._env.user_context
+
     def set_user_context(self, user_context):
         self._env.user_context = user_context
+
+    def merge_user_context_with(self, user_context):
+        self._env.user_context.merge_with(user_context)
 
     def set_data_model(self, dm):
         self._dm = dm
@@ -843,10 +863,12 @@ class Scenario(object):
     def _graph_setup(self, init_step, steps, transitions):
         for tr in init_step.transitions:
             transitions.append(tr)
+            tr.set_scenario_env(self.env)
             if tr.step in steps:
                 continue
             else:
                 steps.append(tr.step)
+                tr.step.set_scenario_env(self.env)
                 self._graph_setup(tr.step, steps, transitions)
 
     def _init_main_properties(self):
@@ -879,6 +901,23 @@ class Scenario(object):
     @property
     def env(self):
         return self._env
+
+    def set_scenario_env(self, env: ScenarioEnv, merge_user_contexts: bool = True):
+        """
+
+        Args:
+            env:
+            merge_user_contexts: the new env will have a user_context that is the merging of
+              the current one and the one provided through the new env.
+              In case some parameter names overlaps, the new values are kept.
+
+        """
+        if merge_user_contexts:
+            self._env.user_context.merge_with(env.user_context)
+            env.user_context = self._env.user_context
+
+        self._env = env
+        self._init_main_properties()
 
     @property
     def steps(self):

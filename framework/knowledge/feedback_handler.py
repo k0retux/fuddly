@@ -79,7 +79,7 @@ class FeedbackHandler(object):
         self.term = None
         self.fmkops = None
 
-    def notify_data_sending(self, current_dm, data_list, timestamp, targets):
+    def notify_data_sending(self, current_dm, data_list, timestamp, target):
         """
         *** To be overloaded ***
 
@@ -90,7 +90,7 @@ class FeedbackHandler(object):
             current_dm (:class:`framework.data_model.DataModel`): current loaded DataModel
             data_list (list): list of :class:`framework.data.Data` that were sent
             timestamp (datetime): date when data was sent
-            targets (list): list of targets to which data was sent
+            target (:class:`framework.target_helpers.Target`): target to which data was sent
         """
         pass
 

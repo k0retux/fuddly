@@ -132,6 +132,8 @@ class Database(object):
     OUTCOME_ROWID = 1
     OUTCOME_DATA = 2
 
+    FEEDBACK_TRAIL_TIME_WINDOW = 10 # seconds
+
     def __init__(self, fmkdb_path=None):
         self.name = 'fmkDB.db'
         if fmkdb_path is None:
@@ -146,7 +148,7 @@ class Database(object):
         self.last_feedback = {}
         self.feedback_trail = {}  # store feedback entries for self.feedback_trail_time_window
         self.feedback_trail_init_ts = None
-        self.feedback_trail_time_window = 10 # in seconds
+        self.feedback_trail_time_window = self.FEEDBACK_TRAIL_TIME_WINDOW
 
         self._data_id = None
 

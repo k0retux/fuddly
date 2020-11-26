@@ -21,12 +21,13 @@
 #
 ################################################################################
 
+import threading
+
 import framework.global_resources as gr
 from framework.data import *
 from framework.dmhelpers.generic import *
 from framework.node_builder import NodeBuilder
 from libs.external_modules import *
-
 
 #### Data Model Abstraction
 
@@ -197,6 +198,40 @@ class DataModel(object):
         a = Accumulator()
         accumulate = a.accumulate
 
+        try:
+            atom, extra = self.absorb(data, scope=scope, atom_name=atom_name, requested_abs_csts=requested_abs_csts)
+        except ValueError as err:
+            msg = colorize(f'\n*** ERROR: {err} ***', rgb=Color.ERROR)
+            return None, msg
+
+        status, off, size, name = extra
+
+        if atom is None:
+            accumulate(colorize("\n*** DECODING ERROR [atom used: '{:s}'] ***", rgb=Color.ERROR)
+                       .format(name))
+            accumulate('\nAbsorption Status: {!r}, {:d}, {:d}'.format(status, off, size))
+            accumulate('\n \_ length of original data: {:d}'.format(len(data)))
+            accumulate('\n \_ remaining: {!r}'.format(data[size:size+1000]))
+        else:
+            accumulate('\n')
+            atom.show(log_func=accumulate, display_title=False, pretty_print=colorized)
+
+        return atom, a.content
+
+    def absorb(self, data, scope=None, atom_name=None, requested_abs_csts=None):
+        """
+
+        Args:
+            data:
+            atom_name (str): requested atom name for the decoding (linked to self.register_atom_for_decoding)
+            scope (str): requested scope for the decoding (linked to self.register_atom_for_decoding)
+            requested_abs_csts:
+
+        Returns:
+            Node:
+              Node which is the result of the absorption or None
+        """
+
         if scope is None and atom_name is None and self._default_atom_for_abs:
             atom, abs_csts = self._default_atom_for_abs
             atom_for_abs = self._backend(atom).atom_copy(atom)
@@ -215,26 +250,15 @@ class DataModel(object):
                     atom_for_abs = self.get_atom(atom_name)
                     abs_csts = AbsFullCsts()
             except ValueError:
-                msg = colorize("\n*** ERROR: provided atom name is unknown: '{:s}' ***".format(atom_name),
-                               rgb=Color.ERROR)
-                return msg
+                raise ValueError(f"provided atom name is unknown: '{atom_name}'")
 
         abs_csts_to_apply = abs_csts if requested_abs_csts is None else requested_abs_csts
-
         status, off, size, name = atom_for_abs.absorb(data, constraints=abs_csts_to_apply)
 
-        if status == AbsorbStatus.FullyAbsorbed:
-            accumulate('\n')
-            atom_for_abs.show(log_func=accumulate, display_title=False, pretty_print=colorized)
-        else:
-            accumulate(colorize("\n*** DECODING ERROR [atom used: '{:s}'] ***", rgb=Color.ERROR)
-                       .format(atom_for_abs.name))
-            accumulate('\nAbsorption Status: {!r}, {:d}, {:d}'.format(status, off, size))
-            accumulate('\n \_ length of original data: {:d}'.format(len(data)))
-            accumulate('\n \_ remaining: {!r}'.format(data[size:size+1000]))
-            atom_for_abs = None
+        atom = atom_for_abs if status == AbsorbStatus.FullyAbsorbed else None
 
-        return (atom_for_abs, a.content)
+        return atom, (status, off, size, name)
+
 
     def cleanup(self):
         pass
@@ -248,6 +272,7 @@ class DataModel(object):
         self._default_atom_for_abs= None
         self._decoded_data = None
         self._included_data_models = None
+        self._dm_access_lock = threading.Lock()
 
     def _backend(self, atom):
         if isinstance(atom, (Node, dict)):
@@ -269,11 +294,12 @@ class DataModel(object):
             self._dm_hashtable[key] = prepared_atom
 
     def get_atom(self, hash_key, name=None):
-        if hash_key in self._dm_hashtable:
-            atom = self._dm_hashtable[hash_key]
-            return self._backend(atom).atom_copy(atom, new_name=name)
-        else:
-            raise ValueError('Requested atom does not exist!')
+        with self._dm_access_lock:
+            if hash_key in self._dm_hashtable:
+                atom = self._dm_hashtable[hash_key]
+                return self._backend(atom).atom_copy(atom, new_name=name)
+            else:
+                raise ValueError('Requested atom does not exist!')
 
 
     def get_atom_for_absorption(self, hash_key):
@@ -423,7 +449,6 @@ class NodeBackend(object):
     def atom_copy(self, orig_atom, new_name=None):
         name = orig_atom.name if new_name is None else new_name
         node = Node(name, base_node=orig_atom, ignore_frozen_state=False, new_env=True)
-        # self.update_knowledge_source(node)
         return node
 
     def update_atom(self, atom, existing_env=False):

@@ -191,10 +191,15 @@ class FmkTask(threading.Thread):
         self._stop = threading.Event()
         self._error_func = error_func
         self._cleanup_func=cleanup_func
+        if isinstance(func, Task):
+            func.stop_event = self._stop
 
     def run(self):
         if isinstance(self._func, Task):
             self._func._setup()
+
+        if isinstance(self._func, Task):
+            time.sleep(self._func.init_delay)
 
         while not self._stop.is_set():
             try:
@@ -317,7 +322,6 @@ class FmkPlumbing(object):
 
         # Fbk Gate to be used for sequencial tasks (scenario steps callbacks, etc.)
         self.last_feedback_gate = FeedbackGate(self.fmkDB, only_last_entries=True)
-        Project.feedback_gate = self.last_feedback_gate
 
         # Fbk Gate to be used for out-of-fmk-order tasks (e.g., Tasks). This gate is agnostic to
         # fmkdb.flush_feedback(). Thus feedback entries last longer there.
@@ -937,7 +941,9 @@ class FmkPlumbing(object):
                 targets = eval(prefix + name + '_proj' + '.targets')
                 targets.insert(0, EmptyTarget())
             except:
-                targets = [EmptyTarget()]
+                tg = EmptyTarget()
+                tg.set_project(prj)
+                targets = [tg]
             else:
                 new_targets = []
                 for obj in targets:
@@ -951,6 +957,7 @@ class FmkPlumbing(object):
                         assert issubclass(obj.__class__, Target), 'project: {!s}'.format(name)
                         tg = obj
                         tg.del_extensions()
+                    tg.set_project(prj)
                     new_targets.append(tg)
                 targets = new_targets
 
@@ -1074,6 +1081,7 @@ class FmkPlumbing(object):
         task_obj.feedback_gate = self.feedback_gate
         task_obj.targets = self.targets
         task_obj.dm = self.dm
+        task_obj.prj = self.prj
 
         fmktask = FmkTask(task_ref, func=task_obj, arg=None, period=period,
                           error_func=self._handle_user_code_exception,
@@ -1798,9 +1806,10 @@ class FmkPlumbing(object):
 
     def _do_after_sending_data(self, data_list):
         self._recovered_tgs = None
+        # _last_sending_date is not as precise as the one stored in Target object. But it is
+        # sufficient for its purpose within the plumbing.
         self._last_sending_date = datetime.datetime.now()
         self._handle_data_callbacks(data_list, hook=HOOK.after_sending)
-        self.prj.notify_data_sending(data_list, self._current_sent_date, self._currently_used_targets)
 
     def _do_sending_and_logging_init(self, data_list):
         for d in data_list:
@@ -2640,6 +2649,10 @@ class FmkPlumbing(object):
         access the feedback from Target directly
         """
         err_detected = False
+
+        if not tg.is_feedback_received():
+            return err_detected
+
         tg_fbk = tg.get_feedback()
         if tg_fbk is not None:
             err_code = tg_fbk.get_error_code()
@@ -3939,8 +3952,9 @@ class FmkShell(cmd.Cmd):
         self.intro = colorize(FontStyle.BOLD + "\n-=[ %s ]=- (with Fuddly FmK %s)\n" % (title, fuddly_version), rgb=Color.TITLE)
 
         self.__allowed_cmd = re.compile(
-            '^quit$|^show_projects$|^show_data_models$|^load_project|^load_data_model|^load_targets|^show_targets$|^launch$' \
-            '|^run_project|^config|^display_color_theme$|^fmkdb_disable$|^fmkdb_enable$|^help'
+            '^quit$|^show_projects$|^show_data_models$|^load_project|^load_data_model'
+            '|^load_targets|^show_targets$|^launch$|^run_project|^config|^display_color_theme$'
+            '|^disable_fmkdb$|^enable_fmkdb$|^disable_fbk_handlers$|^enable_fbk_handlers$|^help'
             )
 
         self.dmaker_name_re = re.compile('^([#\-\w]+)(\(?[^\(\)]*\)?)$', re.S)
@@ -4844,6 +4858,21 @@ class FmkShell(cmd.Cmd):
         self.fz.collect_residual_feedback(timeout=3)
         return False
 
+    def do_collect_feedback(self, line):
+        """
+        Collect the residual feedback (received by the target and the probes) indefinitely.
+        Only stop with Ctrl+C
+        """
+        # t0 = datetime.datetime.now()
+        # while (datetime.datetime.now() - t0).total_seconds() < 100:
+        try:
+            while True:
+                self.fz.collect_residual_feedback(timeout=0.01)
+        except UserInterruption:
+            pass
+
+        return False
+
 
     def do_send(self, line, verbose=False):
         '''
@@ -5590,14 +5619,24 @@ class FmkShell(cmd.Cmd):
         self.__error = False
         return False
 
-    def do_fmkdb_enable(self, line):
-        '''Enable FmkDB recording'''
+    def do_enable_fmkdb(self, line):
+        """Enable FmkDB recording"""
         self.fz.enable_fmkdb()
         return False
 
-    def do_fmkdb_disable(self, line):
-        '''Enable FmkDB recording'''
+    def do_disable_fmkdb(self, line):
+        """Enable FmkDB recording"""
         self.fz.disable_fmkdb()
+        return False
+
+    def do_enable_fbk_handlers(self, line):
+        """Enable Feedback Handlers"""
+        self.fz.prj.enable_feedback_handlers()
+        return False
+
+    def do_disable_fbk_handlers(self, line):
+        """Disable Feedback Handlers"""
+        self.fz.prj.disable_feedback_handlers()
         return False
 
     def do_comment(self, line):

@@ -29,6 +29,7 @@ from libs.external_modules import *
 
 class TargetStuck(Exception): pass
 class TargetError(Exception): pass
+class TargetNotReady(Exception): pass
 
 class Target(object):
     """
@@ -81,6 +82,9 @@ class Target(object):
 
     def set_data_model(self, dm):
         self.current_dm = dm
+
+    def set_project(self, prj):
+        self._project = prj
 
     def _start(self, target_desc, tg_id):
         self._logger.print_console('*** Target initialization: ({:d}) {!s} ***\n'.format(tg_id, target_desc),
@@ -200,7 +204,7 @@ class Target(object):
     def collect_unsolicited_feedback(self, timeout=0):
         """
         If overloaded, it should collect any data from the associated real target that may be sent
-        without solicitation (i.e. without any data sent to it through) and make it available through
+        without solicitation (i.e. without any data sent through it) and make it available through
         the method .get_feedback()
 
         Args:
@@ -297,8 +301,14 @@ class Target(object):
         with self._send_data_lock:
             if data is not None:
                 self._altered_data_queued = data.altered
-            self.send_data(data, from_fmk=from_fmk)
-        self._last_sending_date = datetime.datetime.now()
+            if self.is_target_ready_for_new_data():
+                self._last_sending_date = datetime.datetime.now()
+                self.send_data(data, from_fmk=from_fmk)
+                self._project.notify_data_sending([data], self._last_sending_date, self)
+            else:
+                self._logger.print_console(f'*** Target {self!s} Not ready ***\n',
+                                           nl_before=False, rgb=Color.WARNING)
+                # raise TargetNotReady
 
     def send_multiple_data_sync(self, data_list, from_fmk=False):
         '''
@@ -308,8 +318,14 @@ class Target(object):
         with self._send_data_lock:
             if data_list is not None:
                 self._altered_data_queued = data_list[0].altered
-            self.send_multiple_data(data_list, from_fmk=from_fmk)
-        self._last_sending_date = datetime.datetime.now()
+            if self.is_target_ready_for_new_data():
+                self._last_sending_date = datetime.datetime.now()
+                self.send_multiple_data(data_list, from_fmk=from_fmk)
+                self._project.notify_data_sending(data_list, self._last_sending_date, self)
+            else:
+                self._logger.print_console(f'*** Target {self!s} Not ready ***\n',
+                                           nl_before=False, rgb=Color.WARNING)
+                # raise TargetNotReady
 
     def add_extensions(self, probe):
         if self._extensions is None:

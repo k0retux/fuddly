@@ -80,7 +80,7 @@ class SSHTarget(Target):
 
     def recover_target(self):
         self.stop()
-        self.start()
+        return self.start()
 
     def send_data(self, data, from_fmk=False):
         self._fbk_received = False
