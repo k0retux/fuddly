@@ -327,6 +327,8 @@ class ModelWalker(object):
 
             elif node.is_exhausted(): # --> (reset and node.is_exhausted()) or (not reset and node.is_exhausted())
 
+                # DEBUG_PRINT('*** node_consumer_helper(): exhausted')
+
                 yield node, orig_node_val, False, False
 
                 if self._consumer.interested_by(node):
@@ -564,8 +566,9 @@ class NodeConsumerStub(object):
 
 class BasicVisitor(NodeConsumerStub):
 
-    def init_specific(self, **kwargs):
+    def init_specific(self, reset_when_change=True):
         self._internals_criteria = dm.NodeInternalsCriteria(negative_node_kinds=[dm.NodeInternals_NonTerm])
+        self.need_reset_when_structure_change = reset_when_change
         self.firstcall = True
 
     def consume_node(self, node):
@@ -603,9 +606,10 @@ class BasicVisitor(NodeConsumerStub):
 
 class NonTermVisitor(BasicVisitor):
 
-    def init_specific(self, **kwargs):
-        self._internals_criteria = dm.NodeInternalsCriteria(node_kinds=[dm.NodeInternals_NonTerm])
-        self.need_reset_when_structure_change = True
+    def init_specific(self, reset_when_change=True):
+        self._internals_criteria = dm.NodeInternalsCriteria(node_kinds=[dm.NodeInternals_NonTerm],
+                                                            mandatory_attrs=[dm.NodeInternals.Mutable])
+        self.need_reset_when_structure_change = reset_when_change
         self.last_node = None
         self.current_node = None
 

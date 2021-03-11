@@ -152,10 +152,15 @@ def truncate_info(info, max_size=60):
 @disruptor(tactics, dtype="tWALK", weight=1, modelwalker_user=True,
            args={'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
+                 'full_combinatory': ('When set to True, enable full-combinatory mode for '
+                                      'non-terminal nodes. It means that the non-terminal nodes '
+                                      'will be customized in "FullCombinatory" mode', False, bool),
                  'order': ('When set to True, the walking order is strictly guided ' \
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
                            'in the data model) is used for ordering.', True, bool),
                  'nt_only': ('Walk through non-terminal nodes only.', False, bool),
+                 'reset_when_change': ('Reset the walking when the structure has changed. Only '
+                                       'with @nt_only.', True, bool),
                  'fix_all': ('For each produced data, reevaluate the constraints on the whole graph.',
                              True, bool)})
 class sd_iter_over_data(StatefulDisruptor):
@@ -175,10 +180,17 @@ class sd_iter_over_data(StatefulDisruptor):
 
         prev_content.make_finite(all_conf=True, recursive=True)
 
+        if self.full_combinatory:
+            nic = NodeInternalsCriteria(node_kinds=[NodeInternals_NonTerm])
+            nl = prev_content.get_reachable_nodes(internals_criteria=nic, path_regexp=self.path,
+                                                  ignore_fstate=True)
+            for n in nl:
+                n.cc.custo.full_combinatory_mode = True
+
         if self.nt_only:
-            consumer = NonTermVisitor(respect_order=self.order)
+            consumer = NonTermVisitor(respect_order=self.order, reset_when_change=self.reset_when_change)
         else:
-            consumer = BasicVisitor(respect_order=self.order)
+            consumer = BasicVisitor(respect_order=self.order, reset_when_change=self.reset_when_change)
         consumer.set_node_interest(path_regexp=self.path)
         self.modelwalker = ModelWalker(prev_content, consumer, max_steps=self.max_steps, initial_step=self.init)
         self.walker = iter(self.modelwalker)
@@ -219,6 +231,8 @@ class sd_iter_over_data(StatefulDisruptor):
                            'in the data model) is used for ordering.', True, bool),
                  'deep': ('When set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes.', True, bool),
+                 'full_combinatory': ('When set to True, enable full-combinatory mode for non-terminal nodes. It '
+                                      'means that the non-terminal nodes will be customized in "FullCombinatory" mode',True,bool),
                  'ign_sep': ('When set to True, separators will be ignored ' \
                           'if any are defined.', False, bool),
                  'fix_all': ('For each produced data, reevaluate the constraints on the whole graph.',
@@ -233,7 +247,7 @@ class sd_iter_over_data(StatefulDisruptor):
                  'leaf_determinism': ("If set to 'True', each typed node will be fuzzed in "
                                       "a deterministic way. Otherwise it will be guided by the "
                                       "data model determinism. Note: this option is complementary to "
-                                      "'determinism' is it acts on the typed node substitutions "
+                                      "'determinism' as it acts on the typed node substitutions "
                                       "that occur through this disruptor", True, bool),
                  })
 class sd_fuzz_typed_nodes(StatefulDisruptor):
@@ -259,6 +273,13 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
         if not isinstance(prev_content, Node):
             prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
             return prev_data
+
+        if self.full_combinatory:
+            nic = NodeInternalsCriteria(node_kinds=[NodeInternals_NonTerm])
+            nl = prev_content.get_reachable_nodes(internals_criteria=nic, path_regexp=self.path,
+                                                  ignore_fstate=True)
+            for n in nl:
+                n.cc.custo.full_combinatory_mode = True
 
         self.consumer = TypedNodeDisruption(max_runs_per_node=self.max_runs_per_node,
                                             min_runs_per_node=self.min_runs_per_node,
@@ -526,7 +547,13 @@ class sd_struct_constraints(StatefulDisruptor):
 
         self.seed = prev_content
         self.seed.make_finite(all_conf=True, recursive=True)
+        # self.seed.make_determinist(all_conf=True, recursive=True)
         self.seed.freeze()
+
+        # self.seed.unfreeze(recursive=True)
+        # self.seed.freeze()
+
+        print('\n*** original data:\n',self.seed.to_bytes())
 
         self.idx = 0
 
@@ -544,10 +571,18 @@ class sd_struct_constraints(StatefulDisruptor):
         # print('\n*** FILTERED nodes')
         # for n in self.exist_cst_nodelist:
         #     print(' |_ ' + n.name)
+
+        # print('\n***before:')
+        # for n in self.exist_cst_nodelist:
+        #     print(' |_ ' + n.name)
+
         nodelist = copy.copy(self.exist_cst_nodelist)
         for n in nodelist:
             if n.get_path_from(self.seed) is None:
                 self.exist_cst_nodelist.remove(n)
+        # print('\n***after:')
+        # for n in self.exist_cst_nodelist:
+        #     print(' |_ ' + n.name)
 
         self.qty_cst_nodelist_1 = self.seed.get_reachable_nodes(internals_criteria=ic_qty_cst, path_regexp=self.path,
                                                                 ignore_fstate=True)
@@ -593,7 +628,8 @@ class sd_struct_constraints(StatefulDisruptor):
 
         self.max_runs = len(self.exist_cst_nodelist) + 2*len(self.size_cst_nodelist_1) + \
                         2*len(self.qty_cst_nodelist_1) + 3*len(self.minmax_cst_nodelist_1)
-        
+
+        # print('\n*** final setup:\n',self.seed.to_bytes())
 
     def disrupt_data(self, dm, target, data):
 
@@ -639,21 +675,21 @@ class sd_struct_constraints(StatefulDisruptor):
                     new_mini = max(0, mini-1)
                     self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
                                                       corrupt_op=lambda x, y: (new_mini, new_mini))
-                    op_performed = "set node amount to its minimum minus one"
+                    op_performed = f"set node amount to its minimum minus one ({new_mini})"
             elif self.deep and self.minmax_cst_nodelist_2:
                 consumed_node, mini, maxi = self.minmax_cst_nodelist_2.pop()
                 if self.idx == step_idx:
                     new_maxi = (maxi+1)
                     self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
                                                       corrupt_op=lambda x, y: (new_maxi, new_maxi))
-                    op_performed = "set node amount to its maximum plus one"
+                    op_performed = f"set node amount to its maximum plus one ({new_maxi})"
             elif self.deep and self.minmax_cst_nodelist_3:
                 consumed_node, mini, maxi = self.minmax_cst_nodelist_3.pop()
                 if self.idx == step_idx:
                     new_maxi = (maxi*10)
                     self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
                                                       corrupt_op=lambda x, y: (new_maxi, new_maxi))
-                    op_performed = "set node amount to a value way beyond its maximum"
+                    op_performed = f"set node amount to a value way beyond its maximum ({new_maxi})"
             else:
                 stop = True
                 break
@@ -665,11 +701,23 @@ class sd_struct_constraints(StatefulDisruptor):
             self.handover()
             return data
 
+        print('\n***disrupt before:\n',self.seed.to_bytes())
         corrupted_seed = Node(self.seed.name, base_node=self.seed, ignore_frozen_state=False, new_env=True)
+        corrupted_seed = self.seed.get_clone(ignore_frozen_state=False, new_env=True)
         self.seed.env.remove_node_to_corrupt(consumed_node)
+
+        # print('\n***disrupt source:\n',self.seed.to_bytes())
+        # print('\n***disrupt clone 1:\n',corrupted_seed.to_bytes())
+        # nt_nodes_crit = NodeInternalsCriteria(node_kinds=[NodeInternals_NonTerm])
+        # ntlist = corrupted_seed.get_reachable_nodes(internals_criteria=nt_nodes_crit, ignore_fstate=False)
+        # for nd in ntlist:
+        #     # print(nd.is_attr_set(NodeInternals.Finite))
+        #     nd.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
 
         corrupted_seed.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
         corrupted_seed.freeze()
+
+        print('\n***disrupt after:\n',corrupted_seed.to_bytes())
 
         data.add_info('sample index: {:d}'.format(self.idx))
         data.add_info(' |_ run: {:d} / {:d}'.format(self.idx, self.max_runs))

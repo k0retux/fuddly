@@ -332,6 +332,7 @@ class TestBasics(unittest.TestCase):
                  'u=.', [tux_h, 1], [tc, 10],
                  'u>', [mark, 1], [tx, 1], [idx2, 1]]
              ], conf='ALT')
+        tux.set_attr(MH.Attr.DEBUG, conf='ALT')
 
         concat = Node('CONCAT')
         length = Node('LEN')
@@ -842,11 +843,15 @@ class TestBasics(unittest.TestCase):
             res1 = False
         print(msg)
 
+        self.assertTrue(res1)
+
         node_ex1.unfreeze_all()
         msg = node_ex1.to_bytes(conf='ALT')
         if b'[<]' not in msg or nonascii_test_str not in msg:
             res1 = False
         print(msg)
+
+        self.assertTrue(res1)
 
         node_ex1.unfreeze_all()
         msg = node_ex1.get_first_node_by_path('TUX$').to_bytes(conf='ALT', recursive=False)
@@ -1073,7 +1078,7 @@ class TestMisc(unittest.TestCase):
         nt.make_determinist(all_conf=True, recursive=True)
         nb = self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
-        self.assertEqual(nb, 18)
+        self.assertEqual(nb, 32)
 
         print('\n -=[ determinist & infinite (loop count: %d) ]=- \n' % loop_count)
 
@@ -1096,7 +1101,7 @@ class TestMisc(unittest.TestCase):
         nt.make_random(all_conf=True, recursive=True)
         nb = self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
-        self.assertEqual(nb, 18)
+        self.assertAlmostEqual(nb, 34, delta=4)
 
     def test_BitField_Attr_01(self):
         '''
@@ -1597,7 +1602,7 @@ class TestModelWalker(unittest.TestCase):
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
                                                                     max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertEqual(idx, 37)
+        self.assertEqual(idx, 55)
 
         print('***')
         nt = node_simple.get_clone()
@@ -1629,12 +1634,12 @@ class TestModelWalker(unittest.TestCase):
         print('***')
 
         results = [
-            b' [!] ++++++++++ [!] ::>:: [!] ? [!] ',
-            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::>:: [!] ? [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::>:: [!] ? [!] ',
-            b' [!] >>>>>>>>>> [!] ::>:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::>:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::>:: [!] ? [!] ',
+            b' [!] ++++++++++ [!] ::>:: [!] ? [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::>:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::>:: [!] ',
         ]
 
         idx = 0
@@ -1643,6 +1648,7 @@ class TestModelWalker(unittest.TestCase):
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True,
                                                                     max_steps=50):
             print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
+            # print(colorize(repr(rnode.to_bytes()), rgb=Color.INFO))
             self.assertEqual(rnode.to_bytes(), results[idx-1])
         self.assertEqual(idx, 6)
 
@@ -1706,20 +1712,6 @@ class TestModelWalker(unittest.TestCase):
         nt_data = data.get_clone()
 
         raw_vals = [
-            b' [!] ++++++++++ [!] ::?:: [!] ',
-            b' [!] ++++++++++ [!] ::=:: [!] ',
-            b' [!] ++++++++++ [!] ::\xff:: [!] ',
-            b' [!] ++++++++++ [!] ::\x00:: [!] ',
-            b' [!] ++++++++++ [!] ::\x01:: [!] ',
-            b' [!] ++++++++++ [!] ::\x80:: [!] ',
-            b' [!] ++++++++++ [!] ::\x7f:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::?:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::=:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\xff:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x00:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x01:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x80:: [!] ',
-            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x7f:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::?:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::=:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::\xff:: [!] ',
@@ -1727,13 +1719,27 @@ class TestModelWalker(unittest.TestCase):
             b' [!] ++++++++++ [!] ::AAA::AAA::\x01:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::\x80:: [!] ',
             b' [!] ++++++++++ [!] ::AAA::AAA::\x7f:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::?:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::=:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::\xff:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::\x00:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::\x01:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::\x80:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::\x7f:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::?:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::=:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\xff:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x00:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x01:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x80:: [!] ',
+            b' [!] ++++++++++ [!] ::AAA::AAA::AAA::AAA::\x7f:: [!] ',
+            b' [!] ++++++++++ [!] ::?:: [!] ',
+            b' [!] ++++++++++ [!] ::=:: [!] ',
+            b' [!] ++++++++++ [!] ::\xff:: [!] ',
+            b' [!] ++++++++++ [!] ::\x00:: [!] ',
+            b' [!] ++++++++++ [!] ::\x01:: [!] ',
+            b' [!] ++++++++++ [!] ::\x80:: [!] ',
+            b' [!] ++++++++++ [!] ::\x7f:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::?:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::=:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\xff:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x00:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x01:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x80:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x7f:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::?:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::=:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\xff:: [!] ',
@@ -1741,13 +1747,13 @@ class TestModelWalker(unittest.TestCase):
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x01:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x80:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::AAA::AAA::\x7f:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA::AAA::?:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA::AAA::=:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\xff:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x00:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x01:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x80:: [!] ',
-            b' [!] >>>>>>>>>> [!] ::AAA::AAA::\x7f:: [!] '
+            b' [!] >>>>>>>>>> [!] ::?:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::=:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\xff:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\x00:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\x01:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\x80:: [!] ',
+            b' [!] >>>>>>>>>> [!] ::\x7f:: [!] ',
         ]
 
         # Note that the result of the TC that performs a random bitflip could collide with the one
@@ -1820,7 +1826,7 @@ class TestModelWalker(unittest.TestCase):
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True,
                                                                     max_steps=-1):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertAlmostEqual(idx, 427, delta=1)
+        self.assertAlmostEqual(idx, 346, delta=1)
         # almostequal because collision in String test cases can lead to less test cases
         # (related to random bitflip test case that could collide with case_sensitive test case)
 
@@ -1936,7 +1942,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of confs: %d' % idx, rgb=Color.INFO))
 
-        self.assertIn(idx, [527])
+        self.assertIn(idx, [479])
 
 
 @ddt.ddt
@@ -2869,7 +2875,7 @@ class TestNodeFeatures(unittest.TestCase):
         self.assertEqual(l0, l1)
         self.assertEqual(l1, l2)
 
-
+@ddt.ddt
 class TestNode_NonTerm(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -2877,6 +2883,221 @@ class TestNode_NonTerm(unittest.TestCase):
 
     def setUp(self):
         pass
+
+    @ddt.data((True, True),(True,False),(False,True),(False,False))
+    @ddt.unpack
+    def test_combinatory_1(self, mimick_twalk, full_comb_mode):
+        test_desc = \
+        {'name': 'test',
+         'custo_set': MH.Custo.NTerm.CycleClone,
+         'contents': [
+             {'name': 'prefix',
+              'qty': (0,4),
+              'default_qty': 1,
+              'contents': String(values=['-', '+'])},
+
+             {'section_type': MH.Pick,
+              'weights': (3,2,1),
+              'contents': [
+                  {'name': 'pre1', 'contents': String(values=['x'])},
+                  {'name': 'pre2', 'contents': String(values=['y'])},
+                  {'name': 'pre3', 'contents': String(values=['z'])}
+              ]},
+
+             {'name': 'digit',
+              'qty': (0,10),
+              'default_qty': 2,
+              'contents': [
+                  {'weight': 50,
+                   'contents': [
+                       {'name': 'n1', 'contents': String(values=['1'])}
+                   ]},
+                  {'weight': 40,
+                   'contents': [
+                       {'name': 'n2', 'contents': String(values=['2'])}
+                   ]},
+                  {'weight': 30,
+                   'contents': [
+                       {'name': 'n3', 'contents': String(values=['3'])}
+                   ]},
+                  {'weight': 20,
+                   'contents': [
+                       {'name': 'n4', 'contents': String(values=['4'])}
+                   ]},
+              ]},
+              {'section_type': MH.Pick,
+               'weights': (2,1,3),
+               'contents': [
+                   {'name': 'suf2', 'contents': String(values=['b'])},
+                   {'name': 'suf3', 'contents': String(values=['c'])},
+                   {'name': 'suf1', 'contents': String(values=['a'])}
+               ]}
+         ]}
+
+
+        mb = NodeBuilder(add_env=True)
+        nd = mb.create_graph_from_desc(test_desc)
+
+        data_ref = [
+            b'-x12a',
+            b'-+-+x12a',
+            b'x12a',
+            b'-x1234123412a',
+            b'-xa',
+            b'-y12a',
+            b'-+-+y12a',
+            b'y12a',
+            b'-y1234123412a',
+            b'-ya',
+            b'-z12a',
+            b'-+-+z12a',
+            b'z12a',
+            b'-z1234123412a',
+            b'-za',
+            b'-x12b',
+            b'-+-+x12b',
+            b'x12b',
+            b'-x1234123412b',
+            b'-xb',
+            b'-x12c',
+            b'-+-+x12c',
+            b'x12c',
+            b'-x1234123412c',
+            b'-xc',
+        ]
+
+        mimick_twalk = True
+        full_comb_mode = True
+
+        nd.make_finite()
+        nd.custo.full_combinatory_mode = full_comb_mode
+        for i in range(1, 200):
+            print(f'\n###### data #{i}')
+            if mimick_twalk: # with fix_all
+                nd.unfreeze(recursive=False)
+                nd.freeze()
+                nd.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
+                nd.freeze()
+            else:
+                nd.walk(recursive=False)
+            data = nd.to_bytes()
+            print(data)
+            if not full_comb_mode:
+                self.assertEqual(data, data_ref[i-1], f'i = {i-1}')
+
+            if nd.is_exhausted():
+                break
+
+        if full_comb_mode:
+            self.assertEqual(i, 45)
+        else:
+            self.assertEqual(i, 25)
+
+
+
+    @ddt.data(
+        (True, True, False), (True, False, False), (False, True, False), (False, False, False),
+        (True, True, True), (True, False, True), (False, True, True), (False, False, True)
+    )
+    @ddt.unpack
+    def test_combinatory_2(self, mimick_twalk, clone_mode, full_comb_mode):
+
+        test_desc = \
+        {'name': 'test',
+         'custo_set': MH.Custo.NTerm.CycleClone,
+         'custo_clear': MH.Custo.NTerm.MutableClone,
+         'contents': [
+             {'name': 'scst1', 'qty': 2, 'contents': String(values=['s'])},
+             {'name': 'scst2', 'qty': 2, 'contents': String(values=['s'])},
+
+             {'name': 'pre3',
+              'qty': (1,4),
+              'default_qty': 3,
+              'contents': String(values=['-', '+'])},
+
+             {'name': 'mcst1', 'qty': 2, 'contents': String(values=['s'])},
+             {'name': 'mcst2', 'qty': 2, 'contents': String(values=['s'])},
+
+             {'name': 'digit1',
+              'qty': (0,10),
+              'default_qty': 2,
+              'contents': String(values=['1']),
+              },
+
+             {'name': 'mcst3', 'qty': 2, 'contents': String(values=['s'])},
+
+             {'name': 'digit2',
+              'qty': (3,7),
+              'default_qty': 5,
+              'contents': String(values=['2']),
+              },
+             {'name': 'digit3',
+              'qty': (0,1),
+              'default_qty': 0,
+              'contents': String(values=['3']),
+              },
+
+             {'section_type': MH.Pick,
+              'weights': (2,1,3),
+              'contents': [
+                  {'name': 'suf2', 'contents': String(values=['b'])},
+                  {'name': 'suf3', 'contents': String(values=['c'])},
+                  {'name': 'suf1', 'contents': String(values=['a'])}
+              ]},
+
+             {'name': 'ecst1', 'qty': 2, 'contents': String(values=['s'])},
+             {'name': 'ecst2', 'qty': 2, 'contents': String(values=['s'])},
+
+         ]}
+
+        mb = NodeBuilder(add_env=True)
+        nd = mb.create_graph_from_desc(test_desc)
+
+        data_ref = [
+            b'ssss-+-ssss11ss22222assss',
+            b'ssss-+-+ssss11ss22222assss',
+            b'ssss-ssss11ss22222assss',
+            b'ssss-+-ssss1111111111ss22222assss',
+            b'ssss-+-ssssss22222assss',
+            b'ssss-+-ssss11ss2222222assss',
+            b'ssss-+-ssss11ss222assss',
+            b'ssss-+-ssss11ss222223assss',
+        ]
+
+        nd.make_finite()
+        nd.custo.full_combinatory_mode = full_comb_mode
+        for i in range(1, 200):
+            if clone_mode:
+                nd = nd.get_clone()
+            print(f'\n###### data #{i}')
+            if mimick_twalk: # with fix_all
+                nd.unfreeze(recursive=False)
+                nd.freeze()
+                nd.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
+                nd.freeze()
+            else:
+                nd.walk(recursive=False)
+            data = nd.to_bytes()
+            print(data)
+            if not full_comb_mode:
+                idx = (i-1) % 8
+                if i > 16:
+                    str_ref = data_ref[idx][:-5] + b'cssss'
+                elif i > 8:
+                    str_ref = data_ref[idx][:-5] + b'bssss'
+                else:
+                    str_ref = data_ref[idx]
+
+                self.assertEqual(data, str_ref, f'i = {i-1}')
+
+            if nd.is_exhausted():
+                break
+
+        if full_comb_mode:
+            self.assertEqual(i, 162)  # 3 x 54
+        else:
+            self.assertEqual(i, 24)  # 3 x 8
+
 
     def test_infinity(self):
         infinity_desc = \

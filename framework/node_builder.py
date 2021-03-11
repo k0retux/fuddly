@@ -31,7 +31,8 @@ from framework.error_handling import DataModelDefinitionError, CharsetError, \
     InitialStateNotFoundError, QuantificationError, StructureError, InconvertibilityError, \
     EscapeError, InvalidRangeError, EmptyAlphabetError
 from framework.node import Node, NodeInternals_Empty, GenFuncCusto, NonTermCusto, FuncCusto, \
-    NodeSemantics, SyncScope, SyncQtyFromObj, SyncSizeObj, NodeCondition, SyncExistenceObj, Env
+    NodeSemantics, SyncScope, SyncQtyFromObj, SyncSizeObj, NodeCondition, SyncExistenceObj, Env, \
+    NodeInternalsCriteria, NodeInternals
 
 import framework.value_types as fvt
 
@@ -46,6 +47,7 @@ class NodeBuilder(object):
         # generic description keys
         'name', 'contents', 'qty', 'clone', 'type', 'alt', 'conf',
         'custo_set', 'custo_clear', 'evolution_func', 'description',
+        'default_qty',
         # NonTerminal description keys
         'weight', 'shape_type', 'section_type', 'duplicate_mode', 'weights',
         'separator', 'prefix', 'suffix', 'unique',
@@ -103,7 +105,7 @@ class NodeBuilder(object):
     def create_graph_from_desc(self, desc):
         self.sorted_todo = {}
         self.node_dico = {}
-        self.empty_node = Node('EMPTY')
+        # self.empty_node = Node('EMPTY')
 
         n = self._create_graph_from_desc(desc, None)
 
@@ -117,6 +119,7 @@ class NodeBuilder(object):
                     func(node, *args)
                 else:
                     func(node, args)
+            # func could register new tasks to do
             todo = self._create_todo_list()
 
         return n
@@ -394,7 +397,7 @@ class NodeBuilder(object):
 
         def _handle_section(nodes_desc, sh):
             for n in nodes_desc:
-                if isinstance(n, (list,tuple)) and (len(n) == 2 or len(n) == 3):
+                if isinstance(n, (list,tuple)) and (2 <= len(n) <= 4):
                     sh.append(list(n))
                 elif isinstance(n, dict):
                     qty = n.get('qty', 1)
@@ -406,7 +409,8 @@ class NodeBuilder(object):
                         maxi = qty
                     else:
                         raise ValueError
-                    l = [mini, maxi]
+                    default_qty = n.get('default_qty', None)
+                    l = [mini, maxi] if default_qty is None else [mini, maxi, default_qty]
                     node = self._create_graph_from_desc(n, parent_node)
                     l.insert(0, node)
                     sh.append(l)
@@ -642,10 +646,14 @@ class NodeBuilder(object):
         if encoder is not None:
             node.set_encoder(encoder)
 
-    def _register_todo(self, node, func, args=None, unpack_args=True, prio=MEDIUM_PRIO):
+    def _register_todo(self, node, func, args=None, unpack_args=True,
+                       prio=MEDIUM_PRIO, last_position=False):
         if self.sorted_todo.get(prio, None) is None:
             self.sorted_todo[prio] = []
-        self.sorted_todo[prio].insert(0, (node, func, args, unpack_args))
+        if last_position:
+            self.sorted_todo[prio].append((node, func, args, unpack_args))
+        else:
+            self.sorted_todo[prio].insert(0, (node, func, args, unpack_args))
 
     def _create_todo_list(self):
         todo = []
@@ -655,6 +663,7 @@ class NodeBuilder(object):
             todo += sub_tdl
         return todo
 
+    ic = NodeInternalsCriteria(node_kinds=[NodeInternals_Empty])
     # Should be called at the last time to avoid side effects (e.g.,
     # when creating generator/function nodes, the node arguments are
     # provided at a later time. If set_contents()---which copy nodes---is called
@@ -662,9 +671,18 @@ class NodeBuilder(object):
     def _clone_from_dict(self, node, ref, desc):
         if ref not in self.node_dico:
             raise ValueError("arguments refer to an inexistent node ({:s}, {!s})!".format(ref[0], ref[1]))
-        node.set_contents(self.node_dico[ref], preserve_node=False)
-        self._handle_custo(node, desc, conf=None)
-        self._handle_common_attr(node, desc, conf=None)
+
+        ref_nd = self.node_dico[ref]
+        empty_nodes = ref_nd.get_reachable_nodes(internals_criteria=self.ic)
+        if empty_nodes:
+            # We can't use it as a reference. This node needs to be resolved first, meaning its
+            # empty nodes have to be replaced
+            self._register_todo(node, self._clone_from_dict, args=(ref, desc),
+                                prio=self.LOW_PRIO)
+        else:
+            node.set_contents(self.node_dico[ref], preserve_node=False)
+            self._handle_custo(node, desc, conf=None)
+            self._handle_common_attr(node, desc, conf=None)
 
     def _get_from_dict(self, node, ref, parent_node):
         if ref not in self.node_dico:

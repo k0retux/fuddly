@@ -3288,6 +3288,11 @@ class FmkPlumbing(object):
                 action = full_action
                 user_input = None
 
+            if first and action == 'NOGEN':
+                self.lg.log_fmk_info('We are asked to ignore the generator and to go on with disruptors resolution')
+                first = False
+                continue
+
             if unrecoverable_error:
                 break
 

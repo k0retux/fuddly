@@ -80,6 +80,9 @@ qty
   get such kind of data, specify explicitly the maximum, or use a
   disruptor to do so (:ref:`tuto:disruptors`).
 
+default_qty
+  Specify the default amount of nodes to generate from the description.
+  It should be within ``<min, max>``.
 
 clone
   Allows to make a full copy of an existing node by providing its
@@ -140,12 +143,29 @@ custo_set, custo_clear
     have this attribute cleared to prevent generic disruptors from
     altering them. This mode aims at limiting the number of test
     cases, by pruning what is assumed to be redundant.
+
+  - ``MH.Custo.NTerm.CycleClone``: By default, this mode is *disabled*.
+    When enabled, and when the subnodes need to be duplicated because of a ``qty`` greater than 1,
+    the non-terminal node will walk through each copy, in order to cycle among
+    the various shapes/values of the subnodes. Note this customization won't be effective
+    if an evolution function is provided through the keyword ``evolution_func``.
+
   - ``MH.Custo.NTerm.FrozenCopy``: By default, this mode is *enabled*.
     When enabled, it means that for child nodes which can be instantiated many times
     (refer to ``qty`` attribute), the instantiation process will make a frozen copy
     of the node, meaning that it will be the exact copy of the original one at
     the time of the copy. If disabled, the instantiation process will ignore the frozen
     state, and thus will release all the constraints.
+
+  - ``MH.Custo.NTerm.FullCombinatory``: By default, this mode is *disabled*. When enabled,
+    walking through a non-terminal node will generate all possible combination of shapes for each
+    subnode. The various considered shapes for a subnode are based on the ``qty`` and ``default_qty``
+    parameter provided. Thus there are at most 3 different shapes that boil down to the different amounts of
+    subnodes (max, min and default values), and at least 1 if all are the same. Other possible values
+    in the range ``<min, max>`` are reachable in ``random`` mode, or by changing it manually.
+    When this mode is disabled, walking through the non-terminal node won't generate all possible
+    combinations but a subset of it based on a simpler algorithm that will walk through each subnode and
+    iterate for their different shapes without considering the previous subnodes shapes.
 
     .. note::
 		Note that if the node is not frozen
@@ -202,6 +222,7 @@ custo_set, custo_clear
     Without this mode, when resolving the `request` node to get the byte-string
     the `payload` subnode will be resolved too early and will produce a byte-string without
     any collapse operation.
+
 
   For *generator* node, the customizable behavior modes are:
 
@@ -1029,6 +1050,8 @@ in :mod:`framework.dmhelpers.generic`):
       Return a *generator* that retrieves the value of another node,
       and then return a `vt` node with this value.
 
+:meth:`framework.dmhelpers.generic.SELECT()`
+      Return a *generator* that select a subnode from a non-terminal node and return it
 
 .. _dm:builders:
 

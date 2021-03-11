@@ -106,6 +106,11 @@ Parameters:
         |      | desc: when set to True, if a node structure has changed, the modelwalker
         |      |       will reset its walk through the children nodes
         |      | default: True [type: bool]
+        |_ full_combinatory
+        |      | desc: When set to True, enable full-combinatory mode for non-terminal
+        |      |       nodes. It means that the non-terminal nodes will be customized
+        |      |       in "FullCombinatory" mode
+        |      | default: True [type: bool]
         |_ ign_sep
         |      | desc: when set to True, separators will be ignored if
         |      |       any are defined.
@@ -306,18 +311,27 @@ Parameters:
         |      | desc: graph path regexp to select nodes on which the disruptor should
         |      |       apply
         |      | default: None [type: str]
+        |_ full_combinatory
+        |      | desc: When set to True, enable full-combinatory mode for non-terminal
+        |      |       nodes. It means that the non-terminal nodes will be customized
+        |      |       in "FullCombinatory" mode
+        |      | default: True [type: bool]
         |_ order
         |      | desc: when set to True, the walking order is strictly guided by the
         |      |       data structure. Otherwise, fuzz weight (if specified in the
         |      |       data model) is used for ordering
         |      | default: True [type: bool]
+        |_ nt_only
+        |      | desc: walk through non-terminal nodes only
+        |      | default: False [type: bool]
+        |_ reset_when_change
+        |      | desc: Reset the walking when the structure has changed. Only with
+        |      |       @nt_only.
+        |      | default: True [type: bool]
         |_ fix_all
         |      | desc: for each produced data, reevaluate the constraints on the whole
         |      |       graph
         |      | default: True [type: bool]
-        |_ nt_only
-        |      | desc: walk through non-terminal nodes only
-        |      | default: False [type: bool]
 
 Stateless Disruptors
 --------------------
