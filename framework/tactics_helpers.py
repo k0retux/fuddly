@@ -31,6 +31,7 @@ from functools import partial
 from framework.data import *
 from framework.global_resources import *
 import framework.scenario as sc
+import framework.node as nd
 
 DEBUG = False
 
@@ -572,15 +573,16 @@ class dyn_generator(type):
 class DynGenerator(Generator):
     data_id = ''
     _args_desc = {
-        'finite': ('make the data model finite', False, bool),
-        'determinist': ('make the data model determinist', False, bool),
-        'random': ('make the data model random', False, bool)
+        'finite': ('Make the data model finite', False, bool),
+        'determinist': ("Make the data model determinist if set to 'True', random if set to "
+                        "'False', or do nothing if set to 'None'", None, bool),
+        'tnode_determinist': ("If set to 'True', all the typed nodes of the model will be "
+                              "set to determinist mode prior to any fuzzing. If set "
+                              "to 'False', they will be set to random mode. "
+                              "Otherwise, if set to 'None', nothing will be done.", None, bool),
     }
 
     def setup(self, dm, user_input):
-        if self.determinist or self.random:
-            assert(self.random != self.determinist)
-
         return True
 
     def generate_data(self, dm, monitor, target):
@@ -588,10 +590,22 @@ class DynGenerator(Generator):
         if isinstance(atom, Node):
             if self.finite:
                 atom.make_finite(all_conf=True, recursive=True)
-            if self.determinist:
+
+            if self.determinist is None:
+                pass
+            elif self.determinist:
                 atom.make_determinist(all_conf=True, recursive=True)
-            if self.random:
+            else:
                 atom.make_random(all_conf=True, recursive=True)
+
+            if self.tnode_determinist is not None:
+                nic = nd.NodeInternalsCriteria(node_kinds=[nd.NodeInternals_TypedValue])
+                nl = atom.get_reachable_nodes(internals_criteria=nic, ignore_fstate=True)
+                for n in nl:
+                    if self.tnode_determinist:
+                        n.make_determinist()
+                    else:
+                        n.make_random()
 
         return Data(atom)
 

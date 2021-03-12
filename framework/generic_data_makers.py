@@ -155,20 +155,24 @@ def truncate_info(info, max_size=60):
                  'full_combinatory': ('When set to True, enable full-combinatory mode for '
                                       'non-terminal nodes. It means that the non-terminal nodes '
                                       'will be customized in "FullCombinatory" mode', False, bool),
+                 'tnode_determinist': ("If set to 'True', all the typed nodes of the model will be "
+                                       "set to determinist mode prior to any fuzzing. If set "
+                                       "to 'False', they will be set to random mode. "
+                                       "Otherwise, if set to 'None', nothing will be done.", None, bool),
                  'order': ('When set to True, the walking order is strictly guided ' \
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
                            'in the data model) is used for ordering.', True, bool),
                  'nt_only': ('Walk through non-terminal nodes only.', False, bool),
-                 'reset_when_change': ('Reset the walking when the structure has changed. Only '
-                                       'with @nt_only.', True, bool),
+                 'deep': ('When set to True, if a node structure has changed, the modelwalker ' \
+                          'will reset its walk through the children nodes.', True, bool),
                  'fix_all': ('For each produced data, reevaluate the constraints on the whole graph.',
                              True, bool)})
 class sd_iter_over_data(StatefulDisruptor):
-    '''
+    """
     Walk through the provided data and for each visited node, iterates
     over the allowed values (with respect to the data model).
     Note: *no alteration* is performed by this disruptor.
-    '''
+    """
     def setup(self, dm, user_input):
         return True
 
@@ -187,10 +191,20 @@ class sd_iter_over_data(StatefulDisruptor):
             for n in nl:
                 n.cc.custo.full_combinatory_mode = True
 
+        if self.tnode_determinist is not None:
+            nic = NodeInternalsCriteria(node_kinds=[NodeInternals_TypedValue])
+            nl = prev_content.get_reachable_nodes(internals_criteria=nic, path_regexp=self.path,
+                                                  ignore_fstate=True)
+            for n in nl:
+                if self.tnode_determinist:
+                    n.make_determinist()
+                else:
+                    n.make_random()
+
         if self.nt_only:
-            consumer = NonTermVisitor(respect_order=self.order, reset_when_change=self.reset_when_change)
+            consumer = NonTermVisitor(respect_order=self.order, reset_when_change=self.deep)
         else:
-            consumer = BasicVisitor(respect_order=self.order, reset_when_change=self.reset_when_change)
+            consumer = BasicVisitor(respect_order=self.order, reset_when_change=self.deep)
         consumer.set_node_interest(path_regexp=self.path)
         self.modelwalker = ModelWalker(prev_content, consumer, max_steps=self.max_steps, initial_step=self.init)
         self.walker = iter(self.modelwalker)
@@ -241,14 +255,20 @@ class sd_iter_over_data(StatefulDisruptor):
                          " (only implemented for 'sync_size_with' and 'sync_enc_size_with').", True, bool),
                  'fuzz_mag': ('Order of magnitude for maximum size of some fuzzing test cases.',
                               1.0, float),
-                 'determinism': ("If set to 'True', the whole model will be fuzzed in "
+                 'fuzz_determinism': ("If set to 'True', the whole model will be fuzzed in "
                                  "a deterministic way. Otherwise it will be guided by the "
                                  "data model determinism.", True, bool),
-                 'leaf_determinism': ("If set to 'True', each typed node will be fuzzed in "
-                                      "a deterministic way. Otherwise it will be guided by the "
+                 'leaf_fuzz_determinism': ("If set to 'True', each typed node will be fuzzed in "
+                                      "a deterministic way. If set to 'False' each typed node "
+                                      "will be fuzzed in a random way. Otherwise, if it is set to "
+                                      "'None', it will be guided by the "
                                       "data model determinism. Note: this option is complementary to "
                                       "'determinism' as it acts on the typed node substitutions "
                                       "that occur through this disruptor", True, bool),
+                 'tnode_determinist': ("If set to 'True', all the typed nodes of the model will be "
+                                       "set to determinist mode prior to any fuzzing. If set "
+                                       "to 'False', they will be set to random mode. "
+                                       "Otherwise, if set to 'None', nothing will be done.", None, bool),
                  })
 class sd_fuzz_typed_nodes(StatefulDisruptor):
     """
@@ -281,17 +301,27 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
             for n in nl:
                 n.cc.custo.full_combinatory_mode = True
 
+        if self.tnode_determinist is not None:
+            nic = NodeInternalsCriteria(node_kinds=[NodeInternals_TypedValue])
+            nl = prev_content.get_reachable_nodes(internals_criteria=nic, path_regexp=self.path,
+                                                  ignore_fstate=True)
+            for n in nl:
+                if self.tnode_determinist:
+                    n.make_determinist()
+                else:
+                    n.make_random()
+
         self.consumer = TypedNodeDisruption(max_runs_per_node=self.max_runs_per_node,
                                             min_runs_per_node=self.min_runs_per_node,
                                             fuzz_magnitude=self.fuzz_mag,
                                             fix_constraints=self.fix,
                                             respect_order=self.order,
                                             ignore_separator=self.ign_sep,
-                                            enforce_determinism=self.leaf_determinism)
+                                            determinist=self.leaf_fuzz_determinism)
         self.consumer.need_reset_when_structure_change = self.deep
         self.consumer.set_node_interest(path_regexp=self.path)
         self.modelwalker = ModelWalker(prev_content, self.consumer, max_steps=self.max_steps,
-                                       initial_step=self.init, make_determinist=self.determinism)
+                                       initial_step=self.init, make_determinist=self.fuzz_determinism)
         self.walker = iter(self.modelwalker)
 
         self.max_runs = None

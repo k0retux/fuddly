@@ -158,14 +158,14 @@ custo_set, custo_clear
     state, and thus will release all the constraints.
 
   - ``MH.Custo.NTerm.FullCombinatory``: By default, this mode is *disabled*. When enabled,
-    walking through a non-terminal node will generate all possible combination of shapes for each
-    subnode. The various considered shapes for a subnode are based on the ``qty`` and ``default_qty``
-    parameter provided. Thus there are at most 3 different shapes that boil down to the different amounts of
+    walking through a non-terminal node will generate all "possible" combination of forms for each
+    subnode. The various considered forms for a subnode are based on the ``qty`` and ``default_qty``
+    parameter provided. Thus there are at most 3 different forms that boil down to the different amounts of
     subnodes (max, min and default values), and at least 1 if all are the same. Other possible values
-    in the range ``<min, max>`` are reachable in ``random`` mode, or by changing it manually.
+    in the range ``<min, max>`` are reachable in ``random`` mode, or by changing the subnode quantity manually.
     When this mode is disabled, walking through the non-terminal node won't generate all possible
     combinations but a subset of it based on a simpler algorithm that will walk through each subnode and
-    iterate for their different shapes without considering the previous subnodes shapes.
+    iterate for their different forms without considering the previous subnodes forms.
 
     .. note::
 		Note that if the node is not frozen
@@ -500,6 +500,11 @@ set_attrs
   - ``MH.Attr.Mutable``: If set, generic disruptors will consider the
     node as being mutable, meaning that it can be altered (default
     behavior). Otherwise, it will be ignored.
+    When a non-terminal node has this attribute, generic disruptors using
+    the ModelWalker algorithm (like ``tWALK`` and ``tTYPE``) will stick to
+    its default form (meaning default quantity will be used for each subnodes
+    and if the node has multiple shapes, the higher weighted one will be used.
+    Likewise for `Pick` sections).
   - ``MH.Attr.Determinist``: This attribute can be set directly
     through the keywords ``determinist`` or ``random``. Refer to them
     for details. By default, it is set.

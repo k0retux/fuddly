@@ -1101,7 +1101,7 @@ class TestMisc(unittest.TestCase):
         nt.make_random(all_conf=True, recursive=True)
         nb = self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
-        self.assertAlmostEqual(nb, 34, delta=4)
+        self.assertAlmostEqual(nb, 3)
 
     def test_BitField_Attr_01(self):
         '''
@@ -1826,7 +1826,7 @@ class TestModelWalker(unittest.TestCase):
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True,
                                                                     max_steps=-1):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
-        self.assertAlmostEqual(idx, 346, delta=1)
+        self.assertAlmostEqual(idx, 346, delta=2)
         # almostequal because collision in String test cases can lead to less test cases
         # (related to random bitflip test case that could collide with case_sensitive test case)
 

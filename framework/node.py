@@ -3159,7 +3159,7 @@ class NodeInternals_NonTerm(NodeInternals):
                     exhausted_shape = False
 
 
-            if determinist or finite:
+            if determinist:
                 node_list, pick_section_amount = self.flatten_node_list(node_list)
                 if pick_section_amount > 0:
                     self.exhausted_pick_cases = False
@@ -3219,7 +3219,7 @@ class NodeInternals_NonTerm(NodeInternals):
         determinist = self.is_attr_set(NodeInternals.Determinist)
         finite = self.is_attr_set(NodeInternals.Finite)
 
-        if finite or determinist:
+        if determinist:
 
             if self.shape_exhausted:
                 self.current_flattened_nodelist = node_list = compute_next_shape(determinist, finite)
@@ -3396,7 +3396,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 for nd in self.current_flattened_nodelist[:self.cursor_min]:
                     self.subnodes_attrs[nd].plan_reset()
 
-        else: # random and not finite
+        else: # random
             node_list = compute_next_shape(determinist, finite)
 
             for delim, sublist in self.__iter_csts(node_list):
@@ -3404,8 +3404,8 @@ class NodeInternals_NonTerm(NodeInternals):
                 sublist_tmp = []
 
                 if delim[1] == '>':
-                    for i, node_desc in enumerate(sublist):
-                        self._construct_subnodes(node_desc, sublist_tmp, delim[0], ignore_sep_fstate)
+                    for i, node in enumerate(sublist):
+                        self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
 
                 elif delim[1] == '=':
 
@@ -3416,23 +3416,23 @@ class NodeInternals_NonTerm(NodeInternals):
                         # unfold the Nodes one after another
                         if delim[2:] == '..':
                             for i in range(lg):
-                                node_desc = random.choice(l)
-                                l.remove(node_desc)
-                                self._construct_subnodes(node_desc, sublist_tmp, delim[0], ignore_sep_fstate)
+                                node = random.choice(l)
+                                l.remove(node)
+                                self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
 
                         # unfold all the Node and then choose randomly
                         else:
                             list_unfold = []
                             for i in range(lg):
-                                node_desc = random.choice(l)
-                                l.remove(node_desc)
-                                self._construct_subnodes(node_desc, list_unfold, delim[0], ignore_sep_fstate, ignore_separator=True)
+                                node = random.choice(l)
+                                l.remove(node)
+                                self._construct_subnodes(node, list_unfold, delim[0], ignore_sep_fstate, ignore_separator=True)
 
                             lg = len(list_unfold)
                             for i in range(lg):
-                                node_desc = random.choice(list_unfold)
-                                list_unfold.remove(node_desc)
-                                sublist_tmp.append(node_desc)
+                                node = random.choice(list_unfold)
+                                list_unfold.remove(node)
+                                sublist_tmp.append(node)
                                 if self.separator is not None:
                                     new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
                                                                     ignore_frozen_state=ignore_sep_fstate)
@@ -3441,7 +3441,7 @@ class NodeInternals_NonTerm(NodeInternals):
                     # choice of only one component within a list
                     elif delim[2] == '+':
                         if sublist[0] > -1:
-                            node_desc = self._get_random_component(comp_list=sublist[1], total_weight=sublist[0],
+                            node = self._get_random_component(comp_list=sublist[1], total_weight=sublist[0],
                                                               check_existence=True)
                         else:
                             ndesc_list = []
@@ -3450,11 +3450,11 @@ class NodeInternals_NonTerm(NodeInternals):
                                 shall_exist = self._existence_from_node(n)
                                 if shall_exist is None or shall_exist:
                                     ndesc_list.append(ndesc)
-                            node_desc = random.choice(ndesc_list) if ndesc_list else None
-                        if node_desc is None:
+                            node = random.choice(ndesc_list) if ndesc_list else None
+                        if node is None:
                             continue
                         else:
-                            self._construct_subnodes(node_desc, sublist_tmp, delim[0], ignore_sep_fstate)
+                            self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
 
                     else:
                         raise ValueError(f"delim: '{delim}'")

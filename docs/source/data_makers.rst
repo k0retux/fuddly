@@ -132,16 +132,24 @@ Parameters:
         |_ fuzz_mag
         |      | desc: order of magnitude for maximum size of some fuzzing test cases.
         |      | default: 1.0 [type: float]
-        |_ determinism
+        |_ fuzz_determinism
         |      | desc: If set to 'True', the whole model will be fuzzed in a deterministic
         |      |       way. Otherwise it will be guided by the data model determinism.
         |      | default: True [type: bool]
-        |_ leaf_determinism
+        |_ leaf_fuzz_determinism
         |      | desc: If set to 'True', each typed node will be fuzzed in a deterministic
-        |      |       way. Otherwise it will be guided by the data model determinism.
-        |      |       Note: this option is complementary to 'determinism' is it acts
-        |      |       on the typed node substitutions that occur through this disruptor
+        |      |       way. If set to 'False' each typed node will be fuzzed in a random
+        |      |       way. Otherwise, if it is set to 'None', it will be guided by
+        |      |       the data model determinism. Note: this option is complementary
+        |      |       to 'determinism' as it acts on the typed node substitutions
+        |      |       that occur through this disruptor
         |      | default: True [type: bool]
+        |_ tnode_determinist
+        |      | desc: If set to 'True', all the typed nodes of the model will be set
+        |      |       to determinist mode prior to any fuzzing. If set to 'False',
+        |      |       they will be set to random mode. Otherwise, if set to 'None',
+        |      |       nothing will be done.
+        |      | default: None [type: bool]
 
 
 tSTRUCT - Alter Data Structure
@@ -316,6 +324,12 @@ Parameters:
         |      |       nodes. It means that the non-terminal nodes will be customized
         |      |       in "FullCombinatory" mode
         |      | default: True [type: bool]
+        |_ tnode_determinist
+        |      | desc: If set to 'True', all the typed nodes of the model will be set
+        |      |       to determinist mode prior to any fuzzing. If set to 'False',
+        |      |       they will be set to random mode. Otherwise, if set to 'None',
+        |      |       nothing will be done.
+        |      | default: None [type: bool]
         |_ order
         |      | desc: when set to True, the walking order is strictly guided by the
         |      |       data structure. Otherwise, fuzz weight (if specified in the
@@ -324,9 +338,9 @@ Parameters:
         |_ nt_only
         |      | desc: walk through non-terminal nodes only
         |      | default: False [type: bool]
-        |_ reset_when_change
-        |      | desc: Reset the walking when the structure has changed. Only with
-        |      |       @nt_only.
+        |_ deep
+        |      | desc: when set to True, if a node structure has changed, the modelwalker
+        |      |       will reset its walk through the children nodes
         |      | default: True [type: bool]
         |_ fix_all
         |      | desc: for each produced data, reevaluate the constraints on the whole

@@ -61,10 +61,10 @@ class ModelWalker(object):
         self._root_node.make_finite(all_conf=True, recursive=True)
         
         if make_determinist:
-            assert(not make_random)
+            assert not make_random
             self._root_node.make_determinist(all_conf=True, recursive=True)
         elif make_random:
-            assert(not make_determinist)
+            assert not make_determinist
             self._root_node.make_random(all_conf=True, recursive=True)
 
         self._root_node.freeze()
@@ -234,7 +234,7 @@ class ModelWalker(object):
                 # with 'node'.  Then if the node is not exhausted we
                 # may have new cases where the consumer will find
                 # something (assuming the consumer accepts to reset).
-                elif self._consumer.need_reset(node):   # and not node.is_exhausted():
+                elif self._consumer.need_reset(node) and node.is_attr_set(dm.NodeInternals.Mutable):
                     again = False if node.is_exhausted() else True
                     # Not consumed so we don't unfreeze() with recursive=True
                     self._do_reset(node)
@@ -744,7 +744,7 @@ class AltConfConsumer(NodeConsumerStub):
 
 class TypedNodeDisruption(NodeConsumerStub):
 
-    def init_specific(self, ignore_separator=False, enforce_determinism=True):
+    def init_specific(self, ignore_separator=False, determinist=True):
         if ignore_separator:
             self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable],
                                                                 negative_attrs=[dm.NodeInternals.Separator],
@@ -759,7 +759,7 @@ class TypedNodeDisruption(NodeConsumerStub):
         self.current_fuzz_vt_list = None
         self.current_node = None
         self.orig_internal = None
-        self.enforce_determinism = enforce_determinism
+        self.determinist = determinist
         self._ignore_separator  = ignore_separator
         self.sep_list = None
 
@@ -796,8 +796,12 @@ class TypedNodeDisruption(NodeConsumerStub):
 
             node.set_values(value_type=vt_obj, ignore_entanglement=True, preserve_node=True)
             node.make_finite()
-            if self.enforce_determinism:
+            if self.determinist is None:
+                pass
+            elif self.determinist:
                 node.make_determinist()
+            else:
+                node.make_random()
             node.unfreeze(ignore_entanglement=True)
             # we need to be sure that the current node is freezable
             node.set_attr(dm.NodeInternals.Freezable)
