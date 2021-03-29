@@ -580,6 +580,9 @@ class DynGenerator(Generator):
                               "set to determinist mode prior to any fuzzing. If set "
                               "to 'False', they will be set to random mode. "
                               "Otherwise, if set to 'None', nothing will be done.", None, bool),
+        'min_def': ("Set the default quantity of all the nodes to the defined minimum quantity if "
+                    "this parameter is set to 'True', or maximum quantity if set to 'False'. "
+                    "Otherwise if set to 'None', nothing is done.", None, bool),
     }
 
     def setup(self, dm, user_input):
@@ -606,6 +609,15 @@ class DynGenerator(Generator):
                         n.make_determinist()
                     else:
                         n.make_random()
+
+            if self.min_def is not None:
+                nic = nd.NodeInternalsCriteria(node_kinds=[nd.NodeInternals_NonTerm])
+                nl = atom.get_reachable_nodes(internals_criteria=nic, ignore_fstate=True)
+                for node in nl:
+                    subnodes = node.subnodes_set
+                    for snd in subnodes:
+                        min, max = node.get_subnode_minmax(snd)
+                        node.set_subnode_default_qty(snd, min if self.min_def else max)
 
         return Data(atom)
 

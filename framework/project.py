@@ -42,13 +42,35 @@ class Project(object):
     name = None
     default_dm = None
 
-    def __init__(self, enable_fbk_processing=True):
+    wkspace_enabled = None
+    wkspace_size = None
+    wkspace_free_slot_ratio_when_full = None
+
+    def __init__(self, enable_fbk_processing=True,
+                 wkspace_enabled=True, wkspace_size=1000, wkspace_free_slot_ratio_when_full=0.5):
+        """
+
+        Args:
+            enable_fbk_processing: enable or disable the execution of feedback
+              handlers, if any are set in the project.
+            wkspace_enabled: If set to True, enable the framework workspace that store
+              the generated data.
+            wkspace_size: Maximum number of data that can be stored in the workspace.
+            wkspace_free_slot_ratio_when_full: when the workspace is full, provide the ratio
+              of the workspace size that will be used as the amount of entries to free in
+              the workspace.
+        """
+
         self.monitor = Monitor()
         self._knowledge_source = InformationCollector()
         self._fbk_processing_enabled = enable_fbk_processing
         self._feedback_processing_thread = None
         self._fbk_handlers = []
         self._fbk_handlers_disabled = False
+
+        self.wkspace_enabled = wkspace_enabled
+        self.wkspace_size = wkspace_size
+        self.wkspace_free_slot_ratio_when_full = wkspace_free_slot_ratio_when_full
 
         self.scenario_target_mapping = None
         self.reset_target_mappings()
@@ -177,12 +199,14 @@ class Project(object):
     ### Runtime Operations ###
     ##########################
 
-    def start(self):
+    def share_knowlegde_source(self):
         VT.knowledge_source = self.knowledge_source
         Env.knowledge_source = self.knowledge_source
         DataModel.knowledge_source = self.knowledge_source
         DataMaker.knowledge_source = self.knowledge_source
         ScenarioEnv.knowledge_source = self.knowledge_source
+
+    def start(self):
 
         for fh in self._fbk_handlers:
             fh.fmkops = self._fmkops

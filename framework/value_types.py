@@ -1967,6 +1967,8 @@ class INT_str(INT):
         if min_size is not None:
             self.min_digit = max(self.min_digit, min_size)
             format_str = '{:0' + str(min_size)
+            if self.max_digit < self.min_digit:
+                self.max_digit = self.min_digit
         else:
             format_str = '{:'
 

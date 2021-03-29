@@ -602,7 +602,7 @@ class Database(object):
             "ORDER BY DATE ASC;".format(data_id=data_id)
         )
 
-        def search_dm(data_model_name):
+        def search_dm(data_model_name, load_arg):
             for dm in dm_list:
                 if dm.name == data_model_name:
                     dm.load_data_model(load_arg)
@@ -624,12 +624,12 @@ class Database(object):
         if decoding_hints is not None:
             load_arg, decode_data, decode_fbk, user_atom_name, user_fbk_atom_name, forced_fbk_decoder = decoding_hints
             if decode_data or decode_fbk:
-                decoder_func = search_dm(dm_name)
+                decoder_func = search_dm(dm_name, load_arg)
                 if decoder_func is None:
                     decode_data = False
             if decode_fbk:
                 if forced_fbk_decoder:
-                    fbk_decoder_func = search_dm(forced_fbk_decoder)
+                    fbk_decoder_func = search_dm(forced_fbk_decoder, load_arg)
                 else:
                     fbk_decoder_func = decoder_func
                 decode_fbk = fbk_decoder_func is not None

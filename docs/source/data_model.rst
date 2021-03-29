@@ -27,12 +27,33 @@ name
   in giving the same name to different nodes::
     
     'my_name'
-    ('my_name', 2)
-    ('my_name', 'of the command')
+    ('my_name', 'namespace_1')
+    ('my_name', 'namespace_2')
 
   These names serve as *node references* during data description.
+  Another option is to use the keyword ``namespace``.
 
   .. note:: The character ``/`` is reserved and shall not be used in a *name*.
+
+
+namespace
+    [For non-terminal nodes only]
+
+    Specify a namespace that will be used for the ``name`` of all the nodes reachable
+    from the node declaring the namespace. It means that the subnodes will be automatically
+    described by a tuple with the namespace value as second item
+    (refer to the description of the keyword ``name``).
+
+from_namespace
+    If specified, and some node name are used as inputs (refer for instance to keywords ``clone``
+    or ``node_args``), the specified namespace will be used to fetch the nodes.
+    It is equivalent to use a tuple expression for referring to the node with the ``from_namespace`` value
+    as second item.
+
+    Note that referring to a node without specifying the namespace will be interpreted as using the
+    current namespace. By default (even when no namespaces have been declared), one namespace is
+    always defined from the root node, it can be referred to by ``NodeBuilder.RootNS``.
+
 
 contents
   Every node description has at least a ``name`` and a ``contents``
@@ -176,6 +197,12 @@ custo_set, custo_clear
 		constraints triggers child nodes reconstruction for each non-terminal. And as the terminal
 		children will be frozen at that time, the reconstruction will take into account this
 		customization mode.
+
+  - ``MH.Custo.NTerm.StickToDefault``: By default, this mode is *disabled*. When enabled,
+    walking through a non-terminal node *won't* generate all "possible" combination of forms for each
+    subnode. Only the default quantity (refer to keyword ``default_qty``) is leveraged. Walking through such nodes will
+    generate new forms only if different shapes have been defined (refer to keyword ``shape_type``
+    and ``section_type``).
 
   - ``MH.Custo.NTerm.CollapsePadding``: By default, this mode is *disabled*.
     When enabled, every time two adjacent ``BitField`` 's (within its scope) are found, they
@@ -385,9 +412,10 @@ separator
 				'contents': String(values=['\n'])},
 		   'prefix': False,
 		   'suffix': False,
-		   'unique': True},
+		   'unique': True,
+		   'always': False},
 
-  The keys ``prefix``, ``suffix`` and ``unique`` are optional. They are
+  The keys ``prefix``, ``suffix``, ``unique`` and ``always`` are optional. They are
   described below.
 
   .. seealso:: Refer to :ref:`dm:pattern:separator` for an example using
@@ -407,6 +435,12 @@ unique
   the inserted separators will be independent from each other (full
   node copy). Otherwise, the separators will be references to a
   unique node (zero copy).
+
+always
+  Used optionally within a *separator descriptor*. If set to ``True``,
+  the separator will be always generated even if the
+  subnodes it separates are not generated because their evaluated quantity is 0.
+
 
 encoder
   If specified, an encoder instance should be provided. The *encoding* will be applied
@@ -484,6 +518,10 @@ mutable
   Make the node mutable. It is a shortcut for the node attribute
   ``MH.Attr.Mutable``.
 
+highlight
+  Make the node highlighted. It is a shortcut for the node attribute
+  ``MH.Attr.Highlight``.
+
 set_attrs
   List of attributes to set on the node. The current generic
   attributes are:
@@ -505,6 +543,8 @@ set_attrs
     its default form (meaning default quantity will be used for each subnodes
     and if the node has multiple shapes, the higher weighted one will be used.
     Likewise for `Pick` sections).
+    Also, the method :meth:`framework.node.Node.unfreeze()` won't perform any
+    changes on non-terminal nodes which are not mutable.
   - ``MH.Attr.Determinist``: This attribute can be set directly
     through the keywords ``determinist`` or ``random``. Refer to them
     for details. By default, it is set.
@@ -517,6 +557,9 @@ set_attrs
   - ``MH.Attr.Separator``: Used to distinguish a separator. Some
     disruptors can leverage this attribute to perform their
     alteration.
+  - ``MH.Attr.Highlight``: If set, make the framework display the node in color
+    when printed on the console. This attribute is also used by some disruptors to show the
+    location of their modification.
 
   .. note::
      Most of the generic stateful disruptors will recursively

@@ -110,7 +110,7 @@ Parameters:
         |      | desc: When set to True, enable full-combinatory mode for non-terminal
         |      |       nodes. It means that the non-terminal nodes will be customized
         |      |       in "FullCombinatory" mode
-        |      | default: True [type: bool]
+        |      | default: False [type: bool]
         |_ ign_sep
         |      | desc: when set to True, separators will be ignored if
         |      |       any are defined.
@@ -132,10 +132,10 @@ Parameters:
         |_ fuzz_mag
         |      | desc: order of magnitude for maximum size of some fuzzing test cases.
         |      | default: 1.0 [type: float]
-        |_ fuzz_determinism
-        |      | desc: If set to 'True', the whole model will be fuzzed in a deterministic
-        |      |       way. Otherwise it will be guided by the data model determinism.
-        |      | default: True [type: bool]
+        |_ make_determinist
+        |      | desc: If set to 'True', the whole model will be set in determinist mode.
+        |      |       Otherwise it will be guided by the data model determinism.
+        |      | default: False [type: bool]
         |_ leaf_fuzz_determinism
         |      | desc: If set to 'True', each typed node will be fuzzed in a deterministic
         |      |       way. If set to 'False' each typed node will be fuzzed in a random

@@ -332,8 +332,6 @@ class FmkPlumbing(object):
         self.group_id = 0
         self._recovered_tgs = None # used by self._recover_target()
 
-        self.enable_wkspace()
-
         self.import_successfull = True
         self.get_data_models()
         if self._exit_on_error and not self.import_successfull:
@@ -576,6 +574,8 @@ class FmkPlumbing(object):
         if prj_params is not None:
             self._add_project(prj_params['project'], prj_params['target'], prj_params['logger'],
                               prj_params['prj_rld_args'], reload_prj=True)
+
+            self.prj.share_knowlegde_source()
 
             if dm_prefix is None:
                 # it is ok to call reload_dm() here because it is a
@@ -1263,7 +1263,7 @@ class FmkPlumbing(object):
         print(colorize(FontStyle.BOLD + '\n-=[ FMK Internals ]=-\n', rgb=Color.INFO))
         print(colorize('  [ General Information ]', rgb=Color.INFO))
         print(colorize('                  FmkDB enabled: ', rgb=Color.SUBINFO) + repr(self.fmkDB.enabled))
-        print(colorize('              Workspace enabled: ', rgb=Color.SUBINFO) + repr(self._wkspace_enabled))
+        print(colorize('              Workspace enabled: ', rgb=Color.SUBINFO) + repr(self.prj.wkspace_enabled))
         print(colorize('                  Sending delay: ', rgb=Color.SUBINFO) + delay_str)
         print(colorize('   Number of data sent in burst: ', rgb=Color.SUBINFO) + str(self._burst))
         print(colorize(' Target(s) health-check timeout: ', rgb=Color.SUBINFO) + str(self._hc_timeout_max))
@@ -1576,6 +1576,8 @@ class FmkPlumbing(object):
 
         self._update_targets_desc(prj)
 
+        self.prj.share_knowlegde_source()
+
         return True
 
 
@@ -1613,11 +1615,11 @@ class FmkPlumbing(object):
 
     @EnforceOrder(always_callable=True)
     def enable_wkspace(self):
-        self._wkspace_enabled = True
+        self.prj.wkspace_enabled = True
 
     @EnforceOrder(always_callable=True)
     def disable_wkspace(self):
-        self._wkspace_enabled = False
+        self.prj.wkspace_enabled = False
 
     @EnforceOrder(accepted_states=['S1','S2'])
     def set_sending_delay(self, delay, do_record=False):
@@ -2351,9 +2353,18 @@ class FmkPlumbing(object):
         # the provided data_list can be changed after having called self._send_data()
         multiple_data = len(data_list) > 1
 
-        if self._wkspace_enabled:
-            for idx, dt in enumerate(data_list):
-                self.__current.append(dt)
+        if self.prj.wkspace_enabled:
+            if self.prj.wkspace_size == 1:
+                self.__current = [data_list[-1]]
+            else:
+                for dt in data_list:
+                    self.__current.append(dt)
+                wkspace_len = len(self.__current)
+                if wkspace_len > self.prj.wkspace_size:
+                    self.lg.log_fmk_info(f'Workspace is full (size={self.prj.wkspace_size}). Older '
+                                         f'entries will be removed (ratio={self.prj.wkspace_free_slot_ratio_when_full*100}%)')
+                    fslots = int(self.prj.wkspace_free_slot_ratio_when_full * self.prj.wkspace_size)
+                    self.__current = self.__current[wkspace_len-self.prj.wkspace_size+fslots:]
 
         for dt in data_list:
             dt.make_recordable()
@@ -2871,7 +2882,7 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def get_last_data(self):
-        if not self._wkspace_enabled:
+        if not self.prj.wkspace_enabled:
             self.set_error('Workspace is disabled!',
                            code=Error.CommandError)
             return None
@@ -2965,7 +2976,7 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def show_wkspace(self):
-        if not self._wkspace_enabled:
+        if not self.prj.wkspace_enabled:
             self.set_error('Workspace is disabled!',
                            code=Error.CommandError)
             return
@@ -2984,7 +2995,7 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def empty_workspace(self):
-        if not self._wkspace_enabled:
+        if not self.prj.wkspace_enabled:
             self.set_error('Workspace is disabled!', code=Error.CommandError)
             return
 
@@ -2992,7 +3003,7 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def register_current_in_data_bank(self):
-        if not self._wkspace_enabled:
+        if not self.prj.wkspace_enabled:
             self.set_error('Workspace is disabled!', code=Error.CommandError)
             return
 
@@ -3002,7 +3013,7 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def register_last_in_data_bank(self):
-        if not self._wkspace_enabled:
+        if not self.prj.wkspace_enabled:
             self.set_error('Workspace is disabled!', code=Error.CommandError)
             return
 

@@ -97,6 +97,9 @@ class NodeBackend(DataBackend):
     def to_str(self):
         return self._node.to_str()
 
+    def to_formatted_str(self):
+        return self._node.to_formatted_str()
+
     def to_bytes(self):
         return self._node.to_bytes()
 
@@ -149,6 +152,9 @@ class RawBackend(DataBackend):
     def to_str(self):
         return unconvert_from_internal_repr(self._content)
 
+    def to_formatted_str(self):
+        return self.to_str()
+
     def to_bytes(self):
         return self._content
 
@@ -185,6 +191,9 @@ class EmptyBackend(DataBackend):
         return None
 
     def to_str(self):
+        return 'Empty Backend'
+
+    def to_formatted_str(self):
         return 'Empty Backend'
 
     def to_bytes(self):
@@ -362,6 +371,9 @@ class Data(object):
 
     def to_str(self):
         return self._backend.to_str()
+
+    def to_formatted_str(self):
+        return self._backend.to_formatted_str()
 
     def make_blocked(self):
         self._blocked = True

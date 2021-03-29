@@ -47,8 +47,8 @@ class Logger(object):
 
     def __init__(self, name=None, prefix='', record_data=False, explicit_data_recording=False,
                  export_raw_data=True, term_display_limit=800, enable_term_display=True,
-                 enable_file_logging=False):
-        '''
+                 enable_file_logging=False, highlight_marked_nodes=True):
+        """
         Args:
           name (str): Name to be used in the log filenames. If not specified, the name of the project
             in which the logger is embedded will be used.
@@ -66,7 +66,9 @@ class Logger(object):
           enable_term_display (bool): If True, information will be displayed on the terminal
           prefix (str): prefix to use for printing on the console.
           enable_file_logging (bool): If True, file logging will be enabled.
-        '''
+          highlight_marked_nodes (bool): If True, alteration performed by compatible disruptors will be highlighted
+        """
+
         self.name = name
         self.p = prefix
         self.__record_data = record_data
@@ -81,6 +83,8 @@ class Logger(object):
         self._enable_file_logging = enable_file_logging
         self._fd = None
 
+        self._hl_marked_nodes = highlight_marked_nodes
+
         self._tg_fbk = []
         self._tg_fbk_lck = threading.Lock()
 
@@ -88,15 +92,19 @@ class Logger(object):
 
         def init_logfn(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
                        do_record=True):
+            no_format_mode = False
             if issubclass(x.__class__, Data):
                 data = self._handle_binary_content(x.to_bytes(), raw=self.export_raw_data)
+                colored_data = x.to_formatted_str() if self._hl_marked_nodes else data
                 rgb = None
                 style = None
+                no_format_mode = self._hl_marked_nodes
             elif isinstance(x, str):
-                data = x
+                colored_data = data = x
             else:
-                data = self._handle_binary_content(x, raw=self.export_raw_data)
-            self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)
+                colored_data = data = self._handle_binary_content(x, raw=self.export_raw_data)
+            self.print_console(colored_data, nl_before=nl_before, nl_after=nl_after,
+                               rgb=rgb, style=style, no_format_mode=no_format_mode)
             if verbose and issubclass(x.__class__, Data):
                 x.show()
 
@@ -142,15 +150,19 @@ class Logger(object):
 
             def intern_func(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
                             do_record=True):
+                no_format_mode = False
                 if issubclass(x.__class__, Data):
                     data = self._handle_binary_content(x.to_bytes(), raw=self.export_raw_data)
+                    colored_data = x.to_formatted_str() if self._hl_marked_nodes else data
                     rgb = None
                     style = None
+                    no_format_mode = self._hl_marked_nodes
                 elif isinstance(x, str):
-                    data = x
+                    colored_data = data = x
                 else:
-                    data = self._handle_binary_content(x, raw=self.export_raw_data)
-                self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)
+                    colored_data = data = self._handle_binary_content(x, raw=self.export_raw_data)
+                self.print_console(colored_data, nl_before=nl_before, nl_after=nl_after,
+                                   rgb=rgb, style=style, no_format_mode=no_format_mode)
                 if not do_record:
                     return data
                 try:
@@ -580,7 +592,7 @@ class Logger(object):
             self.fmkDB.insert_fmk_info(data_id, msg, now, error=True)
 
     def print_console(self, msg, nl_before=True, nl_after=False, rgb=None, style=None,
-                      raw_limit=None, limit_output=True):
+                      raw_limit=None, limit_output=True, no_format_mode=False):
 
         if not self.display_on_term:
             return
@@ -593,23 +605,31 @@ class Logger(object):
 
         prefix = p + self.p
 
-        if isinstance(msg, Data):
-            msg = repr(msg)
+        if no_format_mode:
+            sys.stdout.write(prefix)
+            sys.stdout.write(msg)
+            sys.stdout.flush()
 
-        suffix = ''
-        if limit_output and len(msg) > raw_limit:
-            msg = msg[:raw_limit]
-            suffix = ' ...'
+            # print(f'{msg}')
 
-        suffix += s
+        else:
+            if isinstance(msg, Data):
+                msg = repr(msg)
 
-        if rgb is not None:
-            msg = colorize(msg, rgb=rgb)
+            suffix = ''
+            if limit_output and len(msg) > raw_limit:
+                msg = msg[:raw_limit]
+                suffix = ' ...'
 
-        if style is None:
-            style = ''
+            suffix += s
 
-        sys.stdout.write(style + prefix)
-        sys.stdout.write(msg)
-        sys.stdout.write(suffix + FontStyle.END)
-        sys.stdout.flush()
+            if rgb is not None:
+                msg = colorize(msg, rgb=rgb)
+
+            if style is None:
+                style = ''
+
+            sys.stdout.write(style + prefix)
+            sys.stdout.write(msg)
+            sys.stdout.write(suffix + FontStyle.END)
+            sys.stdout.flush()

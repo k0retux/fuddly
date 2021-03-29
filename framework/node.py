@@ -517,6 +517,7 @@ class NonTermCusto(NodeCustomization):
     DelayCollapsing = 5
 
     FullCombinatory = 6
+    StickToDefault = 7
 
     _custo_items = {
         MutableClone: True,
@@ -524,7 +525,8 @@ class NonTermCusto(NodeCustomization):
         FrozenCopy: True,
         CollapsePadding: False,
         DelayCollapsing: False,
-        FullCombinatory: False
+        FullCombinatory: False,
+        StickToDefault: False
     }
 
     @property
@@ -554,6 +556,10 @@ class NonTermCusto(NodeCustomization):
     @full_combinatory_mode.setter
     def full_combinatory_mode(self, val: bool):
         self._custo_items[self.FullCombinatory] = val
+
+    @property
+    def stick_to_default_mode(self):
+        return self._custo_items[self.StickToDefault]
 
 
 class GenFuncCusto(NodeCustomization):
@@ -625,7 +631,8 @@ class NodeInternals(object):
     Separator = 15
     AutoSeparator = 16
 
-    DEBUG = 30
+    Highlight = 30
+    DEBUG = 40
     LOCKED = 50
 
     DISABLED = 100
@@ -651,6 +658,8 @@ class NodeInternals(object):
             # Used to distinguish separator
             NodeInternals.Separator: False,
             NodeInternals.AutoSeparator: False,
+            # Used to display visual effect when the node is printed on the console
+            NodeInternals.Highlight: False,
             # Used for debugging purpose
             NodeInternals.DEBUG: False,
             # Used to express that someone (a disruptor for instance) is
@@ -694,7 +703,7 @@ class NodeInternals(object):
     def _init_specific(self, arg):
         pass
 
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False, enable_color=False):
         raise NotImplementedError
 
     def get_raw_value(self, **kwargs):
@@ -835,6 +844,16 @@ class NodeInternals(object):
         if name not in self.__attrs:
             raise ValueError
         return self.__attrs[name]
+
+    def set_child_attr(self, name, conf=None, all_conf=False, recursive=False):
+        pass
+
+    def clear_child_attr(self, name, conf=None, all_conf=False, recursive=False):
+        pass
+
+    @property
+    def highlight(self):
+        return self.is_attr_set(NodeInternals.Highlight)
 
     @property
     def debug(self):
@@ -1243,7 +1262,7 @@ class DynNode_Helpers(object):
 
 
 class NodeInternals_Empty(NodeInternals):
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False, enable_color=False):
         if return_node_internals:
             return (Node.DEFAULT_DISABLED_NODEINT, True)
         else:
@@ -1296,7 +1315,7 @@ class NodeInternals_GenFunc(NodeInternals):
         # because these attributes are used to change the behaviour of
         # the GenFunc.
         if name in [NodeInternals.Determinist, NodeInternals.Finite, NodeInternals.Abs_Postpone,
-                    NodeInternals.Separator]:
+                    NodeInternals.Separator, NodeInternals.Highlight]:
             if name == NodeInternals.Determinist:
                 self._node_helpers.determinist = True
             if self._generated_node is not None:
@@ -1305,7 +1324,7 @@ class NodeInternals_GenFunc(NodeInternals):
 
     def _unmake_specific(self, name):
         if name in [NodeInternals.Determinist, NodeInternals.Finite, NodeInternals.Abs_Postpone,
-                    NodeInternals.Separator]:
+                    NodeInternals.Separator, NodeInternals.Highlight]:
             if name == NodeInternals.Determinist:
                 self._node_helpers.determinist = False
             if self._generated_node is not None:
@@ -1453,6 +1472,8 @@ class NodeInternals_GenFunc(NodeInternals):
                 self._generated_node.make_determinist(all_conf=True, recursive=True)
             if self.is_attr_set(NodeInternals.Finite):
                 self._generated_node.make_finite(all_conf=True, recursive=True)
+            if self.is_attr_set(NodeInternals.Highlight):
+                self._generated_node.set_attr(NodeInternals.Highlight, recursive=True)
 
         return self._generated_node
 
@@ -1482,12 +1503,12 @@ class NodeInternals_GenFunc(NodeInternals):
             self.generator_arg = generator_arg
 
 
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False, enable_color=False):
         if self.custo.trigger_last_mode and not self._trigger_registered:
             assert(self.env is not None)
             self._trigger_registered = True
             self.env.register_basic_djob(self._get_delayed_value,
-                                         args=[conf, recursive],
+                                         args=[conf, recursive, enable_color],
                                          prio=Node.DJOBS_PRIO_genfunc)
 
             if return_node_internals:
@@ -1499,12 +1520,13 @@ class NodeInternals_GenFunc(NodeInternals):
             self.reset_generator()
 
         ret = self.generated_node._get_value(conf=conf, recursive=recursive,
-                                             return_node_internals=return_node_internals)
+                                             return_node_internals=return_node_internals,
+                                             enable_color=enable_color)
         return (ret, False)
 
-    def _get_delayed_value(self, conf=None, recursive=True):
+    def _get_delayed_value(self, conf=None, recursive=True, enable_color=False):
         self.reset_generator()
-        ret = self.generated_node._get_value(conf=conf, recursive=recursive)
+        ret = self.generated_node._get_value(conf=conf, recursive=recursive, enable_color=enable_color)
         return (ret, False)
 
     def get_raw_value(self, **kwargs):
@@ -1703,15 +1725,27 @@ class NodeInternals_Term(NodeInternals):
     def _set_default_value_specific(self):
         raise NotImplementedError
 
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False, enable_color=False):
+
+        def format_val(val):
+            fval = FontStyle.BOLD + colorize(val.decode('latin-1'), rgb=Color.ND_HLIGHT) + FontStyle.END
+            fval = fval.encode('latin-1')
+            return fval
 
         if self.frozen_node is not None:
-            return (self, False) if return_node_internals else (self.frozen_node, False)
+            if enable_color and self.highlight:
+                fval = format_val(self.frozen_node)
+            else:
+                fval = self.frozen_node
+            return (self, False) if return_node_internals else (fval, False)
 
         val = self._get_value_specific(conf, recursive)
 
         if self.is_attr_set(NodeInternals.Freezable):
             self.frozen_node = val
+
+        if self.highlight:
+            val = format_val(val)
 
         return (self, True) if return_node_internals else (val, True)
 
@@ -1810,12 +1844,6 @@ class NodeInternals_Term(NodeInternals):
 
     def set_child_env(self, env):
         self.env = env
-
-    def set_child_attr(self, name, conf=None, all_conf=False, recursive=False):
-        pass
-
-    def clear_child_attr(self, name, conf=None, all_conf=False, recursive=False):
-        pass
 
     def reset_depth_specific(self, depth):
         pass
@@ -2223,7 +2251,7 @@ class NodeSeparator(object):
       make_private (function): used for full copy
     '''
 
-    def __init__(self, node, prefix=True, suffix=True, unique=False):
+    def __init__(self, node, prefix=True, suffix=True, unique=False, always=False):
         '''
         Args:
           node (Node): node to be used for separation.
@@ -2231,6 +2259,8 @@ class NodeSeparator(object):
           suffix (bool): if `True`, a serapator will also be placed at the end.
           unique (bool): if `False`, the same node will be used for each separation,
             otherwise a new node will be generated.
+          always (bool): if `True`, the separator will be always generated even if the
+            subnodes it separates are not generated because their evaluated quantity is 0.
         '''
         self.node = node
         self.node.set_attr(NodeInternals.Separator)
@@ -2238,6 +2268,7 @@ class NodeSeparator(object):
         self.prefix = prefix
         self.suffix = suffix
         self.unique = unique
+        self.always = always
 
     def make_private(self, node_dico, ignore_frozen_state):
         if self.node in node_dico:
@@ -2657,8 +2688,8 @@ class NodeInternals_NonTerm(NodeInternals):
             #                     self.shape_exhausted, self.current_nodelist_sz, self.expanded_nodelist_origsz,
             #                     self.component_seed, self._perform_first_step]
 
-            new_exhaust_info = [self.exhausted, copy.copy(self.excluded_components),
-                                self.shape_exhausted, self.component_seed,
+            new_exhaust_info = [self.exhausted_shapes, copy.copy(self.excluded_components),
+                                self.combinatory_complete, self.component_seed,
                                 self.exhausted_pick_cases]
 
             new_nodes_drawn_qty = copy.copy(self._nodes_drawn_qty)
@@ -3050,8 +3081,13 @@ class NodeInternals_NonTerm(NodeInternals):
         base_node = node
         external_entangled_nodes = [] if base_node.entangled_nodes is None else list(base_node.entangled_nodes)
 
-        new_node = None
+        if nb == 0:
+            if self.separator is not None and self.separator.always and not ignore_separator:
+                new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
+                                                ignore_frozen_state=ignore_sep_fstate)
+                subnode_list.append(new_sep)
 
+        new_node = None
         transformed_node = None
         for i in range(nb):
             # 'unique' mode
@@ -3193,7 +3229,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
                     node_list = new_node_list
 
-            self.exhausted = exhausted_shape and self.exhausted_pick_cases
+            self.exhausted_shapes = exhausted_shape and self.exhausted_pick_cases
 
             return node_list
 
@@ -3221,13 +3257,13 @@ class NodeInternals_NonTerm(NodeInternals):
 
         if determinist:
 
-            if self.shape_exhausted:
+            if self.combinatory_complete or self.custo.stick_to_default_mode:
                 self.current_flattened_nodelist = node_list = compute_next_shape(determinist, finite)
                 self.cursor_min = 0
                 self.cursor_maj = 0
                 self.previous_cursor_min = 0
                 self.previous_cursor_maj = 0
-                self.shape_exhausted = False
+                self.combinatory_complete = False
                 # self.current_flattened_nodelist = self.flatten_node_list(node_list)
 
             elif self.current_flattened_nodelist is None:
@@ -3269,10 +3305,10 @@ class NodeInternals_NonTerm(NodeInternals):
                                         self.cursor_maj += 1
                                         break
                                 else:
-                                    self.shape_exhausted = True
+                                    self.combinatory_complete = True
                             elif self.cursor_min > self.cursor_maj:
                                 if self.cursor_maj+1 >= current_nodelist_sz:
-                                    self.shape_exhausted = True
+                                    self.combinatory_complete = True
                                 else:
                                     self.cursor_maj += 1
                             else:
@@ -3302,7 +3338,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                                 perform_reset = True
                                                 break
                                         else:
-                                            self.shape_exhausted = True
+                                            self.combinatory_complete = True
 
                                 elif self.cursor_min == self.cursor_maj:
                                     if self.cursor_maj == current_nodelist_sz-1:
@@ -3336,7 +3372,7 @@ class NodeInternals_NonTerm(NodeInternals):
                             self.cursor_min = self.cursor_min + 1
                             first_pass_done = False
                             if self.cursor_min == current_nodelist_sz:
-                                self.shape_exhausted = True
+                                self.combinatory_complete = True
                         else:
                             if not first_pass_done:
                                 # print('\n  ## case 2.a ***')
@@ -3353,7 +3389,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                         perform_reset = True
                                         break
                                 else:
-                                    self.shape_exhausted = True
+                                    self.combinatory_complete = True
                             else:
                                 pass
 
@@ -3388,7 +3424,7 @@ class NodeInternals_NonTerm(NodeInternals):
             if next_cursor_min is not None:
                 self.cursor_min = next_cursor_min
 
-            if self.shape_exhausted:
+            if self.combinatory_complete or self.custo.stick_to_default_mode:
                 for nd in self.current_flattened_nodelist:
                     self.subnodes_attrs[nd].plan_reset()
 
@@ -3422,6 +3458,8 @@ class NodeInternals_NonTerm(NodeInternals):
 
                         # unfold all the Node and then choose randomly
                         else:
+                            # In this case, NodeSeparator(always=True) have no meaning and
+                            # thus 'always' is always considered to be False.
                             list_unfold = []
                             for i in range(lg):
                                 node = random.choice(l)
@@ -3476,7 +3514,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
 
     def _get_value(self, conf=None, recursive=True, after_encoding=True,
-                   return_node_internals=False):
+                   return_node_internals=False, enable_color=False):
 
         '''
         The parameter return_node_internals is not used for non terminal nodes,
@@ -3489,7 +3527,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 return node_internals
             else:
                 return node_internals._get_value(conf=conf, recursive=recursive,
-                                                 return_node_internals=False)[0]
+                                                 return_node_internals=False, enable_color=enable_color)[0]
 
         def handle_encoding(list_to_enc):
 
@@ -3568,7 +3606,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                         prio=Node.DJOBS_PRIO_nterm_existence)
             else:
                 val = n._get_value(conf=conf, recursive=recursive,
-                                   return_node_internals=True)
+                                   return_node_internals=True, enable_color=enable_color)
 
             # 'val' is always a NodeInternals except if non-term encoding has been carried out
             l.append(val)
@@ -3658,7 +3696,7 @@ class NodeInternals_NonTerm(NodeInternals):
         if idx < len(node_list):
             node_list.pop(idx)
 
-    def set_separator_node(self, sep_node, prefix=True, suffix=True, unique=False):
+    def set_separator_node(self, sep_node, prefix=True, suffix=True, unique=False, always=False):
         check_err = set()
         for n in self.subnodes_set:
             check_err.add(n.name)
@@ -3666,7 +3704,7 @@ class NodeInternals_NonTerm(NodeInternals):
             print("\n*** The separator node name shall not be used by a subnode " + \
                   "of this non-terminal node")
             raise ValueError
-        self.separator = NodeSeparator(sep_node, prefix=prefix, suffix=suffix, unique=unique)
+        self.separator = NodeSeparator(sep_node, prefix=prefix, suffix=suffix, unique=unique, always=always)
 
     def get_separator_node(self):
         if self.separator is not None:
@@ -4019,6 +4057,8 @@ class NodeInternals_NonTerm(NodeInternals):
 
             # We try to absorb the separator
             st, off, sz, name = new_sep.absorb(blob, constraints, conf=conf)
+            # if DEBUG:
+            #     print(f'SEPARATOR absorb attempt, st:{st}, off:{off}, sz:{sz}, blob:{blob[:4]} ...')
 
             if st == AbsorbStatus.Reject:
                 if DEBUG:
@@ -4089,6 +4129,8 @@ class NodeInternals_NonTerm(NodeInternals):
             prepend_postponed = None
             postponed_appended = None
 
+            reject_with_min_null = False
+
             node_no = 1
             while node_no <= max_node or max_node < 0: # max_node < 0 means infinity
                 node = self._clone_node(base_node, node_no-1, force_clone)
@@ -4103,6 +4145,9 @@ class NodeInternals_NonTerm(NodeInternals):
                     if DEBUG:
                         print('\nREJECT: %s, size: %d, blob: %r ...' % (node.name, len(blob), blob[:4]))
                     if min_node == 0:
+                        # if DEBUG:
+                        #     print(' --> min node == 0 (No abort)')
+                        reject_with_min_null = True
                         # abort = False
                         break
                     if node_no <= min_node:
@@ -4158,9 +4203,11 @@ class NodeInternals_NonTerm(NodeInternals):
                             # We need to reject this absorption as
                             # accepting it could prevent finding a
                             # good non-terminal shape.
+
                             nb_absorbed = node_no-1
                             if node_no == 1 and min_node == 0:  # this case is OK
                                 # abort = False
+                                reject_with_min_null = True
                                 break
                             elif node_no <= min_node: # reject in this case
                                 if DEBUG:
@@ -4197,6 +4244,17 @@ class NodeInternals_NonTerm(NodeInternals):
                 if first_pass:
                     # considering a postpone node desc from a parent node only in the first loop
                     first_pass = False
+
+            if reject_with_min_null and self.separator is not None and self.separator.always:
+                # if DEBUG:
+                #     print(f'\n Try absorb separator\n  - {blob}\n  - {consumed_size}')
+
+                abort, blob, consumed_size, new_sep = _try_separator_absorption_with(blob, consumed_size)
+                # if DEBUG:
+                #     print(f'\n Try absorb separator, success={not abort}, cons_sz={consumed_size}, blob={blob}')
+                if not abort:
+                    tmp_list.append(new_sep)
+                abort = False
 
             if abort:
                 blob = orig_blob
@@ -4597,7 +4655,8 @@ class NodeInternals_NonTerm(NodeInternals):
                     break
 
             if self.separator is not None and self.frozen_node_list and self.frozen_node_list[-1].is_attr_set(NodeInternals.AutoSeparator):
-                if not self.separator.suffix:
+                if not self.separator.suffix and not self.separator.always:
+                    # TODO: check self.separator.always is maybe not always enough
                     sep = self.frozen_node_list.pop(-1)
                     data = sep._tobytes()
                     consumed_size = consumed_size - len(data)
@@ -4636,8 +4695,12 @@ class NodeInternals_NonTerm(NodeInternals):
             n.confirm_absorb()
 
     def is_exhausted(self):
-        if self.is_attr_set(NodeInternals.Finite):
-            return self.exhausted and self.shape_exhausted
+        if not self.is_attr_set(NodeInternals.Mutable):
+            return True
+        elif self.custo.stick_to_default_mode:
+            return self.exhausted_shapes
+        elif self.is_attr_set(NodeInternals.Finite):
+            return self.exhausted_shapes and self.combinatory_complete
         else:
             return False
 
@@ -4645,11 +4708,26 @@ class NodeInternals_NonTerm(NodeInternals):
         return self.frozen_node_list is not None
 
     def _make_specific(self, name):
+        if name == NodeInternals.Highlight:
+            for node in self.subnodes_set:
+                node.set_attr(name, recursive=True)
+            if self.frozen_node_list:
+                for node in self.frozen_node_list:
+                    node.set_attr(name, recursive=True)
+
         return True
 
     def _unmake_specific(self, name):
         if name == NodeInternals.Determinist:
             self.current_flattened_nodelist = None
+
+        elif name == NodeInternals.Highlight:
+            for node in self.subnodes_set:
+                node.clear_attr(name, recursive=True)
+            if self.frozen_node_list:
+                for node in self.frozen_node_list:
+                    node.clear_attr(name, recursive=True)
+
         return True
 
     def _cleanup_entangled_nodes(self):
@@ -4679,8 +4757,10 @@ class NodeInternals_NonTerm(NodeInternals):
 
     def unfreeze(self, conf=None, recursive=True, dont_change_state=False, ignore_entanglement=False, only_generators=False,
                  reevaluate_constraints=False):
+        mutable = self.is_attr_set(NodeInternals.Mutable)
+        # mutable = True
         if recursive:
-            if reevaluate_constraints:
+            if reevaluate_constraints and mutable:
                 # In order to re-evaluate existence condition of
                 # child node we have to recompute the previous state,
                 # which is the purpose of the following code. We also
@@ -4698,7 +4778,7 @@ class NodeInternals_NonTerm(NodeInternals):
                         # Thus nothing to do, the parameters are correctly initialized.
                         pass
                     else:
-                        self.shape_exhausted = False
+                        self.combinatory_complete = False
                         self.cursor_maj = self.previous_cursor_maj
                         self.cursor_min = self.previous_cursor_min
                         nd = self.current_flattened_nodelist[self.previous_cursor_min]
@@ -4723,7 +4803,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 for n in self.subnodes_set:
                     n.clear_clone_info_since(n)
 
-            elif dont_change_state or only_generators:
+            elif (dont_change_state or only_generators) and mutable:
                 iterable = self.frozen_node_list
             else:
                 iterable = copy.copy(self.subnodes_set)
@@ -4736,7 +4816,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                ignore_entanglement=ignore_entanglement, only_generators=only_generators,
                                reevaluate_constraints=reevaluate_constraints)
 
-        if not dont_change_state and not only_generators and not reevaluate_constraints:
+        if not dont_change_state and not only_generators and not reevaluate_constraints and mutable:
             self._cleanup_entangled_nodes()
             self.frozen_node_list = None
             self._nodes_drawn_qty = {}
@@ -4744,7 +4824,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 self._clear_drawn_node_attrs(n)
                 n.clear_clone_info_since(n)
 
-        if self.exhausted:
+        if self.exhausted_shapes and mutable:
             self.excluded_components = []
 
 
@@ -4765,7 +4845,7 @@ class NodeInternals_NonTerm(NodeInternals):
             self._clear_drawn_node_attrs(n)
             n.clear_clone_info_since(n)
 
-        if self.exhausted:
+        if self.exhausted_shapes:
             self.excluded_components = []
 
 
@@ -4787,9 +4867,9 @@ class NodeInternals_NonTerm(NodeInternals):
         self.frozen_node_list = None
 
         if new_info is None:
-            self.exhausted = False
+            self.exhausted_shapes = False
             self.excluded_components = []
-            self.shape_exhausted = True
+            self.combinatory_complete = True
             self.exhausted_pick_cases = True
             self.component_seed = None
             self.current_pick_section = 0
@@ -4802,9 +4882,9 @@ class NodeInternals_NonTerm(NodeInternals):
                 self.subnodes_attrs[nd].reset()
 
         else:
-            self.exhausted = new_info[0]
+            self.exhausted_shapes = new_info[0]
             self.excluded_components = new_info[1]
-            self.shape_exhausted = new_info[2]
+            self.combinatory_complete = new_info[2]
             self.component_seed = new_info[3]
             self.exhausted_pick_cases = new_info[4]
 
@@ -6376,10 +6456,10 @@ class Node(object):
             self.freeze(conf=conf, recursive=recursive)
 
 
-    def freeze(self, conf=None, recursive=True, return_node_internals=False):
+    def freeze(self, conf=None, recursive=True, return_node_internals=False, enable_color=False):
 
         ret = self._get_value(conf=conf, recursive=recursive,
-                              return_node_internals=return_node_internals)
+                              return_node_internals=return_node_internals, enable_color=enable_color)
 
         if self.env is None:
             print('Warning: freeze() is called on a node that does not have an Env()\n'
@@ -6396,13 +6476,14 @@ class Node(object):
                 self.env.execute_basic_djobs(Node.DJOBS_PRIO_genfunc)
 
             ret = self._get_value(conf=conf, recursive=recursive,
-                                  return_node_internals=return_node_internals)
+                                  return_node_internals=return_node_internals,
+                                  enable_color=enable_color)
 
         return ret
 
     get_value = freeze
 
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False, enable_color=False):
 
         next_conf = conf if recursive else None
         conf2 = conf if self.is_conf_existing(conf) else self.current_conf
@@ -6418,7 +6499,8 @@ class Node(object):
             raise ValueError
 
         ret, was_not_frozen = internal._get_value(conf=next_conf, recursive=recursive,
-                                                  return_node_internals=return_node_internals)
+                                                  return_node_internals=return_node_internals,
+                                                  enable_color=enable_color)
 
         if was_not_frozen:
             self._post_freeze(internal, self)
@@ -6460,16 +6542,17 @@ class Node(object):
                               ignore_entanglement=True)
 
 
-    def to_bytes(self, conf=None, recursive=True):
+    def to_bytes(self, conf=None, recursive=True, enable_color=False):
 
         def tobytes_helper(node_internals):
             if isinstance(node_internals, bytes):
                 return node_internals
             else:
                 return node_internals._get_value(conf=conf, recursive=recursive,
-                                                 return_node_internals=False)[0]
+                                                 return_node_internals=False,
+                                                 enable_color=enable_color)[0]
 
-        node_internals_list = self.freeze(conf=conf, recursive=recursive)
+        node_internals_list = self.freeze(conf=conf, recursive=recursive, enable_color=enable_color)
         if isinstance(node_internals_list, list):
             node_internals_list = list(flatten(node_internals_list))
             if node_internals_list:
@@ -6485,6 +6568,10 @@ class Node(object):
 
     def to_str(self, conf=None, recursive=True):
         val = self.to_bytes(conf=conf, recursive=recursive)
+        return unconvert_from_internal_repr(val)
+
+    def to_formatted_str(self, conf=None, recursive=True):
+        val = self.to_bytes(conf=conf, recursive=recursive, enable_color=True)
         return unconvert_from_internal_repr(val)
 
     def to_ascii(self, conf=None, recursive=True):

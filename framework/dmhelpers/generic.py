@@ -83,6 +83,7 @@ class MH(object):
             CollapsePadding = NonTermCusto.CollapsePadding
             DelayCollapsing = NonTermCusto.DelayCollapsing
             FullCombinatory = NonTermCusto.FullCombinatory
+            StickToDefault = NonTermCusto.StickToDefault
 
         # Generator node (leaf) custo
         class Gen:
@@ -109,6 +110,8 @@ class MH(object):
         Abs_Postpone = NodeInternals.Abs_Postpone
 
         Separator = NodeInternals.Separator
+
+        Highlight = NodeInternals.Highlight
 
         LOCKED = NodeInternals.LOCKED
         DEBUG = NodeInternals.DEBUG
@@ -240,7 +243,7 @@ def TIMESTAMP(time_format="%H%M%S", utc=False,
 
 def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=True,
         set_attrs=None, clear_attrs=None, after_encoding=True, freezable=False,
-        base=16, letter_case='upper', reverse_str=False):
+        base=16, letter_case='upper', min_sz=4, reverse_str=False):
     """
     Return a *generator* that returns the CRC (in the chosen type) of
     all the node parameters. (Default CRC is PKZIP CRC32)
@@ -260,13 +263,14 @@ def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=Tr
       base (int): Relevant when ``vt`` is ``INT_str``. Numerical base to use for string representation
       letter_case (str): Relevant when ``vt`` is ``INT_str``. Letter case for string representation
         ('upper' or 'lower')
+      min_sz (int): Relevant when ``vt`` is ``INT_str``. Minimum size of the resulting string.
       reverse_str (bool): Reverse the order of the string if set to ``True``.
     """
     class Crc(object):
         unfreezable = not freezable
 
         def __init__(self, vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs,
-                     base=16, letter_case='upper', reverse_str=False):
+                     base=16, letter_case='upper', min_sz=4, reverse_str=False):
             self.vt = vt
             self.poly = poly
             self.init_crc = init_crc
@@ -276,6 +280,7 @@ def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=Tr
             self.clear_attrs = clear_attrs
             self.base = base
             self.letter_case = letter_case
+            self.min_sz = min_sz
             self.reverse_str = reverse_str
 
         def __call__(self, nodes):
@@ -298,7 +303,7 @@ def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=Tr
             if issubclass(self.vt, fvt.INT_str):
                 n = Node('cts', value_type=self.vt(values=[result], force_mode=True,
                                                    base=self.base, letter_case=self.letter_case,
-                                                   reverse=self.reverse_str))
+                                                   reverse=self.reverse_str, min_size=self.min_sz))
             else:
                 n = Node('cts', value_type=self.vt(values=[result], force_mode=True))
             n.set_semantics(NodeSemantics(['crc']))
@@ -310,7 +315,7 @@ def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=Tr
 
     vt = MH._validate_int_vt(vt)
     return Crc(vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs,
-               base=base, letter_case=letter_case, reverse_str=reverse_str)
+               base=base, letter_case=letter_case, min_sz=min_sz, reverse_str=reverse_str)
 
 
 

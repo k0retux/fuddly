@@ -246,7 +246,8 @@ class sd_iter_over_data(StatefulDisruptor):
                  'deep': ('When set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes.', True, bool),
                  'full_combinatory': ('When set to True, enable full-combinatory mode for non-terminal nodes. It '
-                                      'means that the non-terminal nodes will be customized in "FullCombinatory" mode',True,bool),
+                                      'means that the non-terminal nodes will be customized in "FullCombinatory" mode',
+                                      False,bool),
                  'ign_sep': ('When set to True, separators will be ignored ' \
                           'if any are defined.', False, bool),
                  'fix_all': ('For each produced data, reevaluate the constraints on the whole graph.',
@@ -255,9 +256,8 @@ class sd_iter_over_data(StatefulDisruptor):
                          " (only implemented for 'sync_size_with' and 'sync_enc_size_with').", True, bool),
                  'fuzz_mag': ('Order of magnitude for maximum size of some fuzzing test cases.',
                               1.0, float),
-                 'fuzz_determinism': ("If set to 'True', the whole model will be fuzzed in "
-                                 "a deterministic way. Otherwise it will be guided by the "
-                                 "data model determinism.", True, bool),
+                 'make_determinist': ("If set to 'True', the whole model will be set in determinist mode."
+                                      "Otherwise it will be guided by the data model determinism.", False, bool),
                  'leaf_fuzz_determinism': ("If set to 'True', each typed node will be fuzzed in "
                                       "a deterministic way. If set to 'False' each typed node "
                                       "will be fuzzed in a random way. Otherwise, if it is set to "
@@ -321,7 +321,7 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
         self.consumer.need_reset_when_structure_change = self.deep
         self.consumer.set_node_interest(path_regexp=self.path)
         self.modelwalker = ModelWalker(prev_content, self.consumer, max_steps=self.max_steps,
-                                       initial_step=self.init, make_determinist=self.fuzz_determinism)
+                                       initial_step=self.init, make_determinist=self.make_determinist)
         self.walker = iter(self.modelwalker)
 
         self.max_runs = None
@@ -583,7 +583,7 @@ class sd_struct_constraints(StatefulDisruptor):
         # self.seed.unfreeze(recursive=True)
         # self.seed.freeze()
 
-        print('\n*** original data:\n',self.seed.to_bytes())
+        # print('\n*** original data:\n',self.seed.to_bytes())
 
         self.idx = 0
 
@@ -731,7 +731,7 @@ class sd_struct_constraints(StatefulDisruptor):
             self.handover()
             return data
 
-        print('\n***disrupt before:\n',self.seed.to_bytes())
+        # print('\n***disrupt before:\n',self.seed.to_bytes())
         corrupted_seed = Node(self.seed.name, base_node=self.seed, ignore_frozen_state=False, new_env=True)
         corrupted_seed = self.seed.get_clone(ignore_frozen_state=False, new_env=True)
         self.seed.env.remove_node_to_corrupt(consumed_node)
@@ -747,7 +747,7 @@ class sd_struct_constraints(StatefulDisruptor):
         corrupted_seed.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
         corrupted_seed.freeze()
 
-        print('\n***disrupt after:\n',corrupted_seed.to_bytes())
+        # print('\n***disrupt after:\n',corrupted_seed.to_bytes())
 
         data.add_info('sample index: {:d}'.format(self.idx))
         data.add_info(' |_ run: {:d} / {:d}'.format(self.idx, self.max_runs))

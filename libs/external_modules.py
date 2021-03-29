@@ -85,6 +85,7 @@ class Color(object):
     ND_SEPARATOR = 0x008000
     ND_ENCODED = 0xFFA500
     ND_CUSTO = 0x800080
+    ND_HLIGHT = 0xEF0000
 
     ANALYSIS_CONFIRM = 0xEF0000
     ANALYSIS_FALSEPOSITIVE = 0x00FF00
@@ -147,3 +148,11 @@ except ImportError:
     serial_module = False
     print('WARNING [FMK]: python(3)-serial module is not installed! '
           'Should be installed for serial-based Target.')
+
+z3_module = True
+try:
+    import z3
+except ImportError:
+    z3_module = False
+    print('WARNING [FMK]: z3 module is not installed! '
+          'Should be installed to support constraint-based nodes.')

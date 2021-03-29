@@ -807,6 +807,8 @@ class TypedNodeDisruption(NodeConsumerStub):
             node.set_attr(dm.NodeInternals.Freezable)
             node.set_attr(dm.NodeInternals.LOCKED)
 
+            node.cc.highlight = True
+
             return True
         else:
             raise ValueError
@@ -839,7 +841,8 @@ class TypedNodeDisruption(NodeConsumerStub):
             except ValueError:
                 print("\n*** WARNING: separator not part of the initial set. (Could happen if "
                       "separators are generated dynamically)")
-            self.current_fuzz_vt_list.insert(0, vtype.String(values=sep_l))
+            if sep_l:
+                self.current_fuzz_vt_list.insert(0, vtype.String(values=sep_l))
         else:
             sz = len(current_val)
             if sz > 1:
