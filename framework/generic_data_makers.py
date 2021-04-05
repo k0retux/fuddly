@@ -322,6 +322,16 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
         self.consumer.set_node_interest(path_regexp=self.path)
         self.modelwalker = ModelWalker(prev_content, self.consumer, max_steps=self.max_steps,
                                        initial_step=self.init, make_determinist=self.make_determinist)
+
+        # After ModelWalker init, 'prev_content' is frozen. We can now check if 'self.path' exists in the
+        # node, because if it does not exist (e.g., user mistype) the ModelWalker will walk until the end of
+        # all the possible paths, and will finally yield nothing. This walk could take a lot of time depending on
+        # the model. Thus, in this situation we inform the user right away.
+        if self.path:
+            d = prev_content.get_nodes_by_paths(path_list=[self.path])
+            if not d[self.path]:
+                raise ValueError(f'The provided path "{self.path}" does not exist.')
+
         self.walker = iter(self.modelwalker)
 
         self.max_runs = None

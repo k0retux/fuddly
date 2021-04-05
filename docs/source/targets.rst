@@ -139,11 +139,11 @@ Description:
   - :meth:`framework.targets.local.LocalTarget.terminate()` for doing
     specific actions at target termination.
 
-
 Feedback:
   This target will automatically provide feedback if the application writes on
   ``stderr`` or returns a negative status or terminates/crashes.
-
+  ``stdout`` can also be parsed looking for user-provided keywords that will trigger
+  some feedback with negative status or even parsed by a user-provided function.
 
 Supported Feedback Mode:
   - :const:`framework.target_helpers.Target.FBK_WAIT_UNTIL_RECV`

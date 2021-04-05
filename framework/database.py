@@ -332,6 +332,9 @@ class Database(object):
     def disable(self):
         self.enabled = False
 
+    def is_enabled(self):
+        return self.enabled
+
     def flush_feedback(self):
         self.last_feedback = {}
         self.feedback_trail = {}

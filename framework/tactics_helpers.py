@@ -583,6 +583,7 @@ class DynGenerator(Generator):
         'min_def': ("Set the default quantity of all the nodes to the defined minimum quantity if "
                     "this parameter is set to 'True', or maximum quantity if set to 'False'. "
                     "Otherwise if set to 'None', nothing is done.", None, bool),
+        'freeze': ("Freeze the generated node.", False, bool)
     }
 
     def setup(self, dm, user_input):
@@ -618,6 +619,9 @@ class DynGenerator(Generator):
                     for snd in subnodes:
                         min, max = node.get_subnode_minmax(snd)
                         node.set_subnode_default_qty(snd, min if self.min_def else max)
+
+        if self.freeze:
+            atom.freeze()
 
         return Data(atom)
 

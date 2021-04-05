@@ -47,7 +47,8 @@ class Project(object):
     wkspace_free_slot_ratio_when_full = None
 
     def __init__(self, enable_fbk_processing=True,
-                 wkspace_enabled=True, wkspace_size=1000, wkspace_free_slot_ratio_when_full=0.5):
+                 wkspace_enabled=True, wkspace_size=1000, wkspace_free_slot_ratio_when_full=0.5,
+                 fmkdb_enabled=True):
         """
 
         Args:
@@ -59,6 +60,8 @@ class Project(object):
             wkspace_free_slot_ratio_when_full: when the workspace is full, provide the ratio
               of the workspace size that will be used as the amount of entries to free in
               the workspace.
+            fmkdb_enabled: If set to `True`, the fmkDB will be used. Otherwise, no DB transactions will
+              occur and thus the fmkDB won't be filled during the session.
         """
 
         self.monitor = Monitor()
@@ -71,6 +74,7 @@ class Project(object):
         self.wkspace_enabled = wkspace_enabled
         self.wkspace_size = wkspace_size
         self.wkspace_free_slot_ratio_when_full = wkspace_free_slot_ratio_when_full
+        self.fmkdb_enabled = fmkdb_enabled
 
         self.scenario_target_mapping = None
         self.reset_target_mappings()

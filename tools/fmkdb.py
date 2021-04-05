@@ -33,6 +33,7 @@ parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
 
 from framework.database import Database
+from framework.global_resources import get_user_input
 from libs.external_modules import *
 
 import argparse
@@ -136,11 +137,13 @@ def handle_confirmation():
                                        rgb=Color.PROMPT))
     except KeyboardInterrupt:
         cont = 'c'
-    except:
+    except Exception as e:
+        print(f'Unexpected exception received: {e}')
         cont = 'c'
     finally:
         if cont.lower() == 'c':
             print(colorize("*** Operation Cancelled ***", rgb=Color.ERROR))
+            fmkdb.stop()
             sys.exit(-1)
 
 def handle_date(date_str):
@@ -154,6 +157,7 @@ def handle_date(date_str):
                 date = datetime.datetime.strptime(date_str, "%Y/%m/%d-%H:%M")
             except ValueError:
                 print(colorize("*** ERROR: Unrecognized Dates ***", rgb=Color.ERROR))
+                fmkdb.stop()
                 sys.exit(-1)
 
     return date

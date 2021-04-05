@@ -312,12 +312,22 @@ class Logger(object):
         hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
         body_color = Color.FEEDBACK_HLIGHT if fbk_cond else None
         # now = timestamp.strftime("%d/%m/%Y - %H:%M:%S.%f")
-        if not processed_feedback:
-            msg_hdr = "### Status from '{!s}': {!s} - received at {!s}".format(
-                source, status_code, timestamp)
+        if isinstance(timestamp, datetime.datetime):
+            ts_msg = f"received at {timestamp}"
+        elif isinstance(timestamp, list):
+            if len(timestamp) == 1:
+                ts_msg = f"received at {timestamp[0]}"
+            else:
+                ts_msg = f"received from {timestamp[0]} to {timestamp[-1]}"
         else:
-            msg_hdr = "### Feedback from '{!s}' (status={!s}) - received at {!s}:".format(
-                source, status_code, timestamp)
+            raise ValueError('Wrong format for timestamp')
+
+        if not processed_feedback:
+            msg_hdr = "### Status from '{!s}': {!s} - {:s}".format(
+                source, status_code, ts_msg)
+        else:
+            msg_hdr = "### Feedback from '{!s}' (status={!s}) - {:s}:".format(
+                source, status_code, ts_msg)
         self.log_fn(msg_hdr, rgb=hdr_color, do_record=record)
         if processed_feedback:
             if isinstance(processed_feedback, list):

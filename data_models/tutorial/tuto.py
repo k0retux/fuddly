@@ -529,12 +529,59 @@ class MyDF_DataModel(DataModel):
              'debug': True
             }
 
+
+        nested_desc = \
+            {'name': 'nested',
+             'custo_clear': MH.Custo.NTerm.MutableClone,
+             'contents': [
+                 {'name' : 'line',
+                  'qty': (0,50), 'default_qty': 2,
+                  'contents': [
+                      {'name': 'sep', 'contents': String(values=['..'])},
+                      {'name': 'wrapper',
+                       'contents': [
+                           {'name': 'point',
+                            'contents': [
+
+                                {'weight':50,
+                                 'contents': [
+                                     {'name': 'lat',
+                                      'contents': [
+                                          {'name': 'lat_dir',
+                                           'contents': String(values=['N', 'S'])},
+                                          {'name': 'lat_deg',
+                                           'contents': INT_str(min=0, max=90, min_size=2)},
+                                          {'name': 'lat_min',
+                                           'qty': (0,1),
+                                           'contents': INT_str(min=0, max=59, min_size=2)},
+                                      ]},
+                                 ]},
+
+                                {'weight':40,
+                                 'contents': [
+                                     {'name': 'lon',
+                                      'contents': [
+                                          {'name': 'lon_dir',
+                                           'contents': String(values=['E', 'W'])},
+                                          {'name': 'lon_deg',
+                                           'contents': INT_str(min=0, max=180, min_size=3)},
+                                          {'name': 'lon_min',
+                                           'qty': (0,1),
+                                           'contents': INT_str(min=0, max=59, min_size=2)},
+                                      ]},
+                                 ]}
+
+                            ]}
+                       ]}
+                  ]}
+             ]}
+
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
                       shape_desc, for_network_tg1, for_network_tg2, for_net_default_tg, basic_intg,
                       enc_desc, example_desc,
                       regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc, xml5_desc,
-                      json1_desc, json2_desc, file_desc)
+                      json1_desc, json2_desc, file_desc, nested_desc)
 
 
 data_model = MyDF_DataModel()

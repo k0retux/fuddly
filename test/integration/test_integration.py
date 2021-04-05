@@ -2966,8 +2966,8 @@ class TestNode_NonTerm(unittest.TestCase):
             b'-xc',
         ]
 
-        mimick_twalk = True
-        full_comb_mode = True
+        # mimick_twalk = True
+        # full_comb_mode = True
 
         nd.make_finite()
         nd.custo.full_combinatory_mode = full_comb_mode

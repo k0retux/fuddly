@@ -1135,6 +1135,12 @@ class FmkPlumbing(object):
 
                 self.mon.wait_for_probe_initialization()
                 self.prj.start()
+                if self.prj.fmkdb_enabled and not self.fmkDB.is_enabled():
+                    self.enable_fmkdb()
+                elif not self.prj.fmkdb_enabled and self.fmkDB.is_enabled():
+                    self.disable_fmkdb()
+                else:
+                    pass
 
                 if self.prj.project_scenarios:
                     self._generic_tactics.register_scenarios(*self.prj.project_scenarios)

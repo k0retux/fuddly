@@ -128,10 +128,7 @@ def is_string_compatible(val):
         return False
 
 def get_user_input(msg):
-    if sys.version_info[0] == 2:
-        return raw_input(msg)
-    else:
-        return input(msg)
+    return input(msg)
 
 # Generic container for user inputs
 

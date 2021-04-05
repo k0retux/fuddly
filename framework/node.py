@@ -36,6 +36,8 @@ import traceback
 import uuid
 import struct
 import math
+import time
+
 from pprint import pprint as pp
 
 from enum import Enum
@@ -854,6 +856,13 @@ class NodeInternals(object):
     @property
     def highlight(self):
         return self.is_attr_set(NodeInternals.Highlight)
+
+    @highlight.setter
+    def highlight(self, val):
+        if val:
+            self.set_attr(NodeInternals.Highlight)
+        else:
+            self.clear_attr(NodeInternals.Highlight)
 
     @property
     def debug(self):
@@ -6181,10 +6190,6 @@ class Node(object):
                     cond2 = node.semantics.match(semantics_criteria)
             else:
                 cond2 = True
-
-            if not resolve_generator and side_effect_risk:
-                # assert path_regexp is None
-                return cond1 and cond2
 
             if path_regexp is not None:
                 paths = node.get_all_paths_from(top_node, flush_cache=False,
