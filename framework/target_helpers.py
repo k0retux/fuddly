@@ -57,6 +57,8 @@ class Target(object):
     STATUS_THRESHOLD_FOR_RECOVERY = 0  # When a feedback status gathered by FmkPlumbing is
                                        # strictly lesser than this value, .recover_target() will be called
 
+    _started = None
+
     _logger = None
     _extensions = None
     _send_data_lock = threading.Lock()
@@ -69,6 +71,7 @@ class Target(object):
 
     def __init__(self, name=None):
         self.name = name
+        self._started = False
 
     @staticmethod
     def get_fbk_mode_desc(fbk_mode, short=False):
@@ -90,13 +93,16 @@ class Target(object):
         self._logger.print_console('*** Target initialization: ({:d}) {!s} ***\n'.format(tg_id, target_desc),
                                    nl_before=False, rgb=Color.COMPONENT_START)
         self._pending_data = []
-        return self.start()
+        self._started = self.start()
+        return self._started
 
     def _stop(self, target_desc, tg_id):
         self._logger.print_console('*** Target cleanup procedure for ({:d}) {!s} ***\n'.format(tg_id, target_desc),
                                    nl_before=False, rgb=Color.COMPONENT_STOP)
         self._pending_data = None
-        return self.stop()
+        ret = self.stop()
+        self._started = not ret
+        return ret
 
     def start(self):
         '''
@@ -109,6 +115,9 @@ class Target(object):
         To be overloaded if needed
         '''
         return True
+
+    def is_started(self):
+        return self._started
 
     def record_info(self, info):
         """

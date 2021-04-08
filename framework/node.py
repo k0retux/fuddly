@@ -5173,6 +5173,9 @@ class NodeSemantics(object):
         '''
         self.__attrs = copy.copy(self.__attrs)
 
+    def __str__(self):
+        return ' '.join(self.__attrs)
+
 
 class NodeSemanticsCriteria(object):
 
@@ -6136,7 +6139,7 @@ class Node(object):
         if isinstance(sem, NodeSemantics):
             self.semantics = sem
         else:
-            assert(isinstance(sem, list))
+            assert isinstance(sem, (list, str))
             self.semantics = NodeSemantics(sem)
 
     def get_semantics(self):

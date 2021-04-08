@@ -427,16 +427,21 @@ class Logger(object):
 
     def _process_target_feedback(self, feedback):
         if feedback is None:
-            return feedback
+            return None
 
         if isinstance(feedback, list):
             new_fbk = []
             for f in feedback:
+                if f is None:
+                    continue
                 new_f = f.strip()
                 if isinstance(new_f, bytes):
                     new_f = self._handle_binary_content(new_f, raw=self.export_raw_data)
                 new_fbk.append(new_f)
-            if not list(filter(lambda x: x != b'', new_fbk)):
+
+            if not new_fbk:
+                new_fbk = None
+            elif not list(filter(lambda x: x != b'', new_fbk)):
                 new_fbk = None
         else:
             new_fbk = feedback.strip()
