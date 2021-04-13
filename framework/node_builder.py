@@ -25,14 +25,16 @@ import inspect
 import string
 import sys
 import math
-import six
 from pprint import pprint as pp
+import copy
 
 from framework.dmhelpers.generic import MH
 from framework.error_handling import DataModelDefinitionError, CharsetError, \
     InitialStateNotFoundError, QuantificationError, StructureError, InconvertibilityError, \
     EscapeError, InvalidRangeError, EmptyAlphabetError
-from framework.node import Node, NodeInternals_Empty, GenFuncCusto, NonTermCusto, FuncCusto, \
+from framework.node import Node,\
+    NodeInternals_Empty, NodeInternals_NonTerm, NodeInternals_GenFunc, NodeInternals_Func, \
+    GenFuncCusto, NonTermCusto, FuncCusto, \
     NodeSemantics, SyncScope, SyncQtyFromObj, SyncSizeObj, NodeCondition, SyncExistenceObj, Env, \
     NodeInternalsCriteria, NodeInternals
 
@@ -76,7 +78,8 @@ class NodeBuilder(object):
         'debug'
     ]
 
-    def __init__(self, dm=None, delayed_jobs=True, add_env=True):
+    def __init__(self, dm=None, delayed_jobs=True, add_env=True,
+                 default_gen_custo=None, default_nonterm_custo=None):
         """
         Help the process of data description. This class is able to construct a
         :class:`framework.data_model.Node` object from a JSON-like description.
@@ -95,7 +98,14 @@ class NodeBuilder(object):
               SHALL have only one ``Env()`` shared between all the nodes and an Env() shall not be
               shared between independent graph (otherwise it could lead to
               unexpected results).
+            default_gen_custo: override default Generator node customization
+            default_nonterm_custo: override default NonTerminal node customization
         """
+        self.default_gen_custo = default_gen_custo
+        self.default_nonterm_custo = default_nonterm_custo
+        self.default_gen_custo_orig = NodeInternals_GenFunc.default_custo
+        self.default_nonterm_custo_orig = NodeInternals_NonTerm.default_custo
+
         self.dm = dm
         self.delayed_jobs = delayed_jobs
         self._add_env_to_the_node = add_env
@@ -110,6 +120,11 @@ class NodeBuilder(object):
         self.sorted_todo = {}
         self.node_dico = {}
         # self.empty_node = Node('EMPTY')
+
+        if self.default_gen_custo:
+            NodeInternals_GenFunc.default_custo = self.default_gen_custo
+        if self.default_nonterm_custo:
+            NodeInternals_NonTerm.default_custo = self.default_nonterm_custo
 
         n = self._create_graph_from_desc(desc, None)
 
@@ -131,6 +146,11 @@ class NodeBuilder(object):
             # func could register new tasks to do
             todo = self._create_todo_list()
             loop += 1
+
+        if self.default_gen_custo:
+            NodeInternals_GenFunc.default_custo = self.default_gen_custo_orig
+        if self.default_nonterm_custo:
+            NodeInternals_NonTerm.default_custo = self.default_nonterm_custo_orig
 
         return n
 
@@ -160,7 +180,7 @@ class NodeBuilder(object):
                 ntype = MH.RawNode
             elif hasattr(contents, '__call__') and pre_ntype in [None, MH.Generator]:
                 ntype = MH.Generator
-            elif isinstance(contents, six.string_types) and pre_ntype in [None, MH.Regex]:
+            elif isinstance(contents, str) and pre_ntype in [None, MH.Regex]:
                 ntype = MH.Regex
             else:
                 ntype = MH.Leaf
@@ -513,8 +533,9 @@ class NodeBuilder(object):
         custo_clear = desc.get('custo_clear', None)
         transform_func = desc.get('evolution_func', None)
 
+        custo = None
+
         if node.is_genfunc(conf=conf):
-            Custo = GenFuncCusto
             trig_last = desc.get('trigger_last', None)
             if trig_last is not None:
                 if trig_last:
@@ -530,22 +551,32 @@ class NodeBuilder(object):
                         custo_clear = [custo_clear]
                     custo_clear.append(MH.Custo.Gen.TriggerLast)
 
+            if custo_set or custo_clear or transform_func:
+                custo = GenFuncCusto() if self.default_gen_custo is None else self.default_gen_custo
+
         elif node.is_nonterm(conf=conf):
-            Custo = NonTermCusto
+            if custo_set or custo_clear or transform_func:
+                custo = NonTermCusto() if self.default_nonterm_custo is None else self.default_nonterm_custo
 
         elif node.is_func(conf=conf):
-            Custo = FuncCusto
+            if custo_set or custo_clear or transform_func:
+                custo = FuncCusto()
 
         else:
-            if custo_set or custo_clear:
+            if custo_set or custo_clear or transform_func:
                 raise DataModelDefinitionError('Customization is not compatible with this '
                                                'node kind! [Guilty Node: {:s}]'.format(node.name))
             else:
                 return
 
         if custo_set or custo_clear or transform_func:
-            custo = Custo(items_to_set=custo_set, items_to_clear=custo_clear,
-                          transform_func=transform_func)
+            if custo_set:
+                custo.set_items(custo_set)
+            if custo_clear:
+                custo.clear_items(custo_clear)
+            if transform_func:
+                custo.transform_func = transform_func
+
             internals = node.conf(conf)
             internals.customize(custo)
 
@@ -1467,7 +1498,7 @@ class RegexParser(StateMachine):
     def parse(self, inputs, name, charset=MH.Charset.ASCII_EXT):
         self._name = name
         self.charset = charset
-        self.int_to_string = chr if sys.version_info[0] == 2 and self.charset != MH.Charset.UNICODE else six.unichr
+        self.int_to_string = chr
 
         if self.charset == MH.Charset.ASCII:
             max = 0x7F

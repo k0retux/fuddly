@@ -447,23 +447,22 @@ def _restore_dmaker_internals(dmaker):
 ################################
 
 GENERIC_ARGS = {
-    'init': ('make the model walker ignore all the steps until the provided one', 1, int),
-    'max_steps': ('maximum number of steps (-1 means until the end)', -1, int),
-    'runs_per_node': ('maximum number of test cases for a single node (-1 means until the end)', -1, int),
-    'clone_node': ('if True the dmaker will always return a copy ' \
+    'init': ('Make the model walker ignore all the steps until the provided one', 1, int),
+    'max_steps': ('Maximum number of steps (-1 means until the end)', -1, int),
+    'min_node_tc': ('Minimum number of test cases per node (-1 means until the end)', -1, int),
+    'max_node_tc': ('Maximum number of test cases per node (-1 means until the end). This value is '
+                    'used for nodes with a fuzz weight strictly greater than 1.', -1, int),
+    'clone_node': ('If True the dmaker will always return a copy ' \
                    'of the node. (for stateless diruptors dealing with ' \
                    'big data it can be usefull to set it to False)', True, bool)
 }
 
 def modelwalker_inputs_handling_helper(dmaker):
-    assert(dmaker.runs_per_node > 0 or dmaker.runs_per_node == -1)
+    assert dmaker.max_node_tc > 0 or dmaker.max_node_tc == -1
+    assert dmaker.min_node_tc > 0 or dmaker.min_node_tc == -1
 
-    if dmaker.runs_per_node == -1:
-        dmaker.max_runs_per_node = -1
-        dmaker.min_runs_per_node = -1
-    else:
-        dmaker.max_runs_per_node = dmaker.runs_per_node + 3
-        dmaker.min_runs_per_node = max(dmaker.runs_per_node - 2, 1)
+    dmaker.max_runs_per_node = dmaker.max_node_tc
+    dmaker.min_runs_per_node = dmaker.min_node_tc
 
 ### Generator & Disruptor
 

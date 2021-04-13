@@ -475,21 +475,9 @@ class NodeCustomization(object):
         self._transform_func = transform_func
         self._custo_items = copy.copy(self._custo_items)
         if items_to_set is not None:
-            if isinstance(items_to_set, int):
-                assert(items_to_set in self._custo_items)
-                self._custo_items[items_to_set] = True
-            elif isinstance(items_to_set, list):
-                for item in items_to_set:
-                    assert(item in self._custo_items)
-                    self._custo_items[item] = True
+            self.set_items(items_to_set)
         if items_to_clear is not None:
-            if isinstance(items_to_clear, int):
-                assert(items_to_clear in self._custo_items)
-                self._custo_items[items_to_clear] = False
-            elif isinstance(items_to_clear, list):
-                for item in items_to_clear:
-                    assert(item in self._custo_items)
-                    self._custo_items[item] = False
+            self.clear_items(items_to_clear)
 
     def __getitem__(self, key):
         if key in self._custo_items:
@@ -497,9 +485,39 @@ class NodeCustomization(object):
         else:
             return None
 
+    def set_items(self, items_to_set):
+        if isinstance(items_to_set, int):
+            assert(items_to_set in self._custo_items)
+            self._custo_items[items_to_set] = True
+        elif isinstance(items_to_set, list):
+            for item in items_to_set:
+                assert(item in self._custo_items)
+                self._custo_items[item] = True
+        else:
+            raise ValueError
+
+    def clear_items(self, items_to_clear):
+        if isinstance(items_to_clear, int):
+            assert(items_to_clear in self._custo_items)
+            self._custo_items[items_to_clear] = False
+        elif isinstance(items_to_clear, list):
+            for item in items_to_clear:
+                assert(item in self._custo_items)
+                self._custo_items[item] = False
+        else:
+            raise ValueError
+
+    def copy_from(self, node_custo):
+        self._custo_items = copy.copy(node_custo._custo_items)
+
     @property
     def transform_func(self):
         return self._transform_func
+
+    @transform_func.setter
+    def transform_func(self, func):
+        self._transform_func = func
+
 
     def __copy__(self):
         new_custo = type(self)()
@@ -5082,7 +5100,7 @@ class NodeSemantics(object):
         self.__attrs = attrs if isinstance(attrs, (list, tuple)) else [attrs]
 
     def __str__(self):
-        return str(self.__attrs)
+        return ' '.join(self.__attrs)
 
     def add_attributes(self, attrs):
         self.__attrs += attrs
@@ -5172,9 +5190,6 @@ class NodeSemantics(object):
         all your metadata private (if needed).
         '''
         self.__attrs = copy.copy(self.__attrs)
-
-    def __str__(self):
-        return ' '.join(self.__attrs)
 
 
 class NodeSemanticsCriteria(object):

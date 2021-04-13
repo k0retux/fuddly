@@ -314,6 +314,7 @@ class ModelWalker(object):
         # We enter this loop only if the consumer is interested by the
         # node.
         while again:
+            consume_called_again = False
             reset = self._consumer.need_reset(node)
 
             if reset and not node.is_exhausted():
@@ -328,7 +329,6 @@ class ModelWalker(object):
             elif node.is_exhausted(): # --> (reset and node.is_exhausted()) or (not reset and node.is_exhausted())
 
                 # DEBUG_PRINT('*** node_consumer_helper(): exhausted')
-
                 yield node, orig_node_val, False, False
 
                 if self._consumer.interested_by(node):
@@ -355,42 +355,21 @@ class ModelWalker(object):
             else:
                 yield node, orig_node_val, False, False
 
-            # if max_steps != 0 and not consume_called_again:
-            #     max_steps -= 1
-            #     # In this case we iterate only on the current node
-            #     node.unfreeze(recursive=False, ignore_entanglement=True)
-            #     node.freeze()
-            #     if self._consumer.fix_constraints:
-            #         node.fix_synchronized_nodes()
-            # elif not consume_called_again:
-            #     if not_recovered and (self._consumer.interested_by(node) or node in consumed_nodes):
-            #         self._consumer.recover_node(node)
-            #         if self._consumer.fix_constraints:
-            #             node.fix_synchronized_nodes()
-            #         if not node.is_exhausted() and self._consumer.need_reset(node):
-            #             yield None, None, True, True
-            #     again = False
-            #
-            # else:
-            #     consume_called_again = False
-            #     node.freeze()
 
             if max_steps != 0:
                 max_steps -= 1
                 if consume_called_again:
                     node.freeze()
-                    consume_called_again = False
+                    # consume_called_again = False
                 else:
                     # In this case we iterate only on the current node
                     node.unfreeze(recursive=False, ignore_entanglement=True)
                     node.freeze()
                     if self._consumer.fix_constraints:
                         node.fix_synchronized_nodes()
-
-            elif consume_called_again:
+            elif consume_called_again and max_steps != 0:
                 node.freeze()
-                consume_called_again = False
-
+                # consume_called_again = False
             else:
                 if not_recovered and (self._consumer.interested_by(node) or node in consumed_nodes):
                     self._consumer.recover_node(node)

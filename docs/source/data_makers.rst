@@ -86,12 +86,16 @@ Parameters:
         |      | desc: make the model walker ignore all the steps until the provided
         |      |       one
         |      | default: 1 [type: int]
-        |_ runs_per_node
-        |      | desc: maximum number of test cases for a single node (-1 means until
-        |      |       the end)
-        |      | default: -1 [type: int]
         |_ max_steps
         |      | desc: maximum number of steps (-1 means until the end)
+        |      | default: -1 [type: int]
+        |_ min_node_tc
+        |      | desc: Minimum number of test cases per node (-1 means until the end)
+        |      | default: -1 [type: int]
+        |_ max_node_tc
+        |      | desc: Maximum number of test cases per node (-1 means until the end).
+        |      |       This value is used for nodes with a fuzz weight strictly greater
+        |      |       than 1.
         |      | default: -1 [type: int]
         |_ clone_node
         |      | desc: if True the dmaker will always return a copy of the node. (for
@@ -227,9 +231,13 @@ Parameters:
          |_ max_steps
          |      | desc: maximum number of steps (-1 means until the end)
          |      | default: -1 [type: int]
-         |_ runs_per_node
-         |      | desc: maximum number of test cases for a single node (-1 means until
-         |      |       the end)
+         |_ min_node_tc
+         |      | desc: Minimum number of test cases per node (-1 means until the end)
+         |      | default: -1 [type: int]
+         |_ max_node_tc
+         |      | desc: Maximum number of test cases per node (-1 means until the end).
+         |      |       This value is used for nodes with a fuzz weight strictly greater
+         |      |       than 1.
          |      | default: -1 [type: int]
          |_ conf
          |      | desc: Change the configuration, with the one provided (by name), of
@@ -265,9 +273,13 @@ Parameters:
          |_ max_steps
          |      | desc: maximum number of steps (-1 means until the end)
          |      | default: -1 [type: int]
-         |_ runs_per_node
-         |      | desc: maximum number of test cases for a single node (-1 means until
-         |      |       the end)
+         |_ min_node_tc
+         |      | desc: Minimum number of test cases per node (-1 means until the end)
+         |      | default: -1 [type: int]
+         |_ max_node_tc
+         |      | desc: Maximum number of test cases per node (-1 means until the end).
+         |      |       This value is used for nodes with a fuzz weight strictly greater
+         |      |       than 1.
          |      | default: -1 [type: int]
          |_ path
          |      | desc: graph path regexp to select nodes on which the disruptor should
@@ -311,9 +323,13 @@ Parameters:
         |_ max_steps
         |      | desc: maximum number of steps (-1 means until the end)
         |      | default: -1 [type: int]
-        |_ runs_per_node
-        |      | desc: maximum number of test cases for a single node (-1 means until
-        |      |       the end)
+        |_ min_node_tc
+        |      | desc: Minimum number of test cases per node (-1 means until the end)
+        |      | default: -1 [type: int]
+        |_ max_node_tc
+        |      | desc: Maximum number of test cases per node (-1 means until the end).
+        |      |       This value is used for nodes with a fuzz weight strictly greater
+        |      |       than 1.
         |      | default: -1 [type: int]
         |_ path
         |      | desc: graph path regexp to select nodes on which the disruptor should

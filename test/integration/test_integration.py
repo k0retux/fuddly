@@ -4312,7 +4312,7 @@ class TestFMK(unittest.TestCase):
         expected_outcomes = []
         outcomes = []
 
-        act = ['OFF_GEN', ('tTYPE', UI(runs_per_node=1))]
+        act = ['OFF_GEN', ('tTYPE', UI(min_node_tc=1, max_node_tc=4))]
         for j in range(100):
             d = fmk.process_data(act)
             if d is None:

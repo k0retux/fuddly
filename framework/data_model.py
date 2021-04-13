@@ -287,6 +287,10 @@ class DataModel(object):
     def included_models(self):
         return self._included_data_models
 
+    def customize_node_backend(self, default_gen_custo=None, default_nonterm_custo=None):
+        self.node_backend.default_gen_custo = default_gen_custo
+        self.node_backend.default_nonterm_custo = default_nonterm_custo
+
     def register(self, *atom_list):
         for a in atom_list:
             if a is None: continue
@@ -409,6 +413,9 @@ class DataModel(object):
 
 class NodeBackend(object):
 
+    default_gen_custo = None
+    default_nonterm_custo = None
+
     def __init__(self, data_model):
         self._dm = data_model
         self._confs = set()
@@ -425,7 +432,8 @@ class NodeBackend(object):
             raise UserWarning(msg)
 
         if isinstance(atom, dict):
-            mb = NodeBuilder(dm=self._dm)
+            mb = NodeBuilder(dm=self._dm, default_gen_custo=self.default_gen_custo,
+                             default_nonterm_custo=self.default_nonterm_custo)
             desc_name = 'Unreadable Name'
             try:
                 desc_name = atom['name']
