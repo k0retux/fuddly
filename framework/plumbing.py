@@ -1963,22 +1963,16 @@ class FmkPlumbing(object):
                     data = self.process_data(data_desc.process, seed=seed,
                                              save_gen_seed=save_generator_seed,
                                              reset_dmakers=reset_dmakers)
-                    if data is None and data_desc.auto_regen:
-                        data_desc.auto_regen_cpt += 1
                     if data is None:
-                        other_process = data_desc.next_process()
-                        if other_process or data_desc.auto_regen:
+                        if data_desc.auto_regen:
+                            data_desc.auto_regen_cpt += 1
+
+                        while data_desc.next_process() or data_desc.auto_regen:
                             data = self.process_data(data_desc.process, seed=seed,
                                                      save_gen_seed=save_generator_seed,
                                                      reset_dmakers=reset_dmakers)
-                            if data is None and data_desc.process_qty > 1:
-                                for i in range(data_desc.process_qty-1):
-                                    data_desc.next_process()
-                                    data = self.process_data(data_desc.process, seed=seed,
-                                                             save_gen_seed=save_generator_seed,
-                                                             reset_dmakers=reset_dmakers)
-                                    if data is not None:
-                                        break
+                            if data is not None:
+                                break
 
                 data_desc.outcomes = data
                 if data is not None:
