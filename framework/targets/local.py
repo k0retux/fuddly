@@ -38,7 +38,7 @@ class LocalTarget(Target):
     _feedback_mode = Target.FBK_WAIT_UNTIL_RECV
     supported_feedback_mode = [Target.FBK_WAIT_UNTIL_RECV]
 
-    def __init__(self, target_path=None, pre_args='', post_args='',
+    def __init__(self, target_path=None, pre_args=None, post_args=None,
                  tmpfile_ext='.bin', send_via_stdin=False, send_via_cmdline=False,
                  error_samples=None, error_parsing_func=lambda x: (False, '')):
         Target.__init__(self)
@@ -59,7 +59,10 @@ class LocalTarget(Target):
     def get_description(self):
         pre_args = self._pre_args
         post_args = self._post_args
-        args = ', Args: ' + pre_args + post_args if pre_args or post_args else ''
+        if pre_args or post_args:
+            args = ', Args: ' + ('' if pre_args is None else pre_args) + ('' if post_args is None else post_args)
+        else:
+            args = ''
         return 'Program: ' + self._target_path + args
 
     def set_tmp_file_extension(self, tmpfile_ext):
@@ -124,13 +127,19 @@ class LocalTarget(Target):
                  f.write(data)
 
         if self._pre_args is not None and self._post_args is not None:
-            cmd = [self._target_path] + self._pre_args.split() + [name] + self._post_args.split()
+            if self._send_via_stdin:
+                cmd = [self._target_path] + self._pre_args.split() + self._post_args.split()
+            else:
+                cmd = [self._target_path] + self._pre_args.split() + [name] + self._post_args.split()
         elif self._pre_args is not None:
-            cmd = [self._target_path] + self._pre_args.split() + [name]
+            cmd = [self._target_path] + self._pre_args.split()
+            if not self._send_via_stdin:
+                cmd += [name]
         elif self._post_args is not None:
-            cmd = [self._target_path, name] + self._post_args.split()
+            cmd = [self._target_path] if self._send_via_stdin else [self._target_path, name]
+            cmd += self._post_args.split()
         else:
-            cmd = [self._target_path, name]
+            cmd = [self._target_path] if self._send_via_stdin else [self._target_path, name]
 
         stdin_arg = subprocess.PIPE if self._send_via_stdin else None
         self._app = subprocess.Popen(args=cmd, stdin=stdin_arg, stdout=subprocess.PIPE,

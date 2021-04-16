@@ -575,7 +575,7 @@ class FmkPlumbing(object):
             self._add_project(prj_params['project'], prj_params['target'], prj_params['logger'],
                               prj_params['prj_rld_args'], reload_prj=True)
 
-            self.prj.share_knowlegde_source()
+            prj_params['project'].share_knowlegde_source()
 
             if dm_prefix is None:
                 # it is ok to call reload_dm() here because it is a

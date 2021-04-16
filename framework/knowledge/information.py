@@ -101,6 +101,10 @@ class InputHandling(Info):
     Ctrl_Char_Set = auto()
     Unknown = auto()
 
+class Test(Info):
+    Cursory = auto()
+    Medium = auto()
+    Deep = auto()
 
 class InformationCollector(object):
 

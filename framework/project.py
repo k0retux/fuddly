@@ -211,7 +211,6 @@ class Project(object):
         ScenarioEnv.knowledge_source = self.knowledge_source
 
     def start(self):
-
         for fh in self._fbk_handlers:
             fh.fmkops = self._fmkops
             fh._start(self.dm)
@@ -225,12 +224,6 @@ class Project(object):
 
 
     def stop(self):
-        VT.knowledge_source = None
-        Env.knowledge_source = None
-        DataModel.knowledge_source = None
-        DataMaker.knowledge_source = None
-        ScenarioEnv.knowledge_source = None
-
         if self._fbk_processing_enabled:
             self._run_fbk_handling_thread = False
             if self._feedback_processing_thread:
@@ -239,6 +232,13 @@ class Project(object):
 
         for fh in self._fbk_handlers:
             fh._stop()
+
+        VT.knowledge_source = None
+        Env.knowledge_source = None
+        DataModel.knowledge_source = None
+        DataMaker.knowledge_source = None
+        ScenarioEnv.knowledge_source = None
+        self.reset_knowledge()
 
     def get_operator(self, name):
         try:
