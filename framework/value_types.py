@@ -1058,8 +1058,11 @@ class String(VT_Alt):
                 fuzzy_values.append(b'%n')
                 fuzzy_values.append(b'%s')
 
-            fuzzy_values.append(orig_val + b'%n' * int(400*fuzz_magnitude))
-            fuzzy_values.append(orig_val + b'%s' * int(400*fuzz_magnitude))
+            if knowledge is None \
+                    or not knowledge.is_info_class_represented(Test) \
+                    or not knowledge.is_assumption_valid(Test.Cursory):
+                fuzzy_values.append(orig_val + b'%n' * int(400*fuzz_magnitude))
+                fuzzy_values.append(orig_val + b'%s' * int(400*fuzz_magnitude))
 
             return fuzzy_values
 

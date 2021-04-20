@@ -94,11 +94,13 @@ class Hardware(Info):
 
 class Language(Info):
     C = auto()
+    Ada = auto()
     Pascal = auto()
     Unknown = auto()
 
 class InputHandling(Info):
     Ctrl_Char_Set = auto()
+    Printable_Char_Set = auto()
     Unknown = auto()
 
 class Test(Info):
