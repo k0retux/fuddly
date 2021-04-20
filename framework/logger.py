@@ -47,7 +47,7 @@ class Logger(object):
 
     def __init__(self, name=None, prefix='', record_data=False, explicit_data_recording=False,
                  export_raw_data=True, term_display_limit=800, enable_term_display=True,
-                 enable_file_logging=False, highlight_marked_nodes=True):
+                 enable_file_logging=False, highlight_marked_nodes=False):
         """
         Args:
           name (str): Name to be used in the log filenames. If not specified, the name of the project
@@ -66,7 +66,9 @@ class Logger(object):
           enable_term_display (bool): If True, information will be displayed on the terminal
           prefix (str): prefix to use for printing on the console.
           enable_file_logging (bool): If True, file logging will be enabled.
-          highlight_marked_nodes (bool): If True, alteration performed by compatible disruptors will be highlighted
+          highlight_marked_nodes (bool): If True, alteration performed by compatible disruptors
+            will be highlighted. Only possible if `export_raw_data` is False, as this option forces
+            data interpretation.
         """
 
         self.name = name
@@ -83,6 +85,8 @@ class Logger(object):
         self._enable_file_logging = enable_file_logging
         self._fd = None
 
+        if export_raw_data and highlight_marked_nodes:
+            raise ValueError('When @highlight_marked_nodes is True, @export_raw_data should be False')
         self._hl_marked_nodes = highlight_marked_nodes
 
         self._tg_fbk = []
@@ -259,20 +263,24 @@ class Logger(object):
 
 
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO,
-                     data_id=None, do_record=True, delay_recording=False):
+                     data_id=None, do_show=True, do_record=True, delay_recording=False):
         now = datetime.datetime.now()
 
         p = '\n' if nl_before else ''
         s = '\n' if nl_after else ''
 
         msg = "{prefix:s}*** [ {message:s} ] ***{suffix:s}".format(prefix=p, suffix=s, message=info)
-        self.log_fn(msg, rgb=rgb)
+        if do_show:
+            self.log_fn(msg, rgb=rgb)
 
         if do_record:
             if not delay_recording:
                 if data_id is None:
-                    for d_id in self._last_data_IDs.values():
-                        self.fmkDB.insert_fmk_info(d_id, info, now)
+                    if self._last_data_IDs:
+                        for d_id in self._last_data_IDs.values():
+                            self.fmkDB.insert_fmk_info(d_id, info, now)
+                    else:
+                        self.fmkDB.insert_fmk_info(None, info, now)
                 else:
                     self.fmkDB.insert_fmk_info(data_id, info, now)
             else:

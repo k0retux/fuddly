@@ -510,7 +510,7 @@ class Database(object):
             '''
             SELECT DATA.ID, DATA.CONTENT, DATA.TYPE, DMAKERS.NAME, DATA.DM_NAME
             FROM DATA INNER JOIN DMAKERS
-              ON DATA.TYPE = DMAKERS.TYPE AND DMAKERS.CLONE_TYPE IS NULL
+              ON DATA.TYPE = DMAKERS.TYPE AND DATA.DM_NAME = DMAKERS.DM_NAME AND DMAKERS.CLONE_TYPE IS NULL
             WHERE DATA.ID >= {sid:d} {ign_eid:s} AND DATA.ID <= {eid:d}
             UNION ALL
             SELECT DATA.ID, DATA.CONTENT, DMAKERS.CLONE_TYPE AS TYPE, DMAKERS.CLONE_NAME AS NAME,
@@ -1062,22 +1062,24 @@ class Database(object):
 
         return prj_records
 
-    def get_data_with_impact(self, prj_name=None, fbk_src=None, display=True, verbose=False,
+    def get_data_with_impact(self, prj_name=None, fbk_src=None, fbk_status_formula='? < 0',
+                             display=True, verbose=False,
                              raw_analysis=False,
                              colorized=True):
 
+        fbk_status_formula =  fbk_status_formula.replace('?', 'STATUS')
         colorize = self._get_color_function(colorized)
 
         if fbk_src:
             fbk_records = self.execute_sql_statement(
-                "SELECT DATA_ID, STATUS, SOURCE FROM FEEDBACK "
-                "WHERE STATUS < 0 and SOURCE REGEXP ?;",
+                f"SELECT DATA_ID, STATUS, SOURCE FROM FEEDBACK "
+                f"WHERE {fbk_status_formula} and SOURCE REGEXP ?;",
                 params=(fbk_src,)
             )
         else:
             fbk_records = self.execute_sql_statement(
-                "SELECT DATA_ID, STATUS, SOURCE FROM FEEDBACK "
-                "WHERE STATUS < 0;"
+                f"SELECT DATA_ID, STATUS, SOURCE FROM FEEDBACK "
+                f"WHERE {fbk_status_formula};"
             )
 
 

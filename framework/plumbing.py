@@ -576,6 +576,8 @@ class FmkPlumbing(object):
                               prj_params['prj_rld_args'], reload_prj=True)
 
             prj_params['project'].share_knowlegde_source()
+            self._show_knowledge(knowledge_src=prj_params['project'].knowledge_source,
+                                 do_record=True)
 
             if dm_prefix is None:
                 # it is ok to call reload_dm() here because it is a
@@ -1291,12 +1293,18 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=['S2'])
     def show_knowledge(self):
-        k = self.prj.knowledge_source
+        self._show_knowledge(do_record=False)
+
+    def _show_knowledge(self, knowledge_src=None, do_record=False):
+        k = self.prj.knowledge_source if knowledge_src is None else knowledge_src
         print(colorize(FontStyle.BOLD + '\n-=[ Status of Knowledge ]=-\n', rgb=Color.INFO))
         if k:
             print(colorize(str(k), rgb=Color.SUBINFO))
         else:
             print(colorize('No knowledge', rgb=Color.SUBINFO))
+        if do_record:
+            msg = ('Status of Knowledge:\n' + str(k)) if k else 'No knowledge'
+            self.lg.log_fmk_info(msg, do_record=True, do_show=False)
 
     @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
     def projects(self):
@@ -1605,6 +1613,8 @@ class FmkPlumbing(object):
             self._stop_fmk_plumbing()
             return False
 
+        self._show_knowledge(do_record=True)
+
         self._init_fmk_internals_step2(self.prj, self.dm)
         return True
 
@@ -1628,7 +1638,7 @@ class FmkPlumbing(object):
         self.prj.wkspace_enabled = False
 
     @EnforceOrder(accepted_states=['S1','S2'])
-    def set_sending_delay(self, delay, do_record=False):
+    def set_sending_delay(self, delay, do_record=True):
         if delay >= 0 or delay == -1:
             self._delay = delay
             self.lg.log_fmk_info('Sending delay = {:.2f}s'.format(self._delay), do_record=do_record)
@@ -1650,7 +1660,7 @@ class FmkPlumbing(object):
             return False
 
     @EnforceOrder(accepted_states=['S1','S2'])
-    def set_health_check_timeout(self, timeout, target=None, do_record=False, do_show=True):
+    def set_health_check_timeout(self, timeout, target=None, do_record=True, do_show=True):
         if timeout >= 0:
             if target is None:
                 self._hc_timeout = {}
@@ -1674,7 +1684,7 @@ class FmkPlumbing(object):
             return False
 
     @EnforceOrder(accepted_states=['S1','S2'])
-    def set_feedback_timeout(self, timeout, tg_id=None, do_record=False, do_show=True):
+    def set_feedback_timeout(self, timeout, tg_id=None, do_record=True, do_show=True):
         self._fbk_timeout_max = 0
 
         if tg_id is None:

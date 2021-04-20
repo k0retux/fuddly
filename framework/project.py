@@ -233,12 +233,6 @@ class Project(object):
         for fh in self._fbk_handlers:
             fh._stop()
 
-        VT.knowledge_source = None
-        Env.knowledge_source = None
-        DataModel.knowledge_source = None
-        DataMaker.knowledge_source = None
-        ScenarioEnv.knowledge_source = None
-        self.reset_knowledge()
 
     def get_operator(self, name):
         try:

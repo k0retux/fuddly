@@ -56,6 +56,11 @@ group.add_argument('--project', metavar='PROJECT_NAME',
                    help='Restrict the data to be displayed to a specific project. '
                         'Supported by: --info-by-date, --info-by-ids, '
                         '--data-with-impact, --data-without-fbk, --data-with-specific-fbk')
+group.add_argument('--fbk-status-formula', metavar='STATUS_REF', default='? < 0',
+                   help='Restrict the data to be displayed to specific feedback status. '
+                        'This option provides the formula to be used for feedback status '
+                        'filtering (the character "?" should be used in place of the status value that will be checked). '
+                        'Supported by: --data-with-impact')
 
 group = parser.add_argument_group('Fuddly Database Visualization')
 group.add_argument('-s', '--all-stats', action='store_true', help='Show all statistics')
@@ -208,6 +213,7 @@ if __name__ == "__main__":
     raw_impact_analysis = args.data_with_impact_raw
     data_without_fbk = args.data_without_fbk
     fbk_src = args.fbk_src
+    fbk_status_formula = args.fbk_status_formula
     data_with_specific_fbk = args.data_with_specific_fbk
     add_analysis = args.add_analysis
     disprove_impact = args.disprove_impact
@@ -314,7 +320,8 @@ if __name__ == "__main__":
             fmkdb.remove_data(remove_one_data, colorized=colorized)
 
     elif impact_analysis or raw_impact_analysis:
-        fmkdb.get_data_with_impact(prj_name=prj_name, fbk_src=fbk_src, verbose=verbose,
+        fmkdb.get_data_with_impact(prj_name=prj_name, fbk_src=fbk_src, fbk_status_formula=fbk_status_formula,
+                                   verbose=verbose,
                                    raw_analysis=raw_impact_analysis,
                                    colorized=colorized)
 
