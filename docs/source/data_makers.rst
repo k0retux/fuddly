@@ -103,11 +103,14 @@ Parameters:
         |      |       to it to False)
         |      | default: True [type: bool]
         |_ path
-        |      | desc: graph path regexp to select nodes on which the disruptor should
+        |      | desc: Graph path regexp to select nodes on which the disruptor should
         |      |       apply
         |      | default: None [type: str]
+        |_ sem
+        |      | desc: Semantics to select nodes on which the disruptor should apply.
+        |      | default: None [type: str, list]
         |_ deep
-        |      | desc: when set to True, if a node structure has changed, the modelwalker
+        |      | desc: When set to True, if a node structure has changed, the modelwalker
         |      |       will reset its walk through the children nodes
         |      | default: True [type: bool]
         |_ full_combinatory

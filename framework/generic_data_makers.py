@@ -35,6 +35,7 @@ from framework.basic_primitives import *
 from framework.value_types import *
 from framework.data_model import DataModel
 from framework.dmhelpers.generic import MH
+from framework.node import NodeSemanticsCriteria as NSC
 
 # from framework.plumbing import *
 from framework.evolutionary_helpers import Population
@@ -240,6 +241,8 @@ class sd_iter_over_data(StatefulDisruptor):
 @disruptor(tactics, dtype="tTYPE", weight=1, modelwalker_user=True,
            args={'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
+                 'sem': ('Semantics to select nodes on which' \
+                         ' the disruptor should apply.', None, (str, list)),
                  'order': ('When set to True, the fuzzing order is strictly guided ' \
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
                            'in the data model) is used for ordering.', True, bool),
@@ -319,7 +322,8 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
                                             ignore_separator=self.ign_sep,
                                             determinist=self.leaf_fuzz_determinism)
         self.consumer.need_reset_when_structure_change = self.deep
-        self.consumer.set_node_interest(path_regexp=self.path)
+        sem_crit = NSC(optionalbut1_criteria=self.sem)
+        self.consumer.set_node_interest(path_regexp=self.path, semantics_criteria=sem_crit)
         self.modelwalker = ModelWalker(prev_content, self.consumer, max_steps=self.max_steps,
                                        initial_step=self.init, make_determinist=self.make_determinist)
 

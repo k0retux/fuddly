@@ -5201,6 +5201,10 @@ class NodeSemanticsCriteria(object):
         self.set_exclusive_criteria(exclusive_criteria)
         self.set_negative_criteria(negative_criteria)
 
+    def __bool__(self):
+        return bool(self.__optionalbut1) or bool(self.__mandatory) \
+               or bool(self.__exclusive) or bool(self.__negative)
+
     def extend(self, sc):
         crit = sc.get_exclusive_criteria()
         if crit:

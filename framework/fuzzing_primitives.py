@@ -412,6 +412,7 @@ class NodeConsumerStub(object):
 
     def init_specific(self, **kwargs):
         self._internals_criteria = dm.NodeInternalsCriteria(negative_node_kinds=[dm.NodeInternals_NonTerm])
+        self._semantics_criteria = dm.NodeSemanticsCriteria()
 
     def preload(self, root_node):
         """
@@ -520,7 +521,7 @@ class NodeConsumerStub(object):
         else:
             cond1 = True
 
-        if self._semantics_criteria is not None:
+        if self._semantics_criteria is not None and self._semantics_criteria:
             if node.semantics is None:
                 cond2 = False
             else:
@@ -588,6 +589,7 @@ class NonTermVisitor(BasicVisitor):
     def init_specific(self, reset_when_change=True):
         self._internals_criteria = dm.NodeInternalsCriteria(node_kinds=[dm.NodeInternals_NonTerm],
                                                             mandatory_attrs=[dm.NodeInternals.Mutable])
+        self._semantics_criteria = dm.NodeSemanticsCriteria()
         self.need_reset_when_structure_change = reset_when_change
         self.last_node = None
         self.current_node = None
@@ -734,6 +736,8 @@ class TypedNodeDisruption(NodeConsumerStub):
                                                                 node_kinds=[dm.NodeInternals_TypedValue,
                                                                             dm.NodeInternals_GenFunc])
 
+        self._semantics_criteria = dm.NodeSemanticsCriteria()
+
         # self.orig_value = None
         self.current_fuzz_vt_list = None
         self.current_node = None
@@ -857,6 +861,8 @@ class SeparatorDisruption(NodeConsumerStub):
         self._internals_criteria = \
             dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable, dm.NodeInternals.Separator],
                                      node_kinds=[dm.NodeInternals_Term])
+
+        self._semantics_criteria = dm.NodeSemanticsCriteria()
 
         self.values = [b'']
         if separators is not None:
