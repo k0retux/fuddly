@@ -548,6 +548,7 @@ class BasicVisitor(NodeConsumerStub):
 
     def init_specific(self, reset_when_change=True):
         self._internals_criteria = dm.NodeInternalsCriteria(negative_node_kinds=[dm.NodeInternals_NonTerm])
+        self._semantics_criteria = dm.NodeSemanticsCriteria()
         self.need_reset_when_structure_change = reset_when_change
         self.firstcall = True
 
@@ -638,6 +639,7 @@ class AltConfConsumer(NodeConsumerStub):
         self.need_reset_when_structure_change = True
 
         self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable])
+        self._semantics_criteria = dm.NodeSemanticsCriteria()
         self._owned_confs = ['MAIN']
         self.current_consumed_node = None
         self.orig_conf = None

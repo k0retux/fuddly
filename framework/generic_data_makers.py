@@ -35,7 +35,7 @@ from framework.basic_primitives import *
 from framework.value_types import *
 from framework.data_model import DataModel
 from framework.dmhelpers.generic import MH
-from framework.node import NodeSemanticsCriteria as NSC
+from framework.node import NodeSemanticsCriteria as NSC, NodeInternalsCriteria as NIC
 
 # from framework.plumbing import *
 from framework.evolutionary_helpers import Population
@@ -153,6 +153,8 @@ def truncate_info(info, max_size=60):
 @disruptor(tactics, dtype="tWALK", weight=1, modelwalker_user=True,
            args={'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
+                 'sem': ('Semantics to select nodes on which' \
+                         ' the disruptor should apply.', None, (str, list)),
                  'full_combinatory': ('When set to True, enable full-combinatory mode for '
                                       'non-terminal nodes. It means that the non-terminal nodes '
                                       'will be customized in "FullCombinatory" mode', False, bool),
@@ -206,7 +208,8 @@ class sd_iter_over_data(StatefulDisruptor):
             consumer = NonTermVisitor(respect_order=self.order, reset_when_change=self.deep)
         else:
             consumer = BasicVisitor(respect_order=self.order, reset_when_change=self.deep)
-        consumer.set_node_interest(path_regexp=self.path)
+        sem_crit = NSC(optionalbut1_criteria=self.sem)
+        consumer.set_node_interest(path_regexp=self.path, semantics_criteria=sem_crit)
         self.modelwalker = ModelWalker(prev_content, consumer, max_steps=self.max_steps, initial_step=self.init)
         self.walker = iter(self.modelwalker)
 
@@ -482,6 +485,8 @@ class sd_switch_to_alternate_conf(StatefulDisruptor):
 @disruptor(tactics, dtype="tSEP", weight=1, modelwalker_user=True,
            args={'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
+                 'sem': ('Semantics to select nodes on which' \
+                         ' the disruptor should apply.', None, (str, list)),
                  'order': ('When set to True, the fuzzing order is strictly guided ' \
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
                            'in the data model) is used for ordering.', True, bool),
@@ -517,7 +522,8 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
                                             respect_order=self.order,
                                             separators=sep_list)
         self.consumer.need_reset_when_structure_change = self.deep
-        self.consumer.set_node_interest(path_regexp=self.path)
+        sem_crit = NSC(optionalbut1_criteria=self.sem)
+        self.consumer.set_node_interest(path_regexp=self.path, semantics_criteria=sem_crit)
         self.modelwalker = ModelWalker(prev_content, self.consumer, max_steps=self.max_steps, initial_step=self.init)
         self.walker = iter(self.modelwalker)
 
@@ -568,6 +574,8 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
                  'max_steps': ('Maximum number of steps (-1 means until the end).', -1, int),
                  'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
+                 'sem': ('Semantics to select nodes on which' \
+                         ' the disruptor should apply.', None, (str, list)),
                  'deep': ('If True, enable corruption of non-terminal node internals',
                           False, bool) })
 class sd_struct_constraints(StatefulDisruptor):
@@ -606,7 +614,10 @@ class sd_struct_constraints(StatefulDisruptor):
         ic_size_cst = NodeInternalsCriteria(required_csts=[SyncScope.Size])
         ic_minmax_cst = NodeInternalsCriteria(node_kinds=[NodeInternals_NonTerm])
 
+        sem_crit = None if self.sem is None else NSC(optionalbut1_criteria=self.sem)
+
         self.exist_cst_nodelist = self.seed.get_reachable_nodes(internals_criteria=ic_exist_cst, path_regexp=self.path,
+                                                                semantics_criteria=sem_crit,
                                                                 ignore_fstate=True)
         # print('\n*** NOT FILTERED nodes')
         # for n in self.exist_cst_nodelist:
@@ -629,6 +640,7 @@ class sd_struct_constraints(StatefulDisruptor):
         #     print(' |_ ' + n.name)
 
         self.qty_cst_nodelist_1 = self.seed.get_reachable_nodes(internals_criteria=ic_qty_cst, path_regexp=self.path,
+                                                                semantics_criteria=sem_crit,
                                                                 ignore_fstate=True)
         # self.qty_cst_nodelist_1 = self.seed.filter_out_entangled_nodes(self.qty_cst_nodelist_1)
         nodelist = copy.copy(self.qty_cst_nodelist_1)
@@ -639,7 +651,8 @@ class sd_struct_constraints(StatefulDisruptor):
         self.qty_cst_nodelist_2 = copy.copy(self.qty_cst_nodelist_1)
 
         self.size_cst_nodelist_1 = self.seed.get_reachable_nodes(internals_criteria=ic_size_cst, path_regexp=self.path,
-                                                               ignore_fstate=True)
+                                                                 semantics_criteria=sem_crit,
+                                                                 ignore_fstate=True)
         nodelist = copy.copy(self.size_cst_nodelist_1)
         for n in nodelist:
             if n.get_path_from(self.seed) is None:
@@ -648,6 +661,7 @@ class sd_struct_constraints(StatefulDisruptor):
 
         if self.deep:
             minmax_cst_nodelist = self.seed.get_reachable_nodes(internals_criteria=ic_minmax_cst, path_regexp=self.path,
+                                                                semantics_criteria=sem_crit,
                                                                 ignore_fstate=True)
             self.minmax_cst_nodelist_1 = set()
 
@@ -1284,12 +1298,16 @@ class d_operate_on_nodes(Disruptor):
 @disruptor(tactics, dtype="MOD", weight=4,
            args={'path': ('Graph path regexp to select nodes on which ' \
                           'the disruptor should apply.', None, str),
+                 'sem': ('Semantics to select nodes on which' \
+                         ' the disruptor should apply.', None, (str, list)),
                  'value': ('The new value to inject within the data.', b'', bytes),
                  'constraints': ('Constraints for the absorption of the new value.', AbsNoCsts(), AbsCsts),
-                 'multi_mod': ('Dictionary of <path>:<item> pairs to change multiple nodes with '
-                             'diferent values. <item> can be either only the new <value> or a '
-                             'tuple (<value>,<abscsts>) if new constraint for absorption is '
-                             'needed', None, dict),
+                 'multi_mod': ('Dictionary of <path>:<item> pairs or '
+                               '<NodeSemanticsCriteria>:<item> pairs or '
+                               '<NodeInternalsCriteria>:<item> pairs to change multiple nodes with '
+                               'different values. <item> can be either only the new <value> or a '
+                               'tuple (<value>,<abscsts>) if new constraint for absorption is '
+                               'needed', None, dict),
                  'clone_node': ('If True the dmaker will always return a copy ' \
                                 'of the node. (For stateless disruptors dealing with ' \
                                 'big data it can be useful to set it to False.)', False, bool)})
@@ -1316,9 +1334,10 @@ class d_modify_nodes(Disruptor):
         if self.multi_mod:
             change_dict = self.multi_mod
         else:
-            change_dict = {self.path: (self.value, self.constraints)}
+            sem = None if self.sem is None else NSC(optionalbut1_criteria=self.sem)
+            change_dict = {self.path if sem is None else sem: (self.value, self.constraints)}
 
-        for path, item in change_dict.items():
+        for selector, item in change_dict.items():
             if isinstance(item, (tuple, list)):
                 assert len(item) == 2
                 new_value, new_csts = item
@@ -1326,8 +1345,16 @@ class d_modify_nodes(Disruptor):
                 new_value = item
                 new_csts = AbsNoCsts()
 
-            if path:
-                l = prev_content.get_reachable_nodes(path_regexp=path)
+            if selector:
+                if isinstance(selector, str):
+                    l = prev_content.get_reachable_nodes(path_regexp=selector)
+                elif isinstance(selector, NSC):
+                    l = prev_content.get_reachable_nodes(semantics_criteria=selector)
+                elif isinstance(selector, NIC):
+                    l = prev_content.get_reachable_nodes(internals_criteria=selector)
+                else:
+                    raise ValueError('Unsupported selector')
+
                 if not l:
                     prev_data.add_info('INVALID INPUT')
                     return prev_data

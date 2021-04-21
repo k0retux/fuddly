@@ -189,6 +189,9 @@ Parameters:
          |      | desc: graph path regexp to select nodes on which the disruptor should
          |      |       apply
          |      | default: None [type: str]
+         |_ sem
+         |      | desc: Semantics to select nodes on which the disruptor should apply.
+         |      | default: None [type: str, list]
          |_ deep
          |      | desc: if True, enable corruption of non-terminal node internals
          |      | default: False [type: bool]
@@ -288,6 +291,9 @@ Parameters:
          |      | desc: graph path regexp to select nodes on which the disruptor should
          |      |       apply
          |      | default: None [type: str]
+         |_ sem
+         |      | desc: Semantics to select nodes on which the disruptor should apply.
+         |      | default: None [type: str, list]
          |_ order
          |      | desc: when set to True, the fuzzing order is strictly guided by the
          |      |       data structure. Otherwise, fuzz weight (if specified in the
@@ -338,6 +344,9 @@ Parameters:
         |      | desc: graph path regexp to select nodes on which the disruptor should
         |      |       apply
         |      | default: None [type: str]
+        |_ sem
+        |      | desc: Semantics to select nodes on which the disruptor should apply.
+        |      | default: None [type: str, list]
         |_ full_combinatory
         |      | desc: When set to True, enable full-combinatory mode for non-terminal
         |      |       nodes. It means that the non-terminal nodes will be customized
