@@ -465,18 +465,26 @@ Parameters:
         |      | desc: Graph path regexp to select nodes on which the disruptor should
         |      |       apply.
         |      | default: None [type: str]
+        |_ sem
+        |      | desc: Semantics to select nodes on which the disruptor should apply.
+        |      | default: None [type: str, list]
         |_ value
         |      | desc: The new value to inject within the data.
-        |      | default: '' [type: str]
+        |      | default: b'' [type: bytes]
         |_ constraints
         |      | desc: Constraints for the absorption of the new value.
         |      | default: AbsNoCsts() [type: AbsCsts]
         |_ multi_mod
-        |      | desc: Dictionary of <path>:<item> pairs to change multiple nodes with
-        |      |       diferent values. <item> can be either only the new <value> or
-        |      |       a tuple (<value>,<abscsts>) if new constraint for absorption
-        |      |       is needed
+        |      | desc: Dictionary of <path>:<item> pairs or <NodeSemanticsCriteria>:<item>
+        |      |       pairs or <NodeInternalsCriteria>:<item> pairs to change multiple
+        |      |       nodes with different values. <item> can be either only the new
+        |      |       <value> or a tuple (<value>,<abscsts>) if new constraint for
+        |      |       absorption is needed
         |      | default: None [type: dict]
+        |_ unfold
+        |      | desc: Resolve all the generator nodes within the input before performing
+        |      |       the @path/@sem research
+        |      | default: False [type: bool]
         |_ clone_node
         |      | desc: If True the dmaker will always return a copy of the node. (For
         |      |       stateless disruptors dealing with big data it can be useful

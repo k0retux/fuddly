@@ -1098,7 +1098,7 @@ class d_corrupt_node_bits(Disruptor):
 
 @disruptor(tactics, dtype="Cp", weight=4,
            args={'idx': ('Byte index to be corrupted (from 1 to data length).', 1, int),
-                 'new_val': ('If provided change the selected byte with the new one.', None, str),
+                 'new_val': ('If provided change the selected byte with the new one.', None, bytes),
                  'ascii': ('Enforce all outputs to be ascii 7bits.', False, bool)})
 class d_corrupt_bits_by_position(Disruptor):
     '''
@@ -1308,6 +1308,8 @@ class d_operate_on_nodes(Disruptor):
                                'different values. <item> can be either only the new <value> or a '
                                'tuple (<value>,<abscsts>) if new constraint for absorption is '
                                'needed', None, dict),
+                 'unfold': ('Resolve all the generator nodes within the input before performing '
+                            'the @path/@sem research', False, bool),
                  'clone_node': ('If True the dmaker will always return a copy ' \
                                 'of the node. (For stateless disruptors dealing with ' \
                                 'big data it can be useful to set it to False.)', False, bool)})
@@ -1328,7 +1330,7 @@ class d_modify_nodes(Disruptor):
     def disrupt_data(self, dm, target, prev_data):
         prev_content = prev_data.content
         if not isinstance(prev_content, Node):
-            prev_data.add_info('INVALID INPUT')
+            prev_data.add_info('UNSUPPORTED INPUT')
             return prev_data
 
         if self.multi_mod:
@@ -1347,16 +1349,19 @@ class d_modify_nodes(Disruptor):
 
             if selector:
                 if isinstance(selector, str):
-                    l = prev_content.get_reachable_nodes(path_regexp=selector)
+                    l = prev_content.get_reachable_nodes(path_regexp=selector,
+                                                         resolve_generator=self.unfold)
                 elif isinstance(selector, NSC):
-                    l = prev_content.get_reachable_nodes(semantics_criteria=selector)
+                    l = prev_content.get_reachable_nodes(semantics_criteria=selector,
+                                                         resolve_generator=self.unfold)
                 elif isinstance(selector, NIC):
-                    l = prev_content.get_reachable_nodes(internals_criteria=selector)
+                    l = prev_content.get_reachable_nodes(internals_criteria=selector,
+                                                         resolve_generator=self.unfold)
                 else:
                     raise ValueError('Unsupported selector')
 
                 if not l:
-                    prev_data.add_info('INVALID INPUT')
+                    prev_data.add_info('No node found with current criteria')
                     return prev_data
 
                 for n in l:

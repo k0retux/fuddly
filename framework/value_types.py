@@ -1684,7 +1684,9 @@ class INT(VT):
     def update_raw_value(self, val):
         ok = True
         if isinstance(val, int):
-            if val > self.__class__.maxi:
+            if self.__class__.maxi is not None and val > self.__class__.maxi:
+                # self.__class__.maxi is None for INT_str which don't have any limit for maximum value
+                # thus this check has to be ignored with INT_str
                 val = self.__class__.maxi
                 ok = False
             if self.values is not None:

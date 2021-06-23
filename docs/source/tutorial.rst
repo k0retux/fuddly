@@ -862,6 +862,16 @@ Finally, if you want to resend data from previous sessions, you can do it by loo
 That command will store these data to the `Data Bank`. From then on, you could use ``show_db`` and ``replay_db``
 as previously explained.
 
+.. note::
+   You can use disruptors with a ``replay_*`` command. However if these disruptors are stateful,
+   you should issue the command only once. Then, if you want to walk through the stateful disruptor,
+   you only have to switch to a ``send``-like command, and use as generator name the string ``NOGEN``
+
+   For instance::
+
+     >> replay_last tTYPE
+     >> send_loop -1 NOGEN tTYPE
+
 
 .. _fuddly-advanced:
 

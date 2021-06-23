@@ -148,7 +148,7 @@ class EnforceOrder(object):
 
     current_state = None
 
-    def __init__(self, accepted_states=None, final_state=None,
+    def __init__(self, accepted_states=None, final_state=None, reset_sm=False,
                  initial_func=False, always_callable=False, transition=None):
         accepted_states = [] if accepted_states is None else accepted_states
         if initial_func:
@@ -158,6 +158,7 @@ class EnforceOrder(object):
         self.final_state = final_state
         self.always_callable = always_callable
         self.transition = transition
+        self.reset_sm = reset_sm
 
     def __call__(self, func):
         @wraps(func)
@@ -168,6 +169,8 @@ class EnforceOrder(object):
                                rgb=Color.ERROR))
                 return False
             ok = func(*args, **kargs)
+            if (ok or ok is None) and self.reset_sm:
+                EnforceOrder.current_state = None
             if (ok or ok is None) and self.final_state is not None:
                 EnforceOrder.current_state = self.final_state
 
@@ -229,15 +232,21 @@ class FmkTask(threading.Thread):
 
 class FmkPlumbing(object):
 
-    ''' 
+    """
     Defines the methods to operate every sub-systems of fuddly
-    '''
+    """
 
     def __init__(self, exit_on_error=False, debug_mode=False, quiet=False):
         self._debug_mode = debug_mode
         self._exit_on_error = exit_on_error
         self._quiet = quiet
 
+        self._reset_main_objects()
+
+    def __str__(self):
+        return 'Fuddly FmK'
+
+    def _reset_main_objects(self):
         self.prj_list = []
         self.dm_list = []
 
@@ -299,8 +308,6 @@ class FmkPlumbing(object):
 
         self._tactics = None
 
-    def __str__(self):
-        return 'Fuddly FmK'
 
     @EnforceOrder(initial_func=True)
     def start(self):
@@ -359,10 +366,11 @@ class FmkPlumbing(object):
                            '               - user projects and user data models',
                            rgb=Color.FMKSUBINFO))
 
-    @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'])
+    @EnforceOrder(accepted_states=['20_load_prj','25_load_dm','S1','S2'], reset_sm=True)
     def stop(self):
         self._stop_fmk_plumbing()
         self.fmkDB.stop()
+        self._reset_main_objects()
 
     @property
     def prj(self):
