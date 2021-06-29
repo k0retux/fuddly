@@ -157,6 +157,10 @@ Parameters:
         |      |       they will be set to random mode. Otherwise, if set to 'None',
         |      |       nothing will be done.
         |      | default: None [type: bool]
+        |_ ign_mutable_attr
+        |      | desc: Walk through all the nodes even if their Mutable attribute is
+        |      |       cleared.
+        |      | default: False [type: bool]
 
 
 tSTRUCT - Alter Data Structure
@@ -374,6 +378,11 @@ Parameters:
         |      | desc: for each produced data, reevaluate the constraints on the whole
         |      |       graph
         |      | default: True [type: bool]
+        |_ ign_mutable_attr
+        |      | desc: Walk through all the nodes even if their Mutable attribute is
+        |      |       cleared.
+        |      | default: True [type: bool]
+
 
 Stateless Disruptors
 --------------------

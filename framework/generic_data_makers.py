@@ -168,6 +168,8 @@ def truncate_info(info, max_size=60):
                  'nt_only': ('Walk through non-terminal nodes only.', False, bool),
                  'deep': ('When set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes.', True, bool),
+                 'ign_mutable_attr': ('Walk through all the nodes even if their Mutable attribute '
+                                      'is cleared.', True, bool),
                  'fix_all': ('For each produced data, reevaluate the constraints on the whole graph.',
                              True, bool)})
 class sd_iter_over_data(StatefulDisruptor):
@@ -205,9 +207,11 @@ class sd_iter_over_data(StatefulDisruptor):
                     n.make_random()
 
         if self.nt_only:
-            consumer = NonTermVisitor(respect_order=self.order, reset_when_change=self.deep)
+            consumer = NonTermVisitor(respect_order=self.order, ignore_mutable_attr=self.ign_mutable_attr,
+                                      reset_when_change=self.deep)
         else:
-            consumer = BasicVisitor(respect_order=self.order, reset_when_change=self.deep)
+            consumer = BasicVisitor(respect_order=self.order, ignore_mutable_attr=self.ign_mutable_attr,
+                                    reset_when_change=self.deep)
         sem_crit = NSC(optionalbut1_criteria=self.sem)
         consumer.set_node_interest(path_regexp=self.path, semantics_criteria=sem_crit)
         self.modelwalker = ModelWalker(prev_content, consumer, max_steps=self.max_steps, initial_step=self.init)
@@ -275,6 +279,8 @@ class sd_iter_over_data(StatefulDisruptor):
                                        "set to determinist mode prior to any fuzzing. If set "
                                        "to 'False', they will be set to random mode. "
                                        "Otherwise, if set to 'None', nothing will be done.", None, bool),
+                 'ign_mutable_attr': ('Walk through all the nodes even if their Mutable attribute '
+                                      'is cleared.', False, bool),
                  })
 class sd_fuzz_typed_nodes(StatefulDisruptor):
     """
@@ -322,6 +328,7 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
                                             fuzz_magnitude=self.fuzz_mag,
                                             fix_constraints=self.fix,
                                             respect_order=self.order,
+                                            ignore_mutable_attr=self.ign_mutable_attr,
                                             ignore_separator=self.ign_sep,
                                             determinist=self.leaf_fuzz_determinism)
         self.consumer.need_reset_when_structure_change = self.deep

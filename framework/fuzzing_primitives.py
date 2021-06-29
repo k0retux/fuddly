@@ -74,7 +74,12 @@ class ModelWalker(object):
         
         assert(self._max_steps > 0 or self._max_steps == -1)
 
-        self.ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable, dm.NodeInternals.Finite])
+        if node_consumer.ignore_mutable_attr:
+            mattr = [dm.NodeInternals.Finite]
+        else:
+            mattr = [dm.NodeInternals.Mutable, dm.NodeInternals.Finite]
+
+        self.ic = dm.NodeInternalsCriteria(mandatory_attrs=mattr)
         self.triglast_ic = dm.NodeInternalsCriteria(mandatory_custo=[dm.GenFuncCusto.TriggerLast])
 
         self.consumed_node_path = None
@@ -386,10 +391,12 @@ class ModelWalker(object):
 
 class NodeConsumerStub(object):
     def __init__(self, max_runs_per_node=-1, min_runs_per_node=-1, respect_order=True,
-                 fuzz_magnitude=1.0, fix_constraints=False, **kwargs):
+                 fuzz_magnitude=1.0, fix_constraints=False, ignore_mutable_attr=False,
+                 **kwargs):
         self.need_reset_when_structure_change = False
         self.fuzz_magnitude = fuzz_magnitude
         self.fix_constraints = fix_constraints
+        self.ignore_mutable_attr = ignore_mutable_attr
 
         self._internals_criteria = None
         self._semantics_criteria = None
@@ -728,13 +735,14 @@ class AltConfConsumer(NodeConsumerStub):
 class TypedNodeDisruption(NodeConsumerStub):
 
     def init_specific(self, ignore_separator=False, determinist=True):
+        mattr = None if self.ignore_mutable_attr else [dm.NodeInternals.Mutable]
         if ignore_separator:
-            self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable],
+            self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=mattr,
                                                                 negative_attrs=[dm.NodeInternals.Separator],
                                                                 node_kinds=[dm.NodeInternals_TypedValue,
                                                                             dm.NodeInternals_GenFunc])
         else:
-            self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable],
+            self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=mattr,
                                                                 node_kinds=[dm.NodeInternals_TypedValue,
                                                                             dm.NodeInternals_GenFunc])
 
