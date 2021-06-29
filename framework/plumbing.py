@@ -1993,7 +1993,7 @@ class FmkPlumbing(object):
                                 break
 
                 data_desc.outcomes = data
-                if data is not None:
+                if data is not None and data.tg_ids is None:
                     data.tg_ids = data_desc.tg_ids
 
             else:
