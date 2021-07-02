@@ -441,10 +441,14 @@ Parameters:
         |_ op
         |      | desc: The operation to perform on the selected nodes.
         |      | default: <function Node.clear_attr> [type: method, function]
+        |_ op_ref
+        |      | desc: Predefined operation that can be referenced by name. The current
+        |      |       predefined function are: 'unfreeze', 'freeze', 'walk'. Take
+        |      |       precedence over @op if not None.
+        |      | default: None [type: str]
         |_ params
         |      | desc: Tuple of parameters that will be provided to the operation.
-        |      |       (default: MH.Attr.Mutable)
-        |      | default: (2,) [type: tuple]
+        |      | default: () [type: tuple]
         |_ clone_node
         |      | desc: If True the dmaker will always return a copy of the node. (For
         |      |       stateless disruptors dealing with big data it can be useful

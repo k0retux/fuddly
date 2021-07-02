@@ -1153,7 +1153,7 @@ class d_fix_constraints(Disruptor):
     def disrupt_data(self, dm, target, prev_data):
         prev_content = prev_data.content
         if not isinstance(prev_content, Node):
-            prev_data.add_info('INVALID INPUT')
+            prev_data.add_info('UNSUPPORTED INPUT')
             return prev_data
 
         if self.path:
@@ -1203,7 +1203,7 @@ class d_next_node_content(Disruptor):
 
         prev_content = prev_data.content
         if not isinstance(prev_content, Node):
-            prev_data.add_info('INVALID INPUT')
+            prev_data.add_info('UNSUPPORTED INPUT')
             return prev_data
 
         prev_content.freeze()
@@ -1235,11 +1235,15 @@ class d_next_node_content(Disruptor):
 @disruptor(tactics, dtype="OP", weight=4,
            args={'path': ('Graph path regexp to select nodes on which ' \
                           'the disruptor should apply.', None, str),
+                 'sem': ('Semantics to select nodes on which' \
+                         ' the disruptor should apply.', None, (str, list)),
                  'op': ('The operation to perform on the selected nodes.', Node.clear_attr,
                         (types.MethodType, types.FunctionType)), # python3, python2
-                 'params': ('Tuple of parameters that will be provided to the operation. ('
-                            'default: MH.Attr.Mutable)',
-                            (MH.Attr.Mutable,),
+                 'op_ref': ("Predefined operation that can be referenced by name. The current "
+                            "predefined function are: 'unfreeze', 'freeze', 'walk'. Take "
+                            "precedence over @op if not None." , None, str),
+                 'params': ('Tuple of parameters that will be provided to the operation.',
+                            (),
                             tuple),
                  'clone_node': ('If True the dmaker will always return a copy ' \
                                 'of the node. (For stateless disruptors dealing with ' \
@@ -1257,11 +1261,23 @@ class d_operate_on_nodes(Disruptor):
         ok = False
         prev_content = prev_data.content
         if not isinstance(prev_content, Node):
-            prev_data.add_info('INVALID INPUT')
+            prev_data.add_info('UNSUPPORTED INPUT')
             return prev_data
 
-        if self.path:
-            l = prev_content.get_reachable_nodes(path_regexp=self.path)
+        if self.op_ref is not None:
+            if self.op_ref is 'unfreeze':
+                self.op = Node.unfreeze
+            elif self.op_ref is 'freeze':
+                self.op = Node.freeze
+            elif self.op_ref is 'walk':
+                self.op = Node.walk
+            else:
+                prev_data.add_info('Unsupported operation')
+                return prev_data
+
+        sem_crit = None if self.sem is None else NSC(optionalbut1_criteria=self.sem)
+        if self.path or sem_crit:
+            l = prev_content.get_reachable_nodes(path_regexp=self.path, semantics_criteria=sem_crit)
             if not l:
                 prev_data.add_info('INVALID INPUT')
                 return prev_data
@@ -1453,7 +1469,7 @@ class d_shallow_copy(Disruptor):
     def disrupt_data(self, dm, target, prev_data):
         prev_content = prev_data.content
         if not isinstance(prev_content, Node):
-            prev_data.add_info('INVALID INPUT')
+            prev_data.add_info('UNSUPPORTED INPUT')
             return prev_data
 
         prev_data.add_info('shallow copy of input data has been done')
