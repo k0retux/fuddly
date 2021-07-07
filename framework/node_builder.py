@@ -791,9 +791,14 @@ class NodeBuilder(object):
                 else:  # in this case this is a node reference in the form ('node name', ID)
                     param = None
                     sync_with = self.__get_node_from_db(comp, namespace=from_ns)
-            else:
+            elif isinstance(comp, str):
+                # comp is a ref of a node
                 param = None
                 sync_with = self.__get_node_from_db(comp, namespace=from_ns)
+            else:
+                # comp is considered to be a boolean condition
+                param = comp
+                sync_with = None
 
         if sync_obj is not None:
             node.make_synchronized_with(scope=scope, sync_obj=sync_obj, conf=conf)

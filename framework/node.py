@@ -753,7 +753,7 @@ class NodeInternals(object):
             assert node is None and param is None
             self._sync_with[scope] = sync_obj
         else:
-            assert node is not None
+            # assert node is not None
             self._sync_with[scope] = (node, param)
 
     def get_node_sync(self, scope):
@@ -3980,18 +3980,21 @@ class NodeInternals_NonTerm(NodeInternals):
                 correct_reply = obj.check()
             else:
                 sync_node, condition = obj
-                exist = node.env.node_exists(id(sync_node))
-                crit_1 = exist
-                crit_2 = True
-                if exist and condition is not None:
-                    try:
-                        crit_2 = condition.check(sync_node)
-                    except Exception as e:
-                        print("\n*** ERROR: existence condition is not verifiable " \
-                              "for node '{:s}' (id: {:d})!\n" \
-                              "*** The condition checker raise an exception!".format(node.name, id(node)))
-                        raise
-                correct_reply = crit_1 and crit_2
+                if sync_node is None:
+                    correct_reply = bool(condition)
+                else:
+                    exist = node.env.node_exists(id(sync_node))
+                    crit_1 = exist
+                    crit_2 = True
+                    if exist and condition is not None:
+                        try:
+                            crit_2 = condition.check(sync_node)
+                        except Exception as e:
+                            print("\n*** ERROR: existence condition is not verifiable " \
+                                  "for node '{:s}' (id: {:d})!\n" \
+                                  "*** The condition checker raise an exception!".format(node.name, id(node)))
+                            raise
+                    correct_reply = crit_1 and crit_2
 
             return NodeInternals_NonTerm.existence_corrupt_hook(node, correct_reply)
 
