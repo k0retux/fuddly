@@ -1265,11 +1265,11 @@ class d_operate_on_nodes(Disruptor):
             return prev_data
 
         if self.op_ref is not None:
-            if self.op_ref is 'unfreeze':
+            if self.op_ref == 'unfreeze':
                 self.op = Node.unfreeze
-            elif self.op_ref is 'freeze':
+            elif self.op_ref == 'freeze':
                 self.op = Node.freeze
-            elif self.op_ref is 'walk':
+            elif self.op_ref == 'walk':
                 self.op = Node.walk
             else:
                 prev_data.add_info('Unsupported operation')

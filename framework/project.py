@@ -48,7 +48,9 @@ class Project(object):
 
     def __init__(self, enable_fbk_processing=True,
                  wkspace_enabled=True, wkspace_size=1000, wkspace_free_slot_ratio_when_full=0.5,
-                 fmkdb_enabled=True):
+                 fmkdb_enabled=True,
+                 default_fbk_timeout=None, default_fbk_mode=None,
+                 default_sending_delay=None, default_burst_value=None):
         """
 
         Args:
@@ -62,6 +64,15 @@ class Project(object):
               the workspace.
             fmkdb_enabled: If set to `True`, the fmkDB will be used. Otherwise, no DB transactions will
               occur and thus the fmkDB won't be filled during the session.
+            default_fbk_timeout: If not None, when the project will be run, this value will be used
+              to initialize the feedback timeout of all the targets
+            default_fbk_mode: If not None, when the project will be run, this value will be used
+              to initialize the feedback mode of all the targets
+            default_sending_delay: If not None, when the project will be run, this value will be used
+              to initialize the delay that is applied by the framework between each data sending.
+            default_burst_value: If not None, when the project will be run, this value will be used
+              to initialize the burst value of the framework (number of data that can be sent in burst
+              before a delay is applied).
         """
 
         self.monitor = Monitor()
@@ -75,6 +86,11 @@ class Project(object):
         self.wkspace_size = wkspace_size
         self.wkspace_free_slot_ratio_when_full = wkspace_free_slot_ratio_when_full
         self.fmkdb_enabled = fmkdb_enabled
+
+        self.default_fbk_timeout = default_fbk_timeout
+        self.default_fbk_mode = default_fbk_mode
+        self.default_sending_delay = default_sending_delay
+        self.default_burst_value = default_burst_value
 
         self.scenario_target_mapping = None
         self.reset_target_mappings()

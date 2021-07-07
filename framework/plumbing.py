@@ -412,8 +412,16 @@ class FmkPlumbing(object):
         self.cleanup_all_dmakers(reset_existing_seed)
         # Warning: fuzz delay is not set to 0 by default in order to have a time frame
         # where SIGINT is accepted from user
-        self.set_sending_delay(self.config.defvalues.fuzz.delay)
-        self.set_sending_burst_counter(self.config.defvalues.fuzz.burst)
+        delay = self.config.defvalues.fuzz.delay if self.prj.default_sending_delay is None else self.prj.default_sending_delay
+        burst = self.config.defvalues.fuzz.burst if self.prj.default_burst_value is None else self.prj.default_burst_value
+        self.set_sending_delay(delay)
+        self.set_sending_burst_counter(burst)
+
+        if self.prj.default_fbk_timeout is not None:
+            self.set_feedback_timeout(self.prj.default_fbk_timeout)
+        if self.prj.default_fbk_mode is not None:
+            self.set_feedback_mode(self.prj.default_fbk_mode)
+
         for tg in self.targets.values():
             self._recompute_generic_timeouts(tg.feedback_timeout, tg.sending_delay, target=tg)
 
@@ -1739,7 +1747,9 @@ class FmkPlumbing(object):
         def _set_fbk_mode(tg):
             ok = tg.set_feedback_mode(mode)
             if not ok:
-                self.set_error('The target does not support this feedback Mode', code=Error.CommandError)
+                mode_desc = tg.get_fbk_mode_desc(mode, short=True)
+                self.set_error(f'The target does not support the requested feedback mode ({mode_desc})',
+                               code=Error.CommandError)
             elif do_show or do_record:
                 if tg.fbk_wait_full_time_slot_mode:
                     msg = 'Feedback Mode = ' + tg.fbk_wait_full_time_slot_msg
