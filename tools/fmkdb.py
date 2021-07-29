@@ -316,8 +316,10 @@ if __name__ == "__main__":
         if remove_data is not None:
             for i in range(remove_data[0], remove_data[1]+1):
                 fmkdb.remove_data(i, colorized=colorized)
+            fmkdb.shrink_db()
         else:
             fmkdb.remove_data(remove_one_data, colorized=colorized)
+            fmkdb.shrink_db()
 
     elif impact_analysis or raw_impact_analysis:
         fmkdb.get_data_with_impact(prj_name=prj_name, fbk_src=fbk_src, fbk_status_formula=fbk_status_formula,

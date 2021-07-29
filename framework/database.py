@@ -167,6 +167,9 @@ class Database(object):
 
         self._ok = None
 
+        self.fbk_timeout_re = re.compile('.*feedback timeout = (.*)s$')
+
+
     def _is_valid(self, connection, cursor):
         valid = False
         with connection:
@@ -599,6 +602,12 @@ class Database(object):
             "ORDER BY ERROR DESC;".format(data_id=data_id)
         )
 
+        fbk_timeout_info = self.execute_sql_statement(
+            'SELECT CONTENT, DATE FROM FMKINFO '
+            'WHERE CONTENT REGEXP "feedback timeout =" '
+            'ORDER BY DATE DESC;'
+        )
+
         analysis_records = self.execute_sql_statement(
             "SELECT CONTENT, DATE, IMPACT FROM ANALYSIS "
             "WHERE DATA_ID == {data_id:d} "
@@ -672,6 +681,21 @@ class Database(object):
                                                                         rgb=Color.FMKSUBINFO)
         msg += colorize('\n' + line_pattern, rgb=Color.NEWLOGENTRY)
 
+        prt(msg)
+
+        msg = ''
+        for idx, fbkt in enumerate(fbk_timeout_info, start=1):
+            content, tstamp = fbkt
+            if sent_date >= tstamp:
+                parsed = self.fbk_timeout_re.match(content)
+                val = parsed.group(1) + 's' if parsed else 'FmkDB ERROR'
+                break
+        else:
+            val = 'Not found in FmkDB (default value was most likely used)'
+
+        msg += colorize("\n Feedback Timeout: ", rgb=Color.FMKINFO)
+        msg += colorize(f"{val}", rgb=Color.FMKSUBINFO)
+        msg += colorize('\n' + line_pattern, rgb=Color.NEWLOGENTRY)
         prt(msg)
 
 
@@ -976,6 +1000,7 @@ class Database(object):
             base_dir = gr.exported_data_folder
             prev_export_date = None
             export_cpt = 0
+            data_id = first
 
             for rec in records:
                 data_id, data_type, dm_name, sent_date, content = rec
@@ -993,11 +1018,12 @@ class Database(object):
                 else:
                     export_cpt += 1
 
-                export_fname = '{typ:s}_{date:s}_{cpt:0>2d}.{ext:s}'.format(
+                export_fname = '{typ:s}_ID{did:d}_{date:s}_{cpt:0>2d}.{ext:s}'.format(
                     date=current_export_date,
                     cpt=export_cpt,
                     ext=file_extension,
-                    typ=data_type)
+                    typ=data_type,
+                    did=data_id)
 
                 export_full_fn = os.path.join(base_dir, dm_name, export_fname)
                 ensure_dir(export_full_fn)
@@ -1007,6 +1033,8 @@ class Database(object):
 
                 print(colorize("Data ID #{:d} --> {:s}".format(data_id, export_full_fn),
                                rgb=Color.FMKINFO))
+
+                data_id += 1
 
         else:
             print(colorize("*** ERROR: The provided DATA IDs do not exist ***", rgb=Color.ERROR))
@@ -1045,6 +1073,11 @@ class Database(object):
         print(colorize("*** Data {:d} and all related records have been removed ***".format(data_id),
                        rgb=Color.FMKINFO))
 
+
+    def shrink_db(self):
+        self.execute_sql_statement(
+            "VACUUM;"
+        )
 
     def get_project_record(self, prj_name=None):
         if prj_name:
