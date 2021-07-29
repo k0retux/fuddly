@@ -1380,8 +1380,8 @@ class INT(VT):
 
         val = self.get_current_raw_val()
         if val is not None:
-            # don't use a set to preserve determinism if needed
-            if val-1 not in supp_list:
+            # don't use a set to preserve the order if needed
+            if val+1 not in supp_list:
                 supp_list.append(val+1)
             if val-1 not in supp_list:
                 supp_list.append(val-1)
