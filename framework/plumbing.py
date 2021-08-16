@@ -307,7 +307,7 @@ class FmkPlumbing(object):
         self._generic_tactics.set_additional_info(self._exportable_fmk_ops)
 
         self._tactics = None
-
+        self.last_data_id = None
 
     @EnforceOrder(initial_func=True)
     def start(self):
@@ -326,6 +326,8 @@ class FmkPlumbing(object):
         ok = self.fmkDB.start()
         if not ok:
             raise InvalidFmkDB("The database {:s} is invalid!".format(self.fmkDB.fmk_db_path))
+
+        self.last_data_id = None
 
         # Fbk Gate to be used for sequencial tasks (scenario steps callbacks, etc.)
         self.last_feedback_gate = FeedbackGate(self.fmkDB, only_last_entries=True)
@@ -2624,12 +2626,12 @@ class FmkPlumbing(object):
                     self.lg.set_target_ack_date(FeedbackSource(tg), date=ack_date)
 
                 if self.fmkDB.enabled:
-                    data_id = self.lg.commit_data_table_entry(self.group_id, self.prj.name)
-                    if data_id is None:
+                    self.last_data_id = self.lg.commit_data_table_entry(self.group_id, self.prj.name)
+                    if self.last_data_id is None:
                         self.lg.print_console('### Data not recorded in FmkDB',
                                               rgb=Color.DATAINFO, nl_after=True)
                     else:
-                        self.lg.print_console('### FmkDB Data ID: {!r}'.format(data_id),
+                        self.lg.print_console('### FmkDB Data ID: {!r}'.format(self.last_data_id),
                                               rgb=Color.DATAINFO, nl_after=True)
 
                 if multiple_data:

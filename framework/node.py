@@ -3045,7 +3045,7 @@ class NodeInternals_NonTerm(NodeInternals):
             assert mini > -2 and maxi > -2 and (maxi >= mini or maxi == -1)
             if nd_len == 4:
                 default = node_desc[3]
-                assert mini <= default <= maxi
+                assert mini <= default <= maxi, f'guilty node --> "{node_desc[0].name}"'
             else:
                 default = None
         else:
