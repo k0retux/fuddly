@@ -6488,6 +6488,7 @@ class Node(object):
 
     def freeze(self, conf=None, recursive=True, return_node_internals=False, enable_color=False):
 
+        # Step 1 - get value
         ret = self._get_value(conf=conf, recursive=recursive,
                               return_node_internals=return_node_internals, enable_color=enable_color)
 
@@ -6495,6 +6496,7 @@ class Node(object):
             print('Warning: freeze() is called on a node that does not have an Env()\n'
                   '  --> node name: {!s}'.format(self.name))
 
+        # Step 2 - DJobs resolution
         if self.env is not None and self.env.delayed_jobs_enabled and \
                 (not self._delayed_jobs_called or self.env.delayed_jobs_pending):
             self._delayed_jobs_called = True
@@ -6533,7 +6535,13 @@ class Node(object):
                                                   enable_color=enable_color)
 
         if was_not_frozen:
-            self._post_freeze(internal, self)
+            pf_ret = self._post_freeze(internal, self, next_conf=next_conf, recursive=recursive,
+                                       return_node_internals=return_node_internals,
+                                       enable_color=enable_color)
+            # post_freeze handler can perform some change on the nodes. Thus, we have to update the
+            # ret value accordingly.
+            if pf_ret is not None:
+                ret, _ = pf_ret
             # We need to test self.env because an Node can be freezed
             # before being registered in the data model. It triggers
             # for instance when a generator Node is freezed
@@ -6545,9 +6553,27 @@ class Node(object):
         return ret
 
 
-    def _post_freeze(self, node_internals, wrapping_node):
+    def _post_freeze(self, node_internals, wrapping_node,
+                     next_conf, recursive, return_node_internals, enable_color):
         if self._post_freeze_handler is not None:
             self._post_freeze_handler(node_internals, wrapping_node)
+            # We need to call again _get_value(), so that we are sure to provide to the freeze()
+            # caller the updated nodes further to the execution of post_freeze.
+            # But even in the case there are no modifications, some bad side-effects could happen,
+            # that will be resolved thanks to the new call to _get_value().
+            # Indeed, in the case the post_freeze handler call Node.freeze() on its associated node, there
+            # could be some side-effects linked to DJobs. If some DJobs are registered (to deal with
+            # node existence for instance in non-terminal nodes), then the post_freeze handler
+            # will trigger them as it will reenter Node.freeze() while step 1 of Node.freeze() is being executed.
+            # It means that when this step 1 has finished, step 2 won't be executed again as it will have
+            # already been executed though post_freeze. Thus, DJobs won't have a chance to be called again and a wrong
+            # value will be provided to the top caller. Thus, we need in this case to call _get_value()
+            # again to force potential Djobs to be registered again.
+            return node_internals._get_value(conf=next_conf, recursive=recursive,
+                                             return_node_internals=return_node_internals,
+                                             enable_color=enable_color)
+        else:
+            return None
         
     def register_post_freeze_handler(self, func):
         self._post_freeze_handler = func
@@ -7029,7 +7055,7 @@ class Node(object):
     def __setitem__(self, key, val):
         nodes = self[key]
         if not nodes:
-            raise ValueError
+            raise ValueError(f'Nodes not found with the key: "{key}"')
 
         if isinstance(val, Node):
             if isinstance(nodes, Node):
@@ -7071,8 +7097,9 @@ class Node(object):
                 continue
             try:
                 self[node_ref] = new_value
-            except ValueError:
+            except ValueError as err:
                 if stop_on_error:
+                    print(f'\n\n*** Node update raised an error: "{err}"')
                     raise
 
 
