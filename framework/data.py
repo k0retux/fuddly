@@ -258,7 +258,9 @@ class Data(object):
 
     _empty_data_backend = EmptyBackend()
 
-    def __init__(self, content=None, altered=False, tg_ids=None):
+    def __init__(self, content=None, altered=False, tg_ids=None, description=None):
+
+        self.description = description
 
         self._data_id = None
         self._backend = None

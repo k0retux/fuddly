@@ -56,9 +56,9 @@ class Periodic(object):
             desc += 'DP({:s})'.format(d.formatted_str(oneliner=True))
         elif isinstance(d, Data):
             if isinstance(d.content, Node):
-                desc += d.content.name
+                desc += d.content.name.upper()
             else:
-                desc += data_graph_desc_fstr.format(d.to_str()[:10])
+                desc += data_graph_desc_fstr.format(d.to_str()[:10]) if d.description is None else f'"{d.description}"'
         elif isinstance(d, str):
             desc += "{:s}".format(d.upper())
         else:
@@ -478,7 +478,10 @@ class Step(object):
                     if self.__class__.__name__ != 'Step':
                         step_desc += '[' + self.__class__.__name__ + ']'
                     else:
-                        step_desc += d.content.name.upper() if isinstance(d.content, Node) else data_graph_desc_fstr.format(d.to_str()[:10])
+                        if isinstance(d.content, Node):
+                            step_desc += d.content.name.upper()
+                        else:
+                            step_desc += data_graph_desc_fstr.format(d.to_str()[:10]) if d.description is None else f'"{d.description}"'
                 elif isinstance(d, str):
                     step_desc += "{:s}".format(self._node_name[idx].upper())
                 else:
