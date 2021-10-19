@@ -3677,6 +3677,13 @@ class NodeInternals_NonTerm(NodeInternals):
                                         if args[2] > job_idx:
                                             args[2] += node_qty-1
 
+        if self.separator is not None and l and isinstance(l[-1], NodeInternals) and \
+                l[-1].is_attr_set(NodeInternals.AutoSeparator):
+            if not self.separator.suffix:
+                l.pop(-1)
+                self.frozen_node_list.pop(-1)
+            self._clone_separator_cleanup()
+
         return (handle_encoding(l), was_not_frozen)
 
 
