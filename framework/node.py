@@ -659,6 +659,9 @@ class NodeInternals(object):
 
     default_custo = None
 
+    def __hash__(self):
+        return id(self)
+
     def __init__(self, arg=None):
         # if new attributes are added, set_contents_from() have to be updated
         self.private = None
@@ -3531,8 +3534,9 @@ class NodeInternals_NonTerm(NodeInternals):
         for e in self.subnodes_set:
             e.tmp_ref_count = 1
 
-        if self.separator is not None and self.frozen_node_list and self.frozen_node_list[-1].is_attr_set(NodeInternals.AutoSeparator):
-            if not self.separator.suffix:
+        if self.separator is not None:
+            if not self.separator.suffix and self.frozen_node_list \
+                    and self.frozen_node_list[-1].is_attr_set(NodeInternals.AutoSeparator):
                 self.frozen_node_list.pop(-1)
             self._clone_separator_cleanup()
 
@@ -3618,7 +3622,9 @@ class NodeInternals_NonTerm(NodeInternals):
         node_list, was_not_frozen = self.get_subnodes_with_csts()
 
         djob_group_created = False
-        for n in node_list:
+        disabled_node = False
+        removed_cpt = 0
+        for idx, n in enumerate(node_list):
             if n.is_attr_set(NodeInternals.DISABLED):
                 val = Node.DEFAULT_DISABLED_NODEINT
                 if not n.env.is_djob_registered(key=id(n), prio=Node.DJOBS_PRIO_nterm_existence):
@@ -3631,12 +3637,30 @@ class NodeInternals_NonTerm(NodeInternals):
                                         cleanup = NodeInternals_NonTerm._cleanup_delayed_nodes,
                                         args=[n, node_list, len(l), conf, recursive],
                                         prio=Node.DJOBS_PRIO_nterm_existence)
+                    disabled_node = True
             else:
                 val = n._get_value(conf=conf, recursive=recursive,
                                    return_node_internals=True, enable_color=enable_color)
 
+            if self.separator is not None and isinstance(val, NodeInternals) and val.is_attr_set(NodeInternals.AutoSeparator) \
+                    and disabled_node and not self.separator.suffix and not self.separator.always:
+
+                # TODO: The case "suffix False and always True" should be already handled at
+                #  self.get_subnodes_with_csts()
+                #  --> TBC
+                disabled_node = False
+                self.frozen_node_list.pop(idx-removed_cpt)
+                removed_cpt += 1
+                continue
+
             # 'val' is always a NodeInternals except if non-term encoding has been carried out
             l.append(val)
+
+        if self.separator is not None and l and isinstance(l[-1], NodeInternals) \
+                and l[-1].is_attr_set(NodeInternals.AutoSeparator):
+            if not self.separator.suffix and not self.separator.always:
+                l.pop(-1)
+                self.frozen_node_list.pop(-1)
 
         if node_list:
             node_env = node_list[0].env
@@ -3676,13 +3700,6 @@ class NodeInternals_NonTerm(NodeInternals):
                                     for func, args, cleanup in djobs.values():
                                         if args[2] > job_idx:
                                             args[2] += node_qty-1
-
-        if self.separator is not None and l and isinstance(l[-1], NodeInternals) and \
-                l[-1].is_attr_set(NodeInternals.AutoSeparator):
-            if not self.separator.suffix:
-                l.pop(-1)
-                self.frozen_node_list.pop(-1)
-            self._clone_separator_cleanup()
 
         return (handle_encoding(l), was_not_frozen)
 
