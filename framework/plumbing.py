@@ -2004,6 +2004,9 @@ class FmkPlumbing(object):
                             if data is not None:
                                 break
 
+                    if data is not None:
+                        data.generate_info_from_content(data=original_data)
+
                 data_desc.outcomes = data
                 if data is not None and data.tg_ids is None:
                     data.tg_ids = data_desc.tg_ids
