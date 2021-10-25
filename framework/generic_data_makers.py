@@ -168,6 +168,10 @@ def truncate_info(info, max_size=60):
                  'nt_only': ('Walk through non-terminal nodes only.', False, bool),
                  'deep': ('When set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes.', True, bool),
+                 'consider_sibbling_change':
+                     ('While walking through terminal nodes, if sibbling nodes are '
+                      'no more the same because of existence condition for instance, walk through '
+                      'the new nodes.', True, bool),
                  'ign_mutable_attr': ('Walk through all the nodes even if their Mutable attribute '
                                       'is cleared.', True, bool),
                  'fix_all': ('For each produced data, reevaluate the constraints on the whole graph.',
@@ -208,9 +212,11 @@ class sd_iter_over_data(StatefulDisruptor):
 
         if self.nt_only:
             consumer = NonTermVisitor(respect_order=self.order, ignore_mutable_attr=self.ign_mutable_attr,
+                                      consider_side_effects_on_sibbling=self.consider_sibbling_change,
                                       reset_when_change=self.deep)
         else:
             consumer = BasicVisitor(respect_order=self.order, ignore_mutable_attr=self.ign_mutable_attr,
+                                    consider_side_effects_on_sibbling=self.consider_sibbling_change,
                                     reset_when_change=self.deep)
         sem_crit = NSC(optionalbut1_criteria=self.sem)
         consumer.set_node_interest(path_regexp=self.path, semantics_criteria=sem_crit)
@@ -281,6 +287,11 @@ class sd_iter_over_data(StatefulDisruptor):
                                        "Otherwise, if set to 'None', nothing will be done.", None, bool),
                  'ign_mutable_attr': ('Walk through all the nodes even if their Mutable attribute '
                                       'is cleared.', False, bool),
+                 'consider_sibbling_change':
+                     ('[EXPERIMENTAL] While walking through terminal nodes, if sibbling nodes are '
+                      'no more the same because of existence condition for instance, walk through '
+                      'the new nodes. (Currently, work only with some specific data model construction.)',
+                      False, bool),
                  })
 class sd_fuzz_typed_nodes(StatefulDisruptor):
     """
@@ -329,6 +340,7 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
                                             fix_constraints=self.fix,
                                             respect_order=self.order,
                                             ignore_mutable_attr=self.ign_mutable_attr,
+                                            consider_side_effects_on_sibbling=self.consider_sibbling_change,
                                             ignore_separator=self.ign_sep,
                                             determinist=self.leaf_fuzz_determinism)
         self.consumer.need_reset_when_structure_change = self.deep

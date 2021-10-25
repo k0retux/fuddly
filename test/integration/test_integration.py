@@ -1598,7 +1598,7 @@ class TestModelWalker(unittest.TestCase):
 
     def test_BasicVisitor(self):
         nt = node_simple.get_clone()
-        default_consumer = BasicVisitor(respect_order=True)
+        default_consumer = BasicVisitor(respect_order=True, consider_side_effects_on_sibbling=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
                                                                     max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
@@ -1606,7 +1606,7 @@ class TestModelWalker(unittest.TestCase):
 
         print('***')
         nt = node_simple.get_clone()
-        default_consumer = BasicVisitor(respect_order=False)
+        default_consumer = BasicVisitor(respect_order=False, consider_side_effects_on_sibbling=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
                                                                     max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
@@ -1616,7 +1616,7 @@ class TestModelWalker(unittest.TestCase):
         print('***')
         idx = 0
         simple = node_simple.get_clone()
-        nonterm_consumer = NonTermVisitor(respect_order=True)
+        nonterm_consumer = NonTermVisitor(respect_order=True, consider_side_effects_on_sibbling=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True,
                                                                     max_steps=20):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
@@ -1625,7 +1625,7 @@ class TestModelWalker(unittest.TestCase):
         print('***')
         idx = 0
         simple = node_simple.get_clone()
-        nonterm_consumer = NonTermVisitor(respect_order=False)
+        nonterm_consumer = NonTermVisitor(respect_order=False, consider_side_effects_on_sibbling=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True,
                                                                     max_steps=20):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
@@ -1644,7 +1644,7 @@ class TestModelWalker(unittest.TestCase):
 
         idx = 0
         data = fmk.dm.get_external_atom(dm_name='mydf', data_id='shape')
-        nonterm_consumer = NonTermVisitor(respect_order=True)
+        nonterm_consumer = NonTermVisitor(respect_order=True, consider_side_effects_on_sibbling=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True,
                                                                     max_steps=50):
             print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
@@ -1655,7 +1655,7 @@ class TestModelWalker(unittest.TestCase):
         print('***')
         idx = 0
         data = fmk.dm.get_external_atom(dm_name='mydf', data_id='shape')
-        nonterm_consumer = NonTermVisitor(respect_order=False)
+        nonterm_consumer = NonTermVisitor(respect_order=False, consider_side_effects_on_sibbling=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True,
                                                                     max_steps=50):
             print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
@@ -1777,7 +1777,7 @@ class TestModelWalker(unittest.TestCase):
 
         print('***')
         idx = 0
-        bv_consumer = BasicVisitor(respect_order=True)
+        bv_consumer = BasicVisitor(respect_order=True, consider_side_effects_on_sibbling=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(bv_data, bv_consumer,
                                                                     make_determinist=True,
                                                                     max_steps=100):
@@ -1786,7 +1786,7 @@ class TestModelWalker(unittest.TestCase):
 
         print('***')
         idx = 0
-        nt_consumer = NonTermVisitor(respect_order=True)
+        nt_consumer = NonTermVisitor(respect_order=True, consider_side_effects_on_sibbling=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt_data, nt_consumer,
                                                                     make_determinist=True,
                                                                     max_steps=100):
@@ -4173,14 +4173,18 @@ class TestDataModelHelpers(unittest.TestCase):
             xml_atom.show()
             assert status == AbsorbStatus.FullyAbsorbed
 
-        data_sizes = [211, 149, 184]
+        data_sizes = [211, 148, 183]
         for i in range(100):
+            # fmk.lg.export_raw_data = True
             data = fmk.process_data(
-                ['XML5', ('tWALK', UI(path='xml5/command/start-tag/content/attr1/cmd_val'))])
+                ['XML5', ('tWALK', UI(path='xml5/command/start-tag/content/attr1/cmd_val',
+                                      consider_sibbling_change=False))])
             if data is None:
                 break
-            assert len(data.to_bytes()) == data_sizes[i]
+
             go_on = fmk.send_data_and_log([data])
+            assert len(data.to_bytes()) == data_sizes[i]
+
             if not go_on:
                 raise ValueError
         else:
@@ -4268,7 +4272,7 @@ class TestFMK(unittest.TestCase):
 
         outcomes = []
 
-        act = [('EXIST_COND', UI(determinist=True)), 'tWALK', 'tSTRUCT']
+        act = [('EXIST_COND', UI(determinist=True)), ('tWALK', UI(consider_sibbling_change=False)), 'tSTRUCT']
         for i in range(4):
             for j in range(10):
                 d = fmk.process_data(act)

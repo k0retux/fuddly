@@ -218,7 +218,7 @@ class FmkTask(threading.Thread):
                 self._error_func("Task '{!s}' has crashed!".format(self._name))
                 break
             if self._period is not None:
-                self._stop.wait(max(self._period,0.001))
+                self._stop.wait(max(self._period,0.0001))
             else:
                 self._cleanup_func()
                 break

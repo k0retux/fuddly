@@ -96,7 +96,8 @@ class ModelWalker(object):
 
         self._cpt = 1
         gen = self.walk_graph_rec([self._root_node], structure_has_changed=False,
-                                  consumed_nodes=set(), parent_node=self._root_node)
+                                  consumed_nodes=set(), parent_node=self._root_node,
+                                  consumer=self._consumer)
         for consumed_node, orig_node_val in gen:
             self._root_node.freeze()
 
@@ -136,7 +137,7 @@ class ModelWalker(object):
         return
 
 
-    def _do_reset(self, node):
+    def _do_reset(self, node, consumer):
         last_gen = self._root_node.get_reachable_nodes(internals_criteria=self.triglast_ic,
                                                        resolve_generator=True)
         for n in last_gen:
@@ -144,9 +145,9 @@ class ModelWalker(object):
         node.unfreeze(recursive=False)
         # self._root_node.unfreeze(recursive=True, dont_change_state=True)
         node.unfreeze(recursive=True, dont_change_state=True, ignore_entanglement=True)
-        self._consumer.do_after_reset(node)
+        consumer.do_after_reset(node)
 
-    def walk_graph_rec(self, node_list, structure_has_changed, consumed_nodes, parent_node):
+    def walk_graph_rec(self, node_list, structure_has_changed, consumed_nodes, parent_node, consumer):
 
         reset = False
         guilty = None
@@ -176,7 +177,7 @@ class ModelWalker(object):
 
                 # For each node we look for direct subnodes
                 fnodes = node.get_reachable_nodes(internals_criteria=self.ic, exclude_self=True,
-                                                  respect_order=self._consumer.respect_order,
+                                                  respect_order=consumer.respect_order,
                                                   resolve_generator=True, relative_depth=1)
                 if DEBUG:
                     DEBUG_PRINT('--(2)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()), level=2)
@@ -188,7 +189,7 @@ class ModelWalker(object):
                 # call ourselves recursively with the list of subnodes
                 if fnodes:
                     generator = self.walk_graph_rec(fnodes, structure_has_changed, consumed_nodes,
-                                                    parent_node=node)
+                                                    parent_node=node, consumer=consumer)
                     for consumed_node, orig_node_val in generator:
                         yield consumed_node, orig_node_val # YIELD
 
@@ -198,8 +199,14 @@ class ModelWalker(object):
                 # for possible uses/modifications. This is performed within our
                 # method node_consumer_helper().
                 if perform_second_step:
+
+                    if consumer.consider_side_effects_on_sibbling:
+                        original_parent_node_list = None
+                        if parent_node.is_nonterm():
+                            original_parent_node_list = set(parent_node.subnodes_set).intersection(set(parent_node.frozen_node_list))
+
                     consumer_gen = self.node_consumer_helper(node, structure_has_changed, consumed_nodes,
-                                                             parent_node=parent_node)
+                                                             parent_node=parent_node, consumer=consumer)
                     for consumed_node, orig_node_val, reset, ignore_node in consumer_gen:
 
                         DEBUG_PRINT("   [ reset: {!r:s} | ignore_node: {!r:s} | " \
@@ -218,7 +225,7 @@ class ModelWalker(object):
                         if ignore_node and reset:
                             perform_second_step = False
                             again = True
-                            self._do_reset(node)
+                            self._do_reset(node, consumer)
                             break
                         elif ignore_node and not reset:
                             perform_second_step = False
@@ -227,7 +234,7 @@ class ModelWalker(object):
                         elif reset:
                             perform_second_step = True
                             again = True
-                            self._do_reset(node)
+                            self._do_reset(node, consumer)
                             break
                         else:
                             perform_second_step = True
@@ -235,26 +242,60 @@ class ModelWalker(object):
 
                         yield consumed_node, orig_node_val # YIELD
 
+                        if consumer.consider_side_effects_on_sibbling:
+                            if parent_node.is_nonterm():
+                                parent_node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
+                                parent_node.freeze()
+                                new_parent_node_list = set(parent_node.subnodes_set).intersection(set(parent_node.frozen_node_list))
+
+                                if original_parent_node_list != new_parent_node_list:
+                                    fnodes = parent_node.get_reachable_nodes(internals_criteria=self.ic, exclude_self=True,
+                                                                             respect_order=consumer.respect_order,
+                                                                             resolve_generator=True, relative_depth=1)
+                                    if fnodes:
+                                        fnodes.remove(node)
+                                        # TODO: check if there is a need to instantiate a copy of the
+                                        #  current consumer with a specific state.
+                                        #  For BasicVisitor, there is no need, as the only state is
+                                        #  the .firstcall value. And we don't need to reset it, because
+                                        #  when we reach this code we already yield once the node value that
+                                        #  we will walk through. Thus, firstcall need to stay to False,
+                                        #  otherwise we will yield the same value twice.
+                                        #
+                                        #  Needed for tTYPE:
+                                        #  - new_consumer = copy.copy(consumer) with a special reset (TBC)
+                                        #  - tTYPE or the walker need to be changed somehow so that it could discover
+                                        #    other NT shapes linked to node existence.
+                                        generator = self.walk_graph_rec(fnodes, structure_has_changed, consumed_nodes,
+                                                                        parent_node=parent_node, consumer=consumer)
+                                        for consumed_node, orig_node_val in generator:
+                                            yield consumed_node, orig_node_val # YIELD
+
+
                 # We reach this case if the consumer is not interested
                 # with 'node'.  Then if the node is not exhausted we
                 # may have new cases where the consumer will find
                 # something (assuming the consumer accepts to reset).
-                elif self._consumer.need_reset(node) and node.is_attr_set(dm.NodeInternals.Mutable):
+                elif consumer.need_reset(node) and node.is_attr_set(dm.NodeInternals.Mutable):
                     again = False if node.is_exhausted() else True
                     # Not consumed so we don't unfreeze() with recursive=True
-                    self._do_reset(node)
+                    self._do_reset(node, consumer)
                 else:
                     again = False
+
+                if consumer.consider_side_effects_on_sibbling:
+                    parent_node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
+                    parent_node.freeze()
 
                 if node.is_nonterm():
                     structure_has_changed = node.cc.structure_will_change()
 
-                if structure_has_changed and self._consumer.need_reset_when_structure_change:
+                if structure_has_changed and consumer.need_reset_when_structure_change:
                     structure_has_changed = False
 
                     idx = node_list.index(node)
 
-                    gen = self.walk_graph_rec(node_list[:idx], False, set(), parent_node=parent_node)
+                    gen = self.walk_graph_rec(node_list[:idx], False, set(), parent_node=parent_node, consumer=consumer)
                     for consumed_node, orig_node_val in gen:
                         yield consumed_node, orig_node_val # YIELD
 
@@ -270,7 +311,7 @@ class ModelWalker(object):
                     #     if n in consumed_nodes:
                     #         consumed_nodes.remove(n)
 
-                elif structure_has_changed and not self._consumer.need_reset_when_structure_change:
+                elif structure_has_changed and not consumer.need_reset_when_structure_change:
                     structure_has_changed = False
                     # print('--> ', node.name, node, node.is_attr_set(dm.NodeInternals.Mutable), 'exhausted: ', node.is_exhausted())
                     consumed_nodes = set()
@@ -278,10 +319,11 @@ class ModelWalker(object):
         return
 
 
-    def node_consumer_helper(self, node, structure_has_changed, consumed_nodes, parent_node):
+    def node_consumer_helper(self, node, structure_has_changed, consumed_nodes, parent_node,
+                             consumer):
 
         def _do_if_not_interested(node, orig_node_val):
-            reset = self._consumer.need_reset(node)
+            reset = consumer.need_reset(node)
             if reset and not node.is_exhausted():
                 return node, orig_node_val, True, True # --> x, x, reset, ignore_node
             elif reset and node.is_exhausted():
@@ -296,12 +338,12 @@ class ModelWalker(object):
         not_recovered = False
         consume_called_again = False
 
-        if self._consumer.interested_by(node):
+        if consumer.interested_by(node):
             if node in consumed_nodes:
                 go_on = False
             else:
-                self._consumer.save_node(node)
-                go_on = self._consumer.consume_node(node)
+                consumer.save_node(node)
+                go_on = consumer.consume_node(node)
         else:
             go_on = False
 
@@ -313,14 +355,14 @@ class ModelWalker(object):
         node.freeze()
         not_recovered = True
 
-        max_steps = self._consumer.wait_for_exhaustion(node)
+        max_steps = consumer.wait_for_exhaustion(node)
         again = True
 
         # We enter this loop only if the consumer is interested by the
         # node.
         while again:
             consume_called_again = False
-            reset = self._consumer.need_reset(node)
+            reset = consumer.need_reset(node)
 
             if reset and not node.is_exhausted():
 
@@ -336,12 +378,12 @@ class ModelWalker(object):
                 # DEBUG_PRINT('*** node_consumer_helper(): exhausted')
                 yield node, orig_node_val, False, False
 
-                if self._consumer.interested_by(node):
-                    if self._consumer.still_interested_by(node):
-                        self._consumer.consume_node(node)
+                if consumer.interested_by(node):
+                    if consumer.still_interested_by(node):
+                        consumer.consume_node(node)
                     else:
-                        self._consumer.recover_node(node)
-                        if self._consumer.fix_constraints:
+                        consumer.recover_node(node)
+                        if consumer.fix_constraints:
                             node.fix_synchronized_nodes()
                         yield _do_if_not_interested(node, orig_node_val)
                         raise ValueError  # We should never return here, otherwise its a bug we want to alert on
@@ -351,8 +393,8 @@ class ModelWalker(object):
                     not_recovered = True
                 else:
                     if node in consumed_nodes:
-                        self._consumer.recover_node(node)
-                        if self._consumer.fix_constraints:
+                        consumer.recover_node(node)
+                        if consumer.fix_constraints:
                             node.fix_synchronized_nodes()
                         not_recovered = False
                     return
@@ -370,17 +412,17 @@ class ModelWalker(object):
                     # In this case we iterate only on the current node
                     node.unfreeze(recursive=False, ignore_entanglement=True)
                     node.freeze()
-                    if self._consumer.fix_constraints:
+                    if consumer.fix_constraints:
                         node.fix_synchronized_nodes()
             elif consume_called_again and max_steps != 0:
                 node.freeze()
                 # consume_called_again = False
             else:
-                if not_recovered and (self._consumer.interested_by(node) or node in consumed_nodes):
-                    self._consumer.recover_node(node)
-                    if self._consumer.fix_constraints:
+                if not_recovered and (consumer.interested_by(node) or node in consumed_nodes):
+                    consumer.recover_node(node)
+                    if consumer.fix_constraints:
                         node.fix_synchronized_nodes()
-                    if not node.is_exhausted() and self._consumer.need_reset(node):
+                    if not node.is_exhausted() and consumer.need_reset(node):
                         yield None, None, True, True
                 again = False
 
@@ -392,8 +434,10 @@ class ModelWalker(object):
 class NodeConsumerStub(object):
     def __init__(self, max_runs_per_node=-1, min_runs_per_node=-1, respect_order=True,
                  fuzz_magnitude=1.0, fix_constraints=False, ignore_mutable_attr=False,
+                 consider_side_effects_on_sibbling=False,
                  **kwargs):
         self.need_reset_when_structure_change = False
+        self.consider_side_effects_on_sibbling = consider_side_effects_on_sibbling
         self.fuzz_magnitude = fuzz_magnitude
         self.fix_constraints = fix_constraints
         self.ignore_mutable_attr = ignore_mutable_attr
@@ -415,7 +459,11 @@ class NodeConsumerStub(object):
         self.__node_backup = None
 
         self.init_specific(**kwargs)
-    
+
+    def reset_state(self):
+        """
+        Called by the ModelWalker to reinitialize the disruptor.
+        """
 
     def init_specific(self, **kwargs):
         self._internals_criteria = dm.NodeInternalsCriteria(negative_node_kinds=[dm.NodeInternals_NonTerm])
@@ -554,9 +602,13 @@ class NodeConsumerStub(object):
 class BasicVisitor(NodeConsumerStub):
 
     def init_specific(self, reset_when_change=True):
+        self._reset_when_change = reset_when_change
+        self.reset_state()
+
+    def reset_state(self):
         self._internals_criteria = dm.NodeInternalsCriteria(negative_node_kinds=[dm.NodeInternals_NonTerm])
         self._semantics_criteria = dm.NodeSemanticsCriteria()
-        self.need_reset_when_structure_change = reset_when_change
+        self.need_reset_when_structure_change = self._reset_when_change
         self.firstcall = True
 
     def consume_node(self, node):
