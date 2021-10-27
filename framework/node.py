@@ -1752,7 +1752,7 @@ class NodeInternals_Term(NodeInternals):
         self.frozen_node = None
         self._set_default_value_specific(val)
 
-    def _set_default_value_specific(self):
+    def _set_default_value_specific(self, val):
         raise NotImplementedError
 
     def _get_value(self, conf=None, recursive=True, return_node_internals=False, enable_color=False):
@@ -1869,6 +1869,12 @@ class NodeInternals_Term(NodeInternals):
     def unfreeze_all(self, recursive=True, ignore_entanglement=False):
         self.frozen_node = None
 
+    def update_value(self, value):
+        self.frozen_node = self._update_value_specific(value)
+
+    def _update_value_specific(self, value):
+        pass
+
     def reset_fuzz_weight(self, recursive):
         pass
 
@@ -1967,6 +1973,18 @@ class NodeInternals_TypedValue(NodeInternals_Term):
 
     def do_cleanup_absorb(self):
         self.value_type.do_cleanup_absorb()
+
+    def _update_value_specific(self, value):
+        if isinstance(value, int):
+            assert isinstance(self.value_type, fvt.INT)
+            self.value_type.update_raw_value(value)
+        else:
+            status, off, size, name = self.value_type.do_absorb(convert_to_internal_repr(val),
+                                                                constraints=AbsNoCsts())
+            if status != AbsorbStatus.FullyAbsorbed:
+                raise ValueError
+
+        return self.value_type.get_current_value()
 
     def _unfreeze_without_state_change(self, current_val):
         self.value_type.rewind()
@@ -7096,12 +7114,10 @@ class Node(object):
         elif isinstance(val, int):
             if isinstance(nodes, Node):
                 # Method defined by INT object (within TypedValue nodes)
-                nodes.update_raw_value(val)
-                nodes.unfreeze()
+                nodes.update_value(val)
             else:
                 for n in nodes:
-                    n.update_raw_value(val)
-                    n.unfreeze()
+                    n.update_value(val)
         else:
             if isinstance(nodes, Node):
                 status, off, size, name = nodes.absorb(convert_to_internal_repr(val),
