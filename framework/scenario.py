@@ -850,7 +850,8 @@ class Scenario(object):
     def user_context(self):
         return self._env.user_context
 
-    def set_user_context(self, user_context):
+    @user_context.setter
+    def user_context(self, user_context):
         self._env.user_context = user_context
 
     def merge_user_context_with(self, user_context):

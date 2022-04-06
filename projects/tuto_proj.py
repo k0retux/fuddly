@@ -173,7 +173,7 @@ open_step.connect_to(FinalStep())
 
 sc_proj1 = Scenario('proj1', anchor=open_step, user_context=UI(prj='proj1'))
 sc_proj2 = sc_proj1.clone('proj2')
-sc_proj2.set_user_context(UI(prj='proj2'))
+sc_proj2.user_context = UI(prj='proj2')
 
 
 step1 = Step(DataProcess(process=['tTYPE'], seed='4tg1'))
