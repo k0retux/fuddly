@@ -151,7 +151,7 @@ Parameters:
         |      |       to 'determinism' as it acts on the typed node substitutions
         |      |       that occur through this disruptor
         |      | default: True [type: bool]
-        |_ tnode_determinist
+        |_ leaf_determinism
         |      | desc: If set to 'True', all the typed nodes of the model will be set
         |      |       to determinist mode prior to any fuzzing. If set to 'False',
         |      |       they will be set to random mode. Otherwise, if set to 'None',
@@ -361,7 +361,7 @@ Parameters:
         |      |       nodes. It means that the non-terminal nodes will be customized
         |      |       in "FullCombinatory" mode
         |      | default: True [type: bool]
-        |_ tnode_determinist
+        |_ leaf_determinism
         |      | desc: If set to 'True', all the typed nodes of the model will be set
         |      |       to determinist mode prior to any fuzzing. If set to 'False',
         |      |       they will be set to random mode. Otherwise, if set to 'None',

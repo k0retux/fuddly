@@ -575,7 +575,7 @@ class DynGenerator(Generator):
         'finite': ('Make the data model finite', False, bool),
         'determinist': ("Make the data model determinist if set to 'True', random if set to "
                         "'False', or do nothing if set to 'None'", None, bool),
-        'tnode_determinist': ("If set to 'True', all the typed nodes of the model will be "
+        'leaf_determinism': ("If set to 'True', all the typed nodes of the model will be "
                               "set to determinist mode prior to any fuzzing. If set "
                               "to 'False', they will be set to random mode. "
                               "Otherwise, if set to 'None', nothing will be done.", None, bool),
@@ -601,11 +601,11 @@ class DynGenerator(Generator):
             else:
                 atom.make_random(all_conf=True, recursive=True)
 
-            if self.tnode_determinist is not None:
+            if self.leaf_determinism is not None:
                 nic = nd.NodeInternalsCriteria(node_kinds=[nd.NodeInternals_TypedValue])
                 nl = atom.get_reachable_nodes(internals_criteria=nic, ignore_fstate=True)
                 for n in nl:
-                    if self.tnode_determinist:
+                    if self.leaf_determinism:
                         n.make_determinist()
                     else:
                         n.make_random()

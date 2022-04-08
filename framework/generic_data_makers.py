@@ -158,7 +158,7 @@ def truncate_info(info, max_size=60):
                  'full_combinatory': ('When set to True, enable full-combinatory mode for '
                                       'non-terminal nodes. It means that the non-terminal nodes '
                                       'will be customized in "FullCombinatory" mode', False, bool),
-                 'tnode_determinist': ("If set to 'True', all the typed nodes of the model will be "
+                 'leaf_determinism': ("If set to 'True', all the typed nodes of the model will be "
                                        "set to determinist mode prior to any fuzzing. If set "
                                        "to 'False', they will be set to random mode. "
                                        "Otherwise, if set to 'None', nothing will be done.", None, bool),
@@ -200,12 +200,12 @@ class sd_iter_over_data(StatefulDisruptor):
             for n in nl:
                 n.cc.custo.full_combinatory_mode = True
 
-        if self.tnode_determinist is not None:
+        if self.leaf_determinism is not None:
             nic = NodeInternalsCriteria(node_kinds=[NodeInternals_TypedValue])
             nl = prev_content.get_reachable_nodes(internals_criteria=nic, path_regexp=self.path,
                                                   ignore_fstate=True)
             for n in nl:
-                if self.tnode_determinist:
+                if self.leaf_determinism:
                     n.make_determinist()
                 else:
                     n.make_random()
@@ -281,7 +281,7 @@ class sd_iter_over_data(StatefulDisruptor):
                                       "data model determinism. Note: this option is complementary to "
                                       "'determinism' as it acts on the typed node substitutions "
                                       "that occur through this disruptor", True, bool),
-                 'tnode_determinist': ("If set to 'True', all the typed nodes of the model will be "
+                 'leaf_determinism': ("If set to 'True', all the typed nodes of the model will be "
                                        "set to determinist mode prior to any fuzzing. If set "
                                        "to 'False', they will be set to random mode. "
                                        "Otherwise, if set to 'None', nothing will be done.", None, bool),
@@ -324,12 +324,12 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
             for n in nl:
                 n.cc.custo.full_combinatory_mode = True
 
-        if self.tnode_determinist is not None:
+        if self.leaf_determinism is not None:
             nic = NodeInternalsCriteria(node_kinds=[NodeInternals_TypedValue])
             nl = prev_content.get_reachable_nodes(internals_criteria=nic, path_regexp=self.path,
                                                   ignore_fstate=True)
             for n in nl:
-                if self.tnode_determinist:
+                if self.leaf_determinism:
                     n.make_determinist()
                 else:
                     n.make_random()
@@ -1252,7 +1252,7 @@ class d_next_node_content(Disruptor):
                  'op': ('The operation to perform on the selected nodes.', Node.clear_attr,
                         (types.MethodType, types.FunctionType)), # python3, python2
                  'op_ref': ("Predefined operation that can be referenced by name. The current "
-                            "predefined function are: 'unfreeze', 'freeze', 'walk'. Take "
+                            "predefined function are: 'unfreeze', 'freeze', 'walk', 'set_qty'. Take "
                             "precedence over @op if not None." , None, str),
                  'params': ('Tuple of parameters that will be provided to the operation.',
                             (),
@@ -1283,6 +1283,11 @@ class d_operate_on_nodes(Disruptor):
                 self.op = Node.freeze
             elif self.op_ref == 'walk':
                 self.op = Node.walk
+            elif self.op_ref == 'set_qty':
+                self.op = NodeInternals_NonTerm.set_subnode_default_qty
+                n = prev_content.get_first_node_by_path(path_regexp=self.path)
+                self.path = self.path[:self.path.rfind('/')] + '$'
+                self.params = (n, *self.params)
             else:
                 prev_data.add_info('Unsupported operation')
                 return prev_data
