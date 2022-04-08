@@ -804,3 +804,8 @@ class DataProcess(object):
         new_datap._process = copy.copy(self._process)
         new_datap.reset()
         return new_datap
+
+
+class EmptyDataProcess(object):
+    def __init__(self, seed=None, tg_ids=None, auto_regen=False):
+        DataProcess.__init__(self, process=None, seed=seed, tg_ids=tg_ids, auto_regen=auto_regen)

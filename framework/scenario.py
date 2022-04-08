@@ -26,7 +26,7 @@ import subprocess
 import platform
 
 from framework.global_resources import *
-from framework.data import Data, DataProcess, DataAttr, NodeBackend
+from framework.data import Data, DataProcess, EmptyDataProcess, DataAttr, NodeBackend
 from framework.node import Node
 from framework.target_helpers import Target
 from libs.external_modules import *
@@ -173,7 +173,7 @@ class Step(object):
             self._data_desc = [data_desc]
 
         for desc in self._data_desc:
-            assert isinstance(desc, (str, Data, DataProcess)), '{!r}, class:{:s}'.format(desc, self.__class__.__name__)
+            assert isinstance(desc, (str, Data, DataProcess, EmptyDataProcess)), '{!r}, class:{:s}'.format(desc, self.__class__.__name__)
 
         if isinstance(data_desc, str):
             self._node_name = [data_desc]
@@ -484,8 +484,10 @@ class Step(object):
                             step_desc += data_graph_desc_fstr.format(d.to_str()[:10]) if d.description is None else f'"{d.description}"'
                 elif isinstance(d, str):
                     step_desc += "{:s}".format(self._node_name[idx].upper())
+                elif isinstance(d, EmptyDataProcess):
+                    step_desc += 'DP(not defined yet)'
                 else:
-                    assert d is None
+                    assert d is None, f'incorrect object: {d}'
                     step_desc += '[' + self.__class__.__name__ + ']'
                 vtgids_str = ' -(vtg)-\> {:s}'.format(str(self.vtg_ids_list[idx])) if self.vtg_ids_list is not None else ''
                 step_desc += vtgids_str + '\n'
@@ -616,25 +618,40 @@ class FinalStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
                  start_tasks=None, stop_tasks=None,
-                 do_before_data_processing=None, valid=True, vtg_ids=None):
+                 do_before_data_processing=None, do_before_sending=None, valid=True, vtg_ids=None):
         Step.__init__(self, final=True, do_before_data_processing=do_before_data_processing,
+                      do_before_sending=do_before_sending,
                       valid=valid, vtg_ids=vtg_ids)
 
 class NoDataStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
                  start_tasks=None, stop_tasks=None,
-                 do_before_data_processing=None, valid=True, vtg_ids=None):
+                 do_before_data_processing=None, do_before_sending=None, valid=True, vtg_ids=None):
         Step.__init__(self, data_desc=Data(''), final=final,
                       fbk_timeout=fbk_timeout, fbk_mode=fbk_mode,
                       set_periodic=set_periodic, clear_periodic=clear_periodic,
                       start_tasks=start_tasks, stop_tasks=stop_tasks,
                       step_desc=step_desc, do_before_data_processing=do_before_data_processing,
+                      do_before_sending=do_before_sending,
                       valid=valid, vtg_ids=vtg_ids)
         self.make_blocked()
 
     def make_free(self):
         pass
+
+class StepStub(Step):
+    def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
+                 set_periodic=None, clear_periodic=None, step_desc=None,
+                 start_tasks=None, stop_tasks=None,
+                 do_before_data_processing=None, do_before_sending=None, valid=True, vtg_ids=None):
+        Step.__init__(self, data_desc=EmptyDataProcess(), final=final,
+                      fbk_timeout=fbk_timeout, fbk_mode=fbk_mode,
+                      set_periodic=set_periodic, clear_periodic=clear_periodic,
+                      start_tasks=start_tasks, stop_tasks=stop_tasks,
+                      step_desc=step_desc, do_before_data_processing=do_before_data_processing,
+                      do_before_sending=do_before_sending,
+                      valid=valid, vtg_ids=vtg_ids)
 
 class Transition(object):
 
