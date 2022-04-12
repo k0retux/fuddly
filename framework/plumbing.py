@@ -3802,6 +3802,8 @@ class FmkPlumbing(object):
 
         dmakers = {}
         for dt, related_dm in self._tactics.generators_info():
+            if related_dm is None:
+                continue
             if related_dm not in dmakers:
                 dmakers[related_dm] = []
             dmakers[related_dm].append(dt)
@@ -3819,6 +3821,8 @@ class FmkPlumbing(object):
 
         dmakers = {}
         for dt, related_dm in self._tactics.disruptors_info():
+            if related_dm is None:
+                continue
             if related_dm not in dmakers:
                 dmakers[related_dm] = []
             dmakers[related_dm].append(dt)

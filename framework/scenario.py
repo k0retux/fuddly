@@ -1125,7 +1125,7 @@ class Scenario(object):
                         uctxt_desc = '{'
                         uinputs = self.env.user_context.get_inputs()
                         for k, v in uinputs.items():
-                            uctxt_desc += '{:s} = {!r}\l|'.format(k, v)
+                            uctxt_desc += '{:s} = {!s}\l|'.format(k, v)
                         uctxt_desc = uctxt_desc[:-1] + '}'
                     else:
                         uctxt_desc = str(self.env.user_context)
