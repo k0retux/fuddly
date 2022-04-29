@@ -1178,12 +1178,12 @@ class d_fix_constraints(Disruptor):
 
             for n in l:
                 n.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
-                prev_data.add_info("release constraints from the node '{!s}'".format(n.name))
+                prev_data.add_info("reevaluate constraints from the node '{!s}'".format(n.name))
                 n.freeze()
 
         else:
             prev_content.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
-            prev_data.add_info('release constraints from the root')
+            prev_data.add_info('reevaluate constraints from the root')
 
         prev_content.freeze()
 
@@ -1564,3 +1564,65 @@ class d_add_data(Disruptor):
             # prev_content.show()
 
         return prev_data
+
+
+@disruptor(tactics, dtype="tWALKcsp", weight=1, modelwalker_user=True,
+           args={'path': ('Graph path regexp to select nodes on which'
+                          ' the disruptor should apply.', None, str),
+                 'sem': ('Semantics to select nodes on which'
+                         ' the disruptor should apply.', None, (str, list)),
+                 'color': ('Highlight the variable involved in the CSP', True, bool),
+                 })
+class sd_walk_csp_solutions(StatefulDisruptor):
+    """
+
+    When the CSP (Constraint Satisfiability Problem) backend are used in the node description.
+    This operator walk through the solutions of the CSP.
+
+    """
+
+    def setup(self, dm, user_input):
+        self._first_call_performed = False
+        self._count = 1
+        return True
+
+    def set_seed(self, prev_data):
+        prev_content = prev_data.content
+        if not isinstance(prev_content, Node):
+            prev_data.add_info('UNSUPPORTED INPUT')
+            return prev_data
+
+        self.constraints = prev_content.env.constraints
+        if not self.constraints:
+            prev_data.add_info('CSP BACKEND NOT USED BY THIS ATOM')
+            return prev_data
+
+        self.seed = prev_content
+        if self.color:
+            self.seed.enable_color()
+        self.seed.freeze()
+
+    def disrupt_data(self, dm, target, data):
+
+        if self._first_call_performed:
+            self.seed.unfreeze(recursive=False, dont_change_state=True, walk_csp_solutions=True)
+            self.seed.freeze()
+            self._count += 1
+        else:
+            self._first_call_performed = True
+
+        data.add_info('csp solution index: {:d}'.format(self._count))
+        data.add_info(' |_ variables assignment:')
+        solution = self.constraints.get_solution()
+        for var, value in solution.items():
+            data.add_info(f'     --> {var}: {value}')
+
+        # data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
+
+        if self.clone_node:
+            exported_node = Node(self.seed.name, base_node=self.seed, new_env=True)
+            data.update_from(exported_node)
+        else:
+            data.update_from(self.seed)
+
+        return data

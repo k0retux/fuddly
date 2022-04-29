@@ -49,6 +49,8 @@ from framework.basic_primitives import *
 from libs.external_modules import *
 from framework.global_resources import *
 from framework.error_handling import *
+from framework.constraint_helpers import Constraint
+
 import framework.value_types as fvt
 
 import libs.debug_facility as dbg
@@ -726,7 +728,7 @@ class NodeInternals(object):
     def _init_specific(self, arg):
         pass
 
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False, enable_color=False):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
         raise NotImplementedError
 
     def get_raw_value(self, **kwargs):
@@ -1292,7 +1294,7 @@ class DynNode_Helpers(object):
 
 
 class NodeInternals_Empty(NodeInternals):
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False, enable_color=False):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
         if return_node_internals:
             return (Node.DEFAULT_DISABLED_NODEINT, True)
         else:
@@ -1533,12 +1535,12 @@ class NodeInternals_GenFunc(NodeInternals):
             self.generator_arg = generator_arg
 
 
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False, enable_color=False):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
         if self.custo.trigger_last_mode and not self._trigger_registered:
             assert(self.env is not None)
             self._trigger_registered = True
             self.env.register_basic_djob(self._get_delayed_value,
-                                         args=[conf, recursive, enable_color],
+                                         args=[conf, recursive],
                                          prio=Node.DJOBS_PRIO_genfunc)
 
             if return_node_internals:
@@ -1550,13 +1552,12 @@ class NodeInternals_GenFunc(NodeInternals):
             self.reset_generator()
 
         ret = self.generated_node._get_value(conf=conf, recursive=recursive,
-                                             return_node_internals=return_node_internals,
-                                             enable_color=enable_color)
+                                             return_node_internals=return_node_internals)
         return (ret, False)
 
-    def _get_delayed_value(self, conf=None, recursive=True, enable_color=False):
+    def _get_delayed_value(self, conf=None, recursive=True):
         self.reset_generator()
-        ret = self.generated_node._get_value(conf=conf, recursive=recursive, enable_color=enable_color)
+        ret = self.generated_node._get_value(conf=conf, recursive=recursive)
         return (ret, False)
 
     def get_raw_value(self, **kwargs):
@@ -1755,7 +1756,7 @@ class NodeInternals_Term(NodeInternals):
     def _set_default_value_specific(self, val):
         raise NotImplementedError
 
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False, enable_color=False):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
 
         def format_val(val):
             fval = FontStyle.BOLD + colorize(val.decode('latin-1'), rgb=Color.ND_HLIGHT) + FontStyle.END
@@ -1763,7 +1764,7 @@ class NodeInternals_Term(NodeInternals):
             return fval
 
         if self.frozen_node is not None:
-            if enable_color and self.highlight:
+            if self.env.color_enabled and self.highlight:
                 fval = format_val(self.frozen_node)
             else:
                 fval = self.frozen_node
@@ -3563,20 +3564,20 @@ class NodeInternals_NonTerm(NodeInternals):
 
 
     def _get_value(self, conf=None, recursive=True, after_encoding=True,
-                   return_node_internals=False, enable_color=False):
+                   return_node_internals=False):
 
-        '''
+        """
         The parameter return_node_internals is not used for non terminal nodes,
         only for terminal nodes. However, keeping it also for non terminal nodes
         avoid additional checks in the code.
-        '''
+        """
 
         def tobytes_helper(node_internals):
             if isinstance(node_internals, bytes):
                 return node_internals
             else:
                 return node_internals._get_value(conf=conf, recursive=recursive,
-                                                 return_node_internals=False, enable_color=enable_color)[0]
+                                                 return_node_internals=False)[0]
 
         def handle_encoding(list_to_enc):
 
@@ -3658,7 +3659,7 @@ class NodeInternals_NonTerm(NodeInternals):
                     disabled_node = True
             else:
                 val = n._get_value(conf=conf, recursive=recursive,
-                                   return_node_internals=True, enable_color=enable_color)
+                                   return_node_internals=True)
 
             if self.separator is not None and isinstance(val, NodeInternals) and val.is_attr_set(NodeInternals.AutoSeparator) \
                     and disabled_node and not self.separator.suffix and not self.separator.always:
@@ -5473,9 +5474,11 @@ class Node(object):
             else:
                 if new_env:
                     self.env = Env() if ignore_frozen_state else copy.copy(base_node.env)
-                    # we always keep a reference to objects coming from other part of the framework,
-                    # namely: knowledge_source
-                    # self.env.knowledge_source = base_node.env.knowledge_source
+                    # we always keep a reference to objects coming from other part of the framework
+                    if ignore_frozen_state:
+                        # print('\n*** DBG (node init) ignore frozen state')
+                        self.env.constraints = copy.copy(base_node.env.constraints)
+                        self.env.constraints.reset()
                 else:
                     self.env = base_node.env
 
@@ -5586,7 +5589,7 @@ class Node(object):
 
         self.description = base_node.description
         self._post_freeze_handler = base_node._post_freeze_handler
-        
+
         if self.internals:
             self.internals = {}
         if self.entangled_nodes:
@@ -5658,6 +5661,21 @@ class Node(object):
         # We deal with node refs within NodeInternals, once the node_dico is complete
         for n in delayed_node_internals:
             n._update_node_refs(node_dico, debug=n)
+
+        if self.env is not None and self.env.constraints is not None:
+            for v in self.env.constraints.iter_vars():
+                old_nd = self.env.constraints.var_mapping[v]
+                new_node = node_dico.get(old_nd, None)
+                if new_node is not None:
+                    self.env.constraints.map_var_to_node(v, new_node)
+                    # print(f'\n*** DBG set_content for node "{old_nd.name}" (called from {self.name}): {v}'
+                    #       f'\n   --> old node: {old_nd}'
+                    #       f'\n   --> new node: {new_node}')
+                else:
+                    # It means we are called from a subnode which are not linked to the
+                    # variables thus we can break, as it exists at least one node from which some
+                    # paths exist to all the variables (and thus we will do the update from there).
+                    break
 
         if base_node.entangled_nodes is not None and ((not ignore_frozen_state) or accept_external_entanglement):
             entangled_set.add(base_node)
@@ -6521,6 +6539,8 @@ class Node(object):
     def get_env(self):
         return self.env
 
+    def add_constraints(self, constraints: Constraint):
+        self.env.constraints = copy.copy(constraints)
 
     def walk(self, conf=None, recursive=True, steps_num=1):
         for _ in range(steps_num):
@@ -6528,11 +6548,11 @@ class Node(object):
             self.freeze(conf=conf, recursive=recursive)
 
 
-    def freeze(self, conf=None, recursive=True, return_node_internals=False, enable_color=False):
+    def freeze(self, conf=None, recursive=True, return_node_internals=False):
 
         # Step 1 - get value
         ret = self._get_value(conf=conf, recursive=recursive,
-                              return_node_internals=return_node_internals, enable_color=enable_color)
+                              return_node_internals=return_node_internals)
 
         if self.env is None:
             print('Warning: freeze() is called on a node that does not have an Env()\n'
@@ -6550,14 +6570,22 @@ class Node(object):
                 self.env.execute_basic_djobs(Node.DJOBS_PRIO_genfunc)
 
             ret = self._get_value(conf=conf, recursive=recursive,
-                                  return_node_internals=return_node_internals,
-                                  enable_color=enable_color)
+                                  return_node_internals=return_node_internals)
+
+        # Step 3 - CSP resolution
+        if self.env.constraints is not None and not self.env.constraints.is_current_solution_processed:
+            solution = self.env.constraints.get_solution()
+            for var, value in solution.items():
+                nd = self.env.constraints.var_mapping[var]
+                nd.set_default_value(value)
+                if self.color_enabled:
+                    nd.set_attr(NodeInternals.Highlight, conf=conf)
 
         return ret
 
     get_value = freeze
 
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False, enable_color=False):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
 
         next_conf = conf if recursive else None
         conf2 = conf if self.is_conf_existing(conf) else self.current_conf
@@ -6573,13 +6601,11 @@ class Node(object):
             raise ValueError
 
         ret, was_not_frozen = internal._get_value(conf=next_conf, recursive=recursive,
-                                                  return_node_internals=return_node_internals,
-                                                  enable_color=enable_color)
+                                                  return_node_internals=return_node_internals)
 
         if was_not_frozen:
             pf_ret = self._post_freeze(internal, self, next_conf=next_conf, recursive=recursive,
-                                       return_node_internals=return_node_internals,
-                                       enable_color=enable_color)
+                                       return_node_internals=return_node_internals)
             # post_freeze handler can perform some change on the nodes. Thus, we have to update the
             # ret value accordingly.
             if pf_ret is not None:
@@ -6596,7 +6622,7 @@ class Node(object):
 
 
     def _post_freeze(self, node_internals, wrapping_node,
-                     next_conf, recursive, return_node_internals, enable_color):
+                     next_conf, recursive, return_node_internals):
         if self._post_freeze_handler is not None:
             self._post_freeze_handler(node_internals, wrapping_node)
             # We need to call again _get_value(), so that we are sure to provide to the freeze()
@@ -6612,8 +6638,7 @@ class Node(object):
             # value will be provided to the top caller. Thus, we need in this case to call _get_value()
             # again to force potential Djobs to be registered again.
             return node_internals._get_value(conf=next_conf, recursive=recursive,
-                                             return_node_internals=return_node_internals,
-                                             enable_color=enable_color)
+                                             return_node_internals=return_node_internals)
         else:
             return None
         
@@ -6640,17 +6665,16 @@ class Node(object):
                               ignore_entanglement=True)
 
 
-    def to_bytes(self, conf=None, recursive=True, enable_color=False):
+    def to_bytes(self, conf=None, recursive=True):
 
         def tobytes_helper(node_internals):
             if isinstance(node_internals, bytes):
                 return node_internals
             else:
                 return node_internals._get_value(conf=conf, recursive=recursive,
-                                                 return_node_internals=False,
-                                                 enable_color=enable_color)[0]
+                                                 return_node_internals=False)[0]
 
-        node_internals_list = self.freeze(conf=conf, recursive=recursive, enable_color=enable_color)
+        node_internals_list = self.freeze(conf=conf, recursive=recursive)
         if isinstance(node_internals_list, list):
             node_internals_list = list(flatten(node_internals_list))
             if node_internals_list:
@@ -6669,7 +6693,9 @@ class Node(object):
         return unconvert_from_internal_repr(val)
 
     def to_formatted_str(self, conf=None, recursive=True):
-        val = self.to_bytes(conf=conf, recursive=recursive, enable_color=True)
+        self.enable_color()
+        val = self.to_bytes(conf=conf, recursive=recursive)
+        self.disable_color()
         return unconvert_from_internal_repr(val)
 
     def to_ascii(self, conf=None, recursive=True):
@@ -6730,13 +6756,17 @@ class Node(object):
 
     def unfreeze(self, conf=None, recursive=True, dont_change_state=False,
                  ignore_entanglement=False, only_generators=False,
-                 reevaluate_constraints=False):
+                 reevaluate_constraints=False, walk_csp_solutions=False):
         self._delayed_jobs_called = False
 
         next_conf = conf
 
         if not self.is_conf_existing(conf):
             conf = self.current_conf
+
+        if walk_csp_solutions:
+            if self.env.constraints is not None and self.env.constraints.is_current_solution_processed:
+                self.env.constraints.next_solution()
 
         # if self.is_frozen(conf):
         self.internals[conf].unfreeze(next_conf, recursive=recursive, dont_change_state=dont_change_state,
@@ -6749,7 +6779,6 @@ class Node(object):
                            ignore_entanglement=True, only_generators=only_generators,
                            reevaluate_constraints=reevaluate_constraints)
 
-
     def unfreeze_all(self, recursive=True, ignore_entanglement=False):
         self._delayed_jobs_called = False
 
@@ -6760,7 +6789,6 @@ class Node(object):
         if not ignore_entanglement and self.entangled_nodes is not None:
             for e in self.entangled_nodes:
                 e.unfreeze_all(recursive=recursive, ignore_entanglement=True)
-
 
 
     def pretty_print(self, max_size=None, conf=None):
@@ -7142,6 +7170,17 @@ class Node(object):
                     print(f'\n\n*** Node update raised an error: "{err}"')
                     raise
 
+    def enable_color(self):
+        assert self.env is not None
+        self.env._color_enabled = True
+
+    def disable_color(self):
+        assert self.env is not None
+        self.env._color_enabled = False
+
+    @property
+    def color_enabled(self):
+        return self.env._color_enabled
 
     def __getattr__(self, name):
         internals = self.__getattribute__('internals')[self.current_conf]
@@ -7215,11 +7254,22 @@ class Env(object):
         self._dm = None
         self.id_list = None
         self._reentrancy_cpt = 0
-        # self._knowledge_source = None
+        self._color_enabled = False
+        self.constraints: Constraint = None
 
     @property
     def delayed_jobs_pending(self):
         return bool(self._sorted_jobs)
+
+    def enable_color(self):
+        self._color_enabled = True
+
+    def disable_color(self):
+        self._color_enabled = False
+
+    @property
+    def color_enabled(self):
+        return self._color_enabled
 
     def __getattr__(self, name):
         if hasattr(self.env4NT, name):
@@ -7423,6 +7473,7 @@ class Env(object):
         new_env.nodes_to_corrupt = copy.copy(self.nodes_to_corrupt)
         new_env.env4NT = copy.copy(self.env4NT)
         new_env._dm = copy.copy(self._dm)
+        new_env.constraints = copy.copy(self.constraints)
 
         # DJobs are ignored in the Env copy, because they only matters
         # in the context of one node graph (Nodes + 1 unique Env) for performing delayed jobs

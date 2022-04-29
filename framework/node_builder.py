@@ -54,6 +54,7 @@ class NodeBuilder(object):
         'name', 'contents', 'qty', 'clone', 'type', 'alt', 'conf',
         'custo_set', 'custo_clear', 'evolution_func', 'description',
         'default_qty', 'namespace', 'from_namespace', 'highlight',
+        'constraints',
         # NonTerminal description keys
         'weight', 'shape_type', 'section_type', 'duplicate_mode', 'weights',
         'separator', 'prefix', 'suffix', 'unique', 'always',
@@ -129,7 +130,7 @@ class NodeBuilder(object):
         n = self._create_graph_from_desc(desc, None)
 
         if self._add_env_to_the_node:
-            self._register_todo(n, self._set_env, prio=self.VERYLOW_PRIO)
+            self._register_todo(n, self._set_env, prio=self.VERYLOW_PRIO, last_position=False)
 
         todo = self._create_todo_list()
         loop = 0
@@ -431,6 +432,10 @@ class NodeBuilder(object):
             n.conf(conf).set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique, always=always)
 
         self._handle_common_attr(n, desc, conf, current_ns=namespace)
+
+        constraints = desc.get('constraints', None)
+        if constraints is not None:
+            self._register_todo(n, self._setup_constraints, args=(constraints, ns), prio=self.VERYLOW_PRIO)
 
         return n
 
@@ -850,6 +855,18 @@ class NodeBuilder(object):
 
         return node
 
+    def _setup_constraints(self, node, constraint, root_namespace):
+        for v in constraint.iter_vars():
+            nd = self.__get_node_from_db(constraint.from_var_to_varns(v), namespace=root_namespace)
+            assert issubclass(nd.cc.value_type.__class__, fvt.INT)
+            constraint.map_var_to_node(v, nd)
+            if nd.cc.value_type.values is not None:
+                domain = copy.copy(nd.cc.value_type.values)
+            else:
+                domain = range(nd.cc.value_type.mini_gen, nd.cc.value_type.maxi_gen + 1)
+            constraint.set_var_domain(v, domain)
+
+        node.add_constraints(constraint)
 
 class State(object):
     """

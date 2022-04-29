@@ -149,10 +149,10 @@ except ImportError:
     print('WARNING [FMK]: python(3)-serial module is not installed! '
           'Should be installed for serial-based Target.')
 
-z3_module = True
+csp_module = True
 try:
-    import z3
+    import constraint
 except ImportError:
-    z3_module = False
-    print('WARNING [FMK]: z3 module is not installed! '
+    csp_module = False
+    print('WARNING [FMK]: python-constraint module is not installed! '
           'Should be installed to support constraint-based nodes.')
