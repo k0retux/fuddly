@@ -190,19 +190,22 @@ class Step(object):
     def set_scenario_env(self, env):
         self._scenario_env = env
 
-    def connect_to(self, obj, dp_completed_guard=False, cbk_after_sending=None, cbk_after_fbk=None, prepend=False):
+    def connect_to(self, obj, dp_completed_guard=False, cbk_after_sending=None, cbk_after_fbk=None,
+                   prepend=False, description=None):
         if isinstance(self, NoDataStep):
             assert cbk_after_sending is None
 
         if dp_completed_guard:
             assert cbk_after_sending is None and cbk_after_fbk is None
             self.transition_on_dp_complete = True
-            self._transitions.insert(0, Transition(obj, dp_completed_guard=dp_completed_guard))
+            self._transitions.insert(0, Transition(obj, dp_completed_guard=dp_completed_guard,
+                                                   description=description))
 
         else:
             tr = Transition(obj,
                             cbk_after_sending=cbk_after_sending,
-                            cbk_after_fbk=cbk_after_fbk)
+                            cbk_after_fbk=cbk_after_fbk,
+                            description=description)
             if prepend:
                 self._transitions.insert(0, tr)
             else:
@@ -242,7 +245,8 @@ class Step(object):
     def make_stutter(self, count):
         self._stutter_cpt = 1
         self._stutter_max = count
-        self.connect_to(self, cbk_after_sending=self._stutter_cbk)
+        self.connect_to(self, cbk_after_sending=self._stutter_cbk,
+                        description=f'Loop {count} times' if count > 1 else f'Loop once')
 
     def is_blocked(self):
         return self._blocked
@@ -655,7 +659,8 @@ class StepStub(Step):
 
 class Transition(object):
 
-    def __init__(self, obj, dp_completed_guard=False, cbk_after_sending=None, cbk_after_fbk=None):
+    def __init__(self, obj, dp_completed_guard=False, cbk_after_sending=None, cbk_after_fbk=None,
+                 description=None):
         self._scenario_env = None
         self._obj = obj
         self.dp_completed_guard = dp_completed_guard
@@ -665,6 +670,8 @@ class Transition(object):
         if cbk_after_fbk:
             self._callbacks[HOOK.after_fbk] = cbk_after_fbk
         self._callbacks_qty = self._callbacks_pending = len(self._callbacks)
+
+        self._description = description
 
         self._invert_conditions = False
         self._crossable = True
@@ -738,6 +745,8 @@ class Transition(object):
     def __str__(self):
         if self.dp_completed_guard:
             desc = 'DP completed?'
+        elif self._description is not None:
+            desc = self._description
         else:
             desc = ''
             for k, v in self._callbacks.items():
