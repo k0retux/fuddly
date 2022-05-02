@@ -1571,6 +1571,9 @@ class d_add_data(Disruptor):
                           ' the disruptor should apply.', None, str),
                  'sem': ('Semantics to select nodes on which'
                          ' the disruptor should apply.', None, (str, list)),
+                 'notify_exhaustion': ('When all the solutions of the CSP have been walked '
+                                       'through, the disruptor will notify it if this parameter '
+                                       'is set to True.', True, bool),
                  'color': ('Highlight the variable involved in the CSP', True, bool),
                  })
 class sd_walk_csp_solutions(StatefulDisruptor):
@@ -1592,8 +1595,8 @@ class sd_walk_csp_solutions(StatefulDisruptor):
             prev_data.add_info('UNSUPPORTED INPUT')
             return prev_data
 
-        self.constraints = prev_content.env.constraints
-        if not self.constraints:
+        self.csp = prev_content.env.csp
+        if not self.csp:
             prev_data.add_info('CSP BACKEND NOT USED BY THIS ATOM')
             return prev_data
 
@@ -1606,23 +1609,30 @@ class sd_walk_csp_solutions(StatefulDisruptor):
 
         if self._first_call_performed:
             self.seed.unfreeze(recursive=False, dont_change_state=True, walk_csp_solutions=True)
-            self.seed.freeze()
-            self._count += 1
         else:
             self._first_call_performed = True
 
-        data.add_info('csp solution index: {:d}'.format(self._count))
-        data.add_info(' |_ variables assignment:')
-        solution = self.constraints.get_solution()
-        for var, value in solution.items():
-            data.add_info(f'     --> {var}: {value}')
+        if self.seed.no_more_solution_for_csp and self.notify_exhaustion:
+            data.make_unusable()
+            self.handover()
 
-        # data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
-
-        if self.clone_node:
-            exported_node = Node(self.seed.name, base_node=self.seed, new_env=True)
-            data.update_from(exported_node)
         else:
-            data.update_from(self.seed)
+            if self._first_call_performed:
+                self.seed.freeze()
+                self._count += 1
+
+            data.add_info('csp solution index: {:d}'.format(self._count))
+            data.add_info(' |_ variables assignment:')
+            solution = self.csp.get_solution()
+            for var, value in solution.items():
+                data.add_info(f'     --> {var}: {value}')
+
+            # data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
+
+            if self.clone_node:
+                exported_node = Node(self.seed.name, base_node=self.seed, new_env=True)
+                data.update_from(exported_node)
+            else:
+                data.update_from(self.seed)
 
         return data

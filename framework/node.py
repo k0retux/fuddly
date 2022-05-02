@@ -49,7 +49,7 @@ from framework.basic_primitives import *
 from libs.external_modules import *
 from framework.global_resources import *
 from framework.error_handling import *
-from framework.constraint_helpers import Constraint
+from framework.constraint_helpers import CSP
 
 import framework.value_types as fvt
 
@@ -5474,11 +5474,8 @@ class Node(object):
             else:
                 if new_env:
                     self.env = Env() if ignore_frozen_state else copy.copy(base_node.env)
-                    # we always keep a reference to objects coming from other part of the framework
                     if ignore_frozen_state:
-                        # print('\n*** DBG (node init) ignore frozen state')
-                        self.env.constraints = copy.copy(base_node.env.constraints)
-                        self.env.constraints.reset()
+                        self.env.csp = copy.copy(base_node.env.csp)
                 else:
                     self.env = base_node.env
 
@@ -5662,12 +5659,12 @@ class Node(object):
         for n in delayed_node_internals:
             n._update_node_refs(node_dico, debug=n)
 
-        if self.env is not None and self.env.constraints is not None:
-            for v in self.env.constraints.iter_vars():
-                old_nd = self.env.constraints.var_mapping[v]
+        if self.env is not None and self.env.csp is not None:
+            for v in self.env.csp.iter_vars():
+                old_nd = self.env.csp.var_mapping[v]
                 new_node = node_dico.get(old_nd, None)
                 if new_node is not None:
-                    self.env.constraints.map_var_to_node(v, new_node)
+                    self.env.csp.map_var_to_node(v, new_node)
                     # print(f'\n*** DBG set_content for node "{old_nd.name}" (called from {self.name}): {v}'
                     #       f'\n   --> old node: {old_nd}'
                     #       f'\n   --> new node: {new_node}')
@@ -6539,8 +6536,12 @@ class Node(object):
     def get_env(self):
         return self.env
 
-    def add_constraints(self, constraints: Constraint):
-        self.env.constraints = copy.copy(constraints)
+    def set_csp(self, csp: CSP):
+        self.env.csp = copy.copy(csp)
+
+    @property
+    def no_more_solution_for_csp(self):
+        return self.env.csp.exhausted_solution if self.env.csp is not None else True
 
     def walk(self, conf=None, recursive=True, steps_num=1):
         for _ in range(steps_num):
@@ -6573,10 +6574,10 @@ class Node(object):
                                   return_node_internals=return_node_internals)
 
         # Step 3 - CSP resolution
-        if self.env.constraints is not None and not self.env.constraints.is_current_solution_processed:
-            solution = self.env.constraints.get_solution()
+        if self.env.csp is not None and not self.env.csp.is_current_solution_processed:
+            solution = self.env.csp.get_solution()
             for var, value in solution.items():
-                nd = self.env.constraints.var_mapping[var]
+                nd = self.env.csp.var_mapping[var]
                 nd.set_default_value(value)
                 if self.color_enabled:
                     nd.set_attr(NodeInternals.Highlight, conf=conf)
@@ -6765,8 +6766,8 @@ class Node(object):
             conf = self.current_conf
 
         if walk_csp_solutions:
-            if self.env.constraints is not None and self.env.constraints.is_current_solution_processed:
-                self.env.constraints.next_solution()
+            if self.env.csp is not None and self.env.csp.is_current_solution_processed:
+                self.env.csp.next_solution()
 
         # if self.is_frozen(conf):
         self.internals[conf].unfreeze(next_conf, recursive=recursive, dont_change_state=dont_change_state,
@@ -7255,7 +7256,7 @@ class Env(object):
         self.id_list = None
         self._reentrancy_cpt = 0
         self._color_enabled = False
-        self.constraints: Constraint = None
+        self.csp: CSP = None
 
     @property
     def delayed_jobs_pending(self):
@@ -7473,7 +7474,7 @@ class Env(object):
         new_env.nodes_to_corrupt = copy.copy(self.nodes_to_corrupt)
         new_env.env4NT = copy.copy(self.env4NT)
         new_env._dm = copy.copy(self._dm)
-        new_env.constraints = copy.copy(self.constraints)
+        new_env.csp = copy.copy(self.csp)
 
         # DJobs are ignored in the Env copy, because they only matters
         # in the context of one node graph (Nodes + 1 unique Env) for performing delayed jobs

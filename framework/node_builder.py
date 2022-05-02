@@ -37,6 +37,7 @@ from framework.node import Node,\
     GenFuncCusto, NonTermCusto, FuncCusto, \
     NodeSemantics, SyncScope, SyncQtyFromObj, SyncSizeObj, NodeCondition, SyncExistenceObj, Env, \
     NodeInternalsCriteria, NodeInternals
+from framework.constraint_helpers import CSP
 
 import framework.value_types as fvt
 
@@ -855,18 +856,19 @@ class NodeBuilder(object):
 
         return node
 
-    def _setup_constraints(self, node, constraint, root_namespace):
-        for v in constraint.iter_vars():
-            nd = self.__get_node_from_db(constraint.from_var_to_varns(v), namespace=root_namespace)
-            assert issubclass(nd.cc.value_type.__class__, fvt.INT)
-            constraint.map_var_to_node(v, nd)
+    def _setup_constraints(self, node, constraints, root_namespace):
+        csp = CSP(constraints=constraints)
+
+        for v in csp.iter_vars():
+            nd = self.__get_node_from_db(csp.from_var_to_varns(v), namespace=root_namespace)
+            csp.map_var_to_node(v, nd)
             if nd.cc.value_type.values is not None:
                 domain = copy.copy(nd.cc.value_type.values)
             else:
                 domain = range(nd.cc.value_type.mini_gen, nd.cc.value_type.maxi_gen + 1)
-            constraint.set_var_domain(v, domain)
+            csp.set_var_domain(v, domain)
 
-        node.add_constraints(constraint)
+        node.set_csp(csp)
 
 class State(object):
     """

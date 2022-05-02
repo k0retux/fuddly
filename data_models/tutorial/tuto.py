@@ -10,6 +10,7 @@ import framework.dmhelpers.xml as xml
 from framework.dmhelpers.json import *
 from framework.dmhelpers.xml import tag_builder as xtb
 from framework.dmhelpers.xml import xml_decl_builder
+from framework.constraint_helpers import Constraint
 
 class MyDF_DataModel(DataModel):
 
@@ -576,12 +577,84 @@ class MyDF_DataModel(DataModel):
                   ]}
              ]}
 
+
+        csp_desc = \
+            {'name': 'csp',
+             'constraints': [Constraint(relation=lambda x, y, z: x == 3*y + z,
+                                        vars=('x_val', 'y_val', 'z_val')),
+                             Constraint(relation=lambda d1, d2: d1[1]+1 == d2[0] or d1[1]+2 == d2[0],
+                                        vars=('delim_1', 'delim_2'))],
+             'contents': [
+                 {'name': 'equation',
+                  'contents': String(values=['x = 3y + z'])},
+                 {'name': 'delim_1', 'contents': String(values=[' [', ' ('])},
+                 {'name': 'variables',
+                  'separator': {'contents': {'name': 'sep', 'contents': String(values=[', '])},
+                                'prefix': False, 'suffix': False},
+                  'contents': [
+                      {'name': 'x',
+                       'contents': [
+                          {'name': 'x_symbol',
+                           'contents': String(values=['x:'])},
+                           {'name': 'x_val',
+                            'contents': INT_str(min=0, max=180)} ]},
+                      {'name': 'y',
+                       'contents': [
+                           {'name': 'y_symbol',
+                            'contents': String(values=['y:'])},
+                           {'name': 'y_val',
+                            'contents': INT_str(min=10, max=40)}]},
+                      {'name': 'z',
+                       'contents': [
+                           {'name': 'z_symbol',
+                            'contents': String(values=['z:'])},
+                           {'name': 'z_val',
+                            'contents': INT_str(min=1, max=10)}]},
+                  ]},
+                 {'name': 'delim_2', 'contents': String(values=['-', ']', ')'])},
+             ]}
+
+
+        csp_ns_desc = \
+            {'name': 'csp_ns',
+             'constraints': [Constraint(relation=lambda lat_deg, lon_deg: lat_deg == lon_deg + 1,
+                                        vars=('lat_deg', 'lon_deg'),
+                                        var_to_varns={'lat_deg': ('deg', 'lat'),
+                                                      'lon_deg': ('deg', 'lon')}),
+                             Constraint(lambda lat_min, lon_deg: lat_min == lon_deg + 10,
+                                        vars=('lat_min', 'lon_deg'),
+                                        var_to_varns={'lon_deg': ('deg', 'lon'),
+                                                      'lat_min': ('min', 'lat')})],
+             'contents': [
+                 {'name': 'latitude',
+                  'namespace': 'lat',
+                  'contents': [
+                      {'name': 'dir',
+                       'contents': String(values=['N', 'S'])},
+                      {'name': 'deg',
+                       'contents': INT_str(min=0, max=90, min_size=2)},
+                      {'name': 'min',
+                       'contents': INT_str(min=0, max=59, min_size=2)},
+                  ]},
+                 {'name': 'longitude',
+                  'namespace': 'lon',
+                  'contents': [
+                      {'name': 'dir',
+                       'contents': String(values=['E', 'W'])},
+                      {'name': 'deg',
+                       'contents': INT_str(min=0, max=180, min_size=3)},
+                      {'name': 'min',
+                       'contents': INT_str(min=0, max=59, min_size=2)},
+                  ]},
+             ]}
+
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
                       shape_desc, for_network_tg1, for_network_tg2, for_net_default_tg, basic_intg,
                       enc_desc, example_desc,
                       regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc, xml5_desc,
-                      json1_desc, json2_desc, file_desc, nested_desc)
+                      json1_desc, json2_desc, file_desc, nested_desc,
+                      csp_desc, csp_ns_desc)
 
 
 data_model = MyDF_DataModel()
