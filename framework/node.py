@@ -6539,9 +6539,12 @@ class Node(object):
     def set_csp(self, csp: CSP):
         self.env.csp = copy.copy(csp)
 
+    def get_csp(self):
+        return self.env.csp
+
     @property
     def no_more_solution_for_csp(self):
-        return self.env.csp.exhausted_solution if self.env.csp is not None else True
+        return self.env.csp.exhausted_solutions if self.env.csp is not None else True
 
     def walk(self, conf=None, recursive=True, steps_num=1):
         for _ in range(steps_num):
@@ -6757,7 +6760,7 @@ class Node(object):
 
     def unfreeze(self, conf=None, recursive=True, dont_change_state=False,
                  ignore_entanglement=False, only_generators=False,
-                 reevaluate_constraints=False, walk_csp_solutions=False):
+                 reevaluate_constraints=False, walk_csp=False, walk_csp_step_size=1):
         self._delayed_jobs_called = False
 
         next_conf = conf
@@ -6765,9 +6768,12 @@ class Node(object):
         if not self.is_conf_existing(conf):
             conf = self.current_conf
 
-        if walk_csp_solutions:
+        if walk_csp:
             if self.env.csp is not None and self.env.csp.is_current_solution_processed:
-                self.env.csp.next_solution()
+                for i in range(walk_csp_step_size):
+                    self.env.csp.next_solution()
+                    if self.env.csp.exhausted_solutions:
+                        break
 
         # if self.is_frozen(conf):
         self.internals[conf].unfreeze(next_conf, recursive=recursive, dont_change_state=dont_change_state,

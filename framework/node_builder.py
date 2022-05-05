@@ -868,6 +868,7 @@ class NodeBuilder(object):
                 domain = range(nd.cc.value_type.mini_gen, nd.cc.value_type.maxi_gen + 1)
             csp.set_var_domain(v, domain)
 
+        csp.save_current_var_domains()
         node.set_csp(csp)
 
 class State(object):

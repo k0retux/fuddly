@@ -23,6 +23,7 @@
 
 import copy
 from typing import Tuple, List
+
 from libs.external_modules import *
 if csp_module:
     from constraint import *
@@ -33,11 +34,31 @@ class Constraint(object):
 
     relation = None
     vars = None
+    _var_domain = None
+    _orig_relation = None
 
     def __init__(self, relation, vars: Tuple, var_to_varns: dict = None):
-        self.relation = relation
+        self.relation = self._orig_relation = relation
         self.vars = vars
         self.var_to_varns = var_to_varns
+
+
+    @property
+    def var_domain(self):
+        return self._var_domain
+
+    @var_domain.setter
+    def var_domain(self, var_domain):
+        self._var_domain = var_domain
+
+    def negate(self):
+        self.relation = self._negated_relation
+
+    def reset_to_original(self):
+        self.relation = self._orig_relation
+
+    def _negated_relation(self, *args):
+        return not self._orig_relation(*args)
 
 class CSP(object):
 
@@ -46,6 +67,7 @@ class CSP(object):
     _var_to_varns = None
     _var_node_mapping = None
     _var_domain = None
+    _orig_var_domain = None
     _problem = None
     _solutions = None
     _model = None
@@ -96,6 +118,12 @@ class CSP(object):
         assert bool(domain)
         self._var_domain[var] = copy.copy(domain)
 
+    def save_current_var_domains(self):
+        self._orig_var_domain = self._var_domain
+
+    def restore_var_domains(self):
+        self._var_domain = self._orig_var_domain
+
     def map_var_to_node(self, var, node):
         self._var_node_mapping[var] = node
 
@@ -125,7 +153,7 @@ class CSP(object):
         self._solutions = self._problem.getSolutionIter()
 
     def next_solution(self):
-        if self._solutions is None or self.exhausted_solution:
+        if self._solutions is None or self._exhausted_solutions:
             self.reset()
             self._solve_constraints()
             try:
@@ -144,12 +172,35 @@ class CSP(object):
 
         self._solution_to_be_processed = False
 
+    def negate_constraint(self, idx):
+        assert 0 <= idx < self.nb_constraints
+        c = self._constraints[idx]
+        c.negate()
+        self.reset()
+
+    def reset_constraint(self, idx):
+        assert 0 <= idx < self.nb_constraints
+        c = self._constraints[idx]
+        c.reset_to_original()
+        self.reset()
+
+    def get_all_constraints(self):
+        return self._constraints
+
+    def get_constraint(self, idx):
+        assert 0 <= idx < self.nb_constraints
+        return self._constraints[idx]
+
+    @property
+    def nb_constraints(self):
+        return len(self._constraints)
+
     @property
     def is_current_solution_processed(self):
         return self._solution_to_be_processed
 
     @property
-    def exhausted_solution(self):
+    def exhausted_solutions(self):
         return self._exhausted_solutions
 
     def __copy__(self):
