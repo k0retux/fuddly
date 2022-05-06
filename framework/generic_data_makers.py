@@ -1568,7 +1568,7 @@ class d_add_data(Disruptor):
 
 @disruptor(tactics, dtype="tWALKcsp", weight=1, modelwalker_user=False,
            args={'init': ('Make the operator ignore all the steps until the provided one', 1, int),
-                 'clone_node': ('If True the dmaker will always return a copy '
+                 'clone_node': ('If True, this operator will always return a copy '
                                 'of the node. (for stateless diruptors dealing with '
                                 'big data it can be usefull to set it to False)', True, bool),
                  'notify_exhaustion': ('When all the solutions of the CSP have been walked '
@@ -1579,7 +1579,7 @@ class d_add_data(Disruptor):
 class sd_walk_csp_solutions(StatefulDisruptor):
     """
 
-    When the CSP (Constraint Satisfiability Problem) backend are used in the node description.
+    When the CSP (Constraint Satisfiability Problem) backend are used in the data description.
     This operator walk through the solutions of the CSP.
 
     """
@@ -1611,8 +1611,8 @@ class sd_walk_csp_solutions(StatefulDisruptor):
         if self._first_call_performed or self.init > 1:
             self.seed.unfreeze(recursive=False, dont_change_state=True, walk_csp=True,
                                walk_csp_step_size=self._step_size)
-        else:
-            self._step_size = 1
+
+        self._step_size = 1
 
         if self.seed.no_more_solution_for_csp and self.notify_exhaustion:
             data.make_unusable()
@@ -1631,8 +1631,6 @@ class sd_walk_csp_solutions(StatefulDisruptor):
             for var, value in solution.items():
                 data.add_info(f'     --> {var}: {value}')
 
-            # data.add_info(' |_ run: {:d} / {:d} (max)'.format(self.run_num, self.max_runs))
-
             if self.clone_node:
                 exported_node = Node(self.seed.name, base_node=self.seed, new_env=True)
                 data.update_from(exported_node)
@@ -1642,31 +1640,38 @@ class sd_walk_csp_solutions(StatefulDisruptor):
         return data
 
 
-@disruptor(tactics, dtype="tSEM", weight=1, modelwalker_user=False,
-           args={'init': ('Make the operator ignore all the steps until the provided one', 1, int),
-                 'clone_node': ('If True the dmaker will always return a copy '
+@disruptor(tactics, dtype="tCONST", weight=1, modelwalker_user=False,
+           args={'const_idx': ('Index of the constraint to begin with (first index is 1)', 1, int),
+                 'sample_idx': ('Index of the sample for the selected constraint to begin with ('
+                                'first index is 1)', 1, int),
+                 'clone_node': ('If True, this operator will always return a copy '
                                 'of the node. (for stateless diruptors dealing with '
                                 'big data it can be usefull to set it to False)', True, bool),
-                 'samples_per_cst': ('Number of samples to output for each negated constraint', 1, int),
+                 'samples_per_cst': ('Maximum number of samples to output for each negated '
+                                     'constraint (-1 means until the end)',
+                                     -1, int),
                  'color': ('Highlight the variable involved in the CSP', True, bool),
                  })
-class sd_semantic_fuzz(StatefulDisruptor):
+class sd_constraint_fuzz(StatefulDisruptor):
     """
 
     When the CSP (Constraint Satisfiability Problem) backend are used in the node description.
     This operator negates the constraint one-by-one and output 1 or more samples for each negated
     constraint.
 
-    TODO: Implement the parameter @init
-
     """
 
     def setup(self, dm, user_input):
-        self._first_call_performed = False
+
+        assert self.const_idx > 0
+        assert self.sample_idx > 0
+
+        self._first_call = True
         self._count = 1
         self._constraint_negated = False
-        self._current_constraint_idx = 0
+        self._current_constraint_idx = self.const_idx-1
         self._sample_count = 0
+        self._step_size = self.sample_idx
 
         return True
 
@@ -1696,59 +1701,69 @@ class sd_semantic_fuzz(StatefulDisruptor):
         for v in variables:
             self.csp.set_var_domain(v, [self.valid_solution[v]])
 
+    def _process_next_constraint(self):
+        self.csp.restore_var_domains()
+        self.csp.reset_constraint(self._current_constraint_idx)
+        self._constraint_negated = False
+        if self._current_constraint_idx < self.csp.nb_constraints - 1:
+            self._current_constraint_idx += 1
+            self.csp.negate_constraint(self._current_constraint_idx)
+            self._constraint_negated = True
+            self._update_csp()
+            self._sample_count = 1
+            return True
+
+        else:
+            return False
+
     def disrupt_data(self, dm, target, data):
 
         if not self._constraint_negated:
             self.csp.negate_constraint(self._current_constraint_idx)
             self._constraint_negated = True
             self._update_csp()
+            self.seed.freeze()
 
-        if self._sample_count < self.samples_per_cst:
-            self._sample_count += 1
-
-        else:
-            self.csp.restore_var_domains()
-            self.csp.reset_constraint(self._current_constraint_idx)
-            self._constraint_negated = False
-            if self._current_constraint_idx < self.csp.nb_constraints-1:
-                self._current_constraint_idx += 1
-                self.csp.negate_constraint(self._current_constraint_idx)
-                self._constraint_negated = True
-                self._update_csp()
-                self._sample_count = 1
+        if self._sample_count < self.samples_per_cst or self.samples_per_cst == -1:
+            if self._first_call:
+                self._sample_count = self._step_size
             else:
+                self._sample_count += 1
+        else:
+            if not self._process_next_constraint(): # no more constraint to deal with
                 data.make_unusable()
                 self.handover()
                 return data
 
-        if self._first_call_performed:
-            self.seed.unfreeze(recursive=False, dont_change_state=True, walk_csp=True)
+        if self._first_call:
+            self.seed.unfreeze(recursive=False, dont_change_state=True, walk_csp=True,
+                               walk_csp_step_size=self._step_size)
+            self._first_call = False
         else:
-            self.seed.freeze()
+            self.seed.unfreeze(recursive=False, dont_change_state=True, walk_csp=True,
+                               walk_csp_step_size=1)
 
         if self.seed.no_more_solution_for_csp: # Node.unfreeze() will trigger it if no new solution
-            data.make_unusable()
-            self.handover()
+            if not self._process_next_constraint():
+                data.make_unusable()
+                self.handover()
+                return data
 
+        self.seed.freeze()
+        self._count += 1
+
+        data.add_info(f'constraint fuzzing test case index: {self._count}')
+        data.add_info(f' |_ constraint number: {self._current_constraint_idx+1}/{self.csp.nb_constraints}')
+        data.add_info(f' |_ sample index: {self._sample_count}/{self.samples_per_cst}')
+        data.add_info(' |_ variables assignment:')
+        solution = self.csp.get_solution()
+        for var, value in solution.items():
+            data.add_info(f'     --> {var}: {value}')
+
+        if self.clone_node:
+            exported_node = Node(self.seed.name, base_node=self.seed, new_env=True)
+            data.update_from(exported_node)
         else:
-            if self._first_call_performed:
-                self.seed.freeze()
-                self._count += 1
-            else:
-                self._first_call_performed = True
-
-            data.add_info(f'semantic fuzzing test case index: {self._count}')
-            data.add_info(f' |_ constraint number: {self._current_constraint_idx+1}/{self.csp.nb_constraints}')
-            data.add_info(f' |_ sample index: {self._sample_count}/{self.samples_per_cst}')
-            data.add_info(' |_ variables assignment:')
-            solution = self.csp.get_solution()
-            for var, value in solution.items():
-                data.add_info(f'     --> {var}: {value}')
-
-            if self.clone_node:
-                exported_node = Node(self.seed.name, base_node=self.seed, new_env=True)
-                data.update_from(exported_node)
-            else:
-                data.update_from(self.seed)
+            data.update_from(self.seed)
 
         return data

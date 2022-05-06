@@ -98,7 +98,7 @@ Parameters:
         |      |       than 1.
         |      | default: -1 [type: int]
         |_ clone_node
-        |      | desc: if True the dmaker will always return a copy of the node. (for
+        |      | desc: if True, this operator will always return a copy of the node. (for
         |      |       stateless disruptors dealing with big data it can be useful
         |      |       to it to False)
         |      | default: True [type: bool]
@@ -235,7 +235,7 @@ Parameters:
   .. code-block:: none
 
          |_ clone_node
-         |      | desc: if True the dmaker will always return a copy of the node. (for
+         |      | desc: if True, this operator will always return a copy of the node. (for
          |      |       stateless disruptors dealing with big data it can be useful
          |      |       to it to False)
          |      | default: True [type: bool]
@@ -261,6 +261,41 @@ Parameters:
          |      | default: None [type: str, list, tuple]
 
 
+tCONST - Alteration of Constraints
+++++++++++++++++++++++++++++++++++
+
+Description:
+    When the CSP (Constraint Satisfiability Problem) backend are used in the node description.
+    This operator negates the constraint one-by-one and output 1 or more samples for each negated
+    constraint.
+
+Reference:
+  :class:`framework.generic_data_makers.sd_constraint_fuzz`
+
+Parameters:
+  .. code-block:: none
+
+    |_ const_idx
+    |      | desc: Index of the constraint to begin with (first index is 1)
+    |      | default: 1 [type: int]
+    |_ sample_idx
+    |      | desc: Index of the sample for the selected constraint to begin with
+    |      |       (first index is 1)
+    |      | default: 1 [type: int]
+    |_ clone_node
+    |      | desc: If True, this operator will always return a copy of the node.
+    |      |       (for stateless diruptors dealing with big data it can be usefull
+    |      |       to set it to False)
+    |      | default: True [type: bool]
+    |_ samples_per_cst
+    |      | desc: Maximum number of samples to output for each negated constraint
+    |      |       (-1 means until the end)
+    |      | default: -1 [type: int]
+    |_ color
+    |      | desc: Highlight the variable involved in the CSP
+    |      | default: True [type: bool]
+
+
 tSEP - Alteration of Separator Node
 +++++++++++++++++++++++++++++++++++
 
@@ -277,7 +312,7 @@ Parameters:
   .. code-block:: none
 
          |_ clone_node
-         |      | desc: if True the dmaker will always return a copy of the node. (for
+         |      | desc: if True, this operator will always return a copy of the node. (for
          |      |       stateless disruptors dealing with big data it can be useful
          |      |       to it to False)
          |      | default: True [type: bool]
@@ -330,7 +365,7 @@ Parameters:
   .. code-block:: none
 
         |_ clone_node
-        |      | desc: if True the dmaker will always return a copy of the node. (for
+        |      | desc: if True, this operator will always return a copy of the node. (for
         |      |       stateless disruptors dealing with big data it can be useful
         |      |       to it to False)
         |      | default: True [type: bool]
@@ -387,6 +422,37 @@ Parameters:
         |      | desc: Walk through all the nodes even if their Mutable attribute is
         |      |       cleared.
         |      | default: True [type: bool]
+
+
+tWALKcsp - Walk Through the Constraint of a Data Model
+++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Description:
+    When the CSP (Constraint Satisfiability Problem) backend are used in the data description.
+    This operator walk through the solutions of the CSP.
+
+Reference:
+  :class:`framework.generic_data_makers.sd_walk_csp_solutions`
+
+Parameters:
+  .. code-block:: none
+
+    |_ init
+    |      | desc: Make the operator ignore all the steps until the provided one
+    |      | default: 1 [type: int]
+    |_ clone_node
+    |      | desc: If True, this operator will always return a copy of the node.
+    |      |       (for stateless diruptors dealing with big data it can be usefull
+    |      |       to set it to False)
+    |      | default: True [type: bool]
+    |_ notify_exhaustion
+    |      | desc: When all the solutions of the CSP have been walked through,
+    |      |       the disruptor will notify it if this parameter is set to True.
+    |      | default: True [type: bool]
+    |_ color
+    |      | desc: Highlight the variable involved in the CSP
+    |      | default: True [type: bool]
+
 
 
 Stateless Disruptors
@@ -559,7 +625,7 @@ Parameters:
       |      |       apply
       |      | default: None [type: str]
       |_ clone_node
-      |      | desc: if True the dmaker will always return a copy of the node. (for
+      |      | desc: if True, this operator will always return a copy of the node. (for
       |      |       stateless disruptors dealing with big data it can be useful
       |      |       to it to False)
       |      | default: False [type: bool]
@@ -593,7 +659,7 @@ Parameters:
       |      |       apply
       |      | default: None [type: str]
       |_ clone_node
-      |      | desc: if True the dmaker will always return a copy of the node. (for
+      |      | desc: if True, this operator will always return a copy of the node. (for
       |      |       stateless disruptors dealing with big data it can be useful
       |      |       to it to False)
       |      | default: False [type: bool]

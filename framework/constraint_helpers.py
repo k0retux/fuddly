@@ -72,7 +72,7 @@ class CSP(object):
     _solutions = None
     _model = None
     _exhausted_solutions = None
-    _solution_to_be_processed = False
+    _solution_is_processed = False
 
     def __init__(self, constraints: Constraint or List[Constraint] = None):
         assert csp_module, "the CSP backend is disabled because python-constraint module is not installed!"
@@ -105,7 +105,7 @@ class CSP(object):
         self._solutions = None
         self._model = None
         self._exhausted_solutions = False
-        self._solution_to_be_processed = False
+        self._solution_is_processed = False
 
     def iter_vars(self):
         for v in self._vars:
@@ -135,7 +135,7 @@ class CSP(object):
         if not self._model:
             self.next_solution()
 
-        self._solution_to_be_processed = True
+        self._solution_is_processed = True
 
         return self._model
 
@@ -159,7 +159,7 @@ class CSP(object):
             try:
                 mdl = next(self._solutions)
             except StopIteration:
-                raise ConstraintError(f'no solution found with the provided constraint {id(self)}')
+                raise ConstraintError(f'No solution found for this CSP\n --> variables: {self._vars}')
             else:
                 self._model = mdl
         else:
@@ -170,7 +170,7 @@ class CSP(object):
             else:
                 self._model = mdl
 
-        self._solution_to_be_processed = False
+        self._solution_is_processed = False
 
     def negate_constraint(self, idx):
         assert 0 <= idx < self.nb_constraints
@@ -197,7 +197,7 @@ class CSP(object):
 
     @property
     def is_current_solution_processed(self):
-        return self._solution_to_be_processed
+        return self._solution_is_processed
 
     @property
     def exhausted_solutions(self):

@@ -452,7 +452,7 @@ GENERIC_ARGS = {
     'min_node_tc': ('Minimum number of test cases per node (-1 means until the end)', -1, int),
     'max_node_tc': ('Maximum number of test cases per node (-1 means until the end). This value is '
                     'used for nodes with a fuzz weight strictly greater than 1.', -1, int),
-    'clone_node': ('If True the dmaker will always return a copy ' \
+    'clone_node': ('If True, this operator will always return a copy ' \
                    'of the node. (for stateless diruptors dealing with ' \
                    'big data it can be usefull to set it to False)', True, bool)
 }

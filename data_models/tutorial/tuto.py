@@ -580,10 +580,10 @@ class MyDF_DataModel(DataModel):
 
         csp_desc = \
             {'name': 'csp',
-             'constraints': [Constraint(relation=lambda x, y, z: x == 3*y + z,
-                                        vars=('x_val', 'y_val', 'z_val')),
-                             Constraint(relation=lambda d1, d2: d1[1]+1 == d2[0] or d1[1]+2 == d2[0],
-                                        vars=('delim_1', 'delim_2'))],
+             'constraints': [Constraint(relation=lambda d1, d2: d1[1]+1 == d2[0] or d1[1]+2 == d2[0],
+                                        vars=('delim_1', 'delim_2')),
+                             Constraint(relation=lambda x, y, z: x == 3*y + z,
+                                        vars=('x_val', 'y_val', 'z_val'))],
              'contents': [
                  {'name': 'equation',
                   'contents': String(values=['x = 3y + z'])},
@@ -594,22 +594,22 @@ class MyDF_DataModel(DataModel):
                   'contents': [
                       {'name': 'x',
                        'contents': [
-                          {'name': 'x_symbol',
-                           'contents': String(values=['x:'])},
+                           {'name': 'x_symbol',
+                            'contents': String(values=['x:'])},
                            {'name': 'x_val',
-                            'contents': INT_str(min=0, max=180)} ]},
+                            'contents': INT_str(min=120, max=160)} ]},
                       {'name': 'y',
                        'contents': [
                            {'name': 'y_symbol',
                             'contents': String(values=['y:'])},
                            {'name': 'y_val',
-                            'contents': INT_str(min=10, max=40)}]},
+                            'contents': INT_str(min=30, max=40)}]},
                       {'name': 'z',
                        'contents': [
                            {'name': 'z_symbol',
                             'contents': String(values=['z:'])},
                            {'name': 'z_val',
-                            'contents': INT_str(min=1, max=10)}]},
+                            'contents': INT_str(min=1, max=3)}]},
                   ]},
                  {'name': 'delim_2', 'contents': String(values=['-', ']', ')'])},
              ]}
