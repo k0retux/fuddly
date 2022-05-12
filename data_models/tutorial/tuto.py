@@ -584,6 +584,7 @@ class MyDF_DataModel(DataModel):
                                         vars=('delim_1', 'delim_2')),
                              Constraint(relation=lambda x, y, z: x == 3*y + z,
                                         vars=('x_val', 'y_val', 'z_val'))],
+             'constraints_highlight': True,
              'contents': [
                  {'name': 'equation',
                   'contents': String(values=['x = 3y + z'])},
@@ -595,19 +596,19 @@ class MyDF_DataModel(DataModel):
                       {'name': 'x',
                        'contents': [
                            {'name': 'x_symbol',
-                            'contents': String(values=['x:'])},
+                            'contents': String(values=['x:', 'X:'])},
                            {'name': 'x_val',
-                            'contents': INT_str(min=120, max=160)} ]},
+                            'contents': INT_str(min=120, max=130)} ]},
                       {'name': 'y',
                        'contents': [
                            {'name': 'y_symbol',
-                            'contents': String(values=['y:'])},
+                            'contents': String(values=['y:', 'Y:'])},
                            {'name': 'y_val',
                             'contents': INT_str(min=30, max=40)}]},
                       {'name': 'z',
                        'contents': [
                            {'name': 'z_symbol',
-                            'contents': String(values=['z:'])},
+                            'contents': String(values=['z:', 'Z:'])},
                            {'name': 'z_val',
                             'contents': INT_str(min=1, max=3)}]},
                   ]},

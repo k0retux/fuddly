@@ -99,7 +99,7 @@ class ModelWalker(object):
                                   consumed_nodes=set(), parent_node=self._root_node,
                                   consumer=self._consumer)
         for consumed_node, orig_node_val in gen:
-            self._root_node.freeze()
+            self._root_node.freeze(resolve_csp=True)
 
             self.consumed_node_path = consumed_node.get_path_from(self._root_node)
             if self.consumed_node_path == None:
@@ -352,7 +352,7 @@ class ModelWalker(object):
             raise ValueError  # We should never return here, otherwise its a bug we want to alert on
 
         consumed_nodes.add(node)
-        node.freeze()
+        node.freeze(restrict_csp=True, resolve_csp=True)
         not_recovered = True
 
         max_steps = consumer.wait_for_exhaustion(node)
@@ -406,16 +406,16 @@ class ModelWalker(object):
             if max_steps != 0:
                 max_steps -= 1
                 if consume_called_again:
-                    node.freeze()
+                    node.freeze(restrict_csp=True, resolve_csp=True)
                     # consume_called_again = False
                 else:
                     # In this case we iterate only on the current node
                     node.unfreeze(recursive=False, ignore_entanglement=True)
-                    node.freeze()
+                    node.freeze(restrict_csp=True, resolve_csp=True)
                     if consumer.fix_constraints:
                         node.fix_synchronized_nodes()
             elif consume_called_again and max_steps != 0:
-                node.freeze()
+                node.freeze(restrict_csp=True, resolve_csp=True)
                 # consume_called_again = False
             else:
                 if not_recovered and (consumer.interested_by(node) or node in consumed_nodes):

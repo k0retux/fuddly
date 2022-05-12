@@ -291,9 +291,6 @@ Parameters:
     |      | desc: Maximum number of samples to output for each negated constraint
     |      |       (-1 means until the end)
     |      | default: -1 [type: int]
-    |_ color
-    |      | desc: Highlight the variable involved in the CSP
-    |      | default: True [type: bool]
 
 
 tSEP - Alteration of Separator Node
@@ -359,7 +356,7 @@ Description:
   alteration* is performed by this disruptor.
 
 Reference:
-  :class:`framework.generic_data_makers.sd_iter_over_data`
+  :class:`framework.generic_data_makers.sd_walk_data_model`
 
 Parameters:
   .. code-block:: none
@@ -449,10 +446,6 @@ Parameters:
     |      | desc: When all the solutions of the CSP have been walked through,
     |      |       the disruptor will notify it if this parameter is set to True.
     |      | default: True [type: bool]
-    |_ color
-    |      | desc: Highlight the variable involved in the CSP
-    |      | default: True [type: bool]
-
 
 
 Stateless Disruptors

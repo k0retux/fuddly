@@ -4555,3 +4555,124 @@ class TestFMK(unittest.TestCase):
         fmk.reload_all(tg_ids=[7])
         fmk.process_data_and_send(DataProcess(['SC_EVOL1']), verbose=False, max_loop=-1)
         fmk.process_data_and_send(DataProcess(['SC_EVOL2']), verbose=False, max_loop=-1)
+
+
+class TestConstBackend(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        fmk.run_project(name='tuto', tg_ids=0, dm_name='mydf')
+        fmk.prj.reset_target_mappings()
+        fmk.disable_fmkdb()
+
+    def setUp(self):
+        fmk.reload_all(tg_ids=[0])
+        fmk.prj.reset_target_mappings()
+
+    def test_twalkcsp_operator(self):
+        idx = 0
+        expected_idx = 8
+        expected_outcomes = [b'x = 3y + z (x:123, y:40, z:3)',
+                             b'x = 3y + z (x:120, y:39, z:3)',
+                             b'x = 3y + z (x:122, y:40, z:2)',
+                             b'x = 3y + z (x:121, y:40, z:1)',
+                             b'x = 3y + z [x:123, y:40, z:3]',
+                             b'x = 3y + z [x:120, y:39, z:3]',
+                             b'x = 3y + z [x:122, y:40, z:2]',
+                             b'x = 3y + z [x:121, y:40, z:1]']
+        outcomes = []
+
+        act = [('CSP', UI(determinist=True)), ('tWALKcsp')]
+        for j in range(20):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            # d.show()
+            idx += 1
+
+        self.assertEqual(idx, expected_idx)
+        self.assertEqual(outcomes, expected_outcomes)
+
+    def test_twalk_operator(self):
+        idx = 0
+        expected_idx = 13
+        expected_outcomes = [b'x = 3y + z (x:123, y:40, z:3)',
+                             b'x = 3y + z (X:123, y:40, z:3)',
+                             b'x = 3y + z (x:123, y:40, z:3)', # redundancy
+                             b'x = 3y + z (x:124, y:40, z:3)',
+                             b'x = 3y + z (x:125, y:40, z:3)',
+                             b'x = 3y + z (x:126, y:40, z:3)',
+                             b'x = 3y + z (x:127, y:40, z:3)',
+                             b'x = 3y + z (x:128, y:40, z:3)',
+                             b'x = 3y + z (x:129, y:40, z:3)',
+                             b'x = 3y + z (x:130, y:40, z:3)',
+                             b'x = 3y + z (x:120, y:39, z:3)',
+                             b'x = 3y + z (x:121, y:40, z:1)',
+                             b'x = 3y + z (x:122, y:40, z:2)']
+        outcomes = []
+
+        act = [('CSP', UI(determinist=True)), ('tWALK', UI(path='csp/variables/x'))]
+        for j in range(20):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            # d.show()
+            idx += 1
+
+        self.assertEqual(idx, expected_idx)
+        self.assertEqual(outcomes, expected_outcomes)
+
+        idx = 0
+        expected_idx = 2
+        expected_outcomes = [b'x = 3y + z [x:123, y:40, z:3]',
+                             b'x = 3y + z (x:123, y:40, z:3)']
+        outcomes = []
+
+        act = [('CSP', UI(determinist=True)), ('tWALK', UI(path='csp/delim_1'))]
+        for j in range(20):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            # d.show()
+            idx += 1
+
+        self.assertEqual(idx, expected_idx)
+        self.assertEqual(outcomes, expected_outcomes)
+
+
+    def test_tconst_operator(self):
+        idx = 0
+        expected_idx = 362
+        expected_outcomes = [b'x = 3y + z (x:123, y:40, z:3-',
+                             b'x = 3y + z [x:123, y:40, z:3)',
+                             b'x = 3y + z [x:123, y:40, z:3-',
+                             b'x = 3y + z (x:130, y:40, z:3)',
+                             b'x = 3y + z (x:130, y:39, z:3)',
+                             b'x = 3y + z (x:130, y:38, z:3)']
+        outcomes = []
+
+        act = [('CSP', UI(determinist=True)), ('tCONST')]
+        for j in range(500):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            # d.show()
+            idx += 1
+
+        self.assertEqual(idx, expected_idx)
+        self.assertEqual(outcomes[:6], expected_outcomes)

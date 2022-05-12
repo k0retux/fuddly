@@ -42,7 +42,6 @@ class Constraint(object):
         self.vars = vars
         self.var_to_varns = var_to_varns
 
-
     @property
     def var_domain(self):
         return self._var_domain
@@ -60,6 +59,11 @@ class Constraint(object):
     def _negated_relation(self, *args):
         return not self._orig_relation(*args)
 
+    def __copy__(self):
+        new_cst = type(self)(self._orig_relation, self.vars, self.var_to_varns)
+        new_cst.__dict__.update(self.__dict__)
+        return new_cst
+
 class CSP(object):
 
     _constraints = None
@@ -67,14 +71,16 @@ class CSP(object):
     _var_to_varns = None
     _var_node_mapping = None
     _var_domain = None
+    _var_domain_updated = False
     _orig_var_domain = None
     _problem = None
     _solutions = None
     _model = None
     _exhausted_solutions = None
-    _solution_is_processed = False
+    _is_solution_queried = False
+    highlight_variables = None
 
-    def __init__(self, constraints: Constraint or List[Constraint] = None):
+    def __init__(self, constraints: Constraint or List[Constraint] = None, highlight_variables=False):
         assert csp_module, "the CSP backend is disabled because python-constraint module is not installed!"
 
         if isinstance(constraints, Constraint):
@@ -99,13 +105,16 @@ class CSP(object):
 
         self._var_node_mapping = {}
         self._var_domain = {}
+        self._var_domain_updated = False
+
+        self.highlight_variables = highlight_variables
 
     def reset(self):
         self._problem = Problem()
         self._solutions = None
         self._model = None
         self._exhausted_solutions = False
-        self._solution_is_processed = False
+        self._is_solution_queried = False
 
     def iter_vars(self):
         for v in self._vars:
@@ -114,15 +123,22 @@ class CSP(object):
     def from_var_to_varns(self, var):
         return var if self._var_to_varns is None else self._var_to_varns[var]
 
+    @property
+    def var_domain_updated(self):
+        return self._var_domain_updated
+
     def set_var_domain(self, var, domain):
         assert bool(domain)
         self._var_domain[var] = copy.copy(domain)
+        self._var_domain_updated = True
 
     def save_current_var_domains(self):
-        self._orig_var_domain = self._var_domain
+        self._orig_var_domain = copy.copy(self._var_domain)
+        self._var_domain_updated = False
 
     def restore_var_domains(self):
-        self._var_domain = self._orig_var_domain
+        self._var_domain = copy.copy(self._orig_var_domain)
+        self._var_domain_updated = False
 
     def map_var_to_node(self, var, node):
         self._var_node_mapping[var] = node
@@ -135,7 +151,7 @@ class CSP(object):
         if not self._model:
             self.next_solution()
 
-        self._solution_is_processed = True
+        self._is_solution_queried = True
 
         return self._model
 
@@ -170,7 +186,7 @@ class CSP(object):
             else:
                 self._model = mdl
 
-        self._solution_is_processed = False
+        self._is_solution_queried = False
 
     def negate_constraint(self, idx):
         assert 0 <= idx < self.nb_constraints
@@ -196,19 +212,22 @@ class CSP(object):
         return len(self._constraints)
 
     @property
-    def is_current_solution_processed(self):
-        return self._solution_is_processed
+    def is_current_solution_queried(self):
+        return self._is_solution_queried
 
     @property
     def exhausted_solutions(self):
         return self._exhausted_solutions
 
     def __copy__(self):
-        new_cst = type(self)(constraints=self._constraints)
-        new_cst.__dict__.update(self.__dict__)
-        new_cst._var_domain = copy.copy(self._var_domain)
-        new_cst._var_node_mapping = copy.copy(self._var_node_mapping)
-        new_cst._solutions = None # the generator cannot be copied
-        new_cst._model = copy.copy(self._model)
+        new_csp = type(self)(constraints=self._constraints)
+        new_csp.__dict__.update(self.__dict__)
+        new_csp._var_domain = copy.copy(self._var_domain)
+        new_csp._var_node_mapping = copy.copy(self._var_node_mapping)
+        new_csp._solutions = None # the generator cannot be copied
+        new_csp._model = copy.copy(self._model)
+        new_csp._constraints = []
+        for c in self._constraints:
+            new_csp._constraints.append(copy.copy(c))
 
-        return new_cst
+        return new_csp

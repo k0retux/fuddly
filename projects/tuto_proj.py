@@ -40,7 +40,8 @@ project.default_dm = ['mydf', 'myproto']
 project.map_targets_to_scenario('ex1', {0: 7, 1: 8, None: 8})
 
 logger = Logger(record_data=False, explicit_data_recording=False,
-                export_raw_data=False, enable_file_logging=False)
+                export_raw_data=False, enable_file_logging=False,
+                highlight_marked_nodes=True)
 
 ### KNOWLEDGE ###
 

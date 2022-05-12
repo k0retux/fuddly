@@ -55,7 +55,7 @@ class NodeBuilder(object):
         'name', 'contents', 'qty', 'clone', 'type', 'alt', 'conf',
         'custo_set', 'custo_clear', 'evolution_func', 'description',
         'default_qty', 'namespace', 'from_namespace', 'highlight',
-        'constraints',
+        'constraints', 'constraints_highlight',
         # NonTerminal description keys
         'weight', 'shape_type', 'section_type', 'duplicate_mode', 'weights',
         'separator', 'prefix', 'suffix', 'unique', 'always',
@@ -435,8 +435,9 @@ class NodeBuilder(object):
         self._handle_common_attr(n, desc, conf, current_ns=namespace)
 
         constraints = desc.get('constraints', None)
+        c_hlight = desc.get('constraints_highlight', None)
         if constraints is not None:
-            self._register_todo(n, self._setup_constraints, args=(constraints, ns), prio=self.VERYLOW_PRIO)
+            self._register_todo(n, self._setup_constraints, args=(constraints, ns, c_hlight), prio=self.VERYLOW_PRIO)
 
         return n
 
@@ -856,8 +857,8 @@ class NodeBuilder(object):
 
         return node
 
-    def _setup_constraints(self, node, constraints, root_namespace):
-        csp = CSP(constraints=constraints)
+    def _setup_constraints(self, node, constraints, root_namespace, constraint_highlight):
+        csp = CSP(constraints=constraints, highlight_variables=constraint_highlight)
 
         for v in csp.iter_vars():
             nd = self.__get_node_from_db(csp.from_var_to_varns(v), namespace=root_namespace)

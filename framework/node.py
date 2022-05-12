@@ -49,7 +49,7 @@ from framework.basic_primitives import *
 from libs.external_modules import *
 from framework.global_resources import *
 from framework.error_handling import *
-from framework.constraint_helpers import CSP
+from framework.constraint_helpers import CSP, ConstraintError
 
 import framework.value_types as fvt
 
@@ -728,7 +728,7 @@ class NodeInternals(object):
     def _init_specific(self, arg):
         pass
 
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False, restrict_csp=False):
         raise NotImplementedError
 
     def get_raw_value(self, **kwargs):
@@ -1294,7 +1294,7 @@ class DynNode_Helpers(object):
 
 
 class NodeInternals_Empty(NodeInternals):
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False, restrict_csp=False):
         if return_node_internals:
             return (Node.DEFAULT_DISABLED_NODEINT, True)
         else:
@@ -1535,12 +1535,12 @@ class NodeInternals_GenFunc(NodeInternals):
             self.generator_arg = generator_arg
 
 
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False, restrict_csp=False):
         if self.custo.trigger_last_mode and not self._trigger_registered:
             assert(self.env is not None)
             self._trigger_registered = True
             self.env.register_basic_djob(self._get_delayed_value,
-                                         args=[conf, recursive],
+                                         args=[conf, recursive, restrict_csp],
                                          prio=Node.DJOBS_PRIO_genfunc)
 
             if return_node_internals:
@@ -1552,12 +1552,13 @@ class NodeInternals_GenFunc(NodeInternals):
             self.reset_generator()
 
         ret = self.generated_node._get_value(conf=conf, recursive=recursive,
-                                             return_node_internals=return_node_internals)
+                                             return_node_internals=return_node_internals,
+                                             restrict_csp=restrict_csp)
         return (ret, False)
 
-    def _get_delayed_value(self, conf=None, recursive=True):
+    def _get_delayed_value(self, conf=None, recursive=True, restrict_csp=False):
         self.reset_generator()
-        ret = self.generated_node._get_value(conf=conf, recursive=recursive)
+        ret = self.generated_node._get_value(conf=conf, recursive=recursive, restrict_csp=restrict_csp)
         return (ret, False)
 
     def get_raw_value(self, **kwargs):
@@ -1756,7 +1757,7 @@ class NodeInternals_Term(NodeInternals):
     def _set_default_value_specific(self, val):
         raise NotImplementedError
 
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False, restrict_csp=False):
 
         def format_val(val):
             fval = FontStyle.BOLD + colorize(val.decode('latin-1'), rgb=Color.ND_HLIGHT) + FontStyle.END
@@ -1980,10 +1981,8 @@ class NodeInternals_TypedValue(NodeInternals_Term):
             assert isinstance(self.value_type, fvt.INT)
             self.value_type.update_raw_value(value)
         else:
-            status, off, size, name = self.value_type.do_absorb(convert_to_internal_repr(val),
-                                                                constraints=AbsNoCsts())
-            if status != AbsorbStatus.FullyAbsorbed:
-                raise ValueError
+            val, off, size = self.value_type.do_absorb(convert_to_internal_repr(value),
+                                                       constraints=AbsNoCsts())
 
         return self.value_type.get_current_value()
 
@@ -3564,7 +3563,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
 
     def _get_value(self, conf=None, recursive=True, after_encoding=True,
-                   return_node_internals=False):
+                   return_node_internals=False, restrict_csp=False):
 
         """
         The parameter return_node_internals is not used for non terminal nodes,
@@ -3577,7 +3576,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 return node_internals
             else:
                 return node_internals._get_value(conf=conf, recursive=recursive,
-                                                 return_node_internals=False)[0]
+                                                 return_node_internals=False, restrict_csp=restrict_csp)[0]
 
         def handle_encoding(list_to_enc):
 
@@ -3659,7 +3658,7 @@ class NodeInternals_NonTerm(NodeInternals):
                     disabled_node = True
             else:
                 val = n._get_value(conf=conf, recursive=recursive,
-                                   return_node_internals=True)
+                                   return_node_internals=True, restrict_csp=restrict_csp)
 
             if self.separator is not None and isinstance(val, NodeInternals) and val.is_attr_set(NodeInternals.AutoSeparator) \
                     and disabled_node and not self.separator.suffix and not self.separator.always:
@@ -6552,11 +6551,30 @@ class Node(object):
             self.freeze(conf=conf, recursive=recursive)
 
 
-    def freeze(self, conf=None, recursive=True, return_node_internals=False):
+    def freeze(self, conf=None, recursive=True, return_node_internals=False, restrict_csp=False, resolve_csp=False):
+        """
+
+        Args:
+            conf:
+            recursive:
+            return_node_internals:
+
+            restrict_csp: Only effective when a CSP is part of the data description. When
+              set to True, if the node on which this method is called is a variable of the CSP, then
+              its domain will be shrinken to its current value. Thus, the node won't change when
+              the CSP will be resolved.
+
+            resolve_csp: Only effective when a CSP is part of the data description. When set to True,
+              the CSP will be resolved and the data generated will comply with the solution.
+
+        Returns:
+
+        """
+
 
         # Step 1 - get value
         ret = self._get_value(conf=conf, recursive=recursive,
-                              return_node_internals=return_node_internals)
+                              return_node_internals=return_node_internals, restrict_csp=restrict_csp)
 
         if self.env is None:
             print('Warning: freeze() is called on a node that does not have an Env()\n'
@@ -6574,22 +6592,43 @@ class Node(object):
                 self.env.execute_basic_djobs(Node.DJOBS_PRIO_genfunc)
 
             ret = self._get_value(conf=conf, recursive=recursive,
-                                  return_node_internals=return_node_internals)
+                                  return_node_internals=return_node_internals, restrict_csp=restrict_csp)
 
         # Step 3 - CSP resolution
-        if self.env.csp is not None and not self.env.csp.is_current_solution_processed:
-            solution = self.env.csp.get_solution()
-            for var, value in solution.items():
-                nd = self.env.csp.var_mapping[var]
-                nd.set_default_value(value)
-                if self.color_enabled:
-                    nd.set_attr(NodeInternals.Highlight, conf=conf)
+        if resolve_csp and self.env.csp is not None and not self.env.csp.is_current_solution_queried:
+            try:
+                solution = self.env.csp.get_solution()
+            except ConstraintError:
+                if not self.env.csp.var_domain_updated:
+                    # in this case we let the caller handle this, as we are not responsible
+                    raise
+                else:
+                    print(f"Warning: no solution found for the current CSP, the generated data will be invalid!\n"
+                          f" --> likely culprit: node '{self.name}' with value {self.get_raw_value()}")
+            else:
+                if solution is not None: # no more solution
+                    for var, value in solution.items():
+                        nd = self.env.csp.var_mapping[var]
+                        if self.env.csp.highlight_variables:
+                            nd.set_attr(NodeInternals.Highlight, conf=conf)
+                        if nd == self:
+                            continue
+                        # nd.set_default_value(value)
+                        # Note: .set_default() does disruptive stuff, like re-ordering
+                        # INT.values list, and could disturb a model walker like tWALK
+                        nd.update_value(value)
+                else:
+                    pass
+                    # print(f'\n***DBG freeze: No more solution - exhausted: {self.env.csp.exhausted_solutions}')
+            finally:
+                if self.env.csp.var_domain_updated:
+                    self.env.csp.restore_var_domains()
 
         return ret
 
     get_value = freeze
 
-    def _get_value(self, conf=None, recursive=True, return_node_internals=False):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False, restrict_csp=False):
 
         next_conf = conf if recursive else None
         conf2 = conf if self.is_conf_existing(conf) else self.current_conf
@@ -6605,7 +6644,20 @@ class Node(object):
             raise ValueError
 
         ret, was_not_frozen = internal._get_value(conf=next_conf, recursive=recursive,
-                                                  return_node_internals=return_node_internals)
+                                                  return_node_internals=return_node_internals,
+                                                  restrict_csp=restrict_csp)
+
+
+        if restrict_csp and self.env.csp is not None and self.is_typed_value(conf=conf):
+
+            for v, n in self.env.csp.var_mapping.items():
+                if self == n:
+                    # print(f'\n***DBG _get_value: "{self.name}" {self.get_raw_value()}\n'
+                    #       f'  --> {self.cc.value_type.values}')
+                    self.env.csp.set_var_domain(v, [self.get_raw_value()])
+                    self.env.csp.reset()
+                    break
+
 
         if was_not_frozen:
             pf_ret = self._post_freeze(internal, self, next_conf=next_conf, recursive=recursive,
@@ -6768,8 +6820,13 @@ class Node(object):
         if not self.is_conf_existing(conf):
             conf = self.current_conf
 
+        # if reevaluate_constraints:
+        #     if self.env.csp is not None:
+        #         print(f'\n***DBG {self.env.csp._is_solution_queried}')
+        #         self.env.csp._is_solution_queried = False
+
         if walk_csp:
-            if self.env.csp is not None and self.env.csp.is_current_solution_processed:
+            if self.env.csp is not None and self.env.csp.is_current_solution_queried:
                 for i in range(walk_csp_step_size):
                     self.env.csp.next_solution()
                     if self.env.csp.exhausted_solutions:

@@ -533,8 +533,14 @@ class String(VT_Alt):
             self.values = []
 
         if val in self.values:
-            self.values.remove(val)
-        self.values.insert(0, val)
+            # self.values.remove(val)
+            idx_val = self.values.index(val)
+            if idx_val + 1 == len(self.values):
+                pass
+            else:
+                self.values = self.values[idx_val:]+self.values[:idx_val]
+        else:
+            self.values.insert(0, val)
         self.default = val
 
         self.reset_state()
@@ -1277,10 +1283,6 @@ class INT(VT):
                         raise DataModelDefinitionError("Incompatible value ({!r}) with {!s}".format(v, self.__class__))
 
             self.values = list(values)
-            # if default is not None:
-            #     assert default in self.values
-            #     self.values.remove(default)
-            #     self.values.insert(0, default)
             self.values_copy = copy.copy(self.values)
 
         else:
@@ -1292,12 +1294,6 @@ class INT(VT):
                 # we keep min/max information as it may be valuable for fuzzing
                 self.mini = self.mini_gen = min
                 self.maxi = self.maxi_gen = max
-                # if default is not None:
-                #     assert min <= default <= max
-                #     self.values.remove(default)
-                #     self.values.insert(0, default)
-                #     # Once inserted at this place, its position is preserved, especially with reset_state()
-                #     # (assuming do_absorb() is not called), so we do not save 'default' value in this case
                 self.values_copy = copy.copy(self.values)
 
             else:
@@ -1324,11 +1320,6 @@ class INT(VT):
                         self.maxi_gen = INT.GEN_MAX_INT
                     else:
                         self.maxi = self.maxi_gen = max
-
-                # if default is not None:
-                #     assert self.mini_gen <= default <= self.maxi_gen
-                #     self.default = default
-                #     self.idx = default - self.mini_gen
 
         if default is not None:
             self._check_constraints_and_update(default)
@@ -1481,8 +1472,14 @@ class INT(VT):
                 if decoded_val not in self.values:
                     raise ValueError('contents not valid!')
             if decoded_val in self.values:
-                self.values.remove(decoded_val)
-            self.values.insert(0, decoded_val)
+                # self.values.remove(decoded_val)
+                idx_val = self.values.index(decoded_val)
+                if idx_val + 1 == len(self.values):
+                    pass
+                else:
+                    self.values = self.values[idx_val:]+self.values[:idx_val]
+            else:
+                self.values.insert(0, decoded_val)
             self.values_copy = copy.copy(self.values)
         elif self.maxi is None and self.mini is None:
             # this case means 'self' is an unlimited INT (like INT_str subclass) where no constraints
@@ -1691,8 +1688,15 @@ class INT(VT):
                 ok = False
             if self.values is not None:
                 if val in self.values:
-                    self.values.remove(val)
-                self.values.insert(0, val)
+                    # self.values.remove(val)
+                    idx_val = self.values.index(val)
+                    if idx_val + 1 == len(self.values):
+                        pass
+                    else:
+                        self.values = self.values[idx_val:]+self.values[:idx_val]
+                else:
+                    self.values.insert(0, val)
+
                 self.values_copy = copy.copy(self.values)
             else:
                 self.idx = val - self.mini_gen

@@ -176,7 +176,7 @@ def truncate_info(info, max_size=60):
                                       'is cleared.', True, bool),
                  'fix_all': ('For each produced data, reevaluate the constraints on the whole graph.',
                              True, bool)})
-class sd_iter_over_data(StatefulDisruptor):
+class sd_walk_data_model(StatefulDisruptor):
     """
     Walk through the provided data and for each visited node, iterates
     over the allowed values (with respect to the data model).
@@ -213,11 +213,11 @@ class sd_iter_over_data(StatefulDisruptor):
         if self.nt_only:
             consumer = NonTermVisitor(respect_order=self.order, ignore_mutable_attr=self.ign_mutable_attr,
                                       consider_side_effects_on_sibbling=self.consider_sibbling_change,
-                                      reset_when_change=self.deep)
+                                      reset_when_change=self.deep, fix_constraints=self.fix_all)
         else:
             consumer = BasicVisitor(respect_order=self.order, ignore_mutable_attr=self.ign_mutable_attr,
                                     consider_side_effects_on_sibbling=self.consider_sibbling_change,
-                                    reset_when_change=self.deep)
+                                    reset_when_change=self.deep, fix_constraints=self.fix_all)
         sem_crit = NSC(optionalbut1_criteria=self.sem)
         consumer.set_node_interest(path_regexp=self.path, semantics_criteria=sem_crit)
         self.modelwalker = ModelWalker(prev_content, consumer, max_steps=self.max_steps, initial_step=self.init)
@@ -1574,7 +1574,6 @@ class d_add_data(Disruptor):
                  'notify_exhaustion': ('When all the solutions of the CSP have been walked '
                                        'through, the disruptor will notify it if this parameter '
                                        'is set to True.', True, bool),
-                 'color': ('Highlight the variable involved in the CSP', True, bool)
                  })
 class sd_walk_csp_solutions(StatefulDisruptor):
     """
@@ -1602,9 +1601,7 @@ class sd_walk_csp_solutions(StatefulDisruptor):
             return prev_data
 
         self.seed = prev_content
-        if self.color:
-            self.seed.enable_color()
-        self.seed.freeze()
+        self.seed.freeze(resolve_csp=True)
 
     def disrupt_data(self, dm, target, data):
 
@@ -1620,7 +1617,7 @@ class sd_walk_csp_solutions(StatefulDisruptor):
 
         else:
             if self._first_call_performed or self.init > 1:
-                self.seed.freeze()
+                self.seed.freeze(resolve_csp=True)
                 self._count += 1
             else:
                 self._first_call_performed = True
@@ -1650,7 +1647,6 @@ class sd_walk_csp_solutions(StatefulDisruptor):
                  'samples_per_cst': ('Maximum number of samples to output for each negated '
                                      'constraint (-1 means until the end)',
                                      -1, int),
-                 'color': ('Highlight the variable involved in the CSP', True, bool),
                  })
 class sd_constraint_fuzz(StatefulDisruptor):
     """
@@ -1667,7 +1663,7 @@ class sd_constraint_fuzz(StatefulDisruptor):
         assert self.sample_idx > 0
 
         self._first_call = True
-        self._count = 1
+        self._count = 0
         self._constraint_negated = False
         self._current_constraint_idx = self.const_idx-1
         self._sample_count = 0
@@ -1687,10 +1683,8 @@ class sd_constraint_fuzz(StatefulDisruptor):
             return prev_data
 
         self.seed = prev_content
-        if self.color:
-            self.seed.enable_color()
 
-        self.seed.freeze()
+        self.seed.freeze(resolve_csp=True)
         self.valid_solution = self.csp.get_solution()
         self.csp_constraints = self.csp.get_all_constraints()
         self.csp_variables = {v for c in self.csp_constraints for v in c.vars}
@@ -1722,7 +1716,7 @@ class sd_constraint_fuzz(StatefulDisruptor):
             self.csp.negate_constraint(self._current_constraint_idx)
             self._constraint_negated = True
             self._update_csp()
-            self.seed.freeze()
+            self.seed.freeze(resolve_csp=True)
 
         if self._sample_count < self.samples_per_cst or self.samples_per_cst == -1:
             if self._first_call:
@@ -1749,7 +1743,7 @@ class sd_constraint_fuzz(StatefulDisruptor):
                 self.handover()
                 return data
 
-        self.seed.freeze()
+        self.seed.freeze(resolve_csp=True)
         self._count += 1
 
         data.add_info(f'constraint fuzzing test case index: {self._count}')
@@ -1765,5 +1759,7 @@ class sd_constraint_fuzz(StatefulDisruptor):
             data.update_from(exported_node)
         else:
             data.update_from(self.seed)
+
+        data.altered = True
 
         return data
