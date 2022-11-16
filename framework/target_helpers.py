@@ -69,8 +69,11 @@ class Target(object):
 
     _last_sending_date = None
 
-    def __init__(self, name=None):
+    display_feedback = False
+
+    def __init__(self, name=None, display_feedback=True):
         self.name = name
+        self.display_feedback = display_feedback
         self._started = False
 
     @staticmethod

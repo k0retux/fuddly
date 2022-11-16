@@ -338,11 +338,14 @@ class Logger(object):
                 source, status_code, ts_msg)
         self.log_fn(msg_hdr, rgb=hdr_color, do_record=record)
         if processed_feedback:
-            if isinstance(processed_feedback, list):
-                for dfbk in processed_feedback:
-                    self.log_fn(dfbk, rgb=body_color, do_record=record)
+            if source.display_feedback:
+                if isinstance(processed_feedback, list):
+                    for dfbk in processed_feedback:
+                        self.log_fn(dfbk, rgb=body_color, do_record=record)
+                else:
+                    self.log_fn(processed_feedback, rgb=body_color, do_record=record)
             else:
-                self.log_fn(processed_feedback, rgb=body_color, do_record=record)
+                self.log_fn('Feedback not displayed', rgb=Color.WARNING, do_record=record)
 
         if record:
             assert isinstance(source, FeedbackSource)

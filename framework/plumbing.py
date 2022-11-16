@@ -1164,6 +1164,7 @@ class FmkPlumbing(object):
 
                 if self.prj.project_scenarios:
                     self._generic_tactics.register_scenarios(*self.prj.project_scenarios)
+                    self._fmkDB_insert_dm_and_dmakers('generic', self._generic_tactics)
 
                 if need_monitoring:
                     time.sleep(0.5)
@@ -2707,7 +2708,8 @@ class FmkPlumbing(object):
                 for ref, fbk, status, tstamp in tg_fbk.iter_and_cleanup_collector():
                     if status < tg.STATUS_THRESHOLD_FOR_RECOVERY:
                         err_detected = True
-                    self.lg.log_target_feedback_from(source=FeedbackSource(tg, subref=ref),
+                    self.lg.log_target_feedback_from(source=FeedbackSource(tg, subref=ref,
+                                                                           display_feedback=tg.display_feedback),
                                                      content=fbk,
                                                      status_code=status,
                                                      timestamp=tstamp,
@@ -2716,7 +2718,7 @@ class FmkPlumbing(object):
 
             raw_fbk = tg_fbk.get_bytes()
             if raw_fbk is not None:
-                self.lg.log_target_feedback_from(source=FeedbackSource(tg),
+                self.lg.log_target_feedback_from(source=FeedbackSource(tg, display_feedback=tg.display_feedback),
                                                  content=raw_fbk,
                                                  status_code=err_code,
                                                  timestamp=tg_fbk.get_timestamp(),
