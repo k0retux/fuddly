@@ -582,7 +582,8 @@ class DynGenerator(Generator):
         'min_def': ("Set the default quantity of all the nodes to the defined minimum quantity if "
                     "this parameter is set to 'True', or maximum quantity if set to 'False'. "
                     "Otherwise if set to 'None', nothing is done.", None, bool),
-        'freeze': ("Freeze the generated node.", False, bool)
+        'freeze': ("Freeze the generated node.", False, bool),
+        'resolve_csp': ("Resolve any CSP if any", True, bool)
     }
 
     def setup(self, dm, user_input):
@@ -605,6 +606,8 @@ class DynGenerator(Generator):
                 nic = nd.NodeInternalsCriteria(node_kinds=[nd.NodeInternals_TypedValue])
                 nl = atom.get_reachable_nodes(internals_criteria=nic, ignore_fstate=True)
                 for n in nl:
+                    if not n.is_attr_set(nd.NodeInternals.Mutable):
+                        continue
                     if self.leaf_determinism:
                         n.make_determinist()
                     else:
@@ -620,7 +623,7 @@ class DynGenerator(Generator):
                         node.set_subnode_default_qty(snd, min if self.min_def else max)
 
         if self.freeze:
-            atom.freeze()
+            atom.freeze(resolve_csp=self.resolve_csp)
 
         return Data(atom)
 
