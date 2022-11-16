@@ -24,6 +24,9 @@
 import copy
 import subprocess
 import platform
+import random
+
+from typing import Tuple
 
 from framework.global_resources import *
 from framework.data import Data, DataProcess, EmptyDataProcess, DataAttr, NodeBackend
@@ -236,15 +239,19 @@ class Step(object):
 
     def _stutter_cbk(self, env, current_step, next_step):
         self._stutter_cpt += 1
+        if self._stutter_fbk_timeout_range:
+            min, max = self._stutter_fbk_timeout_range
+            next_step.feedback_timeout = random.random() * (max-min) + min
         if self._stutter_cpt > self._stutter_max:
             self._stutter_cpt = 1
             return False
         else:
             return True
 
-    def make_stutter(self, count):
+    def make_stutter(self, count, fbk_timeout_range: Tuple[float, float] = None):
         self._stutter_cpt = 1
         self._stutter_max = count
+        self._stutter_fbk_timeout_range = fbk_timeout_range
         self.connect_to(self, cbk_after_sending=self._stutter_cbk,
                         description=f'Loop {count} times' if count > 1 else f'Loop once')
 
