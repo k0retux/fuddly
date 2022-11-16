@@ -1765,7 +1765,7 @@ class NodeInternals_Term(NodeInternals):
             return fval
 
         if self.frozen_node is not None:
-            if self.env.color_enabled and self.highlight:
+            if self.env and self.env.color_enabled and self.highlight:
                 fval = format_val(self.frozen_node)
             else:
                 fval = self.frozen_node
@@ -1978,7 +1978,7 @@ class NodeInternals_TypedValue(NodeInternals_Term):
 
     def _update_value_specific(self, value):
         if isinstance(value, int):
-            assert isinstance(self.value_type, fvt.INT)
+            assert isinstance(self.value_type, (fvt.INT, fvt.BitField)), f'{self.value_type}'
             self.value_type.update_raw_value(value)
         else:
             val, off, size = self.value_type.do_absorb(convert_to_internal_repr(value),
