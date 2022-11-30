@@ -38,6 +38,16 @@ class Constraint(object):
     _orig_relation = None
 
     def __init__(self, relation, vars: Tuple, var_to_varns: dict = None):
+        """
+
+        Args:
+            relation: boolean function that define the constraints between variables
+            vars (list): list of the names of the nodes used in the boolean function in `relation`
+              (in the same order as the parameters of the function).
+            var_to_varns (dict): dictionary that associates for each name in `vars`, the comprehensive
+              reference to the related node, which is a tuple of its name and its namespace.
+        """
+
         self.relation = self._orig_relation = relation
         self.vars = vars
         self.var_to_varns = var_to_varns

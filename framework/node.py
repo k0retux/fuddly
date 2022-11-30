@@ -6561,7 +6561,7 @@ class Node(object):
 
             restrict_csp: Only effective when a CSP is part of the data description. When
               set to True, if the node on which this method is called is a variable of the CSP, then
-              its domain will be shrinken to its current value. Thus, the node won't change when
+              its domain will be shrunk to its current value. Thus, the node won't change when
               the CSP will be resolved.
 
             resolve_csp: Only effective when a CSP is part of the data description. When set to True,

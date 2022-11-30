@@ -700,6 +700,29 @@ charset
   - ``MH.Charset.UNICODE``
 
 
+.. _dm:node_cst_keywords:
+
+Keywords to Describe Constraints
+--------------------------------
+
+constraints
+    List of node constraints specified through :class:`framework.constraint_helpers.Constraint` objects. They will be added to a CSP (Constraint
+    Satisfiability Problem) associated to the currently described data, and resolved when
+    :meth:`Node.freeze` is called with the parameter ``resolve_csp`` set to True (this is performed by default by the operator ``tWALK``).
+    It should always be associated to a non-terminal node.
+    Refer to :ref:`dm:pattern:csp` for details on how to leverage such feature.
+
+    Specific operators have been defined to handle CSP:
+
+    - ``tWALKcsp`` that walk through the solutions of the CSP.
+    - ``tCONST`` that negates the constraint one-by-one and output 1 or more samples for each negate constraint.
+
+constraints_highlight
+    If set to ``True``, the value of the nodes implied in a CSP (that could be specified through the
+    keyword ``constraint``) are highlighted in the console, given the Logger parameter
+    ``highlight_marked_nodes`` is  set to True.
+
+
 .. _vt:value-types:
 
 Value Types
@@ -1978,3 +2001,79 @@ Example 5: Invalid regular expressions.
    # raise also an framework.error_handling.InconvertibilityError
    # because a quantifier (that requires the creation of a terminal node)
    # has been found within parenthesis.
+
+
+.. _dm:pattern:csp:
+
+How to Describe Constraints of Data Formats
+-------------------------------------------
+
+When some relations exist between various parts of the data format you want to describe you have
+different possibilities within ``fuddly``:
+
+- either using some specific keywords that capture basic constraints (e.g., ``qty_from``, ``sync_size_with``, ``exists_if``, ...);
+- or through Generator nodes (refer to :ref:`dm:generators`);
+- or by specifying a CSP through the keyword ``constraint``, which leverage a constraint programming
+  backend (currently limited to the ``python-constraint`` module)
+
+The CSP specification case is described in more details in what follows.
+To describe constraints in the form of a CSP, you should use the ``constraints`` keyword that allows you
+to provide a list of :class:`framework.constraint_helpers.Constraint` objects, which are the
+building blocks for specifying constraints between multiple nodes.
+
+For instance, let's analyse the following data description (extracted from the ``mydf`` data model in ``tuto.py``).
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 3-6, 11, 20-21
+
+        csp_desc = \
+            {'name': 'csp',
+             'constraints': [Constraint(relation=lambda d1, d2: d1[1]+1 == d2[0] or d1[1]+2 == d2[0],
+                                        vars=('delim_1', 'delim_2')),
+                             Constraint(relation=lambda x, y, z: x == 3*y + z,
+                                        vars=('x_val', 'y_val', 'z_val'))],
+             'constraints_highlight': True,
+             'contents': [
+                 {'name': 'equation',
+                  'contents': String(values=['x = 3y + z'])},
+                 {'name': 'delim_1', 'contents': String(values=[' [', ' ('])},
+                 {'name': 'variables',
+                  'separator': {'contents': {'name': 'sep', 'contents': String(values=[', '])},
+                                'prefix': False, 'suffix': False},
+                  'contents': [
+                      {'name': 'x',
+                       'contents': [
+                           {'name': 'x_symbol',
+                            'contents': String(values=['x:', 'X:'])},
+                           {'name': 'x_val',
+                            'contents': INT_str(min=120, max=130)} ]},
+
+        [...]
+
+You can see that two constraints have been specified (l.3-6) through the specific
+:class:`framework.constraint_helpers.Constraint` objects. The constructor take a mandatory ``relation`` parameter
+expecting a boolean function that should express a relation between any nodes reachable
+from the non-terminal node on which the ``constraints`` keyword is attached.
+It takes also a ``vars`` parameter expecting a list of the names of the nodes
+used in the boolean function (in the same order as the parameters of the function).
+
+.. note::
+
+    The ``constraints`` keyword can be used several times along the description, but all the specified
+    :class:`framework.constraint_helpers.Constraint` will eventually end up in a single CSP.
+
+
+These constraints, will then be resolved at :meth:`framework.node.Node.freeze` time (depending if
+the parameter ``resolve_csp`` is set to True).
+Note also that before resolving the CSP it is possible to fix the value of some variables by freezing the related nodes
+with the parameter ``restrict_csp``. This is what is performed by the :class:`framework.fuzzing_primitives.ModelWalker`
+infrastructure when walking a specific node which is part of a CSP, so that the walked node won't be modified
+further to the CSP solving process.
+
+.. note::
+
+   The constructor of :class:`framework.constraint_helpers.Constraint` takes also an optional parameter
+   ``var_to_varns`` in order to support namespaces (used to discriminate nodes having identical
+   name in the data description). Refer to ``namespace`` keyword for more details, and to the ``csp_ns`` node
+   description in the data model ``mydf`` (in ``tuto.py``).

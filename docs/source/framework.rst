@@ -339,6 +339,17 @@ framework.knowledge.information module
    :special-members:
    :exclude-members: __dict__, __weakref__
 
+framework.constraint_helpers module
+-----------------------------------
+
+.. automodule:: framework.constraint_helpers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
+
 
 framework.plumbing module
 -------------------------
