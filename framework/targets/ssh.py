@@ -1,5 +1,6 @@
 import datetime
 import socket
+import time
 
 from framework.target_helpers import Target, TargetError
 from libs.external_modules import *
@@ -11,23 +12,45 @@ import framework.error_handling as eh
 
 class SSHTarget(Target):
 
+    NO_PASSWORD = SSH_Backend.NO_PASSWORD
+    ASK_PASSWORD = SSH_Backend.ASK_PASSWORD
+
     STATUS_THRESHOLD_FOR_RECOVERY = -2
 
-    def __init__(self, host='localhost', port=12345, bind_address=None,
-                 username=None, password=None, pkey_path=None,
+    def __init__(self, target_addr='localhost', port=12345, bind_address=None,
+                 username=None, password=None, pkey_path=None, pkey_password=None,
+                 proxy_jump_addr=None, proxy_jump_bind_addr=None, proxy_jump_port=None,
+                 proxy_jump_username=None, proxy_jump_password=None,
+                 proxy_jump_pkey_path=None, proxy_jump_pkey_password=None,
                  targeted_command=None, file_parameter_path=None,
                  fbk_timeout=0.5, read_stdout=True, read_stderr=True, char_mapping=False,
+                 get_pty=False,
                  ref=None):
         """
         This generic target enables you to interact with a remote target requiring an SSH connection.
 
         Args:
-            host:
-            port:
-            bindaddress:
-            username:
-            password:
-            pkey_path: (optional) path to private key
+            target_addr: IP address to reach the SSH server
+            port: port on which the SSH server listen to.
+            bind_address: source address for communication.
+            username: username to use for the connection.
+            password: (optional) password related to the username.
+            pkey_path: (optional) path to the private key related to the username.
+            pkey_password: (optional)  if the private key is encrypted, this parameter
+              can be either the password to decrypt it, or the special value `SSHTarget.ASK_PASSWORD` that will
+              prompt the user for the password at the time of connection. If the private key is
+              not encrypted, then this parameter should be set to `SSHTarget.NO_PASSWORD`
+            proxy_jump_addr: If a proxy jump has to be done before reaching the target, this parameter
+              should be provided with the proxy address to connect with.
+            proxy_jump_bind_addr: internal address of the proxy to communication with the target.
+            proxy_jump_port: port on which the SSH server of the proxy listen to.
+            proxy_jump_username: username to use for the connection with the proxy.
+            proxy_jump_password: (optional) password related to the username.
+            proxy_jump_pkey_path: (optional) path to the private key related to the username.
+            proxy_jump_pkey_password: (optional) if the private key is encrypted, this parameter
+              can be either the password to decrypt it, or the special value `SSHTarget.ASK_PASSWORD` that will
+              prompt the user for the password at the time of connection. If the private key is
+              not encrypted, then this parameter should be set to `SSHTarget.NO_PASSWORD`.
             targeted_command: If not None, it should be a format string taking one argument that will
               be automatically filled either with
               the data to be sent or with @file_parameter_path if it is not None (meaning the data
@@ -36,17 +59,28 @@ class SSHTarget(Target):
               then this parameter should provide the remote path where the data to be sent will be
               first copied into (otherwise it should remain equal to None).
               it will be provided as a parameter of @targeted_command.
-            fbk_timeout:
+            fbk_timeout: delay for the framework to wait before it requests feedback from us.
+            read_stdout (bool): If `True`, collect as feedback what the executed command will write
+              in stdout.
+            read_stderr (bool): If `True`, collect as feedback what the executed command will write
+              in stderr.
             char_mapping (dict): If provided, specific characters in the payload will be
               replaced based on it.
+            get_pty (bool): Request a pseudo-terminal from the server.
             ref (str): Reference for the target. Used for description only.
         """
         Target.__init__(self)
         if not ssh_module:
             raise eh.UnavailablePythonModule('Python module for SSH is not available!')
 
-        self.ssh_backend = SSH_Backend(host=host, port=port, bind_address=bind_address, username=username,
-                                       password=password, pkey_path=pkey_path, get_pty=True)
+        self.ssh_backend = SSH_Backend(target_addr=target_addr, port=port, bind_address=bind_address, username=username,
+                                       password=password, pkey_path=pkey_path, pkey_password=pkey_password,
+                                       proxy_jump_addr=proxy_jump_addr, proxy_jump_bind_addr = proxy_jump_bind_addr,
+                                       proxy_jump_port=proxy_jump_port,
+                                       proxy_jump_username=proxy_jump_username, proxy_jump_password=proxy_jump_password,
+                                       proxy_jump_pkey_path=proxy_jump_pkey_path,
+                                       proxy_jump_pkey_password=proxy_jump_pkey_password,
+                                       get_pty=get_pty)
 
         self.read_stdout = read_stdout
         self.read_stderr = read_stderr
@@ -138,11 +172,11 @@ class SSHTarget(Target):
         prefix = '{:s} | '.format(self.tg_ref) if self.tg_ref is not None else ''
         desc = '{:s}host:{:s},port:{:d},user:{:s}'.format(prefix, self.ssh_backend.host,
                                                           self.ssh_backend.port, self.ssh_backend.username)
+        if self.ssh_backend.proxy_jump_addr:
+            desc += f" | proxy_jump:{self.ssh_backend.proxy_jump_addr}"
+
         if self.targeted_command:
-            if self.file_paremeter_path:
-                desc += " | cmd='{!s}'".format(self.targeted_command)
-            else:
-                desc += " | cmd='{!s}'".format(self.targeted_command)
+            desc += f" | cmd='{self.targeted_command}'"
 
         return desc
 

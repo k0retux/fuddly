@@ -5,6 +5,7 @@ import subprocess
 import sys
 import threading
 import time
+import getpass
 
 import serial
 
@@ -71,19 +72,58 @@ class Backend(object):
 
 
 class SSH_Backend(Backend):
+
+    NO_PASSWORD = 10
+    ASK_PASSWORD = 20
+
+    @staticmethod
+    def _create_pkey(pkey_path, pkey_password):
+        if pkey_path is not None:
+            if pkey_password == SSH_Backend.NO_PASSWORD:
+                pkey_password = None
+            elif pkey_password == SSH_Backend.ASK_PASSWORD:
+                pkey_password = getpass.getpass()
+            else:
+                pass
+            pkey = ssh.RSAKey.from_private_key_file(pkey_path, password=pkey_password)
+        else:
+            pkey = None
+
+        return pkey
+
+
     """
     Backend to execute command through a serial line.
     """
-    def __init__(self, host='localhost', port=22, bind_address=None,
-                 username=None, password=None, pkey_path=None, codec='latin-1',
-                 timeout=None, get_pty=True):
+    def __init__(self, target_addr='localhost', port=22, bind_address=None,
+                 username=None, password=None, pkey_path=None, pkey_password=NO_PASSWORD,
+                 proxy_jump_addr=None, proxy_jump_bind_addr=None, proxy_jump_port=None,
+                 proxy_jump_username=None, proxy_jump_password=None,
+                 proxy_jump_pkey_path=None, proxy_jump_pkey_password=NO_PASSWORD,
+                 codec='latin-1',
+                 timeout=None, get_pty=False):
         """
         Args:
-            host (str): IP of the SSH server.
+            target_addr (str): IP of the SSH server.
             port (int): port of the SSH server.
             username (str): username to connect with.
-            password (str): password related to the username.
-            pkey_path (str): path of the private key (if no password provided)
+            password (str): (optional) password related to the username.
+            pkey_path (str): (optional) path of the private key (if no password provided).
+            pkey_password: (optional)  if the private key is encrypted, this parameter
+              can be either the password to decrypt it, or the special value `SSHTarget.ASK_PASSWORD` that will
+              prompt the user for the password at the time of connection. If the private key is
+              not encrypted, then this parameter should be set to `SSHTarget.NO_PASSWORD`
+            proxy_jump_addr: If a proxy jump has to be done before reaching the target, this parameter
+              should be provided with the proxy address to connect with.
+            proxy_jump_bind_addr: internal address of the proxy to communication with the target.
+            proxy_jump_port: port on which the SSH server of the proxy listen to.
+            proxy_jump_username: username to use for the connection with the proxy.
+            proxy_jump_password: (optional) password related to the username.
+            proxy_jump_pkey_path: (optional) path to the private key related to the username.
+            proxy_jump_pkey_password: (optional) if the private key is encrypted, this parameter
+              can be either the password to decrypt it, or the special value `SSHTarget.ASK_PASSWORD` that will
+              prompt the user for the password at the time of connection. If the private key is
+              not encrypted, then this parameter should be set to `SSHTarget.NO_PASSWORD`.
             codec (str): codec used by the monitored system to answer.
             timeout (float): timeout on blocking read/write operations. None disables
                timeouts on socket operations
@@ -94,33 +134,60 @@ class SSH_Backend(Backend):
         Backend.__init__(self, codec=codec)
         if not ssh_module:
             raise eh.UnavailablePythonModule('Python module for SSH is not available!')
-        self.host = host
+        self.host = target_addr
         self.port = port
         self.bind_address = bind_address
         self.username = username
 
         assert password is None or pkey_path is None
         self.password = password
-        self.pkey = ssh.RSAKey.from_private_key_file(pkey_path) if pkey_path is not None else None
+        self.pkey_path = pkey_path
+        self.pkey_password = pkey_password
+
+        assert proxy_jump_password is None or proxy_jump_pkey_path is None
+        self.proxy_jump_addr = proxy_jump_addr
+        self.proxy_jump_bind_addr = proxy_jump_bind_addr
+        self.proxy_jump_port = proxy_jump_port
+        self.proxy_jump_username = proxy_jump_username
+        self.proxy_jump_password = proxy_jump_password
+        self.proxy_jump_pkey_path = proxy_jump_pkey_path
+        self.proxy_jump_pkey_password = proxy_jump_pkey_password
+
         self.timeout = timeout
         self.get_pty = get_pty
-
         self.client = None
 
     def _start(self):
-        self.client = ssh.SSHClient()
-        self.client.set_missing_host_key_policy(ssh.AutoAddPolicy())
 
-        if self.bind_address:
+        self.pkey = self._create_pkey(self.pkey_path, self.pkey_password)
+        self.proxy_jump_pkey = self._create_pkey(self.proxy_jump_pkey_path, self.proxy_jump_pkey_password)
+
+        if self.proxy_jump_addr is not None:
+            jumpbox = ssh.SSHClient()
+            jumpbox.set_missing_host_key_policy(ssh.AutoAddPolicy())
+            jumpbox.connect(self.proxy_jump_addr, username=self.proxy_jump_username, pkey=self.proxy_jump_pkey)
+
+            jumpbox_transport = jumpbox.get_transport()
+
+            if self.proxy_jump_addr:
+                src_addr = (self.proxy_jump_addr, self.proxy_jump_port)
+                dest_addr = (self.host, self.port)
+                sock = jumpbox_transport.open_channel("direct-tcpip", dest_addr, src_addr)
+            else:
+                sock = None
+
+        elif self.bind_address:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.bind((self.bind_address, 0))
             sock.connect((self.host, self.port))
         else:
             sock = None
 
+        self.client = ssh.SSHClient()
+        self.client.set_missing_host_key_policy(ssh.AutoAddPolicy())
+
         self.client.connect(hostname=self.host, port=self.port, username=self.username,
                             password=self.password, pkey=self.pkey, sock=sock)
-
 
     def _stop(self):
         self.client.close()
@@ -320,7 +387,7 @@ class Serial_Backend(Backend):
             result = result[:-2]
             ret = b''.join(result)
             if ret.find(self.cmd_notfound) != -1:
-                raise BackendError('The command does not exist on the host')
+                raise BackendError('The command does not exist on the target_addr')
             else:
                 return ret
 
