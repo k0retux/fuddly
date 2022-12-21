@@ -76,22 +76,6 @@ class SSH_Backend(Backend):
     NO_PASSWORD = 10
     ASK_PASSWORD = 20
 
-    @staticmethod
-    def _create_pkey(pkey_path, pkey_password):
-        if pkey_path is not None:
-            if pkey_password == SSH_Backend.NO_PASSWORD:
-                pkey_password = None
-            elif pkey_password == SSH_Backend.ASK_PASSWORD:
-                pkey_password = getpass.getpass()
-            else:
-                pass
-            pkey = ssh.RSAKey.from_private_key_file(pkey_path, password=pkey_password)
-        else:
-            pkey = None
-
-        return pkey
-
-
     """
     Backend to execute command through a serial line.
     """
@@ -107,7 +91,8 @@ class SSH_Backend(Backend):
             target_addr (str): IP of the SSH server.
             port (int): port of the SSH server.
             username (str): username to connect with.
-            password (str): (optional) password related to the username.
+            password (str): (optional) password related to the username. Could also be the special value
+              `SSHTarget.ASK_PASSWORD` that will prompt the user for the password at the time of connection.
             pkey_path (str): (optional) path of the private key (if no password provided).
             pkey_password: (optional)  if the private key is encrypted, this parameter
               can be either the password to decrypt it, or the special value `SSHTarget.ASK_PASSWORD` that will
@@ -118,7 +103,8 @@ class SSH_Backend(Backend):
             proxy_jump_bind_addr: internal address of the proxy to communication with the target.
             proxy_jump_port: port on which the SSH server of the proxy listen to.
             proxy_jump_username: username to use for the connection with the proxy.
-            proxy_jump_password: (optional) password related to the username.
+            proxy_jump_password: (optional) password related to the username. Could also be the special value
+              `SSHTarget.ASK_PASSWORD` that will prompt the user for the password at the time of connection.
             proxy_jump_pkey_path: (optional) path to the private key related to the username.
             proxy_jump_pkey_password: (optional) if the private key is encrypted, this parameter
               can be either the password to decrypt it, or the special value `SSHTarget.ASK_PASSWORD` that will
@@ -157,10 +143,46 @@ class SSH_Backend(Backend):
         self.get_pty = get_pty
         self.client = None
 
+    @staticmethod
+    def _create_pkey(pkey_path, pkey_password, prompt='PKey Password:'):
+        if pkey_path is not None:
+            if pkey_password == SSH_Backend.NO_PASSWORD:
+                pkey_password = None
+            elif pkey_password == SSH_Backend.ASK_PASSWORD:
+                pkey_password = getpass.getpass(prompt=f'{prompt}')
+            else:
+                pass
+            pkey = ssh.RSAKey.from_private_key_file(pkey_path, password=pkey_password)
+        else:
+            pkey = None
+
+        return pkey
+
     def _start(self):
 
-        self.pkey = self._create_pkey(self.pkey_path, self.pkey_password)
-        self.proxy_jump_pkey = self._create_pkey(self.proxy_jump_pkey_path, self.proxy_jump_pkey_password)
+        tg_info = f'[addr:{self.host},user:{self.username}]'
+        if self.password is not None:
+            if self.password == SSH_Backend.ASK_PASSWORD:
+                self.password = getpass.getpass(prompt=f'Target Password {tg_info}:')
+            elif self.password == SSH_Backend.NO_PASSWORD:
+                self.password = None
+            else:
+                pass
+
+        self.pkey = self._create_pkey(self.pkey_path, self.pkey_password,
+                                      prompt=f'Target PKey Password {tg_info}:')
+
+        pj_info = f'[addr:{self.proxy_jump_addr},user:{self.proxy_jump_username}]'
+        if self.proxy_jump_password is not None:
+            if self.proxy_jump_password == SSH_Backend.ASK_PASSWORD:
+                self.proxy_jump_password = getpass.getpass(prompt=f'ProxyJump Password {pj_info}:')
+            elif self.proxy_jump_password == SSH_Backend.NO_PASSWORD:
+                self.proxy_jump_password = None
+            else:
+                pass
+
+        self.proxy_jump_pkey = self._create_pkey(self.proxy_jump_pkey_path, self.proxy_jump_pkey_password,
+                                                 prompt=f'ProxyJump PKey Password {pj_info}:')
 
         if self.proxy_jump_addr is not None:
             jumpbox = ssh.SSHClient()

@@ -34,8 +34,9 @@ class SSHTarget(Target):
             port: port on which the SSH server listen to.
             bind_address: source address for communication.
             username: username to use for the connection.
-            password: (optional) password related to the username.
-            pkey_path: (optional) path to the private key related to the username.
+            password: (optional) password related to the username. Could also be the special value
+              `SSHTarget.ASK_PASSWORD` that will prompt the user for the password at the time of connection.
+            pkey_path: (optional) path to the private key related to the username (if no password provided).
             pkey_password: (optional)  if the private key is encrypted, this parameter
               can be either the password to decrypt it, or the special value `SSHTarget.ASK_PASSWORD` that will
               prompt the user for the password at the time of connection. If the private key is
@@ -45,7 +46,8 @@ class SSHTarget(Target):
             proxy_jump_bind_addr: internal address of the proxy to communication with the target.
             proxy_jump_port: port on which the SSH server of the proxy listen to.
             proxy_jump_username: username to use for the connection with the proxy.
-            proxy_jump_password: (optional) password related to the username.
+            proxy_jump_password: (optional) password related to the username. Could also be the special value
+              `SSHTarget.ASK_PASSWORD` that will prompt the user for the password at the time of connection.
             proxy_jump_pkey_path: (optional) path to the private key related to the username.
             proxy_jump_pkey_password: (optional) if the private key is encrypted, this parameter
               can be either the password to decrypt it, or the special value `SSHTarget.ASK_PASSWORD` that will
