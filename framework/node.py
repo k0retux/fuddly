@@ -5521,7 +5521,7 @@ class Node(object):
         Args:
           name (str): name of the new Node instance. If ``None`` the current name will be used.
           ignore_frozen_state (bool): if set to False, the clone function will produce
-            a Node with the same state as the duplicated Node. Otherwise, the only the state won't be kept.
+            a Node with the same state as the duplicated Node. Otherwise,  only the state won't be kept.
           accept_external_entanglement (bool): refer to the corresponding Node parameter
           acceptance_set (set): refer to the corresponding Node parameter
           new_env (bool): If True, the current :class:`Env()` will be copied.

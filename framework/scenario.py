@@ -35,10 +35,7 @@ from framework.target_helpers import Target
 from libs.external_modules import *
 from libs.utils import find_file, retrieve_app_handler, Task
 
-if sys.version_info[0] > 2:
-    data_graph_desc_fstr = "Data('{!a}'...)"
-else:
-    data_graph_desc_fstr = "Data('{!s}'...)"
+data_graph_desc_fstr = "Data('{!a}'...)"
 
 class Periodic(object):
     def __init__(self, data, period=None, vtg_ids=None):
@@ -238,6 +235,8 @@ class Step(object):
                 d.make_free()
 
     def _stutter_cbk(self, env, current_step, next_step):
+        if self._stutter_cpt == 1 and self._rd_count_range:
+            self._stutter_max = random.randint(self._rd_count_range[0], self._rd_count_range[1])
         self._stutter_cpt += 1
         if self._stutter_fbk_timeout_range:
             min, max = self._stutter_fbk_timeout_range
@@ -248,12 +247,30 @@ class Step(object):
         else:
             return True
 
-    def make_stutter(self, count, fbk_timeout_range: Tuple[float, float] = None):
+    def make_stutter(self, count=None, rd_count_range: Tuple[int, int] = None,
+                     fbk_timeout_range: Tuple[float, float] = None):
+        """
+        Further to this call, a step is connected to itself with a guard enabling looping on the
+        step for a number of time: either @count times or a random value within @rd_count_range.
+
+        Args:
+            count: number of loops.
+            rd_count_range: number of loops is determined randomly
+              within the bounds provided by this parameter.
+            fbk_timeout_range: feedback timeout is chosen randomly within the bounds
+              provided by this parameter.
+
+        """
+        assert bool(count is None) ^ bool(rd_count_range is None)
         self._stutter_cpt = 1
         self._stutter_max = count
+        self._rd_count_range = rd_count_range
         self._stutter_fbk_timeout_range = fbk_timeout_range
-        self.connect_to(self, cbk_after_sending=self._stutter_cbk,
-                        description=f'Loop {count} times' if count > 1 else f'Loop once')
+        if count is not None:
+            desc_str = f'Loop {count} times' if count > 1 else f'Loop once'
+        else:
+            desc_str = f'Loop randomly between {rd_count_range[0]} and {rd_count_range[1]} times'
+        self.connect_to(self, cbk_after_sending=self._stutter_cbk, description=desc_str)
 
     def is_blocked(self):
         return self._blocked
@@ -1141,7 +1158,10 @@ class Scenario(object):
                         uctxt_desc = '{'
                         uinputs = self.env.user_context.get_inputs()
                         for k, v in uinputs.items():
-                            uctxt_desc += '{:s} = {!s}\l|'.format(k, v)
+                            v = f'{v!s}'
+                            v = v.replace('{', '\{')
+                            v = v.replace('}', '\}')
+                            uctxt_desc += '{:s} = {:s}\l|'.format(k, v)
                         uctxt_desc = uctxt_desc[:-1] + '}'
                     else:
                         uctxt_desc = str(self.env.user_context)
