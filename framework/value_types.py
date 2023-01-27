@@ -2333,7 +2333,7 @@ class BitField(VT_Alt):
         if sf_val_extremums is None:
             sf_val_extremums = [None for i in range(len(self.subfield_limits))]
         elif len(sf_val_extremums) != len(self.subfield_limits):
-            raise DataModelDefinitionError
+            raise DataModelDefinitionError('inconsistent number of subfields')
 
         if sf_descs is not None:
             assert(len(self.subfield_limits) == len(sf_descs))

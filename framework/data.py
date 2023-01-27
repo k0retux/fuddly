@@ -687,7 +687,7 @@ class DataProcess(object):
             process (list): List of disruptors (possibly complemented by parameters) to apply to
               a ``seed``. However, if the list begin with a generator, the disruptor chain will apply
               to the outcome of the generator. The generic form for a process is:
-              ``[action_1, (action_2, generic_UI_2, specific_UI_2), ... action_n]``
+              ``[action_1, (action_2, UI_2), ... action_n]``
               where ``action_N`` can be either: ``dmaker_type_N`` or ``(dmaker_type_N, dmaker_name_N)``
             seed: (Optional) Can be a registered :class:`framework.data_model.Node` name or
               a :class:`framework.data_model.Data`. Will be provided to the first disruptor in

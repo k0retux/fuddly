@@ -57,6 +57,7 @@ import libs.debug_facility as dbg
 from libs.utils import chunk_lines
 
 DEBUG = dbg.DM_DEBUG
+DEBUG_PRINT = dbg.DEBUG_PRINT
 
 def split_with(predicate, iterable):
     l = []
@@ -4028,6 +4029,14 @@ class NodeInternals_NonTerm(NodeInternals):
                     exist = node.env.node_exists(id(sync_node))
                     crit_1 = exist
                     crit_2 = True
+
+                    if DEBUG:
+                        print(f'\n*** [Existence Check requested by "{node.name}"]\n'
+                              f'  --> Does the node "{sync_node.name}" exist? {exist}')
+                        if not exist:
+                            print(f'  --> The node "{sync_node.name}" is either really not existing or not\n'
+                                  f'      registered in node.env.drawn_node_attrs because of a bug...')
+
                     if exist and condition is not None:
                         try:
                             crit_2 = condition.check(sync_node)
@@ -4201,6 +4210,8 @@ class NodeInternals_NonTerm(NodeInternals):
             prepend_postponed = None
             postponed_appended = None
 
+            base_node_len = None
+
             reject_with_min_null = False
 
             node_no = 1
@@ -4229,9 +4240,9 @@ class NodeInternals_NonTerm(NodeInternals):
                         break
                 elif st == AbsorbStatus.Absorbed or st == AbsorbStatus.FullyAbsorbed:
                     if DEBUG:
-                        print('\nABSORBED: %s, abort: %r, off: %d, consumed_sz: %d, blob: %r ...' \
-                              % (node.name, abort, off, sz, blob[off:sz][:100]))
-                        print('\nPostpone Node: %r' % postponed)
+                        print('\nABSORBED: %s, abort: %r, off: %d, consumed_sz: %d, blob: %r...' \
+                              % (node.name, abort, off, sz, blob[off:off+sz][:100]))
+                        print(f'\nPostpone Node: {postponed.name if postponed else "N/A"} ({postponed!r})')
 
                     nb_absorbed = node_no
                     sz2 = 0
@@ -4245,6 +4256,13 @@ class NodeInternals_NonTerm(NodeInternals):
                             postponed = None
 
                     elif postponed is not None:
+                        # we first set metadata related to the successful absorption as the absorbed
+                        # node could be leveraged while trying to absorb the postponed node
+                        # (e.g., node existence verification).
+
+                        base_node_len = len(base_node._tobytes())
+                        # this call is necessary for base_node existence check to work
+                        self._set_drawn_node_attrs(base_node, nb=nb_absorbed, sz=base_node_len)
 
                         # we only support one postponed node between two nodes
                         st2, off2, sz2, name2 = \
@@ -4344,7 +4362,9 @@ class NodeInternals_NonTerm(NodeInternals):
                     pending_postponed_to_send_back = None
                 self._clear_drawn_node_attrs(base_node)
             else:
-                self._set_drawn_node_attrs(base_node, nb=nb_absorbed, sz=len(base_node._tobytes()))
+                if base_node_len is None:
+                    base_node_len = len(base_node._tobytes())
+                self._set_drawn_node_attrs(base_node, nb=nb_absorbed, sz=base_node_len)
                 idx = 0
                 for n in tmp_list:
                     if postponed_appended is not None and n is postponed_appended:
@@ -6734,8 +6754,8 @@ class Node(object):
         if isinstance(node_internals_list, list):
             node_internals_list = list(flatten(node_internals_list))
             if node_internals_list:
-                if issubclass(node_internals_list[0].__class__, NodeInternals):
-                    node_internals_list = list(map(tobytes_helper, node_internals_list))
+                # if issubclass(node_internals_list[0].__class__, NodeInternals):
+                node_internals_list = list(map(tobytes_helper, node_internals_list))
                 val = b''.join(node_internals_list)
             else:
                 val = b''
