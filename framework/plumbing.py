@@ -3274,6 +3274,15 @@ class FmkPlumbing(object):
 
         return True
 
+
+    @EnforceOrder(accepted_states=['S2'])
+    def exec_dm_tests(self):
+        try:
+            self.dm.validation_tests()
+        except Exception:
+            self._handle_user_code_exception(f'Validation tests has crashed on current data model {self.dm.name}')
+
+
     @EnforceOrder(accepted_states=['S2'])
     def process_data(self, action_list, seed=None, valid_gen=False, save_gen_seed=False, reset_dmakers=False):
         """
@@ -4309,6 +4318,14 @@ class FmkShell(cmd.Cmd):
 
         self.__error_msg = (
                 "'{}' do not have subkeys".format(args[0]))
+        return False
+
+
+    def do_exec_dm_tests(self, line):
+        """
+        Execute the validation tests of current Data Model
+        """
+        self.fz.exec_dm_tests()
         return False
 
     def do_load_data_model(self, line):
