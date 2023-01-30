@@ -967,7 +967,7 @@ class String(VT_Alt):
 
             unsupported_chars = base_char_set - set(self._bytes2str(self.alphabet))
             if unsupported_chars:
-                sample = random.sample(unsupported_chars, 1)[0]
+                sample = random.choice(tuple(unsupported_chars))[0]
                 test_case = orig_val[:-1] + sample.encode(self.codec)
                 self.values_fuzzy.append(test_case)
 
