@@ -81,7 +81,8 @@ class Step(object):
                  set_periodic=None, clear_periodic=None, step_desc=None,
                  start_tasks=None, stop_tasks=None,
                  do_before_data_processing=None, do_before_sending=None,
-                 valid=True, vtg_ids=None):
+                 valid=True, vtg_ids=None,
+                 refresh_atoms=True):
         """
         Step objects are the building blocks of Scenarios.
 
@@ -103,6 +104,8 @@ class Step(object):
             transition_on_dp_complete (bool):
               this attribute is set
               to ``True`` by the framework.
+            refresh_atoms (bool): if set to `True` atoms described by names in `data_desc` will be re-instanced
+              each time the step is entered.
 
         """
 
@@ -115,6 +118,8 @@ class Step(object):
         # the registered processes are exhausted (data makers have yielded), then if a transition for this
         # condition has been defined (this attribute will be set to True), the scenario will walk through it.
         self.transition_on_dp_complete = False
+
+        self.refresh_atoms = refresh_atoms
 
         self._step_desc = step_desc
         self._transitions = []
@@ -212,6 +217,9 @@ class Step(object):
                 self._transitions.append(tr)
 
     def do_before_data_processing(self):
+        if self.refresh_atoms:
+            self._atom = None
+
         if self._do_before_data_processing is not None:
             self._do_before_data_processing(self._scenario_env, self)
 
@@ -364,9 +372,9 @@ class Step(object):
                         atom_list.append(None)
                 else:
                     atom_list.append(None)
-            elif isinstance(d, Data):
+            elif isinstance(d, Data) and self._node_name[idx] is None:
                 atom_list.append(d.content if isinstance(d.content, Node) else None)
-            elif isinstance(d, Data) or self._node_name[idx] is None:
+            elif self._node_name[idx] is None:
                 # that means that a data creation process has been registered and will be
                 # carried out by the framework through a callback
                 atom_list.append(None)

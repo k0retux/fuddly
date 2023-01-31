@@ -2208,7 +2208,7 @@ class BitField(VT_Alt):
         try:
             idx = self.subfield_descs.index(sf_desc)
         except ValueError:
-            raise DataModelAccessError
+            raise DataModelAccessError(f'wrong subfield description: {sf_desc!r}')
 
         return idx
 
