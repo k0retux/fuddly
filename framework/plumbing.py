@@ -959,9 +959,9 @@ class FmkPlumbing(object):
             prj_params['logger'] = logger
             try:
                 targets = eval(prefix + name + '_proj' + '.targets')
-                targets.insert(0, EmptyTarget())
+                targets.insert(0, EmptyTarget(verbose=self.config.targets.empty_tg.verbose))
             except:
-                tg = EmptyTarget()
+                tg = EmptyTarget(verbose=self.config.targets.empty_tg.verbose)
                 tg.set_project(prj)
                 targets = [tg]
             else:
@@ -4224,7 +4224,7 @@ class FmkShell(cmd.Cmd):
         return comp
 
     def do_config(self, line, target=None):
-        '''Get and set miscellaneous options
+        """Get and set miscellaneous options
 
         Usage:
          - config
@@ -4233,7 +4233,7 @@ class FmkShell(cmd.Cmd):
                Get value associated with <name>.
          - config [name [subname...]] value
                Set value associated with <name>.
-        '''
+        """
         self.__error = True
 
         level = self.config.config.indent.level
@@ -4256,7 +4256,7 @@ class FmkShell(cmd.Cmd):
                     return self.do_config(' '.join(args[1:]), target)
                 except KeyError as e:
                     print('Unknown config "{}": '.format(args[0]) + str(e))
-                return True
+                return False
 
         if len(args) == 0:
             print(target.help(None, level, indent, middle))

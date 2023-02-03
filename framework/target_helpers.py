@@ -360,11 +360,13 @@ class EmptyTarget(Target):
     _feedback_mode = Target.FBK_WAIT_FULL_TIME
     supported_feedback_mode = [Target.FBK_WAIT_FULL_TIME, Target.FBK_WAIT_UNTIL_RECV]
 
-    def __init__(self):
+    def __init__(self, verbose=False):
         Target.__init__(self)
+        self.verbose = verbose
 
     def send_data(self, data, from_fmk=False):
-        pass
+        if self.verbose:
+            print(f'\n*** data sent: {data.to_bytes()}')
 
     def send_multiple_data(self, data_list, from_fmk=False):
         pass

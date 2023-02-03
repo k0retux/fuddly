@@ -76,7 +76,14 @@ fuzz.burst = 1
 ;;  [defvalues.doc]
 ;;  self: (default values used when the framework resets)
 ;;  fuzz.delay: Default value (> 0) for fuzz_delay
-;;  fuzz.burst: Default value (>= 1)for fuzz_burst
+;;  fuzz.burst: Default value (>= 1) for fuzz_burst
+
+[targets]
+empty_tg.verbose = False
+
+;;  [targets.doc]
+;;  self: configuration related to targets
+;;  empty_tg.verbose: Enable verbose mode (if True) on the default EmptyTarget()
 
 ''')
 
