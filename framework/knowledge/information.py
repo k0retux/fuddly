@@ -108,6 +108,11 @@ class Test(Info):
     Medium = auto()
     Deep = auto()
 
+class OperationMode(Info):
+    Determinist = auto()
+    Random = auto()
+
+
 class InformationCollector(object):
 
     def __init__(self):
