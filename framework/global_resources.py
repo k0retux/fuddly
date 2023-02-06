@@ -27,6 +27,14 @@ import copy
 import inspect
 from enum import Enum
 
+
+try:
+    from xdg.BaseDirectory import xdg_data_home, xdg_config_home
+except ModuleNotFoundError:
+    # A bit redundant, but work even if the xdg lib is not installed
+    xdg_data_home = os.path.expanduser('~' + os.sep + 'fuddly_data' + os.sep)
+    xdg_config_home = os.path.expanduser('~' + os.sep + 'fuddly_data' + os.sep + "config")
+
 import framework
 from libs.utils import ensure_dir, ensure_file
 
@@ -34,7 +42,6 @@ from libs.utils import ensure_dir, ensure_file
 fuddly_version = '0.27.2'
 
 framework_folder = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-# framework_folder = os.path.dirname(framework.__file__)
 framework_folder  = '.' if framework_folder == '' else framework_folder
 
 app_folder = os.path.dirname(framework_folder)
@@ -43,8 +50,13 @@ projects_folder = app_folder + os.sep + 'projects' + os.sep
 data_models_folder = app_folder + os.sep + 'data_models' + os.sep
 
 fuddly_data_folder = os.path.expanduser('~' + os.sep + 'fuddly_data' + os.sep)
+xdg_fuddly_data_folder = xdg_data_home + os.sep + 'fuddly' + os.sep
 if not os.path.exists(fuddly_data_folder):
-    new_fuddly_data_folder = True
+    if not os.path.exists(xdg_fuddly_data_folder):
+        new_fuddly_data_folder = True
+    else:
+        fuddly_data_folder = xdg_fuddly_data_folder
+        use_xdg=True
 ensure_dir(fuddly_data_folder)
 
 exported_data_folder = fuddly_data_folder + 'exported_data' + os.sep
@@ -59,7 +71,12 @@ external_libs_folder = fuddly_data_folder + 'external_libs' + os.sep
 ensure_dir(external_libs_folder)
 external_tools_folder = fuddly_data_folder + 'external_tools' + os.sep
 ensure_dir(external_tools_folder)
-config_folder = os.path.join(fuddly_data_folder, 'config') + os.sep
+
+if not use_xdg:
+    config_folder = os.path.join(fuddly_data_folder, 'config') + os.sep
+else:
+    xdg_fuddly_config_folder = xdg_config_home + os.sep + 'fuddly' + os.sep
+    config_folder = xdg_fuddly_config_folder
 ensure_dir(config_folder)
 
 user_projects_folder = fuddly_data_folder + 'user_projects' + os.sep
