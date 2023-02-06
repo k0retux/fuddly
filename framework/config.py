@@ -57,9 +57,6 @@ class default:
         return self.__unindent.sub('', multiline)
 
     def add(self, name, doc):
-        if sys.version_info[0] <= 2:
-            doc = unicode(doc)
-
         self.configs[name] = self._unindent(doc)
 
 
@@ -214,13 +211,11 @@ def config_write(that, stream=sys.stdout):
 
 
 def sectionize(that, parent):
-    if sys.version_info[0] > 2:
-        unicode = str
     if parent is not None:
         that.config_name = parent
 
     try:
-        name = unicode(that.config_name)
+        name = str(that.config_name)
     except BaseException:
         name = that.config_name
 
@@ -496,10 +491,7 @@ class config(object):
                     if verbose:
                         sys.stderr.write('Loading {}...\n'.format(filename))
                     with open(filename, 'r') as cfile:
-                        if sys.version_info[0] > 2:
-                            self.parser.read_file(cfile, source=filename)
-                        else:
-                            self.parser.readfp(cfile, filename=filename)
+                        self.parser.read_file(cfile, source=filename)
                     loaded = True
                 except BaseException as e:
                     if verbose:
@@ -508,21 +500,12 @@ class config(object):
                     continue
 
         if loaded or name in default.configs:
-            if not loaded and sys.version_info[0] > 2:
+            if not loaded:
                 if verbose:
                     sys.stderr.write(
                         'Loading default config for {}...\n'.format(name))
                 self.parser.read_string(default.configs[name],
                                         'default_' + name)
-                loaded = True
-            elif not loaded:
-                if verbose:
-                    sys.stderr.write(
-                        'Loading default config for {}...\n'.format(name))
-                stream = io.StringIO()
-                stream.write(default.configs[name])
-                stream.seek(0)
-                self.parser.readfp(stream, 'default_' + name)
                 loaded = True
 
             if not self.parser.has_section('global'):

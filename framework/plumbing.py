@@ -765,13 +765,9 @@ class FmkPlumbing(object):
 
         try:
             if reload_dm:
-                if sys.version_info[0] == 2:
-                    eval('reload(' + prefix + name + ')')
-                    eval('reload(' + prefix + name + '_strategy' + ')')
-                else:
-                    exec('import importlib')
-                    eval('importlib.reload(' + prefix + name + ')')
-                    eval('importlib.reload(' + prefix + name + '_strategy' + ')')
+                exec('import importlib')
+                eval('importlib.reload(' + prefix + name + ')')
+                eval('importlib.reload(' + prefix + name + '_strategy' + ')')
             else:
                 exec('import ' + prefix + name)
                 exec('import ' + prefix + name + '_strategy')
@@ -909,11 +905,8 @@ class FmkPlumbing(object):
 
         try:
             if reload_prj:
-                if sys.version_info[0] == 2:
-                    eval('reload(' + prefix + name + '_proj' + ')')
-                else:
-                    exec('import importlib')
-                    eval('importlib.reload(' + prefix + name + '_proj' + ')')
+                exec('import importlib')
+                eval('importlib.reload(' + prefix + name + '_proj' + ')')
             else:
                 exec('import ' + prefix + name + '_proj')
         except:

@@ -341,10 +341,7 @@ class TestBasics(unittest.TestCase):
         fct = lambda x: b' @ ' + x + b' @ '
         concat.set_func(fct, tux)
 
-        if sys.version_info[0] > 2:
-            fct = lambda x: b'___' + bytes(chr(x[1]), internal_repr_codec) + b'___'
-        else:
-            fct = lambda x: b'___' + x[1] + b'___'
+        fct = lambda x: b'___' + bytes(chr(x[1]), internal_repr_codec) + b'___'
 
         concat.add_conf('ALT')
         concat.set_func(fct, tux, conf='ALT')
@@ -3545,8 +3542,7 @@ class TestNode_TypedValue(unittest.TestCase):
 
         alphabet = alphabet1 + alphabet2
         for l in raw_data:
-            if sys.version_info[0] > 2:
-                l = chr(l)
+            l = chr(l)
             self.assertTrue(l in alphabet)
 
         print('\n*** Test with following  data:')
@@ -3871,10 +3867,7 @@ class TestDataModel(unittest.TestCase):
             raw = d.to_bytes()
             print(raw)
 
-            if sys.version_info[0] > 2:
-                retr_off = raw[-1]
-            else:
-                retr_off = struct.unpack('B', raw[-1])[0]
+            retr_off = raw[-1]
             print('\nRetrieved offset is: %d' % retr_off)
 
             int_idx = d['off_gen/body$'][0].get_subnode_idx(d['off_gen/body/int'][0])
@@ -4183,7 +4176,8 @@ class TestDataModelHelpers(unittest.TestCase):
                 break
 
             go_on = fmk.send_data_and_log([data])
-            assert len(data.to_bytes()) == data_sizes[i]
+            bstr_len = len(data.to_bytes())
+            assert bstr_len == data_sizes[i], f'i: {i}, len(data.to_bytes()): {bstr_len}'
 
             if not go_on:
                 raise ValueError
@@ -4191,6 +4185,8 @@ class TestDataModelHelpers(unittest.TestCase):
             raise ValueError
 
         assert i == 3
+
+        raise ValueError
 
         specific_cases_checked = False
         for i in range(100):

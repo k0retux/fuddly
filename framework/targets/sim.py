@@ -48,8 +48,7 @@ class SIMTarget(Target):
         self.tel_num = targeted_tel_num
         self.pin_code = pin_code
         self.codec = codec
-        if sys.version_info[0]>2:
-            self.pin_code = bytes(self.pin_code, self.codec)
+        self.pin_code = bytes(self.pin_code, self.codec)
         self.set_feedback_timeout(2)
 
     def start(self):
@@ -118,8 +117,6 @@ class SIMTarget(Target):
         raw_data = data.to_bytes()
         pdu_sz = len(raw_data)
         for c in raw_data:
-            if sys.version_info[0] == 2:
-                c = ord(c)
             pdu += binascii.b2a_hex(struct.pack('B', c))
         pdu = pdu.upper()
 

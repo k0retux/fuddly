@@ -331,12 +331,8 @@ class Serial_Backend(Backend):
         self.dsrdtr = dsrdtr
         self.slowness_factor = slowness_factor
         self.cmd_notfound = cmd_notfound
-        if sys.version_info[0] > 2:
-            self.username = bytes(username, self.codec)
-            self.password = bytes(password, self.codec)
-        else:
-            self.username = username
-            self.password = password
+        self.username = bytes(username, self.codec)
+        self.password = bytes(password, self.codec)
 
         self.client = None
 
@@ -387,8 +383,7 @@ class Serial_Backend(Backend):
         if not self.ser.is_open:
             raise BackendError('Serial port not open')
 
-        if sys.version_info[0] > 2:
-            cmd = bytes(cmd, self.codec)
+        cmd = bytes(cmd, self.codec)
         cmd += b'\r\n'
         self.ser.flushInput()
         self.ser.write(cmd)

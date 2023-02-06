@@ -859,10 +859,7 @@ class Database(object):
     def _handle_binary_content(self, content, sz_limit=None, raw=False, colorized=True):
         colorize = self._get_color_function(colorized)
 
-        if sys.version_info[0] > 2:
-            content = content if not raw else '{!a}'.format(content)
-        else:
-            content = content if not raw else repr(content)
+        content = content if not raw else '{!a}'.format(content)
 
         if sz_limit is not None and len(content) > sz_limit:
             content = content[:sz_limit]

@@ -275,7 +275,7 @@ class SyncExistenceObj(SyncObj):
 
     def _condition_satisfied(self, node, condition):
         exist = node.env.node_exists(id(node))
-        crit_1 = True if exist else False
+        crit_1 = exist
         crit_2 = True
         if exist and condition is not None:
             try:
@@ -4017,7 +4017,6 @@ class NodeInternals_NonTerm(NodeInternals):
     @staticmethod
     def _existence_from_node(node):
         obj = node.synchronized_with(SyncScope.Existence)
-
         if obj is not None:
             if isinstance(obj, SyncExistenceObj):
                 correct_reply = obj.check()
@@ -4037,9 +4036,14 @@ class NodeInternals_NonTerm(NodeInternals):
                             print(f'  --> The node "{sync_node.name}" is either really not existing or not\n'
                                   f'      registered in node.env.drawn_node_attrs because of a bug...')
 
+                        print(f'\n --> condition existing? {bool(condition)}')
+
                     if exist and condition is not None:
                         try:
                             crit_2 = condition.check(sync_node)
+
+                            if DEBUG:
+                                print(f'\n --> condition satisfied? {crit_2}')
                         except Exception as e:
                             print("\n*** ERROR: existence condition is not verifiable " \
                                   "for node '{:s}' (id: {:d})!\n" \
@@ -4052,8 +4056,7 @@ class NodeInternals_NonTerm(NodeInternals):
         obj = node.synchronized_with(SyncScope.Inexistence)
         if obj is not None:
             sync_node, _ = obj  # condition is not checked for this scope
-            inexist = not node.env.node_exists(id(sync_node))
-            correct_reply = True if inexist else False
+            correct_reply = not node.env.node_exists(id(sync_node))
             return NodeInternals_NonTerm.existence_corrupt_hook(node, correct_reply)
 
         return None
@@ -4478,10 +4481,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                             bval = result // (1 << i*8)
                                             result = result % (1 << i*8)  # remainder
                                             l.append(bval)
-                                        if sys.version_info[0] > 2:
-                                            partial_blob = struct.pack('{:d}s'.format(nb_bytes), bytes(l))
-                                        else:
-                                            partial_blob = struct.pack('{:d}s'.format(nb_bytes), str(bytearray(l)))
+                                        partial_blob = struct.pack('{:d}s'.format(nb_bytes), bytes(l))
                                 else:
                                     partial_blob = blob[consumed_size:last_idx]
                                     last_byte = blob[last_idx:last_idx+1]
@@ -6777,10 +6777,7 @@ class Node(object):
     def to_ascii(self, conf=None, recursive=True):
         val = self.to_str(conf=conf, recursive=recursive)
         try:
-            if sys.version_info[0] > 2:
-                val = eval('{!a}'.format(val))
-            else:
-                val = str(val)
+            val = eval('{!a}'.format(val))
         except:
             val = repr(val)
         finally:

@@ -36,14 +36,7 @@ import re
 import zlib
 import codecs
 
-if sys.version_info[0] > 2:
-    # python3
-    import builtins
-    CHR_compat = chr
-else:
-    # python2.7
-    import __builtin__ as builtins
-    CHR_compat = unichr
+import builtins
 
 import framework.basic_primitives as bp
 from framework.encoders import *
@@ -197,7 +190,7 @@ class String(VT_Alt):
 
     ctrl_char_set = ''.join([chr(i) for i in range(0, 0x20)])+'\x7f'
     printable_char_set = ''.join([chr(i) for i in range(0x20, 0x7F)])
-    extended_char_set = ''.join([CHR_compat(i) for i in range(0x80, 0x100)])
+    extended_char_set = ''.join([chr(i) for i in range(0x80, 0x100)])
     non_ctrl_char = printable_char_set + extended_char_set
 
     encoded_string = False
@@ -285,18 +278,7 @@ class String(VT_Alt):
             for v in val:
                 b.append(self._str2bytes(v))
         else:
-            if sys.version_info[0] > 2:
-                b = val if isinstance(val, bytes) else val.encode(self.codec)
-            else:
-                try:
-                    b = val.encode(self.codec)
-                except:
-                    if len(val) > 30:
-                        val = val[:30] + ' ...'
-                    err_msg = "\n*** WARNING: Encoding issue. With python2 'str' or 'bytes' means " \
-                              "ASCII, prefix the string {:s} with 'u'".format(repr(val))
-                    print(err_msg)
-                    b = val
+            b = val if isinstance(val, bytes) else val.encode(self.codec)
         return b
 
     def _bytes2str(self, val):
@@ -1215,8 +1197,6 @@ class String(VT_Alt):
             if max_size is not None and sz > max_size:
                 dec = dec[:max_size]
             dec = dec.decode(self.codec, 'replace')
-            if sys.version_info[0] == 2:
-                dec = dec.encode('latin-1')
             return dec + ' [decoded, sz={!s}, codec={!s}{:s}]'.format(len(dec), self.codec, desc)
         else:
             return 'codec={!s}{:s}'.format(self.codec, desc)
@@ -3109,11 +3089,8 @@ class BitField(VT_Alt):
         # littleendian-encoded
         if self.endian == VT.LittleEndian:
             l = l[::-1]
-           
-        if sys.version_info[0] > 2:
-            return struct.pack('{:d}s'.format(self.nb_bytes), bytes(l))
-        else:
-            return struct.pack('{:d}s'.format(self.nb_bytes), str(bytearray(l)))
+
+        return struct.pack('{:d}s'.format(self.nb_bytes), bytes(l))
 
     def get_current_raw_val(self):
         if self.drawn_val is None:

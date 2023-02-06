@@ -114,9 +114,8 @@ class Wrap_Enc(Encoder):
               Can be individually set to None
         """
         assert isinstance(arg, (tuple, list))
-        if sys.version_info[0] > 2:
-            assert arg[0] is None or isinstance(arg[0], bytes)
-            assert arg[1] is None or isinstance(arg[1], bytes)
+        assert arg[0] is None or isinstance(arg[0], bytes)
+        assert arg[1] is None or isinstance(arg[1], bytes)
         self.prefix = b'' if arg[0] is None else arg[0]
         self.suffix = b'' if arg[1] is None else arg[1]
         self.prefix_sz = 0 if self.prefix is None else len(self.prefix)
@@ -142,10 +141,6 @@ class Wrap_Enc(Encoder):
 class GSM7bitPacking_Enc(Encoder):
 
     def encode(self, msg):
-        if sys.version_info[0] > 2:
-            ORD = lambda x: x
-        else:
-            ORD = ord
         msg_sz = len(msg)
         l = []
         idx = 0
@@ -156,19 +151,15 @@ class GSM7bitPacking_Enc(Encoder):
             if off == 0 and off_cpt > 0:
                 c_idx = idx + 1
             if c_idx+1 < msg_sz:
-                l.append((ORD(msg[c_idx])>>off)+((ORD(msg[c_idx+1])<<(7-off))&0x00FF))
+                l.append((msg[c_idx]>>off)+((msg[c_idx+1]<<(7-off))&0x00FF))
             elif c_idx < msg_sz:
-                l.append(ORD(msg[c_idx])>>off)
+                l.append(msg[c_idx]>>off)
             idx = c_idx + 1
             off_cpt += 1
 
         return b''.join(map(lambda x: struct.pack('B', x), l))
 
     def decode(self, msg):
-        if sys.version_info[0] > 2:
-            ORD = lambda x: x
-        else:
-            ORD = ord
         msg_sz = len(msg)
         l = []
         c_idx = 0
@@ -180,8 +171,8 @@ class GSM7bitPacking_Enc(Encoder):
                 l.append(lsb)
                 lsb = 0
             if c_idx < msg_sz:
-                l.append(((ORD(msg[c_idx])<<off)&0x007F)+lsb)
-                lsb = ORD(msg[c_idx])>>(7-off)
+                l.append(((msg[c_idx]<<off)&0x007F)+lsb)
+                lsb = msg[c_idx]>>(7-off)
             c_idx += 1
             off_cpt += 1
 

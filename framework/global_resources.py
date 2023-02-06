@@ -91,26 +91,19 @@ def convert_to_internal_repr(val):
             new_v = convert_to_internal_repr(v)
             new_val.append(new_v)
         val = new_val
-    elif sys.version_info[0] > 2:
-        if isinstance(val, str):
-            val = val.encode(internal_repr_codec)
-    elif isinstance(val, unicode):  # only for python2
+    elif isinstance(val, str):
         val = val.encode(internal_repr_codec)
-    elif isinstance(val, str):  # only for python2
-        pass
     else:
-        raise ValueError
+        assert isinstance(val, bytes)
+
     return val
 
 def unconvert_from_internal_repr(val):
-    if sys.version_info[0] == 2 and isinstance(val, buffer):
-        # This case occurs when reading from the FmkDB
-        val = str(val)
-    else:
-        try:
-            val = val.decode(internal_repr_codec, 'strict')
-        except:
-            val = val.decode('latin-1')
+    try:
+        val = val.decode(internal_repr_codec, 'strict')
+    except:
+        val = val.decode('latin-1')
+
     return val
 
 def is_string_compatible(val):
@@ -120,12 +113,8 @@ def is_string_compatible(val):
                 return False
         else:
             return True
-    elif sys.version_info[0] > 2:
-        return isinstance(val, (str, bytes))
-    elif isinstance(val, (unicode, str)):  # only for python2
-        return True
     else:
-        return False
+        return isinstance(val, (str, bytes))
 
 def get_user_input(msg):
     return input(msg)

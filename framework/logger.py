@@ -122,10 +122,7 @@ class Logger(object):
 
     def _handle_binary_content(self, content, raw=False):
         content = gr.unconvert_from_internal_repr(content)
-        if sys.version_info[0] > 2:
-            content = content if not raw else '{!a}'.format(content)
-        else:
-            content = content if not raw else repr(content)
+        content = content if not raw else '{!a}'.format(content)
 
         return content
 

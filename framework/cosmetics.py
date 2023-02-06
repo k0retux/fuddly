@@ -108,35 +108,19 @@ class wrapper:
         self.countp = 0
 
 
-if sys.version_info[0] > 2:
+class stdout_wrapper(wrapper, io.TextIOWrapper):
+    """Wrap stdout and handle cosmetic issues."""
 
-    class stdout_wrapper(wrapper, io.TextIOWrapper):
-        """Wrap stdout and handle cosmetic issues."""
+    def __init__(self):
+        io.TextIOWrapper.__init__(self,
+                                  io.BytesIO(), sys.__stdout__.encoding)
+        wrapper.__init__(self, io.TextIOWrapper)
 
-        def __init__(self):
-            io.TextIOWrapper.__init__(self,
-                                      io.BytesIO(), sys.__stdout__.encoding)
-            wrapper.__init__(self, io.TextIOWrapper)
+    def reinit(self):
+        wrapper.reinit(self)
+        io.TextIOWrapper.__init__(self, io.BytesIO())
 
-        def reinit(self):
-            wrapper.reinit(self)
-            io.TextIOWrapper.__init__(self, io.BytesIO())
-
-    stdout_wrapped = stdout_wrapper()
-else:
-
-    class stdout_wrapper(wrapper, io.BytesIO):
-        """Wrap stdout and handle cosmetic issues."""
-
-        def __init__(self):
-            io.BytesIO.__init__(self)
-            wrapper.__init__(self, io.BytesIO)
-
-        def reinit(self):
-            wrapper.reinit(self)
-            io.BytesIO.__init__(self)
-
-    stdout_wrapped = stdout_wrapper()
+stdout_wrapped = stdout_wrapper()
 
 if not import_error:
 
@@ -149,10 +133,7 @@ if not import_error:
     civis = curses.tigetstr("civis")
     cvvis = curses.tigetstr("cvvis")
 else:
-    if sys.version_info[0] > 2:
-        el, ed, cup, civis, cvvis = ('', ) * 5
-    else:
-        el, ed, cup, civis, cvvis = (b'', ) * 5
+    el, ed, cup, civis, cvvis = ('', ) * 5
 
 
 def get_size(
@@ -215,11 +196,8 @@ def buffer_content():
     Returns:
         The whole content of stdout_wrapped."""
 
-    if sys.version_info[0] > 2:
-        stdout_wrapped.seek(0)
-        payload = stdout_wrapped.buffer.read()
-    else:
-        payload = stdout_wrapped.getvalue()
+    stdout_wrapped.seek(0)
+    payload = stdout_wrapped.buffer.read()
     return payload
 
 
@@ -255,10 +233,7 @@ def disp(
     Args:
         payload (bytes): the bytes displayed on screen."""
 
-    if sys.version_info[0] > 2:
-        stdout_unwrapped.buffer.write(payload)
-    else:
-        stdout_unwrapped.write(payload)
+    stdout_unwrapped.buffer.write(payload)
 
 
 def tty_noecho():

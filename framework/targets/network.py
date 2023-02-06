@@ -145,8 +145,7 @@ class NetworkTarget(Target):
 
         if sys.platform in ['linux', 'linux2']:  # python3, python2
             def get_mac_addr(ifname):
-                if sys.version_info[0] > 2:
-                    ifname = bytes(ifname, 'latin_1')
+                ifname = bytes(ifname, 'latin_1')
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 try:
                     info = fcntl.ioctl(s.fileno(), 0x8927, struct.pack('256s', ifname[:15]))
@@ -499,7 +498,7 @@ class NetworkTarget(Target):
         for k, mac_src in self._mac_src.items():
             if mac_src is not None:
                 if mac_src:
-                    mac_src = mac_src.hex() if sys.version_info[0] > 2 else mac_src.encode('hex')
+                    mac_src = mac_src.hex()
                     self.record_info('*** Detected HW address for {!s}: {!s} ***'
                                      .format(k[0], mac_src))
                 else:

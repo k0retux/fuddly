@@ -726,8 +726,7 @@ class ProbePID(Probe):
             fallback_cmd = 'ps a -opid,comm | grep {0:s}'.format(self.process_name)
             chan_desc = self.backend.exec_command(fallback_cmd)
             res = self.backend.read_output(chan_desc)
-            if sys.version_info[0] > 2:
-                res = res.decode(self.backend.codec)
+            res = res.decode(self.backend.codec)
             pid_list = res.split('\n')
             for entry in pid_list:
                 if entry.find(self.process_name) >= 0:
@@ -740,8 +739,7 @@ class ProbePID(Probe):
                 # process not found
                 pid = -1
         else:
-            if sys.version_info[0] > 2:
-                res = res.decode(self.backend.codec)
+            res = res.decode(self.backend.codec)
             l = res.split()
             if len(l) > 1:
                 logger.print_console("*** ERROR: more than one PID detected for process name '{:s}'"
@@ -843,8 +841,7 @@ class ProbeMem(Probe):
         chan_desc = self.backend.exec_command(self.command_pattern.format(self.process_name))
         res = self.backend.read_output(chan_desc)
 
-        if sys.version_info[0] > 2:
-            res = res.decode(self.backend.codec)
+        res = res.decode(self.backend.codec)
         proc_list = res.split('\n')
         for entry in proc_list:
             if entry.find(self.process_name) >= 0:

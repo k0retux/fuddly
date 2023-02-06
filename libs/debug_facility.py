@@ -21,11 +21,11 @@
 #
 ################################################################################
 
-DEBUG = False
+DEBUG = True
 LEVEL = 0
 
 # related to data_model.py
-DM_DEBUG = False
+DM_DEBUG = True
 ABS_DEBUG = False
 
 # related to value_types.py

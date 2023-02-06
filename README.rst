@@ -74,10 +74,9 @@ Miscellaneous
 
 Dependencies
 ------------
-+ Compatible with Python2 and Python3
++ Compatible with Python3
 + Mandatory:
 
-  - `six`_: Python 2/3 compatibility
   - `sqlite3`_: SQLite3 data base
 
 + Optional:
