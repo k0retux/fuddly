@@ -19,15 +19,40 @@ sys.path.insert(0, rootdir)
 from framework.database import Database
 from libs.external_modules import *
 
+#region Argparse
 parser = argparse.ArgumentParser(description='Argument for FmkDB toolkit script')
 
 group = parser.add_argument_group('Main parameters')
-group.add_argument('--id_interval', type=str, help='The ID interval to take into account x..y')
-group.add_argument('--formula', type=str, help='The formula to plot, in the form "y ~ x"')
+
+group.add_argument(
+    '-id', 
+    '--id_interval', 
+    type=str, 
+    help='The ID interval to take into account x..y',
+    required=True
+)
+
+group.add_argument(
+    '-f', 
+    '--formula', 
+    type=str, 
+    help='The formula to plot, in the form "y ~ x"',
+    required=True
+)
+
 
 group = parser.add_argument_group('Options')
-group.add_argument('--fmkdb', metavar='PATH', help='Path to an alternative fmkDB.db')
 
+group.add_argument(
+    '-db', 
+    '--fmkdb', 
+    metavar='PATH', 
+    help='Path to an alternative fmkDB.db', 
+    nargs='?',
+    required=False
+)
+
+#endregion
 
 def display_line(x_data: list[float], y_data: list[float]):
     plt.plot(x_data, y_data)
@@ -187,8 +212,8 @@ if __name__ == "__main__":
 
     variables_values = request_from_database(id_interval, list(variable_names))
 
-    y_values = solve_expression(y_expression, variables_values)
     x_values = solve_expression(x_expression, variables_values)
+    y_values = solve_expression(y_expression, variables_values)
 
     display_line(x_values, y_values)
     
