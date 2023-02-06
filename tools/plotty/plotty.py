@@ -13,8 +13,8 @@ UNION_DELIMITER = ','
 INTERVAL_OPERATOR = '..'
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-parentdir = os.path.dirname(currentdir)
-sys.path.insert(0,parentdir)
+rootdir = os.path.dirname(os.path.dirname(currentdir))
+sys.path.insert(0, rootdir)
 
 from framework.database import Database
 from libs.external_modules import *
