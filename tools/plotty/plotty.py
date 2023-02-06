@@ -1,9 +1,11 @@
 
 import argparse
+from datetime import datetime
 import inspect
 import os
 import sys
 from typing import Any, Optional
+from enum import Enum
 
 import cexprtk
 import matplotlib.pyplot as plt
@@ -11,6 +13,10 @@ import matplotlib.pyplot as plt
 
 UNION_DELIMITER = ','
 INTERVAL_OPERATOR = '..'
+
+class DateUnit(Enum):
+    SECOND = 1
+    MILLISECOND = 2
 
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 rootdir = os.path.dirname(os.path.dirname(currentdir))
@@ -40,6 +46,14 @@ group.add_argument(
     required=True
 )
 
+group.add_argument(
+    '-d',
+    '--date_unit',
+    type=str,
+    help='Unit used for datetime conversion. Can be "s" or "ms"',
+    choices=['s', 'ms'],
+    required=True
+)
 
 group = parser.add_argument_group('Options')
 
@@ -148,7 +162,8 @@ def solve_expression(expression: str, variables_values: list[dict[str, Any]]) ->
         results.append(result)
     return results
 
-def request_from_database(id_interval: set[int], column_names: list[str]) -> Optional[list[dict[str, Any]]]:
+
+def request_from_database(id_interval: set[int], column_names: list[str], date_unit: DateUnit) -> Optional[list[dict[str, Any]]]:
     
     fmkdb = Database()
     ok = fmkdb.start()
@@ -173,6 +188,10 @@ def request_from_database(id_interval: set[int], column_names: list[str]) -> Opt
     for line in matching_data:
         line_values = dict()
         for index, value in enumerate(line):
+            if isinstance(value, datetime):
+                value = value.timestamp()
+                if date_unit == DateUnit.MILLISECOND:
+                    value *= 1000
             line_values[column_names[index]] = value
         result.append(line_values)
 
@@ -201,6 +220,15 @@ if __name__ == "__main__":
         print(colorize(f"*** INFO: for a plot of a+b in function of c*d'*** ", rgb=Color.INFO))
         sys.exit(-3)
 
+    date_unit_str = args.date_unit
+    if date_unit_str is None:
+        print(colorize(f"*** ERROR: Please provide a unit for date values***", rgb=Color.ERROR))
+        sys.exit(-4)
+    
+    date_unit = DateUnit.MILLISECOND
+    if date_unit_str == 's':
+        date_unit = DateUnit.SECOND
+
     id_interval = parse_interval_union(id_interval)
 
     y_expression, x_expression, valid_formula = split_formula(formula)
@@ -210,7 +238,7 @@ if __name__ == "__main__":
     if not valid_formula:
         sys.exit(-3)
 
-    variables_values = request_from_database(id_interval, list(variable_names))
+    variables_values = request_from_database(id_interval, list(variable_names), date_unit)
 
     x_values = solve_expression(x_expression, variables_values)
     y_values = solve_expression(y_expression, variables_values)
