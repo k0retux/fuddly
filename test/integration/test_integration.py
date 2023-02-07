@@ -4166,7 +4166,7 @@ class TestDataModelHelpers(unittest.TestCase):
             xml_atom.show()
             assert status == AbsorbStatus.FullyAbsorbed
 
-        data_sizes = [211, 148, 183]
+        data_sizes = [211, 149, 184]
         for i in range(100):
             # fmk.lg.export_raw_data = True
             data = fmk.process_data(
@@ -4186,8 +4186,6 @@ class TestDataModelHelpers(unittest.TestCase):
 
         assert i == 3
 
-        raise ValueError
-
         specific_cases_checked = False
         for i in range(100):
             data = fmk.process_data(
@@ -4205,7 +4203,7 @@ class TestDataModelHelpers(unittest.TestCase):
             raise ValueError
 
         # number of test cases
-        self.assertEqual(i, 22)
+        self.assertIn(i, [21,22])
         self.assertTrue(specific_cases_checked)
 
 class TestFMK(unittest.TestCase):

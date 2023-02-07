@@ -56,7 +56,7 @@ step1 = Step('exist_cond', fbk_timeout=1, set_periodic=[periodic1, periodic2],
              do_before_sending=before_sending_cbk, vtg_ids=0)
 step2 = Step('separator', fbk_timeout=2, clear_periodic=[periodic1], vtg_ids=1)
 empty = NoDataStep(clear_periodic=[periodic2])
-step4 = Step('off_gen', fbk_timeout=0)
+step4 = Step('off_gen', fbk_timeout=0, refresh_atoms=False)
 
 step1_copy = copy.copy(step1) # for scenario 2
 step2_copy = copy.copy(step2) # for scenario 2

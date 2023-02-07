@@ -3672,6 +3672,8 @@ class NodeInternals_NonTerm(NodeInternals):
                 removed_cpt += 1
                 continue
 
+            disabled_node = False
+
             # 'val' is always a NodeInternals except if non-term encoding has been carried out
             l.append(val)
 
