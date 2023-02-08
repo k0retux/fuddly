@@ -26,7 +26,7 @@
 import sys
 from framework.plumbing import *
 
-fmk = FmkPlumbing()
+fmk = FmkPlumbing(external_term=False)
 fmk.start()
 
 shell = FmkShell("Fuddly Shell", fmk)

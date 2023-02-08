@@ -35,7 +35,7 @@ VT_DEBUG = False
 MW_DEBUG = False
 
 # related to knowledge infrastructure
-KNOW_DEBUG = True
+KNOW_DEBUG = False
 
 try:
     from xtermcolor import colorize

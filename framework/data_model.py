@@ -28,6 +28,7 @@ from framework.data import *
 from framework.dmhelpers.generic import *
 from framework.node_builder import NodeBuilder
 from libs.external_modules import *
+from libs.utils import Accumulator
 
 #### Data Model Abstraction
 
@@ -189,11 +190,6 @@ class DataModel(object):
               Node which is the result of the absorption or None and
               Textual description of the result
         """
-
-        class Accumulator:
-            content = ''
-            def accumulate(self, msg):
-                self.content += msg
 
         a = Accumulator()
         accumulate = a.accumulate

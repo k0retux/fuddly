@@ -67,6 +67,7 @@ default.add('FmkPlumbing', u'''
 config_name: FmkPlumbing
 
 [defvalues]
+external_term = False
 fuzz.delay = 0.01
 fuzz.burst = 1
 

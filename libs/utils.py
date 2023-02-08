@@ -78,6 +78,34 @@ class Term(object):
         self.print(s, newline=True)
 
 
+class ExternalDisplay(object):
+
+    def __init__(self):
+        self._disp = None
+
+    @property
+    def disp(self):
+        return self._disp
+
+    @property
+    def is_terminal(self):
+        return isinstance(self._disp, Term)
+
+    @property
+    def is_enabled(self):
+        return self.disp is not None
+
+    def stop(self):
+        if self._disp:
+            self._disp.stop()
+            self._disp = None
+
+    def start_term(self, name=None, keepterm=False):
+        self._disp = Term(name=name, keepterm=keepterm)
+        self._disp.start()
+        self._disp.print('')
+
+
 class Task(object):
 
     period = None
@@ -147,6 +175,16 @@ class Task(object):
         else:
             print(msg)
 
+class Accumulator:
+
+    def __init__(self):
+        self.content = ''
+
+    def accumulate(self, msg):
+        self.content += msg
+
+    def clear(self):
+        self.content = ''
 
 def ensure_dir(f):
     d = os.path.dirname(f)

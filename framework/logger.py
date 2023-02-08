@@ -22,6 +22,8 @@
 ################################################################################
 
 import os
+import time
+
 import sys
 import datetime
 import threading
@@ -33,7 +35,7 @@ from framework.data import Data
 from framework.global_resources import *
 from framework.database import Database
 from framework.knowledge.feedback_collector import FeedbackSource
-from libs.utils import ensure_dir
+from libs.utils import ensure_dir, ExternalDisplay, Accumulator
 import framework.global_resources as gr
 
 class Logger(object):
@@ -44,6 +46,10 @@ class Logger(object):
     """
 
     fmkDB = None
+
+    FLUSH_API = 1
+    PRINT_CONSOLE_API = 2
+    WRITE_API = 3
 
     def __init__(self, name=None, prefix='', record_data=False, explicit_data_recording=False,
                  export_raw_data=True, term_display_limit=800, enable_term_display=True,
@@ -94,8 +100,24 @@ class Logger(object):
 
         self.display_on_term = enable_term_display
 
+        self._log_handler_thread = None
+        self._log_handler_stop_event = threading.Event()
+
+        self._thread_initialized = threading.Event()
+        self._log_entry_submitted_cond = threading.Condition()
+        self._log_entry_list = []
+        # self._log_displayed = threading.Event()
+        self._sync_lock = threading.Lock()
+
+        self._ext_disp = ExternalDisplay()
+
+        a = Accumulator()
+
         def init_logfn(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
                        do_record=True):
+            if not self.display_on_term:
+                return
+
             no_format_mode = False
             if issubclass(x.__class__, Data):
                 data = self._handle_binary_content(x.to_bytes(), raw=self.export_raw_data)
@@ -110,15 +132,35 @@ class Logger(object):
             self.print_console(colored_data, nl_before=nl_before, nl_after=nl_after,
                                rgb=rgb, style=style, no_format_mode=no_format_mode)
             if verbose and issubclass(x.__class__, Data):
-                x.show()
+                x.show(log_func=a.accumulate)
+                if self._ext_disp.is_enabled:
+                    self._ext_disp.disp.print(a.content)
+                else:
+                    sys.stdout.write(a.content)
+                a.clear()
 
-            return data
+            return
 
         self.log_fn = init_logfn
 
+    def flush(self):
+        with self._sync_lock:
+            with self._log_entry_submitted_cond:
+                self._log_entry_list.append((Logger.FLUSH_API, None))
+                self._log_entry_submitted_cond.notify()
+
+    def write(self, data):
+        with self._sync_lock:
+            with self._log_entry_submitted_cond:
+                self._log_entry_list.append((Logger.WRITE_API, data))
+                self._log_entry_submitted_cond.notify()
+
+
+    def set_external_display(self, disp):
+        self._ext_disp = disp
+
     def __str__(self):
         return 'Logger'
-
 
     def _handle_binary_content(self, content, raw=False):
         content = gr.unconvert_from_internal_repr(content)
@@ -185,7 +227,62 @@ class Logger(object):
             # No file logging
             pass
 
+        if self._log_handler_thread is not None:
+            return
+
+        self._log_handler_thread = threading.Thread(None, self._log_handler, 'log_handler')
+        self._log_handler_thread.start()
+        while not self._thread_initialized.is_set():
+            self._thread_initialized.wait(0.1)
+
         self.print_console('*** Logger is started ***\n', nl_before=False, rgb=Color.COMPONENT_START)
+
+    def _stop_log_handler(self):
+        with self._sync_lock:
+            self._log_handler_stop_event.set()
+            self._log_handler_thread.join()
+
+    def _log_handler(self):
+        self._thread_initialized.set()
+        while True:
+            # self._log_displayed.clear()
+            with self._log_entry_submitted_cond:
+                if self._log_handler_stop_event.is_set() and not self._log_entry_list:
+                    break
+                self._log_entry_submitted_cond.wait(0.001)
+
+                if self._log_entry_list:
+                    log_entries = self._log_entry_list
+                    self._log_entry_list = []
+                else:
+                    continue
+
+            for log_e in log_entries:
+                api, params = log_e
+
+                if api == Logger.FLUSH_API:
+                    if not self._ext_disp.is_enabled:
+                        sys.stdout.flush()
+                elif api == Logger.WRITE_API:
+                    if self._ext_disp.is_enabled:
+                        self._ext_disp.disp.print(params)
+                    else:
+                        sys.stdout.write(params)
+                elif api == Logger.PRINT_CONSOLE_API:
+                    self._print_console(*params)
+                else:
+                    self._print_console('*** ERROR[Logger]: Unknown API ***', rgb=Color.ERROR)
+
+
+            # self._log_displayed.set()
+
+            self._log_handler_stop_event.wait(0.001)
+
+    def wait_for_sync(self):
+        # while not self._log_displayed.is_set():
+        #     self._log_displayed.wait(0.01)
+        # self._log_displayed.clear()
+        time.sleep(0.1)
 
     def stop(self):
 
@@ -196,6 +293,8 @@ class Logger(object):
         self._current_sent_date = None
         self._last_data_IDs = {}
         self.last_data_recordable = None
+
+        self._stop_log_handler()
 
         self.print_console('*** Logger is stopped ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
 
@@ -221,12 +320,12 @@ class Logger(object):
             last_data_id = None
             for tg_ref, ack_date in self._current_ack_dates.items():
                 last_data_id = self.fmkDB.insert_data(init_dmaker, dm_name,
-                                                           self._current_data.to_bytes(),
-                                                           self._current_size,
-                                                           self._current_sent_date,
-                                                           ack_date,
-                                                           tg_ref, prj_name,
-                                                           group_id=group_id)
+                                                      self._current_data.to_bytes(),
+                                                      self._current_size,
+                                                      self._current_sent_date,
+                                                      ack_date,
+                                                      tg_ref, prj_name,
+                                                      group_id=group_id)
                 # assert isinstance(tg_ref, FeedbackSource)
                 self._last_data_IDs[tg_ref.obj] = last_data_id
 
@@ -617,6 +716,16 @@ class Logger(object):
     def print_console(self, msg, nl_before=True, nl_after=False, rgb=None, style=None,
                       raw_limit=None, limit_output=True, no_format_mode=False):
 
+        with self._sync_lock:
+            with self._log_entry_submitted_cond:
+                params = (msg,nl_before,nl_after,rgb,style,raw_limit,limit_output,no_format_mode)
+                self._log_entry_list.append((Logger.PRINT_CONSOLE_API, params))
+                self._log_entry_submitted_cond.notify()
+
+
+    def _print_console(self, msg, nl_before=True, nl_after=False, rgb=None, style=None,
+                       raw_limit=None, limit_output=True, no_format_mode=False):
+
         if not self.display_on_term:
             return
 
@@ -629,9 +738,11 @@ class Logger(object):
         prefix = p + self.p
 
         if no_format_mode:
-            sys.stdout.write(prefix)
-            sys.stdout.write(msg)
-            sys.stdout.flush()
+            if self._ext_disp.is_enabled:
+                self._ext_disp.disp.print(prefix + msg)
+            else:
+                sys.stdout.write(prefix + msg)
+                sys.stdout.flush()
 
             # print(f'{msg}')
 
@@ -652,7 +763,8 @@ class Logger(object):
             if style is None:
                 style = ''
 
-            sys.stdout.write(style + prefix)
-            sys.stdout.write(msg)
-            sys.stdout.write(suffix + FontStyle.END)
-            sys.stdout.flush()
+            if self._ext_disp.is_enabled:
+                self._ext_disp.disp.print(style+prefix+msg+suffix+FontStyle.END)
+            else:
+                sys.stdout.write(style+prefix+msg+suffix+FontStyle.END)
+                sys.stdout.flush()
