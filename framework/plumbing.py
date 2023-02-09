@@ -2888,11 +2888,9 @@ class FmkPlumbing(object):
             return 0
 
     @EnforceOrder(accepted_states=['S2'])
-    def show_data(self, data, verbose=True):
-        a = Accumulator()
+    def show_data(self, data: Data, verbose=True):
         self.lg.print_console('-=[ Data Visualization ]=-\n', rgb=Color.INFO, style=FontStyle.BOLD)
-        data.show(raw_limit=400, log_func=a.accumulate)
-        self.lg.write(a.content)
+        self.lg.pretty_print_data(data, raw_limit=400)
         self.lg.print_console('\n\n', nl_before=False)
 
     @EnforceOrder(accepted_states=['S2'])

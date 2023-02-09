@@ -75,7 +75,7 @@ class DataBackend(object):
 
 class NodeBackend(DataBackend):
 
-    def update_from(self, obj):
+    def update_from(self, obj: Node):
         self._node = obj
         if obj.env is None:
             obj.set_env(Env())

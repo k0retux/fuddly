@@ -48,8 +48,10 @@ class Logger(object):
     fmkDB = None
 
     FLUSH_API = 1
-    PRINT_CONSOLE_API = 2
-    WRITE_API = 3
+    WRITE_API = 2
+    PRETTY_PRINT_API = 3
+    PRINT_CONSOLE_API = 4
+
 
     def __init__(self, name=None, prefix='', record_data=False, explicit_data_recording=False,
                  export_raw_data=True, term_display_limit=800, enable_term_display=True,
@@ -111,8 +113,6 @@ class Logger(object):
 
         self._ext_disp = ExternalDisplay()
 
-        a = Accumulator()
-
         def init_logfn(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
                        do_record=True):
             if not self.display_on_term:
@@ -132,14 +132,9 @@ class Logger(object):
             self.print_console(colored_data, nl_before=nl_before, nl_after=nl_after,
                                rgb=rgb, style=style, no_format_mode=no_format_mode)
             if verbose and issubclass(x.__class__, Data):
-                x.show(log_func=a.accumulate)
-                if self._ext_disp.is_enabled:
-                    self._ext_disp.disp.print(a.content)
-                else:
-                    sys.stdout.write(a.content)
-                a.clear()
+                self.pretty_print_data(x)
 
-            return
+            return data
 
         self.log_fn = init_logfn
 
@@ -149,12 +144,17 @@ class Logger(object):
                 self._log_entry_list.append((Logger.FLUSH_API, None))
                 self._log_entry_submitted_cond.notify()
 
-    def write(self, data):
+    def write(self, data: str):
         with self._sync_lock:
             with self._log_entry_submitted_cond:
                 self._log_entry_list.append((Logger.WRITE_API, data))
                 self._log_entry_submitted_cond.notify()
 
+    def pretty_print_data(self, data: Data, fd = None, raw_limit: int = None):
+        with self._sync_lock:
+            with self._log_entry_submitted_cond:
+                self._log_entry_list.append((Logger.PRETTY_PRINT_API, (data, fd, raw_limit)))
+                self._log_entry_submitted_cond.notify()
 
     def set_external_display(self, disp):
         self._ext_disp = disp
@@ -182,7 +182,7 @@ class Logger(object):
             self._tg_fbk = []
 
         if self.name is None:
-            self.log_fn = lambda x: x
+            raise ValueError("Logger's name shall be provided (either by the framework or at init)")
 
         elif self._enable_file_logging:
             self.now = datetime.datetime.now()
@@ -209,10 +209,9 @@ class Logger(object):
                 if not do_record:
                     return data
                 try:
-                    self._fd.write(data)
-                    self._fd.write('\n')
+                    self._fd.write(data+'\n')
                     if verbose and issubclass(x.__class__, Data):
-                        x.show(log_func=self._fd.write)
+                        self.pretty_print_data(x, fd=self._fd)
                     self._fd.flush()
                 except ValueError:
                     self.print_console('\n*** ERROR: The log file has been closed.' \
@@ -244,6 +243,8 @@ class Logger(object):
 
     def _log_handler(self):
         self._thread_initialized.set()
+
+        accu = Accumulator()
         while True:
             # self._log_displayed.clear()
             with self._log_entry_submitted_cond:
@@ -268,6 +269,18 @@ class Logger(object):
                         self._ext_disp.disp.print(params)
                     else:
                         sys.stdout.write(params)
+                elif api == Logger.PRETTY_PRINT_API:
+                    data, fd, raw_limit = params
+                    if fd is None:
+                        data.show(log_func=accu.accumulate, raw_limit=raw_limit)
+                        if self._ext_disp.is_enabled:
+                            self._ext_disp.disp.print(accu.content)
+                        else:
+                            sys.stdout.write(accu.content)
+                        accu.clear()
+                    else:
+                        data.show(log_func=fd.write, raw_limit=raw_limit)
+                        fd.flush()
                 elif api == Logger.PRINT_CONSOLE_API:
                     self._print_console(*params)
                 else:
