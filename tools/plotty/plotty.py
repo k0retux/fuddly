@@ -12,6 +12,12 @@ import cexprtk
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
+ARG_INVALID_FMDBK = -1
+ARG_INVALID_ID = -2
+ARG_INVALID_FORMULA = -3
+ARG_INVALID_DATE_UNIT = -4
+ARG_INVALID_VAR_NAMES = -5
+ARG_INVALID_POI = -6
 
 UNION_DELIMITER = ','
 INTERVAL_OPERATOR = '..'
@@ -291,28 +297,31 @@ if __name__ == "__main__":
     fmkdb = args.fmkdb
     if fmkdb is not None and not os.path.isfile(fmkdb):
         print(colorize(f"*** ERROR: '{fmkdb}' does not exist ***", rgb=Color.ERROR))
-        sys.exit(-1)
+        sys.exit(ARG_INVALID_FMDBK)
 
     id_interval = args.id_interval
     if id_interval is None:
         print(colorize(f"*** ERROR: Please provide a valid ID interval*** ", rgb=Color.ERROR))
         print(colorize(f"*** INFO: ID interval can be provided in the form '1..5,9..10,7..8'*** ", rgb=Color.INFO))
-        sys.exit(-2)
+        sys.exit(ARG_INVALID_ID)
 
     formula = args.formula
     if formula is None:
         print(colorize(f"*** ERROR: Please provide a valid formula***", rgb=Color.ERROR))
         print(colorize(f"*** INFO: Formula can be provided on the form 'a+b~c*d'*** ", rgb=Color.INFO))
         print(colorize(f"*** INFO: for a plot of a+b in function of c*d'*** ", rgb=Color.INFO))
-        sys.exit(-3)
+        sys.exit(ARG_INVALID_FORMULA)
 
     date_unit_str = args.date_unit
     if date_unit_str is None:
         print(colorize(f"*** ERROR: Please provide a unit for date values***", rgb=Color.ERROR))
-        sys.exit(-4)
+        sys.exit(ARG_INVALID_DATE_UNIT)
 
     poi = args.points_of_interest
-    
+    if poi < 0:
+        print(colorize(f"*** ERROR: Please provide a positive or zero number of point of interest***", rgb=Color.ERROR))
+        sys.exit(ARG_INVALID_POI)
+
     date_unit = DateUnit.MILLISECOND
     if date_unit_str == 's':
         date_unit = DateUnit.SECOND
@@ -325,12 +334,12 @@ if __name__ == "__main__":
     y_variable_names, y_function_names = collect_names(y_expression)
 
     if not valid_formula:
-        sys.exit(-3)
+        sys.exit(ARG_INVALID_FORMULA)
 
     variable_names = x_variable_names.union(y_variable_names)
     variables_values = request_from_database(id_interval, list(variable_names))
     if variables_values is None:
-        sys.exit(-5)
+        sys.exit(ARG_INVALID_VAR_NAMES)
     variables_true_types = {}
     for variable, value in variables_values[0].items():
         variables_true_types[variable] = type(value)
