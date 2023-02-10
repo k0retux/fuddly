@@ -37,7 +37,7 @@ from framework.data import Data
 from framework.global_resources import *
 from framework.database import Database
 from framework.knowledge.feedback_collector import FeedbackSource
-from libs.utils import ensure_dir, ExternalDisplay, Accumulator
+from libs.utils import ExternalDisplay, Accumulator
 import framework.global_resources as gr
 
 class Logger(object):
@@ -721,7 +721,7 @@ class Logger(object):
 
         export_full_fn = os.path.join(base_dir, dm_name, export_fname)
 
-        ensure_dir(export_full_fn)
+        gr.ensure_dir(export_full_fn)
 
         fd = open(export_full_fn, 'wb')
         fd.write(data.to_bytes())

@@ -34,7 +34,7 @@ import framework.global_resources as gr
 import libs.external_modules as em
 from framework.knowledge.feedback_collector import FeedbackSource
 from libs.external_modules import *
-from libs.utils import ensure_dir, chunk_lines
+from libs.utils import chunk_lines
 
 
 def regexp(expr, item):
@@ -1095,7 +1095,7 @@ class Database(object):
                     did=data_id)
 
                 export_full_fn = os.path.join(base_dir, dm_name, export_fname)
-                ensure_dir(export_full_fn)
+                gr.ensure_dir(export_full_fn)
 
                 with open(export_full_fn, 'wb') as fd:
                     fd.write(content)

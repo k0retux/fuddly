@@ -67,7 +67,6 @@ default.add('FmkPlumbing', u'''
 config_name: FmkPlumbing
 
 [misc]
-external_term = False
 fuzz.delay = 0
 fuzz.burst = 1
 
@@ -82,6 +81,27 @@ empty_tg.verbose = False
 ;;  [targets.doc]
 ;;  self: configuration related to targets
 ;;  empty_tg.verbose: Enable verbose mode (if True) on the default EmptyTarget()
+
+[terminal]
+external_term = False
+name=x-terminal-emulator
+title_arg=--title
+hold_arg=--hold
+exec_arg=-e
+exec_arg_type=string
+extra_args=
+
+;; [terminal.doc]
+;; self: Configuration applicable to the external terminal
+;; external_term: Use an external terminal
+;; name: Command to call the terminal
+;; title_arg: Option used by the terminal to set the title
+;; hold_arg: Options to keep the terminal open after the commands exits
+;; exec_arg: Option to specify the program to be run by the terminal
+;; exec_arg_type: How the command should be passed on the command line, can be 
+                    string if the command and it's arguments are to be passed as one string or
+                    list if they are to be individual arguments
+;; extra_args: Extra argument to pass on the command line
 
 ''')
 

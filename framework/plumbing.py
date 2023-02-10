@@ -276,7 +276,7 @@ class FmkPlumbing(object):
         self._quiet = quiet
         self.external_display = ExternalDisplay()
         if external_term:
-            self.external_display.start_term(name='Fuddly log', keepterm=True)
+            self.external_display.start_term(title='Fuddly log', keepterm=True)
 
         self.printer = Printer(self)
         self.print = self.printer.print
@@ -364,7 +364,7 @@ class FmkPlumbing(object):
                 self.config.write(cfile)
         atexit.register(save_config)
 
-        external_term = self.config.misc.external_term
+        external_term = self.config.terminal.external_term
         if external_term and not self.external_display.is_enabled:
             self.switch_term()
 
@@ -417,7 +417,7 @@ class FmkPlumbing(object):
 
     def switch_term(self):
         if not self.external_display.is_enabled:
-            self.external_display.start_term(name='Fuddly log', keepterm=False)
+            self.external_display.start_term(title='Fuddly log', keepterm=False)
         else:
             self.external_display.stop()
 
