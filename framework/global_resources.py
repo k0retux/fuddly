@@ -51,12 +51,13 @@ data_models_folder = app_folder + os.sep + 'data_models' + os.sep
 
 fuddly_data_folder = os.path.expanduser('~' + os.sep + 'fuddly_data' + os.sep)
 xdg_fuddly_data_folder = xdg_data_home + os.sep + 'fuddly' + os.sep
+use_xdg=False
 if not os.path.exists(fuddly_data_folder):
     if not os.path.exists(xdg_fuddly_data_folder):
         new_fuddly_data_folder = True
     else:
         fuddly_data_folder = xdg_fuddly_data_folder
-        use_xdg=True
+        use_xdg = True
 ensure_dir(fuddly_data_folder)
 
 exported_data_folder = fuddly_data_folder + 'exported_data' + os.sep
