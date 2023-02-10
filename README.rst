@@ -72,6 +72,11 @@ Miscellaneous
 + Don't forget to populate ``~/fuddly_data/imported_data/`` with sample files for data
   models that need it
 
++ If you prefer yours configs and data to be organised following the XDG Base Directory
+  Specification, you can create ``$XDG_DATA_HOME/fuddly`` before the first launch (or 
+  move ``~/fuddly_data`` there at a later stage). If you do this, note that the 
+  configuration files will be in ``$XDG_CONFIG_HOME/fuddly``.
+
 Dependencies
 ------------
 + Compatible with Python3
@@ -87,6 +92,7 @@ Dependencies
   - `serial`_: For serial port access
   - `cups`_: Python bindings for libcups
   - `rpyc`_: Remote Python Call (RPyC), a transparent and symmetric RPC library
+  - `pyxdg`_: XDG Base Directory support
 
 + For testing:
 
@@ -112,3 +118,4 @@ Dependencies
 .. _sphinx: http://sphinx-doc.org/
 .. _texlive: https://www.tug.org/texlive/
 .. _readthedocs theme: https://github.com/snide/sphinx_rtd_theme
+.. _pyxdg: https://github.com/srstevenson/xdg or http://freedesktop.org/Software/pyxdg
