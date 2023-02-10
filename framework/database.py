@@ -28,6 +28,7 @@ import math
 import threading
 import copy
 from datetime import datetime, timedelta
+from typing import Optional
 
 import framework.global_resources as gr
 import libs.external_modules as em
@@ -151,6 +152,7 @@ class Database(object):
         self.feedback_trail_time_window = self.FEEDBACK_TRAIL_TIME_WINDOW
 
         self._data_id = None
+        self._current_sent_date = None
 
         self._sql_handler_thread = None
         self._sql_handler_stop_event = threading.Event()
@@ -275,7 +277,7 @@ class Database(object):
             self._sql_handler_thread.join()
 
 
-    def submit_sql_stmt(self, stmt, params=None, outcome_type=None, error_msg=''):
+    def submit_sql_stmt(self, stmt, params=None, outcome_type: Optional[int] = None, error_msg=''):
         """
         This method is the only one that should submit request to the threaded SQL handler.
         It is also synchronized to guarantee request order (especially needed when you wait for
@@ -300,7 +302,7 @@ class Database(object):
                 # If we care about outcomes, then we are sure to get outcomes from the just
                 # submitted SQL statement as this method is 'synchronized'.
                 while not self._sql_stmt_handled.is_set():
-                    self._sql_stmt_handled.wait(0.1)
+                    self._sql_stmt_handled.wait(0.001)
                 self._sql_stmt_handled.clear()
 
                 with self._sql_stmt_outcome_lock:
@@ -389,13 +391,45 @@ class Database(object):
 
         if self._data_id is None:
             d_id = self.submit_sql_stmt(stmt, params=params, outcome_type=Database.OUTCOME_ROWID,
-                                       error_msg=err_msg)
+                                        error_msg=err_msg)
             self._data_id = d_id
         else:
             self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
             self._data_id += 1
 
+        self._current_sent_date = sent_date
+
         return self._data_id
+
+
+    def insert_async_data(self, dtype, dm_name, raw_data, sz, sent_date,
+                          target_ref, prj_name):
+
+        if not self.enabled:
+            return None
+
+        blob = sqlite3.Binary(raw_data)
+
+        stmt = "INSERT INTO ASYNC_DATA(CURRENT_DATA_ID,TYPE,DM_NAME,CONTENT,SIZE,SENT_DATE,"\
+               "TARGET,PRJ_NAME)"\
+               " VALUES(?,?,?,?,?,?,?,?)"
+
+        if self._current_sent_date is not None:
+            # We do not associate an async data to the last data_id if
+            # it is sent more than 60 seconds after
+            if (sent_date - self._current_sent_date).total_seconds() > 60:
+                data_id = None
+            else:
+                data_id = self._data_id
+        else:
+            data_id = self._data_id
+
+        params = (data_id, dtype, dm_name, blob, sz, sent_date, str(target_ref), prj_name)
+        err_msg = 'while inserting a value into table ASYNC_DATA!'
+
+        self.submit_sql_stmt(stmt, params=params, outcome_type=None, error_msg=err_msg)
+
+        return
 
 
     def insert_steps(self, data_id, step_id, dmaker_type, dmaker_name, data_id_src,
@@ -549,7 +583,7 @@ class Database(object):
         return data
 
     def display_data_info(self, data_id, with_data=False, with_fbk=False, with_fmkinfo=True,
-                          with_analysis=True,
+                          with_analysis=True, with_async_data=False,
                           fbk_src=None, limit_data_sz=None, page_width=100, colorized=True,
                           raw=False, decoding_hints=None, dm_list=None):
 
@@ -569,11 +603,21 @@ class Database(object):
             "ORDER BY STEP_ID ASC;".format(data_id=data_id)
         )
 
-        # if not steps:
-        #     print(colorize("*** BUG with data ID '{:d}' (data should always have at least 1 step) "
-        #                    "***".format(data_id),
-        #                    rgb=Color.ERROR))
-        #     return
+        async_data = self.execute_sql_statement(
+            f"SELECT ID, CURRENT_DATA_ID, TYPE, DM_NAME, CONTENT, SIZE, SENT_DATE,"
+            f"       TARGET, PRJ_NAME FROM ASYNC_DATA "
+            f"WHERE PRJ_NAME == ?"
+            f"  AND ( CURRENT_DATA_ID == ?"
+            # If current_data_id is null, we only keep async data which were 
+            # sent no more than 5 seconds before the requested data_id.
+            # And we ignore the ones (current_data_id is null) that have been sent after
+            # (because it means the framework was reset) 
+            f"        OR ( CURRENT_DATA_ID IS NULL"
+            f"             AND CAST((JulianDay(?)-JulianDay(SENT_DATE))*24*60*60 AS INTEGER) < 5"
+            f"             AND (JulianDay(?)-JulianDay(SENT_DATE)) >= 0 )"
+            f"       );",
+            params=(prj, data_id, sent_date,sent_date)
+        )
 
         if fbk_src:
             feedback = self.execute_sql_statement(
@@ -826,6 +870,32 @@ class Database(object):
                 msg += data_content
             msg += colorize('\n' + line_pattern, rgb=Color.NEWLOGENTRY)
 
+        if with_async_data and async_data:
+            for async_data_id, curr_data_id, dtype, dm_name, content, size, async_date, target, prj in async_data:
+                add_info = f' --> sent before Data ID #{data_id}' if curr_data_id is None else ''
+                date_str = async_date.strftime("%d/%m/%Y - %H:%M:%S.%f") if async_date else 'None'
+                msg += colorize(f'\n Async Data ID #{async_data_id}', rgb=Color.FMKINFOGROUP)
+                msg += colorize(f' (', rgb=Color.FMKINFOGROUP)
+                msg += colorize(f'{date_str}', rgb=Color.DATE)
+                msg += colorize(f')', rgb=Color.FMKINFOGROUP)
+                msg += colorize(add_info, rgb=Color.WARNING)
+                msg += colorize(f'\n  | Type:', rgb=Color.FMKINFO)
+                msg += colorize(f' {dtype}', rgb=Color.FMKSUBINFO)
+                msg += colorize(f' | DM:', rgb=Color.FMKINFO)
+                msg += colorize(f' {dm_name}', rgb=Color.FMKSUBINFO)
+                msg += colorize(f' | Size:', rgb=Color.FMKINFO)
+                msg += colorize(f' {size} Bytes', rgb=Color.FMKSUBINFO)
+                msg += colorize(f'\n  | Target:', rgb=Color.FMKINFO)
+                msg += colorize(f' {target}\n', rgb=Color.FMKSUBINFO)
+
+                content = gr.unconvert_from_internal_repr(content)
+                content = self._handle_binary_content(content, sz_limit=limit_data_sz, raw=raw,
+                                                      colorized=colorized)
+                msg += content
+
+            if async_data:
+                msg += colorize('\n' + line_pattern, rgb=Color.NEWLOGENTRY)
+
         if with_fbk:
             for src, tstamp, status, content in feedback:
                 formatted_ts = None if tstamp is None else tstamp.strftime("%d/%m/%Y - %H:%M:%S.%f")
@@ -869,7 +939,7 @@ class Database(object):
 
 
     def display_data_info_by_date(self, start, end, with_data=False, with_fbk=False, with_fmkinfo=True,
-                                  with_analysis=True,
+                                  with_analysis=True, with_async_data=False,
                                   fbk_src=None, prj_name=None,
                                   limit_data_sz=None, raw=False, page_width=100, colorized=True,
                                   decoding_hints=None, dm_list=None):
@@ -894,6 +964,7 @@ class Database(object):
                 self.display_data_info(data_id, with_data=with_data, with_fbk=with_fbk,
                                        with_fmkinfo=with_fmkinfo,
                                        with_analysis=with_analysis,
+                                       with_async_data=with_async_data,
                                        fbk_src=fbk_src,
                                        limit_data_sz=limit_data_sz, raw=raw, page_width=page_width,
                                        colorized=colorized,
@@ -903,7 +974,7 @@ class Database(object):
                            rgb=Color.ERROR))
 
     def display_data_info_by_range(self, first_id, last_id, with_data=False, with_fbk=False, with_fmkinfo=True,
-                                   with_analysis=True,
+                                   with_analysis=True, with_async_data=False,
                                    fbk_src=None, prj_name=None,
                                    limit_data_sz=None, raw=False, page_width=100, colorized=True,
                                    decoding_hints=None, dm_list=None):
@@ -928,6 +999,7 @@ class Database(object):
                 data_id = rec[0]
                 self.display_data_info(data_id, with_data=with_data, with_fbk=with_fbk,
                                        with_fmkinfo=with_fmkinfo, with_analysis=with_analysis,
+                                       with_async_data=with_async_data,
                                        fbk_src=fbk_src,
                                        limit_data_sz=limit_data_sz, raw=raw, page_width=page_width,
                                        colorized=colorized,

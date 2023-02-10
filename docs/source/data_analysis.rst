@@ -44,7 +44,7 @@ Hereunder is shown the output of ``<root of fuddly>/tools/fmkdb.py -h``.
     usage: fmkdb.py [-h] [--fmkdb PATH] [--no-color] [-v] [--page-width WIDTH]
                     [--fbk-src FEEDBACK_SOURCES] [--project PROJECT_NAME]
                     [--fbk-status-formula STATUS_REF] [-s] [-i DATA_ID]
-                    [--info-by-date START END] [-ids FIRST_DATA_ID LAST_DATA_ID] [-wf] [-wd]
+                    [--info-by-date START END] [-ids FIRST_DATA_ID LAST_DATA_ID] [-wf] [-wd] [-wa]
                     [--without-fmkinfo] [--without-analysis] [--limit LIMIT] [--raw] [-dd]
                     [-df] [--data-atom ATOM_NAME] [--fbk-atom ATOM_NAME]
                     [--force-fbk-decoder DATA_MODEL_NAME]
@@ -97,6 +97,8 @@ Hereunder is shown the output of ``<root of fuddly>/tools/fmkdb.py -h``.
                             data ID range
       -wf, --with-fbk       Display full feedback (expect --data-id)
       -wd, --with-data      Display data content (expect --data-id)
+      -wa, --with-async-data
+                            Display any related async data (expect --data-id)
       --without-fmkinfo     Do not display fmkinfo (expect --data-id)
       --without-analysis    Do not display user analysis (expect --data-id)
       --limit LIMIT         Limit the size of what is displayed from the sent data and the

@@ -38,7 +38,7 @@ import datetime
 import time
 import signal
 
-from functools import wraps
+from functools import wraps, partial
 
 from framework.data import Data, DataProcess
 from framework.database import FeedbackGate
@@ -1155,7 +1155,7 @@ class FmkPlumbing(object):
 
         fmktask = FmkTask(task_ref, func=task_obj, arg=None, period=period,
                           error_func=self._handle_user_code_exception,
-                          cleanup_func=functools.partial(self._unregister_task, task_ref))
+                          cleanup_func=partial(self._unregister_task, task_ref))
         self._register_task(task_ref, fmktask)
         if self.is_ok():
             self.lg.log_fmk_info('A task has been registered (Task ID #{!s})'.format(task_ref))
@@ -2193,18 +2193,18 @@ class FmkPlumbing(object):
                             # In this case each time we send the periodic we walk through the process
                             # (thus, sending a new data each time)
                             periodic_data = data_desc
-                            func = functools.partial(self._send_periodic, final_data_tg_ids)
+                            func = partial(self._send_periodic, final_data_tg_ids)
                         else:
                             periodic_data = self.handle_data_desc(data_desc,
                                                                   resolve_dataprocess=resolve_dataprocess,
                                                                   original_data=data)
                             targets = [self.targets[x] for x in final_data_tg_ids]
-                            func = [tg.send_data_sync for tg in targets]
+                            func = [partial(tg.send_data_sync, from_fmk=False) for tg in targets]
 
                         if periodic_data is not None:
                             task = FmkTask(idx, func, periodic_data, period=period,
                                            error_func=self._handle_user_code_exception,
-                                           cleanup_func=functools.partial(self._unregister_task, idx))
+                                           cleanup_func=partial(self._unregister_task, idx))
                             self._register_task(idx, task)
                             if self.is_ok():
                                 self.lg.log_fmk_info('A periodic data sending has been registered (Task ID #{!s})'.format(idx))

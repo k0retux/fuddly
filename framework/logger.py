@@ -29,6 +29,8 @@ import datetime
 import threading
 import itertools
 
+from typing import List, Tuple
+
 from libs.external_modules import *
 from libs.utils import get_caller_object
 from framework.data import Data
@@ -369,6 +371,24 @@ class Logger(object):
 
         else:
             return None
+
+
+    def log_async_data(self, data_list: Data | List[Data] | Tuple[Data], sent_date, target_ref, prj_name):
+
+        if isinstance(data_list, Data):
+            data_list = (data_list,)
+
+        for data in data_list:
+            raw_data = data.to_bytes()
+            data_sz = len(raw_data)
+            init_dmaker = data.get_initial_dmaker()
+            dtype = Database.DEFAULT_GTYPE_NAME if init_dmaker is None else init_dmaker[0]
+            dm = data.get_data_model()
+            dm_name = Database.DEFAULT_DM_NAME if dm is None else dm.name
+            self.fmkDB.insert_async_data(dtype=dtype, dm_name=dm_name,
+                                         raw_data=raw_data,
+                                         sz=data_sz, sent_date=sent_date,
+                                         target_ref=target_ref, prj_name=prj_name)
 
 
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO,

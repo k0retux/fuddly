@@ -25,6 +25,7 @@ import datetime
 import threading
 
 from framework.data import Data
+from framework.knowledge.feedback_collector import FeedbackSource
 from libs.external_modules import *
 
 class TargetStuck(Exception): pass
@@ -302,14 +303,14 @@ class Target(object):
             raise ValueError('No pending data')
 
     def send_data_sync(self, data, from_fmk=False):
-        '''
+        """
         Can be used in user-code to send data to the target without interfering
         with the framework.
 
         Use case example: The user needs to send some message to the target on a regular basis
         in background. For that purpose, it can quickly define a :class:`framework.monitor.Probe` that just
         emits the message by itself.
-        '''
+        """
         with self._send_data_lock:
             if data is not None:
                 self._altered_data_queued = data.altered
@@ -317,16 +318,20 @@ class Target(object):
                 self._last_sending_date = datetime.datetime.now()
                 self.send_data(data, from_fmk=from_fmk)
                 self._project.notify_data_sending([data], self._last_sending_date, self)
+                if not from_fmk:
+                    self._logger.log_async_data(data, sent_date=self._last_sending_date,
+                                                target_ref=FeedbackSource(self),
+                                                prj_name=self._project.name)
             else:
                 self._logger.print_console(f'*** Target {self!s} Not ready ***\n',
                                            nl_before=False, rgb=Color.WARNING)
                 # raise TargetNotReady
 
     def send_multiple_data_sync(self, data_list, from_fmk=False):
-        '''
+        """
         Can be used in user-code to send data to the target without interfering
         with the framework.
-        '''
+        """
         with self._send_data_lock:
             if data_list is not None:
                 self._altered_data_queued = data_list[0].altered
@@ -334,6 +339,10 @@ class Target(object):
                 self._last_sending_date = datetime.datetime.now()
                 self.send_multiple_data(data_list, from_fmk=from_fmk)
                 self._project.notify_data_sending(data_list, self._last_sending_date, self)
+                if not from_fmk:
+                    self._logger.log_async_data(data_list, sent_date=self._last_sending_date,
+                                                target_ref=FeedbackSource(self),
+                                                prj_name=self._project.name)
             else:
                 self._logger.print_console(f'*** Target {self!s} Not ready ***\n',
                                            nl_before=False, rgb=Color.WARNING)

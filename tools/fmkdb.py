@@ -80,6 +80,7 @@ group.add_argument('-ids', '--info-by-ids', nargs=2, metavar=('FIRST_DATA_ID','L
 
 group.add_argument('-wf', '--with-fbk', action='store_true', help='Display full feedback (expect --data-id)')
 group.add_argument('-wd', '--with-data', action='store_true', help='Display data content (expect --data-id)')
+group.add_argument('-wa', '--with-async-data', action='store_true', help='Display any related async data (expect --data-id)')
 group.add_argument('--without-fmkinfo', action='store_true',
                    help='Do not display fmkinfo (expect --data-id)')
 group.add_argument('--without-analysis', action='store_true',
@@ -193,6 +194,7 @@ if __name__ == "__main__":
     prj_name = args.project
     with_fbk = args.with_fbk
     with_data = args.with_data
+    with_async_data = args.with_async_data
     without_fmkinfo = args.without_fmkinfo
     without_analysis = args.without_analysis
     limit_data_sz = args.limit
@@ -278,6 +280,7 @@ if __name__ == "__main__":
         fmkdb.display_data_info(data_ID, with_data=with_data, with_fbk=with_fbk,
                                 with_fmkinfo=not without_fmkinfo,
                                 with_analysis=not without_analysis,
+                                with_async_data=with_async_data,
                                 fbk_src=fbk_src,
                                 limit_data_sz=limit_data_sz, raw=raw_data, page_width=page_width,
                                 colorized=colorized, decoding_hints=decoding_hints, dm_list=dm_list)
@@ -288,7 +291,9 @@ if __name__ == "__main__":
         end = handle_date(data_info_by_date[1])
 
         fmkdb.display_data_info_by_date(start, end, with_data=with_data, with_fbk=with_fbk,
-                                        with_fmkinfo=not without_fmkinfo, fbk_src=fbk_src,
+                                        with_fmkinfo=not without_fmkinfo,
+                                        with_async_data=with_async_data,
+                                        fbk_src=fbk_src,
                                         prj_name=prj_name,
                                         limit_data_sz=limit_data_sz, raw=raw_data, page_width=page_width,
                                         colorized=colorized, decoding_hints=decoding_hints, dm_list=dm_list)
@@ -299,7 +304,9 @@ if __name__ == "__main__":
         last_id=data_info_by_range[1]
 
         fmkdb.display_data_info_by_range(first_id, last_id, with_data=with_data, with_fbk=with_fbk,
-                                         with_fmkinfo=not without_fmkinfo, fbk_src=fbk_src,
+                                         with_fmkinfo=not without_fmkinfo,
+                                         with_async_data=with_async_data,
+                                         fbk_src=fbk_src,
                                          prj_name=prj_name,
                                          limit_data_sz=limit_data_sz, raw=raw_data, page_width=page_width,
                                          colorized=colorized, decoding_hints=decoding_hints, dm_list=dm_list)
