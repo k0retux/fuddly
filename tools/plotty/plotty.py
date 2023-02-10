@@ -3,12 +3,14 @@ import argparse
 from datetime import datetime
 import inspect
 import os
+from statistics import mean
 import sys
 from typing import Any, Optional
 from enum import Enum
 
 import cexprtk
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
 
 
 UNION_DELIMITER = ','
@@ -66,11 +68,78 @@ group.add_argument(
     required=False
 )
 
+group.add_argument(
+    '-poi',
+    '--points_of_interest',
+    type=int,
+    default=0,
+    help='How many point of interest the plot should show. Works only if -poi is set to true',
+    required=False
+)
+
 #endregion
 
-def display_line(x_data: list[float], y_data: list[float]):
-    plt.plot(x_data, y_data)
+
+#region Plot
+
+def add_points_of_interest(axes, x_data: list[float], y_data: list[float], points_of_interest: int):
+
+    backward_difference = [0]
+    for i in range(1, len(y_data)):
+        backward_difference.append(y_data[i] - y_data[i-1])
+    backdiff_mean = mean(backward_difference)
+
+    points = []
+    for i in range(len(y_data)):
+        if backward_difference[i] > 2*backdiff_mean:
+            points.append((x_data[i], y_data[i]))
+
+    points = sorted(points, key=lambda p: p[1], reverse=True)
+    for i in range(points_of_interest):
+        if i >= len(points):
+            break
+        x, y = points[i]
+        plt.plot(x, y, 'o', color='red')
+        axes.annotate(
+            f"{int(x)}",
+            xy=(x, y), xycoords='data',
+            xytext=(-10, 20), textcoords='offset pixels',
+            horizontalalignment='right', verticalalignment='top'
+        )
+
+def display_line(
+    x_data: list[float], 
+    x_true_type: Optional[type], 
+    y_data: list[float], 
+    y_true_type: Optional[type], 
+    date_unit: DateUnit,
+    points_of_interest: int
+):
+    axes = plt.figure().add_subplot(111)
+
+    plt.plot(x_data, y_data, '-')
+
+    if points_of_interest != 0:
+        add_points_of_interest(axes, x_data, y_data, points_of_interest)
+    
+    # Avoid userwarning and fix location of ticks
+    ticks_loc = axes.get_yticks().tolist()
+    axes.yaxis.set_major_locator(mticker.FixedLocator(ticks_loc))
+
+    if x_true_type is not None and x_true_type == datetime:
+        actual_labels = axes.get_xticklabels()
+        new_labels = map(lambda label: float_to_datetime(label.get_position()[1], date_unit), actual_labels)
+        axes.set_xticklabels(list(new_labels))
+    if y_true_type is not None and y_true_type == datetime:
+        actual_labels = axes.get_yticklabels()
+        new_labels = map(lambda label: float_to_datetime(label.get_position()[1], date_unit), actual_labels)
+        axes.set_yticklabels(list(new_labels))
+
+    plt.grid()
     plt.show()
+
+#endregion
+
 
 #region Formula
 def collect_names(expression: str) -> tuple[set[str], set[str]]:
@@ -155,6 +224,24 @@ def parse_interval_union(interval_union: str) -> set[int]:
 #endregion
 
 
+def datetime_to_float(date_time: datetime, date_unit: DateUnit):
+    res = date_time.timestamp()
+    return res if date_unit == DateUnit.SECOND else res * 1000
+
+
+def float_to_datetime(timestamp: float, date_unit: DateUnit):
+    if date_unit == DateUnit.MILLISECOND:
+        timestamp /= 1000
+    return datetime.fromtimestamp(timestamp)
+
+
+def convert_non_operable_types(variables_values: list[dict[str, Any]]):
+    for instanciation in variables_values:
+        for key, value in instanciation.items():
+            if isinstance(value, datetime):
+                instanciation[key] = datetime_to_float(value, date_unit)
+
+
 def solve_expression(expression: str, variables_values: list[dict[str, Any]]) -> list[float]:
     results = []
     for variables_value in variables_values:
@@ -163,7 +250,10 @@ def solve_expression(expression: str, variables_values: list[dict[str, Any]]) ->
     return results
 
 
-def request_from_database(id_interval: set[int], column_names: list[str], date_unit: DateUnit) -> Optional[list[dict[str, Any]]]:
+def request_from_database(
+    id_interval: set[int], 
+    column_names: list[str]
+) -> Optional[list[dict[str, Any]]]:
     
     fmkdb = Database()
     ok = fmkdb.start()
@@ -181,17 +271,13 @@ def request_from_database(id_interval: set[int], column_names: list[str], date_u
 
     fmkdb.stop()
 
-    if matching_data is None:
+    if matching_data is None or matching_data == []:
         return None
 
     result = []
     for line in matching_data:
         line_values = dict()
         for index, value in enumerate(line):
-            if isinstance(value, datetime):
-                value = value.timestamp()
-                if date_unit == DateUnit.MILLISECOND:
-                    value *= 1000
             line_values[column_names[index]] = value
         result.append(line_values)
 
@@ -224,6 +310,8 @@ if __name__ == "__main__":
     if date_unit_str is None:
         print(colorize(f"*** ERROR: Please provide a unit for date values***", rgb=Color.ERROR))
         sys.exit(-4)
+
+    poi = args.points_of_interest
     
     date_unit = DateUnit.MILLISECOND
     if date_unit_str == 's':
@@ -233,16 +321,33 @@ if __name__ == "__main__":
 
     y_expression, x_expression, valid_formula = split_formula(formula)
 
-    variable_names, function_names = collect_names(formula)
+    x_variable_names, x_function_names = collect_names(x_expression)
+    y_variable_names, y_function_names = collect_names(y_expression)
 
     if not valid_formula:
         sys.exit(-3)
 
-    variables_values = request_from_database(id_interval, list(variable_names), date_unit)
+    variable_names = x_variable_names.union(y_variable_names)
+    variables_values = request_from_database(id_interval, list(variable_names))
+    if variables_values is None:
+        sys.exit(-5)
+    variables_true_types = {}
+    for variable, value in variables_values[0].items():
+        variables_true_types[variable] = type(value)
+    convert_non_operable_types(variables_values)
 
     x_values = solve_expression(x_expression, variables_values)
     y_values = solve_expression(y_expression, variables_values)
 
-    display_line(x_values, y_values)
+    x_conversion_type = None
+    if len(x_variable_names) == 1:
+        elmt = next(iter(x_variable_names))
+        x_conversion_type = variables_true_types[elmt]
+    y_conversion_type = None
+    if len(y_variable_names) == 1:
+        elmt = next(iter(y_variable_names))
+        y_conversion_type = variables_true_types[elmt]
+
+    display_line(x_values, x_conversion_type, y_values, y_conversion_type, date_unit, poi)
     
     sys.exit(0)
