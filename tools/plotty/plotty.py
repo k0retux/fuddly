@@ -88,19 +88,22 @@ group.add_argument(
 
 #region Plot
 
-def add_points_of_interest(axes, x_data: list[float], y_data: list[float], points_of_interest: int):
-
+def sort_points_by_interest(x_data: list[float], y_data: list[float]) -> list[tuple[float, float]]:
     backward_difference = [0]
     for i in range(1, len(y_data)):
         backward_difference.append(y_data[i] - y_data[i-1])
-    backdiff_mean = mean(backward_difference)
 
-    points = []
-    for i in range(len(y_data)):
-        if backward_difference[i] > 2*backdiff_mean:
-            points.append((x_data[i], y_data[i]))
+    result = zip(x_data, y_data, backward_difference)
+    result = sorted(result, key=lambda tup: tup[2], reverse=True)
+    result = list(map(lambda tup: (tup[0], tup[1]), result))
 
-    points = sorted(points, key=lambda p: p[1], reverse=True)
+    return result
+
+
+def add_points_of_interest(axes, x_data: list[float], y_data: list[float], points_of_interest: int):
+
+    points = sort_points_by_interest(x_data, y_data)
+    
     for i in range(points_of_interest):
         if i >= len(points):
             break
@@ -112,6 +115,7 @@ def add_points_of_interest(axes, x_data: list[float], y_data: list[float], point
             xytext=(-10, 20), textcoords='offset pixels',
             horizontalalignment='right', verticalalignment='top'
         )
+
 
 def display_line(
     x_data: list[float], 
