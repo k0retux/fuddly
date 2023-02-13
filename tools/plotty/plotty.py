@@ -21,6 +21,7 @@ ARG_INVALID_POI = -6
 
 UNION_DELIMITER = ','
 INTERVAL_OPERATOR = '..'
+STEP_OPERATOR = '|'
 
 class DateUnit(Enum):
     SECOND = 1
@@ -193,43 +194,54 @@ def try_parse_int(s: str) -> Optional[int]:
         return None
 
 
-def parse_interval(interval: str) -> set[int]:
+def parse_int_range(int_range: str) -> Optional[range]:
 
-    bounds = interval.split(INTERVAL_OPERATOR)
+    step = 1
+    bounds_and_step = int_range.split(STEP_OPERATOR)
+    if len(bounds_and_step) == 2:
+        parsed_step = try_parse_int(bounds_and_step[1])
+        if parsed_step is None:
+            print(colorize(f"*** WARNING: Ignoring interval '{int_range}' : invalid step '{parsed_step}' *** ", rgb=Color.WARNING))
+            return None
+        step = parsed_step
+
+    bounds = bounds_and_step[0].split(INTERVAL_OPERATOR)
     if len(bounds) == 1:
         value = try_parse_int(bounds[0])
         if value is not None:
-            return set(value)
+            return range(value, value+1)
         
-        print(colorize(f"*** WARNING: Ignoring interval '{interval}' *** ", rgb=Color.WARNING))
-        return set()
+        print(colorize(f"*** WARNING: Ignoring interval '{int_range}' : invalid integer '{value}' *** ", rgb=Color.WARNING))
+        return None
 
     if len(bounds) == 2:
         lower_bound = try_parse_int(bounds[0])
         upper_bound = try_parse_int(bounds[1])
-        if lower_bound is None or upper_bound is None:
-            print(colorize(f"*** WARNING: Ignoring interval '{interval}' *** ", rgb=Color.WARNING))
-            return set()
+        if lower_bound is None:
+            print(colorize(f"*** WARNING: Ignoring interval '{int_range}' : invalid integer '{lower_bound}' *** ", rgb=Color.WARNING))
+            return None
+
+        if upper_bound is None:
+            print(colorize(f"*** WARNING: Ignoring interval '{int_range}' : invalid integer '{upper_bound}' *** ", rgb=Color.WARNING))
+            return None
 
         if lower_bound >= upper_bound:
-            print(colorize(f"*** WARNING: Ignoring interval '{interval}' *** ", rgb=Color.WARNING))
-            return set()
+            print(colorize(f"*** WARNING: Ignoring interval '{int_range}' *** ", rgb=Color.WARNING))
+            return None
 
-        result = set()
-        for value in range(lower_bound, upper_bound):
-            result.add(value)
-        return result
+        return range(lower_bound, upper_bound, step)
             
-    print(colorize(f"*** WARNING: Invalid interval found: '{interval}' *** ", rgb=Color.ERROR))
-    return set()
+    print(colorize(f"*** WARNING: Invalid interval found: '{int_range}' *** ", rgb=Color.ERROR))
+    return None
 
 
-def parse_interval_union(interval_union: str) -> set[int]:
-    result = set()
-    parts = interval_union.split(UNION_DELIMITER)
+def parse_int_range_union(int_range_union: str) -> list[range]:
+    result = []
+    parts = int_range_union.split(UNION_DELIMITER)
     for part in parts:
-        interval_values = parse_interval(part)
-        result = result.union(interval_values)
+        int_range = parse_int_range(part)
+        if int_range is not None:
+            result.append(int_range)
     return result
 #endregion
 
@@ -260,8 +272,25 @@ def solve_expression(expression: str, variables_values: list[dict[str, Any]]) ->
     return results
 
 
+def belongs_condition_sql_string(column_label: str, int_ranges: list[range]):
+    result = "false"
+    for int_range in int_ranges:
+        sub_condition = ""
+        if int_range.start == int_range.stop:
+            sub_condition = f" OR {column_label} = {list(int_range)}"
+        else:
+            if int_range.step == 1:
+                sub_condition = f" OR {column_label} >= {int_range.start} AND {column_label} < {int_range.stop}"
+                
+            else:
+                sql_range = ','.join(list(map(str, list(int_range))))
+                sub_condition = f" OR {column_label} IN ({sql_range})"
+        result += sub_condition
+    return result
+
+
 def request_from_database(
-    id_interval: set[int], 
+    int_ranges: list[range], 
     column_names: list[str]
 ) -> Optional[list[dict[str, Any]]]:
     
@@ -272,10 +301,10 @@ def request_from_database(
                        rgb=Color.ERROR))
         sys.exit(-1)
 
-    id_interval_str = list(map(str, id_interval))
+    id_ranges_check_str = belongs_condition_sql_string("ID", int_ranges)
 
     statement = f"SELECT {', '.join(column_names)} FROM DATA " \
-                f"WHERE ID IN ({', '.join(id_interval_str)})"
+                f"WHERE {id_ranges_check_str}"
 
     matching_data = fmkdb.execute_sql_statement(statement)
 
@@ -330,7 +359,7 @@ if __name__ == "__main__":
     if date_unit_str == 's':
         date_unit = DateUnit.SECOND
 
-    id_interval = parse_interval_union(id_interval)
+    id_interval = parse_int_range_union(id_interval)
 
     y_expression, x_expression, valid_formula = split_formula(formula)
 
