@@ -93,6 +93,22 @@ group.add_argument(
     required=False
 )
 
+group.add_argument(
+    '-pts',
+    '--display_points',
+    action='store_true',
+    help='Should the graph display every point above the line, or just he line. Default is just the line',
+    required=False
+)
+
+group.add_argument(
+    '-v',
+    '--verbose',
+    action='store_true',
+    help='Should the graph show every value above the points. Must be used with -pts. Default is false',
+    required=False
+)
+
 #endregion
 
 
@@ -110,6 +126,19 @@ def sort_points_by_interest(x_data: list[float], y_data: list[float]) -> list[tu
     return result
 
 
+def add_point(x: float, y: float, color: str):
+    plt.plot(x, y, 'o', color=color)
+
+
+def add_annotation(axes, x: float, y: float):
+    axes.annotate(
+        f"{int(x)}",
+        xy=(x, y), xycoords='data',
+        xytext=(-10, 20), textcoords='offset pixels',
+        horizontalalignment='right', verticalalignment='top'
+    )
+
+
 def add_points_of_interest(axes, x_data: list[float], y_data: list[float], points_of_interest: int):
 
     points = sort_points_by_interest(x_data, y_data)
@@ -118,13 +147,8 @@ def add_points_of_interest(axes, x_data: list[float], y_data: list[float], point
         if i >= len(points):
             break
         x, y = points[i]
-        plt.plot(x, y, 'o', color='red')
-        axes.annotate(
-            f"{int(x)}",
-            xy=(x, y), xycoords='data',
-            xytext=(-10, 20), textcoords='offset pixels',
-            horizontalalignment='right', verticalalignment='top'
-        )
+        add_point(x, y, 'red')
+        add_annotation(axes, x, y)
 
 
 def display_line(
@@ -133,11 +157,21 @@ def display_line(
     y_data: list[float], 
     y_true_type: Optional[type], 
     date_unit: DateUnit,
-    points_of_interest: int
+    points_of_interest: int,
+    display_points: bool,
+    display_values: bool
 ):
     axes = plt.figure().add_subplot(111)
 
     plt.plot(x_data, y_data, '-')
+    
+    if display_points:
+        for (x, y) in zip(x_data, y_data):
+            add_point(x, y, 'b')
+
+    if display_values:
+        for (x, y) in zip(x_data, y_data):
+            add_annotation(axes, x, y)
 
     if points_of_interest != 0:
         add_points_of_interest(axes, x_data, y_data, points_of_interest)
@@ -343,26 +377,32 @@ if __name__ == "__main__":
 
     id_interval = args.id_interval
     if id_interval is None:
-        print_error(f"Please provide a valid ID interval")
-        print_info(f"ID interval can be provided in the form '1..5,9..10,7..8'")
+        print_error("Please provide a valid ID interval")
+        print_info("ID interval can be provided in the form '1..5,9..10,7..8'")
         sys.exit(ARG_INVALID_ID)
 
     formula = args.formula
     if formula is None:
-        print_error(f"Please provide a valid formula")
-        print_info(f"Formula can be provided on the form 'a+b~c*d'")
-        print_info(f"for a plot of a+b in function of c*d'")
+        print_error("Please provide a valid formula")
+        print_info("Formula can be provided on the form 'a+b~c*d'")
+        print_info("for a plot of a+b in function of c*d'")
         sys.exit(ARG_INVALID_FORMULA)
 
     date_unit_str = args.date_unit
     if date_unit_str is None:
-        print_error(f"Please provide a unit for date values")
+        print_error("Please provide a unit for date values")
         sys.exit(ARG_INVALID_DATE_UNIT)
 
     poi = args.points_of_interest
     if poi < 0:
-        print_error(f"Please provide a positive or zero number of point of interest")
+        print_error("Please provide a positive or zero number of point of interest")
         sys.exit(ARG_INVALID_POI)
+
+    display_points = args.display_points
+
+    display_values = args.verbose
+    if display_values and not display_points:
+        parser.error("--points option is required for --verbose option")
 
     date_unit = DateUnit.MILLISECOND
     if date_unit_str == 's':
@@ -399,6 +439,6 @@ if __name__ == "__main__":
         elmt = next(iter(y_variable_names))
         y_conversion_type = variables_true_types[elmt]
 
-    display_line(x_values, x_conversion_type, y_values, y_conversion_type, date_unit, poi)
+    display_line(x_values, x_conversion_type, y_values, y_conversion_type, date_unit, poi, display_points, display_values)
     
     sys.exit(0)
