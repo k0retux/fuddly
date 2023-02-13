@@ -34,6 +34,15 @@ sys.path.insert(0, rootdir)
 from framework.database import Database
 from libs.external_modules import *
 
+def print_info(msg: str):
+    print(colorize(f"*** INFO: {msg} *** ", reg=Color.INFO))
+
+def print_warning(msg: str):
+    print(colorize(f"*** WARNING: {msg} *** ", rgb=Color.WARNING))
+
+def print_error(msg: str):
+    print(colorize(f"*** ERROR: {msg} *** ", rgb=Color.ERROR))
+
 #region Argparse
 parser = argparse.ArgumentParser(description='Argument for FmkDB toolkit script')
 
@@ -190,7 +199,7 @@ def try_parse_int(s: str) -> Optional[int]:
         int_value = int(s)
         return int_value
     except ValueError:
-        print(colorize(f"*** ERROR: Value '{s}' is not a valid integer*** ", rgb=Color.ERROR))
+        print_error(f"Value '{s}' is not a valid integer")
         return None
 
 
@@ -201,7 +210,7 @@ def parse_int_range(int_range: str) -> Optional[range]:
     if len(bounds_and_step) == 2:
         parsed_step = try_parse_int(bounds_and_step[1])
         if parsed_step is None:
-            print(colorize(f"*** WARNING: Ignoring interval '{int_range}' : invalid step '{parsed_step}' *** ", rgb=Color.WARNING))
+            print_warning(f"Ignoring interval '{int_range}': invalid step '{bounds_and_step[1]}'")
             return None
         step = parsed_step
 
@@ -211,27 +220,27 @@ def parse_int_range(int_range: str) -> Optional[range]:
         if value is not None:
             return range(value, value+1)
         
-        print(colorize(f"*** WARNING: Ignoring interval '{int_range}' : invalid integer '{value}' *** ", rgb=Color.WARNING))
+        print_warning(f"Ignoring interval '{int_range}' : invalid integer '{bounds[0]}'")
         return None
 
     if len(bounds) == 2:
         lower_bound = try_parse_int(bounds[0])
         upper_bound = try_parse_int(bounds[1])
         if lower_bound is None:
-            print(colorize(f"*** WARNING: Ignoring interval '{int_range}' : invalid integer '{lower_bound}' *** ", rgb=Color.WARNING))
+            print_warning(f"Ignoring interval '{int_range}' : invalid integer '{bounds[0]}'")
             return None
 
         if upper_bound is None:
-            print(colorize(f"*** WARNING: Ignoring interval '{int_range}' : invalid integer '{upper_bound}' *** ", rgb=Color.WARNING))
+            print_warning(f"Ignoring interval '{int_range}' : invalid integer '{bounds[1]}'")
             return None
 
         if lower_bound >= upper_bound:
-            print(colorize(f"*** WARNING: Ignoring interval '{int_range}' *** ", rgb=Color.WARNING))
+            print_warning(f"Ignoring interval '{int_range}'")
             return None
 
         return range(lower_bound, upper_bound, step)
             
-    print(colorize(f"*** WARNING: Invalid interval found: '{int_range}' *** ", rgb=Color.ERROR))
+    print_warning(f"Invalid interval found: '{int_range}'")
     return None
 
 
@@ -290,16 +299,16 @@ def belongs_condition_sql_string(column_label: str, int_ranges: list[range]):
 
 
 def request_from_database(
+    fmkdb_path: str,
     int_ranges: list[range], 
     column_names: list[str]
 ) -> Optional[list[dict[str, Any]]]:
     
-    fmkdb = Database()
+    fmkdb = Database(fmkdb_path)
     ok = fmkdb.start()
     if not ok:
-        print(colorize("*** ERROR: The database {:s} is invalid! ***".format(fmkdb.fmk_db_path),
-                       rgb=Color.ERROR))
-        sys.exit(-1)
+        print_error(f"The database {fmkdb_path} is invalid!")
+        sys.exit(ARG_INVALID_FMDBK)
 
     id_ranges_check_str = belongs_condition_sql_string("ID", int_ranges)
 
@@ -329,30 +338,30 @@ if __name__ == "__main__":
 
     fmkdb = args.fmkdb
     if fmkdb is not None and not os.path.isfile(fmkdb):
-        print(colorize(f"*** ERROR: '{fmkdb}' does not exist ***", rgb=Color.ERROR))
+        print_error(f"'{fmkdb}' does not exist")
         sys.exit(ARG_INVALID_FMDBK)
 
     id_interval = args.id_interval
     if id_interval is None:
-        print(colorize(f"*** ERROR: Please provide a valid ID interval*** ", rgb=Color.ERROR))
-        print(colorize(f"*** INFO: ID interval can be provided in the form '1..5,9..10,7..8'*** ", rgb=Color.INFO))
+        print_error(f"Please provide a valid ID interval")
+        print_info(f"ID interval can be provided in the form '1..5,9..10,7..8'")
         sys.exit(ARG_INVALID_ID)
 
     formula = args.formula
     if formula is None:
-        print(colorize(f"*** ERROR: Please provide a valid formula***", rgb=Color.ERROR))
-        print(colorize(f"*** INFO: Formula can be provided on the form 'a+b~c*d'*** ", rgb=Color.INFO))
-        print(colorize(f"*** INFO: for a plot of a+b in function of c*d'*** ", rgb=Color.INFO))
+        print_error(f"Please provide a valid formula")
+        print_info(f"Formula can be provided on the form 'a+b~c*d'")
+        print_info(f"for a plot of a+b in function of c*d'")
         sys.exit(ARG_INVALID_FORMULA)
 
     date_unit_str = args.date_unit
     if date_unit_str is None:
-        print(colorize(f"*** ERROR: Please provide a unit for date values***", rgb=Color.ERROR))
+        print_error(f"Please provide a unit for date values")
         sys.exit(ARG_INVALID_DATE_UNIT)
 
     poi = args.points_of_interest
     if poi < 0:
-        print(colorize(f"*** ERROR: Please provide a positive or zero number of point of interest***", rgb=Color.ERROR))
+        print_error(f"Please provide a positive or zero number of point of interest")
         sys.exit(ARG_INVALID_POI)
 
     date_unit = DateUnit.MILLISECOND
@@ -370,7 +379,7 @@ if __name__ == "__main__":
         sys.exit(ARG_INVALID_FORMULA)
 
     variable_names = x_variable_names.union(y_variable_names)
-    variables_values = request_from_database(id_interval, list(variable_names))
+    variables_values = request_from_database(fmkdb, id_interval, list(variable_names))
     if variables_values is None:
         sys.exit(ARG_INVALID_VAR_NAMES)
     variables_true_types = {}
