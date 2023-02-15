@@ -3,12 +3,13 @@ import argparse
 from datetime import datetime
 import inspect
 import os
-from statistics import mean
 import sys
 from typing import Any, Optional
 from enum import Enum
 
 import cexprtk
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
@@ -111,6 +112,14 @@ group.add_argument(
     required=False
 )
 
+group.add_argument(
+    '-o',
+    '--other_id_range',
+    action='append',
+    help='Other ranges of IDs to plot against the main one. All other options apply to it',
+    required=False
+)
+
 #endregion
 
 
@@ -128,11 +137,11 @@ def sort_points_by_interest(x_data: list[float], y_data: list[float]) -> list[tu
     return result
 
 
-def add_point(x: float, y: float, color: str):
-    plt.plot(x, y, 'o', color=color)
+def add_point(axes: Axes, x: float, y: float, color: str):
+    axes.plot(x, y, 'o', color=color)
 
 
-def add_annotation(axes, x: float, y: float):
+def add_annotation(axes: Axes, x: float, y: float):
     axes.annotate(
         f"{int(x)}",
         xy=(x, y), xycoords='data',
@@ -141,7 +150,7 @@ def add_annotation(axes, x: float, y: float):
     )
 
 
-def add_points_of_interest(axes, x_data: list[float], y_data: list[float], points_of_interest: int):
+def add_points_of_interest(axes: Axes, x_data: list[float], y_data: list[float], points_of_interest: int):
 
     points = sort_points_by_interest(x_data, y_data)
     
@@ -149,24 +158,23 @@ def add_points_of_interest(axes, x_data: list[float], y_data: list[float], point
         if i >= len(points):
             break
         x, y = points[i]
-        add_point(x, y, 'red')
+        add_point(axes, x, y, 'red')
         add_annotation(axes, x, y)
 
 
-def display_line(
-    x_data: list[float], 
-    x_true_type: Optional[type], 
-    y_data: list[float], 
-    y_true_type: Optional[type], 
+def plot_line(
+    figure: Figure,
+    x_data: list[float],
+    y_data: list[float],
     args: dict[Any]
 ):
-    axes = plt.figure().add_subplot(111)
+    axes: Axes = figure.get_axes()[0]
 
-    plt.plot(x_data, y_data, '-')
+    axes.plot(x_data, y_data, '-')
     
     if args['display_points']:
         for (x, y) in zip(x_data, y_data):
-            add_point(x, y, 'b')
+            add_point(axes, x, y, 'b')
 
     if args['display_values']:
         for (x, y) in zip(x_data, y_data):
@@ -174,22 +182,21 @@ def display_line(
 
     if args['poi'] != 0:
         add_points_of_interest(axes, x_data, y_data, args['poi'])
-    
-    # Avoid userwarning and fix location of ticks
-    ticks_loc = axes.get_yticks().tolist()
-    axes.yaxis.set_major_locator(mticker.FixedLocator(ticks_loc))
+
+
+def post_process_plot(figure: Figure, x_true_type: Optional[type], y_true_type: Optional[type], args):
+    axes: Axes = figure.get_axes()[0]
 
     if x_true_type is not None and x_true_type == datetime:
-        actual_labels = axes.get_xticklabels()
-        new_labels = map(lambda label: float_to_datetime(label.get_position()[1], args['date_unit']), actual_labels)
-        axes.set_xticklabels(list(new_labels))
+        formatter = mticker.FuncFormatter(float_to_datetime)
+        axes.xaxis.set_major_formatter(formatter)
+        axes.tick_params(axis='x', which='major', labelrotation=30)
+        
     if y_true_type is not None and y_true_type == datetime:
-        actual_labels = axes.get_yticklabels()
-        new_labels = map(lambda label: float_to_datetime(label.get_position()[1], args['date_unit']), actual_labels)
-        axes.set_yticklabels(list(new_labels))
+        axes.tick_params(axis='y', which='major', reset=True)
+        formatter = mticker.FuncFormatter(float_to_datetime)
+        axes.yaxis.set_major_formatter(formatter)
 
-    plt.grid()
-    plt.show()
 
 #endregion
 
@@ -417,10 +424,18 @@ def parse_arguments() -> dict[Any]:
     result['display_points'] = display_points
     result['display_values'] = display_values
 
+    result['other_id_range'] = args.other_id_range
+
     return result
 
 
-def plot_formula(formula: str, id_range: list[range], args: dict[Any]):
+def plot_formula(
+    figure: Figure, 
+    formula: str, 
+    id_range: list[range], 
+    args: dict[Any]
+) -> tuple[str, str, Optional[type], Optional[type]]:
+
     y_expression, x_expression, valid_formula = split_formula(formula)
 
     x_variable_names, x_function_names = collect_names(x_expression)
@@ -441,6 +456,8 @@ def plot_formula(formula: str, id_range: list[range], args: dict[Any]):
     x_values = solve_expression(x_expression, variables_values)
     y_values = solve_expression(y_expression, variables_values)
 
+    plot_line(figure, x_values, y_values, args)
+
     x_conversion_type = None
     if len(x_variable_names) == 1:
         elmt = next(iter(x_variable_names))
@@ -450,14 +467,30 @@ def plot_formula(formula: str, id_range: list[range], args: dict[Any]):
         elmt = next(iter(y_variable_names))
         y_conversion_type = variables_true_types[elmt]
 
-    display_line(x_values, x_conversion_type, y_values, y_conversion_type, args)
+    return x_expression, y_expression, x_conversion_type, y_conversion_type
 
 
 def main():
     args = parse_arguments()
-
+    
+    figure = plt.figure()
+    axes: Axes = figure.add_subplot(111)
+            
     id_range = parse_int_range_union(args['id_range'])
-    plot_formula(args['formula'], id_range, args)
+    x_expression, y_expression, x_conversion_type, y_conversion_type = plot_formula(figure, args['formula'], id_range, args)
+    
+    if args['other_id_range'] is not None:
+        for other_id_range in args['other_id_range']:
+            id_range = parse_int_range_union(other_id_range)
+            plot_formula(figure, args['formula'], id_range, args)
+
+    post_process_plot(figure, x_conversion_type, y_conversion_type, args)
+
+    axes.set_title(f"{args['formula']}")
+    axes.set_xlabel(x_expression)
+    axes.set_ylabel(y_expression)
+    axes.grid()
+    plt.show()
     
     sys.exit(0)
 
