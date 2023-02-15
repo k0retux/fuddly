@@ -43,16 +43,18 @@ def print_warning(msg: str):
 def print_error(msg: str):
     print(colorize(f"*** ERROR: {msg} *** ", rgb=Color.ERROR))
 
+
 #region Argparse
+
 parser = argparse.ArgumentParser(description='Argument for FmkDB toolkit script')
 
 group = parser.add_argument_group('Main parameters')
 
 group.add_argument(
     '-id', 
-    '--id_interval', 
+    '--id_range', 
     type=str, 
-    help='The ID interval to take into account x..y',
+    help='The ID range to take into account x..y',
     required=True
 )
 
@@ -156,25 +158,22 @@ def display_line(
     x_true_type: Optional[type], 
     y_data: list[float], 
     y_true_type: Optional[type], 
-    date_unit: DateUnit,
-    points_of_interest: int,
-    display_points: bool,
-    display_values: bool
+    args: dict[Any]
 ):
     axes = plt.figure().add_subplot(111)
 
     plt.plot(x_data, y_data, '-')
     
-    if display_points:
+    if args['display_points']:
         for (x, y) in zip(x_data, y_data):
             add_point(x, y, 'b')
 
-    if display_values:
+    if args['display_values']:
         for (x, y) in zip(x_data, y_data):
             add_annotation(axes, x, y)
 
-    if points_of_interest != 0:
-        add_points_of_interest(axes, x_data, y_data, points_of_interest)
+    if args['poi'] != 0:
+        add_points_of_interest(axes, x_data, y_data, args['poi'])
     
     # Avoid userwarning and fix location of ticks
     ticks_loc = axes.get_yticks().tolist()
@@ -182,11 +181,11 @@ def display_line(
 
     if x_true_type is not None and x_true_type == datetime:
         actual_labels = axes.get_xticklabels()
-        new_labels = map(lambda label: float_to_datetime(label.get_position()[1], date_unit), actual_labels)
+        new_labels = map(lambda label: float_to_datetime(label.get_position()[1], args['date_unit']), actual_labels)
         axes.set_xticklabels(list(new_labels))
     if y_true_type is not None and y_true_type == datetime:
         actual_labels = axes.get_yticklabels()
-        new_labels = map(lambda label: float_to_datetime(label.get_position()[1], date_unit), actual_labels)
+        new_labels = map(lambda label: float_to_datetime(label.get_position()[1], args['date_unit']), actual_labels)
         axes.set_yticklabels(list(new_labels))
 
     plt.grid()
@@ -196,6 +195,7 @@ def display_line(
 
 
 #region Formula
+
 def collect_names(expression: str) -> tuple[set[str], set[str]]:
     variable_names = set()
     function_names = set()
@@ -224,10 +224,12 @@ def split_formula(formula: str) -> tuple[str, str, bool]:
     parts = list(map(lambda s: "".join(s.split(' ')), parts))
 
     return (parts[0], parts[1], True)
+
 #endregion
 
 
 #region Interval
+
 def try_parse_int(s: str) -> Optional[int]:
     try:
         int_value = int(s)
@@ -286,6 +288,7 @@ def parse_int_range_union(int_range_union: str) -> list[range]:
         if int_range is not None:
             result.append(int_range)
     return result
+
 #endregion
 
 
@@ -300,7 +303,7 @@ def float_to_datetime(timestamp: float, date_unit: DateUnit):
     return datetime.fromtimestamp(timestamp)
 
 
-def convert_non_operable_types(variables_values: list[dict[str, Any]]):
+def convert_non_operable_types(variables_values: list[dict[str, Any]], date_unit: DateUnit):
     for instanciation in variables_values:
         for key, value in instanciation.items():
             if isinstance(value, datetime):
@@ -366,7 +369,8 @@ def request_from_database(
     return result
 
 
-if __name__ == "__main__": 
+def parse_arguments() -> dict[Any]:
+    result = dict()
 
     args = parser.parse_args()
 
@@ -374,12 +378,14 @@ if __name__ == "__main__":
     if fmkdb is not None and not os.path.isfile(fmkdb):
         print_error(f"'{fmkdb}' does not exist")
         sys.exit(ARG_INVALID_FMDBK)
+    result['fmkdb'] = fmkdb
 
-    id_interval = args.id_interval
-    if id_interval is None:
+    id_range = args.id_range
+    if id_range is None:
         print_error("Please provide a valid ID interval")
         print_info("ID interval can be provided in the form '1..5,9..10,7..8'")
         sys.exit(ARG_INVALID_ID)
+    result['id_range'] = id_range
 
     formula = args.formula
     if formula is None:
@@ -387,29 +393,34 @@ if __name__ == "__main__":
         print_info("Formula can be provided on the form 'a+b~c*d'")
         print_info("for a plot of a+b in function of c*d'")
         sys.exit(ARG_INVALID_FORMULA)
+    result['formula'] = formula
 
     date_unit_str = args.date_unit
     if date_unit_str is None:
         print_error("Please provide a unit for date values")
         sys.exit(ARG_INVALID_DATE_UNIT)
+    date_unit = DateUnit.MILLISECOND
+    if date_unit_str == 's':
+        date_unit = DateUnit.SECOND
+    result['date_unit'] = date_unit
 
     poi = args.points_of_interest
     if poi < 0:
         print_error("Please provide a positive or zero number of point of interest")
         sys.exit(ARG_INVALID_POI)
+    result['poi'] = poi
 
     display_points = args.display_points
-
     display_values = args.verbose
     if display_values and not display_points:
         parser.error("--points option is required for --verbose option")
+    result['display_points'] = display_points
+    result['display_values'] = display_values
 
-    date_unit = DateUnit.MILLISECOND
-    if date_unit_str == 's':
-        date_unit = DateUnit.SECOND
+    return result
 
-    id_interval = parse_int_range_union(id_interval)
 
+def plot_formula(formula: str, id_range: list[range], args: dict[Any]):
     y_expression, x_expression, valid_formula = split_formula(formula)
 
     x_variable_names, x_function_names = collect_names(x_expression)
@@ -419,13 +430,13 @@ if __name__ == "__main__":
         sys.exit(ARG_INVALID_FORMULA)
 
     variable_names = x_variable_names.union(y_variable_names)
-    variables_values = request_from_database(fmkdb, id_interval, list(variable_names))
+    variables_values = request_from_database(args['fmkdb'], id_range, list(variable_names))
     if variables_values is None:
         sys.exit(ARG_INVALID_VAR_NAMES)
     variables_true_types = {}
     for variable, value in variables_values[0].items():
         variables_true_types[variable] = type(value)
-    convert_non_operable_types(variables_values)
+    convert_non_operable_types(variables_values, args['date_unit'])
 
     x_values = solve_expression(x_expression, variables_values)
     y_values = solve_expression(y_expression, variables_values)
@@ -439,6 +450,18 @@ if __name__ == "__main__":
         elmt = next(iter(y_variable_names))
         y_conversion_type = variables_true_types[elmt]
 
-    display_line(x_values, x_conversion_type, y_values, y_conversion_type, date_unit, poi, display_points, display_values)
+    display_line(x_values, x_conversion_type, y_values, y_conversion_type, args)
+
+
+def main():
+    args = parse_arguments()
+
+    id_range = parse_int_range_union(args['id_range'])
+    plot_formula(args['formula'], id_range, args)
     
     sys.exit(0)
+
+
+if __name__ == "__main__": 
+    main()
+    
