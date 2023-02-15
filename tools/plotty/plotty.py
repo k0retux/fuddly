@@ -12,9 +12,16 @@ import cexprtk
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
+ARG_INVALID_FMDBK = -1
+ARG_INVALID_ID = -2
+ARG_INVALID_FORMULA = -3
+ARG_INVALID_DATE_UNIT = -4
+ARG_INVALID_VAR_NAMES = -5
+ARG_INVALID_POI = -6
 
 UNION_DELIMITER = ','
 INTERVAL_OPERATOR = '..'
+STEP_OPERATOR = '|'
 
 class DateUnit(Enum):
     SECOND = 1
@@ -26,6 +33,15 @@ sys.path.insert(0, rootdir)
 
 from framework.database import Database
 from libs.external_modules import *
+
+def print_info(msg: str):
+    print(colorize(f"*** INFO: {msg} *** ", reg=Color.INFO))
+
+def print_warning(msg: str):
+    print(colorize(f"*** WARNING: {msg} *** ", rgb=Color.WARNING))
+
+def print_error(msg: str):
+    print(colorize(f"*** ERROR: {msg} *** ", rgb=Color.ERROR))
 
 #region Argparse
 parser = argparse.ArgumentParser(description='Argument for FmkDB toolkit script')
@@ -77,35 +93,63 @@ group.add_argument(
     required=False
 )
 
+group.add_argument(
+    '-pts',
+    '--display_points',
+    action='store_true',
+    help='Should the graph display every point above the line, or just he line. Default is just the line',
+    required=False
+)
+
+group.add_argument(
+    '-v',
+    '--verbose',
+    action='store_true',
+    help='Should the graph show every value above the points. Must be used with -pts. Default is false',
+    required=False
+)
+
 #endregion
 
 
 #region Plot
 
-def add_points_of_interest(axes, x_data: list[float], y_data: list[float], points_of_interest: int):
-
+def sort_points_by_interest(x_data: list[float], y_data: list[float]) -> list[tuple[float, float]]:
     backward_difference = [0]
     for i in range(1, len(y_data)):
         backward_difference.append(y_data[i] - y_data[i-1])
-    backdiff_mean = mean(backward_difference)
 
-    points = []
-    for i in range(len(y_data)):
-        if backward_difference[i] > 2*backdiff_mean:
-            points.append((x_data[i], y_data[i]))
+    result = zip(x_data, y_data, backward_difference)
+    result = sorted(result, key=lambda tup: tup[2], reverse=True)
+    result = list(map(lambda tup: (tup[0], tup[1]), result))
 
-    points = sorted(points, key=lambda p: p[1], reverse=True)
+    return result
+
+
+def add_point(x: float, y: float, color: str):
+    plt.plot(x, y, 'o', color=color)
+
+
+def add_annotation(axes, x: float, y: float):
+    axes.annotate(
+        f"{int(x)}",
+        xy=(x, y), xycoords='data',
+        xytext=(-10, 20), textcoords='offset pixels',
+        horizontalalignment='right', verticalalignment='top'
+    )
+
+
+def add_points_of_interest(axes, x_data: list[float], y_data: list[float], points_of_interest: int):
+
+    points = sort_points_by_interest(x_data, y_data)
+    
     for i in range(points_of_interest):
         if i >= len(points):
             break
         x, y = points[i]
-        plt.plot(x, y, 'o', color='red')
-        axes.annotate(
-            f"{int(x)}",
-            xy=(x, y), xycoords='data',
-            xytext=(-10, 20), textcoords='offset pixels',
-            horizontalalignment='right', verticalalignment='top'
-        )
+        add_point(x, y, 'red')
+        add_annotation(axes, x, y)
+
 
 def display_line(
     x_data: list[float], 
@@ -113,11 +157,21 @@ def display_line(
     y_data: list[float], 
     y_true_type: Optional[type], 
     date_unit: DateUnit,
-    points_of_interest: int
+    points_of_interest: int,
+    display_points: bool,
+    display_values: bool
 ):
     axes = plt.figure().add_subplot(111)
 
     plt.plot(x_data, y_data, '-')
+    
+    if display_points:
+        for (x, y) in zip(x_data, y_data):
+            add_point(x, y, 'b')
+
+    if display_values:
+        for (x, y) in zip(x_data, y_data):
+            add_annotation(axes, x, y)
 
     if points_of_interest != 0:
         add_points_of_interest(axes, x_data, y_data, points_of_interest)
@@ -179,47 +233,58 @@ def try_parse_int(s: str) -> Optional[int]:
         int_value = int(s)
         return int_value
     except ValueError:
-        print(colorize(f"*** ERROR: Value '{s}' is not a valid integer*** ", rgb=Color.ERROR))
+        print_error(f"Value '{s}' is not a valid integer")
         return None
 
 
-def parse_interval(interval: str) -> set[int]:
+def parse_int_range(int_range: str) -> Optional[range]:
 
-    bounds = interval.split(INTERVAL_OPERATOR)
+    step = 1
+    bounds_and_step = int_range.split(STEP_OPERATOR)
+    if len(bounds_and_step) == 2:
+        parsed_step = try_parse_int(bounds_and_step[1])
+        if parsed_step is None:
+            print_warning(f"Ignoring interval '{int_range}': invalid step '{bounds_and_step[1]}'")
+            return None
+        step = parsed_step
+
+    bounds = bounds_and_step[0].split(INTERVAL_OPERATOR)
     if len(bounds) == 1:
         value = try_parse_int(bounds[0])
         if value is not None:
-            return set(value)
+            return range(value, value+1)
         
-        print(colorize(f"*** WARNING: Ignoring interval '{interval}' *** ", rgb=Color.WARNING))
-        return set()
+        print_warning(f"Ignoring interval '{int_range}' : invalid integer '{bounds[0]}'")
+        return None
 
     if len(bounds) == 2:
         lower_bound = try_parse_int(bounds[0])
         upper_bound = try_parse_int(bounds[1])
-        if lower_bound is None or upper_bound is None:
-            print(colorize(f"*** WARNING: Ignoring interval '{interval}' *** ", rgb=Color.WARNING))
-            return set()
+        if lower_bound is None:
+            print_warning(f"Ignoring interval '{int_range}' : invalid integer '{bounds[0]}'")
+            return None
+
+        if upper_bound is None:
+            print_warning(f"Ignoring interval '{int_range}' : invalid integer '{bounds[1]}'")
+            return None
 
         if lower_bound >= upper_bound:
-            print(colorize(f"*** WARNING: Ignoring interval '{interval}' *** ", rgb=Color.WARNING))
-            return set()
+            print_warning(f"Ignoring interval '{int_range}'")
+            return None
 
-        result = set()
-        for value in range(lower_bound, upper_bound):
-            result.add(value)
-        return result
+        return range(lower_bound, upper_bound, step)
             
-    print(colorize(f"*** WARNING: Invalid interval found: '{interval}' *** ", rgb=Color.ERROR))
-    return set()
+    print_warning(f"Invalid interval found: '{int_range}'")
+    return None
 
 
-def parse_interval_union(interval_union: str) -> set[int]:
-    result = set()
-    parts = interval_union.split(UNION_DELIMITER)
+def parse_int_range_union(int_range_union: str) -> list[range]:
+    result = []
+    parts = int_range_union.split(UNION_DELIMITER)
     for part in parts:
-        interval_values = parse_interval(part)
-        result = result.union(interval_values)
+        int_range = parse_int_range(part)
+        if int_range is not None:
+            result.append(int_range)
     return result
 #endregion
 
@@ -250,22 +315,39 @@ def solve_expression(expression: str, variables_values: list[dict[str, Any]]) ->
     return results
 
 
+def belongs_condition_sql_string(column_label: str, int_ranges: list[range]):
+    result = "false"
+    for int_range in int_ranges:
+        sub_condition = ""
+        if int_range.start == int_range.stop:
+            sub_condition = f" OR {column_label} = {list(int_range)}"
+        else:
+            if int_range.step == 1:
+                sub_condition = f" OR {column_label} >= {int_range.start} AND {column_label} < {int_range.stop}"
+                
+            else:
+                sql_range = ','.join(list(map(str, list(int_range))))
+                sub_condition = f" OR {column_label} IN ({sql_range})"
+        result += sub_condition
+    return result
+
+
 def request_from_database(
-    id_interval: set[int], 
+    fmkdb_path: str,
+    int_ranges: list[range], 
     column_names: list[str]
 ) -> Optional[list[dict[str, Any]]]:
     
-    fmkdb = Database()
+    fmkdb = Database(fmkdb_path)
     ok = fmkdb.start()
     if not ok:
-        print(colorize("*** ERROR: The database {:s} is invalid! ***".format(fmkdb.fmk_db_path),
-                       rgb=Color.ERROR))
-        sys.exit(-1)
+        print_error(f"The database {fmkdb_path} is invalid!")
+        sys.exit(ARG_INVALID_FMDBK)
 
-    id_interval_str = list(map(str, id_interval))
+    id_ranges_check_str = belongs_condition_sql_string("ID", int_ranges)
 
     statement = f"SELECT {', '.join(column_names)} FROM DATA " \
-                f"WHERE ID IN ({', '.join(id_interval_str)})"
+                f"WHERE {id_ranges_check_str}"
 
     matching_data = fmkdb.execute_sql_statement(statement)
 
@@ -290,34 +372,43 @@ if __name__ == "__main__":
 
     fmkdb = args.fmkdb
     if fmkdb is not None and not os.path.isfile(fmkdb):
-        print(colorize(f"*** ERROR: '{fmkdb}' does not exist ***", rgb=Color.ERROR))
-        sys.exit(-1)
+        print_error(f"'{fmkdb}' does not exist")
+        sys.exit(ARG_INVALID_FMDBK)
 
     id_interval = args.id_interval
     if id_interval is None:
-        print(colorize(f"*** ERROR: Please provide a valid ID interval*** ", rgb=Color.ERROR))
-        print(colorize(f"*** INFO: ID interval can be provided in the form '1..5,9..10,7..8'*** ", rgb=Color.INFO))
-        sys.exit(-2)
+        print_error("Please provide a valid ID interval")
+        print_info("ID interval can be provided in the form '1..5,9..10,7..8'")
+        sys.exit(ARG_INVALID_ID)
 
     formula = args.formula
     if formula is None:
-        print(colorize(f"*** ERROR: Please provide a valid formula***", rgb=Color.ERROR))
-        print(colorize(f"*** INFO: Formula can be provided on the form 'a+b~c*d'*** ", rgb=Color.INFO))
-        print(colorize(f"*** INFO: for a plot of a+b in function of c*d'*** ", rgb=Color.INFO))
-        sys.exit(-3)
+        print_error("Please provide a valid formula")
+        print_info("Formula can be provided on the form 'a+b~c*d'")
+        print_info("for a plot of a+b in function of c*d'")
+        sys.exit(ARG_INVALID_FORMULA)
 
     date_unit_str = args.date_unit
     if date_unit_str is None:
-        print(colorize(f"*** ERROR: Please provide a unit for date values***", rgb=Color.ERROR))
-        sys.exit(-4)
+        print_error("Please provide a unit for date values")
+        sys.exit(ARG_INVALID_DATE_UNIT)
 
     poi = args.points_of_interest
-    
+    if poi < 0:
+        print_error("Please provide a positive or zero number of point of interest")
+        sys.exit(ARG_INVALID_POI)
+
+    display_points = args.display_points
+
+    display_values = args.verbose
+    if display_values and not display_points:
+        parser.error("--points option is required for --verbose option")
+
     date_unit = DateUnit.MILLISECOND
     if date_unit_str == 's':
         date_unit = DateUnit.SECOND
 
-    id_interval = parse_interval_union(id_interval)
+    id_interval = parse_int_range_union(id_interval)
 
     y_expression, x_expression, valid_formula = split_formula(formula)
 
@@ -325,12 +416,12 @@ if __name__ == "__main__":
     y_variable_names, y_function_names = collect_names(y_expression)
 
     if not valid_formula:
-        sys.exit(-3)
+        sys.exit(ARG_INVALID_FORMULA)
 
     variable_names = x_variable_names.union(y_variable_names)
-    variables_values = request_from_database(id_interval, list(variable_names))
+    variables_values = request_from_database(fmkdb, id_interval, list(variable_names))
     if variables_values is None:
-        sys.exit(-5)
+        sys.exit(ARG_INVALID_VAR_NAMES)
     variables_true_types = {}
     for variable, value in variables_values[0].items():
         variables_true_types[variable] = type(value)
@@ -348,6 +439,6 @@ if __name__ == "__main__":
         elmt = next(iter(y_variable_names))
         y_conversion_type = variables_true_types[elmt]
 
-    display_line(x_values, x_conversion_type, y_values, y_conversion_type, date_unit, poi)
+    display_line(x_values, x_conversion_type, y_values, y_conversion_type, date_unit, poi, display_points, display_values)
     
     sys.exit(0)
