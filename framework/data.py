@@ -295,6 +295,8 @@ class Data(object):
         self.feedback_timeout = None if from_data is None else from_data.feedback_timeout
         self.feedback_mode = None if from_data is None else from_data.feedback_mode
 
+        self.sending_delay = None if from_data is None else from_data.sending_delay
+
         self.altered = False if from_data is None else from_data.altered
 
         self._recordable = False if from_data is None else from_data._recordable

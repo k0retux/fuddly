@@ -1902,6 +1902,9 @@ class FmkPlumbing(object):
 
     def _do_sending_and_logging_init(self, data_list):
         for d in data_list:
+            if d.sending_delay is not None:
+                self.set_sending_delay(d.sending_delay)
+
             if d.feedback_timeout is not None:
                 tg_ids = self._vtg_to_tg(d)
                 for tg_id in tg_ids:
@@ -2398,6 +2401,12 @@ class FmkPlumbing(object):
         except (TargetFeedbackError, UserInterruption):
             return False
 
+        # we delay sending after calling self._do_sending_and_logging_init(data_list)
+        # as this delay can be changed while data is handled by this method.
+        go_on = self._delay_sending()
+        if not go_on:
+            return False
+
         if not data_list:
             return True
 
@@ -2485,9 +2494,6 @@ class FmkPlumbing(object):
                 tg.cleanup()
 
         self._do_after_feedback_retrieval(data_list)
-
-        if cont0:
-            cont0 = self._delay_sending()
 
         if not console_display:
             self.lg.display_on_term = lg_display_on_term_save

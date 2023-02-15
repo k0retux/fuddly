@@ -77,7 +77,7 @@ class Periodic(object):
 class Step(object):
 
     def __init__(self, data_desc=None, final=False,
-                 fbk_timeout=None, fbk_mode=None,
+                 fbk_timeout=None, fbk_mode=None, sending_delay=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
                  start_tasks=None, stop_tasks=None,
                  do_before_data_processing=None, do_before_sending=None,
@@ -142,6 +142,7 @@ class Step(object):
         # need to be set after self._data_desc
         self.feedback_timeout = fbk_timeout
         self.feedback_mode = fbk_mode
+        self.sending_delay = sending_delay
 
         self._scenario_env = None
         self._periodic_data = list(set_periodic) if set_periodic else None
@@ -315,6 +316,17 @@ class Step(object):
             return False
 
     @property
+    def sending_delay(self):
+        return self._sending_delay
+
+    @sending_delay.setter
+    def sending_delay(self, delay):
+        self._sending_delay = delay
+        for d in self._data_desc:
+            if isinstance(d, (Data, DataProcess)):
+                d.sending_delay = delay
+
+    @property
     def feedback_timeout(self):
         return self._feedback_timeout
 
@@ -447,6 +459,8 @@ class Step(object):
             d.feedback_timeout = self._feedback_timeout
         if self._feedback_mode is not None:
             d.feedback_mode = self._feedback_mode
+        if self._sending_delay is not None:
+            d.sending_delay = self._sending_delay
 
         d.set_attributes_from(self.data_attrs)
 
@@ -650,7 +664,7 @@ class Step(object):
 
 
 class FinalStep(Step):
-    def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
+    def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None, sending_delay=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
                  start_tasks=None, stop_tasks=None,
                  do_before_data_processing=None, do_before_sending=None, valid=True, vtg_ids=None):
@@ -659,12 +673,12 @@ class FinalStep(Step):
                       valid=valid, vtg_ids=vtg_ids)
 
 class NoDataStep(Step):
-    def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
+    def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None, sending_delay=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
                  start_tasks=None, stop_tasks=None,
                  do_before_data_processing=None, do_before_sending=None, valid=True, vtg_ids=None):
         Step.__init__(self, data_desc=Data(''), final=final,
-                      fbk_timeout=fbk_timeout, fbk_mode=fbk_mode,
+                      fbk_timeout=fbk_timeout, fbk_mode=fbk_mode, sending_delay=sending_delay,
                       set_periodic=set_periodic, clear_periodic=clear_periodic,
                       start_tasks=start_tasks, stop_tasks=stop_tasks,
                       step_desc=step_desc, do_before_data_processing=do_before_data_processing,
@@ -676,12 +690,12 @@ class NoDataStep(Step):
         pass
 
 class StepStub(Step):
-    def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None,
+    def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None, sending_delay=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
                  start_tasks=None, stop_tasks=None,
                  do_before_data_processing=None, do_before_sending=None, valid=True, vtg_ids=None):
         Step.__init__(self, data_desc=EmptyDataProcess(), final=final,
-                      fbk_timeout=fbk_timeout, fbk_mode=fbk_mode,
+                      fbk_timeout=fbk_timeout, fbk_mode=fbk_mode, sending_delay=sending_delay,
                       set_periodic=set_periodic, clear_periodic=clear_periodic,
                       start_tasks=start_tasks, stop_tasks=stop_tasks,
                       step_desc=step_desc, do_before_data_processing=do_before_data_processing,
