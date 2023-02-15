@@ -364,7 +364,7 @@ class FmkPlumbing(object):
                 self.config.write(cfile)
         atexit.register(save_config)
 
-        external_term = self.config.defvalues.external_term
+        external_term = self.config.misc.external_term
         if external_term and not self.external_display.is_enabled:
             self.switch_term()
 
@@ -470,8 +470,8 @@ class FmkPlumbing(object):
         self.cleanup_all_dmakers(reset_existing_seed)
         # Warning: fuzz delay is not set to 0 by default in order to have a time frame
         # where SIGINT is accepted from user
-        delay = self.config.defvalues.fuzz.delay if self.prj.default_sending_delay is None else self.prj.default_sending_delay
-        burst = self.config.defvalues.fuzz.burst if self.prj.default_burst_value is None else self.prj.default_burst_value
+        delay = self.config.misc.fuzz.delay if self.prj.default_sending_delay is None else self.prj.default_sending_delay
+        burst = self.config.misc.fuzz.burst if self.prj.default_burst_value is None else self.prj.default_burst_value
         self.set_sending_delay(delay)
         self.set_sending_burst_counter(burst)
 

@@ -66,12 +66,12 @@ default.add('FmkPlumbing', u'''
 [global]
 config_name: FmkPlumbing
 
-[defvalues]
+[misc]
 external_term = False
-fuzz.delay = 0.01
+fuzz.delay = 0
 fuzz.burst = 1
 
-;;  [defvalues.doc]
+;;  [misc.doc]
 ;;  self: (default values used when the framework resets)
 ;;  fuzz.delay: Default value (> 0) for fuzz_delay
 ;;  fuzz.burst: Default value (>= 1) for fuzz_burst
