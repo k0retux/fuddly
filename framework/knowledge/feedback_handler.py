@@ -64,17 +64,15 @@ class FeedbackHandler(object):
     A feedback handler extract information from binary data.
     """
 
-    def __init__(self, new_window=False, new_window_title=None, xterm_prg_name='x-terminal-emulator'):
+    def __init__(self, new_window=False, new_window_title=None):
         """
         Args:
             new_window: If `True`, a new terminal emulator is created, enabling the decoder to use
               it for display via the methods `print()` and `print_nl()`
 
-            xterm_prg_name: name of the terminal emulator program to be started
         """
         self._new_window = new_window
         self._new_window_title = new_window_title
-        self._xterm_prg_name = xterm_prg_name
         self._s = None
         self.term = None
         self.fmkops = None
@@ -133,8 +131,7 @@ class FeedbackHandler(object):
         self._s = ''
         if self._new_window:
             nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
-            self.term = Term(name=nm, xterm_prg_name=self._xterm_prg_name,
-                             keepterm=True)
+            self.term = Term(title=nm, keepterm=True)
             self.term.start()
 
         self.start(current_dm)

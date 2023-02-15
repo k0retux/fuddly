@@ -35,8 +35,15 @@ except ModuleNotFoundError:
     xdg_data_home = os.path.expanduser('~' + os.sep + 'fuddly_data' + os.sep)
     xdg_config_home = os.path.expanduser('~' + os.sep + 'fuddly_data' + os.sep + "config")
 
-import framework
-from libs.utils import ensure_dir, ensure_file
+# TODO: Taken out of libs.utils, is this the best place for them?
+def ensure_dir(f):
+    d = os.path.dirname(f)
+    if not os.path.exists(d):
+        os.makedirs(d)
+
+def ensure_file(f):
+    if not os.path.isfile(f):
+        open(f, 'a').close()
 
 
 fuddly_version = '0.27.2'

@@ -30,27 +30,35 @@ import re
 import inspect
 import uuid
 
+from framework.global_resources import config_folder
+from framework.config import config
+import shlex
+
+term = config("FmkPlumbing", path=[config_folder]).terminal
 
 class Term(object):
 
-    def __init__(self, name=None, keepterm=False, xterm_args=None, xterm_prg_name='x-terminal-emulator'):
-        self.name = name
+    def __init__(self, title=None, keepterm=False):
+        self.title = title
         self.keepterm = keepterm
-        self.xterm_args = xterm_args
-        self.xterm_prg_name = xterm_prg_name
 
     def start(self):
         self.pipe_path = os.sep + os.path.join('tmp', 'fuddly_term_'+str(uuid.uuid4()))
         if not os.path.exists(self.pipe_path):
             os.mkfifo(self.pipe_path)
-        self.cmd = [self.xterm_prg_name]
-        if self.name is not None:
-            self.cmd.extend(['-title',self.name])
-        if self.xterm_args:
-            self.cmd.extend(self.xterm_args)
+        self.cmd = [term.name]
+        if self.title is not None:
+            self.cmd.extend([term.title_arg, self.title])
         if self.keepterm:
-            self.cmd.append('--hold')
-        self.cmd.extend(['-e', 'tail -f {:s}'.format(self.pipe_path)])
+            self.cmd.append(term.hold_arg)
+        if term.extra_args:
+            self.cmd.extend(shlex.split(term.extra_args))
+        if term.exec_arg:
+            self.cmd.append(term.exec_arg)
+        if term.exec_arg_type == "list":
+            self.cmd.extend(['tail', '-f', self.pipe_path])
+        elif term.exec_arg_type == "string":
+            self.cmd.append(f"tail -f {self.pipe_path}")
         self._p = None
 
     def _launch_term(self):
@@ -100,8 +108,8 @@ class ExternalDisplay(object):
             self._disp.stop()
             self._disp = None
 
-    def start_term(self, name=None, keepterm=False):
-        self._disp = Term(name=name, keepterm=keepterm)
+    def start_term(self, title=None, keepterm=False):
+        self._disp = Term(title=title, keepterm=keepterm)
         self._disp.start()
         self._disp.print('')
 
@@ -125,7 +133,7 @@ class Task(object):
         pass
 
     def __init__(self, period=None, init_delay=0,
-                 new_window=False, new_window_title=None, xterm_prg_name='x-terminal-emulator'):
+                 new_window=False, new_window_title=None):
         self.period = period
         self.init_delay = init_delay
         self.fmkops = None
@@ -140,13 +148,11 @@ class Task(object):
 
         self._new_window = new_window
         self._new_window_title = new_window_title
-        self._xterm_prg_name = xterm_prg_name
 
     def _setup(self):
         if self._new_window:
             nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
-            self.term = Term(name=nm, xterm_prg_name=self._xterm_prg_name,
-                             keepterm=True)
+            self.term = Term(title=nm, keepterm=True)
             self.term.start()
 
         self.setup()
@@ -185,15 +191,6 @@ class Accumulator:
 
     def clear(self):
         self.content = ''
-
-def ensure_dir(f):
-    d = os.path.dirname(f)
-    if not os.path.exists(d):
-        os.makedirs(d)
-
-def ensure_file(f):
-    if not os.path.isfile(f):
-        open(f, 'a').close()
 
 def chunk_lines(string, length, prefix=''):
     l = string.split(' ')
