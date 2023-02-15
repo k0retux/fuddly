@@ -31,6 +31,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 import framework.global_resources as gr
+from framework.config import config
 import libs.external_modules as em
 from framework.knowledge.feedback_collector import FeedbackSource
 from libs.external_modules import *
@@ -136,11 +137,14 @@ class Database(object):
     FEEDBACK_TRAIL_TIME_WINDOW = 10 # seconds
 
     def __init__(self, fmkdb_path=None):
+
         self.name = 'fmkDB.db'
         if fmkdb_path is None:
             self.fmk_db_path = os.path.join(gr.fuddly_data_folder, self.name)
         else:
             self.fmk_db_path = fmkdb_path
+
+        self.config = None
 
         self.enabled = False
 
@@ -311,6 +315,8 @@ class Database(object):
                     return ret
 
     def start(self):
+        self.config = config("Database", path=[gr.config_folder])
+
         if self._sql_handler_thread is not None:
             return
 
@@ -417,7 +423,7 @@ class Database(object):
         if self._current_sent_date is not None:
             # We do not associate an async data to the last data_id if
             # it is sent more than 60 seconds after
-            if (sent_date - self._current_sent_date).total_seconds() > 60:
+            if (sent_date - self._current_sent_date).total_seconds() > self.config.async_data.after_data_id:
                 data_id = None
             else:
                 data_id = self._data_id
@@ -613,10 +619,11 @@ class Database(object):
             # And we ignore the ones (current_data_id is null) that have been sent after
             # (because it means the framework was reset) 
             f"        OR ( CURRENT_DATA_ID IS NULL"
-            f"             AND CAST((JulianDay(?)-JulianDay(SENT_DATE))*24*60*60 AS INTEGER) < 5"
+            f"             AND CAST((JulianDay(?)-JulianDay(SENT_DATE))*24*60*60 AS INTEGER) "
+            f"                    < {self.config.async_data.before_data_id}"
             f"             AND (JulianDay(?)-JulianDay(SENT_DATE)) >= 0 )"
             f"       );",
-            params=(prj, data_id, sent_date,sent_date)
+            params=(prj, data_id, sent_date, sent_date)
         )
 
         if fbk_src:

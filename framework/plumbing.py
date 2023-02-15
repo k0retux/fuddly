@@ -356,13 +356,6 @@ class FmkPlumbing(object):
         self.check_clone_re = re.compile('(.*)#(\w{1,30})')
 
         self.config = config(self, path=[config_folder])
-        def save_config():
-            filename=os.path.join(
-                    config_folder,
-                    self.config.config_name + '.ini')
-            with open(filename, 'w') as cfile:
-                self.config.write(cfile)
-        atexit.register(save_config)
 
         external_term = self.config.terminal.external_term
         if external_term and not self.external_display.is_enabled:
@@ -4095,18 +4088,22 @@ class FmkShell(cmd.Cmd):
         self.input_param_values_re = re.compile('(.*)=(.*)', re.S)
 
         self.config = config(self, path=[config_folder])
+
+        self.available_configs = {
+                "framework": self.fz.config,
+                "shell": self.config,
+                "db": self.fz.fmkDB.config}
+
         def save_config():
-            filename=os.path.join(
-                    config_folder,
-                    self.config.config_name + '.ini')
-            with open(filename, 'w') as cfile:
-                self.config.write(cfile)
+            for conf in self.available_configs.values():
+                filename=os.path.join(
+                        config_folder,
+                        conf.config_name + '.ini')
+                with open(filename, 'w') as cfile:
+                    conf.write(cfile)
         atexit.register(save_config)
 
         self.prompt = '\n' + self.config.prompt + ' '
-        self.available_configs = {
-                "framework": self.fz.config,
-                "shell": self.config}
 
         self.__error = False
         self.__error_msg = ''

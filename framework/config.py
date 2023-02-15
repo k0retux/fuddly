@@ -142,6 +142,26 @@ aligned_options.prompt_height: 3
 
 ''')
 
+default.add('Database', u'''
+[global]
+config_name: Database
+
+[async_data]
+before_data_id = 5
+after_data_id = 60
+
+;;  [async_data.doc]
+;;  self: Configuration applicable to ASYNC DATA.
+;;
+;;  before_data_id: an async_data (without any associated data_id) will be considered to be related
+      to a data sent afterwards if the number of seconds that separates it from that data is less
+      than the amount specified in this parameter.
+;;  after_data_id: if after the last registered data by the framework, an async data is sent after
+      more than the amount of seconds specified in this parameter, it won't be considered to be
+      related to this last registered data. 
+
+''')
+
 
 def check_type(name, attr, value):
     original = value
