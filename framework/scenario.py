@@ -567,12 +567,21 @@ class Step(object):
                 step_desc = step_desc + '|{{{:s}|{:s}}}'.format(cbk_before_dataproc_str, cbk_before_sending_str)
 
         fbk_mode = None if self.feedback_mode is None else Target.get_fbk_mode_desc(self.feedback_mode, short=True)
+        delay = f'|sending delay: {self.sending_delay}s' if self.sending_delay is not None else ''
         if self.feedback_timeout is not None and self.feedback_mode is not None:
-            step_desc = '{{fbk timeout {!s}s|{:s}}}|{:s}'.format(self.feedback_timeout, fbk_mode, step_desc)
+            step_desc = f'{{fbk timeout: {self.feedback_timeout}s|fbk mode: {fbk_mode}{delay}}}|{step_desc}'
         elif self.feedback_timeout is not None:
-            step_desc = 'fbk timeout\\n{!s}s|{:s}'.format(self.feedback_timeout, step_desc)
+            if self.sending_delay is not None:
+                step_desc = f'{{fbk timeout: {self.feedback_timeout}s{delay}}}|{step_desc}'
+            else:
+                step_desc = f'fbk timeout\\n{self.feedback_timeout}s|{step_desc}'
         elif self.feedback_mode is not None:
-            step_desc = 'fbk mode\\n{:s}|{:s}'.format(fbk_mode, step_desc)
+            if self.sending_delay is not None:
+                step_desc = f'{{fbk mode: {fbk_mode}{delay}}}|{step_desc}'
+            else:
+                step_desc = f'fbk mode\\n{fbk_mode}|{step_desc}'
+        elif self.sending_delay is not None:
+            step_desc = f'sending delay\\n{self.sending_delay}s|{step_desc}'
         else:
             pass
 
