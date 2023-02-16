@@ -392,20 +392,22 @@ class FmkPlumbing(object):
             raise ProjectDefinitionError('Error with some Project imports')
 
         if not self._quiet:
-            self.print(colorize(FontStyle.BOLD + '='*44 + '[ Fuddly Data Folder Information ]==\n',
+            self.print(colorize(FontStyle.BOLD + '='*44 + '[ Fuddly Home Information ]==\n',
                            rgb=Color.FMKINFOGROUP))
 
         if not self._quiet and hasattr(gr, 'new_fuddly_data_folder'):
             self.print(colorize(FontStyle.BOLD + \
-                           ' *** New Fuddly Data Folder Has Been Created ***\n',
+                           ' *** New Fuddly Home Has Been Created ***\n',
                            rgb=Color.FMKINFO_HLIGHT))
 
         if not self._quiet:
-            self.print(colorize(' --> path: {:s}'.format(gr.fuddly_data_folder),
-                           rgb=Color.FMKINFO))
+            self.print(colorize(' --> data folder: {:s}'.format(gr.fuddly_data_folder),
+                                rgb=Color.FMKINFO))
             self.print(colorize(' --> contains: - fmkDB.db, logs, imported/exported data, ...\n'
-                           '               - user projects and user data models',
-                           rgb=Color.FMKSUBINFO))
+                                '               - user projects and user data models, ...',
+                                rgb=Color.FMKSUBINFO))
+            self.print(colorize(' --> config folder: {:s}'.format(gr.config_folder),
+                                rgb=Color.FMKINFO))
 
 
     def switch_term(self):

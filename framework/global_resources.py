@@ -27,13 +27,13 @@ import copy
 import inspect
 from enum import Enum
 
-
+xdg_mod_error = False
 try:
     from xdg.BaseDirectory import xdg_data_home, xdg_config_home
 except ModuleNotFoundError:
-    # A bit redundant, but work even if the xdg lib is not installed
-    xdg_data_home = os.path.expanduser('~' + os.sep + 'fuddly_data' + os.sep)
-    xdg_config_home = os.path.expanduser('~' + os.sep + 'fuddly_data' + os.sep + "config")
+    xdg_mod_error = True
+    print('WARNING [FMK]: python3-xdg module is not installed!')
+
 
 # TODO: Taken out of libs.utils, is this the best place for them?
 def ensure_dir(f):
@@ -57,14 +57,14 @@ projects_folder = app_folder + os.sep + 'projects' + os.sep
 data_models_folder = app_folder + os.sep + 'data_models' + os.sep
 
 fuddly_data_folder = os.path.expanduser('~' + os.sep + 'fuddly_data' + os.sep)
-xdg_fuddly_data_folder = xdg_data_home + os.sep + 'fuddly' + os.sep
-use_xdg=False
-if not os.path.exists(fuddly_data_folder):
-    if not os.path.exists(xdg_fuddly_data_folder):
+if not xdg_mod_error and not os.path.exists(fuddly_data_folder):
+    use_xdg = True
+    fuddly_data_folder = xdg_data_home + os.sep + 'fuddly' + os.sep
+    if not os.path.exists(fuddly_data_folder):
         new_fuddly_data_folder = True
-    else:
-        fuddly_data_folder = xdg_fuddly_data_folder
-        use_xdg = True
+else:
+    use_xdg = False
+
 ensure_dir(fuddly_data_folder)
 
 exported_data_folder = fuddly_data_folder + 'exported_data' + os.sep
