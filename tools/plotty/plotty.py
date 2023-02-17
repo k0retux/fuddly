@@ -241,7 +241,7 @@ def set_grid(
     if grid_match == GridMatch.ALL:
         new_xticks, new_yticks = zip(*plotted_points)
         axes.xaxis.set_ticks(new_xticks)
-        axes.yaxis.set_ticks(int)
+        axes.yaxis.set_ticks(new_yticks)
 
 
 def post_process_plot(
