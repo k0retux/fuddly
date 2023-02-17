@@ -3,12 +3,13 @@ import argparse
 from datetime import datetime
 import inspect
 import os
-from statistics import mean
 import sys
 from typing import Any, Optional
 from enum import Enum
 
 import cexprtk
+from matplotlib.axes import Axes
+from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 
@@ -27,6 +28,11 @@ class DateUnit(Enum):
     SECOND = 1
     MILLISECOND = 2
 
+class GridMatch(Enum):
+    DEFAULT = 1
+    POI = 2
+    ALL = 3
+
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 rootdir = os.path.dirname(os.path.dirname(currentdir))
 sys.path.insert(0, rootdir)
@@ -43,16 +49,18 @@ def print_warning(msg: str):
 def print_error(msg: str):
     print(colorize(f"*** ERROR: {msg} *** ", rgb=Color.ERROR))
 
+
 #region Argparse
+
 parser = argparse.ArgumentParser(description='Argument for FmkDB toolkit script')
 
 group = parser.add_argument_group('Main parameters')
 
 group.add_argument(
     '-id', 
-    '--id_interval', 
+    '--id_range', 
     type=str, 
-    help='The ID interval to take into account x..y',
+    help='The ID range to take into account x..y',
     required=True
 )
 
@@ -89,7 +97,16 @@ group.add_argument(
     '--points_of_interest',
     type=int,
     default=0,
-    help='How many point of interest the plot should show. Works only if -poi is set to true',
+    help='How many point of interest the plot should show. Default is none',
+    required=False
+)
+
+group.add_argument(
+    '-gm',
+    '--grid_match',
+    type=str,
+    help='Should the plot grid specifically match some element. Possible options are "all" and "poi". Default is an arbitrary grid',
+    choices=['all', 'poi'],
     required=False
 )
 
@@ -106,6 +123,14 @@ group.add_argument(
     '--verbose',
     action='store_true',
     help='Should the graph show every value above the points. Must be used with -pts. Default is false',
+    required=False
+)
+
+group.add_argument(
+    '-o',
+    '--other_id_range',
+    action='append',
+    help='Other ranges of IDs to plot against the main one. All other options apply to it',
     required=False
 )
 
@@ -126,11 +151,11 @@ def sort_points_by_interest(x_data: list[float], y_data: list[float]) -> list[tu
     return result
 
 
-def add_point(x: float, y: float, color: str):
-    plt.plot(x, y, 'o', color=color)
+def add_point(axes: Axes, x: float, y: float, color: str):
+    axes.plot(x, y, 'o', color=color)
 
 
-def add_annotation(axes, x: float, y: float):
+def add_annotation(axes: Axes, x: float, y: float):
     axes.annotate(
         f"{int(x)}",
         xy=(x, y), xycoords='data',
@@ -139,63 +164,114 @@ def add_annotation(axes, x: float, y: float):
     )
 
 
-def add_points_of_interest(axes, x_data: list[float], y_data: list[float], points_of_interest: int):
+def add_points_of_interest(
+    axes: Axes, 
+    x_data: list[float], 
+    y_data: list[float], 
+    points_of_interest: int
+) -> set[tuple[float, float]]:
 
     points = sort_points_by_interest(x_data, y_data)
-    
+    plotted_points = set()
+
     for i in range(points_of_interest):
         if i >= len(points):
             break
         x, y = points[i]
-        add_point(x, y, 'red')
+        add_point(axes, x, y, 'red')
         add_annotation(axes, x, y)
+        plotted_points.add((x,y))
+
+    return plotted_points
 
 
-def display_line(
-    x_data: list[float], 
-    x_true_type: Optional[type], 
-    y_data: list[float], 
-    y_true_type: Optional[type], 
-    date_unit: DateUnit,
-    points_of_interest: int,
-    display_points: bool,
-    display_values: bool
-):
-    axes = plt.figure().add_subplot(111)
+def plot_line(
+    axes: Axes,
+    x_data: list[float],
+    y_data: list[float],
+    args: dict[Any]
+) -> set[tuple[float, float]]:
 
-    plt.plot(x_data, y_data, '-')
+    axes.plot(x_data, y_data, '-')
     
-    if display_points:
+    if args['display_points']:
         for (x, y) in zip(x_data, y_data):
-            add_point(x, y, 'b')
+            add_point(axes, x, y, 'b')
 
-    if display_values:
+    if args['display_values']:
         for (x, y) in zip(x_data, y_data):
             add_annotation(axes, x, y)
 
-    if points_of_interest != 0:
-        add_points_of_interest(axes, x_data, y_data, points_of_interest)
+    if args['poi'] == 0:
+        return set()
     
-    # Avoid userwarning and fix location of ticks
-    ticks_loc = axes.get_yticks().tolist()
-    axes.yaxis.set_major_locator(mticker.FixedLocator(ticks_loc))
+    return add_points_of_interest(axes, x_data, y_data, args['poi'])
+
+
+def plot_async_data(
+    axes: Axes, 
+    x_data: list[float],
+    y_data: list[float],
+    args: dict[Any]
+):
+    for (x,y) in zip(x_data, y_data):
+        axes.plot(x, y, 'g^')
+
+    if args['display_values']:
+        for (x, y) in zip(x_data, y_data):
+            add_annotation(axes, x, y)
+
+
+def set_grid(
+    axes: Axes, 
+    grid_match: GridMatch, 
+    plotted_poi: set[tuple[float, float]],
+    plotted_points: set[tuple[float, float]]
+):
+    
+    if grid_match == GridMatch.DEFAULT:
+        return 
+    
+    if grid_match == GridMatch.POI:
+        new_xticks, new_yticks = zip(*plotted_poi)
+        axes.xaxis.set_ticks(new_xticks)
+        axes.yaxis.set_ticks(new_yticks)
+        return
+
+    if grid_match == GridMatch.ALL:
+        new_xticks, new_yticks = zip(*plotted_points)
+        axes.xaxis.set_ticks(new_xticks)
+        axes.yaxis.set_ticks(new_yticks)
+
+
+def post_process_plot(
+    figure: Figure, 
+    x_true_type: Optional[type], 
+    y_true_type: Optional[type], 
+    plotted_poi: set[tuple[float, float]],
+    plotted_points: set[tuple[float, float]],
+    args: dict[Any]
+):
+    axes: Axes = figure.get_axes()[0]
+
+    set_grid(axes, args['grid_match'], plotted_poi, plotted_points)
 
     if x_true_type is not None and x_true_type == datetime:
-        actual_labels = axes.get_xticklabels()
-        new_labels = map(lambda label: float_to_datetime(label.get_position()[1], date_unit), actual_labels)
-        axes.set_xticklabels(list(new_labels))
+        formatter = mticker.FuncFormatter(lambda value, _: float_to_datetime(value, args['date_unit']))
+        axes.xaxis.set_major_formatter(formatter)
+        axes.tick_params(axis='x', which='major', labelrotation=30)
+        
     if y_true_type is not None and y_true_type == datetime:
-        actual_labels = axes.get_yticklabels()
-        new_labels = map(lambda label: float_to_datetime(label.get_position()[1], date_unit), actual_labels)
-        axes.set_yticklabels(list(new_labels))
+        axes.tick_params(axis='y', which='major', reset=True)
+        formatter = mticker.FuncFormatter(lambda value, _: float_to_datetime(value, args['date_unit']))
+        axes.yaxis.set_major_formatter(formatter)
 
-    plt.grid()
-    plt.show()
 
 #endregion
 
 
 #region Formula
+
 def collect_names(expression: str) -> tuple[set[str], set[str]]:
     variable_names = set()
     function_names = set()
@@ -224,10 +300,12 @@ def split_formula(formula: str) -> tuple[str, str, bool]:
     parts = list(map(lambda s: "".join(s.split(' ')), parts))
 
     return (parts[0], parts[1], True)
+
 #endregion
 
 
 #region Interval
+
 def try_parse_int(s: str) -> Optional[int]:
     try:
         int_value = int(s)
@@ -286,13 +364,15 @@ def parse_int_range_union(int_range_union: str) -> list[range]:
         if int_range is not None:
             result.append(int_range)
     return result
+
 #endregion
 
 
 def datetime_to_float(date_time: datetime, date_unit: DateUnit):
     res = date_time.timestamp()
-    return res if date_unit == DateUnit.SECOND else res * 1000
-
+    if date_unit == DateUnit.MILLISECOND:
+        res *= 1000
+    return res
 
 def float_to_datetime(timestamp: float, date_unit: DateUnit):
     if date_unit == DateUnit.MILLISECOND:
@@ -300,7 +380,7 @@ def float_to_datetime(timestamp: float, date_unit: DateUnit):
     return datetime.fromtimestamp(timestamp)
 
 
-def convert_non_operable_types(variables_values: list[dict[str, Any]]):
+def convert_non_operable_types(variables_values: list[dict[str, Any]], date_unit: DateUnit):
     for instanciation in variables_values:
         for key, value in instanciation.items():
             if isinstance(value, datetime):
@@ -336,7 +416,7 @@ def request_from_database(
     fmkdb_path: str,
     int_ranges: list[range], 
     column_names: list[str]
-) -> Optional[list[dict[str, Any]]]:
+) -> tuple[Optional[list[dict[str, Any]]], list[dict[str, Any]]]:
     
     fmkdb = Database(fmkdb_path)
     ok = fmkdb.start()
@@ -345,28 +425,48 @@ def request_from_database(
         sys.exit(ARG_INVALID_FMDBK)
 
     id_ranges_check_str = belongs_condition_sql_string("ID", int_ranges)
+    async_id_ranges_check_str = id_ranges_check_str.replace("ID", "CURRENT_DATA_ID")
 
-    statement = f"SELECT {', '.join(column_names)} FROM DATA " \
-                f"WHERE {id_ranges_check_str}"
+    requested_data_columns_str = ', '.join(column_names)
+    data_statement = f"SELECT {requested_data_columns_str} FROM DATA " \
+                     f"WHERE {id_ranges_check_str}"
 
-    matching_data = fmkdb.execute_sql_statement(statement)
+    # async data 'CURRENT_DATA_ID' is considered to be their ID for plotting
+    requested_async_data_columns_str = ', '.join(column_names).replace('ID', 'CURRENT_DATA_ID')
+    async_data_statement = f"SELECT {requested_async_data_columns_str} FROM ASYNC_DATA " \
+                           f"WHERE {async_id_ranges_check_str}"
+
+    matching_data = fmkdb.execute_sql_statement(data_statement)
+    matching_async_data = fmkdb.execute_sql_statement(async_data_statement)
 
     fmkdb.stop()
 
     if matching_data is None or matching_data == []:
-        return None
+        return (None, None)
 
-    result = []
+    data = []
     for line in matching_data:
         line_values = dict()
         for index, value in enumerate(line):
             line_values[column_names[index]] = value
-        result.append(line_values)
+        data.append(line_values)
 
-    return result
+    if matching_async_data is None:
+        return (data, [])
+
+    async_data = []
+    for line in matching_async_data:
+        line_values = dict()
+        for index, value in enumerate(line):
+            # CURRENT_DATA_ID is matched to ID variable name
+            line_values[column_names[index]] = value
+        async_data.append(line_values)
+
+    return (data, async_data)
 
 
-if __name__ == "__main__": 
+def parse_arguments() -> dict[Any]:
+    result = dict()
 
     args = parser.parse_args()
 
@@ -374,12 +474,14 @@ if __name__ == "__main__":
     if fmkdb is not None and not os.path.isfile(fmkdb):
         print_error(f"'{fmkdb}' does not exist")
         sys.exit(ARG_INVALID_FMDBK)
+    result['fmkdb'] = fmkdb
 
-    id_interval = args.id_interval
-    if id_interval is None:
+    id_range = args.id_range
+    if id_range is None:
         print_error("Please provide a valid ID interval")
         print_info("ID interval can be provided in the form '1..5,9..10,7..8'")
         sys.exit(ARG_INVALID_ID)
+    result['id_range'] = id_range
 
     formula = args.formula
     if formula is None:
@@ -387,28 +489,51 @@ if __name__ == "__main__":
         print_info("Formula can be provided on the form 'a+b~c*d'")
         print_info("for a plot of a+b in function of c*d'")
         sys.exit(ARG_INVALID_FORMULA)
+    result['formula'] = formula
 
     date_unit_str = args.date_unit
     if date_unit_str is None:
         print_error("Please provide a unit for date values")
         sys.exit(ARG_INVALID_DATE_UNIT)
+    date_unit = DateUnit.MILLISECOND
+    if date_unit_str == 's':
+        date_unit = DateUnit.SECOND
+    result['date_unit'] = date_unit
 
     poi = args.points_of_interest
     if poi < 0:
         print_error("Please provide a positive or zero number of point of interest")
         sys.exit(ARG_INVALID_POI)
+    result['poi'] = poi
+
+    grid_match_str = args.grid_match
+    grid_match = GridMatch.ALL
+    if grid_match_str is None:
+        grid_match = GridMatch.DEFAULT
+    elif grid_match_str == 'poi':
+        grid_match = GridMatch.POI
+        if poi == 0:
+            parser.error("--points_of_interest must be set to use --grid_match 'poi' option")
+    result['grid_match'] = grid_match
 
     display_points = args.display_points
-
     display_values = args.verbose
     if display_values and not display_points:
         parser.error("--points option is required for --verbose option")
+    result['display_points'] = display_points
+    result['display_values'] = display_values
 
-    date_unit = DateUnit.MILLISECOND
-    if date_unit_str == 's':
-        date_unit = DateUnit.SECOND
+    result['other_id_range'] = args.other_id_range
 
-    id_interval = parse_int_range_union(id_interval)
+    return result
+
+
+def plot_formula(
+    axes: Axes, 
+    formula: str, 
+    id_range: list[range], 
+    args: dict[Any]
+) -> tuple[str, str, Optional[type], Optional[type], set[tuple[float,float]], list[tuple[float,float]]]:
 
     y_expression, x_expression, valid_formula = split_formula(formula)
 
@@ -419,16 +544,24 @@ if __name__ == "__main__":
         sys.exit(ARG_INVALID_FORMULA)
 
     variable_names = x_variable_names.union(y_variable_names)
-    variables_values = request_from_database(fmkdb, id_interval, list(variable_names))
+    variables_values, async_variables_values = request_from_database(args['fmkdb'], id_range, list(variable_names))
     if variables_values is None:
         sys.exit(ARG_INVALID_VAR_NAMES)
+
     variables_true_types = {}
     for variable, value in variables_values[0].items():
         variables_true_types[variable] = type(value)
-    convert_non_operable_types(variables_values)
+    convert_non_operable_types(variables_values, args['date_unit'])
+    convert_non_operable_types(async_variables_values, args['date_unit'])
 
     x_values = solve_expression(x_expression, variables_values)
     y_values = solve_expression(y_expression, variables_values)
+
+    x_async_values = solve_expression(x_expression, async_variables_values)
+    y_async_values = solve_expression(y_expression, async_variables_values)
+
+    plotted_poi = plot_line(axes, x_values, y_values, args)
+    plot_async_data(axes, x_async_values, y_async_values, args)
 
     x_conversion_type = None
     if len(x_variable_names) == 1:
@@ -439,6 +572,45 @@ if __name__ == "__main__":
         elmt = next(iter(y_variable_names))
         y_conversion_type = variables_true_types[elmt]
 
-    display_line(x_values, x_conversion_type, y_values, y_conversion_type, date_unit, poi, display_points, display_values)
+    all_plotted_points = set(zip(x_values, y_values)).union(set(zip(x_async_values, y_async_values)))
+
+    return x_expression, y_expression, x_conversion_type, y_conversion_type, plotted_poi, all_plotted_points
+
+
+def main():
+    args = parse_arguments()
+    
+    figure = plt.figure()
+    axes: Axes = figure.add_subplot(111)
+
+    all_plotted_poi: set[tuple[float,float]] = set()
+    all_plotted_points: set[tuple[float,float]] = set()
+            
+    id_range = parse_int_range_union(args['id_range'])
+    x_expression, y_expression, x_conversion_type, y_conversion_type, plotted_poi, plotted_points = \
+        plot_formula(axes, args['formula'], id_range, args)
+
+    all_plotted_poi = all_plotted_poi.union(plotted_poi)
+    all_plotted_points = all_plotted_points.union(plotted_points)
+
+    if args['other_id_range'] is not None:
+        for other_id_range in args['other_id_range']:
+            id_range = parse_int_range_union(other_id_range)
+            _, _, _, _, plotted_poi, plotted_points = plot_formula(axes, args['formula'], id_range, args)
+            all_plotted_poi = all_plotted_poi.union(plotted_poi)
+            all_plotted_points = all_plotted_points.union(plotted_points)
+
+    post_process_plot(figure, x_conversion_type, y_conversion_type, all_plotted_poi, all_plotted_points, args)
+
+    axes.set_title(f"{args['formula']}")
+    axes.set_xlabel(x_expression)
+    axes.set_ylabel(y_expression)
+    axes.grid()
+    plt.show()
     
     sys.exit(0)
+
+
+if __name__ == "__main__": 
+    main()
+    
