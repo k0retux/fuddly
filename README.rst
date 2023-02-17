@@ -69,13 +69,11 @@ of ``fuddly`` itself. Usage is as follows:
 
 Miscellaneous
 -------------
-+ Don't forget to populate ``~/fuddly_data/imported_data/`` with sample files for data
++ Don't forget to populate ``<fuddly data folder>/imported_data/`` with sample files for data
   models that need it
 
-+ If you prefer yours configs and data to be organised following the XDG Base Directory
-  Specification, you can create ``$XDG_DATA_HOME/fuddly`` before the first launch (or 
-  move ``~/fuddly_data`` there at a later stage). If you do this, note that the 
-  configuration files will be in ``$XDG_CONFIG_HOME/fuddly``.
++ Note that when the fuddly shell is launched, the path of the fuddly data folder is displayed as
+  well as its configuration folder
 
 Dependencies
 ------------
