@@ -28,6 +28,11 @@ class DateUnit(Enum):
     SECOND = 1
     MILLISECOND = 2
 
+class GridMatch(Enum):
+    DEFAULT = 1
+    POI = 2
+    ALL = 3
+
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 rootdir = os.path.dirname(os.path.dirname(currentdir))
 sys.path.insert(0, rootdir)
@@ -97,10 +102,11 @@ group.add_argument(
 )
 
 group.add_argument(
-    '-gm_poi',
-    '--grid_match_poi',
-    action='store_true',
-    help='Should de plot grid match points of interest. Works only if -poi is greater than 0. Default is false.',
+    '-gm',
+    '--grid_match',
+    type=str,
+    help='Should the plot grid specifically match some element. Possible options are "all" and "poi". Default is an arbitrary grid',
+    choices=['all', 'poi'],
     required=False
 )
 
@@ -203,19 +209,39 @@ def plot_line(
     return add_points_of_interest(axes, x_data, y_data, args['poi'])
 
 
+def set_grid(
+    axes: Axes, 
+    grid_match: GridMatch, 
+    plotted_poi: set[tuple[float, float]],
+    plotted_points: set[tuple[float, float]]
+):
+    
+    if grid_match == GridMatch.DEFAULT:
+        return 
+    
+    if grid_match == GridMatch.POI:
+        new_xticks, new_yticks = zip(*plotted_poi)
+        axes.xaxis.set_ticks(new_xticks)
+        axes.yaxis.set_ticks(new_yticks)
+        return
+
+    if grid_match == GridMatch.ALL:
+        new_xticks, new_yticks = zip(*plotted_points)
+        axes.xaxis.set_ticks(new_xticks)
+        axes.yaxis.set_ticks(new_yticks)
+
+
 def post_process_plot(
     figure: Figure, 
     x_true_type: Optional[type], 
     y_true_type: Optional[type], 
     plotted_poi: set[tuple[float, float]],
+    plotted_points: set[tuple[float, float]],
     args: dict[Any]
 ):
     axes: Axes = figure.get_axes()[0]
 
-    if args['grid_match_poi']:
-        new_xticks, new_yticks = zip(*plotted_poi)
-        axes.xaxis.set_ticks(new_xticks)
-        axes.yaxis.set_ticks(new_yticks)
+    set_grid(axes, args['grid_match'], plotted_poi, plotted_points)
 
     if x_true_type is not None and x_true_type == datetime:
         formatter = mticker.FuncFormatter(float_to_datetime)
@@ -447,10 +473,15 @@ def parse_arguments() -> dict[Any]:
         sys.exit(ARG_INVALID_POI)
     result['poi'] = poi
 
-    grid_match_poi = args.grid_match_poi
-    if poi == 0:
-        parser.error("--points_of_interest must be set to use --grid_match_poi option")
-    result['grid_match_poi'] = grid_match_poi
+    grid_match_str = args.grid_match
+    grid_match = GridMatch.ALL
+    if grid_match_str is None:
+        grid_match = GridMatch.DEFAULT
+    elif grid_match_str == 'poi':
+        grid_match = GridMatch.POI
+        if poi == 0:
+            parser.error("--points_of_interest must be set to use --grid_match 'poi' option")
+    result['grid_match'] = grid_match
 
     display_points = args.display_points
     display_values = args.verbose
@@ -469,7 +500,7 @@ def plot_formula(
     formula: str, 
     id_range: list[range], 
     args: dict[Any]
-) -> tuple[str, str, Optional[type], Optional[type], set[tuple[float,float]]]:
+) -> tuple[str, str, Optional[type], Optional[type], set[tuple[float,float]], list[tuple[float,float]]]:
 
     y_expression, x_expression, valid_formula = split_formula(formula)
 
@@ -502,7 +533,7 @@ def plot_formula(
         elmt = next(iter(y_variable_names))
         y_conversion_type = variables_true_types[elmt]
 
-    return x_expression, y_expression, x_conversion_type, y_conversion_type, plotted_poi
+    return x_expression, y_expression, x_conversion_type, y_conversion_type, plotted_poi, set(zip(x_values, y_values))
 
 
 def main():
@@ -512,18 +543,23 @@ def main():
     axes: Axes = figure.add_subplot(111)
 
     all_plotted_poi: set[tuple[float,float]] = set()
+    all_plotted_points: set[tuple[float,float]] = set()
             
     id_range = parse_int_range_union(args['id_range'])
-    x_expression, y_expression, x_conversion_type, y_conversion_type, plotted_poi = plot_formula(figure, args['formula'], id_range, args)
+    x_expression, y_expression, x_conversion_type, y_conversion_type, plotted_poi, plotted_points = \
+        plot_formula(figure, args['formula'], id_range, args)
+
     all_plotted_poi = all_plotted_poi.union(plotted_poi)
+    all_plotted_points = all_plotted_points.union(plotted_points)
 
     if args['other_id_range'] is not None:
         for other_id_range in args['other_id_range']:
             id_range = parse_int_range_union(other_id_range)
-            _, _, _, _, plotted_poi = plot_formula(figure, args['formula'], id_range, args)
+            _, _, _, _, plotted_poi, plotted_points = plot_formula(figure, args['formula'], id_range, args)
             all_plotted_poi = all_plotted_poi.union(plotted_poi)
+            all_plotted_points = all_plotted_points.union(plotted_points)
 
-    post_process_plot(figure, x_conversion_type, y_conversion_type, all_plotted_poi, args)
+    post_process_plot(figure, x_conversion_type, y_conversion_type, all_plotted_poi, all_plotted_points, args)
 
     axes.set_title(f"{args['formula']}")
     axes.set_xlabel(x_expression)
