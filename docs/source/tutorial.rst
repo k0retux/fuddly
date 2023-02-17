@@ -57,21 +57,32 @@ this:
    *** Found Project: 'usb' ***
    >>> Look for Projects within 'projects/generic' Directory
    *** Found Project: 'standard' ***
-   ================================================================================
+   ============================================[ Fuddly Home Information ]==
 
-   -=[ Fuddly Shell ]=- (with Fuddly FmK 0.23)
+    --> data folder: ~/.local/share/fuddly/
+    --> contains: - fmkDB.db, logs, imported/exported data, ...
+                  - user projects and user data models, ...
+    --> config folder: ~/.config/fuddly/
 
-   >> 
+   -=[ Fuddly Shell ]=- (with Fuddly FmK 0.30)
 
-.. note:: The ``help`` command shows you every defined command within
-   ``Fuddly Shell``. You can also look at a brief command description and
-   syntax by typing ``help <command_name>``
+   >>
 
 Note that ``fuddly`` looks for *Data Model* files (within
 ``data_models/``) and *Project* files (within ``projects/``) during
 its initialization. A *Project* file is used to describe the targets
 that can be tested, the logger behaviour, and optionally specific
 monitoring means as well as some scenarios and/or virtual operators.
+
+.. note::
+
+   Projects and data models files are retrieved either from
+   ``<root of fuddly>/{projects,data_models}/`` or from
+   ``<fuddly data folder>/{projects,data_models}/``.
+
+   Note that when the Fuddly shell is launched, the path of the
+   fuddly data folder is displayed as well as its configuration folder.
+
 
 .. seealso:: To create a new project file, and to describe the
              associated components refer to :ref:`tuto:project`.
@@ -103,7 +114,7 @@ You can look at the defined targets by issuing the following command:
    [0] EmptyTarget [ID: 307144]
    [1] LocalTarget [Program: display]
    [2] LocalTarget [Program: okular]
-   [3] LocalTarget [Program: unzip, Args: -d ~/fuddly_data/workspace/]
+   [3] LocalTarget [Program: unzip, Args: -d ~/.local/share/fuddly/workspace/]
    [4] PrinterTarget [IP: 127.0.0.1, Name: PDF]
    [5] NetworkTarget [localhost:54321, localhost:12345]
 
@@ -228,6 +239,11 @@ command::
    ... [dm_name_n]``, if you want to interact with a target with
    different data models simultaneously. 
 
+.. note:: The ``help`` command shows you every defined command within
+   ``Fuddly Shell``. You can also look at a brief command description and
+   syntax by typing ``help <command_name>``
+
+
 
 Send Malformed ZIP Files to the Target (Manually)
 -------------------------------------------------
@@ -317,7 +333,7 @@ this case---the ZIP data model---the first one will generate modeled
 ZIP archive based uniquely on the data model, whereas the other ones
 (``ZIP_00``, ``ZIP_01``, ...)  generate modeled ZIP archives based on
 the sample files available within the directory
-``~/fuddly_data/imported_data/zip/``.
+``<fuddly data folder>/imported_data/zip/``.
 
 For each one of these generators, some parameters are associated:
 
@@ -998,7 +1014,7 @@ can be performed:
    list(fmk.dm.atom_identifiers())
    
    # Get an instance of the modeled data ZIP_00 which is made from the
-   # absorption of an existing ZIP archive within ~/fuddly_data/imported_data/zip/
+   # absorption of an existing ZIP archive within <fuddly data folder>/imported_data/zip/
    dt = fmk.dm.get_atom('ZIP_00')
 
    # Display the raw contents of the first generated element of the data type `dt`
@@ -1053,7 +1069,7 @@ you have the ``xtermcolor`` python library):
        |_ new node length: 200
    ### Data size: 200 bytes
    ### Emitted data is stored in the file:
-   [...]/fuddly_data/exported_data/zip/2019_06_27_120719_00.zip
+   <fuddly data folder>/exported_data/zip/2019_06_27_120719_00.zip
    ### FmkDB Data ID: 542
 
    ### Ack from 'TestTarget [ID: 725768]' received at: 2019-06-27 12:07:19.071751
@@ -1278,7 +1294,7 @@ Defining the Imaginary MyDF Data Model
 
 Assuming we want to model an imaginary data format called `MyDF`.  Two
 files need to be created either within ``<root of fuddly>/data_models/`` or within
-``~/fuddly_data/user_data_models/`` (or within any subdirectory):
+``<fuddly data folder>/user_data_models/`` (or within any subdirectory):
 
 ``mydf.py``
   Contain the implementation of the data model related to
@@ -1338,7 +1354,7 @@ model, by calling
 .. note::
    In the frame of your data model if you want to instantiate atoms from samples:
 
-   - Add your samples there: ``~/fuddly_data/imported_data/<NAME of DM>/``
+   - Add your samples there: ``<fuddly data folder>/imported_data/<NAME of DM>/``
 
    - Within the method :meth:`framework.data_model.DataModel.build_data_model()`, and once you defined
      your atoms, call the method :meth:`framework.data_model.DataModel.register_atom_for_decoding()`
@@ -1358,7 +1374,7 @@ model, by calling
    :meth:`framework.data_model.DataModel._create_atom_from_raw_data_specific()`.
    Refer to the JSON data model for an illustration, where this method is overloaded in order to create
    either atoms that represent JSON schemas or atoms that model some JSON data; depending on the JSON
-   files provided in ``~/fuddly_data/imported_data/json``.
+   files provided in ``<fuddly data folder>/imported_data/json``.
 
 .. note::
    The method :meth:`framework.data_model.DataModel.register_atom_for_decoding()` is also leveraged
@@ -2098,7 +2114,7 @@ Defining a Project Environment
 The environment---composed of at least one target, a logger, and
 optionnaly some monitoring means and virtual operators---is setup
 within a project file located within ``<root of fuddly>/projects/`` or within
-`~/fuddly_data/user_projects/``. To illustrate that let's
+``<fuddly data folder>/user_projects/``. To illustrate that let's
 show the beginning of ``generic/standard_proj.py``:
 
 .. code-block:: python
@@ -2239,24 +2255,24 @@ and kept in sync with the log files.
 
 The outputs of the logger are of four types:
 
-- ``~/fuddly_data/logs/*<project_name>_logs``: the history of your
+- ``<fuddly data folder>/logs/*<project_name>_logs``: the history of your
   test session for the project named ``project_name``. The files are
   prefixed with the test session starting time. A new one is created
   each time you run a new project or you reload the current one.
   Note these files are created only if the parameter ``enable_file_logging``
   is set to True.
 
-- ``~/fuddly_data/logs/*<project_name>_stats``: some statistics of
+- ``<fuddly data folder>/logs/*<project_name>_stats``: some statistics of
   the kind of data that has been emitted during the session.
   Note these files are created only if the parameter ``enable_file_logging``
   is set to True.
 
-- ``~/fuddly_data/exported_data/<data model name>/*.<data
+- ``<fuddly data folder>/exported_data/<data model name>/*.<data
   extension>``: the data emitted during a session are stored within
   the their data model directory. Each one is prefixed by the date of
   emission, and each one is uniquely identified within the log files.
 
-- records within the database ``~/fuddly_data/fmkDB.db``. Every piece of
+- records within the database ``<fuddly data folder>/fmkDB.db``. Every piece of
   information from the previous files are recorder with this database.
 
 Some parameters allows to customize the behavior of the logger, such as:

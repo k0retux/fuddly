@@ -5,7 +5,7 @@ Data Analysis
 
 Each data you send and all the related information (the way the data has been built,
 the feedback from the target, and so on) are stored within the ``fuddly`` database
-(an SQLite database located at ``~/fuddly_data/fmkdb.db``). They all get a unique ID,
+(an SQLite database located at ``<fuddly data folder>/fmkdb.db``). They all get a unique ID,
 starting from 1 and increasing by 1 each time a data is sent.
 
 To interact with the database a convenient toolkit is provided (``<root of fuddly>/tools/fmkdb.py``).
