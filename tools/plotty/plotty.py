@@ -257,13 +257,13 @@ def post_process_plot(
     set_grid(axes, args['grid_match'], plotted_poi, plotted_points)
 
     if x_true_type is not None and x_true_type == datetime:
-        formatter = mticker.FuncFormatter(float_to_datetime)
+        formatter = mticker.FuncFormatter(lambda value, _: float_to_datetime(value, args['date_unit']))
         axes.xaxis.set_major_formatter(formatter)
         axes.tick_params(axis='x', which='major', labelrotation=30)
         
     if y_true_type is not None and y_true_type == datetime:
         axes.tick_params(axis='y', which='major', reset=True)
-        formatter = mticker.FuncFormatter(float_to_datetime)
+        formatter = mticker.FuncFormatter(lambda value, _: float_to_datetime(value, args['date_unit']))
         axes.yaxis.set_major_formatter(formatter)
 
 
@@ -370,8 +370,9 @@ def parse_int_range_union(int_range_union: str) -> list[range]:
 
 def datetime_to_float(date_time: datetime, date_unit: DateUnit):
     res = date_time.timestamp()
-    return res if date_unit == DateUnit.SECOND else res * 1000
-
+    if date_unit == DateUnit.MILLISECOND:
+        res *= 1000
+    return res
 
 def float_to_datetime(timestamp: float, date_unit: DateUnit):
     if date_unit == DateUnit.MILLISECOND:
