@@ -186,12 +186,11 @@ def add_points_of_interest(
 
 
 def plot_line(
-    figure: Figure,
+    axes: Axes,
     x_data: list[float],
     y_data: list[float],
     args: dict[Any]
 ) -> set[tuple[float, float]]:
-    axes: Axes = figure.get_axes()[0]
 
     axes.plot(x_data, y_data, '-')
     
@@ -207,6 +206,20 @@ def plot_line(
         return set()
     
     return add_points_of_interest(axes, x_data, y_data, args['poi'])
+
+
+def plot_async_data(
+    axes: Axes, 
+    x_data: list[float],
+    y_data: list[float],
+    args: dict[Any]
+):
+    for (x,y) in zip(x_data, y_data):
+        axes.plot(x, y, 'g^')
+
+    if args['display_values']:
+        for (x, y) in zip(x_data, y_data):
+            add_annotation(axes, x, y)
 
 
 def set_grid(
@@ -228,7 +241,7 @@ def set_grid(
     if grid_match == GridMatch.ALL:
         new_xticks, new_yticks = zip(*plotted_points)
         axes.xaxis.set_ticks(new_xticks)
-        axes.yaxis.set_ticks(new_yticks)
+        axes.yaxis.set_ticks(int)
 
 
 def post_process_plot(
@@ -402,7 +415,7 @@ def request_from_database(
     fmkdb_path: str,
     int_ranges: list[range], 
     column_names: list[str]
-) -> Optional[list[dict[str, Any]]]:
+) -> tuple[Optional[list[dict[str, Any]]], list[dict[str, Any]]]:
     
     fmkdb = Database(fmkdb_path)
     ok = fmkdb.start()
@@ -411,25 +424,44 @@ def request_from_database(
         sys.exit(ARG_INVALID_FMDBK)
 
     id_ranges_check_str = belongs_condition_sql_string("ID", int_ranges)
+    async_id_ranges_check_str = id_ranges_check_str.replace("ID", "CURRENT_DATA_ID")
 
-    statement = f"SELECT {', '.join(column_names)} FROM DATA " \
-                f"WHERE {id_ranges_check_str}"
+    requested_data_columns_str = ', '.join(column_names)
+    data_statement = f"SELECT {requested_data_columns_str} FROM DATA " \
+                     f"WHERE {id_ranges_check_str}"
 
-    matching_data = fmkdb.execute_sql_statement(statement)
+    # async data 'CURRENT_DATA_ID' is considered to be their ID for plotting
+    requested_async_data_columns_str = ', '.join(column_names).replace('ID', 'CURRENT_DATA_ID')
+    async_data_statement = f"SELECT {requested_async_data_columns_str} FROM ASYNC_DATA " \
+                           f"WHERE {async_id_ranges_check_str}"
+
+    matching_data = fmkdb.execute_sql_statement(data_statement)
+    matching_async_data = fmkdb.execute_sql_statement(async_data_statement)
 
     fmkdb.stop()
 
     if matching_data is None or matching_data == []:
-        return None
+        return (None, None)
 
-    result = []
+    data = []
     for line in matching_data:
         line_values = dict()
         for index, value in enumerate(line):
             line_values[column_names[index]] = value
-        result.append(line_values)
+        data.append(line_values)
 
-    return result
+    if matching_async_data is None:
+        return (data, [])
+
+    async_data = []
+    for line in matching_async_data:
+        line_values = dict()
+        for index, value in enumerate(line):
+            # CURRENT_DATA_ID is matched to ID variable name
+            line_values[column_names[index]] = value
+        async_data.append(line_values)
+
+    return (data, async_data)
 
 
 def parse_arguments() -> dict[Any]:
@@ -496,7 +528,7 @@ def parse_arguments() -> dict[Any]:
 
 
 def plot_formula(
-    figure: Figure, 
+    axes: Axes, 
     formula: str, 
     id_range: list[range], 
     args: dict[Any]
@@ -511,18 +543,24 @@ def plot_formula(
         sys.exit(ARG_INVALID_FORMULA)
 
     variable_names = x_variable_names.union(y_variable_names)
-    variables_values = request_from_database(args['fmkdb'], id_range, list(variable_names))
+    variables_values, async_variables_values = request_from_database(args['fmkdb'], id_range, list(variable_names))
     if variables_values is None:
         sys.exit(ARG_INVALID_VAR_NAMES)
+
     variables_true_types = {}
     for variable, value in variables_values[0].items():
         variables_true_types[variable] = type(value)
     convert_non_operable_types(variables_values, args['date_unit'])
+    convert_non_operable_types(async_variables_values, args['date_unit'])
 
     x_values = solve_expression(x_expression, variables_values)
     y_values = solve_expression(y_expression, variables_values)
 
-    plotted_poi = plot_line(figure, x_values, y_values, args)
+    x_async_values = solve_expression(x_expression, async_variables_values)
+    y_async_values = solve_expression(y_expression, async_variables_values)
+
+    plotted_poi = plot_line(axes, x_values, y_values, args)
+    plot_async_data(axes, x_async_values, y_async_values, args)
 
     x_conversion_type = None
     if len(x_variable_names) == 1:
@@ -533,7 +571,9 @@ def plot_formula(
         elmt = next(iter(y_variable_names))
         y_conversion_type = variables_true_types[elmt]
 
-    return x_expression, y_expression, x_conversion_type, y_conversion_type, plotted_poi, set(zip(x_values, y_values))
+    all_plotted_points = set(zip(x_values, y_values)).union(set(zip(x_async_values, y_async_values)))
+
+    return x_expression, y_expression, x_conversion_type, y_conversion_type, plotted_poi, all_plotted_points
 
 
 def main():
@@ -547,7 +587,7 @@ def main():
             
     id_range = parse_int_range_union(args['id_range'])
     x_expression, y_expression, x_conversion_type, y_conversion_type, plotted_poi, plotted_points = \
-        plot_formula(figure, args['formula'], id_range, args)
+        plot_formula(axes, args['formula'], id_range, args)
 
     all_plotted_poi = all_plotted_poi.union(plotted_poi)
     all_plotted_points = all_plotted_points.union(plotted_points)
@@ -555,7 +595,7 @@ def main():
     if args['other_id_range'] is not None:
         for other_id_range in args['other_id_range']:
             id_range = parse_int_range_union(other_id_range)
-            _, _, _, _, plotted_poi, plotted_points = plot_formula(figure, args['formula'], id_range, args)
+            _, _, _, _, plotted_poi, plotted_points = plot_formula(axes, args['formula'], id_range, args)
             all_plotted_poi = all_plotted_poi.union(plotted_poi)
             all_plotted_points = all_plotted_points.union(plotted_points)
 
