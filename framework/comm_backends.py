@@ -7,10 +7,8 @@ import threading
 import time
 import getpass
 
-import serial
-
 from framework import error_handling as eh
-from libs.external_modules import ssh_module, ssh, serial_module
+from libs.external_modules import ssh_module, ssh, serial_module, serial
 
 class BackendError(Exception):
     def __init__(self, msg, status=-1):

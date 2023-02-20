@@ -139,6 +139,7 @@ try:
     import serial
 except ImportError:
     serial_module = False
+    serial = None
     print('WARNING [FMK]: python(3)-serial module is not installed! '
           'Should be installed for serial-based Target.')
 
