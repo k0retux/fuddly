@@ -17,17 +17,12 @@ import matplotlib.ticker as mticker
 ARG_INVALID_FMDBK = -1
 ARG_INVALID_ID = -2
 ARG_INVALID_FORMULA = -3
-ARG_INVALID_DATE_UNIT = -4
 ARG_INVALID_VAR_NAMES = -5
 ARG_INVALID_POI = -6
 
 UNION_DELIMITER = ','
 INTERVAL_OPERATOR = '..'
 STEP_OPERATOR = '|'
-
-class DateUnit(Enum):
-    SECOND = 1
-    MILLISECOND = 2
 
 class GridMatch(Enum):
     DEFAULT = 1
@@ -65,24 +60,16 @@ group.add_argument(
     required=True
 )
 
+group = parser.add_argument_group('Options')
+
 group.add_argument(
     '-f', 
     '--formula', 
+    default='SENT_DATE~ID',
     type=str, 
     help='The formula to plot, in the form "y ~ x"',
-    required=True
+    required=False
 )
-
-group.add_argument(
-    '-d',
-    '--date_unit',
-    type=str,
-    help='Unit used for datetime conversion. Can be "s" or "ms"',
-    choices=['s', 'ms'],
-    required=True
-)
-
-group = parser.add_argument_group('Options')
 
 group.add_argument(
     '-db', 
@@ -270,13 +257,13 @@ def post_process_plot(
     set_grid(axes, args['grid_match'], plotted_poi, plotted_points)
 
     if x_true_type is not None and x_true_type == datetime:
-        formatter = mticker.FuncFormatter(lambda value, _: float_to_datetime(value, args['date_unit']))
+        formatter = mticker.FuncFormatter(lambda value, _: float_to_datetime(value))
         axes.xaxis.set_major_formatter(formatter)
         axes.tick_params(axis='x', which='major', labelrotation=30)
         
     if y_true_type is not None and y_true_type == datetime:
         axes.tick_params(axis='y', which='major', reset=True)
-        formatter = mticker.FuncFormatter(lambda value, _: float_to_datetime(value, args['date_unit']))
+        formatter = mticker.FuncFormatter(lambda value, _: float_to_datetime(value))
         axes.yaxis.set_major_formatter(formatter)
 
 
@@ -381,23 +368,18 @@ def parse_int_range_union(int_range_union: str) -> list[range]:
 #endregion
 
 
-def datetime_to_float(date_time: datetime, date_unit: DateUnit):
-    res = date_time.timestamp()
-    if date_unit == DateUnit.MILLISECOND:
-        res *= 1000
-    return res
+def datetime_to_float(date_time: datetime):
+    return date_time.timestamp()
 
-def float_to_datetime(timestamp: float, date_unit: DateUnit):
-    if date_unit == DateUnit.MILLISECOND:
-        timestamp /= 1000
+def float_to_datetime(timestamp: float):
     return datetime.fromtimestamp(timestamp)
 
 
-def convert_non_operable_types(variables_values: list[dict[str, Any]], date_unit: DateUnit):
+def convert_non_operable_types(variables_values: list[dict[str, Any]]):
     for instanciation in variables_values:
         for key, value in instanciation.items():
             if isinstance(value, datetime):
-                instanciation[key] = datetime_to_float(value, date_unit)
+                instanciation[key] = datetime_to_float(value)
 
 
 def solve_expression(expression: str, variables_values: list[dict[str, Any]]) -> list[float]:
@@ -519,15 +501,6 @@ def parse_arguments() -> dict[Any]:
         sys.exit(ARG_INVALID_FORMULA)
     result['formula'] = formula
 
-    date_unit_str = args.date_unit
-    if date_unit_str is None:
-        print_error("Please provide a unit for date values")
-        sys.exit(ARG_INVALID_DATE_UNIT)
-    date_unit = DateUnit.MILLISECOND
-    if date_unit_str == 's':
-        date_unit = DateUnit.SECOND
-    result['date_unit'] = date_unit
-
     poi = args.points_of_interest
     if poi < 0:
         print_error("Please provide a positive or zero number of point of interest")
@@ -546,11 +519,7 @@ def parse_arguments() -> dict[Any]:
 
     display_points = args.display_points
     annotations = args.annotations
-    if len(annotations) != 0 and not display_points:
-        parser.error("--points option is required for --annotations option")
     async_annotations = args.async_annotations
-    if len(async_annotations) != 0 and not display_points:
-        parser.error("--points option is required for --async_annotations option")
     result['display_points'] = display_points
     result['annotations'] = annotations
     result['async_annotations'] = async_annotations
@@ -584,8 +553,8 @@ def plot_formula(
     variables_true_types = {}
     for variable, value in variables_values[0].items():
         variables_true_types[variable] = type(value)
-    convert_non_operable_types(variables_values, args['date_unit'])
-    convert_non_operable_types(async_variables_values, args['date_unit'])
+    convert_non_operable_types(variables_values)
+    convert_non_operable_types(async_variables_values)
 
     x_values = solve_expression(x_expression, variables_values)
     y_values = solve_expression(y_expression, variables_values)
