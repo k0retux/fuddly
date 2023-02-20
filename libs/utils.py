@@ -209,7 +209,7 @@ def chunk_lines(string, length, prefix=''):
     return chk_list
 
 def find_file(filename, root_path):
-    for (dirpath, dirnames, filenames) in os.walk(root_path):
+    for (dirpath, dirnames, filenames) in os.walk(os.path.expanduser(root_path)):
         if filename in filenames:
             return dirpath + os.sep + filename
     else:
