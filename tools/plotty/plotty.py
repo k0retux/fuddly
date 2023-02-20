@@ -534,7 +534,7 @@ def plot_formula(
     formula: str, 
     id_range: list[range], 
     args: dict[Any]
-) -> tuple[str, str, Optional[type], Optional[type], set[tuple[float,float]], list[tuple[float,float]]]:
+) -> Optional[tuple[str, str, Optional[type], Optional[type], set[tuple[float,float]], list[tuple[float,float]]]]:
 
     y_expression, x_expression, valid_formula = split_formula(formula)
 
@@ -547,7 +547,7 @@ def plot_formula(
     variable_names = x_variable_names.union(y_variable_names)
     variables_values, async_variables_values = request_from_database(args['fmkdb'], id_range, list(variable_names))
     if variables_values is None:
-        sys.exit(ARG_INVALID_VAR_NAMES)
+        return None
 
     variables_true_types = {}
     for variable, value in variables_values[0].items():
@@ -588,8 +588,12 @@ def main():
     all_plotted_points: set[tuple[float,float]] = set()
             
     id_range = parse_int_range_union(args['id_range'])
-    x_expression, y_expression, x_conversion_type, y_conversion_type, plotted_poi, plotted_points = \
-        plot_formula(axes, args['formula'], id_range, args)
+    plot_result = plot_formula(axes, args['formula'], id_range, args)
+    if plot_result is None:
+        print_error("Given formula or variables names are invalid")
+        sys.exit(ARG_INVALID_VAR_NAMES)
+    
+    x_expression, y_expression, x_conversion_type, y_conversion_type, plotted_poi, plotted_points = plot_result
 
     all_plotted_poi = all_plotted_poi.union(plotted_poi)
     all_plotted_points = all_plotted_points.union(plotted_points)
@@ -597,7 +601,11 @@ def main():
     if args['other_id_range'] is not None:
         for other_id_range in args['other_id_range']:
             id_range = parse_int_range_union(other_id_range)
-            _, _, _, _, plotted_poi, plotted_points = plot_formula(axes, args['formula'], id_range, args)
+            plot_result = plot_formula(axes, args['formula'], id_range, args)
+            if plot_result is None:
+                print_error(f"Cannot gather database information for range '{other_id_range}', skipping it")
+                continue
+            _, _, _, _, plotted_poi, plotted_points = plot_result
             all_plotted_poi = all_plotted_poi.union(plotted_poi)
             all_plotted_points = all_plotted_points.union(plotted_points)
 
