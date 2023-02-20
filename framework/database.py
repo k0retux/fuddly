@@ -408,8 +408,16 @@ class Database(object):
         return self._data_id
 
 
+    def get_next_data_id(self, prev_id=None):
+        if prev_id is None and self._data_id is None:
+            return None
+        elif prev_id is not None:
+            return prev_id + 1
+        elif self._data_id is not None:
+            return self._data_id + 1
+
     def insert_async_data(self, dtype, dm_name, raw_data, sz, sent_date,
-                          target_ref, prj_name):
+                          target_ref, prj_name, current_data_id=None):
 
         if not self.enabled:
             return None
@@ -426,9 +434,9 @@ class Database(object):
             if (sent_date - self._current_sent_date).total_seconds() > self.config.async_data.after_data_id:
                 data_id = None
             else:
-                data_id = self._data_id
+                data_id = self._data_id if current_data_id is None else current_data_id
         else:
-            data_id = self._data_id
+            data_id = self._data_id if current_data_id is None else current_data_id
 
         params = (data_id, dtype, dm_name, blob, sz, sent_date, str(target_ref), prj_name)
         err_msg = 'while inserting a value into table ASYNC_DATA!'

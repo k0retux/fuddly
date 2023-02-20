@@ -67,6 +67,7 @@ class Target(object):
     _altered_data_queued = None
 
     _pending_data = None
+    _pending_data_id = None
 
     _last_sending_date = None
 
@@ -97,6 +98,7 @@ class Target(object):
         self._logger.print_console('*** Target initialization: ({:d}) {!s} ***\n'.format(tg_id, target_desc),
                                    nl_before=False, rgb=Color.COMPONENT_START)
         self._pending_data = []
+        self._pending_data_id = None
         self._started = self.start()
         return self._started
 
@@ -104,6 +106,7 @@ class Target(object):
         self._logger.print_console('*** Target cleanup procedure for ({:d}) {!s} ***\n'.format(tg_id, target_desc),
                                    nl_before=False, rgb=Color.COMPONENT_STOP)
         self._pending_data = None
+        self._pending_data_id = None
         ret = self.stop()
         self._started = not ret
         return ret
@@ -302,7 +305,7 @@ class Target(object):
         else:
             raise ValueError('No pending data')
 
-    def send_data_sync(self, data, from_fmk=False):
+    def send_data_sync(self, data: Data, from_fmk=False):
         """
         Can be used in user-code to send data to the target without interfering
         with the framework.
@@ -318,10 +321,13 @@ class Target(object):
                 self._last_sending_date = datetime.datetime.now()
                 self.send_data(data, from_fmk=from_fmk)
                 self._project.notify_data_sending([data], self._last_sending_date, self)
+                if from_fmk:
+                    self._pending_data_id = data.estimated_data_id
                 if not from_fmk:
                     self._logger.log_async_data(data, sent_date=self._last_sending_date,
                                                 target_ref=FeedbackSource(self),
-                                                prj_name=self._project.name)
+                                                prj_name=self._project.name,
+                                                current_data_id=self._pending_data_id)
             else:
                 self._logger.print_console(f'*** Target {self!s} Not ready ***\n',
                                            nl_before=False, rgb=Color.WARNING)
@@ -339,10 +345,13 @@ class Target(object):
                 self._last_sending_date = datetime.datetime.now()
                 self.send_multiple_data(data_list, from_fmk=from_fmk)
                 self._project.notify_data_sending(data_list, self._last_sending_date, self)
+                if from_fmk:
+                    self._pending_data_id = data_list[-1].estimated_data_id
                 if not from_fmk:
                     self._logger.log_async_data(data_list, sent_date=self._last_sending_date,
                                                 target_ref=FeedbackSource(self),
-                                                prj_name=self._project.name)
+                                                prj_name=self._project.name,
+                                                current_data_id=self._pending_data_id)
             else:
                 self._logger.print_console(f'*** Target {self!s} Not ready ***\n',
                                            nl_before=False, rgb=Color.WARNING)

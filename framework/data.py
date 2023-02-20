@@ -262,6 +262,7 @@ class Data(object):
 
         self.description = description
 
+        self.estimated_data_id = None
         self._data_id = None
         self._backend = None
 

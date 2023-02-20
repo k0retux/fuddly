@@ -39,6 +39,7 @@ import time
 import signal
 
 from functools import wraps, partial
+from typing import Sequence
 
 from framework.data import Data, DataProcess
 from framework.database import FeedbackGate
@@ -349,6 +350,7 @@ class FmkPlumbing(object):
 
         self._tactics = None
         self.last_data_id = None
+        self.next_data_id = None
 
     @EnforceOrder(initial_func=True)
     def start(self):
@@ -368,6 +370,7 @@ class FmkPlumbing(object):
             raise InvalidFmkDB("The database {:s} is invalid!".format(self.fmkDB.fmk_db_path))
 
         self.last_data_id = None
+        self.next_data_id = None
 
         # Fbk Gate to be used for sequencial tasks (scenario steps callbacks, etc.)
         self.last_feedback_gate = FeedbackGate(self.fmkDB, only_last_entries=True)
@@ -1870,7 +1873,7 @@ class FmkPlumbing(object):
         return ret
 
 
-    def _do_before_sending_data(self, data_list):
+    def _do_before_sending_data(self, data_list: Sequence[Data]) -> Sequence[Data]:
         # Monitor hook function before sending
         self.mon.notify_imminent_data_sending()
         # Callbacks that triggers before sending a data are executed here
@@ -2498,7 +2501,7 @@ class FmkPlumbing(object):
 
 
     @EnforceOrder(accepted_states=['S2'])
-    def _send_data(self, data_list):
+    def _send_data(self, data_list: Sequence[Data]):
         '''
         @data_list: either a list of Data() or a Data()
         '''
@@ -2548,6 +2551,8 @@ class FmkPlumbing(object):
 
             used_targets = []
             for d in data_list:
+                self.next_data_id = self.fmkDB.get_next_data_id(prev_id=self.next_data_id)
+                d.estimated_data_id = self.next_data_id
                 tg_ids = self._vtg_to_tg(d)
                 for tg_id in tg_ids:
                     if tg_id not in self.targets:
