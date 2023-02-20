@@ -270,10 +270,11 @@ class FmkPlumbing(object):
     """
 
     def __init__(self, exit_on_error=False, debug_mode=False, quiet=False,
-                 external_term=False):
+                 external_term=False, fmkdb_path=None):
         self._debug_mode = debug_mode
         self._exit_on_error = exit_on_error
         self._quiet = quiet
+        self._fmkdb_path = fmkdb_path
         self.external_display = ExternalDisplay()
         if external_term:
             self.external_display.start_term(title='Fuddly log', keepterm=True)
@@ -361,7 +362,7 @@ class FmkPlumbing(object):
         if external_term and not self.external_display.is_enabled:
             self.switch_term()
 
-        self.fmkDB = Database()
+        self.fmkDB = Database(fmkdb_path=self._fmkdb_path)
         ok = self.fmkDB.start()
         if not ok:
             raise InvalidFmkDB("The database {:s} is invalid!".format(self.fmkDB.fmk_db_path))

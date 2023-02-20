@@ -38,7 +38,7 @@ from libs.external_modules import *
 
 import argparse
 
-parser = argparse.ArgumentParser(description='Argument for FmkDB toolkit script')
+parser = argparse.ArgumentParser(description='Arguments for FmkDB toolkit script')
 
 group = parser.add_argument_group('Miscellaneous Options')
 group.add_argument('--fmkdb', metavar='PATH', help='Path to an alternative fmkDB.db')
