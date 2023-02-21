@@ -95,7 +95,7 @@ Dependencies
 + For testing:
 
   - `ddt`_: Used for data-driven tests
-  - `mock`_: Used for mocking (only needed in Python2)
+  - `mock`_: Used for mocking
 
 + For documentation generation:
 
@@ -116,4 +116,4 @@ Dependencies
 .. _sphinx: http://sphinx-doc.org/
 .. _texlive: https://www.tug.org/texlive/
 .. _readthedocs theme: https://github.com/snide/sphinx_rtd_theme
-.. _pyxdg: https://github.com/srstevenson/xdg or http://freedesktop.org/Software/pyxdg
+.. _pyxdg: http://freedesktop.org/Software/pyxdg
