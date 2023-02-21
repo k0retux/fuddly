@@ -114,11 +114,6 @@ class FeedbackGate(object):
     def size(self):
         return len(list(self.db.iter_feedback_entries(last=self.last_fbk_entries)))
 
-    # for python2 compatibility
-    def __nonzero__(self):
-        return bool(self.db.last_feedback if self.last_fbk_entries else self.db.feedback_trail)
-
-    # for python3 compatibility
     def __bool__(self):
         return bool(self.db.last_feedback if self.last_fbk_entries else self.db.feedback_trail)
 

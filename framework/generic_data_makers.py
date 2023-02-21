@@ -1250,7 +1250,7 @@ class d_next_node_content(Disruptor):
                  'sem': ('Semantics to select nodes on which' \
                          ' the disruptor should apply.', None, (str, list)),
                  'op': ('The operation to perform on the selected nodes.', Node.clear_attr,
-                        (types.MethodType, types.FunctionType)), # python3, python2
+                        types.MethodType),
                  'op_ref': ("Predefined operation that can be referenced by name. The current "
                             "predefined function are: 'unfreeze', 'freeze', 'walk', 'set_qty'. Take "
                             "precedence over @op if not None." , None, str),
@@ -1439,7 +1439,7 @@ class d_modify_nodes(Disruptor):
            args={'func': ('The function that will be called with a node as its first parameter, '
                           'and provided optionnaly with addtionnal parameters if @params is set.',
                           lambda x:x,
-                          (types.MethodType, types.FunctionType)), # python3, python2
+                          types.MethodType),
                  'params': ('Tuple of parameters that will be provided to the function.',
                             None, tuple) })
 class d_call_function(Disruptor):

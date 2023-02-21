@@ -143,7 +143,7 @@ class NetworkTarget(Target):
         if not self._is_valid_socket_type(socket_type):
             raise ValueError("Unrecognized socket type")
 
-        if sys.platform in ['linux', 'linux2']:  # python3, python2
+        if sys.platform in ['linux']:
             def get_mac_addr(ifname):
                 ifname = bytes(ifname, 'latin_1')
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -659,7 +659,6 @@ class NetworkTarget(Target):
                 fd = self._hclient_hp2sock[(host, port)].fileno()
                 if fd == -1:
                     # if the socket has been closed, -1 is received by python3
-                    # (with python2 previous instruction raise a Bad file descriptor Exception)
                     raise OSError
             except Exception:
                 print('\n*** WARNING: Current socket was closed unexpectedly! --> create new one.')
