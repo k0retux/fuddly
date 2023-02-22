@@ -11,8 +11,10 @@ from enum import Enum
 import cexprtk
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from matplotlib.dates import DateFormatter, date2num
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
+
 
 ARG_INVALID_FMDBK = -1
 ARG_INVALID_ID = -2
@@ -109,6 +111,7 @@ group.add_argument(
 group.add_argument(
     '-a',
     '--annotations',
+    type=str,
     action='append',
     default=['TYPE'],
     help='Which values to show above the points. Must be used with -pts. Default is TYPE',
@@ -118,6 +121,7 @@ group.add_argument(
 group.add_argument(
     '-async_a',
     '--async_annotations',
+    type=str,
     action='append',
     default=['ID'],
     help='Which values to show above the aync points. Must be used with -pts. Default is ID',
@@ -127,8 +131,18 @@ group.add_argument(
 group.add_argument(
     '-o',
     '--other_id_range',
+    type=str,
     action='append',
     help='Other ranges of IDs to plot against the main one. All other options apply to it',
+    required=False
+)
+
+group.add_argument(
+    '-df',
+    '--date_format',
+    type=str,
+    default='%M:%S.%f',
+    help='Wanted date format, in a strftime format (1989 C standard). Default is %M:%S.%f',
     required=False
 )
 
@@ -257,14 +271,14 @@ def post_process_plot(
     set_grid(axes, args['grid_match'], plotted_poi, plotted_points)
 
     if x_true_type is not None and x_true_type == datetime:
-        formatter = mticker.FuncFormatter(lambda value, _: float_to_datetime(value))
+        formatter = DateFormatter(args['date_format'])
         axes.xaxis.set_major_formatter(formatter)
         axes.tick_params(axis='x', which='major', labelrotation=30)
         
     if y_true_type is not None and y_true_type == datetime:
-        axes.tick_params(axis='y', which='major', reset=True)
-        formatter = mticker.FuncFormatter(lambda value, _: float_to_datetime(value))
+        formatter = DateFormatter(args['date_format'])
         axes.yaxis.set_major_formatter(formatter)
+        axes.tick_params(axis='y', which='major', reset=True)
 
 
 #endregion
@@ -368,18 +382,11 @@ def parse_int_range_union(int_range_union: str) -> list[range]:
 #endregion
 
 
-def datetime_to_float(date_time: datetime):
-    return date_time.timestamp()
-
-def float_to_datetime(timestamp: float):
-    return datetime.fromtimestamp(timestamp)
-
-
 def convert_non_operable_types(variables_values: list[dict[str, Any]]):
     for instanciation in variables_values:
         for key, value in instanciation.items():
             if isinstance(value, datetime):
-                instanciation[key] = datetime_to_float(value)
+                instanciation[key] = date2num(value)
 
 
 def solve_expression(expression: str, variables_values: list[dict[str, Any]]) -> list[float]:
@@ -416,7 +423,7 @@ def request_from_database(
 ) -> tuple[Optional[list[dict[str, Any]]], Optional[list[dict[str,Any]]], list[dict[str, Any]], list[dict[str, Any]]]:
     
     if len(column_names) == 0:
-        return (None, [])
+        return (None, None, [], [])
 
     fmkdb = Database(fmkdb_path)
     ok = fmkdb.start()
@@ -452,7 +459,7 @@ def request_from_database(
     fmkdb.stop()
 
     if matching_data is None or matching_data == []:
-        return (None, None)
+        return (None, None, [], [])
 
     data = []
     for line in matching_data:
@@ -462,7 +469,7 @@ def request_from_database(
         data.append(line_values)
 
     if matching_async_data is None:
-        return (data, [])
+        return (data, matching_data_annotations, [], [])
 
     async_data = []
     for line in matching_async_data:
@@ -517,14 +524,13 @@ def parse_arguments() -> dict[Any]:
             parser.error("--points_of_interest must be set to use --grid_match 'poi' option")
     result['grid_match'] = grid_match
 
-    display_points = args.display_points
-    annotations = args.annotations
-    async_annotations = args.async_annotations
-    result['display_points'] = display_points
-    result['annotations'] = annotations
-    result['async_annotations'] = async_annotations
+    result['display_points'] = args.display_points
+    result['annotations'] = args.annotations
+    result['async_annotations'] = args.async_annotations
 
     result['other_id_range'] = args.other_id_range
+    
+    result['date_format'] = args.date_format
 
     return result
 
