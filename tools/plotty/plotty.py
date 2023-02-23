@@ -11,23 +11,19 @@ from enum import Enum
 import cexprtk
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from matplotlib.dates import DateFormatter, date2num
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
+
 
 ARG_INVALID_FMDBK = -1
 ARG_INVALID_ID = -2
 ARG_INVALID_FORMULA = -3
-ARG_INVALID_DATE_UNIT = -4
 ARG_INVALID_VAR_NAMES = -5
 ARG_INVALID_POI = -6
 
 UNION_DELIMITER = ','
 INTERVAL_OPERATOR = '..'
 STEP_OPERATOR = '|'
-
-class DateUnit(Enum):
-    SECOND = 1
-    MILLISECOND = 2
 
 class GridMatch(Enum):
     DEFAULT = 1
@@ -65,24 +61,16 @@ group.add_argument(
     required=True
 )
 
+group = parser.add_argument_group('Options')
+
 group.add_argument(
     '-f', 
     '--formula', 
+    default='SENT_DATE~ID',
     type=str, 
     help='The formula to plot, in the form "y ~ x"',
-    required=True
+    required=False
 )
-
-group.add_argument(
-    '-d',
-    '--date_unit',
-    type=str,
-    help='Unit used for datetime conversion. Can be "s" or "ms"',
-    choices=['s', 'ms'],
-    required=True
-)
-
-group = parser.add_argument_group('Options')
 
 group.add_argument(
     '-db', 
@@ -120,18 +108,40 @@ group.add_argument(
 )
 
 group.add_argument(
-    '-v',
-    '--verbose',
-    action='store_true',
-    help='Should the graph show every value above the points. Must be used with -pts. Default is false',
+    '-a',
+    '--annotations',
+    type=str,
+    action='append',
+    default=['TYPE'],
+    help='Which values to show above the points. Must be used with -pts. Default is TYPE',
+    required=False
+)
+
+group.add_argument(
+    '-async_a',
+    '--async_annotations',
+    type=str,
+    action='append',
+    default=['ID'],
+    help='Which values to show above the aync points. Must be used with -pts. Default is ID',
     required=False
 )
 
 group.add_argument(
     '-o',
     '--other_id_range',
+    type=str,
     action='append',
     help='Other ranges of IDs to plot against the main one. All other options apply to it',
+    required=False
+)
+
+group.add_argument(
+    '-df',
+    '--date_format',
+    type=str,
+    default='%M:%S.%f',
+    help='Wanted date format, in a strftime format (1989 C standard). Default is %M:%S.%f',
     required=False
 )
 
@@ -156,9 +166,9 @@ def add_point(axes: Axes, x: float, y: float, color: str):
     axes.plot(x, y, 'o', color=color)
 
 
-def add_annotation(axes: Axes, x: float, y: float):
+def add_annotation(axes: Axes, x: float, y: float, value: str):
     axes.annotate(
-        f"{int(x)}",
+        f"{value}",
         xy=(x, y), xycoords='data',
         xytext=(-10, 20), textcoords='offset pixels',
         horizontalalignment='right', verticalalignment='top'
@@ -190,18 +200,19 @@ def plot_line(
     axes: Axes,
     x_data: list[float],
     y_data: list[float],
+    annotations: list[str],
     args: dict[Any]
 ) -> set[tuple[float, float]]:
-
+    
     axes.plot(x_data, y_data, '-')
     
     if args['display_points']:
         for (x, y) in zip(x_data, y_data):
             add_point(axes, x, y, 'b')
 
-    if args['display_values']:
-        for (x, y) in zip(x_data, y_data):
-            add_annotation(axes, x, y)
+    if len(args['annotations']) != 0:
+        for i, (x, y) in enumerate(zip(x_data, y_data)):
+            add_annotation(axes, x, y, annotations[i])
 
     if args['poi'] == 0:
         return set()
@@ -213,14 +224,16 @@ def plot_async_data(
     axes: Axes, 
     x_data: list[float],
     y_data: list[float],
+    annotations: list[str],
     args: dict[Any]
 ):
+        
     for (x,y) in zip(x_data, y_data):
         axes.plot(x, y, 'g^')
 
-    if args['display_values']:
-        for (x, y) in zip(x_data, y_data):
-            add_annotation(axes, x, y)
+    if args['async_annotations']:
+        for i, (x, y) in enumerate(zip(x_data, y_data)):
+            add_annotation(axes, x, y, annotations[i])
 
 
 def set_grid(
@@ -258,14 +271,14 @@ def post_process_plot(
     set_grid(axes, args['grid_match'], plotted_poi, plotted_points)
 
     if x_true_type is not None and x_true_type == datetime:
-        formatter = mticker.FuncFormatter(lambda value, _: float_to_datetime(value, args['date_unit']))
+        formatter = DateFormatter(args['date_format'])
         axes.xaxis.set_major_formatter(formatter)
         axes.tick_params(axis='x', which='major', labelrotation=30)
         
     if y_true_type is not None and y_true_type == datetime:
-        axes.tick_params(axis='y', which='major', reset=True)
-        formatter = mticker.FuncFormatter(lambda value, _: float_to_datetime(value, args['date_unit']))
+        formatter = DateFormatter(args['date_format'])
         axes.yaxis.set_major_formatter(formatter)
+        axes.tick_params(axis='y', which='major', reset=True)
 
 
 #endregion
@@ -369,23 +382,11 @@ def parse_int_range_union(int_range_union: str) -> list[range]:
 #endregion
 
 
-def datetime_to_float(date_time: datetime, date_unit: DateUnit):
-    res = date_time.timestamp()
-    if date_unit == DateUnit.MILLISECOND:
-        res *= 1000
-    return res
-
-def float_to_datetime(timestamp: float, date_unit: DateUnit):
-    if date_unit == DateUnit.MILLISECOND:
-        timestamp /= 1000
-    return datetime.fromtimestamp(timestamp)
-
-
-def convert_non_operable_types(variables_values: list[dict[str, Any]], date_unit: DateUnit):
+def convert_non_operable_types(variables_values: list[dict[str, Any]]):
     for instanciation in variables_values:
         for key, value in instanciation.items():
             if isinstance(value, datetime):
-                instanciation[key] = datetime_to_float(value, date_unit)
+                instanciation[key] = date2num(value)
 
 
 def solve_expression(expression: str, variables_values: list[dict[str, Any]]) -> list[float]:
@@ -416,9 +417,14 @@ def belongs_condition_sql_string(column_label: str, int_ranges: list[range]):
 def request_from_database(
     fmkdb_path: str,
     int_ranges: list[range], 
-    column_names: list[str]
-) -> tuple[Optional[list[dict[str, Any]]], list[dict[str, Any]]]:
+    column_names: list[str],
+    annotation_column_names: list[str],
+    async_annotation_column_names: list[str],
+) -> tuple[Optional[list[dict[str, Any]]], Optional[list[dict[str,Any]]], list[dict[str, Any]], list[dict[str, Any]]]:
     
+    if len(column_names) == 0:
+        return (None, None, [], [])
+
     fmkdb = Database(fmkdb_path)
     ok = fmkdb.start()
     if not ok:
@@ -432,18 +438,28 @@ def request_from_database(
     data_statement = f"SELECT {requested_data_columns_str} FROM DATA " \
                      f"WHERE {id_ranges_check_str}"
 
+    requested_data_annotations_columns_str = ', '.join(annotation_column_names)
+    data_annotation_statement = f"SELECT {requested_data_annotations_columns_str} FROM DATA " \
+                     f"WHERE {id_ranges_check_str}"
+
     # async data 'CURRENT_DATA_ID' is considered to be their ID for plotting
     requested_async_data_columns_str = ', '.join(column_names).replace('ID', 'CURRENT_DATA_ID')
     async_data_statement = f"SELECT {requested_async_data_columns_str} FROM ASYNC_DATA " \
                            f"WHERE {async_id_ranges_check_str}"
 
+    requested_async_data_annotations_columns_str = ', '.join(async_annotation_column_names)
+    async_data_annotation_statement = f"SELECT {requested_async_data_annotations_columns_str} FROM ASYNC_DATA " \
+                           f"WHERE {async_id_ranges_check_str}"
+
     matching_data = fmkdb.execute_sql_statement(data_statement)
+    matching_data_annotations = fmkdb.execute_sql_statement(data_annotation_statement)
     matching_async_data = fmkdb.execute_sql_statement(async_data_statement)
+    matching_async_data_annotations = fmkdb.execute_sql_statement(async_data_annotation_statement)
 
     fmkdb.stop()
 
     if matching_data is None or matching_data == []:
-        return (None, None)
+        return (None, None, [], [])
 
     data = []
     for line in matching_data:
@@ -453,7 +469,7 @@ def request_from_database(
         data.append(line_values)
 
     if matching_async_data is None:
-        return (data, [])
+        return (data, matching_data_annotations, [], [])
 
     async_data = []
     for line in matching_async_data:
@@ -463,7 +479,7 @@ def request_from_database(
             line_values[column_names[index]] = value
         async_data.append(line_values)
 
-    return (data, async_data)
+    return (data, matching_data_annotations, async_data, matching_async_data_annotations)
 
 
 def parse_arguments() -> dict[Any]:
@@ -492,15 +508,6 @@ def parse_arguments() -> dict[Any]:
         sys.exit(ARG_INVALID_FORMULA)
     result['formula'] = formula
 
-    date_unit_str = args.date_unit
-    if date_unit_str is None:
-        print_error("Please provide a unit for date values")
-        sys.exit(ARG_INVALID_DATE_UNIT)
-    date_unit = DateUnit.MILLISECOND
-    if date_unit_str == 's':
-        date_unit = DateUnit.SECOND
-    result['date_unit'] = date_unit
-
     poi = args.points_of_interest
     if poi < 0:
         print_error("Please provide a positive or zero number of point of interest")
@@ -517,14 +524,13 @@ def parse_arguments() -> dict[Any]:
             parser.error("--points_of_interest must be set to use --grid_match 'poi' option")
     result['grid_match'] = grid_match
 
-    display_points = args.display_points
-    display_values = args.verbose
-    if display_values and not display_points:
-        parser.error("--points option is required for --verbose option")
-    result['display_points'] = display_points
-    result['display_values'] = display_values
+    result['display_points'] = args.display_points
+    result['annotations'] = args.annotations
+    result['async_annotations'] = args.async_annotations
 
     result['other_id_range'] = args.other_id_range
+    
+    result['date_format'] = args.date_format
 
     return result
 
@@ -533,8 +539,9 @@ def plot_formula(
     axes: Axes, 
     formula: str, 
     id_range: list[range], 
+    align_to: Optional[tuple[Any, Any]],
     args: dict[Any]
-) -> tuple[str, str, Optional[type], Optional[type], set[tuple[float,float]], list[tuple[float,float]]]:
+) -> Optional[tuple[str, str, Optional[type], Optional[type], set[tuple[float,float]], set[tuple[float,float]]]]:
 
     y_expression, x_expression, valid_formula = split_formula(formula)
 
@@ -545,24 +552,42 @@ def plot_formula(
         sys.exit(ARG_INVALID_FORMULA)
 
     variable_names = x_variable_names.union(y_variable_names)
-    variables_values, async_variables_values = request_from_database(args['fmkdb'], id_range, list(variable_names))
+    variables_values, annotations_values, async_variables_values, async_annotations_values = \
+        request_from_database(args['fmkdb'], id_range, list(variable_names), args['annotations'], args['async_annotations'])
     if variables_values is None:
-        sys.exit(ARG_INVALID_VAR_NAMES)
+        return None
 
     variables_true_types = {}
     for variable, value in variables_values[0].items():
         variables_true_types[variable] = type(value)
-    convert_non_operable_types(variables_values, args['date_unit'])
-    convert_non_operable_types(async_variables_values, args['date_unit'])
+    convert_non_operable_types(variables_values)
+    convert_non_operable_types(async_variables_values)
 
     x_values = solve_expression(x_expression, variables_values)
     y_values = solve_expression(y_expression, variables_values)
+    annotations = []
+    for annotation_values in annotations_values:
+        annotation_str = f"{', '.join([str(value) for value in annotation_values])}"
+        annotations.append(annotation_str)
 
     x_async_values = solve_expression(x_expression, async_variables_values)
     y_async_values = solve_expression(y_expression, async_variables_values)
+    async_annotations = []
+    for async_annotation_values in async_annotations_values:
+        annotation_str = f"{', '.join([str(value) for value in async_annotation_values])}"
+        async_annotations.append(annotation_str)
+    
+    if align_to is not None:
+        first = sorted(zip(x_values, y_values), key=lambda p: p[0])[0]
+        shift_x = align_to[0] - first[0]
+        shift_y = align_to[1] - first[1] 
+        x_values = list(map(lambda x: x + shift_x, x_values))
+        y_values = list(map(lambda y: y + shift_y, y_values)) 
+        x_async_values = list(map(lambda x: x + shift_x, x_async_values))
+        y_async_values = list(map(lambda y: y + shift_y, y_async_values)) 
 
-    plotted_poi = plot_line(axes, x_values, y_values, args)
-    plot_async_data(axes, x_async_values, y_async_values, args)
+    plotted_poi = plot_line(axes, x_values, y_values, annotations, args)
+    plot_async_data(axes, x_async_values, y_async_values, async_annotations, args)
 
     x_conversion_type = None
     if len(x_variable_names) == 1:
@@ -588,16 +613,25 @@ def main():
     all_plotted_points: set[tuple[float,float]] = set()
             
     id_range = parse_int_range_union(args['id_range'])
-    x_expression, y_expression, x_conversion_type, y_conversion_type, plotted_poi, plotted_points = \
-        plot_formula(axes, args['formula'], id_range, args)
-
+    plot_result = plot_formula(axes, args['formula'], id_range, None, args)
+    if plot_result is None:
+        print_error("Given formula or variables names are invalid")
+        sys.exit(ARG_INVALID_VAR_NAMES)
+    
+    x_expression, y_expression, x_conversion_type, y_conversion_type, plotted_poi, plotted_points = plot_result
+    origin = sorted(list(plotted_points), key=lambda p: p[0])[0]
     all_plotted_poi = all_plotted_poi.union(plotted_poi)
     all_plotted_points = all_plotted_points.union(plotted_points)
 
     if args['other_id_range'] is not None:
         for other_id_range in args['other_id_range']:
+            
             id_range = parse_int_range_union(other_id_range)
-            _, _, _, _, plotted_poi, plotted_points = plot_formula(axes, args['formula'], id_range, args)
+            plot_result = plot_formula(axes, args['formula'], id_range, origin, args)
+            if plot_result is None:
+                print_error(f"Cannot gather database information for range '{other_id_range}', skipping it")
+                continue
+            _, _, _, _, plotted_poi, plotted_points = plot_result
             all_plotted_poi = all_plotted_poi.union(plotted_poi)
             all_plotted_points = all_plotted_points.union(plotted_points)
 
