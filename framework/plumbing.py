@@ -3584,6 +3584,8 @@ class FmkPlumbing(object):
                         else:
                             data = dmaker_obj.generate_data(self.dm, self.mon,
                                                             self.targets)
+                            if data.scenario_dependence:
+                                initial_generator_info = data.get_initial_dmaker()
                             if save_gen_seed and dmaker_obj.produced_seed is None:
                                 # Usefull to replay from the beginning a modelwalking sequence
                                 dmaker_obj.produced_seed = Data(data.get_content(do_copy=True))

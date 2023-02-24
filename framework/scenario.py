@@ -422,6 +422,12 @@ class Step(object):
                 # in this case a data creation process is provided to the framework through the
                 # callback HOOK.before_sending_step1
                 d = Data('STEP:POISON_1')
+
+            name = node_list.name if isinstance(node_list, Node) else None
+            if name is not None:
+                gen_info = [name.upper(), 'g_' + name, None]
+                d.set_initial_dmaker(gen_info)
+
         else:
             # In this case we have multiple data
             # Practically it means that the creation of these data need to be performed
