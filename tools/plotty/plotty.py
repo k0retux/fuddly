@@ -63,7 +63,25 @@ group.add_argument(
     required=True
 )
 
-group = parser.add_argument_group('Options')
+group.add_argument(
+    '-df',
+    '--date-format',
+    type=str,
+    default='%H:%M:%S.%f',
+    help='Wanted date format, in a strftime format (1989 C standard). Default is %%H:%%M:%%S.%%f',
+    required=False
+)
+
+group.add_argument(
+    '-db',
+    '--fmkdb',
+    metavar='PATH',
+    help='Path to an alternative fmkDB.db',
+    nargs='?',
+    required=False
+)
+
+group = parser.add_argument_group('Display Options')
 
 group.add_argument(
     '-f', 
@@ -71,15 +89,6 @@ group.add_argument(
     default='SENT_DATE~ID',
     type=str, 
     help='The formula to plot, in the form "y ~ x"',
-    required=False
-)
-
-group.add_argument(
-    '-db', 
-    '--fmkdb', 
-    metavar='PATH', 
-    help='Path to an alternative fmkDB.db', 
-    nargs='?',
     required=False
 )
 
@@ -110,33 +119,89 @@ group.add_argument(
     required=False
 )
 
+group = parser.add_argument_group('Labels Configuration')
+
 group.add_argument(
-    '-a',
-    '--annotations',
-    type=str,
-    action='append',
-    default=['TYPE'],
-    help='Which values to show above the points. Default is TYPE',
+    '-dt',
+    '--display-type',
+    dest='annotations',
+    action='append_const',
+    const='TYPE',
+    help='Display the TYPE value for each Data ID represented in the curve',
     required=False
 )
 
 group.add_argument(
-    '-aa',
-    '--async-annotations',
-    type=str,
-    action='append',
-    default=['ID'],
-    help='Which values to show above the aync points. Must be used with -pts. Default is ID',
+    '-dtg',
+    '--display-target',
+    dest='annotations',
+    action='append_const',
+    const='TARGET',
+    help='Display the TARGET value for each Data ID represented in the curve',
     required=False
 )
 
 group.add_argument(
-    '-ha',
-    '--hide-annotations',
-    action='store_true',
-    help='Hide all annotations',
+    '-dsz',
+    '--display-size',
+    dest='annotations',
+    action='append_const',
+    const='SIZE',
+    help='Display the SIZE value for each Data ID represented in the curve',
     required=False
 )
+
+group.add_argument(
+    '-dack',
+    '--display-ack-date',
+    dest='annotations',
+    action='append_const',
+    const='ACK_DATE',
+    help='Display the ACK_DATE value for each Data ID represented in the curve',
+    required=False
+)
+
+group.add_argument(
+    '-adi',
+    '--async-display-id',
+    dest='async_annotations',
+    action='append_const',
+    const='ID',
+    help='Display the ID value for each Async Data ID represented in the curve',
+    required=False
+)
+
+group.add_argument(
+    '-adt',
+    '--async-display-type',
+    dest='async_annotations',
+    action='append_const',
+    const='TYPE',
+    help='Display the TYPE value for each Async Data ID represented in the curve',
+    required=False
+)
+
+group.add_argument(
+    '-adtg',
+    '--async-display-target',
+    dest='async_annotations',
+    action='append_const',
+    const='TARGET',
+    help='Display the TYPE value for each Async Data ID represented in the curve',
+    required=False
+)
+
+group.add_argument(
+    '-adsz',
+    '--async-display-size',
+    dest='async_annotations',
+    action='append_const',
+    const='SIZE',
+    help='Display the SIZE value for each Async Data ID represented in the curve',
+    required=False
+)
+
+group = parser.add_argument_group('Multiple Curves Options')
 
 group.add_argument(
     '-o',
@@ -154,15 +219,6 @@ group.add_argument(
     default=1,
     help='When --other-id-range is used, specify the spacing between the curves. The shift is '
          'computed as the multiplication between the original curve height and this value',
-    required=False
-)
-
-group.add_argument(
-    '-df',
-    '--date-format',
-    type=str,
-    default='%H:%M:%S.%f',
-    help='Wanted date format, in a strftime format (1989 C standard). Default is %%H:%%M:%%S.%%f',
     required=False
 )
 
@@ -188,10 +244,11 @@ def add_point(axes: Axes, x: float, y: float, color: str):
 
 
 def add_annotation(axes: Axes, x: float, y: float, value: str):
+    text_width = value.count('\n') + 1
     axes.annotate(
         f"{value}",
         xy=(x, y), xycoords='data',
-        xytext=(-10, 20), textcoords='offset pixels',
+        xytext=(-10, 20*text_width), textcoords='offset pixels',
         horizontalalignment='right', verticalalignment='top'
     )
 
@@ -230,7 +287,7 @@ def plot_line(
         for (x, y) in zip(x_data, y_data):
             add_point(axes, x, y, 'b')
 
-    if len(args['annotations']) != 0:
+    if args['annotations'] is not None:
         for i, (x, y) in enumerate(zip(x_data, y_data)):
             add_annotation(axes, x, y, annotations[i])
 
@@ -251,7 +308,7 @@ def plot_async_data(
     for (x,y) in zip(x_data, y_data):
         axes.plot(x, y, 'g^')
 
-    if args['async_annotations']:
+    if args['async_annotations'] is not None:
         for i, (x, y) in enumerate(zip(x_data, y_data)):
             add_annotation(axes, x, y, annotations[i])
 
@@ -466,14 +523,14 @@ def request_from_database(
     matching_async_data = fmkdb.execute_sql_statement(async_data_statement)
 
     matching_data_annotations = []
-    if len(annotation_column_names) != 0:
+    if annotation_column_names is not None:
         requested_data_annotations_columns_str = ', '.join(annotation_column_names)
         data_annotation_statement = f"SELECT {requested_data_annotations_columns_str} FROM DATA " \
                          f"WHERE {id_ranges_check_str}"
         matching_data_annotations = fmkdb.execute_sql_statement(data_annotation_statement)
 
     matching_async_data_annotations = []
-    if len(async_annotation_column_names) != 0:
+    if async_annotation_column_names is not None:
         requested_async_data_annotations_columns_str = ', '.join(async_annotation_column_names)
         async_data_annotation_statement = f"SELECT {requested_async_data_annotations_columns_str} FROM ASYNC_DATA " \
                                f"WHERE {async_id_ranges_check_str}"
@@ -550,7 +607,6 @@ def parse_arguments() -> dict[Any]:
     result['hide_points'] = args.hide_points
     result['annotations'] = args.annotations
     result['async_annotations'] = args.async_annotations
-    result['hide_annotations'] = args.hide_annotations
 
     result['other_id_range'] = args.other_id_range
     result['vertical_shift'] = args.vertical_shift
@@ -576,8 +632,6 @@ def plot_formula(
     if not valid_formula:
         sys.exit(ARG_INVALID_FORMULA)
 
-    args['annotations'] = [] if args['hide_annotations'] else args['annotations']
-    args['async_annotations'] = [] if args['hide_annotations'] else args['async_annotations']
     variable_names = x_variable_names.union(y_variable_names)
     variables_values, annotations_values, async_variables_values, async_annotations_values = \
         request_from_database(args['fmkdb'], id_range, list(variable_names), args['annotations'], args['async_annotations'])
@@ -595,14 +649,14 @@ def plot_formula(
     annotations = []
     if annotations_values is not None:
         for annotation_values in annotations_values:
-            annotation_str = f"{', '.join([str(value) for value in annotation_values])}"
+            annotation_str = '\n'.join([str(value) for value in annotation_values])
             annotations.append(annotation_str)
 
     x_async_values = solve_expression(x_expression, async_variables_values)
     y_async_values = solve_expression(y_expression, async_variables_values)
     async_annotations = []
     for async_annotation_values in async_annotations_values:
-        annotation_str = f"{', '.join([str(value) for value in async_annotation_values])}"
+        annotation_str = '\n'.join([str(value) for value in async_annotation_values])
         async_annotations.append(annotation_str)
     
     if align_to is not None:
