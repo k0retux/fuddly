@@ -148,6 +148,16 @@ group.add_argument(
 )
 
 group.add_argument(
+    '-s',
+    '--vertical-shift',
+    type=float,
+    default=1,
+    help='When --other-id-range is used, specify the spacing between the curves. The shift is '
+         'computed as the multiplication between the original curve height and this value',
+    required=False
+)
+
+group.add_argument(
     '-df',
     '--date-format',
     type=str,
@@ -596,9 +606,13 @@ def plot_formula(
         async_annotations.append(annotation_str)
     
     if align_to is not None:
-        first = sorted(zip(x_values, y_values), key=lambda p: p[0])[0]
+        sorted_points = sorted(zip(x_values, y_values), key=lambda p: p[0])
+        # first = sorted(zip(x_values, y_values), key=lambda p: p[0])[0]
+        first = sorted_points[0]
+        last = sorted_points[-1]
+        curve_height = abs(last[1] - first[1])
         shift_x = align_to[0] - first[0]
-        shift_y = align_to[1] - first[1] 
+        shift_y = align_to[1] - first[1] + curve_height * args['vertical_shift']
         x_values = list(map(lambda x: x + shift_x, x_values))
         y_values = list(map(lambda y: y + shift_y, y_values)) 
         x_async_values = list(map(lambda x: x + shift_x, x_async_values))
