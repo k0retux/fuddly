@@ -38,7 +38,7 @@ from framework.database import Database
 from libs.external_modules import *
 
 def print_info(msg: str):
-    print(colorize(f"*** INFO: {msg} *** ", reg=Color.INFO))
+    print(colorize(f"*** INFO: {msg} *** ", rgb=Color.INFO))
 
 def print_warning(msg: str):
     print(colorize(f"*** WARNING: {msg} *** ", rgb=Color.WARNING))
@@ -54,10 +54,12 @@ parser = argparse.ArgumentParser(description='Argument for FmkDB toolkit script'
 group = parser.add_argument_group('Main parameters')
 
 group.add_argument(
-    '-id', 
-    '--id_range', 
+    '-ids',
+    '--id-range',
     type=str, 
-    help='The ID range to take into account x..y',
+    help='The ID range to take into account should be: '
+         'either <id_start>..<id_stop>[|<step>], '
+         'or <id_start_1>..<id_stop_1>[|<step_1>], ..., <id_start_n>..<id_stop_n>[|<step_n>]',
     required=True
 )
 
@@ -83,7 +85,7 @@ group.add_argument(
 
 group.add_argument(
     '-poi',
-    '--points_of_interest',
+    '--points-of-interest',
     type=int,
     default=0,
     help='How many point of interest the plot should show. Default is none',
@@ -92,18 +94,19 @@ group.add_argument(
 
 group.add_argument(
     '-gm',
-    '--grid_match',
+    '--grid-match',
     type=str,
-    help='Should the plot grid specifically match some element. Possible options are "all" and "poi". Default is an arbitrary grid',
+    default='all',
+    help="Should the plot grid specifically match some element. Possible options are 'all' and 'poi'. Default is 'all'",
     choices=['all', 'poi'],
     required=False
 )
 
 group.add_argument(
-    '-pts',
-    '--display_points',
+    '-hp',
+    '--hide-points',
     action='store_true',
-    help='Should the graph display every point above the line, or just he line. Default is just the line',
+    help='Should the graph display every point above the line, or just the line. Default is to display the points',
     required=False
 )
 
@@ -113,13 +116,13 @@ group.add_argument(
     type=str,
     action='append',
     default=['TYPE'],
-    help='Which values to show above the points. Must be used with -pts. Default is TYPE',
+    help='Which values to show above the points. Default is TYPE',
     required=False
 )
 
 group.add_argument(
-    '-async_a',
-    '--async_annotations',
+    '-aa',
+    '--async-annotations',
     type=str,
     action='append',
     default=['ID'],
@@ -128,8 +131,16 @@ group.add_argument(
 )
 
 group.add_argument(
+    '-ha',
+    '--hide-annotations',
+    action='store_true',
+    help='Hide all annotations',
+    required=False
+)
+
+group.add_argument(
     '-o',
-    '--other_id_range',
+    '--other-id-range',
     type=str,
     action='append',
     help='Other ranges of IDs to plot against the main one. All other options apply to it',
@@ -138,10 +149,10 @@ group.add_argument(
 
 group.add_argument(
     '-df',
-    '--date_format',
+    '--date-format',
     type=str,
-    default='%M:%S.%f',
-    help='Wanted date format, in a strftime format (1989 C standard). Default is %M:%S.%f',
+    default='%H:%M:%S.%f',
+    help='Wanted date format, in a strftime format (1989 C standard). Default is %%H:%%M:%%S.%%f',
     required=False
 )
 
@@ -178,7 +189,7 @@ def add_annotation(axes: Axes, x: float, y: float, value: str):
 def add_points_of_interest(
     axes: Axes, 
     x_data: list[float], 
-    y_data: list[float], 
+    y_data: list[float],
     points_of_interest: int
 ) -> set[tuple[float, float]]:
 
@@ -190,7 +201,6 @@ def add_points_of_interest(
             break
         x, y = points[i]
         add_point(axes, x, y, 'red')
-        add_annotation(axes, x, y)
         plotted_points.add((x,y))
 
     return plotted_points
@@ -206,7 +216,7 @@ def plot_line(
     
     axes.plot(x_data, y_data, '-')
     
-    if args['display_points']:
+    if not args['hide_points']:
         for (x, y) in zip(x_data, y_data):
             add_point(axes, x, y, 'b')
 
@@ -214,10 +224,10 @@ def plot_line(
         for i, (x, y) in enumerate(zip(x_data, y_data)):
             add_annotation(axes, x, y, annotations[i])
 
-    if args['poi'] == 0:
-        return set()
+    if args['poi'] != 0:
+        return add_points_of_interest(axes, x_data, y_data, args['poi'])
     
-    return add_points_of_interest(axes, x_data, y_data, args['poi'])
+    return set()
 
 
 def plot_async_data(
@@ -437,24 +447,27 @@ def request_from_database(
     requested_data_columns_str = ', '.join(column_names)
     data_statement = f"SELECT {requested_data_columns_str} FROM DATA " \
                      f"WHERE {id_ranges_check_str}"
-
-    requested_data_annotations_columns_str = ', '.join(annotation_column_names)
-    data_annotation_statement = f"SELECT {requested_data_annotations_columns_str} FROM DATA " \
-                     f"WHERE {id_ranges_check_str}"
+    matching_data = fmkdb.execute_sql_statement(data_statement)
 
     # async data 'CURRENT_DATA_ID' is considered to be their ID for plotting
     requested_async_data_columns_str = ', '.join(column_names).replace('ID', 'CURRENT_DATA_ID')
     async_data_statement = f"SELECT {requested_async_data_columns_str} FROM ASYNC_DATA " \
                            f"WHERE {async_id_ranges_check_str}"
-
-    requested_async_data_annotations_columns_str = ', '.join(async_annotation_column_names)
-    async_data_annotation_statement = f"SELECT {requested_async_data_annotations_columns_str} FROM ASYNC_DATA " \
-                           f"WHERE {async_id_ranges_check_str}"
-
-    matching_data = fmkdb.execute_sql_statement(data_statement)
-    matching_data_annotations = fmkdb.execute_sql_statement(data_annotation_statement)
     matching_async_data = fmkdb.execute_sql_statement(async_data_statement)
-    matching_async_data_annotations = fmkdb.execute_sql_statement(async_data_annotation_statement)
+
+    matching_data_annotations = []
+    if len(annotation_column_names) != 0:
+        requested_data_annotations_columns_str = ', '.join(annotation_column_names)
+        data_annotation_statement = f"SELECT {requested_data_annotations_columns_str} FROM DATA " \
+                         f"WHERE {id_ranges_check_str}"
+        matching_data_annotations = fmkdb.execute_sql_statement(data_annotation_statement)
+
+    matching_async_data_annotations = []
+    if len(async_annotation_column_names) != 0:
+        requested_async_data_annotations_columns_str = ', '.join(async_annotation_column_names)
+        async_data_annotation_statement = f"SELECT {requested_async_data_annotations_columns_str} FROM ASYNC_DATA " \
+                               f"WHERE {async_id_ranges_check_str}"
+        matching_async_data_annotations = fmkdb.execute_sql_statement(async_data_annotation_statement)
 
     fmkdb.stop()
 
@@ -524,11 +537,13 @@ def parse_arguments() -> dict[Any]:
             parser.error("--points_of_interest must be set to use --grid_match 'poi' option")
     result['grid_match'] = grid_match
 
-    result['display_points'] = args.display_points
+    result['hide_points'] = args.hide_points
     result['annotations'] = args.annotations
     result['async_annotations'] = args.async_annotations
+    result['hide_annotations'] = args.hide_annotations
 
     result['other_id_range'] = args.other_id_range
+    result['vertical_shift'] = args.vertical_shift
     
     result['date_format'] = args.date_format
 
@@ -551,6 +566,8 @@ def plot_formula(
     if not valid_formula:
         sys.exit(ARG_INVALID_FORMULA)
 
+    args['annotations'] = [] if args['hide_annotations'] else args['annotations']
+    args['async_annotations'] = [] if args['hide_annotations'] else args['async_annotations']
     variable_names = x_variable_names.union(y_variable_names)
     variables_values, annotations_values, async_variables_values, async_annotations_values = \
         request_from_database(args['fmkdb'], id_range, list(variable_names), args['annotations'], args['async_annotations'])
@@ -566,9 +583,10 @@ def plot_formula(
     x_values = solve_expression(x_expression, variables_values)
     y_values = solve_expression(y_expression, variables_values)
     annotations = []
-    for annotation_values in annotations_values:
-        annotation_str = f"{', '.join([str(value) for value in annotation_values])}"
-        annotations.append(annotation_str)
+    if annotations_values is not None:
+        for annotation_values in annotations_values:
+            annotation_str = f"{', '.join([str(value) for value in annotation_values])}"
+            annotations.append(annotation_str)
 
     x_async_values = solve_expression(x_expression, async_variables_values)
     y_async_values = solve_expression(y_expression, async_variables_values)
