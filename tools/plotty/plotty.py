@@ -26,7 +26,7 @@ INTERVAL_OPERATOR = '..'
 STEP_OPERATOR = '|'
 
 class GridMatch(Enum):
-    DEFAULT = 1
+    AUTO = 1
     POI = 2
     ALL = 3
 
@@ -106,8 +106,9 @@ group.add_argument(
     '--grid-match',
     type=str,
     default='all',
-    help="Should the plot grid specifically match some element. Possible options are 'all' and 'poi'. Default is 'all'",
-    choices=['all', 'poi'],
+    help="Should the plot grid specifically match some element. Possible options are 'all', "
+         "'poi' and 'auto'. Default is 'all'",
+    choices=['all', 'poi', 'auto'],
     required=False
 )
 
@@ -266,7 +267,7 @@ def set_grid(
     plotted_points: set[tuple[float, float]]
 ):
     
-    if grid_match == GridMatch.DEFAULT:
+    if grid_match == GridMatch.AUTO:
         return 
     
     if grid_match == GridMatch.POI:
@@ -556,13 +557,17 @@ def parse_arguments() -> dict[Any]:
     result['poi'] = poi
 
     grid_match_str = args.grid_match
-    grid_match = GridMatch.ALL
-    if grid_match_str is None:
-        grid_match = GridMatch.DEFAULT
+    if grid_match_str is None or grid_match_str == 'all':
+        grid_match = GridMatch.ALL
+    elif grid_match_str == 'auto':
+        grid_match = GridMatch.AUTO
     elif grid_match_str == 'poi':
         grid_match = GridMatch.POI
         if poi == 0:
             parser.error("--points-of-interest must be set to use --grid-match 'poi' option")
+    else:
+        parser.error(f"Unknown Grid Match value '{grid_match_str}'")
+
     result['grid_match'] = grid_match
 
     result['hide_points'] = args.hide_points
