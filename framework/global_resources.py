@@ -46,7 +46,7 @@ def ensure_file(f):
         open(f, 'a').close()
 
 
-fuddly_version = '0.27.2'
+fuddly_version = '0.30'
 
 framework_folder = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 framework_folder  = '.' if framework_folder == '' else framework_folder
