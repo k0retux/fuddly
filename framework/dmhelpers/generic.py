@@ -78,8 +78,12 @@ class MH(object):
         # NonTerminal node custo
         class NTerm:
             MutableClone = NonTermCusto.MutableClone
+            CycleClone = NonTermCusto.CycleClone
             FrozenCopy = NonTermCusto.FrozenCopy
             CollapsePadding = NonTermCusto.CollapsePadding
+            DelayCollapsing = NonTermCusto.DelayCollapsing
+            FullCombinatory = NonTermCusto.FullCombinatory
+            StickToDefault = NonTermCusto.StickToDefault
 
         # Generator node (leaf) custo
         class Gen:
@@ -106,6 +110,8 @@ class MH(object):
         Abs_Postpone = NodeInternals.Abs_Postpone
 
         Separator = NodeInternals.Separator
+
+        Highlight = NodeInternals.Highlight
 
         LOCKED = NodeInternals.LOCKED
         DEBUG = NodeInternals.DEBUG
@@ -237,7 +243,7 @@ def TIMESTAMP(time_format="%H%M%S", utc=False,
 
 def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=True,
         set_attrs=None, clear_attrs=None, after_encoding=True, freezable=False,
-        base=16, letter_case='upper', reverse_str=False):
+        base=16, letter_case='upper', min_sz=4, reverse_str=False):
     """
     Return a *generator* that returns the CRC (in the chosen type) of
     all the node parameters. (Default CRC is PKZIP CRC32)
@@ -257,13 +263,14 @@ def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=Tr
       base (int): Relevant when ``vt`` is ``INT_str``. Numerical base to use for string representation
       letter_case (str): Relevant when ``vt`` is ``INT_str``. Letter case for string representation
         ('upper' or 'lower')
+      min_sz (int): Relevant when ``vt`` is ``INT_str``. Minimum size of the resulting string.
       reverse_str (bool): Reverse the order of the string if set to ``True``.
     """
     class Crc(object):
         unfreezable = not freezable
 
         def __init__(self, vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs,
-                     base=16, letter_case='upper', reverse_str=False):
+                     base=16, letter_case='upper', min_sz=4, reverse_str=False):
             self.vt = vt
             self.poly = poly
             self.init_crc = init_crc
@@ -273,6 +280,7 @@ def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=Tr
             self.clear_attrs = clear_attrs
             self.base = base
             self.letter_case = letter_case
+            self.min_sz = min_sz
             self.reverse_str = reverse_str
 
         def __call__(self, nodes):
@@ -295,7 +303,7 @@ def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=Tr
             if issubclass(self.vt, fvt.INT_str):
                 n = Node('cts', value_type=self.vt(values=[result], force_mode=True,
                                                    base=self.base, letter_case=self.letter_case,
-                                                   reverse=self.reverse_str))
+                                                   reverse=self.reverse_str, min_size=self.min_sz))
             else:
                 n = Node('cts', value_type=self.vt(values=[result], force_mode=True))
             n.set_semantics(NodeSemantics(['crc']))
@@ -307,7 +315,7 @@ def CRC(vt=fvt.INT_str, poly=0x104c11db7, init_crc=0, xor_out=0xFFFFFFFF, rev=Tr
 
     vt = MH._validate_int_vt(vt)
     return Crc(vt, poly, init_crc, xor_out, rev, set_attrs, clear_attrs,
-               base=base, letter_case=letter_case, reverse_str=reverse_str)
+               base=base, letter_case=letter_case, min_sz=min_sz, reverse_str=reverse_str)
 
 
 
@@ -414,7 +422,7 @@ def CYCLE(vals, depth=1, vt=fvt.String,
                 raise NotImplementedError('Value type not supported')
 
             n = Node('cts', value_type=vtype)
-            MH._handle_attrs(n, set_attrs, clear_attrs)
+            MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
             return n
 
     assert(not issubclass(vt, fvt.BitField))
@@ -498,7 +506,7 @@ def OFFSET(use_current_position=True, depth=1, vt=fvt.INT_str,
                 off = nodes[-1].get_subnode_off(idx)
 
             n = Node('cts_off', value_type=self.vt(values=[base+off], force_mode=True))
-            MH._handle_attrs(n, set_attrs, clear_attrs)
+            MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
             return n
 
     vt = MH._validate_int_vt(vt)
@@ -556,7 +564,11 @@ def COPY_VALUE(path, depth=None, vt=None,
             else:
                 base_node = node
 
-            tg_node = base_node[self.path]
+            tg_node = list(base_node.iter_nodes_by_path(self.path, resolve_generator=True))
+            if tg_node:
+                tg_node = tg_node[0]
+            else:
+                raise ValueError('incorrect path: {}'.format(self.path))
 
             if tg_node.is_nonterm():
                 n = Node('cts', base_node=tg_node, ignore_frozen_state=False)
@@ -576,10 +588,74 @@ def COPY_VALUE(path, depth=None, vt=None,
                 n = Node('cts', value_type=vtype)
 
             n.set_semantics(NodeSemantics(['clone']))
-            MH._handle_attrs(n, set_attrs, clear_attrs)
+            MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
             return n
 
 
     assert(vt is None or not issubclass(vt, fvt.BitField))
     return CopyValue(path, depth, vt, set_attrs, clear_attrs)
 
+
+def SELECT(idx=None, path=None, filter_func=None, fallback_node=None, clone=True,
+           set_attrs=None, clear_attrs=None):
+    """
+    Return a *generator* that select a subnode from a non-terminal node and return it (or a copy
+    of it depending on the parameter `clone`). If the `path` parameter is provided, the previous
+    selected node is searched for the `path` in order to return the related subnode instead. The
+    non-terminal node is selected regarding various criteria provided as parameters.
+
+    Args:
+      idx (int): if None, the node will be selected randomly, otherwise it should be given
+        the subnodes position in the non-terminal node, or in the subset of subnodes if the
+        `filter_func` parameter is provided.
+      path (str): if provided, it has to be a path identifying a subnode to clone from the
+        selected node.
+      filter_func: function to filter the subnodes prior to any selection.
+      fallback_node (Node): if 'path' does not exist, then the clone node will be the one provided
+        in this parameter.
+      clone (bool): [default: True] If True, the returned node will be cloned, otherwise
+        the original node will be returned.
+      set_attrs (list): attributes that will be set on the generated node (only if `clone` is True).
+      clear_attrs (list): attributes that will be cleared on the generated node (only if `clone` is True).
+    """
+    class SelectNode(object):
+
+        def __init__(self, idx=None, path=None, filter_func=None, fallback_node=None, clone=True,
+                     set_attrs=None, clear_attrs=None):
+            self.set_attrs = set_attrs
+            self.clear_attrs = clear_attrs
+            self.idx = idx
+            self.fallback_node = Node('fallback_node', values=['!FALLBACK!']) if fallback_node is None else fallback_node
+            self.clone = clone
+            self.path = path
+            self.filter_func = filter_func
+
+        def __call__(self, node):
+            assert node.is_nonterm()
+            node.freeze()
+
+            if self.filter_func:
+                filtered_nodes = list(filter(self.filter_func, node.frozen_node_list))
+            else:
+                filtered_nodes = node.frozen_node_list
+
+            if filtered_nodes:
+                idx = random.randint(0, len(filtered_nodes)-1) if self.idx is None else self.idx
+                selected_node = filtered_nodes[idx]
+                if selected_node and self.path:
+                    # print(f'{selected_node.name} {self.path}')
+                    # selected_node.show()
+                    selected_node = selected_node[self.path]
+                    selected_node = self.fallback_node if selected_node is None else selected_node[0]
+            else:
+                selected_node = self.fallback_node
+
+            if self.clone:
+                selected_node = selected_node.get_clone(ignore_frozen_state=False)
+                selected_node.set_semantics(NodeSemantics(['clone']))
+                MH._handle_attrs(selected_node, self.set_attrs, self.clear_attrs)
+
+            return selected_node
+
+    return SelectNode(idx=idx, path=path, filter_func=filter_func, fallback_node=fallback_node,
+                      clone=clone, set_attrs=set_attrs, clear_attrs=clear_attrs)

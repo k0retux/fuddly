@@ -69,15 +69,17 @@ of ``fuddly`` itself. Usage is as follows:
 
 Miscellaneous
 -------------
-+ Don't forget to populate ``~/fuddly_data/imported_data/`` with sample files for data
++ Don't forget to populate ``<fuddly data folder>/imported_data/`` with sample files for data
   models that need it
+
++ Note that when the fuddly shell is launched, the path of the fuddly data folder is displayed as
+  well as its configuration folder
 
 Dependencies
 ------------
-+ Compatible with Python2 and Python3
++ Compatible with Python3
 + Mandatory:
 
-  - `six`_: Python 2/3 compatibility
   - `sqlite3`_: SQLite3 data base
 
 + Optional:
@@ -88,11 +90,12 @@ Dependencies
   - `serial`_: For serial port access
   - `cups`_: Python bindings for libcups
   - `rpyc`_: Remote Python Call (RPyC), a transparent and symmetric RPC library
+  - `pyxdg`_: XDG Base Directory support
 
 + For testing:
 
   - `ddt`_: Used for data-driven tests
-  - `mock`_: Used for mocking (only needed in Python2)
+  - `mock`_: Used for mocking
 
 + For documentation generation:
 
@@ -113,3 +116,4 @@ Dependencies
 .. _sphinx: http://sphinx-doc.org/
 .. _texlive: https://www.tug.org/texlive/
 .. _readthedocs theme: https://github.com/snide/sphinx_rtd_theme
+.. _pyxdg: https://pypi.org/project/pyxdg/

@@ -321,8 +321,8 @@ class ZIP_DataModel(DataModel):
 
         pkzip_abs = pkzip.get_clone(new_env=True)
         pkzip_abs.set_current_conf('ABS', recursive=True)
-        self.register_atom_for_absorption(pkzip_abs,
-                                          absorb_constraints=AbsNoCsts(size=True, struct=True))
+        self.register_atom_for_decoding(pkzip_abs,
+                                        absorb_constraints=AbsNoCsts(size=True, struct=True))
 
 data_model = ZIP_DataModel()
 

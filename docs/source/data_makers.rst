@@ -1,18 +1,65 @@
+.. _gen:generic-generators:
+
+Generic Data Makers
+*******************
+
+Generic Generators
+==================
+
+The current generic generators are presented within the following
+sections.
+
+GENP - Pattern Generation
+-------------------------
+
+Description:
+  Generate basic data based on a pattern and different parameters.
+
+Reference:
+  :class:`framework.generic_data_makers.g_generic_pattern`
+
+Parameters:
+    .. code-block:: none
+
+        |_ pattern
+        |      | desc: Pattern to be used for generating data
+        |      | default: b'1234567890' [type: bytes]
+        |_ prefix
+        |      | desc: Prefix added to the pattern
+        |      | default: b'' [type: bytes]
+        |_ suffix
+        |      | desc: Suffix replacing the end of the pattern
+        |      | default: b'' [type: bytes]
+        |_ size
+        |      | desc: Size of the generated data.
+        |      | default: None [type: int]
+        |_ eval
+        |      | desc: The pattern will be evaluated before being used. Note that the
+        |      |       evaluation shall result in a byte string.
+        |      | default: False [type: bool]
+
+
+POPULATION - Generator for Evolutionary Fuzzing
+-----------------------------------------------
+
+This generator is used only internally by the evolutionary fuzzing infrastructure.
+
+
 .. _dis:generic-disruptors:
 
 Generic Disruptors
-******************
+==================
 
 The current generic disruptors are presented within the following
 sections.
 
 Stateful Disruptors
-===================
+-------------------
 
 .. _dis:ttype:
 
 tTYPE - Advanced Alteration of Terminal Typed Node
---------------------------------------------------
+++++++++++++++++++++++++++++++++++++++++++++++++++
 
 Description:
   Perform alterations on typed nodes (one at a time) according to:
@@ -35,31 +82,42 @@ Reference:
 Parameters:
   .. code-block:: none
 
-      parameters:
         |_ init
         |      | desc: make the model walker ignore all the steps until the provided
         |      |       one
         |      | default: 1 [type: int]
-        |_ runs_per_node
-        |      | desc: maximum number of test cases for a single node (-1 means until
-        |      |       the end)
-        |      | default: -1 [type: int]
         |_ max_steps
         |      | desc: maximum number of steps (-1 means until the end)
         |      | default: -1 [type: int]
+        |_ min_node_tc
+        |      | desc: Minimum number of test cases per node (-1 means until the end)
+        |      | default: -1 [type: int]
+        |_ max_node_tc
+        |      | desc: Maximum number of test cases per node (-1 means until the end).
+        |      |       This value is used for nodes with a fuzz weight strictly greater
+        |      |       than 1.
+        |      | default: -1 [type: int]
         |_ clone_node
-        |      | desc: if True the dmaker will always return a copy of the node. (for
+        |      | desc: if True, this operator will always return a copy of the node. (for
         |      |       stateless disruptors dealing with big data it can be useful
         |      |       to it to False)
         |      | default: True [type: bool]
         |_ path
-        |      | desc: graph path regexp to select nodes on which the disruptor should
+        |      | desc: Graph path regexp to select nodes on which the disruptor should
         |      |       apply
         |      | default: None [type: str]
+        |_ sem
+        |      | desc: Semantics to select nodes on which the disruptor should apply.
+        |      | default: None [type: str, list]
         |_ deep
-        |      | desc: when set to True, if a node structure has changed, the modelwalker
+        |      | desc: When set to True, if a node structure has changed, the modelwalker
         |      |       will reset its walk through the children nodes
         |      | default: True [type: bool]
+        |_ full_combinatory
+        |      | desc: When set to True, enable full-combinatory mode for non-terminal
+        |      |       nodes. It means that the non-terminal nodes will be customized
+        |      |       in "FullCombinatory" mode
+        |      | default: False [type: bool]
         |_ ign_sep
         |      | desc: when set to True, separators will be ignored if
         |      |       any are defined.
@@ -81,20 +139,37 @@ Parameters:
         |_ fuzz_mag
         |      | desc: order of magnitude for maximum size of some fuzzing test cases.
         |      | default: 1.0 [type: float]
-        |_ determinism
-        |      | desc: If set to 'True', the whole model will be fuzzed in a deterministic
-        |      |       way. Otherwise it will be guided by the data model determinism.
+        |_ make_determinist
+        |      | desc: If set to 'True', the whole model will be set in determinist mode.
+        |      |       Otherwise it will be guided by the data model determinism.
+        |      | default: False [type: bool]
+        |_ leaf_fuzz_determinism
+        |      | desc: If set to 'True', each typed node will be fuzzed in a deterministic
+        |      |       way. If set to 'False' each typed node will be fuzzed in a random
+        |      |       way. Otherwise, if it is set to 'None', it will be guided by
+        |      |       the data model determinism. Note: this option is complementary
+        |      |       to 'determinism' as it acts on the typed node substitutions
+        |      |       that occur through this disruptor
         |      | default: True [type: bool]
         |_ leaf_determinism
-        |      | desc: If set to 'True', each typed node will be fuzzed in a deterministic
-        |      |       way. Otherwise it will be guided by the data model determinism.
-        |      |       Note: this option is complementary to 'determinism' is it acts
-        |      |       on the typed node substitutions that occur through this disruptor
+        |      | desc: If set to 'True', all the typed nodes of the model will be set
+        |      |       to determinist mode prior to any fuzzing. If set to 'False',
+        |      |       they will be set to random mode. Otherwise, if set to 'None',
+        |      |       nothing will be done.
+        |      | default: None [type: bool]
+        |_ consider_sibbling_change
+        |      | desc: While walking through terminal nodes, if sibbling nodes are
+        |      |       no more the same because of existence condition for instance,
+        |      |       walk through the new nodes.
         |      | default: True [type: bool]
+        |_ ign_mutable_attr
+        |      | desc: Walk through all the nodes even if their Mutable attribute is
+        |      |       cleared.
+        |      | default: False [type: bool]
 
 
 tSTRUCT - Alter Data Structure
-------------------------------
+++++++++++++++++++++++++++++++
 
 Description:
   Perform constraints alteration (one at a time) on each node that depends on another one
@@ -112,7 +187,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ init
          |      | desc: make the model walker ignore all the steps until the provided
          |      |       one
@@ -124,6 +198,9 @@ Parameters:
          |      | desc: graph path regexp to select nodes on which the disruptor should
          |      |       apply
          |      | default: None [type: str]
+         |_ sem
+         |      | desc: Semantics to select nodes on which the disruptor should apply.
+         |      | default: None [type: str, list]
          |_ deep
          |      | desc: if True, enable corruption of non-terminal node internals
          |      | default: False [type: bool]
@@ -145,7 +222,7 @@ Usage Example:
 
 
 tALT - Walk Through Alternative Node Configurations
----------------------------------------------------
++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 Description:
   Switch the configuration of each node, one by one, with the provided
@@ -157,9 +234,8 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ clone_node
-         |      | desc: if True the dmaker will always return a copy of the node. (for
+         |      | desc: if True, this operator will always return a copy of the node. (for
          |      |       stateless disruptors dealing with big data it can be useful
          |      |       to it to False)
          |      | default: True [type: bool]
@@ -170,9 +246,13 @@ Parameters:
          |_ max_steps
          |      | desc: maximum number of steps (-1 means until the end)
          |      | default: -1 [type: int]
-         |_ runs_per_node
-         |      | desc: maximum number of test cases for a single node (-1 means until
-         |      |       the end)
+         |_ min_node_tc
+         |      | desc: Minimum number of test cases per node (-1 means until the end)
+         |      | default: -1 [type: int]
+         |_ max_node_tc
+         |      | desc: Maximum number of test cases per node (-1 means until the end).
+         |      |       This value is used for nodes with a fuzz weight strictly greater
+         |      |       than 1.
          |      | default: -1 [type: int]
          |_ conf
          |      | desc: Change the configuration, with the one provided (by name), of
@@ -181,8 +261,40 @@ Parameters:
          |      | default: None [type: str, list, tuple]
 
 
+tCONST - Alteration of Constraints
+++++++++++++++++++++++++++++++++++
+
+Description:
+    When the CSP (Constraint Satisfiability Problem) backend are used in the node description.
+    This operator negates the constraint one-by-one and output 1 or more samples for each negated
+    constraint.
+
+Reference:
+  :class:`framework.generic_data_makers.sd_constraint_fuzz`
+
+Parameters:
+  .. code-block:: none
+
+    |_ const_idx
+    |      | desc: Index of the constraint to begin with (first index is 1)
+    |      | default: 1 [type: int]
+    |_ sample_idx
+    |      | desc: Index of the sample for the selected constraint to begin with
+    |      |       (first index is 1)
+    |      | default: 1 [type: int]
+    |_ clone_node
+    |      | desc: If True, this operator will always return a copy of the node.
+    |      |       (for stateless diruptors dealing with big data it can be usefull
+    |      |       to set it to False)
+    |      | default: True [type: bool]
+    |_ samples_per_cst
+    |      | desc: Maximum number of samples to output for each negated constraint
+    |      |       (-1 means until the end)
+    |      | default: -1 [type: int]
+
+
 tSEP - Alteration of Separator Node
------------------------------------
++++++++++++++++++++++++++++++++++++
 
 Description:
   Perform alterations on separators (one at a time). Each time a
@@ -196,9 +308,8 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ clone_node
-         |      | desc: if True the dmaker will always return a copy of the node. (for
+         |      | desc: if True, this operator will always return a copy of the node. (for
          |      |       stateless disruptors dealing with big data it can be useful
          |      |       to it to False)
          |      | default: True [type: bool]
@@ -209,14 +320,21 @@ Parameters:
          |_ max_steps
          |      | desc: maximum number of steps (-1 means until the end)
          |      | default: -1 [type: int]
-         |_ runs_per_node
-         |      | desc: maximum number of test cases for a single node (-1 means until
-         |      |       the end)
+         |_ min_node_tc
+         |      | desc: Minimum number of test cases per node (-1 means until the end)
+         |      | default: -1 [type: int]
+         |_ max_node_tc
+         |      | desc: Maximum number of test cases per node (-1 means until the end).
+         |      |       This value is used for nodes with a fuzz weight strictly greater
+         |      |       than 1.
          |      | default: -1 [type: int]
          |_ path
          |      | desc: graph path regexp to select nodes on which the disruptor should
          |      |       apply
          |      | default: None [type: str]
+         |_ sem
+         |      | desc: Semantics to select nodes on which the disruptor should apply.
+         |      | default: None [type: str, list]
          |_ order
          |      | desc: when set to True, the fuzzing order is strictly guided by the
          |      |       data structure. Otherwise, fuzz weight (if specified in the
@@ -230,7 +348,7 @@ Parameters:
 
 
 tWALK - Walk Through a Data Model
----------------------------------
++++++++++++++++++++++++++++++++++
 
 Description:
   Walk through the provided data and for each visited node, iterates
@@ -238,14 +356,13 @@ Description:
   alteration* is performed by this disruptor.
 
 Reference:
-  :class:`framework.generic_data_makers.sd_iter_over_data`
+  :class:`framework.generic_data_makers.sd_walk_data_model`
 
 Parameters:
   .. code-block:: none
 
-      parameters:
         |_ clone_node
-        |      | desc: if True the dmaker will always return a copy of the node. (for
+        |      | desc: if True, this operator will always return a copy of the node. (for
         |      |       stateless disruptors dealing with big data it can be useful
         |      |       to it to False)
         |      | default: True [type: bool]
@@ -256,32 +373,119 @@ Parameters:
         |_ max_steps
         |      | desc: maximum number of steps (-1 means until the end)
         |      | default: -1 [type: int]
-        |_ runs_per_node
-        |      | desc: maximum number of test cases for a single node (-1 means until
-        |      |       the end)
+        |_ min_node_tc
+        |      | desc: Minimum number of test cases per node (-1 means until the end)
+        |      | default: -1 [type: int]
+        |_ max_node_tc
+        |      | desc: Maximum number of test cases per node (-1 means until the end).
+        |      |       This value is used for nodes with a fuzz weight strictly greater
+        |      |       than 1.
         |      | default: -1 [type: int]
         |_ path
         |      | desc: graph path regexp to select nodes on which the disruptor should
         |      |       apply
         |      | default: None [type: str]
+        |_ sem
+        |      | desc: Semantics to select nodes on which the disruptor should apply.
+        |      | default: None [type: str, list]
+        |_ full_combinatory
+        |      | desc: When set to True, enable full-combinatory mode for non-terminal
+        |      |       nodes. It means that the non-terminal nodes will be customized
+        |      |       in "FullCombinatory" mode
+        |      | default: True [type: bool]
+        |_ leaf_determinism
+        |      | desc: If set to 'True', all the typed nodes of the model will be set
+        |      |       to determinist mode prior to any fuzzing. If set to 'False',
+        |      |       they will be set to random mode. Otherwise, if set to 'None',
+        |      |       nothing will be done.
+        |      | default: None [type: bool]
         |_ order
         |      | desc: when set to True, the walking order is strictly guided by the
         |      |       data structure. Otherwise, fuzz weight (if specified in the
         |      |       data model) is used for ordering
         |      | default: True [type: bool]
+        |_ nt_only
+        |      | desc: walk through non-terminal nodes only
+        |      | default: False [type: bool]
+        |_ deep
+        |      | desc: when set to True, if a node structure has changed, the modelwalker
+        |      |       will reset its walk through the children nodes
+        |      | default: True [type: bool]
         |_ fix_all
         |      | desc: for each produced data, reevaluate the constraints on the whole
         |      |       graph
         |      | default: True [type: bool]
-        |_ nt_only
-        |      | desc: walk through non-terminal nodes only
-        |      | default: False [type: bool]
+        |_ ign_mutable_attr
+        |      | desc: Walk through all the nodes even if their Mutable attribute is
+        |      |       cleared.
+        |      | default: True [type: bool]
+
+
+tWALKcsp - Walk Through the Constraint of a Data Model
+++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Description:
+    When the CSP (Constraint Satisfiability Problem) backend are used in the data description.
+    This operator walk through the solutions of the CSP.
+
+Reference:
+  :class:`framework.generic_data_makers.sd_walk_csp_solutions`
+
+Parameters:
+  .. code-block:: none
+
+    |_ init
+    |      | desc: Make the operator ignore all the steps until the provided one
+    |      | default: 1 [type: int]
+    |_ clone_node
+    |      | desc: If True, this operator will always return a copy of the node.
+    |      |       (for stateless diruptors dealing with big data it can be usefull
+    |      |       to set it to False)
+    |      | default: True [type: bool]
+    |_ notify_exhaustion
+    |      | desc: When all the solutions of the CSP have been walked through,
+    |      |       the disruptor will notify it if this parameter is set to True.
+    |      | default: True [type: bool]
+
 
 Stateless Disruptors
-====================
+--------------------
+
+ADD - Add Data Within a Node
+++++++++++++++++++++++++++++
+
+Description:
+   Add some data within the retrieved input.
+
+Reference:
+  :class:`framework.generic_data_makers.d_add_data`
+
+Parameters:
+  .. code-block:: none
+
+        |_ path
+        |      | desc: Graph path to select the node on which the disruptor should
+        |      |       apply.
+        |      | default: None [type: str]
+        |_ after
+        |      | desc: If True, the addition will be done after the selected node.
+        |      |       Otherwise, it will be done before.
+        |      | default: True [type: bool]
+        |_ atom
+        |      | desc: Name of the atom to add within the retrieved input. It is mutually
+        |      |       exclusive with @raw
+        |      | default: None [type: str]
+        |_ raw
+        |      | desc: Raw value to add within the retrieved input. It is mutually
+        |      |       exclusive with @atom.
+        |      | default: b'' [type: bytes, str]
+        |_ name
+        |      | desc: If provided, the added node will have this name.
+        |      | default: None [type: str]
+
 
 OP - Perform Operations on Nodes
---------------------------------
+++++++++++++++++++++++++++++++++
 
 Description:
     Perform an operation on the nodes specified by the regexp path. @op is an operation that
@@ -294,7 +498,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-      parameters:
         |_ path
         |      | desc: Graph path regexp to select nodes on which the disruptor should
         |      |       apply.
@@ -302,10 +505,14 @@ Parameters:
         |_ op
         |      | desc: The operation to perform on the selected nodes.
         |      | default: <function Node.clear_attr> [type: method, function]
+        |_ op_ref
+        |      | desc: Predefined operation that can be referenced by name. The current
+        |      |       predefined function are: 'unfreeze', 'freeze', 'walk'. Take
+        |      |       precedence over @op if not None.
+        |      | default: None [type: str]
         |_ params
         |      | desc: Tuple of parameters that will be provided to the operation.
-        |      |       (default: MH.Attr.Mutable)
-        |      | default: (2,) [type: tuple]
+        |      | default: () [type: tuple]
         |_ clone_node
         |      | desc: If True the dmaker will always return a copy of the node. (For
         |      |       stateless disruptors dealing with big data it can be useful
@@ -314,7 +521,7 @@ Parameters:
 
 
 MOD - Modify Node Contents
---------------------------
+++++++++++++++++++++++++++
 
 Description:
     Perform modifications on the provided data. Two ways are possible:
@@ -331,32 +538,39 @@ Reference:
 Parameters:
   .. code-block:: none
 
-      parameters:
         |_ path
         |      | desc: Graph path regexp to select nodes on which the disruptor should
         |      |       apply.
         |      | default: None [type: str]
+        |_ sem
+        |      | desc: Semantics to select nodes on which the disruptor should apply.
+        |      | default: None [type: str, list]
         |_ value
         |      | desc: The new value to inject within the data.
-        |      | default: '' [type: str]
+        |      | default: b'' [type: bytes]
         |_ constraints
         |      | desc: Constraints for the absorption of the new value.
         |      | default: AbsNoCsts() [type: AbsCsts]
         |_ multi_mod
-        |      | desc: Dictionary of <path>:<item> pairs to change multiple nodes with
-        |      |       diferent values. <item> can be either only the new <value> or
-        |      |       a tuple (<value>,<abscsts>) if new constraint for absorption
-        |      |       is needed
+        |      | desc: Dictionary of <path>:<item> pairs or <NodeSemanticsCriteria>:<item>
+        |      |       pairs or <NodeInternalsCriteria>:<item> pairs to change multiple
+        |      |       nodes with different values. <item> can be either only the new
+        |      |       <value> or a tuple (<value>,<abscsts>) if new constraint for
+        |      |       absorption is needed
         |      | default: None [type: dict]
+        |_ unfold
+        |      | desc: Resolve all the generator nodes within the input before performing
+        |      |       the @path/@sem research
+        |      | default: False [type: bool]
         |_ clone_node
         |      | desc: If True the dmaker will always return a copy of the node. (For
         |      |       stateless disruptors dealing with big data it can be useful
-        |      |       to it to False.)
+        |      |       to set it to False.)
         |      | default: False [type: bool]
 
 
 CALL - Call Function
---------------------
+++++++++++++++++++++
 
 Description:
     Call the function provided with the first parameter being the :class:`framework.data.Data`
@@ -373,7 +587,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-      parameters:
         |_ func
         |      | desc: The function that will be called with a node as its first parameter,
         |      |       and provided optionnaly with addtionnal parameters if @params
@@ -386,7 +599,7 @@ Parameters:
 
 
 NEXT - Next Node Content
-------------------------
+++++++++++++++++++++++++
 
 Description:
   Move to the next content of the nodes from input data or from only
@@ -400,13 +613,12 @@ Reference:
 Parameters:
   .. code-block:: none
 
-    parameters:
       |_ path
       |      | desc: graph path regexp to select nodes on which the disruptor should
       |      |       apply
       |      | default: None [type: str]
       |_ clone_node
-      |      | desc: if True the dmaker will always return a copy of the node. (for
+      |      | desc: if True, this operator will always return a copy of the node. (for
       |      |       stateless disruptors dealing with big data it can be useful
       |      |       to it to False)
       |      | default: False [type: bool]
@@ -417,7 +629,7 @@ Parameters:
 
 
 FIX - Fix Data Constraints
---------------------------
+++++++++++++++++++++++++++
 
 Description:
   Release constraints from input data or from only a piece of it (if
@@ -435,20 +647,19 @@ Reference:
 Parameters:
   .. code-block:: none
 
-    parameters:
       |_ path
       |      | desc: graph path regexp to select nodes on which the disruptor should
       |      |       apply
       |      | default: None [type: str]
       |_ clone_node
-      |      | desc: if True the dmaker will always return a copy of the node. (for
+      |      | desc: if True, this operator will always return a copy of the node. (for
       |      |       stateless disruptors dealing with big data it can be useful
       |      |       to it to False)
       |      | default: False [type: bool]
 
 
 ALT - Alternative Node Configuration
-------------------------------------
+++++++++++++++++++++++++++++++++++++
 
 Description:
   Switch to an alternate configuration.
@@ -459,7 +670,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ path
          |      | desc: graph path regexp to select nodes on which the disruptor should
          |      |       apply
@@ -476,7 +686,7 @@ Parameters:
 
 
 C - Node Corruption
--------------------
++++++++++++++++++++
 
 Description:
   Corrupt bits on some nodes of the data model.
@@ -487,7 +697,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ path
          |      | desc: graph path regexp to select nodes on which the disruptor should
          |      |       apply
@@ -505,7 +714,7 @@ Parameters:
 
 
 Cp - Corruption at Specific Position
-------------------------------------
+++++++++++++++++++++++++++++++++++++
 
 Description:
   Corrupt bit at a specific byte.
@@ -516,7 +725,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ new_val
          |      | desc: if provided change the selected byte with the new one
          |      | default: None [type: str]
@@ -529,7 +737,7 @@ Parameters:
 
 
 EXT - Make Use of an External Program
--------------------------------------
++++++++++++++++++++++++++++++++++++++
 
 Description:
   Call an external program to deal with the data.
@@ -540,7 +748,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ path
          |      | desc: graph path regexp to select nodes on which the disruptor should
          |      |       apply
@@ -555,7 +762,7 @@ Parameters:
 
 
 SIZE - Truncate
----------------
++++++++++++++++
 
 Description:
   Truncate the data (or part of the data) to the provided size.
@@ -566,7 +773,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ sz
          |      | desc: truncate the data (or part of the data) to the provided size
          |      | default: 10 [type: int]
@@ -577,7 +783,7 @@ Parameters:
 
 
 STRUCT - Shake Up Data Structure
---------------------------------
+++++++++++++++++++++++++++++++++
 
 Description:
   Disrupt the data model structure (replace ordered sections by
@@ -589,7 +795,6 @@ Reference:
 Parameters:
   .. code-block:: none
 
-       parameters:
          |_ path
          |      | desc: graph path regexp to select nodes on which the disruptor should
          |      |       apply
@@ -598,7 +803,7 @@ Parameters:
 
 
 COPY - Shallow Copy Data
-------------------------
+++++++++++++++++++++++++
 
 Description:
   Shallow copy of the input data, which means: ignore its frozen

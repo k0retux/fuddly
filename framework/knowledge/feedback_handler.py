@@ -64,19 +64,18 @@ class FeedbackHandler(object):
     A feedback handler extract information from binary data.
     """
 
-    def __init__(self, new_window=False, new_window_title=None, xterm_prg_name='x-terminal-emulator'):
+    def __init__(self, new_window=False, new_window_title=None):
         """
         Args:
             new_window: If `True`, a new terminal emulator is created, enabling the decoder to use
               it for display via the methods `print()` and `print_nl()`
 
-            xterm_prg_name: name of the terminal emulator program to be started
         """
         self._new_window = new_window
         self._new_window_title = new_window_title
-        self._xterm_prg_name = xterm_prg_name
         self._s = None
         self.term = None
+        self.fmkops = None
 
     def notify_data_sending(self, current_dm, data_list, timestamp, target):
         """
@@ -89,7 +88,7 @@ class FeedbackHandler(object):
             current_dm (:class:`framework.data_model.DataModel`): current loaded DataModel
             data_list (list): list of :class:`framework.data.Data` that were sent
             timestamp (datetime): date when data was sent
-            target (Target): target to which data was sent
+            target (:class:`framework.target_helpers.Target`): target to which data was sent
         """
         pass
 
@@ -122,18 +121,27 @@ class FeedbackHandler(object):
         """
         return UNIQUE
 
-    def _start(self):
+    def start(self, current_dm):
+        pass
+
+    def stop(self):
+        pass
+
+    def _start(self, current_dm):
         self._s = ''
         if self._new_window:
             nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
-            self.term = Term(name=nm, xterm_prg_name=self._xterm_prg_name,
-                             keepterm=True)
+            self.term = Term(title=nm, keepterm=True)
             self.term.start()
+
+        self.start(current_dm)
 
     def _stop(self):
         self._s = None
         if self._new_window and self.term is not None:
             self.term.stop()
+
+        self.stop()
 
     def print(self, msg):
         if self._new_window:

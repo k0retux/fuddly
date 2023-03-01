@@ -10,6 +10,7 @@ import framework.dmhelpers.xml as xml
 from framework.dmhelpers.json import *
 from framework.dmhelpers.xml import tag_builder as xtb
 from framework.dmhelpers.xml import xml_decl_builder
+from framework.constraint_helpers import Constraint
 
 class MyDF_DataModel(DataModel):
 
@@ -193,10 +194,10 @@ class MyDF_DataModel(DataModel):
          'shape_type': MH.Ordered,
          'contents': [
              {'name': 'opcode',
-              'contents': String(values=['A1', 'A2', 'A3'], determinist=True)},
+              'contents': String(values=['A1', 'A2', 'A3'], determinist=True, case_sensitive=False)},
 
              {'name': 'command_A1',
-              'contents': String(values=['AAA', 'BBBB', 'CCCCC']),
+              'contents': String(values=['AAA', 'BBBB', 'CCCCC'], case_sensitive=False),
               'exists_if': (RawCondition('A1'), 'opcode'),
               'qty': 3},
 
@@ -226,11 +227,11 @@ class MyDF_DataModel(DataModel):
               ]},
 
              {'name': 'A31_payload',
-              'contents': String(values=['$ A31_OK $', '$ A31_KO $'], determinist=False),
+              'contents': String(values=['$ A31_OK $', '$ A31_KO $'], determinist=False, case_sensitive=False),
               'exists_if': (BitFieldCondition(sf=2, val=[6,12]), 'A3_subopcode')},
 
              {'name': 'A32_payload',
-              'contents': String(values=['$ A32_VALID $', '$ A32_INVALID $'], determinist=False),
+              'contents': String(values=['$ A32_VALID $', '$ A32_INVALID $'], determinist=False, case_sensitive=False),
               'exists_if': (BitFieldCondition(sf=[0, 1, 2], val=[[500, 501], [1, 2], 5]), 'A3_subopcode')}
          ]}
 
@@ -298,12 +299,12 @@ class MyDF_DataModel(DataModel):
 
              {'name': 'tstamp',
               'contents': TIMESTAMP("%H%M%S"),
-              'absorb_csts': AbsCsts(contents=False)},
+              'absorb_csts': AbsCsts(content=False)},
 
              {'name': 'crc',
               'contents': CRC(UINT32_be),
               'node_args': ['tstamp', 'int32_qty'],
-              'absorb_csts': AbsCsts(contents=False)}
+              'absorb_csts': AbsCsts(content=False)}
 
          ]}
 
@@ -368,7 +369,7 @@ class MyDF_DataModel(DataModel):
              {'name': 'crc',
               'contents': CRC(vt=UINT32_be, after_encoding=False),
               'node_args': ['enc_data', 'data2'],
-              'absorb_csts': AbsFullCsts(contents=False) },
+              'absorb_csts': AbsFullCsts(content=False, similar_content=False)},
              {'name': 'enc_data',
               'encoder': GZIP_Enc(6),
               'set_attrs': [NodeInternals.Abs_Postpone],
@@ -376,7 +377,7 @@ class MyDF_DataModel(DataModel):
                  {'name': 'len',
                   'contents': LEN(vt=UINT8, after_encoding=False),
                   'node_args': 'data1',
-                  'absorb_csts': AbsFullCsts(contents=False)},
+                  'absorb_csts': AbsFullCsts(content=False, similar_content=False)},
                  {'name': 'data1',
                   'contents': String(values=['Test!', 'Hello World!'], codec='utf-16-le') },
               ]},
@@ -398,7 +399,7 @@ class MyDF_DataModel(DataModel):
                   'mutable': False,
                   'contents': LEN(vt=UINT8, after_encoding=False),
                   'node_args': 'data1',
-                  'absorb_csts': AbsFullCsts(contents=False)},
+                  'absorb_csts': AbsFullCsts(content=False, similar_content=False)},
 
                  {'name': 'data1',
                   'contents': String(values=['Test!', 'Hello World!']) },
@@ -529,12 +530,132 @@ class MyDF_DataModel(DataModel):
              'debug': True
             }
 
+
+        nested_desc = \
+            {'name': 'nested',
+             'custo_clear': MH.Custo.NTerm.MutableClone,
+             'contents': [
+                 {'name' : 'line',
+                  'qty': (0,50), 'default_qty': 2,
+                  'contents': [
+                      {'name': 'sep', 'contents': String(values=['..'])},
+                      {'name': 'wrapper',
+                       'contents': [
+                           {'name': 'point',
+                            'contents': [
+
+                                {'weight':50,
+                                 'contents': [
+                                     {'name': 'lat',
+                                      'contents': [
+                                          {'name': 'lat_dir',
+                                           'contents': String(values=['N', 'S'])},
+                                          {'name': 'lat_deg',
+                                           'contents': INT_str(min=0, max=90, min_size=2)},
+                                          {'name': 'lat_min',
+                                           'qty': (0,1),
+                                           'contents': INT_str(min=0, max=59, min_size=2)},
+                                      ]},
+                                 ]},
+
+                                {'weight':40,
+                                 'contents': [
+                                     {'name': 'lon',
+                                      'contents': [
+                                          {'name': 'lon_dir',
+                                           'contents': String(values=['E', 'W'])},
+                                          {'name': 'lon_deg',
+                                           'contents': INT_str(min=0, max=180, min_size=3)},
+                                          {'name': 'lon_min',
+                                           'qty': (0,1),
+                                           'contents': INT_str(min=0, max=59, min_size=2)},
+                                      ]},
+                                 ]}
+
+                            ]}
+                       ]}
+                  ]}
+             ]}
+
+
+        csp_desc = \
+            {'name': 'csp',
+             'constraints': [Constraint(relation=lambda d1, d2: d1[1]+1 == d2[0] or d1[1]+2 == d2[0],
+                                        vars=('delim_1', 'delim_2')),
+                             Constraint(relation=lambda x, y, z: x == 3*y + z,
+                                        vars=('x_val', 'y_val', 'z_val'))],
+             'constraints_highlight': True,
+             'contents': [
+                 {'name': 'equation',
+                  'contents': String(values=['x = 3y + z'])},
+                 {'name': 'delim_1', 'contents': String(values=[' [', ' ('])},
+                 {'name': 'variables',
+                  'separator': {'contents': {'name': 'sep', 'contents': String(values=[', '])},
+                                'prefix': False, 'suffix': False},
+                  'contents': [
+                      {'name': 'x',
+                       'contents': [
+                           {'name': 'x_symbol',
+                            'contents': String(values=['x:', 'X:'])},
+                           {'name': 'x_val',
+                            'contents': INT_str(min=120, max=130)} ]},
+                      {'name': 'y',
+                       'contents': [
+                           {'name': 'y_symbol',
+                            'contents': String(values=['y:', 'Y:'])},
+                           {'name': 'y_val',
+                            'contents': INT_str(min=30, max=40)}]},
+                      {'name': 'z',
+                       'contents': [
+                           {'name': 'z_symbol',
+                            'contents': String(values=['z:', 'Z:'])},
+                           {'name': 'z_val',
+                            'contents': INT_str(min=1, max=3)}]},
+                  ]},
+                 {'name': 'delim_2', 'contents': String(values=['-', ']', ')'])},
+             ]}
+
+
+        csp_ns_desc = \
+            {'name': 'csp_ns',
+             'constraints': [Constraint(relation=lambda lat_deg, lon_deg: lat_deg == lon_deg + 1,
+                                        vars=('lat_deg', 'lon_deg'),
+                                        var_to_varns={'lat_deg': ('deg', 'lat'),
+                                                      'lon_deg': ('deg', 'lon')}),
+                             Constraint(lambda lat_min, lon_deg: lat_min == lon_deg + 10,
+                                        vars=('lat_min', 'lon_deg'),
+                                        var_to_varns={'lon_deg': ('deg', 'lon'),
+                                                      'lat_min': ('min', 'lat')})],
+             'contents': [
+                 {'name': 'latitude',
+                  'namespace': 'lat',
+                  'contents': [
+                      {'name': 'dir',
+                       'contents': String(values=['N', 'S'])},
+                      {'name': 'deg',
+                       'contents': INT_str(min=0, max=90, min_size=2)},
+                      {'name': 'min',
+                       'contents': INT_str(min=0, max=59, min_size=2)},
+                  ]},
+                 {'name': 'longitude',
+                  'namespace': 'lon',
+                  'contents': [
+                      {'name': 'dir',
+                       'contents': String(values=['E', 'W'])},
+                      {'name': 'deg',
+                       'contents': INT_str(min=0, max=180, min_size=3)},
+                      {'name': 'min',
+                       'contents': INT_str(min=0, max=59, min_size=2)},
+                  ]},
+             ]}
+
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
                       shape_desc, for_network_tg1, for_network_tg2, for_net_default_tg, basic_intg,
                       enc_desc, example_desc,
                       regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc, xml5_desc,
-                      json1_desc, json2_desc, file_desc)
+                      json1_desc, json2_desc, file_desc, nested_desc,
+                      csp_desc, csp_ns_desc)
 
 
 data_model = MyDF_DataModel()

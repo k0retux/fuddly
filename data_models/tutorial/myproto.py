@@ -44,7 +44,7 @@ class MyProto_DataModel(DataModel):
              {'name': 'init',
               'exists_if': (BitFieldCondition(sf=1, val=[1]), 'header'),
               'contents': TIMESTAMP("%H:%M:%S"),
-              'absorb_csts': AbsFullCsts(contents=False)},
+              'absorb_csts': AbsFullCsts(content=False, similar_content=False)},
 
              {'name': 'register',
               'custo_clear': MH.Custo.NTerm.FrozenCopy,
@@ -85,14 +85,14 @@ class MyProto_DataModel(DataModel):
         req_atom = NodeBuilder(add_env=True).create_graph_from_desc(req_desc)
 
         init_atom = req_atom.get_clone('init', ignore_frozen_state=True)
-        init_atom['.*/header'].set_subfield(idx=1, val=1)
+        init_atom['.*/header'][0].set_subfield(idx=1, val=1)
         init_atom.unfreeze(recursive=True)
         register_atom = req_atom.get_clone('register', ignore_frozen_state=True)
-        register_atom['.*/header'].set_subfield(idx=1, val=10)
+        register_atom['.*/header'][0].set_subfield(idx=1, val=10)
         register_atom.unfreeze(recursive=True)
         zregister_atom = req_atom.get_clone('zregister', ignore_frozen_state=True)
-        zregister_atom['.*/header'].set_subfield(idx=1, val=20)
-        zregister_atom['.*/header'].set_subfield(idx=2, val=3)
+        zregister_atom['.*/header'][0].set_subfield(idx=1, val=20)
+        zregister_atom['.*/header'][0].set_subfield(idx=2, val=3)
         zregister_atom.unfreeze(recursive=True)
 
         self.register(req_atom, init_atom, register_atom, zregister_atom)

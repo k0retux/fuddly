@@ -30,27 +30,35 @@ import re
 import inspect
 import uuid
 
+from framework.global_resources import config_folder
+from framework.config import config
+import shlex
+
+term = config("FmkPlumbing", path=[config_folder]).terminal
 
 class Term(object):
 
-    def __init__(self, name=None, keepterm=False, xterm_args=None, xterm_prg_name='x-terminal-emulator'):
-        self.name = name
+    def __init__(self, title=None, keepterm=False):
+        self.title = title
         self.keepterm = keepterm
-        self.xterm_args = xterm_args
-        self.xterm_prg_name = xterm_prg_name
 
     def start(self):
         self.pipe_path = os.sep + os.path.join('tmp', 'fuddly_term_'+str(uuid.uuid4()))
         if not os.path.exists(self.pipe_path):
             os.mkfifo(self.pipe_path)
-        self.cmd = [self.xterm_prg_name]
-        if self.name is not None:
-            self.cmd.extend(['-title',self.name])
-        if self.xterm_args:
-            self.cmd.extend(self.xterm_args)
+        self.cmd = [term.name]
+        if self.title is not None:
+            self.cmd.extend([term.title_arg, self.title])
         if self.keepterm:
-            self.cmd.append('--hold')
-        self.cmd.extend(['-e', 'tail -f {:s}'.format(self.pipe_path)])
+            self.cmd.append(term.hold_arg)
+        if term.extra_args:
+            self.cmd.extend(shlex.split(term.extra_args))
+        if term.exec_arg:
+            self.cmd.append(term.exec_arg)
+        if term.exec_arg_type == "list":
+            self.cmd.extend(['tail', '-f', self.pipe_path])
+        elif term.exec_arg_type == "string":
+            self.cmd.append(f"tail -f {self.pipe_path}")
         self._p = None
 
     def _launch_term(self):
@@ -66,6 +74,8 @@ class Term(object):
             pass
 
     def print(self, s, newline=False):
+        if not isinstance(s, str):
+            s = str(s)
         s += '\n' if newline else ''
         if self._p is None or self._p.poll() is not None:
             self._launch_term()
@@ -76,33 +86,130 @@ class Term(object):
         self.print(s, newline=True)
 
 
-def ensure_dir(f):
-    d = os.path.dirname(f)
-    if not os.path.exists(d):
-        os.makedirs(d)
+class ExternalDisplay(object):
 
-def ensure_file(f):
-    if not os.path.isfile(f):
-        open(f, 'a').close()
+    def __init__(self):
+        self._disp = None
 
-def chunk_lines(string, length):
+    @property
+    def disp(self):
+        return self._disp
+
+    @property
+    def is_terminal(self):
+        return isinstance(self._disp, Term)
+
+    @property
+    def is_enabled(self):
+        return self.disp is not None
+
+    def stop(self):
+        if self._disp:
+            self._disp.stop()
+            self._disp = None
+
+    def start_term(self, title=None, keepterm=False):
+        self._disp = Term(title=title, keepterm=keepterm)
+        self._disp.start()
+        self._disp.print('')
+
+
+class Task(object):
+
+    period = None
+    fmkops = None
+    feedback_gate = None
+    targets = None
+    dm = None
+    prj = None
+
+    def __call__(self, args):
+        pass
+
+    def setup(self):
+        pass
+
+    def cleanup(self):
+        pass
+
+    def __init__(self, period=None, init_delay=0,
+                 new_window=False, new_window_title=None):
+        self.period = period
+        self.init_delay = init_delay
+        self.fmkops = None
+        self.feedback_gate = None
+        self.targets = None
+        self.dm = None
+        self.prj = None
+        # When a task is used in the context of a FmkTask, this attribute is initialized to a
+        # threading event by the FmkTask. Then when set, it should be understood by the task that
+        # the framework want it to stop.
+        self.stop_event = None
+
+        self._new_window = new_window
+        self._new_window_title = new_window_title
+
+    def _setup(self):
+        if self._new_window:
+            nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
+            self.term = Term(title=nm, keepterm=True)
+            self.term.start()
+
+        self.setup()
+
+    def _cleanup(self):
+        self.cleanup()
+        if self._new_window and self.term is not None:
+            self.term.stop()
+
+    def __str__(self):
+        if self.period is None:
+            desc = 'Oneshot Task'
+        else:
+            desc = 'Periodic Task (period={}s)'.format(self.period)
+        return desc
+
+    def print(self, msg):
+        if self._new_window:
+            self.term.print(msg)
+        else:
+            print(msg)
+
+    def print_nl(self, msg):
+        if self._new_window:
+            self.term.print_nl(msg)
+        else:
+            print(msg)
+
+class Accumulator:
+
+    def __init__(self):
+        self.content = ''
+
+    def accumulate(self, msg):
+        self.content += msg
+
+    def clear(self):
+        self.content = ''
+
+def chunk_lines(string, length, prefix=''):
     l = string.split(' ')
     chk_list = []
     full_line = ''
     for wd in l:
         full_line += wd + ' '
         if len(full_line) > (length - 1):
-            chk_list.append(full_line)
+            chk_list.append(prefix+full_line)
             full_line = ''
     if full_line:
-        chk_list.append(full_line)
+        chk_list.append(prefix+full_line)
     # remove last space char
     if chk_list:
         chk_list[-1] = (chk_list[-1])[:-1]
     return chk_list
 
 def find_file(filename, root_path):
-    for (dirpath, dirnames, filenames) in os.walk(root_path):
+    for (dirpath, dirnames, filenames) in os.walk(os.path.expanduser(root_path)):
         if filename in filenames:
             return dirpath + os.sep + filename
     else:
@@ -125,12 +232,6 @@ def retrieve_app_handler(filename):
         app_name = result.group(1).split()[0]
     return app_name
 
-
-if sys.version_info[0] > 2:
-    def get_caller_object(stack_frame=2):
-        caller_frame_record = inspect.stack()[stack_frame]
-        return caller_frame_record.frame.f_locals['self']
-else:
-    def get_caller_object(stack_frame=2):
-        caller_frame_record = inspect.stack()[stack_frame]
-        return caller_frame_record[0].f_locals['self']
+def get_caller_object(stack_frame=2):
+    caller_frame_record = inspect.stack()[stack_frame]
+    return caller_frame_record.frame.f_locals['self']

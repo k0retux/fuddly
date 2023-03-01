@@ -27,10 +27,7 @@ import random
 from framework.global_resources import workspace_folder
 from framework.target_helpers import Target
 from framework.knowledge.feedback_collector import FeedbackCollector
-from libs.external_modules import cups_module
-
-if cups_module:
-   import cups
+from libs.external_modules import cups_module, cups
 
 class PrinterTarget(Target):
 

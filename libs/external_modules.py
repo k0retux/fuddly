@@ -27,13 +27,6 @@ try:
     import xtermcolor
     from xtermcolor import colorize
     xtermcolor.isatty = lambda x: True
-
-    if sys.version_info[0] <= 2:
-        def colorize(string, rgb=None, ansi=None, bg=None, ansi_bg=None, fd=1):
-            if isinstance(string, unicode):
-                string = str(string)
-            return xtermcolor.colorize(string, rgb=rgb, ansi=ansi, bg=bg, ansi_bg=ansi_bg, fd=fd)
-
 except ImportError:
     print("WARNING [FMK]: python-xtermcolor module is not installed, colors won't be available!")
     def colorize(string, rgb=None, ansi=None, bg=None, ansi_bg=None, fd=1):
@@ -85,6 +78,7 @@ class Color(object):
     ND_SEPARATOR = 0x008000
     ND_ENCODED = 0xFFA500
     ND_CUSTO = 0x800080
+    ND_HLIGHT = 0xEF0000
 
     ANALYSIS_CONFIRM = 0xEF0000
     ANALYSIS_FALSEPOSITIVE = 0x00FF00
@@ -107,6 +101,7 @@ try:
     import graphviz
 except ImportError:
     graphviz_module = False
+    graphviz = None
     print('WARNING [FMK]: python(3)-graphviz module is not installed, Scenario could not be visualized!')
 
 sqlite3_module = True
@@ -114,6 +109,7 @@ try:
     import sqlite3
 except ImportError:
     sqlite3_module = False
+    sqlite3 = None
     print('WARNING [FMK]: SQLite3 not installed, FmkDB will not be available!')
 
 cups_module = True
@@ -121,6 +117,7 @@ try:
     import cups
 except ImportError:
     cups_module = False
+    cups = None
     print('WARNING [FMK]: python(3)-cups module is not installed, Printer targets will not be available!')
 
 crcmod_module = True
@@ -128,6 +125,7 @@ try:
     import crcmod
 except ImportError:
     crcmod_module = False
+    crcmod = None
     print('WARNING [FMK]: python(3)-crcmod module is not installed, the CRC()' \
           ' generator template will not be available!')
 
@@ -136,6 +134,7 @@ try:
     import paramiko as ssh
 except ImportError:
     ssh_module = False
+    ssh = None
     print('WARNING [FMK]: python(3)-paramiko module is not installed! '
           'Should be installed for ssh-based monitoring.')
 
@@ -144,5 +143,15 @@ try:
     import serial
 except ImportError:
     serial_module = False
+    serial = None
     print('WARNING [FMK]: python(3)-serial module is not installed! '
           'Should be installed for serial-based Target.')
+
+csp_module = True
+try:
+    import constraint
+except ImportError:
+    csp_module = False
+    constraint = None
+    print('WARNING [FMK]: python-constraint module is not installed! '
+          'Should be installed to support constraint-based nodes.')

@@ -26,13 +26,16 @@ import os
 import re
 import math
 import threading
-from datetime import datetime
+import copy
+from datetime import datetime, timedelta
+from typing import Optional
 
 import framework.global_resources as gr
+from framework.config import config
 import libs.external_modules as em
 from framework.knowledge.feedback_collector import FeedbackSource
 from libs.external_modules import *
-from libs.utils import ensure_dir, chunk_lines
+from libs.utils import chunk_lines
 
 
 def regexp(expr, item):
@@ -53,15 +56,16 @@ def regexp_bin(expr, item):
 
 class FeedbackGate(object):
 
-    def __init__(self, database):
+    def __init__(self, database, only_last_entries=True):
         """
         Args:
             database (Database): database to be associated with
         """
         self.db = database
+        self.last_fbk_entries = only_last_entries
 
     def __iter__(self):
-        for item in self.db.iter_last_feedback_entries():
+        for item in self.db.iter_feedback_entries(last=self.last_fbk_entries):
             yield item
 
     def get_feedback_from(self, source):
@@ -69,7 +73,7 @@ class FeedbackGate(object):
             source = FeedbackSource(source)
 
         try:
-            fbk = self.db.last_feedback[source]
+            fbk = self.db.last_feedback[source] if self.last_fbk_entries else self.db.feedback_trail[source]
         except KeyError:
             raise
         else:
@@ -91,7 +95,7 @@ class FeedbackGate(object):
                 - the 4-uplet: (source, status, timestamp, content) if `source` is `None`
 
         """
-        for item in self.db.iter_last_feedback_entries(source=source):
+        for item in self.db.iter_feedback_entries(last=self.last_fbk_entries, source=source):
             yield item
 
     def sources_names(self):
@@ -103,21 +107,22 @@ class FeedbackGate(object):
             list: names of the feedback sources
 
         """
-        return [str(fs) for fs in self.db.last_feedback.keys()]
+        fbk_db = self.db.last_feedback if self.last_fbk_entries else self.db.feedback_trail
+        return [str(fs) for fs in fbk_db.keys()]
 
-    # for python2 compatibility
-    def __nonzero__(self):
-        return bool(self.db.last_feedback)
+    @property
+    def size(self):
+        return len(list(self.db.iter_feedback_entries(last=self.last_fbk_entries)))
 
-    # for python3 compatibility
     def __bool__(self):
-        return bool(self.db.last_feedback)
+        return bool(self.db.last_feedback if self.last_fbk_entries else self.db.feedback_trail)
 
 
 class Database(object):
 
     DDL_fname = 'fmk_db.sql'
 
+    DEFAULT_DB_NAME = 'fmkDB.db'
     DEFAULT_DM_NAME = '__DEFAULT_DATAMODEL'
     DEFAULT_GTYPE_NAME = '__DEFAULT_GTYPE'
     DEFAULT_GEN_NAME = '__DEFAULT_GNAME'
@@ -125,20 +130,30 @@ class Database(object):
     OUTCOME_ROWID = 1
     OUTCOME_DATA = 2
 
+    FEEDBACK_TRAIL_TIME_WINDOW = 10 # seconds
+
     def __init__(self, fmkdb_path=None):
-        self.name = 'fmkDB.db'
+
+        self.name = Database.DEFAULT_DB_NAME
         if fmkdb_path is None:
             self.fmk_db_path = os.path.join(gr.fuddly_data_folder, self.name)
         else:
-            self.fmk_db_path = fmkdb_path
+            self.fmk_db_path = os.path.expanduser(fmkdb_path)
+
+        self._ref_names = {}
+        self.config = None
 
         self.enabled = False
 
         self.current_project = None
 
         self.last_feedback = {}
+        self.feedback_trail = {}  # store feedback entries for self.feedback_trail_time_window
+        self.feedback_trail_init_ts = None
+        self.feedback_trail_time_window = self.FEEDBACK_TRAIL_TIME_WINDOW
 
         self._data_id = None
+        self._current_sent_date = None
 
         self._sql_handler_thread = None
         self._sql_handler_stop_event = threading.Event()
@@ -155,6 +170,13 @@ class Database(object):
 
         self._ok = None
 
+        self.fbk_timeout_re = re.compile('.*feedback timeout = (.*)s$')
+
+
+    @staticmethod
+    def get_default_db_path():
+        return os.path.join(gr.fuddly_data_folder, Database.DEFAULT_DB_NAME)
+
     def _is_valid(self, connection, cursor):
         valid = False
         with connection:
@@ -169,16 +191,19 @@ class Database(object):
                 tables = filter(lambda x: not x.startswith('sqlite'), tables)
                 for t in tables:
                     cur.execute('select * from {!s}'.format(t))
-                    ref_names = list(map(lambda x: x[0], cur.description))
+                    self._ref_names[t] = list(map(lambda x: x[0], cur.description))
                     cursor.execute('select * from {!s}'.format(t))
                     names = list(map(lambda x: x[0], cursor.description))
-                    if ref_names != names:
+                    if self._ref_names[t] != names:
                         valid = False
                         break
                 else:
                     valid = True
 
         return valid
+
+    def column_names_from(self, table):
+        return self._ref_names[table]
 
     def _sql_handler(self):
         if os.path.isfile(self.fmk_db_path):
@@ -260,7 +285,7 @@ class Database(object):
             self._sql_handler_thread.join()
 
 
-    def submit_sql_stmt(self, stmt, params=None, outcome_type=None, error_msg=''):
+    def submit_sql_stmt(self, stmt, params=None, outcome_type: Optional[int] = None, error_msg=''):
         """
         This method is the only one that should submit request to the threaded SQL handler.
         It is also synchronized to guarantee request order (especially needed when you wait for
@@ -285,7 +310,7 @@ class Database(object):
                 # If we care about outcomes, then we are sure to get outcomes from the just
                 # submitted SQL statement as this method is 'synchronized'.
                 while not self._sql_stmt_handled.is_set():
-                    self._sql_stmt_handled.wait(0.1)
+                    self._sql_stmt_handled.wait(0.001)
                 self._sql_stmt_handled.clear()
 
                 with self._sql_stmt_outcome_lock:
@@ -294,6 +319,8 @@ class Database(object):
                     return ret
 
     def start(self):
+        self.config = config("Database", path=[gr.config_folder])
+
         if self._sql_handler_thread is not None:
             return
 
@@ -320,9 +347,15 @@ class Database(object):
     def disable(self):
         self.enabled = False
 
+    def is_enabled(self):
+        return self.enabled
+
+    def flush_feedback(self):
+        self.last_feedback = {}
+        self.feedback_trail = {}
+
     def flush_current_feedback(self):
         self.last_feedback = {}
-        self.last_feedback_sources_names = {}
 
     def execute_sql_statement(self, sql_stmt, params=None):
         return self.submit_sql_stmt(sql_stmt, params=params, outcome_type=Database.OUTCOME_DATA)
@@ -368,13 +401,53 @@ class Database(object):
 
         if self._data_id is None:
             d_id = self.submit_sql_stmt(stmt, params=params, outcome_type=Database.OUTCOME_ROWID,
-                                       error_msg=err_msg)
+                                        error_msg=err_msg)
             self._data_id = d_id
         else:
             self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
             self._data_id += 1
 
+        self._current_sent_date = sent_date
+
         return self._data_id
+
+
+    def get_next_data_id(self, prev_id=None):
+        if prev_id is None and self._data_id is None:
+            return None
+        elif prev_id is not None:
+            return prev_id + 1
+        elif self._data_id is not None:
+            return self._data_id + 1
+
+    def insert_async_data(self, dtype, dm_name, raw_data, sz, sent_date,
+                          target_ref, prj_name, current_data_id=None):
+
+        if not self.enabled:
+            return None
+
+        blob = sqlite3.Binary(raw_data)
+
+        stmt = "INSERT INTO ASYNC_DATA(CURRENT_DATA_ID,TYPE,DM_NAME,CONTENT,SIZE,SENT_DATE,"\
+               "TARGET,PRJ_NAME)"\
+               " VALUES(?,?,?,?,?,?,?,?)"
+
+        if self._current_sent_date is not None:
+            # We do not associate an async data to the last data_id if
+            # it is sent more than 60 seconds after
+            if (sent_date - self._current_sent_date).total_seconds() > self.config.async_data.after_data_id:
+                data_id = None
+            else:
+                data_id = self._data_id if current_data_id is None else current_data_id
+        else:
+            data_id = self._data_id if current_data_id is None else current_data_id
+
+        params = (data_id, dtype, dm_name, blob, sz, sent_date, str(target_ref), prj_name)
+        err_msg = 'while inserting a value into table ASYNC_DATA!'
+
+        self.submit_sql_stmt(stmt, params=params, outcome_type=None, error_msg=err_msg)
+
+        return
 
 
     def insert_steps(self, data_id, step_id, dmaker_type, dmaker_name, data_id_src,
@@ -394,19 +467,32 @@ class Database(object):
 
     def insert_feedback(self, data_id, source, timestamp, content, status_code=None):
 
+        if self.feedback_trail_init_ts is None:
+            self.feedback_trail_init_ts = timestamp
+
+        # timestamp could be None, in this case we ignore the following condition
+        if timestamp is not None and \
+                timestamp - self.feedback_trail_init_ts > timedelta(seconds=self.feedback_trail_time_window):
+            self.feedback_trail = {}
+            self.feedback_trail_init_ts = timestamp
+
         if not isinstance(source, FeedbackSource):
             source = FeedbackSource(source)
 
         if source not in self.last_feedback:
             self.last_feedback[source] = []
 
-        self.last_feedback[source].append(
-            {
-                'timestamp': timestamp,
-                'content': content,
-                'status': status_code
-            }
-        )
+        if source not in self.feedback_trail:
+            self.feedback_trail[source] = []
+
+        fbk_entry = {
+            'timestamp': timestamp,
+            'content': content,
+            'status': status_code
+        }
+
+        self.last_feedback[source].append(fbk_entry)
+        self.feedback_trail[source].append(fbk_entry)
 
         if self.current_project:
             self.current_project.trigger_feedback_handlers(source, timestamp, content, status_code)
@@ -423,17 +509,19 @@ class Database(object):
         err_msg = 'while inserting a value into table FEEDBACK!'
         self.submit_sql_stmt(stmt, params=params, error_msg=err_msg)
 
-    def iter_last_feedback_entries(self, source=None):
-        last_fbk = self.last_feedback.items()
+
+    def iter_feedback_entries(self, last=True, source=None):
+        feedback = copy.copy(self.last_feedback if last else self.feedback_trail)
         if source is None:
-            for src, fbks in last_fbk:
+            for src, fbks in feedback.items():
                 for item in fbks:
                     status = item['status']
                     ts = item['timestamp']
                     content = item['content']
                     yield src, status, ts, content
         else:
-            for item in self.last_feedback[source]:
+            fbk_from_src = self.last_feedback[source] if last else self.feedback_trail[source]
+            for item in fbk_from_src:
                 status = item['status']
                 ts = item['timestamp']
                 content = item['content']
@@ -477,7 +565,7 @@ class Database(object):
             '''
             SELECT DATA.ID, DATA.CONTENT, DATA.TYPE, DMAKERS.NAME, DATA.DM_NAME
             FROM DATA INNER JOIN DMAKERS
-              ON DATA.TYPE = DMAKERS.TYPE AND DMAKERS.CLONE_TYPE IS NULL
+              ON DATA.TYPE = DMAKERS.TYPE AND DATA.DM_NAME = DMAKERS.DM_NAME AND DMAKERS.CLONE_TYPE IS NULL
             WHERE DATA.ID >= {sid:d} {ign_eid:s} AND DATA.ID <= {eid:d}
             UNION ALL
             SELECT DATA.ID, DATA.CONTENT, DMAKERS.CLONE_TYPE AS TYPE, DMAKERS.CLONE_NAME AS NAME,
@@ -513,7 +601,7 @@ class Database(object):
         return data
 
     def display_data_info(self, data_id, with_data=False, with_fbk=False, with_fmkinfo=True,
-                          with_analysis=True,
+                          with_analysis=True, with_async_data=False,
                           fbk_src=None, limit_data_sz=None, page_width=100, colorized=True,
                           raw=False, decoding_hints=None, dm_list=None):
 
@@ -533,11 +621,22 @@ class Database(object):
             "ORDER BY STEP_ID ASC;".format(data_id=data_id)
         )
 
-        if not steps:
-            print(colorize("*** BUG with data ID '{:d}' (data should always have at least 1 step) "
-                           "***".format(data_id),
-                           rgb=Color.ERROR))
-            return
+        async_data = self.execute_sql_statement(
+            f"SELECT ID, CURRENT_DATA_ID, TYPE, DM_NAME, CONTENT, SIZE, SENT_DATE,"
+            f"       TARGET, PRJ_NAME FROM ASYNC_DATA "
+            f"WHERE PRJ_NAME == ?"
+            f"  AND ( CURRENT_DATA_ID == ?"
+            # If current_data_id is null, we only keep async data which were 
+            # sent no more than 5 seconds before the requested data_id.
+            # And we ignore the ones (current_data_id is null) that have been sent after
+            # (because it means the framework was reset) 
+            f"        OR ( CURRENT_DATA_ID IS NULL"
+            f"             AND CAST((JulianDay(?)-JulianDay(SENT_DATE))*24*60*60 AS INTEGER) "
+            f"                    < {self.config.async_data.before_data_id}"
+            f"             AND (JulianDay(?)-JulianDay(SENT_DATE)) >= 0 )"
+            f"       );",
+            params=(prj, data_id, sent_date, sent_date)
+        )
 
         if fbk_src:
             feedback = self.execute_sql_statement(
@@ -566,17 +665,27 @@ class Database(object):
             "ORDER BY ERROR DESC;".format(data_id=data_id)
         )
 
+        fbk_timeout_info = self.execute_sql_statement(
+            'SELECT CONTENT, DATE FROM FMKINFO '
+            'WHERE CONTENT REGEXP "feedback timeout =" '
+            'ORDER BY DATE DESC;'
+        )
+
         analysis_records = self.execute_sql_statement(
             "SELECT CONTENT, DATE, IMPACT FROM ANALYSIS "
             "WHERE DATA_ID == {data_id:d} "
             "ORDER BY DATE ASC;".format(data_id=data_id)
         )
 
-        def search_dm(data_model_name):
+        def search_dm(data_model_name, load_arg):
             for dm in dm_list:
                 if dm.name == data_model_name:
                     dm.load_data_model(load_arg)
-                    return dm.decode
+
+                    def decode_wrapper(*args, **kwargs):
+                        return dm.decode(*args, **kwargs)[1]
+
+                    return decode_wrapper
             else:
                 print(colorize("*** ERROR: No available data model matching this database entry "
                                "[requested data model: '{:s}'] ***".format(data_model_name),
@@ -589,15 +698,16 @@ class Database(object):
         fbk_decoder_func = None
         if decoding_hints is not None:
             load_arg, decode_data, decode_fbk, user_atom_name, user_fbk_atom_name, forced_fbk_decoder = decoding_hints
-            decoder_func = search_dm(dm_name)
-            if decoder_func is None:
-                decode_data, decode_fbk = False, False
-            if forced_fbk_decoder:
-                fbk_decoder_func = search_dm(forced_fbk_decoder)
-                if fbk_decoder_func is None:
-                    decode_fbk = False
-            else:
-                fbk_decoder_func = decoder_func
+            if decode_data or decode_fbk:
+                decoder_func = search_dm(dm_name, load_arg)
+                if decoder_func is None:
+                    decode_data = False
+            if decode_fbk:
+                if forced_fbk_decoder:
+                    fbk_decoder_func = search_dm(forced_fbk_decoder, load_arg)
+                else:
+                    fbk_decoder_func = decoder_func
+                decode_fbk = fbk_decoder_func is not None
 
         line_pattern = '-' * page_width
         data_id_pattern = " Data ID #{:d} ".format(data_id)
@@ -636,6 +746,21 @@ class Database(object):
 
         prt(msg)
 
+        msg = ''
+        for idx, fbkt in enumerate(fbk_timeout_info, start=1):
+            content, tstamp = fbkt
+            if sent_date >= tstamp:
+                parsed = self.fbk_timeout_re.match(content)
+                val = parsed.group(1) + 's' if parsed else 'FmkDB ERROR'
+                break
+        else:
+            val = 'Not found in FmkDB (default value was most likely used)'
+
+        msg += colorize("\n Feedback Timeout: ", rgb=Color.FMKINFO)
+        msg += colorize(f"{val}", rgb=Color.FMKSUBINFO)
+        msg += colorize('\n' + line_pattern, rgb=Color.NEWLOGENTRY)
+        prt(msg)
+
 
         def handle_dmaker(dmk_pattern, info, dmk_type, dmk_name, name_sep_sz, ui, id_src=None):
             msg = ''
@@ -661,37 +786,38 @@ class Database(object):
             return msg
 
 
-        msg = ''
-        first_pass = True
-        prefix_sz = 7
-        name_sep_sz = len(data_type)
-        for _, _, dmk_type, _, _, _, _ in steps:
-            dmk_type_sz = 0 if dmk_type is None else len(dmk_type)
-            name_sep_sz = dmk_type_sz if dmk_type_sz > name_sep_sz else name_sep_sz
-        sid = 1
-        for _, step_id, dmk_type, dmk_name, id_src, ui, info in steps:
-            if first_pass:
-                if dmk_type is None:
-                    assert (id_src is not None)
-                    continue
-                else:
-                    first_pass = False
-                msg += colorize("\n Step #{:d}:".format(sid), rgb=Color.FMKINFOGROUP)
-                if dmk_type != data_type:
-                    msg += colorize("\n  |_ Generator: ", rgb=Color.FMKINFO)
-                    msg += colorize(str(data_type), rgb=Color.FMKSUBINFO)
-                    sid += 1
+        if steps:
+            msg = ''
+            first_pass = True
+            prefix_sz = 7
+            name_sep_sz = len(data_type)
+            for _, _, dmk_type, _, _, _, _ in steps:
+                dmk_type_sz = 0 if dmk_type is None else len(dmk_type)
+                name_sep_sz = dmk_type_sz if dmk_type_sz > name_sep_sz else name_sep_sz
+            sid = 1
+            for _, step_id, dmk_type, dmk_name, id_src, ui, info in steps:
+                if first_pass:
+                    if dmk_type is None:
+                        assert (id_src is not None)
+                        continue
+                    else:
+                        first_pass = False
                     msg += colorize("\n Step #{:d}:".format(sid), rgb=Color.FMKINFOGROUP)
-                    msg += handle_dmaker('Disruptor', info, dmk_type, dmk_name, len(data_type), ui)
+                    if dmk_type != data_type:
+                        msg += colorize("\n  |_ Generator: ", rgb=Color.FMKINFO)
+                        msg += colorize(str(data_type), rgb=Color.FMKSUBINFO)
+                        sid += 1
+                        msg += colorize("\n Step #{:d}:".format(sid), rgb=Color.FMKINFOGROUP)
+                        msg += handle_dmaker('Disruptor', info, dmk_type, dmk_name, len(data_type), ui)
+                    else:
+                        msg += handle_dmaker('Generator', info, dmk_type, dmk_name, name_sep_sz, ui,
+                                             id_src=id_src)
                 else:
-                    msg += handle_dmaker('Generator', info, dmk_type, dmk_name, name_sep_sz, ui,
-                                         id_src=id_src)
-            else:
-                msg += colorize("\n Step #{:d}:".format(sid), rgb=Color.FMKINFOGROUP)
-                msg += handle_dmaker('Disruptor', info, dmk_type, dmk_name, name_sep_sz, ui)
-            sid += 1
-        msg += colorize('\n' + line_pattern, rgb=Color.NEWLOGENTRY)
-        prt(msg)
+                    msg += colorize("\n Step #{:d}:".format(sid), rgb=Color.FMKINFOGROUP)
+                    msg += handle_dmaker('Disruptor', info, dmk_type, dmk_name, name_sep_sz, ui)
+                sid += 1
+            msg += colorize('\n' + line_pattern, rgb=Color.NEWLOGENTRY)
+            prt(msg)
 
         msg = ''
         for idx, info in enumerate(analysis_records, start=1):
@@ -763,6 +889,32 @@ class Database(object):
                 msg += data_content
             msg += colorize('\n' + line_pattern, rgb=Color.NEWLOGENTRY)
 
+        if with_async_data and async_data:
+            for async_data_id, curr_data_id, dtype, dm_name, content, size, async_date, target, prj in async_data:
+                add_info = f' --> sent before Data ID #{data_id}' if curr_data_id is None else ''
+                date_str = async_date.strftime("%d/%m/%Y - %H:%M:%S.%f") if async_date else 'None'
+                msg += colorize(f'\n Async Data ID #{async_data_id}', rgb=Color.FMKINFOGROUP)
+                msg += colorize(f' (', rgb=Color.FMKINFOGROUP)
+                msg += colorize(f'{date_str}', rgb=Color.DATE)
+                msg += colorize(f')', rgb=Color.FMKINFOGROUP)
+                msg += colorize(add_info, rgb=Color.WARNING)
+                msg += colorize(f'\n  | Type:', rgb=Color.FMKINFO)
+                msg += colorize(f' {dtype}', rgb=Color.FMKSUBINFO)
+                msg += colorize(f' | DM:', rgb=Color.FMKINFO)
+                msg += colorize(f' {dm_name}', rgb=Color.FMKSUBINFO)
+                msg += colorize(f' | Size:', rgb=Color.FMKINFO)
+                msg += colorize(f' {size} Bytes', rgb=Color.FMKSUBINFO)
+                msg += colorize(f'\n  | Target:', rgb=Color.FMKINFO)
+                msg += colorize(f' {target}\n', rgb=Color.FMKSUBINFO)
+
+                content = gr.unconvert_from_internal_repr(content)
+                content = self._handle_binary_content(content, sz_limit=limit_data_sz, raw=raw,
+                                                      colorized=colorized)
+                msg += content
+
+            if async_data:
+                msg += colorize('\n' + line_pattern, rgb=Color.NEWLOGENTRY)
+
         if with_fbk:
             for src, tstamp, status, content in feedback:
                 formatted_ts = None if tstamp is None else tstamp.strftime("%d/%m/%Y - %H:%M:%S.%f")
@@ -796,10 +948,7 @@ class Database(object):
     def _handle_binary_content(self, content, sz_limit=None, raw=False, colorized=True):
         colorize = self._get_color_function(colorized)
 
-        if sys.version_info[0] > 2:
-            content = content if not raw else '{!a}'.format(content)
-        else:
-            content = content if not raw else repr(content)
+        content = content if not raw else '{!a}'.format(content)
 
         if sz_limit is not None and len(content) > sz_limit:
             content = content[:sz_limit]
@@ -809,7 +958,7 @@ class Database(object):
 
 
     def display_data_info_by_date(self, start, end, with_data=False, with_fbk=False, with_fmkinfo=True,
-                                  with_analysis=True,
+                                  with_analysis=True, with_async_data=False,
                                   fbk_src=None, prj_name=None,
                                   limit_data_sz=None, raw=False, page_width=100, colorized=True,
                                   decoding_hints=None, dm_list=None):
@@ -834,6 +983,7 @@ class Database(object):
                 self.display_data_info(data_id, with_data=with_data, with_fbk=with_fbk,
                                        with_fmkinfo=with_fmkinfo,
                                        with_analysis=with_analysis,
+                                       with_async_data=with_async_data,
                                        fbk_src=fbk_src,
                                        limit_data_sz=limit_data_sz, raw=raw, page_width=page_width,
                                        colorized=colorized,
@@ -843,7 +993,7 @@ class Database(object):
                            rgb=Color.ERROR))
 
     def display_data_info_by_range(self, first_id, last_id, with_data=False, with_fbk=False, with_fmkinfo=True,
-                                   with_analysis=True,
+                                   with_analysis=True, with_async_data=False,
                                    fbk_src=None, prj_name=None,
                                    limit_data_sz=None, raw=False, page_width=100, colorized=True,
                                    decoding_hints=None, dm_list=None):
@@ -868,6 +1018,7 @@ class Database(object):
                 data_id = rec[0]
                 self.display_data_info(data_id, with_data=with_data, with_fbk=with_fbk,
                                        with_fmkinfo=with_fmkinfo, with_analysis=with_analysis,
+                                       with_async_data=with_async_data,
                                        fbk_src=fbk_src,
                                        limit_data_sz=limit_data_sz, raw=raw, page_width=page_width,
                                        colorized=colorized,
@@ -937,6 +1088,7 @@ class Database(object):
             base_dir = gr.exported_data_folder
             prev_export_date = None
             export_cpt = 0
+            data_id = first
 
             for rec in records:
                 data_id, data_type, dm_name, sent_date, content = rec
@@ -954,20 +1106,23 @@ class Database(object):
                 else:
                     export_cpt += 1
 
-                export_fname = '{typ:s}_{date:s}_{cpt:0>2d}.{ext:s}'.format(
+                export_fname = '{typ:s}_ID{did:d}_{date:s}_{cpt:0>2d}.{ext:s}'.format(
                     date=current_export_date,
                     cpt=export_cpt,
                     ext=file_extension,
-                    typ=data_type)
+                    typ=data_type,
+                    did=data_id)
 
                 export_full_fn = os.path.join(base_dir, dm_name, export_fname)
-                ensure_dir(export_full_fn)
+                gr.ensure_dir(export_full_fn)
 
                 with open(export_full_fn, 'wb') as fd:
                     fd.write(content)
 
                 print(colorize("Data ID #{:d} --> {:s}".format(data_id, export_full_fn),
                                rgb=Color.FMKINFO))
+
+                data_id += 1
 
         else:
             print(colorize("*** ERROR: The provided DATA IDs do not exist ***", rgb=Color.ERROR))
@@ -1007,6 +1162,11 @@ class Database(object):
                        rgb=Color.FMKINFO))
 
 
+    def shrink_db(self):
+        self.execute_sql_statement(
+            "VACUUM;"
+        )
+
     def get_project_record(self, prj_name=None):
         if prj_name:
             prj_records = self.execute_sql_statement(
@@ -1023,22 +1183,24 @@ class Database(object):
 
         return prj_records
 
-    def get_data_with_impact(self, prj_name=None, fbk_src=None, display=True, verbose=False,
+    def get_data_with_impact(self, prj_name=None, fbk_src=None, fbk_status_formula='? < 0',
+                             display=True, verbose=False,
                              raw_analysis=False,
                              colorized=True):
 
+        fbk_status_formula =  fbk_status_formula.replace('?', 'STATUS')
         colorize = self._get_color_function(colorized)
 
         if fbk_src:
             fbk_records = self.execute_sql_statement(
-                "SELECT DATA_ID, STATUS, SOURCE FROM FEEDBACK "
-                "WHERE STATUS < 0 and SOURCE REGEXP ?;",
+                f"SELECT DATA_ID, STATUS, SOURCE FROM FEEDBACK "
+                f"WHERE {fbk_status_formula} and SOURCE REGEXP ?;",
                 params=(fbk_src,)
             )
         else:
             fbk_records = self.execute_sql_statement(
-                "SELECT DATA_ID, STATUS, SOURCE FROM FEEDBACK "
-                "WHERE STATUS < 0;"
+                f"SELECT DATA_ID, STATUS, SOURCE FROM FEEDBACK "
+                f"WHERE {fbk_status_formula};"
             )
 
 

@@ -23,6 +23,8 @@
 
 import types
 import subprocess
+import uuid
+
 from copy import *
 
 from framework.node import *
@@ -33,6 +35,7 @@ from framework.basic_primitives import *
 from framework.value_types import *
 from framework.data_model import DataModel
 from framework.dmhelpers.generic import MH
+from framework.node import NodeSemanticsCriteria as NSC, NodeInternalsCriteria as NIC
 
 # from framework.plumbing import *
 from framework.evolutionary_helpers import Population
@@ -45,24 +48,72 @@ tactics = Tactics()
 #     GENERATORS      #
 #######################
 
+@generator(tactics, gtype="GENP", weight=4,
+           args={'pattern': ('Pattern to be used for generating data', b'1234567890', bytes),
+                 'prefix': ('Prefix added to the pattern', b'', bytes),
+                 'suffix': ('Suffix replacing the end of the pattern', b'', bytes),
+                 'size': ('Size of the generated data.', None, int),
+                 'eval': ('The pattern will be evaluated before being used. Note that the evaluation '
+                          'shall result in a byte string.', False, bool)
+                 })
+class g_generic_pattern(Generator):
+    """
+    Generate basic data based on a pattern and different parameters.
+    """
+    def setup(self, dm, user_input):
+        if not self.pattern:
+            return False
+        return True
+
+    def generate_data(self, dm, monitor, target):
+        if self.eval:
+            try:
+                pattern = eval(self.pattern)
+            except:
+                data = Data()
+                # data.make_unusable()
+                data.add_info('Invalid expression provided in @pattern. It will be used without evaluation.')
+                return data
+        else:
+            pattern = self.pattern
+
+        if self.size is not None:
+            psize = len(pattern)
+            pattern = pattern * (self.size // psize) + pattern[:(self.size%psize)]
+            if self.prefix:
+                pattern = self.prefix + pattern[:-(len(self.prefix))]
+
+        else:
+            pattern = self.prefix+pattern
+
+        if self.suffix:
+            pattern = pattern[:-len(self.suffix)] + self.suffix
+        if self.size is not None and self.size < len(pattern):
+            pattern = pattern[:self.size]
+
+        return Data(pattern)
+
+
 @generator(tactics, gtype='POPULATION', weight=1,
-           args={'population': ('The population to iterate over.', None, Population)})
+           args={'population': ('The population to iterate over.', None, Population),
+                 'track': ('Keep trace of the changes that occurred on data, generation after generation',
+                           False, bool)}
+           )
 class g_population(Generator):
     """ Walk through the given population """
     def setup(self, dm, user_input):
         assert self.population is not None
-
         self.population.reset()
-
+        self._pop_sz = self.population.size()
+        self._curr_generation = self.population.generation
         return True
 
     def generate_data(self, dm, monitor, target):
         reset = False
 
         try:
-            data = Data(self.population.next().node)
+            data = self.population.next().data
         except StopIteration:
-
             # all individuals of the current population have been sent
 
             if self.population.is_final():
@@ -70,6 +121,8 @@ class g_population(Generator):
             else:
                 try:
                     self.population.evolve()
+                    self._pop_sz = self.population.size()
+                    self._curr_generation = self.population.generation
                 except ExtinctPopulationError:
                     reset = True
                 else:
@@ -79,6 +132,10 @@ class g_population(Generator):
             data = Data()
             data.make_unusable()
             self.need_reset()
+
+        data.add_info('Generation: {}, Population size: {}'.format(self._curr_generation, self._pop_sz))
+        data.add_info('Data index in the population: {}'.format(self.population.index))
+        data.take_info_ownership(keep_previous_info=self.track)
 
         return data
 
@@ -96,18 +153,35 @@ def truncate_info(info, max_size=60):
 @disruptor(tactics, dtype="tWALK", weight=1, modelwalker_user=True,
            args={'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
+                 'sem': ('Semantics to select nodes on which' \
+                         ' the disruptor should apply.', None, (str, list)),
+                 'full_combinatory': ('When set to True, enable full-combinatory mode for '
+                                      'non-terminal nodes. It means that the non-terminal nodes '
+                                      'will be customized in "FullCombinatory" mode', False, bool),
+                 'leaf_determinism': ("If set to 'True', all the typed nodes of the model will be "
+                                       "set to determinist mode prior to any fuzzing. If set "
+                                       "to 'False', they will be set to random mode. "
+                                       "Otherwise, if set to 'None', nothing will be done.", None, bool),
                  'order': ('When set to True, the walking order is strictly guided ' \
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
                            'in the data model) is used for ordering.', True, bool),
                  'nt_only': ('Walk through non-terminal nodes only.', False, bool),
+                 'deep': ('When set to True, if a node structure has changed, the modelwalker ' \
+                          'will reset its walk through the children nodes.', True, bool),
+                 'consider_sibbling_change':
+                     ('While walking through terminal nodes, if sibbling nodes are '
+                      'no more the same because of existence condition for instance, walk through '
+                      'the new nodes.', True, bool),
+                 'ign_mutable_attr': ('Walk through all the nodes even if their Mutable attribute '
+                                      'is cleared.', True, bool),
                  'fix_all': ('For each produced data, reevaluate the constraints on the whole graph.',
                              True, bool)})
-class sd_iter_over_data(StatefulDisruptor):
-    '''
+class sd_walk_data_model(StatefulDisruptor):
+    """
     Walk through the provided data and for each visited node, iterates
     over the allowed values (with respect to the data model).
     Note: *no alteration* is performed by this disruptor.
-    '''
+    """
     def setup(self, dm, user_input):
         return True
 
@@ -119,11 +193,33 @@ class sd_iter_over_data(StatefulDisruptor):
 
         prev_content.make_finite(all_conf=True, recursive=True)
 
+        if self.full_combinatory:
+            nic = NodeInternalsCriteria(node_kinds=[NodeInternals_NonTerm])
+            nl = prev_content.get_reachable_nodes(internals_criteria=nic, path_regexp=self.path,
+                                                  ignore_fstate=True)
+            for n in nl:
+                n.cc.custo.full_combinatory_mode = True
+
+        if self.leaf_determinism is not None:
+            nic = NodeInternalsCriteria(node_kinds=[NodeInternals_TypedValue])
+            nl = prev_content.get_reachable_nodes(internals_criteria=nic, path_regexp=self.path,
+                                                  ignore_fstate=True)
+            for n in nl:
+                if self.leaf_determinism:
+                    n.make_determinist()
+                else:
+                    n.make_random()
+
         if self.nt_only:
-            consumer = NonTermVisitor(respect_order=self.order)
+            consumer = NonTermVisitor(respect_order=self.order, ignore_mutable_attr=self.ign_mutable_attr,
+                                      consider_side_effects_on_sibbling=self.consider_sibbling_change,
+                                      reset_when_change=self.deep, fix_constraints=self.fix_all)
         else:
-            consumer = BasicVisitor(respect_order=self.order)
-        consumer.set_node_interest(path_regexp=self.path)
+            consumer = BasicVisitor(respect_order=self.order, ignore_mutable_attr=self.ign_mutable_attr,
+                                    consider_side_effects_on_sibbling=self.consider_sibbling_change,
+                                    reset_when_change=self.deep, fix_constraints=self.fix_all)
+        sem_crit = NSC(optionalbut1_criteria=self.sem)
+        consumer.set_node_interest(path_regexp=self.path, semantics_criteria=sem_crit)
         self.modelwalker = ModelWalker(prev_content, consumer, max_steps=self.max_steps, initial_step=self.init)
         self.walker = iter(self.modelwalker)
 
@@ -158,11 +254,16 @@ class sd_iter_over_data(StatefulDisruptor):
 @disruptor(tactics, dtype="tTYPE", weight=1, modelwalker_user=True,
            args={'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
+                 'sem': ('Semantics to select nodes on which' \
+                         ' the disruptor should apply.', None, (str, list)),
                  'order': ('When set to True, the fuzzing order is strictly guided ' \
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
                            'in the data model) is used for ordering.', True, bool),
                  'deep': ('When set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes.', True, bool),
+                 'full_combinatory': ('When set to True, enable full-combinatory mode for non-terminal nodes. It '
+                                      'means that the non-terminal nodes will be customized in "FullCombinatory" mode',
+                                      False,bool),
                  'ign_sep': ('When set to True, separators will be ignored ' \
                           'if any are defined.', False, bool),
                  'fix_all': ('For each produced data, reevaluate the constraints on the whole graph.',
@@ -171,14 +272,26 @@ class sd_iter_over_data(StatefulDisruptor):
                          " (only implemented for 'sync_size_with' and 'sync_enc_size_with').", True, bool),
                  'fuzz_mag': ('Order of magnitude for maximum size of some fuzzing test cases.',
                               1.0, float),
-                 'determinism': ("If set to 'True', the whole model will be fuzzed in "
-                                 "a deterministic way. Otherwise it will be guided by the "
-                                 "data model determinism.", True, bool),
-                 'leaf_determinism': ("If set to 'True', each typed node will be fuzzed in "
-                                      "a deterministic way. Otherwise it will be guided by the "
+                 'make_determinist': ("If set to 'True', the whole model will be set in determinist mode."
+                                      "Otherwise it will be guided by the data model determinism.", False, bool),
+                 'leaf_fuzz_determinism': ("If set to 'True', each typed node will be fuzzed in "
+                                      "a deterministic way. If set to 'False' each typed node "
+                                      "will be fuzzed in a random way. Otherwise, if it is set to "
+                                      "'None', it will be guided by the "
                                       "data model determinism. Note: this option is complementary to "
-                                      "'determinism' is it acts on the typed node substitutions "
+                                      "'determinism' as it acts on the typed node substitutions "
                                       "that occur through this disruptor", True, bool),
+                 'leaf_determinism': ("If set to 'True', all the typed nodes of the model will be "
+                                       "set to determinist mode prior to any fuzzing. If set "
+                                       "to 'False', they will be set to random mode. "
+                                       "Otherwise, if set to 'None', nothing will be done.", None, bool),
+                 'ign_mutable_attr': ('Walk through all the nodes even if their Mutable attribute '
+                                      'is cleared.', False, bool),
+                 'consider_sibbling_change':
+                     ('[EXPERIMENTAL] While walking through terminal nodes, if sibbling nodes are '
+                      'no more the same because of existence condition for instance, walk through '
+                      'the new nodes. (Currently, work only with some specific data model construction.)',
+                      False, bool),
                  })
 class sd_fuzz_typed_nodes(StatefulDisruptor):
     """
@@ -204,17 +317,47 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
             prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
             return prev_data
 
+        if self.full_combinatory:
+            nic = NodeInternalsCriteria(node_kinds=[NodeInternals_NonTerm])
+            nl = prev_content.get_reachable_nodes(internals_criteria=nic, path_regexp=self.path,
+                                                  ignore_fstate=True)
+            for n in nl:
+                n.cc.custo.full_combinatory_mode = True
+
+        if self.leaf_determinism is not None:
+            nic = NodeInternalsCriteria(node_kinds=[NodeInternals_TypedValue])
+            nl = prev_content.get_reachable_nodes(internals_criteria=nic, path_regexp=self.path,
+                                                  ignore_fstate=True)
+            for n in nl:
+                if self.leaf_determinism:
+                    n.make_determinist()
+                else:
+                    n.make_random()
+
         self.consumer = TypedNodeDisruption(max_runs_per_node=self.max_runs_per_node,
                                             min_runs_per_node=self.min_runs_per_node,
                                             fuzz_magnitude=self.fuzz_mag,
                                             fix_constraints=self.fix,
                                             respect_order=self.order,
+                                            ignore_mutable_attr=self.ign_mutable_attr,
+                                            consider_side_effects_on_sibbling=self.consider_sibbling_change,
                                             ignore_separator=self.ign_sep,
-                                            enforce_determinism=self.leaf_determinism)
+                                            determinist=self.leaf_fuzz_determinism)
         self.consumer.need_reset_when_structure_change = self.deep
-        self.consumer.set_node_interest(path_regexp=self.path)
+        sem_crit = NSC(optionalbut1_criteria=self.sem)
+        self.consumer.set_node_interest(path_regexp=self.path, semantics_criteria=sem_crit)
         self.modelwalker = ModelWalker(prev_content, self.consumer, max_steps=self.max_steps,
-                                       initial_step=self.init, make_determinist=self.determinism)
+                                       initial_step=self.init, make_determinist=self.make_determinist)
+
+        # After ModelWalker init, 'prev_content' is frozen. We can now check if 'self.path' exists in the
+        # node, because if it does not exist (e.g., user mistype) the ModelWalker will walk until the end of
+        # all the possible paths, and will finally yield nothing. This walk could take a lot of time depending on
+        # the model. Thus, in this situation we inform the user right away.
+        if self.path:
+            d = prev_content.get_nodes_by_paths(path_list=[self.path])
+            if not d[self.path]:
+                raise ValueError(f'The provided path "{self.path}" does not exist.')
+
         self.walker = iter(self.modelwalker)
 
         self.max_runs = None
@@ -361,6 +504,8 @@ class sd_switch_to_alternate_conf(StatefulDisruptor):
 @disruptor(tactics, dtype="tSEP", weight=1, modelwalker_user=True,
            args={'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
+                 'sem': ('Semantics to select nodes on which' \
+                         ' the disruptor should apply.', None, (str, list)),
                  'order': ('When set to True, the fuzzing order is strictly guided ' \
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
                            'in the data model) is used for ordering.', True, bool),
@@ -396,7 +541,8 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
                                             respect_order=self.order,
                                             separators=sep_list)
         self.consumer.need_reset_when_structure_change = self.deep
-        self.consumer.set_node_interest(path_regexp=self.path)
+        sem_crit = NSC(optionalbut1_criteria=self.sem)
+        self.consumer.set_node_interest(path_regexp=self.path, semantics_criteria=sem_crit)
         self.modelwalker = ModelWalker(prev_content, self.consumer, max_steps=self.max_steps, initial_step=self.init)
         self.walker = iter(self.modelwalker)
 
@@ -447,6 +593,8 @@ class sd_fuzz_separator_nodes(StatefulDisruptor):
                  'max_steps': ('Maximum number of steps (-1 means until the end).', -1, int),
                  'path': ('Graph path regexp to select nodes on which' \
                           ' the disruptor should apply.', None, str),
+                 'sem': ('Semantics to select nodes on which' \
+                         ' the disruptor should apply.', None, (str, list)),
                  'deep': ('If True, enable corruption of non-terminal node internals',
                           False, bool) })
 class sd_struct_constraints(StatefulDisruptor):
@@ -470,7 +618,13 @@ class sd_struct_constraints(StatefulDisruptor):
 
         self.seed = prev_content
         self.seed.make_finite(all_conf=True, recursive=True)
+        # self.seed.make_determinist(all_conf=True, recursive=True)
         self.seed.freeze()
+
+        # self.seed.unfreeze(recursive=True)
+        # self.seed.freeze()
+
+        # print('\n*** original data:\n',self.seed.to_bytes())
 
         self.idx = 0
 
@@ -479,7 +633,10 @@ class sd_struct_constraints(StatefulDisruptor):
         ic_size_cst = NodeInternalsCriteria(required_csts=[SyncScope.Size])
         ic_minmax_cst = NodeInternalsCriteria(node_kinds=[NodeInternals_NonTerm])
 
+        sem_crit = None if self.sem is None else NSC(optionalbut1_criteria=self.sem)
+
         self.exist_cst_nodelist = self.seed.get_reachable_nodes(internals_criteria=ic_exist_cst, path_regexp=self.path,
+                                                                semantics_criteria=sem_crit,
                                                                 ignore_fstate=True)
         # print('\n*** NOT FILTERED nodes')
         # for n in self.exist_cst_nodelist:
@@ -488,12 +645,21 @@ class sd_struct_constraints(StatefulDisruptor):
         # print('\n*** FILTERED nodes')
         # for n in self.exist_cst_nodelist:
         #     print(' |_ ' + n.name)
+
+        # print('\n***before:')
+        # for n in self.exist_cst_nodelist:
+        #     print(' |_ ' + n.name)
+
         nodelist = copy.copy(self.exist_cst_nodelist)
         for n in nodelist:
             if n.get_path_from(self.seed) is None:
                 self.exist_cst_nodelist.remove(n)
+        # print('\n***after:')
+        # for n in self.exist_cst_nodelist:
+        #     print(' |_ ' + n.name)
 
         self.qty_cst_nodelist_1 = self.seed.get_reachable_nodes(internals_criteria=ic_qty_cst, path_regexp=self.path,
+                                                                semantics_criteria=sem_crit,
                                                                 ignore_fstate=True)
         # self.qty_cst_nodelist_1 = self.seed.filter_out_entangled_nodes(self.qty_cst_nodelist_1)
         nodelist = copy.copy(self.qty_cst_nodelist_1)
@@ -504,7 +670,8 @@ class sd_struct_constraints(StatefulDisruptor):
         self.qty_cst_nodelist_2 = copy.copy(self.qty_cst_nodelist_1)
 
         self.size_cst_nodelist_1 = self.seed.get_reachable_nodes(internals_criteria=ic_size_cst, path_regexp=self.path,
-                                                               ignore_fstate=True)
+                                                                 semantics_criteria=sem_crit,
+                                                                 ignore_fstate=True)
         nodelist = copy.copy(self.size_cst_nodelist_1)
         for n in nodelist:
             if n.get_path_from(self.seed) is None:
@@ -513,6 +680,7 @@ class sd_struct_constraints(StatefulDisruptor):
 
         if self.deep:
             minmax_cst_nodelist = self.seed.get_reachable_nodes(internals_criteria=ic_minmax_cst, path_regexp=self.path,
+                                                                semantics_criteria=sem_crit,
                                                                 ignore_fstate=True)
             self.minmax_cst_nodelist_1 = set()
 
@@ -537,7 +705,8 @@ class sd_struct_constraints(StatefulDisruptor):
 
         self.max_runs = len(self.exist_cst_nodelist) + 2*len(self.size_cst_nodelist_1) + \
                         2*len(self.qty_cst_nodelist_1) + 3*len(self.minmax_cst_nodelist_1)
-        
+
+        # print('\n*** final setup:\n',self.seed.to_bytes())
 
     def disrupt_data(self, dm, target, data):
 
@@ -583,21 +752,21 @@ class sd_struct_constraints(StatefulDisruptor):
                     new_mini = max(0, mini-1)
                     self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
                                                       corrupt_op=lambda x, y: (new_mini, new_mini))
-                    op_performed = "set node amount to its minimum minus one"
+                    op_performed = f"set node amount to its minimum minus one ({new_mini})"
             elif self.deep and self.minmax_cst_nodelist_2:
                 consumed_node, mini, maxi = self.minmax_cst_nodelist_2.pop()
                 if self.idx == step_idx:
                     new_maxi = (maxi+1)
                     self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
                                                       corrupt_op=lambda x, y: (new_maxi, new_maxi))
-                    op_performed = "set node amount to its maximum plus one"
+                    op_performed = f"set node amount to its maximum plus one ({new_maxi})"
             elif self.deep and self.minmax_cst_nodelist_3:
                 consumed_node, mini, maxi = self.minmax_cst_nodelist_3.pop()
                 if self.idx == step_idx:
                     new_maxi = (maxi*10)
                     self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
                                                       corrupt_op=lambda x, y: (new_maxi, new_maxi))
-                    op_performed = "set node amount to a value way beyond its maximum"
+                    op_performed = f"set node amount to a value way beyond its maximum ({new_maxi})"
             else:
                 stop = True
                 break
@@ -609,11 +778,23 @@ class sd_struct_constraints(StatefulDisruptor):
             self.handover()
             return data
 
+        # print('\n***disrupt before:\n',self.seed.to_bytes())
         corrupted_seed = Node(self.seed.name, base_node=self.seed, ignore_frozen_state=False, new_env=True)
+        corrupted_seed = self.seed.get_clone(ignore_frozen_state=False, new_env=True)
         self.seed.env.remove_node_to_corrupt(consumed_node)
+
+        # print('\n***disrupt source:\n',self.seed.to_bytes())
+        # print('\n***disrupt clone 1:\n',corrupted_seed.to_bytes())
+        # nt_nodes_crit = NodeInternalsCriteria(node_kinds=[NodeInternals_NonTerm])
+        # ntlist = corrupted_seed.get_reachable_nodes(internals_criteria=nt_nodes_crit, ignore_fstate=False)
+        # for nd in ntlist:
+        #     # print(nd.is_attr_set(NodeInternals.Finite))
+        #     nd.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
 
         corrupted_seed.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
         corrupted_seed.freeze()
+
+        # print('\n***disrupt after:\n',corrupted_seed.to_bytes())
 
         data.add_info('sample index: {:d}'.format(self.idx))
         data.add_info(' |_ run: {:d} / {:d}'.format(self.idx, self.max_runs))
@@ -624,190 +805,6 @@ class sd_struct_constraints(StatefulDisruptor):
         data.altered = True
 
         return data
-
-
-# ADAPTED FOR THE EVOLUTIONARY PROCESS #
-
-class SwapperDisruptor(StatefulDisruptor):
-    """
-    Merge two nodes to produce two children
-    """
-
-    def _swap_nodes(self, node_1, node_2):
-        node_2_copy = node_2.get_clone()
-        node_2.set_contents(node_1)
-        node_1.set_contents(node_2_copy)
-
-    def set_seed(self, prev_data):
-
-        self.count = 0  # number of sent element
-
-        prev_content = prev_data.content
-        assert isinstance(prev_content, Node)
-        prev_content.freeze(recursive=True)
-
-        if self.node is None:
-            self.node = prev_content.get_clone()
-
-    def disrupt_data(self, dm, target, data):
-
-        if self.count == 2:
-            data.make_unusable()
-            self.handover()
-
-        elif self.count == 1:
-            data.update_from(self.node)
-
-        self.count += 1
-        data.altered = True
-        return data
-
-
-@disruptor(tactics, dtype="tCROSS", weight=1,
-           args={'node': ('Node to crossover with.', None, Node),
-                 'percentage_to_share': ('Percentage of the base node to share.', 0.50, float)})
-class sd_crossover(SwapperDisruptor):
-    """
-    Makes two graphs share a certain percentages of their leaf nodes in order to produce two children
-    """
-
-    class Operand(object):
-
-        def __init__(self, node):
-            self.node = node
-
-            self.leafs = []
-
-            for path, node in self.node.iter_paths():
-                if node.is_term() and path not in self.leafs:
-                    self.leafs.append(path)
-
-            self.shared = None
-
-        def compute_sub_graphs(self, percentage):
-            random.shuffle(self.leafs)
-            self.shared = self.leafs[:int(round(len(self.leafs) * percentage))]
-            self.shared.sort()
-
-            change = True
-            while change:
-
-                change = False
-                index = 0
-                length = len(self.shared)
-
-                while index < length:
-
-                    current_path = self.shared[index]
-
-                    slash_index = current_path[::-1].find('/')
-
-                    # check if we are dealing with the root node
-                    if slash_index == -1:
-                        index += 1
-                        continue
-
-                    parent_path = current_path[:-current_path[::-1].find('/') - 1]
-                    children_nb = self._count_brothers(index, parent_path)
-                    if children_nb == self.node.get_node_by_path(parent_path).cc.get_subnode_qty():
-                        self._merge_brothers(index, parent_path, children_nb)
-                        change = True
-                        index += 1
-                        length = len(self.shared)
-                    else:
-                        index += children_nb
-
-        def _count_brothers(self, index, pattern):
-            count = 1
-            p = re.compile(u'^' + pattern + '($|/*)')
-            for i in range(index + 1, len(self.shared)):
-                if re.match(p, self.shared[i]) is not None:
-                    count += 1
-            return count
-
-        def _merge_brothers(self, index, pattern, length):
-            for _ in range(0, length, 1):
-                del self.shared[index]
-            self.shared.insert(index, pattern)
-
-    def setup(self, dm, user_input):
-        if self.percentage_to_share is None:
-            self.percentage_to_share = float(random.randint(3, 7)) / 10.0
-        elif not (0 < self.percentage_to_share < 1):
-            print("Invalid percentage, a float between 0 and 1 need to be provided")
-            return False
-
-        return True
-
-    def set_seed(self, prev_data):
-        prev_content = prev_data.content
-        if not isinstance(prev_content, Node):
-            prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
-            return prev_data
-
-        SwapperDisruptor.set_seed(self, prev_data)
-
-        source = self.Operand(prev_content)
-        source.compute_sub_graphs(self.percentage_to_share)
-        random.shuffle(source.shared)
-
-        param = self.Operand(self.node)
-        param.compute_sub_graphs(1.0 - self.percentage_to_share)
-        random.shuffle(param.shared)
-
-        swap_nb = len(source.shared) if len(source.shared) < len(param.shared) else len(param.shared)
-
-        for i in range(swap_nb):
-            node_1 = source.node.get_node_by_path(path=source.shared[i])
-            node_2 = param.node.get_node_by_path(path=param.shared[i])
-            self._swap_nodes(node_1, node_2)
-
-
-@disruptor(tactics, dtype="tCOMB", weight=1,
-           args={'node': ('Node to combine with.', None, Node)})
-class sd_combine(SwapperDisruptor):
-    """
-    Merge two nodes by swapping some roots' children
-    """
-
-    def setup(self, dm, user_input):
-        return True
-
-    def get_nodes(self, node):
-        while True:
-            nodes = [node] if node.is_term() else node.cc.frozen_node_list
-
-            if len(nodes) == 1 and not nodes[0].is_term():
-                node = nodes[0]
-            else:
-                break
-
-        return nodes
-
-    def set_seed(self, prev_data):
-
-        SwapperDisruptor.set_seed(self, prev_data)
-
-        prev_content = prev_data.content
-        if not isinstance(prev_content, Node):
-            prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
-            return prev_data
-
-        source = self.get_nodes(prev_content)
-        param = self.get_nodes(self.node)
-
-        if len(source) == 0 or len(param) == 0:
-            prev_data.add_info('DONT_PROCESS_THIS_KIND_OF_DATA')
-            return prev_data
-
-        swap_nb = len(source) if len(source) < len(param) else len(param)
-        swap_nb = int(math.ceil(swap_nb / 2.0))
-
-        random.shuffle(source)
-        random.shuffle(param)
-
-        for i in range(swap_nb):
-            self._swap_nodes(source[i], param[i])
 
 
 ########################
@@ -840,7 +837,7 @@ class d_call_external_program(Disruptor):
     def disrupt_data(self, dm, target, prev_data):
         prev_content = prev_data.content
         if self.path and isinstance(prev_content, Node):
-            node = prev_content.get_node_by_path(path_regexp=self.path)
+            node = prev_content.get_first_node_by_path(path_regexp=self.path)
             if node is None:
                 prev_data.add_info('INVALID INPUT')
                 return prev_data
@@ -1005,7 +1002,7 @@ class d_max_size(Disruptor):
         prev_content = prev_data.content
         if isinstance(prev_content, Node):
             if self.path is not None:
-                node = prev_content.get_node_by_path(self.path)
+                node = prev_content.get_first_node_by_path(self.path)
                 if node is None:
                     node = prev_content
             else:
@@ -1120,7 +1117,7 @@ class d_corrupt_node_bits(Disruptor):
 
 @disruptor(tactics, dtype="Cp", weight=4,
            args={'idx': ('Byte index to be corrupted (from 1 to data length).', 1, int),
-                 'new_val': ('If provided change the selected byte with the new one.', None, str),
+                 'new_val': ('If provided change the selected byte with the new one.', None, bytes),
                  'ascii': ('Enforce all outputs to be ascii 7bits.', False, bool)})
 class d_corrupt_bits_by_position(Disruptor):
     '''
@@ -1168,7 +1165,7 @@ class d_fix_constraints(Disruptor):
     def disrupt_data(self, dm, target, prev_data):
         prev_content = prev_data.content
         if not isinstance(prev_content, Node):
-            prev_data.add_info('INVALID INPUT')
+            prev_data.add_info('UNSUPPORTED INPUT')
             return prev_data
 
         if self.path:
@@ -1181,12 +1178,12 @@ class d_fix_constraints(Disruptor):
 
             for n in l:
                 n.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
-                prev_data.add_info("release constraints from the node '{!s}'".format(n.name))
+                prev_data.add_info("reevaluate constraints from the node '{!s}'".format(n.name))
                 n.freeze()
 
         else:
             prev_content.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
-            prev_data.add_info('release constraints from the root')
+            prev_data.add_info('reevaluate constraints from the root')
 
         prev_content.freeze()
 
@@ -1218,7 +1215,7 @@ class d_next_node_content(Disruptor):
 
         prev_content = prev_data.content
         if not isinstance(prev_content, Node):
-            prev_data.add_info('INVALID INPUT')
+            prev_data.add_info('UNSUPPORTED INPUT')
             return prev_data
 
         prev_content.freeze()
@@ -1250,11 +1247,15 @@ class d_next_node_content(Disruptor):
 @disruptor(tactics, dtype="OP", weight=4,
            args={'path': ('Graph path regexp to select nodes on which ' \
                           'the disruptor should apply.', None, str),
+                 'sem': ('Semantics to select nodes on which' \
+                         ' the disruptor should apply.', None, (str, list)),
                  'op': ('The operation to perform on the selected nodes.', Node.clear_attr,
-                        (types.MethodType, types.FunctionType)), # python3, python2
-                 'params': ('Tuple of parameters that will be provided to the operation. ('
-                            'default: MH.Attr.Mutable)',
-                            (MH.Attr.Mutable,),
+                        types.MethodType),
+                 'op_ref': ("Predefined operation that can be referenced by name. The current "
+                            "predefined function are: 'unfreeze', 'freeze', 'walk', 'set_qty'. Take "
+                            "precedence over @op if not None." , None, str),
+                 'params': ('Tuple of parameters that will be provided to the operation.',
+                            (),
                             tuple),
                  'clone_node': ('If True the dmaker will always return a copy ' \
                                 'of the node. (For stateless disruptors dealing with ' \
@@ -1272,11 +1273,28 @@ class d_operate_on_nodes(Disruptor):
         ok = False
         prev_content = prev_data.content
         if not isinstance(prev_content, Node):
-            prev_data.add_info('INVALID INPUT')
+            prev_data.add_info('UNSUPPORTED INPUT')
             return prev_data
 
-        if self.path:
-            l = prev_content.get_reachable_nodes(path_regexp=self.path)
+        if self.op_ref is not None:
+            if self.op_ref == 'unfreeze':
+                self.op = Node.unfreeze
+            elif self.op_ref == 'freeze':
+                self.op = Node.freeze
+            elif self.op_ref == 'walk':
+                self.op = Node.walk
+            elif self.op_ref == 'set_qty':
+                self.op = NodeInternals_NonTerm.set_subnode_default_qty
+                n = prev_content.get_first_node_by_path(path_regexp=self.path)
+                self.path = self.path[:self.path.rfind('/')] + '$'
+                self.params = (n, *self.params)
+            else:
+                prev_data.add_info('Unsupported operation')
+                return prev_data
+
+        sem_crit = None if self.sem is None else NSC(optionalbut1_criteria=self.sem)
+        if self.path or sem_crit:
+            l = prev_content.get_reachable_nodes(path_regexp=self.path, semantics_criteria=sem_crit)
             if not l:
                 prev_data.add_info('INVALID INPUT')
                 return prev_data
@@ -1320,15 +1338,21 @@ class d_operate_on_nodes(Disruptor):
 @disruptor(tactics, dtype="MOD", weight=4,
            args={'path': ('Graph path regexp to select nodes on which ' \
                           'the disruptor should apply.', None, str),
-                 'value': ('The new value to inject within the data.', '', str),
+                 'sem': ('Semantics to select nodes on which' \
+                         ' the disruptor should apply.', None, (str, list)),
+                 'value': ('The new value to inject within the data.', b'', bytes),
                  'constraints': ('Constraints for the absorption of the new value.', AbsNoCsts(), AbsCsts),
-                 'multi_mod': ('Dictionary of <path>:<item> pairs to change multiple nodes with '
-                             'diferent values. <item> can be either only the new <value> or a '
-                             'tuple (<value>,<abscsts>) if new constraint for absorption is '
-                             'needed', None, dict),
+                 'multi_mod': ('Dictionary of <path>:<item> pairs or '
+                               '<NodeSemanticsCriteria>:<item> pairs or '
+                               '<NodeInternalsCriteria>:<item> pairs to change multiple nodes with '
+                               'different values. <item> can be either only the new <value> or a '
+                               'tuple (<value>,<abscsts>) if new constraint for absorption is '
+                               'needed', None, dict),
+                 'unfold': ('Resolve all the generator nodes within the input before performing '
+                            'the @path/@sem research', False, bool),
                  'clone_node': ('If True the dmaker will always return a copy ' \
                                 'of the node. (For stateless disruptors dealing with ' \
-                                'big data it can be useful to it to False.)', False, bool)})
+                                'big data it can be useful to set it to False.)', False, bool)})
 class d_modify_nodes(Disruptor):
     """
     Perform modifications on the provided data. Two ways are possible:
@@ -1346,15 +1370,16 @@ class d_modify_nodes(Disruptor):
     def disrupt_data(self, dm, target, prev_data):
         prev_content = prev_data.content
         if not isinstance(prev_content, Node):
-            prev_data.add_info('INVALID INPUT')
+            prev_data.add_info('UNSUPPORTED INPUT')
             return prev_data
 
         if self.multi_mod:
             change_dict = self.multi_mod
         else:
-            change_dict = {self.path: (self.value, self.constraints)}
+            sem = None if self.sem is None else NSC(optionalbut1_criteria=self.sem)
+            change_dict = {self.path if sem is None else sem: (self.value, self.constraints)}
 
-        for path, item in change_dict.items():
+        for selector, item in change_dict.items():
             if isinstance(item, (tuple, list)):
                 assert len(item) == 2
                 new_value, new_csts = item
@@ -1362,18 +1387,29 @@ class d_modify_nodes(Disruptor):
                 new_value = item
                 new_csts = AbsNoCsts()
 
-            if path:
-                l = prev_content.get_reachable_nodes(path_regexp=path)
+            if selector:
+                if isinstance(selector, str):
+                    l = prev_content.get_reachable_nodes(path_regexp=selector,
+                                                         resolve_generator=self.unfold)
+                elif isinstance(selector, NSC):
+                    l = prev_content.get_reachable_nodes(semantics_criteria=selector,
+                                                         resolve_generator=self.unfold)
+                elif isinstance(selector, NIC):
+                    l = prev_content.get_reachable_nodes(internals_criteria=selector,
+                                                         resolve_generator=self.unfold)
+                else:
+                    raise ValueError('Unsupported selector')
+
                 if not l:
-                    prev_data.add_info('INVALID INPUT')
+                    prev_data.add_info('No node found with current criteria')
                     return prev_data
 
                 for n in l:
                     status, off, size, name = n.absorb(new_value, constraints=new_csts)
-                    self._add_info(prev_data, n, status, size)
+                    self._add_info(prev_data, n, new_value, status, size)
             else:
                 status, off, size, name = prev_content.absorb(new_value, constraints=new_csts)
-                self._add_info(prev_data, prev_content, status, size)
+                self._add_info(prev_data, prev_content, new_value, status, size)
 
         prev_content.freeze()
 
@@ -1384,11 +1420,11 @@ class d_modify_nodes(Disruptor):
         prev_data.altered = True
         return prev_data
 
-    def _add_info(self, prev_data, n, status, size):
-        val_len = len(self.value)
+    def _add_info(self, prev_data, n, new_value, status, size):
+        val_len = len(new_value)
         prev_data.add_info("changed node:     {!s}".format(n.name))
         prev_data.add_info("absorption status: {!s}".format(status))
-        prev_data.add_info("value provided:   {!s}".format(truncate_info(self.value)))
+        prev_data.add_info("value provided:   {!s}".format(truncate_info(new_value)))
         prev_data.add_info("__ length:         {:d}".format(val_len))
         if status != AbsorbStatus.FullyAbsorbed:
             prev_data.add_info("absorbed size:     {:d}".format(size))
@@ -1403,7 +1439,7 @@ class d_modify_nodes(Disruptor):
            args={'func': ('The function that will be called with a node as its first parameter, '
                           'and provided optionnaly with addtionnal parameters if @params is set.',
                           lambda x:x,
-                          (types.MethodType, types.FunctionType)), # python3, python2
+                          types.MethodType),
                  'params': ('Tuple of parameters that will be provided to the function.',
                             None, tuple) })
 class d_call_function(Disruptor):
@@ -1426,7 +1462,8 @@ class d_call_function(Disruptor):
                 new_data = self.func(prev_data)
         except:
             new_data = prev_data
-            new_data.add_info("an error occurred while executing the user function '{!r}'".format(self.func))
+            new_data.add_info("An error occurred while executing the user function '{!r}':".format(self.func))
+            new_data.add_info(traceback.format_exc())
         else:
             new_data.add_info("called function: {!r}".format(self.func))
             if self.params:
@@ -1449,7 +1486,7 @@ class d_shallow_copy(Disruptor):
     def disrupt_data(self, dm, target, prev_data):
         prev_content = prev_data.content
         if not isinstance(prev_content, Node):
-            prev_data.add_info('INVALID INPUT')
+            prev_data.add_info('UNSUPPORTED INPUT')
             return prev_data
 
         prev_data.add_info('shallow copy of input data has been done')
@@ -1459,3 +1496,270 @@ class d_shallow_copy(Disruptor):
 
         return prev_data
 
+@disruptor(tactics, dtype="ADD", weight=4,
+           args={'path': ('Graph path to select the node on which ' \
+                          'the disruptor should apply.', None, str),
+                 'after': ('If True, the addition will be done after the selected node. Otherwise, '
+                           'it will be done before.',
+                          True, bool),
+                 'atom': ('Name of the atom to add within the retrieved input. It is mutually '
+                         'exclusive with @raw',
+                          None, str),
+                 'raw': ('Raw value to add within the retrieved input. It is mutually '
+                         'exclusive with @atom.',
+                         b'', (bytes,str)),
+                 'name': ('If provided, the added node will have this name.',
+                          None, str)
+                 })
+class d_add_data(Disruptor):
+    """
+    Add some data within the retrieved input.
+    """
+    def setup(self, dm, user_input):
+        if self.atom and self.raw:
+            return False
+        return True
+
+    def disrupt_data(self, dm, target, prev_data):
+        prev_content = prev_data.content
+        if isinstance(prev_content, bytes):
+            prev_content = Node('wrapper', subnodes=[Node('raw', values=[prev_content])])
+            prev_content.set_env(Env())
+            prev_content.freeze()
+        elif isinstance(prev_content, Node) and prev_content.is_term():
+            prev_content = Node('wrapper', subnodes=[prev_content])
+            prev_content.set_env(Env())
+            prev_content.freeze()
+
+        assert isinstance(prev_content, Node)
+
+        if self.atom is not None:
+            try:
+                obj = dm.get_atom(self.atom)
+            except:
+                prev_data.add_info("An error occurred while retrieving the atom named '{:s}'".format(self.atom))
+                return prev_data
+        else:
+            obj = Node('raw{}'.format(uuid.uuid1()), values=[self.raw])
+
+        if self.name is not None:
+            obj.name = self.name
+
+        if self.path:
+            nt_node_path = self.path[:self.path.rfind('/')]
+            try:
+                nt_node = prev_content[nt_node_path][0]
+                pivot = prev_content[self.path][0]
+            except:
+                prev_data.add_info('An error occurred while handling @path')
+                return prev_data
+
+            if self.after:
+                nt_node.add(obj, after=pivot)
+            else:
+                nt_node.add(obj, before=pivot)
+        else:
+            prev_content.add(obj)
+            prev_data.update_from(prev_content)
+            # prev_content.show()
+
+        return prev_data
+
+
+@disruptor(tactics, dtype="tWALKcsp", weight=1, modelwalker_user=False,
+           args={'init': ('Make the operator ignore all the steps until the provided one', 1, int),
+                 'clone_node': ('If True, this operator will always return a copy '
+                                'of the node. (for stateless diruptors dealing with '
+                                'big data it can be usefull to set it to False)', True, bool),
+                 'notify_exhaustion': ('When all the solutions of the CSP have been walked '
+                                       'through, the disruptor will notify it if this parameter '
+                                       'is set to True.', True, bool),
+                 })
+class sd_walk_csp_solutions(StatefulDisruptor):
+    """
+
+    When the CSP (Constraint Satisfiability Problem) backend are used in the data description.
+    This operator walk through the solutions of the CSP.
+
+    """
+
+    def setup(self, dm, user_input):
+        self._first_call_performed = False
+        self._count = 1
+        self._step_size = self.init-1 if self.init > 1 else 1
+        return True
+
+    def set_seed(self, prev_data):
+        prev_content = prev_data.content
+        if not isinstance(prev_content, Node):
+            prev_data.add_info('UNSUPPORTED INPUT')
+            return prev_data
+
+        self.csp = prev_content.get_csp()
+        if not self.csp:
+            prev_data.add_info('CSP BACKEND NOT USED BY THIS ATOM')
+            return prev_data
+
+        self.seed = prev_content
+        self.seed.freeze(resolve_csp=True)
+
+    def disrupt_data(self, dm, target, data):
+
+        if self._first_call_performed or self.init > 1:
+            self.seed.unfreeze(recursive=False, dont_change_state=True, walk_csp=True,
+                               walk_csp_step_size=self._step_size)
+
+        self._step_size = 1
+
+        if self.seed.no_more_solution_for_csp and self.notify_exhaustion:
+            data.make_unusable()
+            self.handover()
+
+        else:
+            if self._first_call_performed or self.init > 1:
+                self.seed.freeze(resolve_csp=True)
+                self._count += 1
+            else:
+                self._first_call_performed = True
+
+            data.add_info('csp solution index: {:d}'.format(self._count))
+            data.add_info(' |_ variables assignment:')
+            solution = self.csp.get_solution()
+            for var, value in solution.items():
+                data.add_info(f'     --> {var}: {value}')
+
+            if self.clone_node:
+                exported_node = Node(self.seed.name, base_node=self.seed, new_env=True)
+                data.update_from(exported_node)
+            else:
+                data.update_from(self.seed)
+
+        return data
+
+
+@disruptor(tactics, dtype="tCONST", weight=1, modelwalker_user=False,
+           args={'const_idx': ('Index of the constraint to begin with (first index is 1)', 1, int),
+                 'sample_idx': ('Index of the sample for the selected constraint to begin with ('
+                                'first index is 1)', 1, int),
+                 'clone_node': ('If True, this operator will always return a copy '
+                                'of the node. (for stateless diruptors dealing with '
+                                'big data it can be usefull to set it to False)', True, bool),
+                 'samples_per_cst': ('Maximum number of samples to output for each negated '
+                                     'constraint (-1 means until the end)',
+                                     -1, int),
+                 })
+class sd_constraint_fuzz(StatefulDisruptor):
+    """
+
+    When the CSP (Constraint Satisfiability Problem) backend are used in the node description.
+    This operator negates the constraint one-by-one and output 1 or more samples for each negated
+    constraint.
+
+    """
+
+    def setup(self, dm, user_input):
+
+        assert self.const_idx > 0
+        assert self.sample_idx > 0
+
+        self._first_call = True
+        self._count = 0
+        self._constraint_negated = False
+        self._current_constraint_idx = self.const_idx-1
+        self._sample_count = 0
+        self._step_size = self.sample_idx
+
+        return True
+
+    def set_seed(self, prev_data):
+        prev_content = prev_data.content
+        if not isinstance(prev_content, Node):
+            prev_data.add_info('UNSUPPORTED INPUT')
+            return prev_data
+
+        self.csp = prev_content.get_csp()
+        if not self.csp:
+            prev_data.add_info('CSP BACKEND NOT USED BY THIS ATOM')
+            return prev_data
+
+        self.seed = prev_content
+
+        self.seed.freeze(resolve_csp=True)
+        self.valid_solution = self.csp.get_solution()
+        self.csp_constraints = self.csp.get_all_constraints()
+        self.csp_variables = {v for c in self.csp_constraints for v in c.vars}
+
+    def _update_csp(self):
+        current_constraint = self.csp.get_constraint(self._current_constraint_idx)
+        variables = self.csp_variables - set(current_constraint.vars)
+        for v in variables:
+            self.csp.set_var_domain(v, [self.valid_solution[v]])
+
+    def _process_next_constraint(self):
+        self.csp.restore_var_domains()
+        self.csp.reset_constraint(self._current_constraint_idx)
+        self._constraint_negated = False
+        if self._current_constraint_idx < self.csp.nb_constraints - 1:
+            self._current_constraint_idx += 1
+            self.csp.negate_constraint(self._current_constraint_idx)
+            self._constraint_negated = True
+            self._update_csp()
+            self._sample_count = 1
+            return True
+
+        else:
+            return False
+
+    def disrupt_data(self, dm, target, data):
+
+        if not self._constraint_negated:
+            self.csp.negate_constraint(self._current_constraint_idx)
+            self._constraint_negated = True
+            self._update_csp()
+            self.seed.freeze(resolve_csp=True)
+
+        if self._sample_count < self.samples_per_cst or self.samples_per_cst == -1:
+            if self._first_call:
+                self._sample_count = self._step_size
+            else:
+                self._sample_count += 1
+        else:
+            if not self._process_next_constraint(): # no more constraint to deal with
+                data.make_unusable()
+                self.handover()
+                return data
+
+        if self._first_call:
+            self.seed.unfreeze(recursive=False, dont_change_state=True, walk_csp=True,
+                               walk_csp_step_size=self._step_size)
+            self._first_call = False
+        else:
+            self.seed.unfreeze(recursive=False, dont_change_state=True, walk_csp=True,
+                               walk_csp_step_size=1)
+
+        if self.seed.no_more_solution_for_csp: # Node.unfreeze() will trigger it if no new solution
+            if not self._process_next_constraint():
+                data.make_unusable()
+                self.handover()
+                return data
+
+        self.seed.freeze(resolve_csp=True)
+        self._count += 1
+
+        data.add_info(f'constraint fuzzing test case index: {self._count}')
+        data.add_info(f' |_ constraint number: {self._current_constraint_idx+1}/{self.csp.nb_constraints}')
+        data.add_info(f' |_ sample index: {self._sample_count}/{self.samples_per_cst}')
+        data.add_info(' |_ variables assignment:')
+        solution = self.csp.get_solution()
+        for var, value in solution.items():
+            data.add_info(f'     --> {var}: {value}')
+
+        if self.clone_node:
+            exported_node = Node(self.seed.name, base_node=self.seed, new_env=True)
+            data.update_from(exported_node)
+        else:
+            data.update_from(self.seed)
+
+        data.altered = True
+
+        return data

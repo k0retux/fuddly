@@ -31,6 +31,7 @@ from functools import partial
 from framework.data import *
 from framework.global_resources import *
 import framework.scenario as sc
+import framework.node as nd
 
 DEBUG = False
 
@@ -38,6 +39,7 @@ XT_NAME_LIST_K = 1
 XT_CLS_LIST_K = 2
 XT_WEIGHT_K = 3
 XT_VALID_CLS_LIST_K = 4
+XT_RELATED_DM = 5
 
 class Tactics(object):
 
@@ -47,16 +49,23 @@ class Tactics(object):
         self.disruptor_clones = {}
         self.generator_clones = {}
         self._fmkops = None
-        # self._knowledge_source = None
+        self._related_dm = None
 
-    def set_exportable_fmk_ops(self, fmkops):
+    def set_additional_info(self, fmkops, related_dm=None):
         self._fmkops = fmkops
+        self._related_dm = related_dm
         for dtype in self.generator_types:
+            self.generators[dtype][XT_RELATED_DM] = related_dm
             for name, attrs in self.get_generators_list(dtype).items():
                 attrs['obj'].set_exportable_fmk_ops(fmkops)
+                if self._related_dm:
+                    attrs['obj'].related_dm_name = self._related_dm.name
         for dtype in self.disruptor_types:
+            self.disruptors[dtype][XT_RELATED_DM] = related_dm
             for name, attrs in self.get_disruptors_list(dtype).items():
                 attrs['obj'].set_exportable_fmk_ops(fmkops)
+                if self._related_dm:
+                    attrs['obj'].related_dm_name = self._related_dm.name
 
     @staticmethod
     def scenario_ref_from(scenario):
@@ -78,16 +87,22 @@ class Tactics(object):
             dict_var[dmaker_type][XT_CLS_LIST_K] = {}
             dict_var[dmaker_type][XT_WEIGHT_K] = 0
             dict_var[dmaker_type][XT_VALID_CLS_LIST_K] = {}
+            dict_var[dmaker_type][XT_RELATED_DM] = self._related_dm
 
         if name in dict_var[dmaker_type][XT_NAME_LIST_K]:
             print("\n*** /!\\ ERROR: The name '%s' is already used for the dmaker_type '%s'\n" % \
                       (name, dmaker_type))
             raise ValueError
 
+        if self._fmkops is not None:
+            obj.set_exportable_fmk_ops(self._fmkops)
+        if self._related_dm is not None:
+            obj.related_dm_name = self._related_dm.name
+
         dict_var[dmaker_type][XT_NAME_LIST_K][name] = {
             'obj': obj,
             'weight': weight,
-            'valid': False
+            'valid': False,
             }
 
         dict_var[dmaker_type][XT_CLS_LIST_K][obj] = name
@@ -99,9 +114,6 @@ class Tactics(object):
             dict_var[dmaker_type][XT_VALID_CLS_LIST_K][name] = \
                 dict_var[dmaker_type][XT_NAME_LIST_K][name]
 
-        if self._fmkops is not None:
-            obj.set_exportable_fmk_ops(self._fmkops)
-        # obj.knowledge_source = self.knowledge_source
 
     def register_new_disruptor(self, name, obj, weight, dmaker_type, valid=False):
         self.__register_new_data_maker(self.disruptors, name, obj,
@@ -197,6 +209,13 @@ class Tactics(object):
 
         return ret
 
+    def generators_info(self):
+        for gen_type, attrs in self.generators.items():
+            yield gen_type, attrs[XT_RELATED_DM]
+
+    def disruptors_info(self):
+        for dis_type, attrs in self.disruptors.items():
+            yield dis_type, attrs[XT_RELATED_DM]
 
     def get_disruptor_weight(self, dmaker_type, name):
         try:
@@ -403,6 +422,9 @@ def _handle_user_inputs(dmaker, user_input):
                 assert(type(ui_val) in arg_type or ui_val is None)
             elif isinstance(arg_type, type):
                 assert(type(ui_val) == arg_type or issubclass(type(ui_val), arg_type) or ui_val is None)
+            elif arg_type is None:
+                # we ignore type verification
+                pass
             else:
                 raise ValueError
             if ui_val is None:
@@ -425,23 +447,22 @@ def _restore_dmaker_internals(dmaker):
 ################################
 
 GENERIC_ARGS = {
-    'init': ('make the model walker ignore all the steps until the provided one', 1, int),
-    'max_steps': ('maximum number of steps (-1 means until the end)', -1, int),
-    'runs_per_node': ('maximum number of test cases for a single node (-1 means until the end)', -1, int),
-    'clone_node': ('if True the dmaker will always return a copy ' \
+    'init': ('Make the model walker ignore all the steps until the provided one', 1, int),
+    'max_steps': ('Maximum number of steps (-1 means until the end)', -1, int),
+    'min_node_tc': ('Minimum number of test cases per node (-1 means until the end)', -1, int),
+    'max_node_tc': ('Maximum number of test cases per node (-1 means until the end). This value is '
+                    'used for nodes with a fuzz weight strictly greater than 1.', -1, int),
+    'clone_node': ('If True, this operator will always return a copy ' \
                    'of the node. (for stateless diruptors dealing with ' \
-                   'big data it can be usefull to it to False)', True, bool)
+                   'big data it can be usefull to set it to False)', True, bool)
 }
 
 def modelwalker_inputs_handling_helper(dmaker):
-    assert(dmaker.runs_per_node > 0 or dmaker.runs_per_node == -1)
+    assert dmaker.max_node_tc > 0 or dmaker.max_node_tc == -1
+    assert dmaker.min_node_tc > 0 or dmaker.min_node_tc == -1
 
-    if dmaker.runs_per_node == -1:
-        dmaker.max_runs_per_node = -1
-        dmaker.min_runs_per_node = -1
-    else:
-        dmaker.max_runs_per_node = dmaker.runs_per_node + 3
-        dmaker.min_runs_per_node = max(dmaker.runs_per_node - 2, 1)
+    dmaker.max_runs_per_node = dmaker.max_node_tc
+    dmaker.min_runs_per_node = dmaker.min_node_tc
 
 ### Generator & Disruptor
 
@@ -456,10 +477,10 @@ class DataMaker(object):
     knowledge_source = None
     _modelwalker_user = False
     _args_desc = None
+    related_dm_name = None
 
     def __init__(self):
         self._fmkops = None
-        # self._knowledge_source = None
 
     def set_exportable_fmk_ops(self, fmkops):
         self._fmkops = fmkops
@@ -542,7 +563,6 @@ class Generator(DataMaker):
 
 class dyn_generator(type):
     data_id = ''
-    
     def __init__(cls, name, bases, attrs):
         attrs['_args_desc'] = DynGenerator._args_desc
         type.__init__(cls, name, bases, attrs)
@@ -552,15 +572,21 @@ class dyn_generator(type):
 class DynGenerator(Generator):
     data_id = ''
     _args_desc = {
-        'finite': ('make the data model finite', False, bool),
-        'determinist': ('make the data model determinist', False, bool),
-        'random': ('make the data model random', False, bool)
+        'finite': ('Make the data model finite', False, bool),
+        'determinist': ("Make the data model determinist if set to 'True', random if set to "
+                        "'False', or do nothing if set to 'None'", None, bool),
+        'leaf_determinism': ("If set to 'True', all the typed nodes of the model will be "
+                              "set to determinist mode prior to any fuzzing. If set "
+                              "to 'False', they will be set to random mode. "
+                              "Otherwise, if set to 'None', nothing will be done.", None, bool),
+        'min_def': ("Set the default quantity of all the nodes to the defined minimum quantity if "
+                    "this parameter is set to 'True', or maximum quantity if set to 'False'. "
+                    "Otherwise if set to 'None', nothing is done.", None, bool),
+        'freeze': ("Freeze the generated node.", False, bool),
+        'resolve_csp': ("Resolve any CSP if any", True, bool)
     }
 
     def setup(self, dm, user_input):
-        if self.determinist or self.random:
-            assert(self.random != self.determinist)
-
         return True
 
     def generate_data(self, dm, monitor, target):
@@ -568,20 +594,49 @@ class DynGenerator(Generator):
         if isinstance(atom, Node):
             if self.finite:
                 atom.make_finite(all_conf=True, recursive=True)
-            if self.determinist:
+
+            if self.determinist is None:
+                pass
+            elif self.determinist:
                 atom.make_determinist(all_conf=True, recursive=True)
-            if self.random:
+            else:
                 atom.make_random(all_conf=True, recursive=True)
+
+            if self.leaf_determinism is not None:
+                nic = nd.NodeInternalsCriteria(node_kinds=[nd.NodeInternals_TypedValue])
+                nl = atom.get_reachable_nodes(internals_criteria=nic, ignore_fstate=True)
+                for n in nl:
+                    if not n.is_attr_set(nd.NodeInternals.Mutable):
+                        continue
+                    if self.leaf_determinism:
+                        n.make_determinist()
+                    else:
+                        n.make_random()
+
+            if self.min_def is not None:
+                nic = nd.NodeInternalsCriteria(node_kinds=[nd.NodeInternals_NonTerm])
+                nl = atom.get_reachable_nodes(internals_criteria=nic, ignore_fstate=True)
+                for node in nl:
+                    subnodes = node.subnodes_set
+                    for snd in subnodes:
+                        min, max = node.get_subnode_minmax(snd)
+                        node.set_subnode_default_qty(snd, min if self.min_def else max)
+
+        if self.freeze:
+            atom.freeze(resolve_csp=self.resolve_csp)
 
         return Data(atom)
 
 
 class dyn_generator_from_scenario(type):
     scenario = None
-    def __init__(cls, name, bases, attrs):
-        attrs['_args_desc'] = DynGeneratorFromScenario._args_desc
-        type.__init__(cls, name, bases, attrs)
-        cls.scenario = dyn_generator_from_scenario.scenario
+    def __new__(cls, name, bases, attrs):
+        attrs['_args_desc'] = copy.copy(DynGeneratorFromScenario._args_desc)
+        if dyn_generator_from_scenario.scenario._user_args:
+            attrs['_args_desc'].update(dyn_generator_from_scenario.scenario._user_args)
+        cls_obj = type(name, bases, attrs)
+        cls_obj.scenario = dyn_generator_from_scenario.scenario
+        return cls_obj
 
 class DynGeneratorFromScenario(Generator):
     scenario = None
@@ -629,6 +684,8 @@ class DynGeneratorFromScenario(Generator):
         self._cleanup_walking_attrs()
         for periodic_id in self.scenario.periodic_to_clear:
             fmkops.unregister_task(periodic_id, ign_error=True)
+        for task_id in self.scenario.tasks_to_stop:
+            fmkops.unregister_task(task_id, ign_error=True)
 
     def _cleanup_walking_attrs(self):
         self.tr_selected = None
@@ -636,10 +693,7 @@ class DynGeneratorFromScenario(Generator):
         self.tr_selected_idx = -1
 
     def setup(self, dm, user_input):
-        if not _user_input_conformity(self, user_input, self._args_desc):
-            return False
         self.__class__.scenario.set_data_model(dm)
-        # self.__class__.scenario.knowledge_source = self.knowledge_source
         self.scenario = copy.copy(self.__class__.scenario)
 
         assert (self.data_fuzz and not (self.cond_fuzz or self.ignore_timing)) or not self.data_fuzz
@@ -708,12 +762,12 @@ class DynGeneratorFromScenario(Generator):
         data_desc = step.data_desc
         if isinstance(data_desc[0], str) \
                 or (isinstance(data_desc[0], Data) and data_desc[0].content is not None):
-            dp = sc.DataProcess(process=['tTYPE#{:d}'.format(self._step_num)], seed=data_desc[0],
+            dp = DataProcess(process=['tTYPE#{:d}'.format(self._step_num)], seed=data_desc[0],
                                 auto_regen=True)
             dp.append_new_process([('tSTRUCT#{:d}'.format(self._step_num), UI(init=1, deep=True))])
             data_desc[0] = dp
             step.data_desc = data_desc
-        elif isinstance(data_desc[0], sc.DataProcess):
+        elif isinstance(data_desc[0], DataProcess):
             proc = copy.copy(data_desc[0].process)
             proc2 = copy.copy(data_desc[0].process)
             proc.append('tTYPE#{:d}'.format(self._step_num))
@@ -722,7 +776,7 @@ class DynGeneratorFromScenario(Generator):
             data_desc[0].append_new_process(proc2)
             data_desc[0].auto_regen = True
         elif isinstance(data_desc[0], Data):
-            dp = sc.DataProcess(process=['C#{:d}'.format(self._step_num)], seed=data_desc[0],
+            dp = DataProcess(process=['C#{:d}'.format(self._step_num)], seed=data_desc[0],
                                 auto_regen=True)
             data_desc[0] = dp
             step.data_desc = data_desc
@@ -739,7 +793,7 @@ class DynGeneratorFromScenario(Generator):
         if self._prev_func is not None:
             self._prev_func(env, step)
         data_desc = step.data_desc[0]
-        assert isinstance(data_desc, sc.DataProcess)
+        assert isinstance(data_desc, DataProcess)
         if data_desc.auto_regen_cpt > 0:
             data_desc.auto_regen_cpt = 0
             self._data_fuzz_change_step = True
@@ -823,6 +877,11 @@ class DynGeneratorFromScenario(Generator):
                 self._alteration_just_performed = False
 
         self.scenario.set_target(target)
+
+        if self.scenario._user_args:
+            for ua in self.scenario._user_args.keys():
+                setattr(self.scenario.env, str(ua), getattr(self, str(ua)))
+
         self.step = self.scenario.current_step
 
         self.step.do_before_data_processing()
@@ -837,9 +896,10 @@ class DynGeneratorFromScenario(Generator):
             else:
                 self.need_reset()
                 data = Data()
-                data.register_callback(self._callback_cleanup_periodic, hook=HOOK.after_dmaker_production)
+                # data.register_callback(self._callback_cleanup_periodic, hook=HOOK.after_dmaker_production)
                 data.make_unusable()
                 data.origin = self.scenario
+                data.scenario_dependence = self.scenario.name
                 return data
 
         data = self.step.get_data()
@@ -855,17 +915,11 @@ class DynGeneratorFromScenario(Generator):
         data.register_callback(self._callback_dispatcher_before_sending_step2, hook=HOOK.before_sending_step2)
         data.register_callback(self._callback_dispatcher_after_sending, hook=HOOK.after_sending)
         data.register_callback(self._callback_dispatcher_after_fbk, hook=HOOK.after_fbk)
+        data.register_callback(self._callback_dispatcher_final, hook=HOOK.final)
 
         data.scenario_dependence = self.scenario.name
 
         return data
-
-
-    def _callback_cleanup_periodic(self):
-        cbkops = CallBackOps()
-        for periodic_id in self.scenario.periodic_to_clear:
-            cbkops.add_operation(CallBackOps.Del_PeriodicData, id=periodic_id)
-        return cbkops
 
 
     def __handle_transition_callbacks(self, hook, feedback=None):
@@ -880,7 +934,14 @@ class DynGeneratorFromScenario(Generator):
         if self.tr_selected is None:
             for idx, tr in enumerate(self.step.transitions):
                 if self.tr_selected is None:
-                    if not tr.has_callback() and tr.is_crossable():
+                    if tr.dp_completed_guard:
+                        for d_desc in self.step.data_desc:
+                            if isinstance(d_desc, DataProcess) and d_desc.dp_completed:
+                                # d_desc.dp_completed = False
+                                self.tr_selected = tr
+                                self.tr_selected_idx = idx
+                                break
+                    elif not tr.has_callback() and tr.is_crossable():
                         self.tr_selected = tr
                         self.tr_selected_idx = idx
                         break
@@ -901,23 +962,33 @@ class DynGeneratorFromScenario(Generator):
         if self.step.has_dataprocess():
             cbkops.add_operation(CallBackOps.Replace_Data,
                                  param=(self.step.data_desc, self.step.vtg_ids_list))
+            if self.step.transition_on_dp_complete:
+                cbkops.set_flag(CallBackOps.ForceDataHandling)
 
         return cbkops
 
     def _callback_dispatcher_before_sending_step2(self):
         # Callback called after any data have been processed but not sent yet
-        self.step.do_before_sending()
-        # We add again the operation CallBackOps.Replace_Data, because the step contents could have changed
+        did_something = self.step.do_before_sending()
+
+        self.__handle_transition_callbacks(HOOK.before_sending_step2)
+
         cbkops = CallBackOps()
-        cbkops.add_operation(CallBackOps.Replace_Data,
-                             param=(self.step.data_desc, self.step.vtg_ids_list))
+        if did_something:
+            # We add again the operation CallBackOps.Replace_Data, because the step contents could have changed
+            cbkops.add_operation(CallBackOps.Replace_Data,
+                                 param=(self.step.data_desc, self.step.vtg_ids_list))
+
         return cbkops
 
     def _callback_dispatcher_after_sending(self):
         self.__handle_transition_callbacks(HOOK.after_sending)
 
     def _callback_dispatcher_after_fbk(self, fbk):
-        """This callback is always called by the framework"""
+        """
+        This callback is always called by the framework
+        It allows for a NoDataStep to perform actions (trigger periodic data, tasks, ...)
+        """
 
         self.__handle_transition_callbacks(HOOK.after_fbk, feedback=fbk)
 
@@ -929,6 +1000,16 @@ class DynGeneratorFromScenario(Generator):
         for periodic_id in self.step.periodic_to_clear:
             cbkops.add_operation(CallBackOps.Del_PeriodicData, id=periodic_id)
 
+        for desc in self.step.tasks_to_start:
+            cbkops.add_operation(CallBackOps.Start_Task, id=id(desc),
+                                 param=desc, period=desc.period)
+
+        for task_id in self.step.tasks_to_stop:
+            cbkops.add_operation(CallBackOps.Stop_Task, id=task_id)
+
+        return cbkops
+
+    def _callback_dispatcher_final(self):
         if self.tr_selected is not None:
             self.scenario.walk_to(self.tr_selected.step)
         else:
@@ -937,8 +1018,6 @@ class DynGeneratorFromScenario(Generator):
 
         # In case the same Data is used again without going through self.generate_data()
         self._cleanup_walking_attrs()
-
-        return cbkops
 
 
 class Disruptor(DataMaker):

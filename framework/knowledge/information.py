@@ -94,12 +94,23 @@ class Hardware(Info):
 
 class Language(Info):
     C = auto()
+    Ada = auto()
     Pascal = auto()
     Unknown = auto()
 
 class InputHandling(Info):
     Ctrl_Char_Set = auto()
+    Printable_Char_Set = auto()
     Unknown = auto()
+
+class Test(Info):
+    Cursory = auto()
+    Medium = auto()
+    Deep = auto()
+
+class OperationMode(Info):
+    Determinist = auto()
+    Random = auto()
 
 
 class InformationCollector(object):
@@ -110,6 +121,8 @@ class InformationCollector(object):
 
     def add_information(self, info, initial_trust_value=0):
         assert info is not None
+        if isinstance(info, Info):
+            info = [info]
 
         try:
             for i in info:
@@ -143,11 +156,6 @@ class InformationCollector(object):
 
         return desc
 
-    # for python2 compatibility
-    def __nonzero__(self):
-        return bool(self._collector)
-
-    # for python3 compatibility
     def __bool__(self):
         return bool(self._collector)
 

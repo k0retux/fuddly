@@ -23,6 +23,7 @@
 
 import socket
 
+from framework.comm_backends import Serial_Backend
 from framework.plumbing import *
 from framework.targets.debug import TestTarget
 from framework.targets.network import NetworkTarget
@@ -30,15 +31,17 @@ from framework.knowledge.information import *
 from framework.knowledge.feedback_handler import TestFbkHandler
 from framework.scenario import *
 from framework.global_resources import UI
-from framework.evolutionary_helpers import DefaultPopulation
+from framework.evolutionary_helpers import DefaultPopulation, CrossoverHelper
+from framework.data import DataProcess
 
 project = Project()
 project.default_dm = ['mydf', 'myproto']
 
 project.map_targets_to_scenario('ex1', {0: 7, 1: 8, None: 8})
 
-logger = Logger(record_data=False, explicit_data_recording=False, export_orig=False,
-                export_raw_data=False, enable_file_logging=False)
+logger = Logger(record_data=False, explicit_data_recording=False,
+                export_raw_data=False, enable_file_logging=False,
+                highlight_marked_nodes=True)
 
 ### KNOWLEDGE ###
 
@@ -171,17 +174,38 @@ open_step.connect_to(FinalStep())
 
 sc_proj1 = Scenario('proj1', anchor=open_step, user_context=UI(prj='proj1'))
 sc_proj2 = sc_proj1.clone('proj2')
-sc_proj2.set_user_context(UI(prj='proj2'))
+sc_proj2.user_context = UI(prj='proj2')
 
-project.register_scenarios(sc_proj1, sc_proj2)
+
+step1 = Step(DataProcess(process=['tTYPE'], seed='4tg1'))
+step2 = Step(DataProcess(process=['tTYPE#2'], seed='4tg2'))
+
+step1.connect_to(step2, dp_completed_guard=True)
+step2.connect_to(FinalStep(), dp_completed_guard=True)
+
+sc_proj3 = Scenario('proj3', anchor=step1)
+
+project.register_scenarios(sc_proj1, sc_proj2, sc_proj3)
 
 ### EVOLUTIONNARY PROCESS EXAMPLE ###
 
+init_dp1 = DataProcess([('tTYPE', UI(fuzz_mag=0.2))], seed='exist_cond')
+init_dp1.append_new_process([('tSTRUCT', UI(deep=True))])
+
+init_dp2 = DataProcess([('tTYPE#2', UI(fuzz_mag=0.2))], seed='exist_cond')
+init_dp2.append_new_process([('tSTRUCT#2', UI(deep=True))])
+
 project.register_evolutionary_processes(
-    ('evol', DefaultPopulation,
-     {'init_process': [('SEPARATOR', UI(random=True)), 'tTYPE'],
-      'size': 10,
-      'max_generation_nb': 10})
+    ('evol1', DefaultPopulation,
+     {'init_process': init_dp1,
+      'max_size': 80,
+      'max_generation_nb': 3,
+      'crossover_algo': CrossoverHelper.crossover_algo1}),
+    ('evol2', DefaultPopulation,
+     {'init_process': init_dp2,
+      'max_size': 80,
+      'max_generation_nb': 3,
+      'crossover_algo': CrossoverHelper.get_configured_crossover_algo2()})
 )
 
 ### OPERATOR DEFINITION ###
@@ -203,9 +227,9 @@ class MyOp(Operator):
         self.detected_error = 0
 
         if self.mode == 1:
-            fmk_ops.set_fuzz_delay(0)
+            fmk_ops.set_sending_delay(0)
         else:
-            fmk_ops.set_fuzz_delay(0.5)
+            fmk_ops.set_sending_delay(0.5)
 
         return True
 

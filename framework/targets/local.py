@@ -38,8 +38,9 @@ class LocalTarget(Target):
     _feedback_mode = Target.FBK_WAIT_UNTIL_RECV
     supported_feedback_mode = [Target.FBK_WAIT_UNTIL_RECV]
 
-    def __init__(self, target_path=None, pre_args='', post_args='',
-                 tmpfile_ext='.bin', send_via_stdin=False, send_via_cmdline=False):
+    def __init__(self, target_path=None, pre_args=None, post_args=None,
+                 tmpfile_ext='.bin', send_via_stdin=False, send_via_cmdline=False,
+                 error_samples=None, error_parsing_func=lambda x: (False, '')):
         Target.__init__(self)
         self._suffix = '{:0>12d}'.format(random.randint(2 ** 16, 2 ** 32))
         self._app = None
@@ -47,6 +48,8 @@ class LocalTarget(Target):
         self._post_args = post_args
         self._send_via_stdin = send_via_stdin
         self._send_via_cmdline = send_via_cmdline
+        self._error_samples = [b'error', b'invalid'] if error_samples is None else error_samples
+        self._error_parsing_func = error_parsing_func
         self._data_sent = None
         self._feedback_computed = None
         self._feedback = FeedbackCollector()
@@ -56,7 +59,10 @@ class LocalTarget(Target):
     def get_description(self):
         pre_args = self._pre_args
         post_args = self._post_args
-        args = ', Args: ' + pre_args + post_args if pre_args or post_args else ''
+        if pre_args or post_args:
+            args = ', Args: ' + ('' if pre_args is None else pre_args) + ('' if post_args is None else post_args)
+        else:
+            args = ''
         return 'Program: ' + self._target_path + args
 
     def set_tmp_file_extension(self, tmpfile_ext):
@@ -121,13 +127,19 @@ class LocalTarget(Target):
                  f.write(data)
 
         if self._pre_args is not None and self._post_args is not None:
-            cmd = [self._target_path] + self._pre_args.split() + [name] + self._post_args.split()
+            if self._send_via_stdin:
+                cmd = [self._target_path] + self._pre_args.split() + self._post_args.split()
+            else:
+                cmd = [self._target_path] + self._pre_args.split() + [name] + self._post_args.split()
         elif self._pre_args is not None:
-            cmd = [self._target_path] + self._pre_args.split() + [name]
+            cmd = [self._target_path] + self._pre_args.split()
+            if not self._send_via_stdin:
+                cmd += [name]
         elif self._post_args is not None:
-            cmd = [self._target_path, name] + self._post_args.split()
+            cmd = [self._target_path] if self._send_via_stdin else [self._target_path, name]
+            cmd += self._post_args.split()
         else:
-            cmd = [self._target_path, name]
+            cmd = [self._target_path] if self._send_via_stdin else [self._target_path, name]
 
         stdin_arg = subprocess.PIPE if self._send_via_stdin else None
         self._app = subprocess.Popen(args=cmd, stdin=stdin_arg, stdout=subprocess.PIPE,
@@ -164,40 +176,58 @@ class LocalTarget(Target):
         else:
             self._feedback_computed = True
 
-        err_detected = False
-
-        if self._app is None and self._data_sent:
-            err_detected = True
-            self._feedback.add_fbk_from("LocalTarget", "Application has terminated (crash?)",
-                                        status=-3)
-            return self._feedback
-        elif self._app is None:
+        if self._app is None:
+            # application not yet started
             return self._feedback
 
-        exit_status = self._app.poll()
-        if exit_status is not None and exit_status < 0:
-            err_detected = True
-            self._feedback.add_fbk_from("Application[{:d}]".format(self._app.pid),
-                                         "Negative return status ({:d})".format(exit_status),
-                                        status=exit_status)
+        exit_error = False
+        proc_killed = False
+        return_code = self._app.poll()
+        if return_code is not None: # process has terminate
+            if return_code < 0:
+                # process terminated by a signal (python behavior for POSIX system)
+                proc_killed = True
+                self._feedback.add_fbk_from(f"Application[{self._app.pid}]",
+                                            f"Application terminated by a signal (ID: {-return_code})",
+                                            status=-3)
 
+            else:
+                if self.is_processed_data_altered() and return_code == 0:
+                    exit_error = True
+                    msg = f"Wrong exit status ({return_code}) - expecting != 0 (as altered data was provided)"
+                elif not self.is_processed_data_altered() and return_code != 0:
+                    exit_error = True
+                    msg = f"Wrong exit status ({return_code}) - expecting 0 (as valid data was provided)"
+                else:
+                    msg = f'Expected exit status ({return_code})'
+
+                self._feedback.add_fbk_from(f"Application[{self._app.pid}]", msg, status=-1 if exit_error else 0)
+
+        console_error = False
         ret = select.select([self._app.stdout, self._app.stderr], [], [], timeout)
         if ret[0]:
             byte_string = b''
             for fd in ret[0][:-1]:
                 byte_string += fd.read() + b'\n\n'
 
-            if b'error' in byte_string or b'invalid' in byte_string:
-                err_detected = True
+            console_error, msg = self._error_parsing_func(byte_string)
+            if console_error:
                 self._feedback.add_fbk_from("LocalTarget[stdout]",
-                                             "Application outputs errors on stdout",
+                                            f"Error detected on stdout (by provided parsing function)\n --> {msg}",
                                             status=-1)
+
+            for err_msg in self._error_samples:
+                if err_msg in byte_string:
+                    console_error = True
+                    self._feedback.add_fbk_from("LocalTarget[stdout]",
+                                                f"Error detected on stdout (from provided samples): '{err_msg.decode()}'",
+                                                status=-1)
 
             stderr_msg = ret[0][-1].read()
             if stderr_msg:
-                err_detected = True
+                console_error = True
                 self._feedback.add_fbk_from("LocalTarget[stderr]",
-                                             "Application outputs on stderr",
+                                            "Application outputs on stderr",
                                             status=-2)
                 byte_string += stderr_msg
             else:
@@ -206,7 +236,7 @@ class LocalTarget(Target):
         else:
             byte_string = b''
 
-        if err_detected:
+        if proc_killed or exit_error or console_error:
             self._feedback.set_error_code(-1)
         self._feedback.set_bytes(byte_string)
 

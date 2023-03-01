@@ -24,18 +24,26 @@
 import inspect
 import string
 import sys
-import six
+import math
+from pprint import pprint as pp
+import copy
 
 from framework.dmhelpers.generic import MH
 from framework.error_handling import DataModelDefinitionError, CharsetError, \
     InitialStateNotFoundError, QuantificationError, StructureError, InconvertibilityError, \
     EscapeError, InvalidRangeError, EmptyAlphabetError
-from framework.node import Node, NodeInternals_Empty, GenFuncCusto, NonTermCusto, FuncCusto, \
-    NodeSemantics, SyncScope, SyncQtyFromObj, SyncSizeObj, NodeCondition, SyncExistenceObj, Env
+from framework.node import Node,\
+    NodeInternals_Empty, NodeInternals_NonTerm, NodeInternals_GenFunc, NodeInternals_Func, \
+    GenFuncCusto, NonTermCusto, FuncCusto, \
+    NodeSemantics, SyncScope, SyncQtyFromObj, SyncSizeObj, NodeCondition, SyncExistenceObj, Env, \
+    NodeInternalsCriteria, NodeInternals
+from framework.constraint_helpers import CSP
 
 import framework.value_types as fvt
 
 class NodeBuilder(object):
+
+    RootNS = 1
 
     HIGH_PRIO = 1
     MEDIUM_PRIO = 2
@@ -45,15 +53,17 @@ class NodeBuilder(object):
     valid_keys = [
         # generic description keys
         'name', 'contents', 'qty', 'clone', 'type', 'alt', 'conf',
-        'custo_set', 'custo_clear', 'evolution_func',
+        'custo_set', 'custo_clear', 'evolution_func', 'description',
+        'default_qty', 'namespace', 'from_namespace', 'highlight',
+        'constraints', 'constraints_highlight',
         # NonTerminal description keys
         'weight', 'shape_type', 'section_type', 'duplicate_mode', 'weights',
-        'separator', 'prefix', 'suffix', 'unique',
+        'separator', 'prefix', 'suffix', 'unique', 'always',
         'encoder',
         # Generator/Function description keys
         'node_args', 'other_args', 'provide_helpers', 'trigger_last',
         # Typed-node description keys
-        'specific_fuzzy_vals',
+        'specific_fuzzy_vals', 'default',
         # Import description keys
         'import_from', 'data_id',
         # node properties description keys
@@ -70,7 +80,8 @@ class NodeBuilder(object):
         'debug'
     ]
 
-    def __init__(self, dm=None, delayed_jobs=True, add_env=True):
+    def __init__(self, dm=None, delayed_jobs=True, add_env=True,
+                 default_gen_custo=None, default_nonterm_custo=None):
         """
         Help the process of data description. This class is able to construct a
         :class:`framework.data_model.Node` object from a JSON-like description.
@@ -89,7 +100,14 @@ class NodeBuilder(object):
               SHALL have only one ``Env()`` shared between all the nodes and an Env() shall not be
               shared between independent graph (otherwise it could lead to
               unexpected results).
+            default_gen_custo: override default Generator node customization
+            default_nonterm_custo: override default NonTerminal node customization
         """
+        self.default_gen_custo = default_gen_custo
+        self.default_nonterm_custo = default_nonterm_custo
+        self.default_gen_custo_orig = NodeInternals_GenFunc.default_custo
+        self.default_nonterm_custo_orig = NodeInternals_NonTerm.default_custo
+
         self.dm = dm
         self.delayed_jobs = delayed_jobs
         self._add_env_to_the_node = add_env
@@ -103,39 +121,58 @@ class NodeBuilder(object):
     def create_graph_from_desc(self, desc):
         self.sorted_todo = {}
         self.node_dico = {}
-        self.empty_node = Node('EMPTY')
+        # self.empty_node = Node('EMPTY')
+
+        if self.default_gen_custo:
+            NodeInternals_GenFunc.default_custo = self.default_gen_custo
+        if self.default_nonterm_custo:
+            NodeInternals_NonTerm.default_custo = self.default_nonterm_custo
 
         n = self._create_graph_from_desc(desc, None)
 
         if self._add_env_to_the_node:
-            self._register_todo(n, self._set_env, prio=self.VERYLOW_PRIO)
+            self._register_todo(n, self._set_env, prio=self.VERYLOW_PRIO, last_position=False)
 
         todo = self._create_todo_list()
+        loop = 0
         while todo:
+            if loop > 50:
+                print('\n*** Recursion Error ***\n')
+                pp(self.node_dico)
+                raise ValueError
             for node, func, args, unpack_args in todo:
                 if isinstance(args, tuple) and unpack_args:
                     func(node, *args)
                 else:
                     func(node, args)
+            # func could register new tasks to do
             todo = self._create_todo_list()
+            loop += 1
+
+        if self.default_gen_custo:
+            NodeInternals_GenFunc.default_custo = self.default_gen_custo_orig
+        if self.default_nonterm_custo:
+            NodeInternals_NonTerm.default_custo = self.default_nonterm_custo_orig
 
         return n
 
-    def _handle_name(self, name_desc):
+    def _handle_name(self, name_desc, namespace=None):
         if isinstance(name_desc, (tuple, list)):
             assert(len(name_desc) == 2)
             name = name_desc[0]
-            ident = name_desc[1]
+            ns = name_desc[1]
         elif isinstance(name_desc, str):
             name = name_desc
-            ident = 1
+            ns = NodeBuilder.RootNS if namespace is None else namespace
         else:
             raise ValueError("Name is not recognized: '%s'!" % name_desc)
 
-        return name, ident
+        assert isinstance(name, str)
+
+        return name, ns
 
 
-    def _create_graph_from_desc(self, desc, parent_node):
+    def _create_graph_from_desc(self, desc, parent_node, namespace=None):
 
         def _get_type(top_desc, contents):
             pre_ntype = top_desc.get('type', None)
@@ -145,7 +182,7 @@ class NodeBuilder(object):
                 ntype = MH.RawNode
             elif hasattr(contents, '__call__') and pre_ntype in [None, MH.Generator]:
                 ntype = MH.Generator
-            elif isinstance(contents, six.string_types) and pre_ntype in [None, MH.Regex]:
+            elif isinstance(contents, str) and pre_ntype in [None, MH.Regex]:
                 ntype = MH.Regex
             else:
                 ntype = MH.Leaf
@@ -161,13 +198,13 @@ class NodeBuilder(object):
                       MH.RawNode: self._update_provided_node}
 
         if contents is None:
-            nd = self.__handle_clone(desc, parent_node)
+            nd = self.__handle_clone(desc, parent_node, namespace=namespace)
         else:
             # Non-terminal are recognized via its contents (avoiding
             # the user to always provide a 'type' field)
             ntype = _get_type(desc, contents)
-            nd = dispatcher.get(ntype)(desc)
-            self.__post_handling(desc, nd)
+            nd = dispatcher.get(ntype)(desc, namespace=namespace)
+            self.__post_handling(desc, nd, namespace=namespace)
 
         alt_confs = desc.get('alt', None)
         if alt_confs is not None:
@@ -179,15 +216,15 @@ class NodeBuilder(object):
                                      " into an alternate configuration is not supported")
                 ntype = _get_type(alt, cts)
                 # dispatcher.get(ntype)(alt, None, node=nd)
-                dispatcher.get(ntype)(alt, node=nd)
+                dispatcher.get(ntype)(alt, node=nd, namespace=namespace)
 
         return nd
 
-    def __handle_clone(self, desc, parent_node):
+    def __handle_clone(self, desc, parent_node, namespace=None):
         if isinstance(desc.get('contents'), Node):
             name, ident = self._handle_name(desc['contents'].name)
         else:
-            name, ident = self._handle_name(desc['name'])
+            name, ident = self._handle_name(desc['name'], namespace=namespace)
 
         exp = desc.get('import_from', None)
         if exp is not None:
@@ -201,9 +238,11 @@ class NodeBuilder(object):
 
         nd = Node(name)
         clone_ref = desc.get('clone', None)
+        from_ns = desc.get('from_namespace', None)
+        current_ns = namespace if from_ns is None else from_ns
         if clone_ref is not None:
-            ref = self._handle_name(clone_ref)
-            self._register_todo(nd, self._clone_from_dict, args=(ref, desc),
+            ref = self._handle_name(clone_ref, namespace=current_ns)
+            self._register_todo(nd, self._clone_from_dict, args=(ref, desc, current_ns),
                                 prio=self.LOW_PRIO)
             self.node_dico[(name, ident)] = nd
         else:
@@ -217,7 +256,7 @@ class NodeBuilder(object):
 
         return nd
 
-    def __pre_handling(self, desc, node):
+    def __pre_handling(self, desc, node, namespace=None):
         if node is not None:
             if isinstance(node.cc, NodeInternals_Empty):
                 raise ValueError("Error: alternative configuration"\
@@ -230,30 +269,30 @@ class NodeBuilder(object):
             conf = None
         else:
             conf = None
-            ref = self._handle_name(desc['name'])
+            ref = self._handle_name(desc['name'], namespace=namespace)
             if ref in self.node_dico:
                 raise ValueError("name {!r} is already used!".format(ref))
             n = Node(ref[0])
 
         return n, conf
 
-    def __post_handling(self, desc, node):
+    def __post_handling(self, desc, node, namespace=None):
         if not isinstance(node.cc, NodeInternals_Empty):
             if isinstance(desc.get('contents'), Node):
                 ref = self._handle_name(desc['contents'].name)
             else:
-                ref = self._handle_name(desc['name'])
+                ref = self._handle_name(desc['name'], namespace=namespace)
             self.node_dico[ref] = node
 
-    def _update_provided_node(self, desc, node=None):
-        n, conf = self.__pre_handling(desc, node)
+    def _update_provided_node(self, desc, node=None, namespace=None):
+        n, conf = self.__pre_handling(desc, node, namespace=namespace)
         self._handle_custo(n, desc, conf)
-        self._handle_common_attr(n, desc, conf)
+        self._handle_common_attr(n, desc, conf, current_ns=namespace)
         return n
 
-    def _create_generator_node(self, desc, node=None):
+    def _create_generator_node(self, desc, node=None, namespace=None):
 
-        n, conf = self.__pre_handling(desc, node)
+        n, conf = self.__pre_handling(desc, node, namespace=namespace)
 
         contents = desc.get('contents')
 
@@ -264,6 +303,7 @@ class NodeBuilder(object):
             else:
                 provide_helpers = desc.get('provide_helpers', False)
             node_args = desc.get('node_args', None)
+            from_ns = desc.get('from_namespace', None)
             n.set_generator_func(contents, func_arg=other_args,
                                  provide_helpers=provide_helpers, conf=conf)
 
@@ -282,24 +322,26 @@ class NodeBuilder(object):
             if node_args is not None:
                 # node_args interpretation is postponed after all nodes has been created
                 if isinstance(node_args, dict):
-                    self._register_todo(n, self._complete_generator_from_desc, args=(node_args, conf), unpack_args=True,
+                    self._register_todo(n, self._complete_generator_from_desc,
+                                        args=(node_args, conf), unpack_args=True,
                                         prio=self.HIGH_PRIO)
 
                 else:
-                    self._register_todo(n, self._complete_generator, args=(node_args, conf), unpack_args=True,
+                    self._register_todo(n, self._complete_generator,
+                                        args=(node_args, conf, from_ns, namespace), unpack_args=True,
                                         prio=self.HIGH_PRIO)
         else:
             raise ValueError("*** ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
         self._handle_custo(n, desc, conf)
-        self._handle_common_attr(n, desc, conf)
+        self._handle_common_attr(n, desc, conf, current_ns=namespace)
 
         return n
 
 
-    def _create_non_terminal_node_from_regex(self, desc, node=None):
+    def _create_non_terminal_node_from_regex(self, desc, node=None, namespace=None):
 
-        n, conf = self.__pre_handling(desc, node)
+        n, conf = self.__pre_handling(desc, node, namespace=namespace)
 
         name =  desc.get('name') if desc.get('name') is not None else node.name
         if isinstance(name, tuple):
@@ -325,21 +367,25 @@ class NodeBuilder(object):
             prefix = sep_desc.get('prefix', True)
             suffix = sep_desc.get('suffix', True)
             unique = sep_desc.get('unique', False)
-            n.set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique)
+            always = sep_desc.get('always', False)
+            n.set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique, always=always)
 
-        self._handle_common_attr(n, desc, conf)
+        self._handle_common_attr(n, desc, conf, current_ns=namespace)
 
         return n
 
 
-    def _create_non_terminal_node(self, desc, node=None):
+    def _create_non_terminal_node(self, desc, node=None, namespace=None):
 
-        n, conf = self.__pre_handling(desc, node)
+        n, conf = self.__pre_handling(desc, node, namespace=namespace)
 
         shapes = []
         cts = desc.get('contents')
         if not cts:
             raise ValueError
+
+        ns = desc.get('namespace')
+        ns = namespace if ns is None else ns
 
         if isinstance(cts[0], (list,tuple)):
             # thus contains at least something that is not a
@@ -359,7 +405,7 @@ class NodeBuilder(object):
                 shtype = s.get('shape_type', MH.Ordered)
                 dupmode = s.get('duplicate_mode', MH.Copy)
                 shape = self._create_nodes_from_shape(subnodes, n, shape_type=shtype,
-                                                      dup_mode=dupmode)
+                                                      dup_mode=dupmode, namespace=ns)
                 shapes.append(weight)
                 shapes.append(shape)
         else:
@@ -367,7 +413,7 @@ class NodeBuilder(object):
             shtype = desc.get('shape_type', MH.Ordered)
             dupmode = desc.get('duplicate_mode', MH.Copy)
             shape = self._create_nodes_from_shape(cts, n, shape_type=shtype,
-                                                  dup_mode=dupmode)
+                                                  dup_mode=dupmode, namespace=ns)
             shapes.append(1)
             shapes.append(shape)
 
@@ -379,22 +425,29 @@ class NodeBuilder(object):
         if sep_desc is not None:
             sep_node_desc = sep_desc.get('contents', None)
             assert(sep_node_desc is not None)
-            sep_node = self._create_graph_from_desc(sep_node_desc, n)
+            sep_node = self._create_graph_from_desc(sep_node_desc, n, namespace=ns)
             prefix = sep_desc.get('prefix', True)
             suffix = sep_desc.get('suffix', True)
             unique = sep_desc.get('unique', False)
-            n.conf(conf).set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique)
+            always = sep_desc.get('always', False)
+            n.conf(conf).set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique, always=always)
 
-        self._handle_common_attr(n, desc, conf)
+        self._handle_common_attr(n, desc, conf, current_ns=namespace)
+
+        constraints = desc.get('constraints', None)
+        c_hlight = desc.get('constraints_highlight', None)
+        if constraints is not None:
+            self._register_todo(n, self._setup_constraints, args=(constraints, ns, c_hlight), prio=self.VERYLOW_PRIO)
 
         return n
 
 
-    def _create_nodes_from_shape(self, shapes, parent_node, shape_type=MH.Ordered, dup_mode=MH.Copy):
+    def _create_nodes_from_shape(self, shapes, parent_node, shape_type=MH.Ordered, dup_mode=MH.Copy,
+                                 namespace=None):
 
         def _handle_section(nodes_desc, sh):
             for n in nodes_desc:
-                if isinstance(n, (list,tuple)) and (len(n) == 2 or len(n) == 3):
+                if isinstance(n, (list,tuple)) and (2 <= len(n) <= 4):
                     sh.append(list(n))
                 elif isinstance(n, dict):
                     qty = n.get('qty', 1)
@@ -406,8 +459,9 @@ class NodeBuilder(object):
                         maxi = qty
                     else:
                         raise ValueError
-                    l = [mini, maxi]
-                    node = self._create_graph_from_desc(n, parent_node)
+                    default_qty = n.get('default_qty', None)
+                    l = [mini, maxi] if default_qty is None else [mini, maxi, default_qty]
+                    node = self._create_graph_from_desc(n, parent_node, namespace=namespace)
                     l.insert(0, node)
                     sh.append(l)
                 else:
@@ -450,9 +504,9 @@ class NodeBuilder(object):
         return sh
 
 
-    def _create_leaf_node(self, desc, node=None):
+    def _create_leaf_node(self, desc, node=None, namespace=None):
 
-        n, conf = self.__pre_handling(desc, node)
+        n, conf = self.__pre_handling(desc, node, namespace=namespace)
 
         contents = desc.get('contents')
 
@@ -464,18 +518,20 @@ class NodeBuilder(object):
             other_args = desc.get('other_args', None)
             provide_helpers = desc.get('provide_helpers', False)
             node_args = desc.get('node_args', None)
+            from_ns = desc.get('from_namespace', None)
             n.set_func(contents, func_arg=other_args,
                        provide_helpers=provide_helpers, conf=conf)
 
             # node_args interpretation is postponed after all nodes has been created
-            self._register_todo(n, self._complete_func, args=(node_args, conf), unpack_args=True,
+            self._register_todo(n, self._complete_func,
+                                args=(node_args, conf, from_ns, namespace), unpack_args=True,
                                 prio=self.HIGH_PRIO)
 
         else:
             raise ValueError("ERROR: {:s} is an invalid contents!".format(repr(contents)))
 
         self._handle_custo(n, desc, conf)
-        self._handle_common_attr(n, desc, conf)
+        self._handle_common_attr(n, desc, conf, current_ns=namespace)
 
         return n
 
@@ -484,8 +540,9 @@ class NodeBuilder(object):
         custo_clear = desc.get('custo_clear', None)
         transform_func = desc.get('evolution_func', None)
 
+        custo = None
+
         if node.is_genfunc(conf=conf):
-            Custo = GenFuncCusto
             trig_last = desc.get('trigger_last', None)
             if trig_last is not None:
                 if trig_last:
@@ -501,33 +558,61 @@ class NodeBuilder(object):
                         custo_clear = [custo_clear]
                     custo_clear.append(MH.Custo.Gen.TriggerLast)
 
+            if custo_set or custo_clear or transform_func:
+                custo = GenFuncCusto() if self.default_gen_custo is None else self.default_gen_custo
+
         elif node.is_nonterm(conf=conf):
-            Custo = NonTermCusto
+            if custo_set or custo_clear or transform_func:
+                custo = NonTermCusto() if self.default_nonterm_custo is None else self.default_nonterm_custo
 
         elif node.is_func(conf=conf):
-            Custo = FuncCusto
+            if custo_set or custo_clear or transform_func:
+                custo = FuncCusto()
 
         else:
-            if custo_set or custo_clear:
+            if custo_set or custo_clear or transform_func:
                 raise DataModelDefinitionError('Customization is not compatible with this '
                                                'node kind! [Guilty Node: {:s}]'.format(node.name))
             else:
                 return
 
         if custo_set or custo_clear or transform_func:
-            custo = Custo(items_to_set=custo_set, items_to_clear=custo_clear,
-                          transform_func=transform_func)
+            if custo_set:
+                custo.set_items(custo_set)
+            if custo_clear:
+                custo.clear_items(custo_clear)
+            if transform_func:
+                custo.transform_func = transform_func
+
             internals = node.conf(conf)
             internals.customize(custo)
 
 
-    def _handle_common_attr(self, node, desc, conf):
+    def _handle_common_attr(self, node, desc, conf, current_ns=None):
+        from_ns = desc.get('from_namespace', None)
+        ns = current_ns if from_ns is None else from_ns
+
+        hl = desc.get('highlight')
+        if hl is not None:
+            if hl:
+                node.set_attr(MH.Attr.Highlight, conf=conf)
+            else:
+                node.clear_attr(MH.Attr.Highlight, conf=conf)
+        param = desc.get('description', None)
+        if param is not None:
+            node.description = param
         vals = desc.get('specific_fuzzy_vals', None)
         if vals is not None:
             if not node.is_typed_value(conf=conf):
                 raise DataModelDefinitionError("'specific_fuzzy_vals' is only usable with Typed-nodes."
                                                " [guilty node: '{:s}']".format(node.name))
             node.conf(conf).set_specific_fuzzy_values(vals)
+        def_val = desc.get('default', None)
+        if def_val is not None:
+            if not node.is_typed_value(conf=conf):
+                raise DataModelDefinitionError("'default' is only usable with Typed-nodes."
+                                               " [guilty node: '{:s}']".format(node.name))
+            node.set_default_value(def_val, conf=conf)
         param = desc.get('mutable', None)
         if param is not None:
             if param:
@@ -584,12 +669,12 @@ class NodeBuilder(object):
         ref = desc.get('sync_qty_with', None)
         if ref is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(ref, SyncScope.Qty, conf, None),
+                                args=(ref, SyncScope.Qty, conf, None, ns),
                                 unpack_args=True)
         qty_from = desc.get('qty_from', None)
         if qty_from is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(qty_from, SyncScope.QtyFrom, conf, None),
+                                args=(qty_from, SyncScope.QtyFrom, conf, None, ns),
                                 unpack_args=True)
 
         sync_size_with = desc.get('sync_size_with', None)
@@ -597,31 +682,31 @@ class NodeBuilder(object):
         assert sync_size_with is None or sync_enc_size_with is None
         if sync_size_with is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(sync_size_with, SyncScope.Size, conf, False),
+                                args=(sync_size_with, SyncScope.Size, conf, False, ns),
                                 unpack_args=True)
         if sync_enc_size_with is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(sync_enc_size_with, SyncScope.Size, conf, True),
+                                args=(sync_enc_size_with, SyncScope.Size, conf, True, ns),
                                 unpack_args=True)
         condition = desc.get('exists_if', None)
         if condition is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(condition, SyncScope.Existence, conf, None),
+                                args=(condition, SyncScope.Existence, conf, None, ns),
                                 unpack_args=True)
         condition = desc.get('exists_if/and', None)
         if condition is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(condition, SyncScope.Existence, conf, 'and'),
+                                args=(condition, SyncScope.Existence, conf, 'and', ns),
                                 unpack_args=True)
         condition = desc.get('exists_if/or', None)
         if condition is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(condition, SyncScope.Existence, conf, 'or'),
+                                args=(condition, SyncScope.Existence, conf, 'or', ns),
                                 unpack_args=True)
         condition = desc.get('exists_if_not', None)
         if condition is not None:
             self._register_todo(node, self._set_sync_node,
-                                args=(condition, SyncScope.Inexistence, conf, None),
+                                args=(condition, SyncScope.Inexistence, conf, None, ns),
                                 unpack_args=True)
         fw = desc.get('fuzz_weight', None)
         if fw is not None:
@@ -633,10 +718,14 @@ class NodeBuilder(object):
         if encoder is not None:
             node.set_encoder(encoder)
 
-    def _register_todo(self, node, func, args=None, unpack_args=True, prio=MEDIUM_PRIO):
+    def _register_todo(self, node, func, args=None, unpack_args=True,
+                       prio=MEDIUM_PRIO, last_position=False):
         if self.sorted_todo.get(prio, None) is None:
             self.sorted_todo[prio] = []
-        self.sorted_todo[prio].insert(0, (node, func, args, unpack_args))
+        if last_position:
+            self.sorted_todo[prio].append((node, func, args, unpack_args))
+        else:
+            self.sorted_todo[prio].insert(0, (node, func, args, unpack_args))
 
     def _create_todo_list(self):
         todo = []
@@ -646,23 +735,33 @@ class NodeBuilder(object):
             todo += sub_tdl
         return todo
 
+    ic = NodeInternalsCriteria(node_kinds=[NodeInternals_Empty])
     # Should be called at the last time to avoid side effects (e.g.,
     # when creating generator/function nodes, the node arguments are
     # provided at a later time. If set_contents()---which copy nodes---is called
     # in-between, node arguments risk to not be copied)
-    def _clone_from_dict(self, node, ref, desc):
+    def _clone_from_dict(self, node, ref, desc, current_ns):
         if ref not in self.node_dico:
             raise ValueError("arguments refer to an inexistent node ({:s}, {!s})!".format(ref[0], ref[1]))
-        node.set_contents(self.node_dico[ref], preserve_node=False)
-        self._handle_custo(node, desc, conf=None)
-        self._handle_common_attr(node, desc, conf=None)
+
+        ref_nd = self.node_dico[ref]
+        empty_nodes = ref_nd.get_reachable_nodes(internals_criteria=self.ic)
+        if empty_nodes:
+            # We can't use it as a reference. This node needs to be resolved first, meaning its
+            # empty nodes have to be replaced
+            self._register_todo(node, self._clone_from_dict, args=(ref, desc, current_ns),
+                                prio=self.LOW_PRIO)
+        else:
+            node.set_contents(self.node_dico[ref], preserve_node=False)
+            self._handle_custo(node, desc, conf=None)
+            self._handle_common_attr(node, desc, conf=None, current_ns=current_ns)
 
     def _get_from_dict(self, node, ref, parent_node):
         if ref not in self.node_dico:
             raise ValueError("arguments refer to an inexistent node ({:s}, {!s})!".format(ref[0], ref[1]))
         parent_node.replace_subnode(node, self.node_dico[ref])
 
-    def _set_sync_node(self, node, comp, scope, conf, private):
+    def _set_sync_node(self, node, comp, scope, conf, private, from_ns):
         sync_obj = None
 
         if scope == SyncScope.QtyFrom:
@@ -670,7 +769,7 @@ class NodeBuilder(object):
                 node_ref, base_qty = comp
             else:
                 node_ref, base_qty = comp, 0
-            sync_with = self.__get_node_from_db(node_ref)
+            sync_with = self.__get_node_from_db(node_ref, namespace=from_ns)
             sync_obj = SyncQtyFromObj(sync_with, base_qty=base_qty)
 
         elif scope == SyncScope.Size:
@@ -678,56 +777,62 @@ class NodeBuilder(object):
                 node_ref, base_size = comp
             else:
                 node_ref, base_size = comp, 0
-            sync_with = self.__get_node_from_db(node_ref)
+            sync_with = self.__get_node_from_db(node_ref, namespace=from_ns)
             sync_obj = SyncSizeObj(sync_with, base_size=base_size,
                                    apply_to_enc_size=private)
         else:
             if isinstance(comp, (tuple,list)):
                 if issubclass(comp[0].__class__, NodeCondition):
                     param = comp[0]
-                    sync_with = self.__get_node_from_db(comp[1])
+                    sync_with = self.__get_node_from_db(comp[1], namespace=from_ns)
                 elif issubclass(comp[0].__class__, (tuple,list)):
                     assert private in ['and', 'or']
                     sync_list = []
                     for subcomp in comp:
                         assert isinstance(subcomp, (tuple,list)) and len(subcomp) == 2
                         param = subcomp[0]
-                        sync_with = self.__get_node_from_db(subcomp[1])
+                        sync_with = self.__get_node_from_db(subcomp[1], namespace=from_ns)
                         sync_list.append((sync_with, param))
                     and_junction = private == 'and'
                     sync_obj = SyncExistenceObj(sync_list, and_junction=and_junction)
                 else:  # in this case this is a node reference in the form ('node name', ID)
                     param = None
-                    sync_with = self.__get_node_from_db(comp)
-            else:
+                    sync_with = self.__get_node_from_db(comp, namespace=from_ns)
+            elif isinstance(comp, str):
+                # comp is a ref of a node
                 param = None
-                sync_with = self.__get_node_from_db(comp)
+                sync_with = self.__get_node_from_db(comp, namespace=from_ns)
+            else:
+                # comp is considered to be a boolean condition
+                param = comp
+                sync_with = None
 
         if sync_obj is not None:
             node.make_synchronized_with(scope=scope, sync_obj=sync_obj, conf=conf)
         else:
             node.make_synchronized_with(scope=scope, node=sync_with, param=param, conf=conf)
 
-    def _complete_func(self, node, args, conf):
+    def _complete_func(self, node, args, conf, from_ns, current_ns):
+        ns = current_ns if from_ns is None else from_ns
         if isinstance(args, str):
-            func_args = self.__get_node_from_db(args)
+            func_args = self.__get_node_from_db(args, namespace=ns)
         else:
             assert(isinstance(args, (tuple, list)))
             func_args = []
             for name_desc in args:
-                func_args.append(self.__get_node_from_db(name_desc))
+                func_args.append(self.__get_node_from_db(name_desc, namespace=ns))
         internals = node.cc if conf is None else node.c[conf]
         internals.set_func_arg(node=func_args)
 
-    def _complete_generator(self, node, args, conf):
-        if isinstance(args, str) or \
-           (isinstance(args, tuple) and isinstance(args[1], int)):
-            func_args = self.__get_node_from_db(args)
+    def _complete_generator(self, node, args, conf, from_ns, current_ns):
+        ns = current_ns if from_ns is None else from_ns
+        if isinstance(args, str) or (isinstance(args, tuple) and len(args)==2):
+            func_args = self.__get_node_from_db(args, namespace=ns)
         else:
-            assert(isinstance(args, (tuple, list)))
+            assert isinstance(args, list)
             func_args = []
             for name_desc in args:
-                func_args.append(self.__get_node_from_db(name_desc))
+                func_args.append(self.__get_node_from_db(name_desc, namespace=ns))
         internals = node.cc if conf is None else node.c[conf]
         internals.set_generator_func_arg(generator_node_arg=func_args)
 
@@ -741,8 +846,8 @@ class NodeBuilder(object):
         env.delayed_jobs_enabled = self.delayed_jobs
         node.set_env(env)
 
-    def __get_node_from_db(self, name_desc):
-        ref = self._handle_name(name_desc)
+    def __get_node_from_db(self, name_desc, namespace=None):
+        ref = self._handle_name(name_desc, namespace=namespace)
         if ref not in self.node_dico:
             raise ValueError("arguments refer to an inexistent node ({:s}, {!s})!".format(ref[0], ref[1]))
 
@@ -752,6 +857,20 @@ class NodeBuilder(object):
 
         return node
 
+    def _setup_constraints(self, node, constraints, root_namespace, constraint_highlight):
+        csp = CSP(constraints=constraints, highlight_variables=constraint_highlight)
+
+        for v in csp.iter_vars():
+            nd = self.__get_node_from_db(csp.from_var_to_varns(v), namespace=root_namespace)
+            csp.map_var_to_node(v, nd)
+            if nd.cc.value_type.values is not None:
+                domain = copy.copy(nd.cc.value_type.values)
+            else:
+                domain = range(nd.cc.value_type.mini_gen, nd.cc.value_type.maxi_gen + 1)
+            csp.set_var_domain(v, domain)
+
+        csp.save_current_var_domains()
+        node.set_csp(csp)
 
 class State(object):
     """
@@ -1172,7 +1291,7 @@ class RegexParser(StateMachine):
                 elif ctx.input in ('(', '['):
                     raise InconvertibilityError()
                 elif ctx.input == '-':
-                    raise InvalidRangeError()
+                    return self.machine.BeforeRange
                 elif ctx.input == ']':
                     raise EmptyAlphabetError()
                 elif ctx.input == '\\':
@@ -1208,8 +1327,11 @@ class RegexParser(StateMachine):
                 pass
 
             def advance(self, ctx):
-                if ctx.input in ('?', '*', '+', '{', '}', '(', ')', '[', ']', '|', '-', None):
+                if ctx.input in ('?', '*', '+', '{', '}', '(', ')', '[', '|', '-', None):
                     raise InvalidRangeError()
+                elif ctx.input == ']':
+                    ctx.append_to_alphabet('-')
+                    return self.machine.Final
                 elif ctx.input == '\\':
                     return self.machine.EscapeAfterRange
                 else:
@@ -1402,7 +1524,7 @@ class RegexParser(StateMachine):
     def parse(self, inputs, name, charset=MH.Charset.ASCII_EXT):
         self._name = name
         self.charset = charset
-        self.int_to_string = chr if sys.version_info[0] == 2 and self.charset != MH.Charset.UNICODE else six.unichr
+        self.int_to_string = chr
 
         if self.charset == MH.Charset.ASCII:
             max = 0x7F
@@ -1445,7 +1567,16 @@ class RegexParser(StateMachine):
             if type == fvt.String:
                 node = Node(name=name, vt=fvt.String(values=values, codec=self.codec))
             else:
-                node = Node(name=name, vt=fvt.INT_str(values=values))
+                if values == [i for i in range(10)] and (qty[1] != 0 or qty[1] is None):
+                    max_digit = qty[1]
+                    min_digit = qty[0]
+                    node = Node(name=name, vt=fvt.INT_str(min=(min_digit-1)*10,
+                                                          max=10**max_digit-1 if max_digit is not None else None))
+
+                    return [node, 1, 1]
+
+                else:
+                    node = Node(name=name, vt=fvt.INT_str(values=values))
 
             return [node, qty[0], -1 if qty[1] is None else qty[1]]
 

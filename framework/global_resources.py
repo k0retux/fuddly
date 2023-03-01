@@ -27,14 +27,28 @@ import copy
 import inspect
 from enum import Enum
 
-import framework
-from libs.utils import ensure_dir, ensure_file
+xdg_mod_error = False
+try:
+    from xdg.BaseDirectory import xdg_data_home, xdg_config_home
+except ModuleNotFoundError:
+    xdg_mod_error = True
+    print('WARNING [FMK]: python3-xdg module is not installed!')
 
 
-fuddly_version = '0.27.2'
+# TODO: Taken out of libs.utils, is this the best place for them?
+def ensure_dir(f):
+    d = os.path.dirname(f)
+    if not os.path.exists(d):
+        os.makedirs(d)
+
+def ensure_file(f):
+    if not os.path.isfile(f):
+        open(f, 'a').close()
+
+
+fuddly_version = '0.30'
 
 framework_folder = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-# framework_folder = os.path.dirname(framework.__file__)
 framework_folder  = '.' if framework_folder == '' else framework_folder
 
 app_folder = os.path.dirname(framework_folder)
@@ -43,8 +57,14 @@ projects_folder = app_folder + os.sep + 'projects' + os.sep
 data_models_folder = app_folder + os.sep + 'data_models' + os.sep
 
 fuddly_data_folder = os.path.expanduser('~' + os.sep + 'fuddly_data' + os.sep)
-if not os.path.exists(fuddly_data_folder):
-    new_fuddly_data_folder = True
+if not xdg_mod_error and not os.path.exists(fuddly_data_folder):
+    use_xdg = True
+    fuddly_data_folder = xdg_data_home + os.sep + 'fuddly' + os.sep
+    if not os.path.exists(fuddly_data_folder):
+        new_fuddly_data_folder = True
+else:
+    use_xdg = False
+
 ensure_dir(fuddly_data_folder)
 
 exported_data_folder = fuddly_data_folder + 'exported_data' + os.sep
@@ -59,7 +79,12 @@ external_libs_folder = fuddly_data_folder + 'external_libs' + os.sep
 ensure_dir(external_libs_folder)
 external_tools_folder = fuddly_data_folder + 'external_tools' + os.sep
 ensure_dir(external_tools_folder)
-config_folder = os.path.join(fuddly_data_folder, 'config') + os.sep
+
+if not use_xdg:
+    config_folder = os.path.join(fuddly_data_folder, 'config') + os.sep
+else:
+    xdg_fuddly_config_folder = xdg_config_home + os.sep + 'fuddly' + os.sep
+    config_folder = xdg_fuddly_config_folder
 ensure_dir(config_folder)
 
 user_projects_folder = fuddly_data_folder + 'user_projects' + os.sep
@@ -68,6 +93,10 @@ ensure_file(user_projects_folder + os.sep + '__init__.py')
 user_data_models_folder = fuddly_data_folder + 'user_data_models' + os.sep
 ensure_dir(user_data_models_folder)
 ensure_file(user_data_models_folder + os.sep + '__init__.py')
+
+user_info_folder = fuddly_data_folder + 'user_info' + os.sep
+ensure_dir(user_info_folder)
+ensure_file(user_info_folder + os.sep + '__init__.py')
 
 user_targets_folder = fuddly_data_folder + 'user_targets' + os.sep
 ensure_dir(user_targets_folder)
@@ -87,26 +116,19 @@ def convert_to_internal_repr(val):
             new_v = convert_to_internal_repr(v)
             new_val.append(new_v)
         val = new_val
-    elif sys.version_info[0] > 2:
-        if isinstance(val, str):
-            val = val.encode(internal_repr_codec)
-    elif isinstance(val, unicode):  # only for python2
+    elif isinstance(val, str):
         val = val.encode(internal_repr_codec)
-    elif isinstance(val, str):  # only for python2
-        pass
     else:
-        raise ValueError
+        assert isinstance(val, bytes)
+
     return val
 
 def unconvert_from_internal_repr(val):
-    if sys.version_info[0] == 2 and isinstance(val, buffer):
-        # This case occurs when reading from the FmkDB
-        val = str(val)
-    else:
-        try:
-            val = val.decode(internal_repr_codec, 'strict')
-        except:
-            val = val.decode('latin-1')
+    try:
+        val = val.decode(internal_repr_codec, 'strict')
+    except:
+        val = val.decode('latin-1')
+
     return val
 
 def is_string_compatible(val):
@@ -116,12 +138,11 @@ def is_string_compatible(val):
                 return False
         else:
             return True
-    elif sys.version_info[0] > 2:
-        return isinstance(val, (str, bytes))
-    elif isinstance(val, (unicode, str)):  # only for python2
-        return True
     else:
-        return False
+        return isinstance(val, (str, bytes))
+
+def get_user_input(msg):
+    return input(msg)
 
 # Generic container for user inputs
 
@@ -134,11 +155,6 @@ class UI(object):
         for k, v in kwargs.items():
             self._inputs[k] = v
 
-    # for python2 compatibility
-    def __nonzero__(self):
-        return bool(self._inputs)
-
-    # for python3 compatibility
     def __bool__(self):
         return bool(self._inputs)
 
@@ -154,6 +170,9 @@ class UI(object):
     def set_user_inputs(self, user_inputs):
         assert isinstance(user_inputs, dict)
         self._inputs = user_inputs
+
+    def merge_with(self, user_inputs):
+        self._inputs.update(user_inputs._inputs)
 
     def check_conformity(self, valid_args):
         for arg in self._inputs:
@@ -176,6 +195,8 @@ class UI(object):
         else:
             return '[ ]'
 
+    __repr__ = __str__
+
     def __copy__(self):
         new_ui = type(self)()
         new_ui.__dict__.update(self.__dict__)
@@ -197,13 +218,15 @@ class AbsCsts(object):
     Contents = 2
     Regexp = 3
     Structure = 4
+    SimilarContent = 5
 
-    def __init__(self, size=True, contents=True, regexp=True, struct=True):
+    def __init__(self, size=True, content=True, regexp=True, struct=True, similar_content=False):
         self.constraints = {
             AbsCsts.Size: size,
-            AbsCsts.Contents: contents,
+            AbsCsts.Contents: content,
             AbsCsts.Regexp: regexp,
-            AbsCsts.Structure: struct
+            AbsCsts.Structure: struct,
+            AbsCsts.SimilarContent: similar_content  # for String-type nodes it means "case sensitive"
         }
 
     def __bool__(self):
@@ -240,8 +263,9 @@ class AbsCsts(object):
 
 class AbsNoCsts(AbsCsts):
 
-    def __init__(self, size=False, contents=False, regexp=False, struct=False):
-        AbsCsts.__init__(self, size=size, contents=contents, regexp=regexp, struct=struct)
+    def __init__(self, size=False, content=False, regexp=False, struct=False, similar_content=False):
+        AbsCsts.__init__(self, size=size, content=content, regexp=regexp, struct=struct,
+                         similar_content=similar_content)
 
     def __repr__(self):
         return 'AbsNoCsts()'
@@ -249,8 +273,9 @@ class AbsNoCsts(AbsCsts):
 
 class AbsFullCsts(AbsCsts):
 
-    def __init__(self, size=True, contents=True, regexp=True, struct=True):
-        AbsCsts.__init__(self, size=size, contents=contents, regexp=regexp, struct=struct)
+    def __init__(self, size=True, content=True, regexp=True, struct=True, similar_content=True):
+        AbsCsts.__init__(self, size=size, content=content, regexp=regexp, struct=struct,
+                         similar_content=similar_content)
 
     def __repr__(self):
         return 'AbsFullCsts()'
@@ -269,7 +294,7 @@ class Error(object):
     FmkWarning = -6
     OperationCancelled = -7
 
-    # FmkPlumbing.get_data() error code
+    # FmkPlumbing.process_data() error code
     CloneError = -10
     InvalidDmaker = -11
     HandOver = -12
@@ -348,3 +373,4 @@ class HOOK(Enum):
     before_sending_step2 = 3
     after_sending = 4
     after_fbk = 5
+    final = 6

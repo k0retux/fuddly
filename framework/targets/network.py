@@ -59,10 +59,11 @@ eth_hdr_node = NodeBuilder(add_env=True).create_graph_from_desc(eth_hdr_desc)
 
 
 class NetworkTarget(Target):
-    '''Generic target class for interacting with a network resource. Can
+    """
+    Generic target class for interacting with a network resource. Can
     be used directly, but some methods may require to be overloaded to
     fit your needs.
-    '''
+    """
 
     General_Info_ID = 'General Information'
 
@@ -74,10 +75,11 @@ class NetworkTarget(Target):
     supported_feedback_mode = [Target.FBK_WAIT_FULL_TIME, Target.FBK_WAIT_UNTIL_RECV]
 
     def __init__(self, host='localhost', port=12345, socket_type=(socket.AF_INET, socket.SOCK_STREAM),
-                 data_semantics=UNKNOWN_SEMANTIC, server_mode=False, target_address=None, wait_for_client=True,
+                 data_semantics=UNKNOWN_SEMANTIC,
+                 server_mode=False, listen_on_start=True, target_address=None, wait_for_client=True,
                  hold_connection=False, keep_first_client=True,
                  mac_src=None, mac_dst=None, add_eth_header=False,
-                 fbk_timeout=2, sending_delay=1, recover_timeout=0.5):
+                 fbk_timeout=2, fbk_mode=Target.FBK_WAIT_FULL_TIME, sending_delay=1, recover_timeout=0.5):
         """
         Args:
           host (str): IP address of the target to connect to, or
@@ -97,6 +99,9 @@ class NetworkTarget(Target):
           server_mode (bool): If `True`, the interface will be set in server mode,
             which means we will wait for the real target to connect to us for sending
             it data.
+          listen_on_start (bool): If `True`, servers will be launched right after the `NetworkTarget`
+            starts. Otherwise, they will be launched in a lazy mode, meaning just when something is
+            about to be sent through the server mode interface.
           target_address (tuple): Used only if `server_mode` is `True` and socket type
             is `SOCK_DGRAM`. To be used if data has to be sent to a specific address
             (which is not necessarily the client). It is especially
@@ -138,10 +143,9 @@ class NetworkTarget(Target):
         if not self._is_valid_socket_type(socket_type):
             raise ValueError("Unrecognized socket type")
 
-        if sys.platform in ['linux', 'linux2']:  # python3, python2
+        if sys.platform in ['linux']:
             def get_mac_addr(ifname):
-                if sys.version_info[0] > 2:
-                    ifname = bytes(ifname, 'latin_1')
+                ifname = bytes(ifname, 'latin_1')
                 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 try:
                     info = fcntl.ioctl(s.fileno(), 0x8927, struct.pack('256s', ifname[:15]))
@@ -203,8 +207,10 @@ class NetworkTarget(Target):
         self._raw_server_private = None
         self._recover_timeout = recover_timeout
 
-        self.set_timeout(fbk_timeout=fbk_timeout, sending_delay=sending_delay)
+        self._listen_on_start = listen_on_start
 
+        self.set_timeout(fbk_timeout=fbk_timeout, sending_delay=sending_delay)
+        self.set_feedback_mode(fbk_mode)
 
     def _is_valid_socket_type(self, socket_type):
         skt_sz = len(socket_type)
@@ -276,7 +282,8 @@ class NetworkTarget(Target):
 
     def add_additional_feedback_interface(self, host, port,
                                           socket_type=(socket.AF_INET, socket.SOCK_STREAM),
-                                          fbk_id=None, fbk_length=None, server_mode=False):
+                                          fbk_id=None, fbk_length=None, server_mode=False,
+                                          wait_time=None):
         '''Allows to register additional socket to get feedback
         from. Connection is attempted be when target starts, that is
         when :meth:`NetworkTarget.start()` is called.
@@ -286,7 +293,8 @@ class NetworkTarget(Target):
             fbk_id = 'Default Additional Feedback ID %d' % self._default_additional_fbk_id
         else:
             assert(not str(fbk_id).startswith('Default Additional Feedback ID'))
-        self._additional_fbk_desc[fbk_id] = (host, port, socket_type, fbk_id, fbk_length, server_mode)
+        self._additional_fbk_desc[fbk_id] = (host, port, socket_type, fbk_id, fbk_length,
+                                             server_mode, wait_time)
         self.hold_connection[(host, port)] = True
         self._server_mode_additional_info[(host, port)] = (None, None, None)
 
@@ -422,9 +430,10 @@ class NetworkTarget(Target):
         Connection to additional feedback sockets, if any.
         '''
         if self._additional_fbk_desc:
-            for host, port, socket_type, fbk_id, fbk_length, server_mode in self._additional_fbk_desc.values():
+            for host, port, socket_type, fbk_id, fbk_length, server_mode, wait_time in self._additional_fbk_desc.values():
                 if server_mode:
-                    self._raw_listen_to(host, port, fbk_id, socket_type, chk_size=fbk_length)
+                    self._raw_listen_to(host, port, fbk_id, socket_type, chk_size=fbk_length,
+                                        wait_time=wait_time)
                 else:
                     self._raw_connect_to(host, port, fbk_id, socket_type, chk_size=fbk_length)
 
@@ -479,10 +488,17 @@ class NetworkTarget(Target):
 
         self._connect_to_additional_feedback_sockets()
 
+        if self._listen_on_start:
+            # In the case there are server mode interfaces,
+            # we initiate the server threads by the following method and could thus catch
+            # information from any connected clients trying to reach us. This could then
+            # be leveraged when we sent data.
+            self.collect_unsolicited_feedback()
+
         for k, mac_src in self._mac_src.items():
             if mac_src is not None:
                 if mac_src:
-                    mac_src = mac_src.hex() if sys.version_info[0] > 2 else mac_src.encode('hex')
+                    mac_src = mac_src.hex()
                     self.record_info('*** Detected HW address for {!s}: {!s} ***'
                                      .format(k[0], mac_src))
                 else:
@@ -519,7 +535,7 @@ class NetworkTarget(Target):
 
     def recover_target(self):
         t0 = datetime.datetime.now()
-        while not self.is_target_ready_for_new_data():
+        while not self.is_feedback_received():
             time.sleep(0.0001)
             now = datetime.datetime.now()
             if (now - t0).total_seconds() > self._recover_timeout:
@@ -554,8 +570,8 @@ class NetworkTarget(Target):
 
         for data, host, port, socket_type, server_mode in sending_list:
             if server_mode:
-                if from_fmk:
-                    self._fbk_collector_to_launch_cpt += 1
+                # if from_fmk:
+                #     self._fbk_collector_to_launch_cpt += 1
                 connected_client_event[(host, port)] = threading.Event()
                 self._listen_to_target(host, port, socket_type,
                                        self._handle_target_connection,
@@ -580,8 +596,8 @@ class NetworkTarget(Target):
             # this case exist when data are only sent through 'server_mode'-configured interfaces
             # (because self._send_data() is called through self._handle_target_connection())
             # or a connection error has occurred.
-            pass
-            # self._feedback_handled = True
+            if from_fmk:
+                self._fbk_collector_to_launch_cpt += 1
 
         if data_list is None:
             return
@@ -607,6 +623,10 @@ class NetworkTarget(Target):
                     err_msg = ">>> WARNING: unable to send data because the target did not connect" \
                               " to us [{:s}:{:d}] <<<".format(host, port)
                     self._feedback.add_fbk_from(self._INTERNALS_ID, err_msg, status=-1)
+                # self._fbk_collector_to_launch_cpt -= 1
+
+        # else:
+        #     self._fbk_collector_to_launch_cpt -= 1
 
     def _get_data_semantic_key(self, data):
         if not isinstance(data.content, Node):
@@ -639,7 +659,6 @@ class NetworkTarget(Target):
                 fd = self._hclient_hp2sock[(host, port)].fileno()
                 if fd == -1:
                     # if the socket has been closed, -1 is received by python3
-                    # (with python2 previous instruction raise a Bad file descriptor Exception)
                     raise OSError
             except Exception:
                 print('\n*** WARNING: Current socket was closed unexpectedly! --> create new one.')
@@ -762,6 +781,9 @@ class NetworkTarget(Target):
         else:
             raise ValueError("Unrecognized socket type")
 
+    def _cleanup_state(self):
+        self._fbk_collector_to_launch_cpt -= 1
+
     # For SOCK_STREAM
     def _server_main(self, serversocket, host, port, func):
         _first_client = {}
@@ -881,6 +903,8 @@ class NetworkTarget(Target):
                 with self._server_thread_lock:
                     self._last_client_hp2sock[(host, port)] = (clientsocket, address)
                     self._last_client_sock2hp[clientsocket] = (host, port)
+            # if from_fmk:
+            #     self._fbk_collector_to_launch_cpt += 1
             connected_client_event.set()
             self._send_data([clientsocket], {clientsocket:(data, host, port, address)},
                             fbk_timeout=self.feedback_timeout, from_fmk=from_fmk,
@@ -1074,7 +1098,7 @@ class NetworkTarget(Target):
 
         if data_refs[sockets[0]][0] is None:
             # We check the data to send. If it is None, we only collect feedback from the sockets.
-            # This is used by self.collect_pending_feedback()
+            # This is used by self.collect_unsolicited_feedback()
             if fbk_sockets is None:
                 assert fbk_ids is None
                 assert fbk_lengths is None
@@ -1177,12 +1201,14 @@ class NetworkTarget(Target):
 
     def _feedback_complete(self):
         self._fbk_collector_finished_cpt += 1
+        # print('\n***DBG _fc: {} {}'.format(self._fbk_collector_to_launch_cpt, self._fbk_collector_finished_cpt))
 
     def _before_sending_data(self, data_list, from_fmk):
         if from_fmk:
             self._last_ack_date = None
             self._first_send_data_call = True  # related to additional feedback
             with self._fbk_handling_lock:
+                # print('\n***DBG _bsd: {} {}'.format(self._fbk_collector_to_launch_cpt, self._fbk_collector_finished_cpt))
                 assert self._fbk_collector_to_launch_cpt == self._fbk_collector_finished_cpt
                 self._fbk_collector_finished_cpt = 0
                 self._fbk_collector_to_launch_cpt = 0
@@ -1235,7 +1261,7 @@ class NetworkTarget(Target):
 
         return self._custom_data_handling_before_emission(new_data_list)
 
-    def collect_pending_feedback(self, timeout=0):
+    def collect_unsolicited_feedback(self, timeout=0):
         self._flush_feedback_delay = timeout
         self.send_multiple_data_sync(None, from_fmk=True)
         return True
@@ -1243,8 +1269,12 @@ class NetworkTarget(Target):
     def get_feedback(self):
         return self._feedback
 
-    def is_target_ready_for_new_data(self):
+    def is_feedback_received(self):
+        # print('\n*** DBG network is fbk received: {} {}'.format(self._fbk_collector_to_launch_cpt, self._fbk_collector_finished_cpt))
         return self._fbk_collector_to_launch_cpt == self._fbk_collector_finished_cpt
+
+    def is_target_ready_for_new_data(self):
+        return self.is_feedback_received()
 
     def _register_last_ack_date(self, ack_date):
         self._last_ack_date = ack_date

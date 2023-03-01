@@ -104,7 +104,7 @@ class USB_DataModel(DataModel):
              {'name': 'wMaxPacketSize',
               'contents': BitField(subfield_limits=[11,13,16],
                                    subfield_val_extremums=[None,[0,2],[0,0]],
-                                   subfield_values=[[2**x for x in range(1,12)],None,[0]],
+                                   subfield_values=[[2**x for x in range(1,11)],None,[0]],
                                    endian=VT.LittleEndian),
               'random': True,
               'alt': [

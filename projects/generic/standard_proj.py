@@ -23,6 +23,7 @@
 
 import socket
 
+from framework.comm_backends import Shell_Backend
 from framework.plumbing import *
 from framework.targets.local import LocalTarget
 from framework.targets.network import NetworkTarget
@@ -33,7 +34,7 @@ project.default_dm = ['mydf','jpg']
 # If you only want one default DM, provide its name directly as follows:
 # project.default_dm = 'mydf'
 
-logger = Logger('standard', record_data=False, explicit_data_recording=True, export_orig=False,
+logger = Logger('standard', record_data=False, explicit_data_recording=True,
                 enable_file_logging=False)
 
 printer1_tg = PrinterTarget(tmpfile_ext='.png')
@@ -97,7 +98,7 @@ class Op1(Operator):
         self.init_gen_len = len(self.gen_ids)
         self.current_gen_id = self.gen_ids.pop(0)
 
-        # fmk_ops.set_fuzz_delay(5)
+        # fmk_ops.set_sending_delay(5)
         return True
 
     def stop(self, fmk_ops, dm, monitor, target, logger):

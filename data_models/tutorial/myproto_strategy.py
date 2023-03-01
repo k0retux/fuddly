@@ -11,7 +11,7 @@ def cbk_check_crc_error(env, current_step, next_step, fbk):
 
 
 def set_init_v3(env, step):
-    step.content['.*/header'].set_subfield(2, 3)
+    step.content['.*/header'][0].set_subfield(2, 3)
 
 
 init_step = Step('init', fbk_timeout=0.5, do_before_sending=set_init_v3)

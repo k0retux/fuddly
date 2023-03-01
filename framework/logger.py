@@ -22,10 +22,14 @@
 ################################################################################
 
 import os
+import time
+
 import sys
 import datetime
 import threading
 import itertools
+
+from typing import List, Tuple
 
 from libs.external_modules import *
 from libs.utils import get_caller_object
@@ -33,22 +37,28 @@ from framework.data import Data
 from framework.global_resources import *
 from framework.database import Database
 from framework.knowledge.feedback_collector import FeedbackSource
-from libs.utils import ensure_dir
+from libs.utils import ExternalDisplay, Accumulator
 import framework.global_resources as gr
 
 class Logger(object):
-    '''
+    """
     The Logger is used for keeping the history of the communication
     with the Target. The methods are used by the framework, but can
     also be leveraged by an Operator.
-    '''
+    """
 
     fmkDB = None
 
+    FLUSH_API = 1
+    WRITE_API = 2
+    PRETTY_PRINT_API = 3
+    PRINT_CONSOLE_API = 4
+
+
     def __init__(self, name=None, prefix='', record_data=False, explicit_data_recording=False,
-                 export_orig=True, export_raw_data=True, console_display_limit=800,
-                 enable_file_logging=False):
-        '''
+                 export_raw_data=True, term_display_limit=800, enable_term_display=True,
+                 enable_file_logging=False, highlight_marked_nodes=False):
+        """
         Args:
           name (str): Name to be used in the log filenames. If not specified, the name of the project
             in which the logger is embedded will be used.
@@ -59,20 +69,23 @@ class Logger(object):
             Such notification is possible when the framework call its method
             :meth:`framework.operator_helpers.Operator.do_after_all()`, where the Operator can take its decision
             after the observation of the target feedback and/or probes outputs.
-          export_orig (bool): If True, will also log the original data on which disruptors have been called.
           export_raw_data (bool): If True, will log the data as it is, without trying to interpret it
             as human readable text.
-          console_display_limit (int): maximum amount of characters to display on the console at once.
+          term_display_limit (int): maximum amount of characters to display on the terminal at once.
             If this threshold is overrun, the message to print on the console will be truncated.
+          enable_term_display (bool): If True, information will be displayed on the terminal
           prefix (str): prefix to use for printing on the console.
           enable_file_logging (bool): If True, file logging will be enabled.
-        '''
+          highlight_marked_nodes (bool): If True, alteration performed by compatible disruptors
+            will be highlighted. Only possible if `export_raw_data` is False, as this option forces
+            data interpretation.
+        """
+
         self.name = name
         self.p = prefix
         self.__record_data = record_data
         self.__explicit_data_recording = explicit_data_recording
-        self.__export_orig = export_orig
-        self._console_display_limit = console_display_limit
+        self._term_display_limit = term_display_limit
 
         now = datetime.datetime.now()
         self.__prev_export_date = now.strftime("%Y%m%d_%H%M%S")
@@ -82,37 +95,78 @@ class Logger(object):
         self._enable_file_logging = enable_file_logging
         self._fd = None
 
+        if export_raw_data and highlight_marked_nodes:
+            raise ValueError('When @highlight_marked_nodes is True, @export_raw_data should be False')
+        self._hl_marked_nodes = highlight_marked_nodes
+
         self._tg_fbk = []
         self._tg_fbk_lck = threading.Lock()
 
+        self.display_on_term = enable_term_display
+
+        self._log_handler_thread = None
+        self._log_handler_stop_event = threading.Event()
+
+        self._thread_initialized = threading.Event()
+        self._log_entry_submitted_cond = threading.Condition()
+        self._log_entry_list = []
+        # self._log_displayed = threading.Event()
+        self._sync_lock = threading.Lock()
+
+        self._ext_disp = ExternalDisplay()
+
         def init_logfn(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
                        do_record=True):
+            if not self.display_on_term:
+                return
+
+            no_format_mode = False
             if issubclass(x.__class__, Data):
                 data = self._handle_binary_content(x.to_bytes(), raw=self.export_raw_data)
+                colored_data = x.to_formatted_str() if self._hl_marked_nodes else data
                 rgb = None
                 style = None
+                no_format_mode = self._hl_marked_nodes
             elif isinstance(x, str):
-                data = x
+                colored_data = data = x
             else:
-                data = self._handle_binary_content(x, raw=self.export_raw_data)
-            self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)
+                colored_data = data = self._handle_binary_content(x, raw=self.export_raw_data)
+            self.print_console(colored_data, nl_before=nl_before, nl_after=nl_after,
+                               rgb=rgb, style=style, no_format_mode=no_format_mode)
             if verbose and issubclass(x.__class__, Data):
-                x.show()
+                self.pretty_print_data(x)
 
             return data
 
         self.log_fn = init_logfn
 
+    def flush(self):
+        with self._sync_lock:
+            with self._log_entry_submitted_cond:
+                self._log_entry_list.append((Logger.FLUSH_API, None))
+                self._log_entry_submitted_cond.notify()
+
+    def write(self, data: str):
+        with self._sync_lock:
+            with self._log_entry_submitted_cond:
+                self._log_entry_list.append((Logger.WRITE_API, data))
+                self._log_entry_submitted_cond.notify()
+
+    def pretty_print_data(self, data: Data, fd = None, raw_limit: int = None):
+        with self._sync_lock:
+            with self._log_entry_submitted_cond:
+                self._log_entry_list.append((Logger.PRETTY_PRINT_API, (data, fd, raw_limit)))
+                self._log_entry_submitted_cond.notify()
+
+    def set_external_display(self, disp):
+        self._ext_disp = disp
+
     def __str__(self):
         return 'Logger'
 
-
     def _handle_binary_content(self, content, raw=False):
         content = gr.unconvert_from_internal_repr(content)
-        if sys.version_info[0] > 2:
-            content = content if not raw else '{!a}'.format(content)
-        else:
-            content = content if not raw else repr(content)
+        content = content if not raw else '{!a}'.format(content)
 
         return content
 
@@ -130,7 +184,7 @@ class Logger(object):
             self._tg_fbk = []
 
         if self.name is None:
-            self.log_fn = lambda x: x
+            raise ValueError("Logger's name shall be provided (either by the framework or at init)")
 
         elif self._enable_file_logging:
             self.now = datetime.datetime.now()
@@ -141,22 +195,25 @@ class Logger(object):
 
             def intern_func(x, nl_before=True, nl_after=False, rgb=None, style=None, verbose=False,
                             do_record=True):
+                no_format_mode = False
                 if issubclass(x.__class__, Data):
                     data = self._handle_binary_content(x.to_bytes(), raw=self.export_raw_data)
+                    colored_data = x.to_formatted_str() if self._hl_marked_nodes else data
                     rgb = None
                     style = None
+                    no_format_mode = self._hl_marked_nodes
                 elif isinstance(x, str):
-                    data = x
+                    colored_data = data = x
                 else:
-                    data = self._handle_binary_content(x, raw=self.export_raw_data)
-                self.print_console(data, nl_before=nl_before, nl_after=nl_after, rgb=rgb, style=style)
+                    colored_data = data = self._handle_binary_content(x, raw=self.export_raw_data)
+                self.print_console(colored_data, nl_before=nl_before, nl_after=nl_after,
+                                   rgb=rgb, style=style, no_format_mode=no_format_mode)
                 if not do_record:
                     return data
                 try:
-                    self._fd.write(data)
-                    self._fd.write('\n')
+                    self._fd.write(data+'\n')
                     if verbose and issubclass(x.__class__, Data):
-                        x.show(log_func=self._fd.write)
+                        self.pretty_print_data(x, fd=self._fd)
                     self._fd.flush()
                 except ValueError:
                     self.print_console('\n*** ERROR: The log file has been closed.' \
@@ -171,7 +228,76 @@ class Logger(object):
             # No file logging
             pass
 
+        if self._log_handler_thread is not None:
+            return
+
+        self._log_handler_thread = threading.Thread(None, self._log_handler, 'log_handler')
+        self._log_handler_thread.start()
+        while not self._thread_initialized.is_set():
+            self._thread_initialized.wait(0.1)
+
         self.print_console('*** Logger is started ***\n', nl_before=False, rgb=Color.COMPONENT_START)
+
+    def _stop_log_handler(self):
+        with self._sync_lock:
+            self._log_handler_stop_event.set()
+            self._log_handler_thread.join()
+
+    def _log_handler(self):
+        self._thread_initialized.set()
+
+        accu = Accumulator()
+        while True:
+            # self._log_displayed.clear()
+            with self._log_entry_submitted_cond:
+                if self._log_handler_stop_event.is_set() and not self._log_entry_list:
+                    break
+                self._log_entry_submitted_cond.wait(0.001)
+
+                if self._log_entry_list:
+                    log_entries = self._log_entry_list
+                    self._log_entry_list = []
+                else:
+                    continue
+
+            for log_e in log_entries:
+                api, params = log_e
+
+                if api == Logger.FLUSH_API:
+                    if not self._ext_disp.is_enabled:
+                        sys.stdout.flush()
+                elif api == Logger.WRITE_API:
+                    if self._ext_disp.is_enabled:
+                        self._ext_disp.disp.print(params)
+                    else:
+                        sys.stdout.write(params)
+                elif api == Logger.PRETTY_PRINT_API:
+                    data, fd, raw_limit = params
+                    if fd is None:
+                        data.show(log_func=accu.accumulate, raw_limit=raw_limit)
+                        if self._ext_disp.is_enabled:
+                            self._ext_disp.disp.print(accu.content)
+                        else:
+                            sys.stdout.write(accu.content)
+                        accu.clear()
+                    else:
+                        data.show(log_func=fd.write, raw_limit=raw_limit)
+                        fd.flush()
+                elif api == Logger.PRINT_CONSOLE_API:
+                    self._print_console(*params)
+                else:
+                    self._print_console('*** ERROR[Logger]: Unknown API ***', rgb=Color.ERROR)
+
+
+            # self._log_displayed.set()
+
+            self._log_handler_stop_event.wait(0.001)
+
+    def wait_for_sync(self):
+        # while not self._log_displayed.is_set():
+        #     self._log_displayed.wait(0.01)
+        # self._log_displayed.clear()
+        time.sleep(0.1)
 
     def stop(self):
 
@@ -183,13 +309,14 @@ class Logger(object):
         self._last_data_IDs = {}
         self.last_data_recordable = None
 
+        self._stop_log_handler()
+
         self.print_console('*** Logger is stopped ***\n', nl_before=False, rgb=Color.COMPONENT_STOP)
 
 
     def reset_current_state(self):
         self._current_data = None
         self._current_group_id = None
-        self._current_orig_data_id = None
         self._current_size = None
         self._current_ack_dates = None
         self._current_dmaker_list= []
@@ -208,12 +335,12 @@ class Logger(object):
             last_data_id = None
             for tg_ref, ack_date in self._current_ack_dates.items():
                 last_data_id = self.fmkDB.insert_data(init_dmaker, dm_name,
-                                                           self._current_data.to_bytes(),
-                                                           self._current_size,
-                                                           self._current_sent_date,
-                                                           ack_date,
-                                                           tg_ref, prj_name,
-                                                           group_id=group_id)
+                                                      self._current_data.to_bytes(),
+                                                      self._current_size,
+                                                      self._current_sent_date,
+                                                      ack_date,
+                                                      tg_ref, prj_name,
+                                                      group_id=group_id)
                 # assert isinstance(tg_ref, FeedbackSource)
                 self._last_data_IDs[tg_ref.obj] = last_data_id
 
@@ -224,13 +351,7 @@ class Logger(object):
 
                 self._current_data.set_data_id(last_data_id)
 
-                if self._current_orig_data_id is not None:
-                    self.fmkDB.insert_steps(last_data_id, 1, None, None,
-                                            self._current_orig_data_id,
-                                            None, None)
-                    step_id_start = 2
-                else:
-                    step_id_start = 1
+                step_id_start = 1
 
                 for step_id, dmaker in enumerate(self._current_dmaker_list, start=step_id_start):
                     dmaker_type, dmaker_name, user_input = dmaker
@@ -252,27 +373,51 @@ class Logger(object):
             return None
 
 
+    def log_async_data(self, data_list: Data | List[Data] | Tuple[Data], sent_date, target_ref, prj_name,
+                       current_data_id):
+
+        if isinstance(data_list, Data):
+            data_list = (data_list,)
+
+        for data in data_list:
+            raw_data = data.to_bytes()
+            data_sz = len(raw_data)
+            init_dmaker = data.get_initial_dmaker()
+            dtype = Database.DEFAULT_GTYPE_NAME if init_dmaker is None else init_dmaker[0]
+            dm = data.get_data_model()
+            dm_name = Database.DEFAULT_DM_NAME if dm is None else dm.name
+            self.fmkDB.insert_async_data(dtype=dtype, dm_name=dm_name,
+                                         raw_data=raw_data,
+                                         sz=data_sz, sent_date=sent_date,
+                                         target_ref=target_ref, prj_name=prj_name,
+                                         current_data_id=current_data_id)
+
+
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO,
-                     data_id=None, do_record=True, delay_recording=False):
+                     data_id=None, do_show=True, do_record=True, delay_recording=False):
         now = datetime.datetime.now()
 
         p = '\n' if nl_before else ''
         s = '\n' if nl_after else ''
 
         msg = "{prefix:s}*** [ {message:s} ] ***{suffix:s}".format(prefix=p, suffix=s, message=info)
-        self.log_fn(msg, rgb=rgb)
+        if do_show:
+            self.log_fn(msg, rgb=rgb)
 
         if do_record:
             if not delay_recording:
                 if data_id is None:
-                    for d_id in self._last_data_IDs.values():
-                        self.fmkDB.insert_fmk_info(d_id, info, now)
+                    if self._last_data_IDs:
+                        for d_id in self._last_data_IDs.values():
+                            self.fmkDB.insert_fmk_info(d_id, info, now)
+                    else:
+                        self.fmkDB.insert_fmk_info(None, info, now)
                 else:
                     self.fmkDB.insert_fmk_info(data_id, info, now)
             else:
                 self._current_fmk_info.append((info, now))
 
-    def collect_feedback(self, content, status_code=None):
+    def collect_feedback(self, content, status_code=None, subref=None, fbk_src=None):
         """
         Used within the scope of the Logger feedback-collector infrastructure.
         If your target implement the interface :meth:`Target.get_feedback`, no need to
@@ -283,12 +428,14 @@ class Logger(object):
         Args:
             content: feedback record
             status_code (int): should be negative for error
+            subref (str): specific reference to distinguish internal log sources within the same caller
+            fbk_src: [optional] source object of the feedback
         """
         now = datetime.datetime.now()
-        fbk_src = get_caller_object()
+        fbk_src = get_caller_object() if fbk_src is None else fbk_src
 
         with self._tg_fbk_lck:
-            self._tg_fbk.append((now, FeedbackSource(fbk_src), content, status_code))
+            self._tg_fbk.append((now, FeedbackSource(fbk_src, subref=subref), content, status_code))
 
     def shall_record(self):
         if self.last_data_recordable or not self.__explicit_data_recording:
@@ -303,17 +450,33 @@ class Logger(object):
         fbk_cond = status_code is not None and status_code < 0
         hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
         body_color = Color.FEEDBACK_HLIGHT if fbk_cond else None
-        if not processed_feedback:
-            msg_hdr = "### Status from '{!s}': {!s}".format(source, status_code)
+        # now = timestamp.strftime("%d/%m/%Y - %H:%M:%S.%f")
+        if isinstance(timestamp, datetime.datetime) or timestamp is None:
+            ts_msg = f"received at {timestamp}"
+        elif isinstance(timestamp, list):
+            if len(timestamp) == 1:
+                ts_msg = f"received at {timestamp[0]}"
+            else:
+                ts_msg = f"received from {timestamp[0]} to {timestamp[-1]}"
         else:
-            msg_hdr = "### Feedback from '{!s}' (status={!s}):".format(source, status_code)
+            raise ValueError(f'Wrong format for timestamp [{type(timestamp)}]')
+
+        if not processed_feedback:
+            msg_hdr = "### Status from '{!s}': {!s} - {:s}".format(
+                source, status_code, ts_msg)
+        else:
+            msg_hdr = "### Feedback from '{!s}' (status={!s}) - {:s}:".format(
+                source, status_code, ts_msg)
         self.log_fn(msg_hdr, rgb=hdr_color, do_record=record)
         if processed_feedback:
-            if isinstance(processed_feedback, list):
-                for dfbk in processed_feedback:
-                    self.log_fn(dfbk, rgb=body_color, do_record=record)
+            if source.display_feedback:
+                if isinstance(processed_feedback, list):
+                    for dfbk in processed_feedback:
+                        self.log_fn(dfbk, rgb=body_color, do_record=record)
+                else:
+                    self.log_fn(processed_feedback, rgb=body_color, do_record=record)
             else:
-                self.log_fn(processed_feedback, rgb=body_color, do_record=record)
+                self.log_fn('Feedback not displayed', rgb=Color.WARNING, do_record=record)
 
         if record:
             assert isinstance(source, FeedbackSource)
@@ -321,8 +484,10 @@ class Logger(object):
                 try:
                     data_id = self._last_data_IDs[source.related_tg]
                 except KeyError:
-                    print('\nWarning: The feedback source is related to a target to which nothing has been sent.'
-                          ' Retrieved feedback will not be attached to any data ID.')
+                    self.print_console(
+                        '*** Warning: The feedback source is related to a target to which nothing has been sent.'
+                        ' Retrieved feedback will not be attached to any data ID.',
+                        nl_before=True, rgb=Color.WARNING)
                     data_id = None
             else:
                 ids = self._last_data_IDs.values()
@@ -355,7 +520,7 @@ class Logger(object):
             bool: True if target feedback has been collected through logger infrastructure
               :meth:`Logger.collect_feedback`, False otherwise.
         """
-        error_detected = {}
+        collected_status = {}
 
         with self._tg_fbk_lck:
             fbk_list = self._tg_fbk
@@ -373,17 +538,12 @@ class Logger(object):
         for idx, fbk_record in enumerate(fbk_list):
             timestamp, fbk_src, fbk, status = fbk_record
             self._log_feedback(fbk_src, fbk, status, timestamp, record=record)
-
-            if status is not None and status < 0:
-                error_detected[fbk_src.obj] = True
-            else:
-                error_detected[fbk_src.obj] = False
+            collected_status[fbk_src.obj] = status
 
         if epilogue is not None:
             self.log_fn(epilogue, do_record=record, rgb=Color.FMKINFO)
 
-        return error_detected
-
+        return collected_status
 
     def log_target_feedback_from(self, source, content, status_code, timestamp,
                                  preamble=None, epilogue=None):
@@ -409,16 +569,21 @@ class Logger(object):
 
     def _process_target_feedback(self, feedback):
         if feedback is None:
-            return feedback
+            return None
 
         if isinstance(feedback, list):
             new_fbk = []
             for f in feedback:
+                if f is None:
+                    continue
                 new_f = f.strip()
                 if isinstance(new_f, bytes):
                     new_f = self._handle_binary_content(new_f, raw=self.export_raw_data)
                 new_fbk.append(new_f)
-            if not list(filter(lambda x: x != b'', new_fbk)):
+
+            if not new_fbk:
+                new_fbk = None
+            elif not list(filter(lambda x: x != b'', new_fbk)):
                 new_fbk = None
         else:
             new_fbk = feedback.strip()
@@ -436,7 +601,7 @@ class Logger(object):
     def start_new_log_entry(self, preamble=''):
         self.__idx += 1
         self._current_sent_date = datetime.datetime.now()
-        now = self._current_sent_date.strftime("%d/%m/%Y - %H:%M:%S")
+        now = self._current_sent_date.strftime("%d/%m/%Y - %H:%M:%S.%f")
         msg = "====[ {:d} ]==[ {:s} ]====".format(self.__idx, now)
         msg += '='*(max(80-len(msg),0))
         self.log_fn(msg, rgb=Color.NEWLOGENTRY, style=FontStyle.BOLD)
@@ -479,10 +644,10 @@ class Logger(object):
 
         self.log_fn(" |- data info:", rgb=Color.DATAINFO)
         for msg in data_info:
-            if len(msg) > 400:
-                msg = msg[:400] + ' ...'
+            if len(msg) > self._term_display_limit:
+                msg = msg[:self._term_display_limit] + ' ...'
 
-            self.log_fn('    |_ ' + msg, rgb=Color.DATAINFO)
+            self.log_fn('    | ' + msg, rgb=Color.DATAINFO)
 
     def log_info(self, info):
         msg = "### Info: {:s}".format(info)
@@ -499,47 +664,6 @@ class Logger(object):
             self._current_ack_dates = {tg_ref: date}
         else:
             self._current_ack_dates[tg_ref] = date
-
-    def log_orig_data(self, data):
-
-        exportable = False if data is None else data.is_recordable()
-
-        if self.__explicit_data_recording and not exportable:
-            return False
-
-        if data is not None:
-            self._current_orig_data_id = data.get_data_id()
-
-        if self.__export_orig and not self.__record_data:
-            if data is None:
-                msgs = ("### No Original Data",)
-            else:
-                msgs = ("### Original Data:", data)
-
-            for msg in msgs:
-                self.log_fn(msg, rgb=Color.LOGSECTION)
-
-            ret = True
-
-        elif self.__export_orig:
-
-            if data is None:
-                ret = False
-            else:
-                ffn = self._export_data_func(data)
-                if ffn:
-                    self.log_fn("### Original data is stored in the file:", rgb=Color.DATAINFO)
-                    self.log_fn(ffn)
-                    ret = True
-                else:
-                    self.print_console("ERROR: saving data in an extenal file has failed!",
-                                       nl_before=True, rgb=Color.ERROR)
-                    ret = False
-
-        else:
-            ret = False
-
-        return ret
 
     def log_data(self, data, verbose=False):
 
@@ -599,7 +723,7 @@ class Logger(object):
 
         export_full_fn = os.path.join(base_dir, dm_name, export_fname)
 
-        ensure_dir(export_full_fn)
+        gr.ensure_dir(export_full_fn)
 
         fd = open(export_full_fn, 'wb')
         fd.write(data.to_bytes())
@@ -625,33 +749,57 @@ class Logger(object):
             self.fmkDB.insert_fmk_info(data_id, msg, now, error=True)
 
     def print_console(self, msg, nl_before=True, nl_after=False, rgb=None, style=None,
-                      raw_limit=None, limit_output=True):
+                      raw_limit=None, limit_output=True, no_format_mode=False):
+
+        with self._sync_lock:
+            with self._log_entry_submitted_cond:
+                params = (msg,nl_before,nl_after,rgb,style,raw_limit,limit_output,no_format_mode)
+                self._log_entry_list.append((Logger.PRINT_CONSOLE_API, params))
+                self._log_entry_submitted_cond.notify()
+
+
+    def _print_console(self, msg, nl_before=True, nl_after=False, rgb=None, style=None,
+                       raw_limit=None, limit_output=True, no_format_mode=False):
+
+        if not self.display_on_term:
+            return
 
         if raw_limit is None:
-            raw_limit = self._console_display_limit
+            raw_limit = self._term_display_limit
 
         p = '\n' if nl_before else ''
         s = '\n' if nl_after else ''
 
         prefix = p + self.p
 
-        if isinstance(msg, Data):
-            msg = repr(msg)
+        if no_format_mode:
+            if self._ext_disp.is_enabled:
+                self._ext_disp.disp.print(prefix + msg)
+            else:
+                sys.stdout.write(prefix + msg)
+                sys.stdout.flush()
 
-        suffix = ''
-        if limit_output and len(msg) > raw_limit:
-            msg = msg[:raw_limit]
-            suffix = ' ...'
+            # print(f'{msg}')
 
-        suffix += s
+        else:
+            if isinstance(msg, Data):
+                msg = repr(msg)
 
-        if rgb is not None:
-            msg = colorize(msg, rgb=rgb)
+            suffix = ''
+            if limit_output and len(msg) > raw_limit:
+                msg = msg[:raw_limit]
+                suffix = ' ...'
 
-        if style is None:
-            style = ''
+            suffix += s
 
-        sys.stdout.write(style + prefix)
-        sys.stdout.write(msg)
-        sys.stdout.write(suffix + FontStyle.END)
-        sys.stdout.flush()
+            if rgb is not None:
+                msg = colorize(msg, rgb=rgb)
+
+            if style is None:
+                style = ''
+
+            if self._ext_disp.is_enabled:
+                self._ext_disp.disp.print(style+prefix+msg+suffix+FontStyle.END)
+            else:
+                sys.stdout.write(style+prefix+msg+suffix+FontStyle.END)
+                sys.stdout.flush()

@@ -1,11 +1,8 @@
 [NEW FEATURES]
 
+- Add new IA infrastructure supporting the creation of data models (automatic discovery of data structure from raw data)
+- Enhance current post-analysis tooling and add new features supporting investigation (diagrams, statistics, research by pattern, etc.)
 - Add GDB/PIN/QEMU probes/managers
-- Add FmkDB visualization tools
-- Add support for automatic adaptation of fuzz test cases depending on
-  specific Target meta-data (HW architecture, programming language, ...)
-- Implement new node types that leverage python-constraint, or more
-  powerfull constraint programming library
 
 [ENHANCEMENT]
 

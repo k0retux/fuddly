@@ -26,6 +26,7 @@ from framework.scenario import *
 from framework.global_resources import *
 from framework.data_model import MH
 from framework.target_helpers import *
+from framework.data import DataProcess
 
 tactics = Tactics()
 
@@ -43,7 +44,7 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', u
             elif x == 'padr':
                 if current_step.content is not None:
                     mac_src = current_step.content['.*/mac_src']
-                    env.mac_src = mac_src
+                    env.mac_src = mac_src[0] if mac_src is not None else None
                 else:
                     mac_src = env.mac_src
                 if mac_src is not None:
@@ -71,8 +72,8 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', u
 
                 if result[0] == AbsorbStatus.FullyAbsorbed:
                     try:
-                        service_name = msg_x['.*/value/v101'].to_bytes()
-                        mac_src = msg_x['.*/mac_src'].to_bytes()
+                        service_name = msg_x['.*/value/v101'][0].to_bytes()
+                        mac_src = msg_x['.*/mac_src'][0].to_bytes()
                     except:
                         continue
                     print(' [ {:s} received! ]'.format(x.upper()))
@@ -82,7 +83,7 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', u
 
                     host_uniq = msg_x['.*/value/v103']
                     if host_uniq is not None:
-                        host_uniq = host_uniq.to_bytes()
+                        host_uniq = host_uniq[0].to_bytes()
                         env.host_uniq = host_uniq
                         t_fix_pppoe_msg_fields.host_uniq = host_uniq
 
@@ -90,8 +91,8 @@ def retrieve_X_from_feedback(env, current_step, next_step, feedback, x='padi', u
                         next_step.content.freeze()
                         try:
                             next_step.content['.*/tag_sn/value/v101'] = service_name
-                            next_step.content['.*/tag_sn$'].unfreeze(recursive=True, reevaluate_constraints=True)
-                            next_step.content['.*/tag_sn$'].freeze()
+                            next_step.content['.*/tag_sn$'][0].unfreeze(recursive=True, reevaluate_constraints=True)
+                            next_step.content['.*/tag_sn$'][0].freeze()
                         except:
                             pass
 
@@ -134,7 +135,7 @@ class t_fix_pppoe_msg_fields(Disruptor):
                 n['.*/mac_dst'] = self.mac_src
                 prev_data.add_info("update 'mac_src'")
                 if not self.reevaluate_csts:
-                    n['.*/mac_dst'].unfreeze(dont_change_state=True)
+                    n['.*/mac_dst'][0].unfreeze(dont_change_state=True)
             except:
                 print(error_msg.format('mac_dst'))
         else:
@@ -152,11 +153,11 @@ class t_fix_pppoe_msg_fields(Disruptor):
 
         if self.host_uniq:
             try:
-                if not n['.*/tag_host_uniq/.*/v103'].is_attr_set(MH.Attr.LOCKED) and \
-                    not n['.*/tag_host_uniq/len'].is_attr_set(MH.Attr.LOCKED) and \
-                    not n['.*/tag_host_uniq/type'].is_attr_set(MH.Attr.LOCKED):
+                if not n['.*/tag_host_uniq/.*/v103'][0].is_attr_set(MH.Attr.LOCKED) and \
+                    not n['.*/tag_host_uniq/len'][0].is_attr_set(MH.Attr.LOCKED) and \
+                    not n['.*/tag_host_uniq/type'][0].is_attr_set(MH.Attr.LOCKED):
                     n['.*/tag_host_uniq/.*/v103'] = self.host_uniq
-                    tag_uniq = n['.*/tag_host_uniq$']
+                    tag_uniq = n['.*/tag_host_uniq$'][0]
                     tag_uniq.unfreeze(recursive=True, reevaluate_constraints=True)
                     tag_uniq.freeze()
                     prev_data.add_info("update 'host_uniq' with: {!s}".format(self.host_uniq))

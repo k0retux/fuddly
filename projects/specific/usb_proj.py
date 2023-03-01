@@ -31,7 +31,7 @@ from framework.node import *
 project = Project()
 project.default_dm = 'usb'
 
-logger = Logger('bin', record_data=False, explicit_data_recording=True, export_orig=False)
+logger = Logger('bin', record_data=False, explicit_data_recording=True)
 
 rpyc_module = True
 try:
@@ -97,7 +97,7 @@ class Pandaboard(Target):
             self.cnx.root.connect(conf_desc_str_list=[data.to_bytes()])
 
 
-    def is_target_ready_for_new_data(self):
+    def is_feedback_received(self):
         time.sleep(3)
         self.cnx.root.disconnect()
         time.sleep(1)

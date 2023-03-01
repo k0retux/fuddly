@@ -123,6 +123,17 @@ framework.targets.sim module
     :special-members:
     :exclude-members: __dict__, __weakref__
 
+framework.targets.ssh module
+----------------------------
+
+.. automodule:: framework.targets.ssh
+    :members:
+    :undoc-members:
+    :show-inheritance:
+    :private-members:
+    :special-members:
+    :exclude-members: __dict__, __weakref__
+
 framework.targets.printer module
 --------------------------------
 
@@ -190,6 +201,19 @@ framework.monitor module
    :private-members:
    :special-members:
    :exclude-members: __dict__, __weakref__
+
+
+framework.comm_backends module
+------------------------------
+
+.. automodule:: framework.comm_backends
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
+
 
 framework.tactics_helpers module
 --------------------------------
@@ -314,6 +338,37 @@ framework.knowledge.information module
    :private-members:
    :special-members:
    :exclude-members: __dict__, __weakref__
+
+framework.constraint_helpers module
+-----------------------------------
+
+.. automodule:: framework.constraint_helpers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
+
+
+framework.plumbing module
+-------------------------
+
+.. automodule:: framework.plumbing
+   :members:
+   :undoc-members:
+   :exclude-members: __dict__, __weakref__, FmkShell, EnforceOrder, FmkFeedback, is_python_file
+
+
+libs.utils module
+-----------------
+
+.. automodule:: libs.utils
+    :members:
+    :undoc-members:
+    :show-inheritance: __dict__, __weakref__
+
+
 
 ..
    framework.plumbing module

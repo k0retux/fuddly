@@ -28,12 +28,14 @@ import collections
 
 class FeedbackSource(object):
 
-    def __init__(self, src, subref=None, reliability=None, related_tg=None):
+    def __init__(self, src, subref=None, reliability=None, related_tg=None,
+                 display_feedback=True):
         self._subref = subref
         self._name = str(src) if subref is None else str(src) + ' - ' + str(subref)
         self._obj = src
         self._reliability = reliability
         self._related_tg = related_tg
+        self._display_feedback = display_feedback
 
     def __str__(self):
         return self._name
@@ -52,6 +54,9 @@ class FeedbackSource(object):
     def related_tg(self):
         return self._related_tg
 
+    @property
+    def display_feedback(self):
+        return self._display_feedback
 
 class FeedbackCollector(object):
     fbk_lock = threading.Lock()

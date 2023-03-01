@@ -2,12 +2,12 @@ from framework.plumbing import *
 from framework.tactics_helpers import *
 from framework.global_resources import *
 from framework.scenario import *
-from framework.data import Data
+from framework.data import Data, DataProcess
 from framework.value_types import *
 
 tactics = Tactics()
 
-def cbk_transition1(env, current_step, next_step, feedback):
+def check_answer(env, current_step, next_step, feedback):
     if not feedback:
         print("\n\nNo feedback retrieved. Let's wait for another turn")
         current_step.make_blocked()
@@ -30,7 +30,7 @@ def cbk_transition1(env, current_step, next_step, feedback):
             print("*** The next node won't be modified!")
         return True
 
-def cbk_transition2(env, current_step, next_step):
+def check_switch(env, current_step, next_step):
     if env.user_context.switch:
         return False
     else:
@@ -48,8 +48,7 @@ def before_data_processing_cbk(env, step):
         step.content.show()
     return True
 
-periodic1 = Periodic(DataProcess(process=[('C', UI(nb=1)), 'tTYPE'], seed='enc'),
-                     period=5)
+periodic1 = Periodic(DataProcess(process=[('C', UI(nb=1)), 'tTYPE'], seed='enc'), period=5)
 periodic2 = Periodic(Data('2nd Periodic (3s)\n'), period=3)
 
 ### SCENARIO 1 ###
@@ -57,15 +56,15 @@ step1 = Step('exist_cond', fbk_timeout=1, set_periodic=[periodic1, periodic2],
              do_before_sending=before_sending_cbk, vtg_ids=0)
 step2 = Step('separator', fbk_timeout=2, clear_periodic=[periodic1], vtg_ids=1)
 empty = NoDataStep(clear_periodic=[periodic2])
-step4 = Step('off_gen', fbk_timeout=0)
+step4 = Step('off_gen', fbk_timeout=0, refresh_atoms=False)
 
 step1_copy = copy.copy(step1) # for scenario 2
 step2_copy = copy.copy(step2) # for scenario 2
 
 step1.connect_to(step2)
-step2.connect_to(empty, cbk_after_fbk=cbk_transition1)
+step2.connect_to(empty, cbk_after_fbk=check_answer)
 empty.connect_to(step4)
-step4.connect_to(step1, cbk_after_sending=cbk_transition2)
+step4.connect_to(step1, cbk_after_sending=check_switch)
 
 sc_tuto_ex1 = Scenario('ex1', anchor=step1, user_context=UI(switch=False))
 
@@ -74,7 +73,7 @@ step4 = Step(DataProcess(process=['tTYPE#2'], seed='shape'))
 step_final = FinalStep()
 
 step1_copy.connect_to(step2_copy)
-step2_copy.connect_to(step4, cbk_after_fbk=cbk_transition1)
+step2_copy.connect_to(step4, cbk_after_fbk=check_answer)
 step4.connect_to(step_final)
 
 sc_tuto_ex2 = Scenario('ex2', anchor=step1_copy)
@@ -88,7 +87,7 @@ option1 = Step(Data('Option 1'), step_desc='option 1\ndescription',
 option2 = Step(Data('Option 2'),
                do_before_data_processing=before_data_processing_cbk)
 
-anchor.connect_to(option1, cbk_after_sending=cbk_transition2)
+anchor.connect_to(option1, cbk_after_sending=check_switch)
 anchor.connect_to(option2)
 option1.connect_to(anchor)
 option2.connect_to(anchor)

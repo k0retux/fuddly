@@ -57,21 +57,32 @@ this:
    *** Found Project: 'usb' ***
    >>> Look for Projects within 'projects/generic' Directory
    *** Found Project: 'standard' ***
-   ================================================================================
+   ============================================[ Fuddly Home Information ]==
 
-   -=[ Fuddly Shell ]=- (with Fuddly FmK 0.23)
+    --> data folder: ~/.local/share/fuddly/
+    --> contains: - fmkDB.db, logs, imported/exported data, ...
+                  - user projects and user data models, ...
+    --> config folder: ~/.config/fuddly/
 
-   >> 
+   -=[ Fuddly Shell ]=- (with Fuddly FmK 0.30)
 
-.. note:: The ``help`` command shows you every defined command within
-   ``Fuddly Shell``. You can also look at a brief command description and
-   syntax by typing ``help <command_name>``
+   >>
 
 Note that ``fuddly`` looks for *Data Model* files (within
 ``data_models/``) and *Project* files (within ``projects/``) during
 its initialization. A *Project* file is used to describe the targets
 that can be tested, the logger behaviour, and optionally specific
 monitoring means as well as some scenarios and/or virtual operators.
+
+.. note::
+
+   Projects and data models files are retrieved either from
+   ``<root of fuddly>/{projects,data_models}/`` or from
+   ``<fuddly data folder>/{projects,data_models}/``.
+
+   Note that when the Fuddly shell is launched, the path of the
+   fuddly data folder is displayed as well as its configuration folder.
+
 
 .. seealso:: To create a new project file, and to describe the
              associated components refer to :ref:`tuto:project`.
@@ -103,7 +114,7 @@ You can look at the defined targets by issuing the following command:
    [0] EmptyTarget [ID: 307144]
    [1] LocalTarget [Program: display]
    [2] LocalTarget [Program: okular]
-   [3] LocalTarget [Program: unzip, Args: -d ~/fuddly_data/workspace/]
+   [3] LocalTarget [Program: unzip, Args: -d ~/.local/share/fuddly/workspace/]
    [4] PrinterTarget [IP: 127.0.0.1, Name: PDF]
    [5] NetworkTarget [localhost:54321, localhost:12345]
 
@@ -180,24 +191,24 @@ issuing the following command:
    *** Target initialization: (0) EmptyTarget [ID: 307144] ***
    *** Monitor is started ***
 
-   *** [ Fuzz delay = 0 ] ***
+   *** [ Sending delay = 0.00s ] ***
    *** [ Number of data sent in burst = 1 ] ***
-   *** [ Target health-check timeout = 10 ] ***
-   >> 
+   *** [ Target EmptyTarget [ID: 241984] health-check timeout = 10.0s ] ***
+   >>
 
 
 .. note::
    Note that just after the project is launched, some internal parameters
    are displayed, namely:
 
-   - The fuzzing delay, which allows you to set a minimum delay between
+   - The sending delay, which allows you to set a minimum delay between
      two data emission. (Can be changed through the command
      ``set_delay``).
    - The maximum number of data that will be sent in burst, thus
-     ignoring the fuzzing delay. (Can be changed through the command
+     ignoring the sending delay. (Can be changed through the command
      ``set_burst``)
    - The timeout value for checking target's health. (Can be changed
-     through the command ``set_health_timeout``)
+     through the command ``set_health_check_timeout``)
 
 Finally, you may prefer to directly launch your project thanks to
 the command ``run_project``. Indeed, by using it, you will automatically trigger the commands we
@@ -227,6 +238,11 @@ command::
    ``load_multiple_data_model <dm_name_1> <dm_name_2>
    ... [dm_name_n]``, if you want to interact with a target with
    different data models simultaneously. 
+
+.. note:: The ``help`` command shows you every defined command within
+   ``Fuddly Shell``. You can also look at a brief command description and
+   syntax by typing ``help <command_name>``
+
 
 
 Send Malformed ZIP Files to the Target (Manually)
@@ -317,7 +333,7 @@ this case---the ZIP data model---the first one will generate modeled
 ZIP archive based uniquely on the data model, whereas the other ones
 (``ZIP_00``, ``ZIP_01``, ...)  generate modeled ZIP archives based on
 the sample files available within the directory
-``~/fuddly_data/imported_data/zip/``.
+``<fuddly data folder>/imported_data/zip/``.
 
 For each one of these generators, some parameters are associated:
 
@@ -490,8 +506,6 @@ can see on lines 16 & 19.
 	     .. figure::  images/zip_show.png
 		:align:   center
 		:scale: 60%
-
-
 
 .. note::
    Parameters are given to data makers
@@ -864,6 +878,16 @@ Finally, if you want to resend data from previous sessions, you can do it by loo
 That command will store these data to the `Data Bank`. From then on, you could use ``show_db`` and ``replay_db``
 as previously explained.
 
+.. note::
+   You can use disruptors with a ``replay_*`` command. However if these disruptors are stateful,
+   you should issue the command only once. Then, if you want to walk through the stateful disruptor,
+   you only have to switch to a ``send``-like command, and use as generator name the string ``NOGEN``
+
+   For instance::
+
+     >> replay_last tTYPE
+     >> send_loop -1 NOGEN tTYPE
+
 
 .. _fuddly-advanced:
 
@@ -879,17 +903,18 @@ will need to issue the following commands:
    from framework.plumbing import *
 
    fmk = FmkPlumbing()
+   fmk.start()
 
 From now on you can use ``fuddly`` through the
 object ``fmk``. Every commands defined by ``Fuddly Shell`` (refer to
 :ref:`tuto:start-fuzzshell`) are backed by a method of the class
 :class:`framework.plumbing.FmkPlumbing`.
 
-Here under some basic commands to start with:
+Here under some basic commands to launch the project ``tuto``, a virtual testing target and the
+``ZIP`` data model:
 
 .. code-block:: python
    :linenos:
-
 
    # To show the available projects
    fmk.show_projects()
@@ -897,14 +922,17 @@ Here under some basic commands to start with:
    # Contains the list of all the Project objects available
    fmk.prj_list
 
-   # Load the ``standard`` project by name
-   fmk.load_project(name='standard')
+   # Load the ``tuto`` project by name
+   fmk.load_project(name='tuto')
+
+   # Reference to the currently launched project, in our case ``tuto``
+   fmk.prj
 
    # Show available targets for this project
    fmk.show_targets()
 
-   # Select the target with ID ``3``
-   fmk.load_targets(3)
+   # Select the target with ID ``7``
+   fmk.load_targets(7)
 
    # To show all the available data models
    fmk.show_data_models()
@@ -921,15 +949,64 @@ Here under some basic commands to start with:
    # Launch the project and all the related components
    fmk.launch()
 
-   # Reference to the currently launched project, in our case ``standard``
-   fmk.prj
+.. note::
+   The previous commands used to load a project, targets and data models can be factorized
+   in one line thanks to the following command::
 
-   # To launch the ``standard`` project with the target number ``3``
-   # and the ZIP data model in one line
-   fmk.run_project(name='standard', tg=3, dm_name='zip')
+      # To launch the ``tuto`` project with the targets ID ``7`` and ``8``
+      # and the ZIP data model in one line
+      fmk.run_project(name='tuto', tg_ids=[7,8], dm_name='zip')
+
+You can also change the timeout value used to retrieved feedback from the targets, as well as
+tuning the way this value has to be considered (a maximum value or a strict time slice).
+
+.. code-block:: python
+   :linenos:
+
+   fmk.set_feedback_timeout(1, tg_id=7)
+   fmk.set_feedback_mode(Target.FBK_WAIT_UNTIL_RECV, tg_id=7)
+   fmk.set_feedback_timeout(2, tg_id=8)
+   fmk.set_feedback_mode(Target.FBK_WAIT_FULL_TIME, tg_id=8)
+
+The effect of this commands is summarized in a specific screen that can be displayed by issuing the
+command ``fmk.show_fmk_internals()``::
+
+
+   -=[ FMK Internals ]=-
+
+     [ General Information ]
+                     FmkDB enabled: True
+                 Workspace enabled: True
+                     Sending delay: 0.0
+      Number of data sent in burst: 1
+    Target(s) health-check timeout: 4.0
+
+     [ Target Specific Information - (7) TestTarget [ID: 792104] ]
+                  Feedback timeout: 1
+                     Feedback mode: Wait until the target has sent something back to us
+
+     [ Target Specific Information - (8) TestTarget [ID: 792160] ]
+                  Feedback timeout: 2
+                     Feedback mode: Wait for the full time slot allocated for feedback retrieval
+
+
+Other commands allowing you to perform some user code changes either in the project file or
+the data models and take them into account without restarting fuddly:
+
+.. code-block:: python
+   :linenos:
 
    # Reload all sub-systems and data model definitions and choose the target ``0``
    fmk.reload_all(tg_num=0)
+
+   # Reload the data model definitions
+   fmk.reload_dm()
+
+Then, when everything is loaded, the following commands is an example on how target interaction
+can be performed:
+
+.. code-block:: python
+   :linenos:
 
    # Show a list of the registered data type within the data model
    fmk.show_atom_identifiers()
@@ -937,7 +1014,7 @@ Here under some basic commands to start with:
    list(fmk.dm.atom_identifiers())
    
    # Get an instance of the modeled data ZIP_00 which is made from the
-   # absorption of an existing ZIP archive within ~/fuddly_data/imported_data/zip/
+   # absorption of an existing ZIP archive within <fuddly data folder>/imported_data/zip/
    dt = fmk.dm.get_atom('ZIP_00')
 
    # Display the raw contents of the first generated element of the data type `dt`
@@ -961,53 +1038,73 @@ Here under some basic commands to start with:
    # cases and enforce the disruptor to strictly follow the ZIP structure
    # Finally truncate the output to 200 bytes
    action_list = [('tTYPE', UI(init=5, order=True)), ('SIZE', UI(sz=200))]
-   altered_data = fmk.get_data(action_list, data_orig=Data(dt))
+   altered_data = fmk.process_data(action_list, seed=Data(dt))
 
    # Send this new data and look at the actions that perform tTYPE and
    # SIZE through the console or the logs
    fmk.send_data_and_log(altered_data)
-   
 
 The last command will display something like this (with some color if
 you have the ``xtermcolor`` python library):
 
 .. code-block:: none
 
-   ========[ 2 ]==[ 11/09/2015 - 20:06:56 ]=======================
-   ### Target ack received at: None
-   ### Initial Generator (currently disabled):
-    |- generator type: None | generator name: None | User input: None
-     ...
+   ====[ 3 ]==[ 27/06/2019 - 12:07:19 ]============================================
    ### Step 1:
-    |- disruptor type: tTYPE | disruptor name: d_fuzz_typed_nodes | User input: G=[init=5], S=[order=True]
+    |- disruptor type: tTYPE | disruptor name: sd_fuzz_typed_nodes | User input: [init=5,order=True]
     |- data info:
-       |_ model walking index: 5
-       |_  |_ run: 1 / -1 (max)
+       |_ model walking index: 4
+       |_  |_ run: 4 / -1 (max)
        |_ current fuzzed node:     ZIP_00/file_list/file/header/common_attrs/version_needed
-       |_  |_ value type:         <framework.value_types.Fuzzy_INT16 object at 0x7efe52da4c90>
-       |_  |_ original node value: 1400 (ascii: )
-       |_  |_ corrupt node value:  0080 (ascii: �)
+       |_  |_ value type:          <framework.value_types.UINT16_le object at 0x7f2bcd49b160>
+       |_  |_ original node value (hex): b'1403'
+       |_  |                    (ascii): b'\x14\x03'
+       |_  |_ corrupt node value  (hex): b'0000'
+       |_                       (ascii): b'\x00\x00'
    ### Step 2:
-    |- disruptor type: SIZE | disruptor name: d_max_size | User input: G=None, S=[sz=200]
+    |- disruptor type: SIZE | disruptor name: d_max_size | User input: [sz=200]
     |- data info:
-       |_ orig node length: 1054002
+       |_ orig node length: 595
        |_ right truncation
        |_ new node length: 200
    ### Data size: 200 bytes
    ### Emitted data is stored in the file:
-   ./exported_data/zip/2015_09_11_200656_00.zip
+   <fuddly data folder>/exported_data/zip/2019_06_27_120719_00.zip
+   ### FmkDB Data ID: 542
 
+   ### Ack from 'TestTarget [ID: 725768]' received at: 2019-06-27 12:07:19.071751
+   ### Feedback from 'TestTarget [ID: 725768]' (status=0):
+   CRC error
+
+The previous commands can be factorized through the method
+:meth:`framework.plumbing.FmkPlumbing.process_data_and_send()`
+
+For instance fuzzing the targets 7 and 8 simultaneously (that handle ZIP format) until exhaustion
+of test cases can be done thanks to the following lines:
 
 .. code-block:: python
    :linenos:
 
-   # And to terminate fuddly properly 
-   fmk.stop()
+    # Hereunder the chosen fuzzing follow a 2-step approach:
+    # 1- the disruptor tTYPE is called on the seed and starts from the 5th test case
+    # 2- a trailer payload is added at the end of what is generated previsouly
 
+    dp = DataProcess([('tTYPE', UI(deep=True, init=5)),
+                      ('ADD', UI(raw='This is added at the end'))],
+                     seed='ZIP_00')
+
+    fmk.process_data_and_send(dp, max_loop=-1, tg_ids=[7,8])
+
+We did not discuss all the methods available from :class:`framework.plumbing.FmkPlumbing`but you
+should now be more familiar with :class:`framework.plumbing.FmkPlumbing` and go on with its exploration.
+
+Finally, in order to exit the framework, the following method should be called (otherwise,
+various threads would block the correct termination of the framework)::
+
+   fmk.stop()
 
 For more information on how to manually make modification on data,
 refer to the section :ref:`tuto:disruptors`
-
 
 
 Implementing a Data Model and Defining a Project Environment
@@ -1197,7 +1294,7 @@ Defining the Imaginary MyDF Data Model
 
 Assuming we want to model an imaginary data format called `MyDF`.  Two
 files need to be created either within ``<root of fuddly>/data_models/`` or within
-``~/fuddly_data/user_data_models/`` (or within any subdirectory):
+``<fuddly data folder>/user_data_models/`` (or within any subdirectory):
 
 ``mydf.py``
   Contain the implementation of the data model related to
@@ -1255,12 +1352,12 @@ model, by calling
 :func:`framework.data_model.DataModel.register()` on them.
 
 .. note::
-   If you want to import data samples that comply with your data model:
+   In the frame of your data model if you want to instantiate atoms from samples:
 
-   - Add your samples there: ``~/fuddly_data/imported_data/<NAME of DM>/``
+   - Add your samples there: ``<fuddly data folder>/imported_data/<NAME of DM>/``
 
    - Within the method :meth:`framework.data_model.DataModel.build_data_model()`, and once you defined
-     your atoms, call the method :meth:`framework.data_model.DataModel.register_atom_for_absorption()`
+     your atoms, call the method :meth:`framework.data_model.DataModel.register_atom_for_decoding()`
      to register the atom that will be used to model your samples. (To perform this action the framework
      leverages the node absorption mechanism -- :ref:`tuto:dm-absorption`.)
      For a usage example, refer to the ZIP data model.
@@ -1272,8 +1369,15 @@ model, by calling
    the method :meth:`framework.data_model.DataModel._atom_absorption_additional_actions()` as illsutrated
    by the JPG data model.
 
+   Finally, if you need even more flexibility in order to create atoms from samples, because
+   node absorption is not satisfactory in your context, then you could overload the method
+   :meth:`framework.data_model.DataModel._create_atom_from_raw_data_specific()`.
+   Refer to the JSON data model for an illustration, where this method is overloaded in order to create
+   either atoms that represent JSON schemas or atoms that model some JSON data; depending on the JSON
+   files provided in ``<fuddly data folder>/imported_data/json``.
+
 .. note::
-   The method :meth:`framework.data_model.DataModel.register_atom_for_absorption()` is also leveraged
+   The method :meth:`framework.data_model.DataModel.register_atom_for_decoding()` is also leveraged
    by the decoding feature of the class :class:`framework.data_model.DataModel`, which is implemented
    by the method :meth:`framework.data_model.DataModel.decode()`.
 
@@ -1580,8 +1684,13 @@ Currently, there is four kinds of constraints:
   attributes are specified within a terminal node---this constraint
   control it.
  
-``contents``
+``content``
   Only the values specified in the data model are accepted
+
+``similar_content``
+  This constraint is a lighter version of ``content``. It allows values similar to the one defined
+  in the data model to be accepted in absorption operations. This is especially leveraged by
+  String() to distinguish case sensitive from case incensitive strings.
 
 ``regexp``
   This constraint control if regular expression---that some terminal
@@ -2005,7 +2114,7 @@ Defining a Project Environment
 The environment---composed of at least one target, a logger, and
 optionnaly some monitoring means and virtual operators---is setup
 within a project file located within ``<root of fuddly>/projects/`` or within
-`~/fuddly_data/user_projects/``. To illustrate that let's
+``<fuddly data folder>/user_projects/``. To illustrate that let's
 show the beginning of ``generic/standard_proj.py``:
 
 .. code-block:: python
@@ -2024,7 +2133,7 @@ show the beginning of ``generic/standard_proj.py``:
    # project.default_dm = 'mydf'
 
    logger = Logger(record_data=False, explicit_data_recording=False,
-		   export_orig=False, export_raw_data=False)
+		    export_raw_data=False)
 
    printer1_tg = PrinterTarget(tmpfile_ext='.png')
    printer1_tg.set_target_ip('127.0.0.1')
@@ -2062,8 +2171,9 @@ and optionally:
 - targets (referenced by a variable ``targets``, :ref:`targets-def`)
 - scenarios (:ref:`scenario-infra`) that can be registered into a project through the method
   :meth:`framework.project.Project.register_scenarios`
-- probes (:ref:`tuto:probes`).
-- operators (:ref:`tuto:operator`).
+- probes (:ref:`tuto:probes`)
+- tasks (:ref:`tuto:tasks`)
+- operators (:ref:`tuto:operator`)
 
 A default data model or a list of data models can be added to the
 project through its attribute ``default_dm``. ``fuddly`` will use this
@@ -2145,24 +2255,24 @@ and kept in sync with the log files.
 
 The outputs of the logger are of four types:
 
-- ``~/fuddly_data/logs/*<project_name>_logs``: the history of your
+- ``<fuddly data folder>/logs/*<project_name>_logs``: the history of your
   test session for the project named ``project_name``. The files are
   prefixed with the test session starting time. A new one is created
   each time you run a new project or you reload the current one.
   Note these files are created only if the parameter ``enable_file_logging``
   is set to True.
 
-- ``~/fuddly_data/logs/*<project_name>_stats``: some statistics of
+- ``<fuddly data folder>/logs/*<project_name>_stats``: some statistics of
   the kind of data that has been emitted during the session.
   Note these files are created only if the parameter ``enable_file_logging``
   is set to True.
 
-- ``~/fuddly_data/exported_data/<data model name>/*.<data
+- ``<fuddly data folder>/exported_data/<data model name>/*.<data
   extension>``: the data emitted during a session are stored within
   the their data model directory. Each one is prefixed by the date of
   emission, and each one is uniquely identified within the log files.
 
-- records within the database ``~/fuddly_data/fmkDB.db``. Every piece of
+- records within the database ``<fuddly data folder>/fmkDB.db``. Every piece of
   information from the previous files are recorder with this database.
 
 Some parameters allows to customize the behavior of the logger, such as:
@@ -2535,3 +2645,46 @@ it returns, by setting a negative status and some feedback on it.
 .. note:: Setting a negative status through
    :class:`framework.operator_helpers.LastInstruction` will make ``fuddly`` act the same
    as for a negative status from a probe. In addition, the operator will be shutdown.
+
+.. _tuto:tasks:
+
+Defining Tasks
+++++++++++++++
+
+Contrary to probes (:ref:`tuto:probes`), Tasks are not sequenced by the framework, they run asynchronously.
+They can be periodic or one-shot and their logic need to be defined entirely by the user.
+They can be started either when a target is launched (see below) or by a step of a scenario (refer to :ref:`sc:steps`).
+
+To implement the logic of the task, you need to inherit from :class:`libs.utils.Task` and to
+implement the :meth:`__call__` method. This method is then called either once or with a period that
+is specified in the constructor.
+When run by the framework this task has some attributes automatically filled that you can leverage
+in your logic:
+
+- :attr:`libs.utils.Task.feedback_gate`: provide an access to the last 10 seconds of feedback.
+  (:class:`framework.database.FeedbackGate`)
+- :attr:`libs.utils.Task.dm`: current loaded data model.
+- :attr:`libs.utils.Task.targets`: enabled targets.
+- :attr:`libs.utils.Task.fmkops`: provide access to some framework operations
+  (:class:`framework.plumbing.ExportableFMKOps`).
+
+Moreover, you could also print some information in another terminal window dedicated to the task.
+For such case, you should set the parameter ``new_window`` of the :class:`libs.utils.Task` constructor to
+``True``, then use a specific API composed of :meth:`libs.utils.Task.print` and :meth:`libs.utils.Task.print_nl`.
+
+Like with probes (:ref:`tuto:probes`), you can associate tasks to ``targets`` in order to execute
+them when a target is enabled. But they need to be instantiated first (while probes are only referenced
+by class name).
+Thus, for instance, if you want to run one or more tasks when a target ``A`` is enabled by the framework
+you have to put in the project ``targets`` list, a tuple containing first the target itself, then
+all the needed instantiated tasks.
+
+Here under an example with the target ``A`` associated to a task of class name ``myTask``, and
+the target ``B`` without tasks:
+
+.. code-block:: python
+   :linenos:
+
+   targets = [(A, myTask()), B]
+
+.. note:: You can mix probes and tasks

@@ -42,14 +42,55 @@ class Project(object):
     name = None
     default_dm = None
 
-    feedback_gate = None
+    wkspace_enabled = None
+    wkspace_size = None
+    wkspace_free_slot_ratio_when_full = None
 
-    def __init__(self, enable_fbk_processing=True):
+    def __init__(self, enable_fbk_processing=True,
+                 wkspace_enabled=True, wkspace_size=1000, wkspace_free_slot_ratio_when_full=0.5,
+                 fmkdb_enabled=True,
+                 default_fbk_timeout=None, default_fbk_mode=None,
+                 default_sending_delay=None, default_burst_value=None):
+        """
+
+        Args:
+            enable_fbk_processing: enable or disable the execution of feedback
+              handlers, if any are set in the project.
+            wkspace_enabled: If set to True, enable the framework workspace that store
+              the generated data.
+            wkspace_size: Maximum number of data that can be stored in the workspace.
+            wkspace_free_slot_ratio_when_full: when the workspace is full, provide the ratio
+              of the workspace size that will be used as the amount of entries to free in
+              the workspace.
+            fmkdb_enabled: If set to `True`, the fmkDB will be used. Otherwise, no DB transactions will
+              occur and thus the fmkDB won't be filled during the session.
+            default_fbk_timeout: If not None, when the project will be run, this value will be used
+              to initialize the feedback timeout of all the targets
+            default_fbk_mode: If not None, when the project will be run, this value will be used
+              to initialize the feedback mode of all the targets
+            default_sending_delay: If not None, when the project will be run, this value will be used
+              to initialize the delay that is applied by the framework between each data sending.
+            default_burst_value: If not None, when the project will be run, this value will be used
+              to initialize the burst value of the framework (number of data that can be sent in burst
+              before a delay is applied).
+        """
+
         self.monitor = Monitor()
         self._knowledge_source = InformationCollector()
         self._fbk_processing_enabled = enable_fbk_processing
         self._feedback_processing_thread = None
         self._fbk_handlers = []
+        self._fbk_handlers_disabled = False
+
+        self.wkspace_enabled = wkspace_enabled
+        self.wkspace_size = wkspace_size
+        self.wkspace_free_slot_ratio_when_full = wkspace_free_slot_ratio_when_full
+        self.fmkdb_enabled = fmkdb_enabled
+
+        self.default_fbk_timeout = default_fbk_timeout
+        self.default_fbk_mode = default_fbk_mode
+        self.default_sending_delay = default_sending_delay
+        self.default_burst_value = default_burst_value
 
         self.scenario_target_mapping = None
         self.reset_target_mappings()
@@ -78,12 +119,21 @@ class Project(object):
     def register_feedback_handler(self, fbk_handler):
         self._fbk_handlers.append(fbk_handler)
 
+    def disable_feedback_handlers(self):
+        self._fbk_handlers_disabled = True
+
+    def enable_feedback_handlers(self):
+        self._fbk_handlers_disabled = False
+
     def notify_data_sending(self, data_list, timestamp, target):
+        if self._fbk_handlers_disabled:
+            return
+
         for fh in self._fbk_handlers:
             fh.notify_data_sending(self.dm, data_list, timestamp, target)
 
     def trigger_feedback_handlers(self, source, timestamp, content, status):
-        if not self._fbk_processing_enabled:
+        if not self._fbk_processing_enabled or self._fbk_handlers_disabled:
             return
         self._feedback_fifo.put((source, timestamp, content, status))
 
@@ -169,15 +219,17 @@ class Project(object):
     ### Runtime Operations ###
     ##########################
 
-    def start(self):
+    def share_knowlegde_source(self):
         VT.knowledge_source = self.knowledge_source
         Env.knowledge_source = self.knowledge_source
         DataModel.knowledge_source = self.knowledge_source
         DataMaker.knowledge_source = self.knowledge_source
         ScenarioEnv.knowledge_source = self.knowledge_source
 
+    def start(self):
         for fh in self._fbk_handlers:
-            fh._start()
+            fh.fmkops = self._fmkops
+            fh._start(self.dm)
 
         if self._fbk_processing_enabled:
             self._run_fbk_handling_thread = True
@@ -188,12 +240,6 @@ class Project(object):
 
 
     def stop(self):
-        VT.knowledge_source = None
-        Env.knowledge_source = None
-        DataModel.knowledge_source = None
-        DataMaker.knowledge_source = None
-        ScenarioEnv.knowledge_source = None
-
         if self._fbk_processing_enabled:
             self._run_fbk_handling_thread = False
             if self._feedback_processing_thread:
@@ -202,6 +248,7 @@ class Project(object):
 
         for fh in self._fbk_handlers:
             fh._stop()
+
 
     def get_operator(self, name):
         try:

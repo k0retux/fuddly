@@ -253,7 +253,7 @@ Search for Nodes in a Graph
 Searching a graph for specific nodes can be performed in basically two ways. Depending on the
 criteria based on which you want to perform the search, you should use:
 
-- :meth:`framework.node.Node.get_node_by_path`: will retrieve the first node that match the
+- :meth:`framework.node.Node.iter_nodes_by_path`: iterator that walk through all the nodes that match the
   *graph path*---you provide as a parameter---from the node on which the method is called (or
   ``None`` if nothing is found). The syntax defined to represent paths is similar to the one of
   filesystem paths. Each path are represented by a python string, where node names are
@@ -262,9 +262,10 @@ criteria based on which you want to perform the search, you should use:
 
       'ex/data_group/len'
 
-  You can also use a regexp to describe a path. Also, if you need to retrieve all the nodes
-  matching a path regexp you should use the following method.
+  Note the path provided is interpreted as a regexp.
 
+- :meth:`framework.node.Node.get_first_node_by_path`: use the previous iterator to provide the first
+  node that match the *graph path* or ``None`` if nothing is found
 
 - :meth:`framework.node.Node.get_reachable_nodes`: It is the more flexible primitive that
   enables to perform a search based on syntactic and/or semantic criteria. It can take several
@@ -291,6 +292,9 @@ criteria based on which you want to perform the search, you should use:
   + ``owned_conf``: The name of a node configuration (refer to :ref:`dmanip:conf`) that
     the targeted nodes own.
 
+  .. note:: If the search is only path-based, :meth:`framework.node.Node.iter_nodes_by_path` is the
+     preferable solution as it is more efficient.
+
   The following code snippet illustrates the use of such criteria for retrieving all the nodes
   coming from the ``data2`` description (refer to :ref:`dmanip:entangle`):
 
@@ -302,10 +306,12 @@ criteria based on which you want to perform the search, you should use:
      from framework.value_types import *
 
      fmk = FmkPlumbing()
+     fmk.start()
+
      fmk.run_project(name='tuto')
 
-     data = fmk.get_data(['EX'])    # Return a Data container on the data model example
-     data.content.freeze()
+     ex_node = fmk.dm.get_atom('ex')
+     ex_node.freeze()
 
      ic = NodeInternalsCriteria(mandatory_attrs=[NodeInternals.Mutable],
                                 node_kinds=[NodeInternals_TypedValue],
@@ -314,14 +320,21 @@ criteria based on which you want to perform the search, you should use:
 
      sc = NodeSemanticsCriteria(mandatory_criteria=['sem1', 'sem2'])
 
-     data.content.get_reachable_nodes(internals_criteria=ic, semantics_criteria=sc,
-                                   owned_conf='alt2')
+     ex_node.get_reachable_nodes(internals_criteria=ic, semantics_criteria=sc,
+                                 owned_conf='alt2')
 
   Obviously, you don't need all these criteria for retrieving such node. It's only for
   exercise.
 
   .. note:: For abstracting away the data model from the rest of the framework, ``fuddly`` uses the
-     specific class :meth:`framework.data.Data` which acts as a data container.
+     specific class :class:`framework.data.Data` which acts as a data container.
+     Thus, while interacting with the different part of the framework, Node-based data
+     (or string-based data) should be encapsulated
+     in a :class:`framework.data.Data` object.
+
+     For instance ``Data(ex_node)`` will create an object that encapsulate ``ex_node``.
+     Accessing the node again is done through the property :attr:`framework.data.Data.content`
+
 
 
 The Node Dictionary Interface
@@ -340,10 +353,12 @@ following operation are possible on a node:
 As a ``key``, you can provide:
 
 - A *path regexp* (where the node on which the method is called is considered as the root) to the
-  node you want to reach. If multiple nodes match the path regexp, the first one will be returned
-  (or ``None`` if the path match nothing). It is equivalent to calling
-  :meth:`framework.node.Node.get_node_by_path` on the node and providing the parameter
-  ``path_regexp`` with your path.
+  nodes you want to reach. A list of the nodes will be returned for the reading operation
+  (or ``None`` if the path match nothing), and
+  for the writing operation all the matching nodes will get the new value.
+  The reading operation is equivalent to calling
+  :meth:`framework.node.Node.iter_nodes_by_path` on the node and providing the parameter
+  ``path_regexp`` with your path (except the method will return a python generator instead of a list).
 
   The following python code snippet illustrate the access to the node named ``len`` to
   retrieve its byte string representation:
@@ -351,10 +366,10 @@ As a ``key``, you can provide:
    .. code-block:: python
       :linenos:
 
-      rnode['ex/data_group/len'].to_bytes()
+      rnode['ex/data_group/len'][0].to_bytes()
 
       # same as:
-      rnode.get_node_by_path('ex/data_group/len').to_bytes()
+      rnode.get_first_node_by_path('ex/data_group/len').to_bytes()
 
 
 - A :class:`framework.node.NodeInternalsCriteria` that match the internal
@@ -431,11 +446,11 @@ it if you like ;).
 
     usb_str = fmk.dm.get_external_atom(dm_name='usb', data_id='STR')
 
-    data = fmk.get_data(['EX'])      # Return a Data container on the data model example
+    ex_node = fmk.dm.get_atom('ex')
 
-    data.content['ex/data0'] = usb_str  # Perform the substitution
+    ex_node['ex/data0'] = usb_str  # Perform the substitution
 
-    data.show()                      # Data.show() will call .show() on the embedded node
+    ex_node.show()                      # Data.show() will call .show() on the embedded node
 
 
 The result is shown below:
@@ -445,9 +460,72 @@ The result is shown below:
    :scale:   100 %
 
 
-.. warning:: Releasing constraints (like a CRC, an offset, a length, ...) of an altered
+.. note:: Releasing constraints (like a CRC, an offset, a length, ...) of an altered
    data can be useful if you want ``fuddly`` to automatically recomputes the constraint for you and
    still comply to the model. Refer to :ref:`dmanip:freeze`.
+
+
+You can also add subnodes to non-terminal nodes through the usage of :meth:`framework.node.NodeInternals_NonTerm.add()`.
+For instance the following code snippet will add a new node after the node ``data2``.
+
+.. code-block:: python
+   :linenos:
+
+   data2_node = ex_node['ex/data_group/data2'][0]
+   ex_node['ex/data_group$'][0].add(Node('my_node', values=['New node added']),
+                                    after=data2_node)
+
+Thus, if ``ex_node`` before the modification is::
+
+   [0] ex [NonTerm]
+    \__(1) ex/data0 [String] size=4B
+    |        \_ codec=iso8859-1
+    |        \_raw: b'Plip'
+    \__[1] ex/data_group [NonTerm]
+    |   \__[2] ex/data_group/len [GenFunc | node_args: ex/data_group/data1]
+    |   |   \__(3) ex/data_group/len/cts [UINT8] size=1B
+    |   |            \_ 5 (0x5)
+    |   |            \_raw: b'\x05'
+    |   \__(2) ex/data_group/data1 [String] size=5B
+    |   |        \_ codec=iso8859-1
+    |   |        \_raw: b'Test!'
+    |   \__(2) ex/data_group/data2 [UINT16_be] size=2B
+    |   |        \_ 10 (0xA)
+    |   |        \_raw: b'\x00\n'
+    |   \__(2) ex/data_group/data3 [UINT8] size=1B
+    |            \_ 30 (0x1E)
+    |            \_raw: b'\x1e'
+    \__(1) ex/data4 [String] size=3B
+             \_ codec=iso8859-1
+             \_raw: b'Red'
+
+
+After the modification it will be::
+
+   [0] ex [NonTerm]
+    \__(1) ex/data0 [String] size=4B
+    |        \_ codec=iso8859-1
+    |        \_raw: b'Plip'
+    \__[1] ex/data_group [NonTerm]
+    |   \__[2] ex/data_group/len [GenFunc | node_args: ex/data_group/data1]
+    |   |   \__(3) ex/data_group/len/cts [UINT8] size=1B
+    |   |            \_ 5 (0x5)
+    |   |            \_raw: b'\x05'
+    |   \__(2) ex/data_group/data1 [String] size=5B
+    |   |        \_ codec=iso8859-1
+    |   |        \_raw: b'Test!'
+    |   \__(2) ex/data_group/data2 [UINT16_be] size=2B
+    |   |        \_ 10 (0xA)
+    |   |        \_raw: b'\x00\n'
+    |   \__(2) ex/data_group/my_node [String] size=14B
+    |   |        \_ codec=iso8859-1
+    |   |        \_raw: b'New node added'
+    |   \__(2) ex/data_group/data3 [UINT8] size=1B
+    |            \_ 30 (0x1E)
+    |            \_raw: b'\x1e'
+    \__(1) ex/data4 [String] size=3B
+             \_ codec=iso8859-1
+             \_raw: b'Red'
 
 
 .. _dmanip:prop:
@@ -545,17 +623,17 @@ In what follows, we illustrate some node configuration change based on our data 
     rnode.freeze()   # We consider there is at least 2 'data2' nodes
 
     # We change the configuration of the second 'data2' node
-    rnode['ex/data_group/data2:2'].set_current_conf('alt1', ignore_entanglement=True)
-    rnode['ex/data_group/data2:2'].unfreeze()
+    rnode['ex/data_group/data2:2'][0].set_current_conf('alt1', ignore_entanglement=True)
+    rnode['ex/data_group/data2:2'][0].unfreeze()
 
     rnode.show()
 
     # We change back 'data2:2' to the default configuration
-    rnode['ex/data_group/data2:2'].set_current_conf('MAIN', ignore_entanglement=True)
+    rnode['ex/data_group/data2:2'][0].set_current_conf('MAIN', ignore_entanglement=True)
     # We change the configuration of the first 'data2' node
-    rnode['ex/data_group/data2'].set_current_conf('alt1', ignore_entanglement=True)
+    rnode['ex/data_group/data2'][0].set_current_conf('alt1', ignore_entanglement=True)
     # This time we unfreeze directly the parent node
-    rnode['ex/data_group$'].unfreeze(dont_change_state=True)
+    rnode['ex/data_group$'][0].unfreeze(dont_change_state=True)
 
     rnode.show()
 

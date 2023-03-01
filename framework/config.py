@@ -57,9 +57,6 @@ class default:
         return self.__unindent.sub('', multiline)
 
     def add(self, name, doc):
-        if sys.version_info[0] <= 2:
-            doc = unicode(doc)
-
         self.configs[name] = self._unindent(doc)
 
 
@@ -69,14 +66,42 @@ default.add('FmkPlumbing', u'''
 [global]
 config_name: FmkPlumbing
 
-[defvalues]
-fuzz.delay = 0.01
+[misc]
+fuzz.delay = 0
 fuzz.burst = 1
 
-;;  [defvalues.doc]
+;;  [misc.doc]
 ;;  self: (default values used when the framework resets)
 ;;  fuzz.delay: Default value (> 0) for fuzz_delay
-;;  fuzz.burst: Default value (>= 1)for fuzz_burst
+;;  fuzz.burst: Default value (>= 1) for fuzz_burst
+
+[targets]
+empty_tg.verbose = False
+
+;;  [targets.doc]
+;;  self: configuration related to targets
+;;  empty_tg.verbose: Enable verbose mode (if True) on the default EmptyTarget()
+
+[terminal]
+external_term = False
+name=x-terminal-emulator
+title_arg=--title
+hold_arg=--hold
+exec_arg=-e
+exec_arg_type=string
+extra_args=
+
+;; [terminal.doc]
+;; self: Configuration applicable to the external terminal
+;; external_term: Use an external terminal
+;; name: Command to call the terminal
+;; title_arg: Option used by the terminal to set the title
+;; hold_arg: Options to keep the terminal open after the commands exits
+;; exec_arg: Option to specify the program to be run by the terminal
+;; exec_arg_type: How the command should be passed on the command line, can be 
+                    string if the command and it's arguments are to be passed as one string or
+                    list if they are to be individual arguments
+;; extra_args: Extra argument to pass on the command line
 
 ''')
 
@@ -101,7 +126,7 @@ indent.level: 0
                     used to display the helpers.
 
 [send_loop]
-aligned: True
+aligned: False
 aligned_options.batch_mode: False
 aligned_options.hide_cursor: True
 aligned_options.prompt_height: 3
@@ -114,6 +139,26 @@ aligned_options.prompt_height: 3
                      (when using 'send_loop -1 <generator>').
 ;;  aligned_options.hide_cursor: Attempt to reduce blinking by hiding cursor.
 ;;  aligned_options.prompt_height: Estimation of prompt's height.
+
+''')
+
+default.add('Database', u'''
+[global]
+config_name: Database
+
+[async_data]
+before_data_id = 5
+after_data_id = 60
+
+;;  [async_data.doc]
+;;  self: Configuration applicable to ASYNC DATA.
+;;
+;;  before_data_id: an async_data (without any associated data_id) will be considered to be related
+      to a data sent afterwards if the number of seconds that separates it from that data is less
+      than the amount specified in this parameter.
+;;  after_data_id: if after the last registered data by the framework, an async data is sent after
+      more than the amount of seconds specified in this parameter, it won't be considered to be
+      related to this last registered data. 
 
 ''')
 
@@ -207,13 +252,11 @@ def config_write(that, stream=sys.stdout):
 
 
 def sectionize(that, parent):
-    if sys.version_info[0] > 2:
-        unicode = str
     if parent is not None:
         that.config_name = parent
 
     try:
-        name = unicode(that.config_name)
+        name = str(that.config_name)
     except BaseException:
         name = that.config_name
 
@@ -489,10 +532,7 @@ class config(object):
                     if verbose:
                         sys.stderr.write('Loading {}...\n'.format(filename))
                     with open(filename, 'r') as cfile:
-                        if sys.version_info[0] > 2:
-                            self.parser.read_file(cfile, source=filename)
-                        else:
-                            self.parser.readfp(cfile, filename=filename)
+                        self.parser.read_file(cfile, source=filename)
                     loaded = True
                 except BaseException as e:
                     if verbose:
@@ -501,21 +541,12 @@ class config(object):
                     continue
 
         if loaded or name in default.configs:
-            if not loaded and sys.version_info[0] > 2:
+            if not loaded:
                 if verbose:
                     sys.stderr.write(
                         'Loading default config for {}...\n'.format(name))
                 self.parser.read_string(default.configs[name],
                                         'default_' + name)
-                loaded = True
-            elif not loaded:
-                if verbose:
-                    sys.stderr.write(
-                        'Loading default config for {}...\n'.format(name))
-                stream = io.StringIO()
-                stream.write(default.configs[name])
-                stream.seek(0)
-                self.parser.readfp(stream, 'default_' + name)
                 loaded = True
 
             if not self.parser.has_section('global'):

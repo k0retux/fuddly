@@ -27,12 +27,33 @@ name
   in giving the same name to different nodes::
     
     'my_name'
-    ('my_name', 2)
-    ('my_name', 'of the command')
+    ('my_name', 'namespace_1')
+    ('my_name', 'namespace_2')
 
   These names serve as *node references* during data description.
+  Another option is to use the keyword ``namespace``.
 
   .. note:: The character ``/`` is reserved and shall not be used in a *name*.
+
+
+namespace
+    [For non-terminal nodes only]
+
+    Specify a namespace that will be used for the ``name`` of all the nodes reachable
+    from the node declaring the namespace. It means that the subnodes will be automatically
+    described by a tuple with the namespace value as second item
+    (refer to the description of the keyword ``name``).
+
+from_namespace
+    If specified, and some node name are used as inputs (refer for instance to keywords ``clone``
+    or ``node_args``), the specified namespace will be used to fetch the nodes.
+    It is equivalent to use a tuple expression for referring to the node with the ``from_namespace`` value
+    as second item.
+
+    Note that referring to a node without specifying the namespace will be interpreted as using the
+    current namespace. By default (even when no namespaces have been declared), one namespace is
+    always defined from the root node, it can be referred to by ``NodeBuilder.RootNS``.
+
 
 contents
   Every node description has at least a ``name`` and a ``contents``
@@ -58,6 +79,15 @@ contents
   Note that for defining a *function node* and not a generator node,
   you have to state the type attribute to ``MH.Leaf``.
 
+default
+  Default value for the node. Only compatible with typed nodes
+  (:class:`framework.node.NodeInternals_TypedValue`). It is directly linked to the
+  ``default`` parameter of each type constructor. Refer to :ref:`vt:value-types` for more information.
+
+description
+  Textual description of the node. Note this information is shown by the method
+  :meth:`framework.node.Node.show()`.
+
 qty
   Specify the amount of nodes to generate from the description, or a
   tuple ``(min, max)`` specifying the minimum (which can be 0) and the
@@ -71,6 +101,9 @@ qty
   get such kind of data, specify explicitly the maximum, or use a
   disruptor to do so (:ref:`tuto:disruptors`).
 
+default_qty
+  Specify the default amount of nodes to generate from the description.
+  It should be within ``<min, max>``.
 
 clone
   Allows to make a full copy of an existing node by providing its
@@ -131,12 +164,29 @@ custo_set, custo_clear
     have this attribute cleared to prevent generic disruptors from
     altering them. This mode aims at limiting the number of test
     cases, by pruning what is assumed to be redundant.
+
+  - ``MH.Custo.NTerm.CycleClone``: By default, this mode is *disabled*.
+    When enabled, and when the subnodes need to be duplicated because of a ``qty`` greater than 1,
+    the non-terminal node will walk through each copy, in order to cycle among
+    the various shapes/values of the subnodes. Note this customization won't be effective
+    if an evolution function is provided through the keyword ``evolution_func``.
+
   - ``MH.Custo.NTerm.FrozenCopy``: By default, this mode is *enabled*.
     When enabled, it means that for child nodes which can be instantiated many times
     (refer to ``qty`` attribute), the instantiation process will make a frozen copy
     of the node, meaning that it will be the exact copy of the original one at
     the time of the copy. If disabled, the instantiation process will ignore the frozen
     state, and thus will release all the constraints.
+
+  - ``MH.Custo.NTerm.FullCombinatory``: By default, this mode is *disabled*. When enabled,
+    walking through a non-terminal node will generate all "possible" combination of forms for each
+    subnode. The various considered forms for a subnode are based on the ``qty`` and ``default_qty``
+    parameter provided. Thus there are at most 3 different forms that boil down to the different amounts of
+    subnodes (max, min and default values), and at least 1 if all are the same. Other possible values
+    in the range ``<min, max>`` are reachable in ``random`` mode, or by changing the subnode quantity manually.
+    When this mode is disabled, walking through the non-terminal node won't generate all possible
+    combinations but a subset of it based on a simpler algorithm that will walk through each subnode and
+    iterate for their different forms without considering the previous subnodes forms.
 
     .. note::
 		Note that if the node is not frozen
@@ -148,20 +198,58 @@ custo_set, custo_clear
 		children will be frozen at that time, the reconstruction will take into account this
 		customization mode.
 
+  - ``MH.Custo.NTerm.StickToDefault``: By default, this mode is *disabled*. When enabled,
+    walking through a non-terminal node *won't* generate all "possible" combination of forms for each
+    subnode. Only the default quantity (refer to keyword ``default_qty``) is leveraged. Walking through such nodes will
+    generate new forms only if different shapes have been defined (refer to keyword ``shape_type``
+    and ``section_type``).
+
   - ``MH.Custo.NTerm.CollapsePadding``: By default, this mode is *disabled*.
     When enabled, every time two adjacent ``BitField`` 's (within its scope) are found, they
-    will be merged in order to remove any padding in between. This is done
+    will be merged in order to remove any padding in-between. This is done
     "recursively" until any inner padding is removed.
 
     .. note::
       To be compatible with an *absorption* operation, the non-terminal set with this
       customization should comply with the following requirements:
 
-      - It shall only contains ``BitField`` 's (which implies that no *separators* shall be used)
       - The ``lsb_padding`` parameter shall be set to ``True`` on every related ``BitField`` 's.
       - The ``endian`` parameter shall be set to ``VT.BigEndian`` on every related ``BitField`` 's.
       - the ``qty`` keyword should not be used on the children except if it is equal to ``1``,
         or ``(1,1)``.
+
+  - ``MH.Custo.NTerm.DelayCollapsing``: By default, this mode is *disabled*.
+    To be used in
+    conjunction with ``MH.Custo.NTerm.CollapsePadding`` when the collapse operation should not
+    be performed in the current non-terminal node but in the parent node.
+    Refer to the code snippet below for an example:
+
+    .. code-block:: python
+
+        {'name': 'request',
+         'custo_set': MH.Custo.NTerm.CollapsePadding,
+         'contents': [
+             {'name': 'header',
+              'contents': BitField(subfield_sizes=[3,1], endian=VT.BigEndian,
+                                   subfield_val_extremums=[[0,7], [0,1]])},
+
+             {'name': 'payload',
+              'custo_set': [MH.Custo.NTerm.CollapsePadding, MH.Custo.NTerm.DelayCollapsing],
+              'contents': [
+                  {'name': 'status',
+                   'contents': BitField(subfield_sizes=[1,3], endian=VT.BigEndian,
+                                        subfield_values=[None,[0,1,2]])},
+                  {'name': 'count',
+                   'contents': UINT16_be()}
+               ]},
+
+               # [...]
+          }
+
+    Without this mode, when resolving the `request` node to get the byte-string
+    the `payload` subnode will be resolved too early and will produce a byte-string without
+    any collapse operation.
+
 
   For *generator* node, the customizable behavior modes are:
 
@@ -324,9 +412,10 @@ separator
 				'contents': String(values=['\n'])},
 		   'prefix': False,
 		   'suffix': False,
-		   'unique': True},
+		   'unique': True,
+		   'always': False},
 
-  The keys ``prefix``, ``suffix`` and ``unique`` are optional. They are
+  The keys ``prefix``, ``suffix``, ``unique`` and ``always`` are optional. They are
   described below.
 
   .. seealso:: Refer to :ref:`dm:pattern:separator` for an example using
@@ -347,6 +436,12 @@ unique
   node copy). Otherwise, the separators will be references to a
   unique node (zero copy).
 
+always
+  Used optionally within a *separator descriptor*. If set to ``True``,
+  the separator will be always generated even if the
+  subnodes it separates are not generated because their evaluated quantity is 0.
+
+
 encoder
   If specified, an encoder instance should be provided. The *encoding* will be applied
   transparently when the binary value of the non terminal node will be retrieved
@@ -366,7 +461,6 @@ encoder
 
 Keywords to Describe Generator Node
 -----------------------------------
-
 
 node_args
   List of node parameters to be provided to a *generator* node or a
@@ -424,6 +518,10 @@ mutable
   Make the node mutable. It is a shortcut for the node attribute
   ``MH.Attr.Mutable``.
 
+highlight
+  Make the node highlighted. It is a shortcut for the node attribute
+  ``MH.Attr.Highlight``.
+
 set_attrs
   List of attributes to set on the node. The current generic
   attributes are:
@@ -440,6 +538,13 @@ set_attrs
   - ``MH.Attr.Mutable``: If set, generic disruptors will consider the
     node as being mutable, meaning that it can be altered (default
     behavior). Otherwise, it will be ignored.
+    When a non-terminal node has this attribute, generic disruptors using
+    the ModelWalker algorithm (like ``tWALK`` and ``tTYPE``) will stick to
+    its default form (meaning default quantity will be used for each subnodes
+    and if the node has multiple shapes, the higher weighted one will be used.
+    Likewise for `Pick` sections).
+    Also, the method :meth:`framework.node.Node.unfreeze()` won't perform any
+    changes on non-terminal nodes which are not mutable.
   - ``MH.Attr.Determinist``: This attribute can be set directly
     through the keywords ``determinist`` or ``random``. Refer to them
     for details. By default, it is set.
@@ -452,6 +557,9 @@ set_attrs
   - ``MH.Attr.Separator``: Used to distinguish a separator. Some
     disruptors can leverage this attribute to perform their
     alteration.
+  - ``MH.Attr.Highlight``: If set, make the framework display the node in color
+    when printed on the console. This attribute is also used by some disruptors to show the
+    location of their modification.
 
   .. note::
      Most of the generic stateful disruptors will recursively
@@ -592,6 +700,29 @@ charset
   - ``MH.Charset.UNICODE``
 
 
+.. _dm:node_cst_keywords:
+
+Keywords to Describe Constraints
+--------------------------------
+
+constraints
+    List of node constraints specified through :class:`framework.constraint_helpers.Constraint` objects. They will be added to a CSP (Constraint
+    Satisfiability Problem) associated to the currently described data, and resolved when
+    :meth:`Node.freeze` is called with the parameter ``resolve_csp`` set to True (this is performed by default by the operator ``tWALK``).
+    It should always be associated to a non-terminal node.
+    Refer to :ref:`dm:pattern:csp` for details on how to leverage such feature.
+
+    Specific operators have been defined to handle CSP:
+
+    - ``tWALKcsp`` that walk through the solutions of the CSP.
+    - ``tCONST`` that negates the constraint one-by-one and output 1 or more samples for each negate constraint.
+
+constraints_highlight
+    If set to ``True``, the value of the nodes implied in a CSP (that could be specified through the
+    keyword ``constraint``) are highlighted in the console, given the Logger parameter
+    ``highlight_marked_nodes`` is  set to True.
+
+
 .. _vt:value-types:
 
 Value Types
@@ -629,7 +760,8 @@ following parameters:
   Maximum valid value for the node backed by this *Integer object*.
 
 ``default`` [optional, default value: **None**]
-  If ``values`` is not provided, this value if provided will be used as the default one.
+  If not None, this value will be provided by default at first
+  when :meth:`framework.value_types.INT.get_value()` is called.
 
 ``determinist`` [default value: **True**]
   If set to ``True`` generated values will be in a deterministic
@@ -684,6 +816,8 @@ For :class:`framework.value_types.INT_str`, additional parameters are available:
 ``reverse`` [optional, default value: **False**]
   Reverse the order of the string if set to ``True``.
 
+
+
 String
 ------
 
@@ -724,6 +858,14 @@ following parameters:
   Codec to use for encoding the string (e.g., 'latin-1', 'utf8').
   Note that depending on the charset, additional fuzzing cases are defined.
 
+``case_sensitive`` [default value: **True**]
+  If the string is set to be case sensitive then specific additional
+  test cases will be generated in fuzzing mode.
+
+``default`` [optional, default value: **None**]
+  If not None, this value will be provided by default at first
+  when :meth:`framework.value_types.String.get_value()` is called.
+
 ``extra_fuzzy_list`` [optional, default value: **None**]
   During data generation, if this parameter is specified with some
   specific values, they will be part of the test cases generated by
@@ -738,6 +880,10 @@ following parameters:
   The alphabet to use for generating data, in case no ``values`` is
   provided. Also use during absorption to validate the contents. It is
   checked if there is no ``values``.
+
+``values_desc`` [optional, default value: **None**]
+  Dictionary that maps string values to their descriptions (character strings). Leveraged for
+  display purpose. Even if provided, all values do not need to be described.
 
 ``max_encoded_sz`` [optional, default value: **None**]
   Only relevant for subclasses that leverage the encoding infrastructure.
@@ -756,16 +902,16 @@ that enables to handle transparently any encoding scheme:
 - Some test cases may be defined on the encoding scheme itself.
 
 .. note::
-   To define a ``String`` subclass handling a specific encoding, you have to overload
-   the methods: :meth:`framework.value_types.String.encode` and :meth:`framework.value_types.String.decode`.
-   You may optionally overload: :meth:`framework.value_types.String.encoding_test_cases` if you want
-   to define encoding-related test cases. And if you need to initialize the encoding scheme you
-   should overload the method :meth:`framework.value_types.String.init_encoding_scheme`.
+   To define a ``String`` subclass handling a specific encoding, you first have to define
+   an encoder class that inherits from :class:`framework.encoders.Encoder` (you may also use an
+   existing one, if it fits your needs).
+   Then you have to create a subclass of String decorated by :func:`framework.value_types.from_encoder`
+   with your encoder class in parameter.
+   Additionally, you can overload :meth:`framework.value_types.String.encoding_test_cases` if you want
+   to implement specific test cases related to your encoding. They will be automatically added to
+   the set of test cases to be triggered by the disruptor ``tTYPE``.
 
-   Alternatively and preferably, you should define a subclass of :class:`framework.encoders.Encoder`
-   and then create a subclass of String decorated by :func:`framework.value_types.from_encoder`
-   with the your encoder subclass in parameter. By doing so, you enable your encoder to be also
-   usable by a non-terminal node.
+   Note that the encoder you defined can also be used by a non-terminal node (refer to :ref:`dm:pattern:encoder`).
 
 
 Below the different currently defined string types:
@@ -774,6 +920,8 @@ Below the different currently defined string types:
 - :class:`framework.value_types.Filename`: Filename. Similar to the type
   ``String``, but some disruptors like ``tTYPE`` will generate more specific
   test cases.
+- :class:`framework.value_types.FolderPath`: FolderPath. Similar to the type
+  ``Filename``, but generated test cases are slightly different.
 - :class:`framework.value_types.GZIP`: ``String`` compressed with ``zlib``. The parameter
   ``encoding_arg`` is used to specify the level of compression (0-9).
 - :class:`framework.value_types.GSM7bitPacking`: ``String`` encoded in conformity
@@ -847,10 +995,10 @@ parameters:
   to do it at the node level by using the data model keyword ``determinist``
   (refer to :ref:`dm:node_prop_keywords`).
 
-``defaults`` [optional, default value: **None**]
-  List of default value for each sub-field. Used only when the related sub-field is
-  not described through ``subfield_values``. If ``subfield_values`` describes the related
-  sub-field, then a ``None`` item should be inserted at the corresponding position in the list.
+``default`` [optional, default value: **None**]
+  If not None, it should be the list of default value for each sub-field.
+  They will be provided by default at first
+  when :meth:`framework.value_types.BitField.get_value()` is called.
 
 ``subfield_descs`` [optional, default value: **None**]
   List of descriptions (character strings) for each sub-field. To
@@ -858,6 +1006,11 @@ parameters:
   others. This parameter is used for display purpose. Look at the
   following examples for usage.
 
+``subfield_value_descs`` [optional, default value: **None**]
+  Dictionary providing descriptions (character strings) for values in each sub-field. More precisely,
+  the dictionary maps subfield indexes to other dictionaries whose provides the mapping between values and
+  descriptions. Leveraged for display purpose. Even if provided, all values do not need to be described.
+  Look at the following examples for usage.
 
 Let's take the following examples to make ``BitField`` usage
 obvious. On the first one, we specify the sub-fields of the
@@ -893,7 +1046,7 @@ session.
 On the second example we specify the sub-fields of the ``BitField`` by
 their sizes. And the other parameters are described in the same way as
 the first example. We additionally specify the parameter
-``subfield_descs``. Look at the output for the differences.
+``subfield_descs`` and ``subfield_value_descs``. Look at the output for the differences.
 
 .. code-block:: python
    :linenos:
@@ -903,13 +1056,14 @@ the first example. We additionally specify the parameter
 		 subfield_values=[[4,2,1], None, [10,13]],
 		 subfield_val_extremums=[None, [14, 15], None],
 		 padding=0, lsb_padding=False, endian=VT.BigEndian,
-		 subfield_descs=['first', None, 'last'])
+		 subfield_descs=['first', None, 'last'],
+		 subfield_value_descs={0:{4:'optionA',2:'optionB'}})
 
     t.pretty_print()
 
     # output of the previous call:
     #
-    #     (+|padding: 0000 |2(last): 1101 |1: 1111 |0(first): 0100 |-) 2788
+    #     (+|padding: 0000 |2(last): 1101 |1: 1111 |0(first): 0100 [optionA] |-) 2788
 
 
 .. seealso:: Methods are defined to help for modifying a
@@ -967,6 +1121,8 @@ in :mod:`framework.dmhelpers.generic`):
       Return a *generator* that retrieves the value of another node,
       and then return a `vt` node with this value.
 
+:meth:`framework.dmhelpers.generic.SELECT()`
+      Return a *generator* that select a subnode from a non-terminal node and return it
 
 .. _dm:builders:
 
@@ -1845,3 +2001,79 @@ Example 5: Invalid regular expressions.
    # raise also an framework.error_handling.InconvertibilityError
    # because a quantifier (that requires the creation of a terminal node)
    # has been found within parenthesis.
+
+
+.. _dm:pattern:csp:
+
+How to Describe Constraints of Data Formats
+-------------------------------------------
+
+When some relations exist between various parts of the data format you want to describe you have
+different possibilities within ``fuddly``:
+
+- either using some specific keywords that capture basic constraints (e.g., ``qty_from``, ``sync_size_with``, ``exists_if``, ...);
+- or through Generator nodes (refer to :ref:`dm:generators`);
+- or by specifying a CSP through the keyword ``constraint``, which leverage a constraint programming
+  backend (currently limited to the ``python-constraint`` module)
+
+The CSP specification case is described in more details in what follows.
+To describe constraints in the form of a CSP, you should use the ``constraints`` keyword that allows you
+to provide a list of :class:`framework.constraint_helpers.Constraint` objects, which are the
+building blocks for specifying constraints between multiple nodes.
+
+For instance, let's analyse the following data description (extracted from the ``mydf`` data model in ``tuto.py``).
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 3-6, 11, 20-21
+
+        csp_desc = \
+            {'name': 'csp',
+             'constraints': [Constraint(relation=lambda d1, d2: d1[1]+1 == d2[0] or d1[1]+2 == d2[0],
+                                        vars=('delim_1', 'delim_2')),
+                             Constraint(relation=lambda x, y, z: x == 3*y + z,
+                                        vars=('x_val', 'y_val', 'z_val'))],
+             'constraints_highlight': True,
+             'contents': [
+                 {'name': 'equation',
+                  'contents': String(values=['x = 3y + z'])},
+                 {'name': 'delim_1', 'contents': String(values=[' [', ' ('])},
+                 {'name': 'variables',
+                  'separator': {'contents': {'name': 'sep', 'contents': String(values=[', '])},
+                                'prefix': False, 'suffix': False},
+                  'contents': [
+                      {'name': 'x',
+                       'contents': [
+                           {'name': 'x_symbol',
+                            'contents': String(values=['x:', 'X:'])},
+                           {'name': 'x_val',
+                            'contents': INT_str(min=120, max=130)} ]},
+
+        [...]
+
+You can see that two constraints have been specified (l.3-6) through the specific
+:class:`framework.constraint_helpers.Constraint` objects. The constructor take a mandatory ``relation`` parameter
+expecting a boolean function that should express a relation between any nodes reachable
+from the non-terminal node on which the ``constraints`` keyword is attached.
+It takes also a ``vars`` parameter expecting a list of the names of the nodes
+used in the boolean function (in the same order as the parameters of the function).
+
+.. note::
+
+    The ``constraints`` keyword can be used several times along the description, but all the specified
+    :class:`framework.constraint_helpers.Constraint` will eventually end up in a single CSP.
+
+
+These constraints, will then be resolved at :meth:`framework.node.Node.freeze` time (depending if
+the parameter ``resolve_csp`` is set to True).
+Note also that before resolving the CSP it is possible to fix the value of some variables by freezing the related nodes
+with the parameter ``restrict_csp``. This is what is performed by the :class:`framework.fuzzing_primitives.ModelWalker`
+infrastructure when walking a specific node which is part of a CSP, so that the walked node won't be modified
+further to the CSP solving process.
+
+.. note::
+
+   The constructor of :class:`framework.constraint_helpers.Constraint` takes also an optional parameter
+   ``var_to_varns`` in order to support namespaces (used to discriminate nodes having identical
+   name in the data description). Refer to ``namespace`` keyword for more details, and to the ``csp_ns`` node
+   description in the data model ``mydf`` (in ``tuto.py``).

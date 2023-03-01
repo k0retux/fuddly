@@ -139,11 +139,11 @@ Description:
   - :meth:`framework.targets.local.LocalTarget.terminate()` for doing
     specific actions at target termination.
 
-
 Feedback:
   This target will automatically provide feedback if the application writes on
   ``stderr`` or returns a negative status or terminates/crashes.
-
+  ``stdout`` can also be parsed looking for user-provided keywords that will trigger
+  some feedback with negative status or even parsed by a user-provided function.
 
 Supported Feedback Mode:
   - :const:`framework.target_helpers.Target.FBK_WAIT_UNTIL_RECV`
@@ -178,6 +178,28 @@ Usage example:
      ``fuddly`` workspace directory which is typically used when
      temporary files need to be created.
 
+
+SSHTarget
+=========
+
+Reference:
+  :class:`framework.targets.ssh.SSHTarget`
+
+Description:
+  This generic target enables you to interact with a remote target requiring an SSH connection.
+
+Feedback:
+  This target will automatically provide the results of the commands sent through SSH.
+
+Supported Feedback Mode:
+  - :const:`framework.target_helpers.Target.FBK_WAIT_FULL_TIME`
+  - :const:`framework.target_helpers.Target.FBK_WAIT_UNTIL_RECV`
+
+Usage Example:
+   .. code-block:: python
+      :linenos:
+
+       tg = SSHTarget(host='192.168.0.1', port=22, username='test', password='test')
 
 
 PrinterTarget
@@ -240,3 +262,30 @@ Usage Example:
 
        tg = SIMTarget(serial_port='/dev/ttyUSB3', baudrate=115200, pin_code='0000'
                       targeted_tel_num='0123456789', zone='33')
+
+
+
+TestTarget
+==========
+
+Reference:
+  :class:`framework.targets.debug.TestTarget`
+
+Description:
+  This generic target enables you to stimulate a virtual target that could be useful for test
+  preparation for instance.
+  Some parameters enable to change the behavior of this target.
+
+Feedback:
+  This target could provide random feedback, or feedback chosen from a provided sample list, or
+  it could repeat the received data as its feedback.
+
+Supported Feedback Mode:
+  - :const:`framework.target_helpers.Target.FBK_WAIT_FULL_TIME`
+  - :const:`framework.target_helpers.Target.FBK_WAIT_UNTIL_RECV`
+
+Usage Example:
+   .. code-block:: python
+      :linenos:
+
+       tg = TestTarget(name='mytest_target', fbk_samples=['OK','ERROR'])

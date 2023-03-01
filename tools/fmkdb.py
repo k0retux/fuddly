@@ -33,11 +33,12 @@ parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
 
 from framework.database import Database
+from framework.global_resources import get_user_input
 from libs.external_modules import *
 
 import argparse
 
-parser = argparse.ArgumentParser(description='Argument for FmkDB toolkit script')
+parser = argparse.ArgumentParser(description='Arguments for FmkDB toolkit script')
 
 group = parser.add_argument_group('Miscellaneous Options')
 group.add_argument('--fmkdb', metavar='PATH', help='Path to an alternative fmkDB.db')
@@ -55,6 +56,11 @@ group.add_argument('--project', metavar='PROJECT_NAME',
                    help='Restrict the data to be displayed to a specific project. '
                         'Supported by: --info-by-date, --info-by-ids, '
                         '--data-with-impact, --data-without-fbk, --data-with-specific-fbk')
+group.add_argument('--fbk-status-formula', metavar='STATUS_REF', default='? < 0',
+                   help='Restrict the data to be displayed to specific feedback status. '
+                        'This option provides the formula to be used for feedback status '
+                        'filtering (the character "?" should be used in place of the status value that will be checked). '
+                        'Supported by: --data-with-impact')
 
 group = parser.add_argument_group('Fuddly Database Visualization')
 group.add_argument('-s', '--all-stats', action='store_true', help='Show all statistics')
@@ -68,12 +74,13 @@ group.add_argument('--info-by-date', nargs=2, metavar=('START','END'),
                    help='''Display information on data sent between START and END '''
                         '''(date format 'Year/Month/Day' or 'Year/Month/Day-Hour' or
                         'Year/Month/Day-Hour:Minute')''')
-group.add_argument('--info-by-ids', nargs=2, metavar=('FIRST_DATA_ID','LAST_DATA_ID'), type=int,
+group.add_argument('-ids', '--info-by-ids', nargs=2, metavar=('FIRST_DATA_ID','LAST_DATA_ID'), type=int,
                    help='''Display information on all the data included within the specified
                    data ID range''')
 
 group.add_argument('-wf', '--with-fbk', action='store_true', help='Display full feedback (expect --data-id)')
 group.add_argument('-wd', '--with-data', action='store_true', help='Display data content (expect --data-id)')
+group.add_argument('-wa', '--with-async-data', action='store_true', help='Display any related async data (expect --data-id)')
 group.add_argument('--without-fmkinfo', action='store_true',
                    help='Do not display fmkinfo (expect --data-id)')
 group.add_argument('--without-analysis', action='store_true',
@@ -132,17 +139,17 @@ group.add_argument('--disprove-impact', nargs=2, metavar=('FIRST_ID', 'LAST_ID')
 
 def handle_confirmation():
     try:
-        if sys.version_info[0] == 2:
-            cont = raw_input("\n*** Press [ENTER] to continue ('C' to CANCEL) ***\n")
-        else:
-            cont = input("\n*** Press [ENTER] to continue ('C' to CANCEL) ***\n")
+        cont = get_user_input(colorize("\n*** Press [ENTER] to continue ('C' to CANCEL) ***\n",
+                                       rgb=Color.PROMPT))
     except KeyboardInterrupt:
         cont = 'c'
-    except:
+    except Exception as e:
+        print(f'Unexpected exception received: {e}')
         cont = 'c'
     finally:
         if cont.lower() == 'c':
             print(colorize("*** Operation Cancelled ***", rgb=Color.ERROR))
+            fmkdb.stop()
             sys.exit(-1)
 
 def handle_date(date_str):
@@ -156,6 +163,7 @@ def handle_date(date_str):
                 date = datetime.datetime.strptime(date_str, "%Y/%m/%d-%H:%M")
             except ValueError:
                 print(colorize("*** ERROR: Unrecognized Dates ***", rgb=Color.ERROR))
+                fmkdb.stop()
                 sys.exit(-1)
 
     return date
@@ -186,6 +194,7 @@ if __name__ == "__main__":
     prj_name = args.project
     with_fbk = args.with_fbk
     with_data = args.with_data
+    with_async_data = args.with_async_data
     without_fmkinfo = args.without_fmkinfo
     without_analysis = args.without_analysis
     limit_data_sz = args.limit
@@ -206,6 +215,7 @@ if __name__ == "__main__":
     raw_impact_analysis = args.data_with_impact_raw
     data_without_fbk = args.data_without_fbk
     fbk_src = args.fbk_src
+    fbk_status_formula = args.fbk_status_formula
     data_with_specific_fbk = args.data_with_specific_fbk
     add_analysis = args.add_analysis
     disprove_impact = args.disprove_impact
@@ -270,6 +280,7 @@ if __name__ == "__main__":
         fmkdb.display_data_info(data_ID, with_data=with_data, with_fbk=with_fbk,
                                 with_fmkinfo=not without_fmkinfo,
                                 with_analysis=not without_analysis,
+                                with_async_data=with_async_data,
                                 fbk_src=fbk_src,
                                 limit_data_sz=limit_data_sz, raw=raw_data, page_width=page_width,
                                 colorized=colorized, decoding_hints=decoding_hints, dm_list=dm_list)
@@ -280,7 +291,9 @@ if __name__ == "__main__":
         end = handle_date(data_info_by_date[1])
 
         fmkdb.display_data_info_by_date(start, end, with_data=with_data, with_fbk=with_fbk,
-                                        with_fmkinfo=not without_fmkinfo, fbk_src=fbk_src,
+                                        with_fmkinfo=not without_fmkinfo,
+                                        with_async_data=with_async_data,
+                                        fbk_src=fbk_src,
                                         prj_name=prj_name,
                                         limit_data_sz=limit_data_sz, raw=raw_data, page_width=page_width,
                                         colorized=colorized, decoding_hints=decoding_hints, dm_list=dm_list)
@@ -291,7 +304,9 @@ if __name__ == "__main__":
         last_id=data_info_by_range[1]
 
         fmkdb.display_data_info_by_range(first_id, last_id, with_data=with_data, with_fbk=with_fbk,
-                                         with_fmkinfo=not without_fmkinfo, fbk_src=fbk_src,
+                                         with_fmkinfo=not without_fmkinfo,
+                                         with_async_data=with_async_data,
+                                         fbk_src=fbk_src,
                                          prj_name=prj_name,
                                          limit_data_sz=limit_data_sz, raw=raw_data, page_width=page_width,
                                          colorized=colorized, decoding_hints=decoding_hints, dm_list=dm_list)
@@ -308,11 +323,14 @@ if __name__ == "__main__":
         if remove_data is not None:
             for i in range(remove_data[0], remove_data[1]+1):
                 fmkdb.remove_data(i, colorized=colorized)
+            fmkdb.shrink_db()
         else:
             fmkdb.remove_data(remove_one_data, colorized=colorized)
+            fmkdb.shrink_db()
 
     elif impact_analysis or raw_impact_analysis:
-        fmkdb.get_data_with_impact(prj_name=prj_name, fbk_src=fbk_src, verbose=verbose,
+        fmkdb.get_data_with_impact(prj_name=prj_name, fbk_src=fbk_src, fbk_status_formula=fbk_status_formula,
+                                   verbose=verbose,
                                    raw_analysis=raw_impact_analysis,
                                    colorized=colorized)
 
