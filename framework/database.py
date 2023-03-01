@@ -122,6 +122,7 @@ class Database(object):
 
     DDL_fname = 'fmk_db.sql'
 
+    DEFAULT_DB_NAME = 'fmkDB.db'
     DEFAULT_DM_NAME = '__DEFAULT_DATAMODEL'
     DEFAULT_GTYPE_NAME = '__DEFAULT_GTYPE'
     DEFAULT_GEN_NAME = '__DEFAULT_GNAME'
@@ -133,11 +134,11 @@ class Database(object):
 
     def __init__(self, fmkdb_path=None):
 
-        self.name = 'fmkDB.db'
+        self.name = Database.DEFAULT_DB_NAME
         if fmkdb_path is None:
             self.fmk_db_path = os.path.join(gr.fuddly_data_folder, self.name)
         else:
-            self.fmk_db_path = fmkdb_path
+            self.fmk_db_path = os.path.expanduser(fmkdb_path)
 
         self._ref_names = {}
         self.config = None
@@ -171,6 +172,10 @@ class Database(object):
 
         self.fbk_timeout_re = re.compile('.*feedback timeout = (.*)s$')
 
+
+    @staticmethod
+    def get_default_db_path():
+        return os.path.join(gr.fuddly_data_folder, Database.DEFAULT_DB_NAME)
 
     def _is_valid(self, connection, cursor):
         valid = False
