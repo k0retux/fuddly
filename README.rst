@@ -116,4 +116,4 @@ Dependencies
 .. _sphinx: http://sphinx-doc.org/
 .. _texlive: https://www.tug.org/texlive/
 .. _readthedocs theme: https://github.com/snide/sphinx_rtd_theme
-.. _pyxdg: http://freedesktop.org/Software/pyxdg
+.. _pyxdg: https://pypi.org/project/pyxdg/
