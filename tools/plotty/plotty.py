@@ -122,82 +122,28 @@ group.add_argument(
 group = parser.add_argument_group('Labels Configuration')
 
 group.add_argument(
-    '-dt',
-    '--display-type',
+    '-l',
+    '--labels',
     dest='annotations',
-    action='append_const',
-    const='TYPE',
-    help='Display the TYPE value for each Data ID represented in the curve',
+    action='extend',
+    nargs='+',
+    help='''
+    Display the specified labels for each Data ID represented in the curve.
+    ('t' for TYPE, 'g' for TARGET, 's' for SIZE, 'a' for ACK_DATE)
+    ''',
     required=False
 )
 
 group.add_argument(
-    '-dtg',
-    '--display-target',
-    dest='annotations',
-    action='append_const',
-    const='TARGET',
-    help='Display the TARGET value for each Data ID represented in the curve',
-    required=False
-)
-
-group.add_argument(
-    '-dsz',
-    '--display-size',
-    dest='annotations',
-    action='append_const',
-    const='SIZE',
-    help='Display the SIZE value for each Data ID represented in the curve',
-    required=False
-)
-
-group.add_argument(
-    '-dack',
-    '--display-ack-date',
-    dest='annotations',
-    action='append_const',
-    const='ACK_DATE',
-    help='Display the ACK_DATE value for each Data ID represented in the curve',
-    required=False
-)
-
-group.add_argument(
-    '-adi',
-    '--async-display-id',
+    '-al',
+    '--async-labels',
     dest='async_annotations',
-    action='append_const',
-    const='ID',
-    help='Display the ID value for each Async Data ID represented in the curve',
-    required=False
-)
-
-group.add_argument(
-    '-adt',
-    '--async-display-type',
-    dest='async_annotations',
-    action='append_const',
-    const='TYPE',
-    help='Display the TYPE value for each Async Data ID represented in the curve',
-    required=False
-)
-
-group.add_argument(
-    '-adtg',
-    '--async-display-target',
-    dest='async_annotations',
-    action='append_const',
-    const='TARGET',
-    help='Display the TYPE value for each Async Data ID represented in the curve',
-    required=False
-)
-
-group.add_argument(
-    '-adsz',
-    '--async-display-size',
-    dest='async_annotations',
-    action='append_const',
-    const='SIZE',
-    help='Display the SIZE value for each Async Data ID represented in the curve',
+    action='extend',
+    nargs='+',
+    help='''
+    Display the specified labels for each Async Data ID represented in the curve.
+    ('i' for 'ID', 't' for TYPE, 'g' for TARGET, 's' for SIZE)
+    ''',
     required=False
 )
 
@@ -244,11 +190,11 @@ def add_point(axes: Axes, x: float, y: float, color: str):
 
 
 def add_annotation(axes: Axes, x: float, y: float, value: str):
-    text_width = value.count('\n') + 1
+    text_height = value.count('\n') + 1
     axes.annotate(
         f"{value}",
         xy=(x, y), xycoords='data',
-        xytext=(-10, 20*text_width), textcoords='offset pixels',
+        xytext=(-10, 20 * text_height), textcoords='offset pixels',
         horizontalalignment='right', verticalalignment='top'
     )
 
@@ -601,12 +547,36 @@ def parse_arguments() -> dict[Any]:
     elif grid_match_str == 'poi':
         grid_match = GridMatch.POI
         if poi == 0:
-            parser.error("--points_of_interest must be set to use --grid_match 'poi' option")
+            parser.error("--points-of-interest must be set to use --grid-match 'poi' option")
     result['grid_match'] = grid_match
 
     result['hide_points'] = args.hide_points
-    result['annotations'] = args.annotations
-    result['async_annotations'] = args.async_annotations
+
+    labels = []
+    for l in args.annotations:
+        labels.append(
+            {'t': 'TYPE',
+             'g': 'TARGET',
+             's': 'SIZE',
+             'a': 'ACK_DATE'}.get(l, None)
+        )
+    if None in labels:
+        print_warning('Unknown labels have been discarded')
+    labels = list(filter(lambda x: x is not None, labels))
+    result['annotations'] = labels
+
+    async_labels = []
+    for l in args.async_annotations:
+        async_labels.append(
+            {'i': 'ID',
+             't': 'TYPE',
+             'g': 'TARGET',
+             's': 'SIZE'}.get(l, None)
+        )
+    if None in async_labels:
+        print_warning('Unknown async labels have been discarded')
+    async_labels = list(filter(lambda x: x is not None, async_labels))
+    result['async_annotations'] = async_labels
 
     result['other_id_range'] = args.other_id_range
     result['vertical_shift'] = args.vertical_shift
