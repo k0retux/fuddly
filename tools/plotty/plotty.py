@@ -439,7 +439,7 @@ def belongs_condition_sql_string(column_label: str, int_ranges: list[range]):
 
 def request_from_database(
     fmkdb_path: str,
-    int_ranges: list[range], 
+    int_ranges: list[range],
     column_names: list[str],
     annotation_column_names: list[str],
     async_annotation_column_names: list[str],
@@ -454,6 +454,14 @@ def request_from_database(
         print_error(f"The database {fmkdb_path} is invalid!")
         sys.exit(ARG_INVALID_FMDBK)
 
+    async_data_column_names = fmkdb.column_names_from('ASYNC_DATA')
+    for c in column_names:
+        if c not in async_data_column_names:
+            compatible_async = False
+            break
+    else:
+        compatible_async = True
+
     id_ranges_check_str = belongs_condition_sql_string("ID", int_ranges)
     async_id_ranges_check_str = id_ranges_check_str.replace("ID", "CURRENT_DATA_ID")
 
@@ -462,12 +470,6 @@ def request_from_database(
                      f"WHERE {id_ranges_check_str}"
     matching_data = fmkdb.execute_sql_statement(data_statement)
 
-    # async data 'CURRENT_DATA_ID' is considered to be their ID for plotting
-    requested_async_data_columns_str = ', '.join(column_names).replace('ID', 'CURRENT_DATA_ID')
-    async_data_statement = f"SELECT {requested_async_data_columns_str} FROM ASYNC_DATA " \
-                           f"WHERE {async_id_ranges_check_str}"
-    matching_async_data = fmkdb.execute_sql_statement(async_data_statement)
-
     matching_data_annotations = []
     if annotation_column_names is not None:
         requested_data_annotations_columns_str = ', '.join(annotation_column_names)
@@ -475,12 +477,21 @@ def request_from_database(
                          f"WHERE {id_ranges_check_str}"
         matching_data_annotations = fmkdb.execute_sql_statement(data_annotation_statement)
 
+
     matching_async_data_annotations = []
-    if async_annotation_column_names is not None:
-        requested_async_data_annotations_columns_str = ', '.join(async_annotation_column_names)
-        async_data_annotation_statement = f"SELECT {requested_async_data_annotations_columns_str} FROM ASYNC_DATA " \
+    matching_async_data = None
+    if compatible_async:
+        # async data 'CURRENT_DATA_ID' is considered to be their ID for plotting
+        requested_async_data_columns_str = ', '.join(column_names).replace('ID', 'CURRENT_DATA_ID')
+        async_data_statement = f"SELECT {requested_async_data_columns_str} FROM ASYNC_DATA " \
                                f"WHERE {async_id_ranges_check_str}"
-        matching_async_data_annotations = fmkdb.execute_sql_statement(async_data_annotation_statement)
+        matching_async_data = fmkdb.execute_sql_statement(async_data_statement)
+
+        if async_annotation_column_names is not None:
+            requested_async_data_annotations_columns_str = ', '.join(async_annotation_column_names)
+            async_data_annotation_statement = f"SELECT {requested_async_data_annotations_columns_str} FROM ASYNC_DATA " \
+                                   f"WHERE {async_id_ranges_check_str}"
+            matching_async_data_annotations = fmkdb.execute_sql_statement(async_data_annotation_statement)
 
     fmkdb.stop()
 
@@ -489,6 +500,8 @@ def request_from_database(
 
     data = []
     for line in matching_data:
+        if None in line:
+            continue
         line_values = dict()
         for index, value in enumerate(line):
             line_values[column_names[index]] = value
@@ -499,6 +512,8 @@ def request_from_database(
 
     async_data = []
     for line in matching_async_data:
+        if None in line:
+            continue
         line_values = dict()
         for index, value in enumerate(line):
             # CURRENT_DATA_ID is matched to ID variable name
@@ -552,31 +567,37 @@ def parse_arguments() -> dict[Any]:
 
     result['hide_points'] = args.hide_points
 
-    labels = []
-    for l in args.annotations:
-        labels.append(
-            {'t': 'TYPE',
-             'g': 'TARGET',
-             's': 'SIZE',
-             'a': 'ACK_DATE'}.get(l, None)
-        )
-    if None in labels:
-        print_warning('Unknown labels have been discarded')
-    labels = list(filter(lambda x: x is not None, labels))
-    result['annotations'] = labels
+    if args.annotations is not None:
+        labels = []
+        for l in args.annotations:
+            labels.append(
+                {'t': 'TYPE',
+                 'g': 'TARGET',
+                 's': 'SIZE',
+                 'a': 'ACK_DATE'}.get(l, None)
+            )
+        if None in labels:
+            print_warning('Unknown labels have been discarded')
+        labels = list(filter(lambda x: x is not None, labels))
+        result['annotations'] = labels
+    else:
+        result['annotations'] = None
 
-    async_labels = []
-    for l in args.async_annotations:
-        async_labels.append(
-            {'i': 'ID',
-             't': 'TYPE',
-             'g': 'TARGET',
-             's': 'SIZE'}.get(l, None)
-        )
-    if None in async_labels:
-        print_warning('Unknown async labels have been discarded')
-    async_labels = list(filter(lambda x: x is not None, async_labels))
-    result['async_annotations'] = async_labels
+    if args.async_annotations is not None:
+        async_labels = []
+        for l in args.async_annotations:
+            async_labels.append(
+                {'i': 'ID',
+                 't': 'TYPE',
+                 'g': 'TARGET',
+                 's': 'SIZE'}.get(l, None)
+            )
+        if None in async_labels:
+            print_warning('Unknown async labels have been discarded')
+        async_labels = list(filter(lambda x: x is not None, async_labels))
+        result['async_annotations'] = async_labels
+    else:
+        result['async_annotations'] = None
 
     result['other_id_range'] = args.other_id_range
     result['vertical_shift'] = args.vertical_shift
@@ -600,15 +621,21 @@ def plot_formula(
     y_variable_names, y_function_names = collect_names(y_expression)
 
     if not valid_formula:
-        sys.exit(ARG_INVALID_FORMULA)
+        print_error("Given formula or variables names are invalid")
+        return None
 
     variable_names = x_variable_names.union(y_variable_names)
     variables_values, annotations_values, async_variables_values, async_annotations_values = \
         request_from_database(args['fmkdb'], id_range, list(variable_names), args['annotations'], args['async_annotations'])
     if variables_values is None:
+        print_error(f"Cannot gather database information for range '{id_range}', skipping it")
         return None
 
     variables_true_types = {}
+    if not variables_values:
+        print_error(f"No valid values to display given the formula")
+        return None
+
     for variable, value in variables_values[0].items():
         variables_true_types[variable] = type(value)
     convert_non_operable_types(variables_values)
@@ -671,7 +698,6 @@ def main():
     id_range = parse_int_range_union(args['id_range'])
     plot_result = plot_formula(axes, args['formula'], id_range, None, args)
     if plot_result is None:
-        print_error("Given formula or variables names are invalid")
         sys.exit(ARG_INVALID_VAR_NAMES)
     
     x_expression, y_expression, x_conversion_type, y_conversion_type, plotted_poi, plotted_points = plot_result
@@ -685,7 +711,6 @@ def main():
             id_range = parse_int_range_union(other_id_range)
             plot_result = plot_formula(axes, args['formula'], id_range, origin, args)
             if plot_result is None:
-                print_error(f"Cannot gather database information for range '{other_id_range}', skipping it")
                 continue
             _, _, _, _, plotted_poi, plotted_points = plot_result
             all_plotted_poi = all_plotted_poi.union(plotted_poi)

@@ -139,6 +139,7 @@ class Database(object):
         else:
             self.fmk_db_path = fmkdb_path
 
+        self._ref_names = {}
         self.config = None
 
         self.enabled = False
@@ -185,16 +186,19 @@ class Database(object):
                 tables = filter(lambda x: not x.startswith('sqlite'), tables)
                 for t in tables:
                     cur.execute('select * from {!s}'.format(t))
-                    ref_names = list(map(lambda x: x[0], cur.description))
+                    self._ref_names[t] = list(map(lambda x: x[0], cur.description))
                     cursor.execute('select * from {!s}'.format(t))
                     names = list(map(lambda x: x[0], cursor.description))
-                    if ref_names != names:
+                    if self._ref_names[t] != names:
                         valid = False
                         break
                 else:
                     valid = True
 
         return valid
+
+    def column_names_from(self, table):
+        return self._ref_names[table]
 
     def _sql_handler(self):
         if os.path.isfile(self.fmk_db_path):
