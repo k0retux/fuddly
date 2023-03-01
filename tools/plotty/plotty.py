@@ -617,6 +617,7 @@ def plot_formula(
     formula: str, 
     id_range: list[range], 
     align_to: Optional[tuple[Any, Any]],
+    index: int,
     args: dict[Any]
 ) -> Optional[tuple[str, str, Optional[type], Optional[type], set[tuple[float,float]], set[tuple[float,float]]]]:
 
@@ -668,7 +669,7 @@ def plot_formula(
         last = sorted_points[-1]
         curve_height = abs(last[1] - first[1])
         shift_x = align_to[0] - first[0]
-        shift_y = align_to[1] - first[1] + curve_height * args['vertical_shift']
+        shift_y = align_to[1] - first[1] + index * curve_height * args['vertical_shift']
         x_values = list(map(lambda x: x + shift_x, x_values))
         y_values = list(map(lambda y: y + shift_y, y_values)) 
         x_async_values = list(map(lambda x: x + shift_x, x_async_values))
@@ -701,7 +702,7 @@ def main():
     all_plotted_points: set[tuple[float,float]] = set()
             
     id_range = parse_int_range_union(args['id_range'])
-    plot_result = plot_formula(axes, args['formula'], id_range, None, args)
+    plot_result = plot_formula(axes, args['formula'], id_range, None, 0, args)
     if plot_result is None:
         sys.exit(ARG_INVALID_VAR_NAMES)
     
@@ -711,10 +712,10 @@ def main():
     all_plotted_points = all_plotted_points.union(plotted_points)
 
     if args['other_id_range'] is not None:
-        for other_id_range in args['other_id_range']:
+        for index, other_id_range in enumerate(args['other_id_range']):
             
             id_range = parse_int_range_union(other_id_range)
-            plot_result = plot_formula(axes, args['formula'], id_range, origin, args)
+            plot_result = plot_formula(axes, args['formula'], id_range, origin, index+1, args)
             if plot_result is None:
                 continue
             _, _, _, _, plotted_poi, plotted_points = plot_result
