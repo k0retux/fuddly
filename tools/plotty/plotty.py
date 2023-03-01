@@ -49,7 +49,7 @@ def print_error(msg: str):
 
 #region Argparse
 
-parser = argparse.ArgumentParser(description='Argument for FmkDB toolkit script')
+parser = argparse.ArgumentParser(description='Arguments for Plotty')
 
 group = parser.add_argument_group('Main parameters')
 
@@ -76,8 +76,11 @@ group.add_argument(
     '-db',
     '--fmkdb',
     metavar='PATH',
-    help='Path to an alternative fmkDB.db',
-    nargs='?',
+    default=[],
+    action='extend',
+    nargs="+",
+    help='Path to any fmkDB.db files. There can be many if using the --other_id_range option.'
+         ' Default is fuddly/data/directory/fmkDB.db',
     required=False
 )
 
@@ -530,9 +533,12 @@ def parse_arguments() -> dict[Any]:
     args = parser.parse_args()
 
     fmkdb = args.fmkdb
-    if fmkdb is not None and not os.path.isfile(fmkdb):
-        print_error(f"'{fmkdb}' does not exist")
-        sys.exit(ARG_INVALID_FMDBK)
+    if not fmkdb:
+        fmkdb = [Database.get_default_db_path()]
+    for db in fmkdb:
+        if db is not None and not os.path.isfile(os.path.expanduser(db)):
+            print_error(f"'{db}' does not exist")
+            sys.exit(ARG_INVALID_FMDBK)
     result['fmkdb'] = fmkdb
 
     id_range = args.id_range
@@ -605,6 +611,10 @@ def parse_arguments() -> dict[Any]:
         result['async_annotations'] = None
 
     result['other_id_range'] = args.other_id_range
+    max_fmkdb = len(args.other_id_range) if args.other_id_range else 0
+    if len(result['fmkdb']) not in {1, max_fmkdb + 1}:
+        parser.error('Number of given fmkdbs must be one, or match the total number of given ranges')
+
     result['vertical_shift'] = args.vertical_shift
     
     result['date_format'] = args.date_format
@@ -617,6 +627,7 @@ def plot_formula(
     formula: str, 
     id_range: list[range], 
     align_to: Optional[tuple[Any, Any]],
+    index: int,
     args: dict[Any]
 ) -> Optional[tuple[str, str, Optional[type], Optional[type], set[tuple[float,float]], set[tuple[float,float]]]]:
 
@@ -629,9 +640,10 @@ def plot_formula(
         print_error("Given formula or variables names are invalid")
         return None
 
+    db = args['fmkdb'][index % len(args['fmkdb'])]
     variable_names = x_variable_names.union(y_variable_names)
     variables_values, annotations_values, async_variables_values, async_annotations_values = \
-        request_from_database(args['fmkdb'], id_range, list(variable_names), args['annotations'], args['async_annotations'])
+        request_from_database(db, id_range, list(variable_names), args['annotations'], args['async_annotations'])
     if variables_values is None:
         print_error(f"Cannot gather database information for range '{id_range}', skipping it")
         return None
@@ -663,12 +675,11 @@ def plot_formula(
     
     if align_to is not None:
         sorted_points = sorted(zip(x_values, y_values), key=lambda p: p[0])
-        # first = sorted(zip(x_values, y_values), key=lambda p: p[0])[0]
         first = sorted_points[0]
         last = sorted_points[-1]
         curve_height = abs(last[1] - first[1])
         shift_x = align_to[0] - first[0]
-        shift_y = align_to[1] - first[1] + curve_height * args['vertical_shift']
+        shift_y = align_to[1] - first[1] + index * curve_height * args['vertical_shift']
         x_values = list(map(lambda x: x + shift_x, x_values))
         y_values = list(map(lambda y: y + shift_y, y_values)) 
         x_async_values = list(map(lambda x: x + shift_x, x_async_values))
@@ -701,7 +712,7 @@ def main():
     all_plotted_points: set[tuple[float,float]] = set()
             
     id_range = parse_int_range_union(args['id_range'])
-    plot_result = plot_formula(axes, args['formula'], id_range, None, args)
+    plot_result = plot_formula(axes, args['formula'], id_range, None, 0, args)
     if plot_result is None:
         sys.exit(ARG_INVALID_VAR_NAMES)
     
@@ -711,10 +722,10 @@ def main():
     all_plotted_points = all_plotted_points.union(plotted_points)
 
     if args['other_id_range'] is not None:
-        for other_id_range in args['other_id_range']:
+        for index, other_id_range in enumerate(args['other_id_range']):
             
             id_range = parse_int_range_union(other_id_range)
-            plot_result = plot_formula(axes, args['formula'], id_range, origin, args)
+            plot_result = plot_formula(axes, args['formula'], id_range, origin, index+1, args)
             if plot_result is None:
                 continue
             _, _, _, _, plotted_poi, plotted_points = plot_result
