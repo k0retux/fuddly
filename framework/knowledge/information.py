@@ -156,11 +156,6 @@ class InformationCollector(object):
 
         return desc
 
-    # for python2 compatibility
-    def __nonzero__(self):
-        return bool(self._collector)
-
-    # for python3 compatibility
     def __bool__(self):
         return bool(self._collector)
 

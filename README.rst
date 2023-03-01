@@ -95,7 +95,7 @@ Dependencies
 + For testing:
 
   - `ddt`_: Used for data-driven tests
-  - `mock`_: Used for mocking (only needed in Python2)
+  - `mock`_: Used for mocking
 
 + For documentation generation:
 

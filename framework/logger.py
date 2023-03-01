@@ -373,7 +373,8 @@ class Logger(object):
             return None
 
 
-    def log_async_data(self, data_list: Data | List[Data] | Tuple[Data], sent_date, target_ref, prj_name):
+    def log_async_data(self, data_list: Data | List[Data] | Tuple[Data], sent_date, target_ref, prj_name,
+                       current_data_id):
 
         if isinstance(data_list, Data):
             data_list = (data_list,)
@@ -388,7 +389,8 @@ class Logger(object):
             self.fmkDB.insert_async_data(dtype=dtype, dm_name=dm_name,
                                          raw_data=raw_data,
                                          sz=data_sz, sent_date=sent_date,
-                                         target_ref=target_ref, prj_name=prj_name)
+                                         target_ref=target_ref, prj_name=prj_name,
+                                         current_data_id=current_data_id)
 
 
     def log_fmk_info(self, info, nl_before=False, nl_after=False, rgb=Color.FMKINFO,

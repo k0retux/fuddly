@@ -155,11 +155,6 @@ class UI(object):
         for k, v in kwargs.items():
             self._inputs[k] = v
 
-    # for python2 compatibility
-    def __nonzero__(self):
-        return bool(self._inputs)
-
-    # for python3 compatibility
     def __bool__(self):
         return bool(self._inputs)
 

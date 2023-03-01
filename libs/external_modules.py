@@ -101,6 +101,7 @@ try:
     import graphviz
 except ImportError:
     graphviz_module = False
+    graphviz = None
     print('WARNING [FMK]: python(3)-graphviz module is not installed, Scenario could not be visualized!')
 
 sqlite3_module = True
@@ -108,6 +109,7 @@ try:
     import sqlite3
 except ImportError:
     sqlite3_module = False
+    sqlite3 = None
     print('WARNING [FMK]: SQLite3 not installed, FmkDB will not be available!')
 
 cups_module = True
@@ -115,6 +117,7 @@ try:
     import cups
 except ImportError:
     cups_module = False
+    cups = None
     print('WARNING [FMK]: python(3)-cups module is not installed, Printer targets will not be available!')
 
 crcmod_module = True
@@ -122,6 +125,7 @@ try:
     import crcmod
 except ImportError:
     crcmod_module = False
+    crcmod = None
     print('WARNING [FMK]: python(3)-crcmod module is not installed, the CRC()' \
           ' generator template will not be available!')
 
@@ -148,5 +152,6 @@ try:
     import constraint
 except ImportError:
     csp_module = False
+    constraint = None
     print('WARNING [FMK]: python-constraint module is not installed! '
           'Should be installed to support constraint-based nodes.')

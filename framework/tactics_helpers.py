@@ -630,12 +630,13 @@ class DynGenerator(Generator):
 
 class dyn_generator_from_scenario(type):
     scenario = None
-    def __init__(cls, name, bases, attrs):
-        attrs['_args_desc'] = DynGeneratorFromScenario._args_desc
+    def __new__(cls, name, bases, attrs):
+        attrs['_args_desc'] = copy.copy(DynGeneratorFromScenario._args_desc)
         if dyn_generator_from_scenario.scenario._user_args:
             attrs['_args_desc'].update(dyn_generator_from_scenario.scenario._user_args)
-        type.__init__(cls, name, bases, attrs)
-        cls.scenario = dyn_generator_from_scenario.scenario
+        cls_obj = type(name, bases, attrs)
+        cls_obj.scenario = dyn_generator_from_scenario.scenario
+        return cls_obj
 
 class DynGeneratorFromScenario(Generator):
     scenario = None
@@ -692,10 +693,7 @@ class DynGeneratorFromScenario(Generator):
         self.tr_selected_idx = -1
 
     def setup(self, dm, user_input):
-        if not _user_input_conformity(self, user_input, self._args_desc):
-            return False
         self.__class__.scenario.set_data_model(dm)
-        # self.__class__.scenario.knowledge_source = self.knowledge_source
         self.scenario = copy.copy(self.__class__.scenario)
 
         assert (self.data_fuzz and not (self.cond_fuzz or self.ignore_timing)) or not self.data_fuzz
@@ -879,9 +877,11 @@ class DynGeneratorFromScenario(Generator):
                 self._alteration_just_performed = False
 
         self.scenario.set_target(target)
+
         if self.scenario._user_args:
             for ua in self.scenario._user_args.keys():
                 setattr(self.scenario.env, str(ua), getattr(self, str(ua)))
+
         self.step = self.scenario.current_step
 
         self.step.do_before_data_processing()

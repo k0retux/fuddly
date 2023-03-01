@@ -114,11 +114,6 @@ class FeedbackGate(object):
     def size(self):
         return len(list(self.db.iter_feedback_entries(last=self.last_fbk_entries)))
 
-    # for python2 compatibility
-    def __nonzero__(self):
-        return bool(self.db.last_feedback if self.last_fbk_entries else self.db.feedback_trail)
-
-    # for python3 compatibility
     def __bool__(self):
         return bool(self.db.last_feedback if self.last_fbk_entries else self.db.feedback_trail)
 
@@ -127,6 +122,7 @@ class Database(object):
 
     DDL_fname = 'fmk_db.sql'
 
+    DEFAULT_DB_NAME = 'fmkDB.db'
     DEFAULT_DM_NAME = '__DEFAULT_DATAMODEL'
     DEFAULT_GTYPE_NAME = '__DEFAULT_GTYPE'
     DEFAULT_GEN_NAME = '__DEFAULT_GNAME'
@@ -138,12 +134,13 @@ class Database(object):
 
     def __init__(self, fmkdb_path=None):
 
-        self.name = 'fmkDB.db'
+        self.name = Database.DEFAULT_DB_NAME
         if fmkdb_path is None:
             self.fmk_db_path = os.path.join(gr.fuddly_data_folder, self.name)
         else:
-            self.fmk_db_path = fmkdb_path
+            self.fmk_db_path = os.path.expanduser(fmkdb_path)
 
+        self._ref_names = {}
         self.config = None
 
         self.enabled = False
@@ -176,6 +173,10 @@ class Database(object):
         self.fbk_timeout_re = re.compile('.*feedback timeout = (.*)s$')
 
 
+    @staticmethod
+    def get_default_db_path():
+        return os.path.join(gr.fuddly_data_folder, Database.DEFAULT_DB_NAME)
+
     def _is_valid(self, connection, cursor):
         valid = False
         with connection:
@@ -190,16 +191,19 @@ class Database(object):
                 tables = filter(lambda x: not x.startswith('sqlite'), tables)
                 for t in tables:
                     cur.execute('select * from {!s}'.format(t))
-                    ref_names = list(map(lambda x: x[0], cur.description))
+                    self._ref_names[t] = list(map(lambda x: x[0], cur.description))
                     cursor.execute('select * from {!s}'.format(t))
                     names = list(map(lambda x: x[0], cursor.description))
-                    if ref_names != names:
+                    if self._ref_names[t] != names:
                         valid = False
                         break
                 else:
                     valid = True
 
         return valid
+
+    def column_names_from(self, table):
+        return self._ref_names[table]
 
     def _sql_handler(self):
         if os.path.isfile(self.fmk_db_path):
@@ -408,8 +412,16 @@ class Database(object):
         return self._data_id
 
 
+    def get_next_data_id(self, prev_id=None):
+        if prev_id is None and self._data_id is None:
+            return None
+        elif prev_id is not None:
+            return prev_id + 1
+        elif self._data_id is not None:
+            return self._data_id + 1
+
     def insert_async_data(self, dtype, dm_name, raw_data, sz, sent_date,
-                          target_ref, prj_name):
+                          target_ref, prj_name, current_data_id=None):
 
         if not self.enabled:
             return None
@@ -426,9 +438,9 @@ class Database(object):
             if (sent_date - self._current_sent_date).total_seconds() > self.config.async_data.after_data_id:
                 data_id = None
             else:
-                data_id = self._data_id
+                data_id = self._data_id if current_data_id is None else current_data_id
         else:
-            data_id = self._data_id
+            data_id = self._data_id if current_data_id is None else current_data_id
 
         params = (data_id, dtype, dm_name, blob, sz, sent_date, str(target_ref), prj_name)
         err_msg = 'while inserting a value into table ASYNC_DATA!'
