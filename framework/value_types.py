@@ -136,6 +136,10 @@ class VT_Alt(VT):
         self._fuzzy_mode = False
         self._specific_fuzzy_vals = None
 
+    @property
+    def fuzz_mode_enabled(self):
+        return self._fuzzy_mode
+
     def switch_mode(self):
         if self._fuzzy_mode:
             self._enable_normal_mode()
@@ -2982,7 +2986,7 @@ class BitField(VT_Alt):
                         cursor = self.idx_inuse[i] = default-mini if default is not None else 0
                         val += (mini + cursor) << prev_lim
                     else:
-                        if default is not None:
+                        if default is not None and not self.fuzz_mode_enabled:
                             self.idx_inuse[i] = values.index(default)
                             sf_val = default
                         else:
