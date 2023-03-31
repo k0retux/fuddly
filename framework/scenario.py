@@ -82,7 +82,7 @@ class Step(object):
                  start_tasks=None, stop_tasks=None,
                  do_before_data_processing=None, do_before_sending=None,
                  valid=True, vtg_ids=None,
-                 refresh_atoms=True):
+                 refresh_atoms=True, private=None):
         """
         Step objects are the building blocks of Scenarios.
 
@@ -106,7 +106,9 @@ class Step(object):
               to ``True`` by the framework.
             refresh_atoms (bool): if set to `True` atoms described by names in `data_desc` will be re-instanced
               each time the step is entered.
-
+            private: Provided for arbitrary usage while building a scenario. It can be leveraged for
+              instance within scenario callbacks to identify specific steps and/or provide specific
+              information to a step.
         """
 
         self.final = final
@@ -120,6 +122,7 @@ class Step(object):
         self.transition_on_dp_complete = False
 
         self.refresh_atoms = refresh_atoms
+        self.private = private
 
         self._step_desc = step_desc
         self._transitions = []
@@ -675,6 +678,7 @@ class Step(object):
         new_step._scenario_env = None  # we ignore the environment, a new one will be provided
         new_step._transitions = copy.copy(self._transitions)
         new_step.data_attrs = copy.copy(self.data_attrs)
+        new_step.private = copy.copy(self.private)
         return new_step
 
 
@@ -682,23 +686,25 @@ class FinalStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None, sending_delay=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
                  start_tasks=None, stop_tasks=None,
-                 do_before_data_processing=None, do_before_sending=None, valid=True, vtg_ids=None):
+                 do_before_data_processing=None, do_before_sending=None, valid=True, vtg_ids=None,
+                 refresh_atoms=True, private=None):
         Step.__init__(self, final=True, do_before_data_processing=do_before_data_processing,
                       do_before_sending=do_before_sending,
-                      valid=valid, vtg_ids=vtg_ids)
+                      valid=valid, vtg_ids=vtg_ids, private=private)
 
 class NoDataStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None, sending_delay=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
                  start_tasks=None, stop_tasks=None,
-                 do_before_data_processing=None, do_before_sending=None, valid=True, vtg_ids=None):
+                 do_before_data_processing=None, do_before_sending=None,
+                 valid=True, vtg_ids=None, refresh_atoms=True, private=None):
         Step.__init__(self, data_desc=Data(''), final=final,
                       fbk_timeout=fbk_timeout, fbk_mode=fbk_mode, sending_delay=sending_delay,
                       set_periodic=set_periodic, clear_periodic=clear_periodic,
                       start_tasks=start_tasks, stop_tasks=stop_tasks,
                       step_desc=step_desc, do_before_data_processing=do_before_data_processing,
                       do_before_sending=do_before_sending,
-                      valid=valid, vtg_ids=vtg_ids)
+                      valid=valid, vtg_ids=vtg_ids, private=private)
         self.make_blocked()
 
     def make_free(self):
@@ -708,14 +714,15 @@ class StepStub(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None, sending_delay=None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
                  start_tasks=None, stop_tasks=None,
-                 do_before_data_processing=None, do_before_sending=None, valid=True, vtg_ids=None):
+                 do_before_data_processing=None, do_before_sending=None,
+                 valid=True, vtg_ids=None, refresh_atoms=True, private=None):
         Step.__init__(self, data_desc=EmptyDataProcess(), final=final,
                       fbk_timeout=fbk_timeout, fbk_mode=fbk_mode, sending_delay=sending_delay,
                       set_periodic=set_periodic, clear_periodic=clear_periodic,
                       start_tasks=start_tasks, stop_tasks=stop_tasks,
                       step_desc=step_desc, do_before_data_processing=do_before_data_processing,
                       do_before_sending=do_before_sending,
-                      valid=valid, vtg_ids=vtg_ids)
+                      valid=valid, vtg_ids=vtg_ids, refresh_atoms=refresh_atoms, private=private)
 
 class Transition(object):
 
