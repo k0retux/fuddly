@@ -2130,6 +2130,8 @@ class BitField(VT_Alt):
         self.subfield_extrems = None
         self.subfield_extrems_save = None
         self.subfield_fuzzy_vals = []
+        self.subfield_defaults = None
+        self._first_pass = None
         self.current_subfield = None
         self.idx = None
         self.idx_inuse = None
@@ -2155,6 +2157,7 @@ class BitField(VT_Alt):
             self.idx = copy.deepcopy(self.idx)
             self.idx_inuse = copy.deepcopy(self.idx_inuse)
             self.subfield_fuzzy_vals = copy.deepcopy(self.subfield_fuzzy_vals)
+            self._first_pass = copy.deepcopy(self._first_pass)
 
     def reset_state(self):
         self._reset_idx()
@@ -2169,6 +2172,7 @@ class BitField(VT_Alt):
 
     def _reset_idx(self, reset_idx_inuse=True):
         self.current_subfield = 0
+        self._first_pass = {i:True for i in range(len(self.subfield_limits))}
         if self._fuzzy_mode:
             self.idx = [1 for i in self.subfield_limits]
         else:
@@ -2924,11 +2928,11 @@ class BitField(VT_Alt):
         prev_lim = 0
         update_current_subfield = False
 
-        # Avoid value redundancy when walking through the possible values
-        # do our best when default value are used (without impacting perfo)
-        if self.current_subfield > 0 and not self._fuzzy_mode:
-            default = self.subfield_defaults[self.current_subfield]
-            if default is None:
+        if not self._fuzzy_mode:
+            curr_sf_default = self.subfield_defaults[self.current_subfield]
+            # Avoid value redundancy when walking through the possible values
+            # when no default values are set
+            if self.current_subfield > 0 and curr_sf_default is None:
                 vals = self.subfield_vals[self.current_subfield]
                 if vals is not None:
                     if len(vals) > 1 and self.idx[self.current_subfield] == 0:
@@ -2940,43 +2944,61 @@ class BitField(VT_Alt):
                         self.idx[self.current_subfield] = 1
                     else:
                         pass
-
-            else:
-                if self.subfield_vals[self.current_subfield] is not None:
-                    default_idx = self.subfield_vals[self.current_subfield].index(default)
-                    if self.idx[self.current_subfield] == default_idx \
-                            and default_idx+1 < len(self.subfield_vals[self.current_subfield]):
-                        self.idx[self.current_subfield] += 1
-                    else:
-                        pass
-                else:
-                    min, max = self.subfield_extrems[self.current_subfield]
-                    if self.idx[self.current_subfield] == default - min and default < max:
-                        self.idx[self.current_subfield] += 1
-                    else:
-                        pass
+        else:
+            curr_sf_default = None
 
         self.idx_inuse = copy.copy(self.idx)
 
         for lim, values, extrems, i in zip(self.subfield_limits, self.subfield_vals, self.subfield_extrems,
-                                             range(len(self.subfield_limits))):
+                                           range(len(self.subfield_limits))):
             if self.determinist:
                 if i == self.current_subfield:
                     index = self.idx[self.current_subfield]
                     if values is None:
                         mini, maxi = extrems
+                        if curr_sf_default is not None and self.current_subfield > 0 \
+                                and self.idx[self.current_subfield] == curr_sf_default - mini:
+                            # Avoid value redundancy when walking through the possible values
+                            self._first_pass[self.current_subfield] = False
+                            index += 1
+
                         v = mini + index
-                        if v >= maxi:
+                        if (curr_sf_default is None and v >= maxi) or (curr_sf_default is not None
+                                                                       and ((curr_sf_default == maxi and v >= maxi-1)
+                                                                            or (curr_sf_default == mini and v >= maxi)
+                                                                            or (curr_sf_default != maxi and curr_sf_default != mini
+                                                                                and v == curr_sf_default-1))
+                                                                       and not self._first_pass[self.current_subfield]):
                             update_current_subfield = True
                         else:
-                            self.idx[self.current_subfield] += 1
+                            if v == maxi:
+                                self.idx[self.current_subfield] = 0
+                            else:
+                                self.idx[self.current_subfield] = index + 1
                         self.idx_inuse[self.current_subfield] = index
                         val += v << prev_lim
                     else:
-                        if index >= len(values) - 1:
+                        if curr_sf_default is not None and self.current_subfield > 0 \
+                                and self.idx[self.current_subfield] == values.index(curr_sf_default):
+                            # Avoid value redundancy when walking through the possible values
+                            self._first_pass[self.current_subfield] = False
+                            index += 1
+
+                        idx_max = len(values) - 1
+                        idx_default = values.index(curr_sf_default) if curr_sf_default is not None else 0
+                        if (curr_sf_default is None and index >= idx_max) \
+                                or (curr_sf_default is not None
+                                    and ((idx_default == idx_max and index >= idx_max-1)
+                                         or (idx_default == 0 and index >= idx_max)
+                                         or (idx_default != idx_max and idx_default != 0
+                                             and index == idx_default-1))
+                                    and not self._first_pass[self.current_subfield]):
                             update_current_subfield = True
                         else:
-                            self.idx[self.current_subfield] += 1
+                            if index == idx_max:
+                                self.idx[self.current_subfield] = 0
+                            else:
+                                self.idx[self.current_subfield] = index + 1
                         self.idx_inuse[self.current_subfield] = index
                         val += values[index] << prev_lim
                 else:
@@ -3020,6 +3042,8 @@ class BitField(VT_Alt):
             else:
                 self.exhausted = False
 
+        if self._first_pass[self.current_subfield]:
+            self._first_pass[self.current_subfield] = False
 
         if update_current_subfield:
             self.exhausted = False

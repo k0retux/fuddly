@@ -3379,6 +3379,50 @@ class TestNode_TypedValue(unittest.TestCase):
         self.assertEqual(b3, b'\x0f\x74')
         self.assertEqual(b4, b'\x0f\x74')
 
+
+    def test_bitfield_walking(self):
+
+        bf = BitField(subfield_sizes=[2, 1, 2, 3], endian=VT.BigEndian,
+                      subfield_val_extremums=[[0, 3], [0, 1], [0,2], [1, 4]],
+                      defaults=[0b11, 0, None, 2])
+
+        reference_values = [67,64,65,66, 71, 75,83, 99,131,35]
+
+        print('\n*** with extremums:\n')
+        l = []
+        print(bf.pretty_print(), bf.is_exhausted())
+        l.append(bf.get_current_raw_val() >> bf.padding_size)
+
+        go_on = True
+        while go_on:
+            bf.get_value()
+            l.append(bf.get_current_raw_val() >> bf.padding_size)
+            if bf.is_exhausted():
+                go_on = False
+            print(bf.pretty_print(), bf.is_exhausted())
+
+        self.assertListEqual(l, reference_values)
+
+        bf = BitField(subfield_sizes=[2, 1, 2, 3], endian=VT.BigEndian,
+                      subfield_values =[[0, 1, 2, 3], [0, 1], [0, 1, 2], [1, 2, 3, 4]],
+                      defaults=[0b11, 0, None, 2])
+
+        print('\n*** with value list:\n')
+        l = []
+        print(bf.pretty_print(), bf.is_exhausted())
+        l.append(bf.get_current_raw_val() >> bf.padding_size)
+
+        go_on = True
+        while go_on:
+            bf.get_value()
+            l.append(bf.get_current_raw_val() >> bf.padding_size)
+            if bf.is_exhausted():
+                go_on = False
+            print(bf.pretty_print(), bf.is_exhausted())
+
+        self.assertListEqual(l, reference_values)
+
+
     def test_integer(self):
         node = Node('Int1', vt=UINT8(min=9, max=40, determinist=True, default=21))
         node.set_env(Env())
