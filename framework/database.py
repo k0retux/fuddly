@@ -141,36 +141,34 @@ class Database(object):
             self.fmk_db_path = os.path.expanduser(fmkdb_path)
 
         self._ref_names = {}
-        self.config = None
 
+        self.config = None
         self.enabled = False
 
-        self.current_project = None
-
-        self.last_feedback = {}
-        self.feedback_trail = {}  # store feedback entries for self.feedback_trail_time_window
-        self.feedback_trail_init_ts = None
-        self.feedback_trail_time_window = self.FEEDBACK_TRAIL_TIME_WINDOW
-
-        self._data_id = None
-        self._current_sent_date = None
-
-        self._sql_handler_thread = None
-        self._sql_handler_stop_event = threading.Event()
-
-        self._thread_initialized = threading.Event()
-        self._sql_stmt_submitted_cond = threading.Condition()
-        self._sql_stmt_list = []
-        self._sql_stmt_handled = threading.Event()
-
-        self._sql_stmt_outcome_lock = threading.Lock()
-        self._sql_stmt_outcome = None
-
-        self._sync_lock = threading.Lock()
-
-        self._ok = None
-
         self.fbk_timeout_re = re.compile('.*feedback timeout = (.*)s$')
+
+        # self.current_project = None
+        #
+        # self.last_feedback = {}
+        # self.feedback_trail = {}  # store feedback entries for self.feedback_trail_time_window
+        # self.feedback_trail_init_ts = None
+        # self.feedback_trail_time_window = self.FEEDBACK_TRAIL_TIME_WINDOW
+        #
+        # self._data_id = None
+        # self._current_sent_date = None
+        #
+        # self._sql_handler_thread = None
+        # self._sql_handler_stop_event = threading.Event()
+        #
+        # self._thread_initialized = threading.Event()
+        # self._sql_stmt_submitted_cond = threading.Condition()
+        # self._sql_stmt_list = []
+        # self._sql_stmt_handled = threading.Event()
+        #
+        # self._sql_stmt_outcome_lock = threading.Lock()
+        # self._sql_stmt_outcome = None
+        #
+        # self._sync_lock = threading.Lock()
 
 
     @staticmethod
@@ -319,6 +317,28 @@ class Database(object):
                     return ret
 
     def start(self):
+        self.current_project = None
+
+        self.last_feedback = {}
+        self.feedback_trail = {}  # store feedback entries for self.feedback_trail_time_window
+        self.feedback_trail_init_ts = None
+        self.feedback_trail_time_window = self.FEEDBACK_TRAIL_TIME_WINDOW
+
+        self._data_id = None
+        self._current_sent_date = None
+
+        self._sql_handler_thread = None
+        self._sql_handler_stop_event = threading.Event()
+        self._thread_initialized = threading.Event()
+        self._sql_stmt_submitted_cond = threading.Condition()
+        self._sql_stmt_list = []
+        self._sql_stmt_handled = threading.Event()
+        self._sql_stmt_outcome_lock = threading.Lock()
+        self._sql_stmt_outcome = None
+
+        self._sync_lock = threading.Lock()
+
+        self._ok = False
         self.config = config("Database", path=[gr.config_folder])
 
         if self._sql_handler_thread is not None:
