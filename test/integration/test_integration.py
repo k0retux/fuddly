@@ -3240,7 +3240,6 @@ class TestNode_NonTerm(unittest.TestCase):
                   'absorb_csts': AbsFullCsts(content=False, similar_content=False)},
                  {'name': 'enc_data',
                   'encoder': GZIP_Enc(6),
-                  'set_attrs': NodeInternals.Abs_Postpone,
                   'contents': [
                       {'name': 'len',
                        'contents': LEN(vt=UINT8, after_encoding=False),

@@ -52,6 +52,7 @@ from framework.error_handling import *
 from framework.constraint_helpers import CSP, ConstraintError
 
 import framework.value_types as fvt
+import framework.encoders as enc
 
 import libs.debug_facility as dbg
 from libs.utils import chunk_lines
@@ -2453,7 +2454,7 @@ class NodeInternals_NonTerm(NodeInternals):
     default_custo = NonTermCusto()
 
     def _init_specific(self, arg):
-        self.encoder = None
+        self.encoder: enc.Encoder = None
         self.subnodes_set = None
         self.subnodes_order = None
         self.subnodes_attrs = None
@@ -4114,16 +4115,55 @@ class NodeInternals_NonTerm(NodeInternals):
 
 
     def absorb(self, blob, constraints, conf, pending_postpone_desc=None):
-        '''
-        TOFIX: Checking existence condition independently from data
+        """
+        TOFIX: Checking existence condition independently of data
                description order is not supported. Only supported
                within the same non-terminal node. Use delayed job
                infrastructure to cover all cases (TBC).
-        '''
+        """
 
         if self.encoder:
-            original_blob = blob
-            blob = self.encoder.decode(blob)
+            original_blob_size = len(blob)
+            if isinstance(self.encoder, enc.EncoderAbsorptionHelper):
+                try:
+                    determined_encoded_size = self.encoder.how_much_can_be_consumed_from(blob)
+                except enc.EncoderUnrecognizedValueError as e:
+                    if dbg.ABS_DEBUG:
+                        print(f'\n*** Exception {type(e)} raised while calling {type(self.encoder)} absorption helper')
+                    return AbsorbStatus.Reject, 0, 0, pending_postpone_desc
+                except (enc.EncoderSizeNotFoundError, NotImplementedError) as e:
+                    if dbg.ABS_DEBUG:
+                        print(f'\n*** Size of the encoding part cannot be determined:'
+                              f'\n    |_ {type(e)} has been raised')
+                    determined_encoded_size = None
+            else:
+                determined_encoded_size = None
+
+            if determined_encoded_size is not None:
+                original_encoded_blob = blob[:determined_encoded_size]
+                try:
+                    blob = self.encoder.decode(original_encoded_blob)
+                except enc.EncoderUnrecognizedValueError as e:
+                    if dbg.ABS_DEBUG:
+                        print(f'\n*** Exception {type(e)} raised while decoding with {type(self.encoder)} '
+                              f'{determined_encoded_size} byte(s) of the input "{blob[:4]}..."')
+                    return AbsorbStatus.Reject, 0, 0, pending_postpone_desc
+                else:
+                    size_of_decoded_object = len(blob)
+            else:
+                original_encoded_blob = blob
+                try:
+                    blob = self.encoder.decode(blob)
+                except enc.EncoderUnrecognizedValueError as e:
+                    if dbg.ABS_DEBUG:
+                        print(f'\n*** Exception {type(e)} raised while decoding with {type(self.encoder)} '
+                              f'the whole input "{blob[:4]}..."')
+                    return AbsorbStatus.Reject, 0, 0, pending_postpone_desc
+                else:
+                    size_of_decoded_object = len(blob)
+
+            original_decoded_blob = blob
+
 
         abs_excluded_components = []
         abs_exhausted = False
@@ -4526,7 +4566,9 @@ class NodeInternals_NonTerm(NodeInternals):
                                     blob_update_pending = False
                                     blob = blob[consumed_size:]
 
-                        elif base_node.is_attr_set(NodeInternals.Abs_Postpone):
+                        elif base_node.is_attr_set(NodeInternals.Abs_Postpone) \
+                                or (idx < len(sublist)-1 and base_node.is_nonterm() and base_node.encoder is not None
+                                    and not isinstance(base_node.encoder, enc.EncoderAbsorptionHelper)):
                             if postponed_node_desc or pending_postpone_desc:
                                 raise ValueError("\n*** ERROR: Only one node at a time can have its "
                                                  "absorption delayed [current:{!s}]"
@@ -4714,7 +4756,9 @@ class NodeInternals_NonTerm(NodeInternals):
 
                             base_node, min_node, max_node = self._parse_node_desc(node_desc)
 
-                            if base_node.is_attr_set(NodeInternals.Abs_Postpone):
+                            if base_node.is_attr_set(NodeInternals.Abs_Postpone) \
+                                    or (idx < len(sublist)-1 and base_node.is_nonterm() and base_node.encoder is not None
+                                        and not isinstance(base_node.encoder, enc.EncoderAbsorptionHelper)):
                                 if postponed_node_desc or pending_postpone_desc:
                                     raise ValueError("\nERROR: Only one node at a time (current:%s) delaying" \
                                                      " its dissection is supported!" % postponed_node_desc)
@@ -4760,14 +4804,32 @@ class NodeInternals_NonTerm(NodeInternals):
                 status = AbsorbStatus.Absorbed
 
         # clean up
-        if status != AbsorbStatus.Absorbed and status != AbsorbStatus.FullyAbsorbed:
+        if status != AbsorbStatus.Absorbed:
             self.cancel_absorb()
+        else:
+            if self.encoder:
+                if determined_encoded_size is not None:
+                    assert size_of_decoded_object == consumed_size
+                    consumed_size = determined_encoded_size
+                else:
+                    orig_dec_blob_sz = len(original_decoded_blob)
+                    orig_enc_blob_sz = len(original_encoded_blob)
+
+                    if orig_dec_blob_sz != orig_enc_blob_sz:
+                        if orig_dec_blob_sz == consumed_size:
+                            consumed_size = orig_enc_blob_sz
+                        else:
+                            if dbg.ABS_DEBUG:
+                                print(f'\nAbsorption of encoded part was not possible with {self.encoder}')
+                    else:
+                        if orig_dec_blob_sz == consumed_size:
+                            pass
+                        else:
+                            print('\n*** Warning: the decoding by  did not is able to ignore the tail '
+                                  'of the blob which is not to be consumed by it ***')
 
         self._clone_node_cleanup()
         self._clone_separator_cleanup()
-
-        if self.encoder:
-            consumed_size = len(original_blob)
 
         return status, 0, consumed_size, postponed_to_send_back
 
@@ -6137,6 +6199,7 @@ class Node(object):
         if len(blob) == sz and status == AbsorbStatus.Absorbed:
             status = AbsorbStatus.FullyAbsorbed
             self.internals[conf].confirm_absorb()
+
         return status, off, sz, self.name
 
     def set_absorb_helper(self, helper, conf=None):
@@ -7339,6 +7402,8 @@ class Env(object):
         self._reentrancy_cpt = 0
         self._color_enabled = False
         self.csp: CSP = None
+
+        self._decoded_blob = None
 
     @property
     def delayed_jobs_pending(self):

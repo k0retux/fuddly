@@ -29,7 +29,11 @@ import binascii
 
 from framework.global_resources import *
 
+class EncoderUnrecognizedValueError(Exception): pass
+class EncoderSizeNotFoundError(Exception): pass
+
 class Encoder(object):
+
     def __init__(self, encoding_arg=None):
         self.encoding_arg = encoding_arg
         self.reset()
@@ -61,6 +65,8 @@ class Encoder(object):
         To be overloaded.
         (Should be stateless.)
 
+        Raise `EncoderUnrecognizedValue` if decoding is not possible.
+
         Args:
             val (bytes): the encoded value
 
@@ -80,6 +86,32 @@ class Encoder(object):
         """
         pass
 
+
+class EncoderAbsorptionHelper(object):
+    """
+    Helper used in the context of absorption
+    """
+
+    def how_much_can_be_consumed_from(self, blob: bytes):
+        """
+        To be overloaded.
+        (Should be stateless.)
+
+        Try to determine the end of what is decodable from the beginning of `blob`.
+        `blob` is always starting with the encoded part.
+        Otherwise, the blob is to be considered not compliant with the Encoder.
+        Raise `EncoderUnrecognizedValue` in this case.
+
+        If the `blob` is decodable but the correct size cannot be determined raise
+        `EncoderSizeNotFound`.
+
+        Args:
+            blob (bytes): the encoded binary string
+
+        Returns:
+            int: the size of what is decodable from the beginning of `blob`.
+        """
+        raise NotImplementedError
 
 class GZIP_Enc(Encoder):
 
@@ -220,3 +252,30 @@ class BitReverse_Enc(Encoder):
 
     def decode(self, val):
         return self.encode(val)
+
+class BitInverter_Enc(Encoder, EncoderAbsorptionHelper):
+
+    def encode(self, byte_str):
+        if len(byte_str) == 0:
+            return b''
+
+        # inverse bit order of val
+        int8_val = byte_str[0]
+        int8_val_inv = 0
+        int8_val_inv += (int8_val << 7) & 0x80
+        int8_val_inv += (int8_val << 5) & 0x40
+        int8_val_inv += (int8_val << 3) & 0x20
+        int8_val_inv += (int8_val << 1) & 0x10
+        int8_val_inv += (int8_val >> 7) & 0x01
+        int8_val_inv += (int8_val >> 5) & 0x02
+        int8_val_inv += (int8_val >> 3) & 0x04
+        int8_val_inv += (int8_val >> 1) & 0x08
+        inverted_byte_str = struct.pack('B', int8_val_inv)
+
+        return inverted_byte_str
+
+    def decode(self, byte_str):
+        return self.encode(byte_str)
+
+    def how_much_can_be_consumed_from(self, blob: bytes):
+        return 1
