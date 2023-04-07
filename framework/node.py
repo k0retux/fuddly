@@ -6861,8 +6861,9 @@ class Node(object):
         if isinstance(node_internals_list, list):
             node_internals_list = list(flatten(node_internals_list))
             if node_internals_list:
-                if issubclass(node_internals_list[0].__class__, NodeInternals):
-                    node_internals_list = list(map(tobytes_helper, node_internals_list))
+                # if issubclass(node_internals_list[0].__class__, NodeInternals):
+                node_internals_list = list(map(tobytes_helper, node_internals_list))
+                # print(node_internals_list)
                 val = b''.join(node_internals_list)
             else:
                 val = b''
