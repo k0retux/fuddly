@@ -87,8 +87,8 @@ class PlottyFigure:
 
 
     def __post_process(self):
-        self.__setup_grid()
         self.__setup_axes()
+        self.__setup_grid()
         self.__setup_legend()
 
 
@@ -108,7 +108,7 @@ class PlottyFigure:
             self.__axes.xaxis.set_ticks(new_xticks)
             self.__axes.yaxis.set_ticks(new_yticks)
 
-        self.__axes.grid()
+        self.__axes.grid(True)
 
 
     def __setup_axes(self):
