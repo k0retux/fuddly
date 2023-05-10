@@ -166,7 +166,7 @@ def main():
 
     for i, data_ids in enumerate(PlottyOptions.other_data_ids):
         area = create_figure_area(
-            PlottyOptions.fmkdb[i % len(PlottyOptions.fmkdb)],
+            PlottyOptions.fmkdb[(i+1) % len(PlottyOptions.fmkdb)],
             data_ids,
             i+1,
             False
