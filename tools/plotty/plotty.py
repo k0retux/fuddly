@@ -68,7 +68,7 @@ def get_points(
         points_coordinates.append(PlottyOptions.formula.evaluate(instanciation))
 
     annotations = None
-    if annotation_column_names is not None:
+    if annotation_column_names is not None and len(annotation_column_names) != 0:
         all_annotations = database.request(
             table_name,
             data_ids,
