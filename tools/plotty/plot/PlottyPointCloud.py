@@ -22,7 +22,7 @@ class PlottyPointCloud(APlottyGeometry):
     def plot(self, axes: Axes, color: str) -> list[PlottyPoint]:
 
         if len(self.__points) == 0:
-            return
+            return self.__points
 
         x_data = list(map(lambda point: point.x, self.__points))
         y_data = list(map(lambda point: point.y, self.__points))

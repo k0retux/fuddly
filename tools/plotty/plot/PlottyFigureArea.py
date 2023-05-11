@@ -75,4 +75,5 @@ class PlottyFigureArea:
         self.__figure.add_plotted_additionals(additionals)
         for geometry in self.__additional_geometries:
             points = geometry.plot(axes, color)
-            self.__figure.add_plotted_points(points)
+            if len(points) != 0:
+                self.__figure.add_plotted_points(points)
