@@ -83,7 +83,7 @@ def get_points(
     for i, coord in enumerate(points_coordinates):
         point = PlottyPoint(
             coord,
-            PlottyGlobals.main_color,
+            PlottyGlobals.colors[0],
             PlottyGlobals.main_marker,
             annotations[i] if annotations is not None else None
         )

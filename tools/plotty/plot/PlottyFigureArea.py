@@ -1,5 +1,5 @@
 
-from tools.plotty.globals import PlottyOptions
+from tools.plotty.globals import PlottyGlobals, PlottyOptions
 from tools.plotty.plot.PlottyFigure import PlottyFigure
 from tools.plotty.plot.APlottyGeometry import APlottyGeometry
 
@@ -11,12 +11,12 @@ class PlottyFigureArea:
     def __init__(
             self,
             main_geometry: APlottyGeometry,
-            alignement_index: int
+            index: int
     ):
         self.__figure: PlottyFigure = None
         self.__main_geometry = main_geometry
         self.__additional_geometries = []
-        self.__alignement_index = alignement_index
+        self.__index = index
     
 
     @property
@@ -33,7 +33,7 @@ class PlottyFigureArea:
 
     @property
     def alignement_index(self) -> int:
-        return self.__alignement_index
+        return self.__index
 
 
     def add_geometry(self, geometry: APlottyGeometry):
@@ -56,7 +56,7 @@ class PlottyFigureArea:
         curve_height = abs(last.y - first.y)
         shift_x = reference_first.x - first.x
         shift_y = reference_first.y - first.y + \
-            self.__alignement_index * curve_height * \
+            self.__index * curve_height * \
             PlottyOptions.vertical_shift
 
         for geometry in [self.__main_geometry, *self.__additional_geometries]:
@@ -68,10 +68,11 @@ class PlottyFigureArea:
 
 
     def plot(self, axes: Axes):
-        points = self.__main_geometry.plot(axes)
+        color = PlottyGlobals.colors[self.__index]
+        points = self.__main_geometry.plot(axes, color)
         self.__figure.add_plotted_points(points)
         additionals = self.__main_geometry.plot_additionals(axes)
         self.__figure.add_plotted_additionals(additionals)
         for geometry in self.__additional_geometries:
-            points = geometry.plot(axes)
+            points = geometry.plot(axes, color)
             self.__figure.add_plotted_points(points)

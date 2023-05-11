@@ -29,7 +29,7 @@ class PlottyCurve(APlottyGeometry):
         self.__draw_line = value
 
 
-    def plot(self, axes: Axes) -> list[PlottyPoint]:
+    def plot(self, axes: Axes, color: str) -> list[PlottyPoint]:
 
         if len(self.__points) == 0:
             return
@@ -37,7 +37,7 @@ class PlottyCurve(APlottyGeometry):
         x_data = list(map(lambda point: point.x, self.__points))
         y_data = list(map(lambda point: point.y, self.__points))
         if self.__draw_line:
-            axes.plot(x_data, y_data, color=self.__points[0].color)
+            axes.plot(x_data, y_data, color=color)
 
         if not PlottyOptions.hide_points:
             for point in self.__points:

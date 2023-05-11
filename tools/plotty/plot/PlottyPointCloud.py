@@ -19,7 +19,7 @@ class PlottyPointCloud(APlottyGeometry):
         return self.__points
 
 
-    def plot(self, axes: Axes) -> list[PlottyPoint]:
+    def plot(self, axes: Axes, color: str) -> list[PlottyPoint]:
 
         if len(self.__points) == 0:
             return

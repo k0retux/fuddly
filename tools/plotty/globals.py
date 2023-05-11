@@ -10,6 +10,7 @@ class GridMatch(Enum):
     POI = 2
     ALL = 3
 
+
 class PlottyOptions:
     fmkdb: list['PlottyDatase']
     data_ids: list[range]
@@ -28,7 +29,7 @@ class PlottyGlobals:
     EXIT_SUCCESS = 0
     ERR_INVALID_VAR_NAMES = -1
     ERR_INVALID_FMDBK = -2
-    main_color: str = 'b'
+    colors: list[str] = ['b', 'r', 'g']
     main_marker: str = 'o'
     poi_color: str = 'r'
     poi_marker: str = 'o'

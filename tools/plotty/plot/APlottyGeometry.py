@@ -28,7 +28,7 @@ class APlottyGeometry:
 
 
     @abstractmethod
-    def plot(self, axes: Axes):
+    def plot(self, axes: Axes, color: str):
         pass
 
 
