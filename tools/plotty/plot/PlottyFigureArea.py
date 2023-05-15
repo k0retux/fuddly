@@ -51,9 +51,9 @@ class PlottyFigureArea:
             return
 
         reference_first = reference_area.main_geometry.points[0]
-        first = reference_area.main_geometry.points[0]
-        last = reference_area.main_geometry.points[-1]
-        curve_height = abs(last.y - first.y)
+        reference_last = reference_area.main_geometry.points[-1]
+        first = self.__main_geometry.points[0]
+        curve_height = abs(reference_first.y - reference_last.y)
         shift_x = reference_first.x - first.x
         shift_y = reference_first.y - first.y + \
             self.__index * curve_height * \
