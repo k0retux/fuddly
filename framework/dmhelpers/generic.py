@@ -171,9 +171,20 @@ def LEN(vt=fvt.INT_str, base_len=0,
             self.set_attrs = set_attrs
             self.clear_attrs = clear_attrs
 
-        def __call__(self, node):
-            blob = node.to_bytes() if after_encoding else node.get_raw_value()
-            n = Node('cts', value_type=self.vt(values=[len(blob)+base_len], force_mode=True))
+        def __call__(self, nodes):
+            if isinstance(nodes, Node):
+                b = nodes.to_bytes() if after_encoding else nodes.get_raw_value()
+            else:
+                if issubclass(nodes.__class__, NodeAbstraction):
+                    nodes = nodes.get_concrete_nodes()
+                elif not isinstance(nodes, (tuple, list)):
+                    raise TypeError("Contents of 'nodes' parameter is incorrect!")
+                b = b''
+                for n in nodes:
+                    blob = n.to_bytes() if after_encoding else n.get_raw_value()
+                    b += blob
+
+            n = Node('cts', value_type=self.vt(values=[len(b)+base_len], force_mode=True))
             n.set_semantics(NodeSemantics(['len']))
             MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
             return n
