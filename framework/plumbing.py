@@ -4141,8 +4141,11 @@ class FmkShell(cmd.Cmd):
         if self._quit_shell:
             self._quit_shell = False
             msg = colorize(FontStyle.BOLD + "\nReally Quit? [Y/n]", rgb=Color.WARNING)
-            cont = get_user_input(msg)
-            cont = cont.upper()
+            try:
+                cont = get_user_input(msg)
+                cont = cont.upper()
+            except(EOFError):
+                cont = 'Y'
             if cont == 'Y' or cont == '':
                 self.fz.stop()
                 return True
