@@ -115,6 +115,14 @@ def flatten(nested):
 
 nodes_weight_re = re.compile('(.*?)\((.*)\)')
 
+### Debug Means ###
+
+def print_node_list(node_list):
+    s = f'['
+    for i, node in enumerate(node_list):
+        s += f'\n {i} {node.name} {node.cc} {id(node)},'
+    s += f'\n]'
+    print(s)
 
 ### Materials for Node Synchronization ###
 
@@ -748,6 +756,9 @@ class NodeInternals(object):
         self._env = src
 
     def has_subkinds(self):
+        return False
+
+    def has_no_children(self):
         return False
 
     def get_current_subkind(self):
@@ -1979,8 +1990,7 @@ class NodeInternals_TypedValue(NodeInternals_Term):
         self.value_type.do_cleanup_absorb()
 
     def _update_value_specific(self, value):
-        if isinstance(value, int):
-            assert isinstance(self.value_type, (fvt.INT, fvt.BitField)), f'{self.value_type}'
+        if isinstance(value, int) and isinstance(self.value_type, (fvt.INT, fvt.BitField)):
             self.value_type.update_raw_value(value)
         else:
             val, off, size = self.value_type.do_absorb(convert_to_internal_repr(value),
@@ -3122,9 +3132,10 @@ class NodeInternals_NonTerm(NodeInternals):
             else:
                 nb = random.randint(mini, maxi)
 
-        qty = self._qty_from_node(node)
-        if qty is not None:
-            nb = qty
+        if not corrupted:
+            qty = self._qty_from_node(node)
+            if qty is not None:
+                nb = qty
 
         to_entangle = set()
 
@@ -3192,6 +3203,9 @@ class NodeInternals_NonTerm(NodeInternals):
 
             subnode_list.append(new_node)
             to_entangle.add(new_node)
+
+            # if new_node.is_nonterm():   ### TODO debug
+            #     print(new_node.name, new_node.frozen_node_list)
 
             if self.separator is not None and not ignore_separator:
                 new_sep = self._clone_separator(self.separator.node, unique=self.separator.unique,
@@ -3643,8 +3657,10 @@ class NodeInternals_NonTerm(NodeInternals):
 
         djob_group_created = False
         disabled_node = False
+        node_with_no_children = False
         removed_cpt = 0
-        for idx, n in enumerate(node_list):
+
+        for idx, n in enumerate(copy.copy(node_list)):
             if n.is_attr_set(NodeInternals.DISABLED):
                 val = Node.DEFAULT_DISABLED_NODEINT
                 if not n.env.is_djob_registered(key=id(n), prio=Node.DJOBS_PRIO_nterm_existence):
@@ -3662,8 +3678,24 @@ class NodeInternals_NonTerm(NodeInternals):
                 val = n._get_value(conf=conf, recursive=recursive,
                                    return_node_internals=True, restrict_csp=restrict_csp)
 
-            if self.separator is not None and isinstance(val, NodeInternals) and val.is_attr_set(NodeInternals.AutoSeparator) \
-                    and disabled_node and not self.separator.suffix and not self.separator.always:
+                if node_with_no_children and n.is_attr_set(NodeInternals.AutoSeparator):
+                    # print(f'\nNode with no children - step 2 / {idx} {n.name}')
+                    # print_node_list(self.frozen_node_list)
+                    node_with_no_children = False
+                    self.frozen_node_list.pop(idx)
+                    continue
+                elif (self.separator is not None and not self.separator.always
+                        and not n.is_attr_set(NodeInternals.AutoSeparator)
+                        and n.is_nonterm() and n.has_no_children()):
+                    # print(f'\nNode with no children - step 1 / {idx} {n.name}')
+                    # print_node_list(self.frozen_node_list)
+                    node_with_no_children = True
+                    continue
+                else:
+                    node_with_no_children = False
+
+            if disabled_node and self.separator is not None and isinstance(val, NodeInternals) and val.is_attr_set(NodeInternals.AutoSeparator) \
+                    and not self.separator.always: # and not self.separator.suffix
 
                 # TODO: The case "suffix False and always True" should be already handled at
                 #  self.get_subnodes_with_csts()
@@ -3678,9 +3710,12 @@ class NodeInternals_NonTerm(NodeInternals):
             # 'val' is always a NodeInternals except if non-term encoding has been carried out
             l.append(val)
 
-        if self.separator is not None and l and isinstance(l[-1], NodeInternals) \
-                and l[-1].is_attr_set(NodeInternals.AutoSeparator):
-            if not self.separator.suffix and not self.separator.always:
+        # if self.debug:
+        #     print(f'\nEND LOOP {last_idx}')
+
+        if self.separator is not None and l:
+            if (not self.separator.always and not self.separator.suffix
+                    and isinstance(l[-1], NodeInternals) and l[-1].is_attr_set(NodeInternals.AutoSeparator)):
                 l.pop(-1)
                 self.frozen_node_list.pop(-1)
 
@@ -4173,7 +4208,7 @@ class NodeInternals_NonTerm(NodeInternals):
             constraints = self.absorb_constraints
 
         def _try_separator_absorption_with(blob, consumed_size):
-            DEBUG = False
+            DEBUG = dbg.ABS_DEBUG
 
             new_sep = self._clone_separator(self.separator.node, unique=True)
             abort = False
@@ -4320,7 +4355,7 @@ class NodeInternals_NonTerm(NodeInternals):
                         elif st2 == AbsorbStatus.Absorbed or st2 == AbsorbStatus.FullyAbsorbed:
                             if DEBUG:
                                 print('\nABSORBED (of postponed): %s, off: %d, consumed_sz: %d, blob: %r ...' \
-                                    % (postponed.name, off2, sz2, blob[off2:sz2][:100]))
+                                    % (postponed.name, off2, sz2, blob[off2:sz2][:150]))
 
                             if pending_upper_postpone is not None: # meaning postponed_node_desc is None
                                 pending_postponed_to_send_back = postponed
@@ -4381,12 +4416,12 @@ class NodeInternals_NonTerm(NodeInternals):
                     first_pass = False
 
             if reject_with_min_null and self.separator is not None and self.separator.always:
-                # if DEBUG:
-                #     print(f'\n Try absorb separator\n  - {blob}\n  - {consumed_size}')
+                if DEBUG:
+                    print(f'\n Try absorb separator\n  - {blob}\n  - {consumed_size}')
 
                 abort, blob, consumed_size, new_sep = _try_separator_absorption_with(blob, consumed_size)
-                # if DEBUG:
-                #     print(f'\n Try absorb separator, success={not abort}, cons_sz={consumed_size}, blob={blob}')
+                if DEBUG:
+                    print(f'\n Try absorb separator, success={not abort}, cons_sz={consumed_size}, blob={blob}')
                 if not abort:
                     tmp_list.append(new_sep)
                 abort = False
@@ -4862,6 +4897,15 @@ class NodeInternals_NonTerm(NodeInternals):
 
     def is_frozen(self):
         return self.frozen_node_list is not None
+
+    def has_no_children(self):
+        assert self.is_frozen()  # attr.current_qty would change the state of attr if not node not frozen
+        # TODO: current_qty call next_qty() if not defined.
+        #   But current qty should be stateless to avoid some side effects
+        for nd, attr in self.subnodes_attrs.items():
+            if attr.current_qty != 0:
+                return False
+        return True
 
     def _make_specific(self, name):
         if name == NodeInternals.Highlight:
@@ -6188,6 +6232,10 @@ class Node(object):
         conf = self._check_conf(conf)
         return isinstance(self.internals[conf], NodeInternals_Empty)
 
+    def has_no_children(self, conf=None):
+        conf = self._check_conf(conf)
+        return self.internals[conf].has_no_children()
+
     def absorb(self, blob, constraints=AbsCsts(), conf=None, pending_postpone_desc=None):
         conf, next_conf = self._compute_confs(conf=conf, recursive=True)
         blob = convert_to_internal_repr(blob)
@@ -6688,10 +6736,10 @@ class Node(object):
                     # in this case we let the caller handle this, as we are not responsible
                     raise
                 else:
-                    print(f"Warning: no solution found for the current CSP, the generated data will be invalid!\n"
+                    print(f"\nWarning: no solution found for the current CSP, the generated data will be invalid!\n"
                           f" --> likely culprit: node '{self.name}' with value {self.get_raw_value()}")
             else:
-                if solution is not None: # no more solution
+                if solution is not None:  # Does a solution exist?
                     for var, value in solution.items():
                         nd = self.env.csp.var_mapping[var]
                         if self.env.csp.highlight_variables:
@@ -6708,7 +6756,6 @@ class Node(object):
             finally:
                 if self.env.csp.var_domain_updated:
                     self.env.csp.restore_var_domains()
-
         return ret
 
     get_value = freeze
