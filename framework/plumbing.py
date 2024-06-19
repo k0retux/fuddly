@@ -3401,6 +3401,7 @@ class FmkPlumbing(object):
         unrecoverable_error = False
         activate_all = False
 
+        action_list_sz = len(action_list)
         for idx, full_action in enumerate(action_list):
 
             if isinstance(full_action, (tuple, list)):
@@ -3418,7 +3419,7 @@ class FmkPlumbing(object):
             if unrecoverable_error:
                 break
 
-            if idx == len(action_list) - 1:
+            if idx == action_list_sz - 1:
                 last = True
 
             generic = False
@@ -3504,7 +3505,10 @@ class FmkPlumbing(object):
                         (dmaker_obj in self.__initialized_dmakers and self.__initialized_dmakers[dmaker_obj][0]):
                     ui = self.__initialized_dmakers[dmaker_obj][1]
                 else:
-                    ui = user_input
+                    if action_list_sz == 1:
+                        ui = user_input.merge_with(UI(freeze=True))
+                    else:
+                        ui = user_input
                 initial_generator_info = [dmaker_type, dmaker_name, ui]
 
             # Make sure that if a Generator is active (i.e., it has
