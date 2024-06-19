@@ -5,10 +5,11 @@ ddt==1.6.0
 graphviz==0.20.1
 matplotlib==3.7.0
 mock==5.0.1
-paramiko==3.0.0
+paramiko>=3.4.0,<4.0.0
 pyserial==3.5
 python_constraint==1.4.0
+z3-solver>=4.8
 pyxdg==0.28
-rpyc==5.3.0
+rpyc>=6.0.0,<7.0.0
 sphinx_rtd_theme==1.2.0
 xtermcolor==1.3

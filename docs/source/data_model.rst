@@ -2013,8 +2013,8 @@ different possibilities within ``fuddly``:
 
 - either using some specific keywords that capture basic constraints (e.g., ``qty_from``, ``sync_size_with``, ``exists_if``, ...);
 - or through Generator nodes (refer to :ref:`dm:generators`);
-- or by specifying a CSP through the keyword ``constraint``, which leverage a constraint programming
-  backend (currently limited to the ``python-constraint`` module)
+- or by specifying a CSP through the keyword ``constraint``, which leverage constraint programming
+  backends (either the python ``constraint`` module or the ``z3-solver`` module)
 
 The CSP specification case is described in more details in what follows.
 To describe constraints in the form of a CSP, you should use the ``constraints`` keyword that allows you
@@ -2077,3 +2077,9 @@ further to the CSP solving process.
    ``var_to_varns`` in order to support namespaces (used to discriminate nodes having identical
    name in the data description). Refer to ``namespace`` keyword for more details, and to the ``csp_ns`` node
    description in the data model ``mydf`` (in ``tuto.py``).
+
+.. note::
+
+    You can also use the Z3 backend that may provide significant performance improvement depending on the context usage.
+    In order to leverage this backend, you only have to use :class:`framework.constraint_helpers.Z3Constraint` instead of :class:`framework.constraint_helpers.Constraint`
+    and provide Z3 formulas within the ``relation`` parameter instead of boolean function.

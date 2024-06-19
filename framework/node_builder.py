@@ -865,9 +865,12 @@ class NodeBuilder(object):
             csp.map_var_to_node(v, nd)
             if nd.cc.value_type.values is not None:
                 domain = copy.copy(nd.cc.value_type.values)
+                csp.set_var_domain(v, domain)
             else:
                 domain = range(nd.cc.value_type.mini_gen, nd.cc.value_type.maxi_gen + 1)
-            csp.set_var_domain(v, domain)
+                csp.set_var_domain(v, domain,
+                                   min=nd.cc.value_type.mini_gen,
+                                   max=nd.cc.value_type.maxi_gen)
 
         csp.save_current_var_domains()
         node.set_csp(csp)

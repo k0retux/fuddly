@@ -149,9 +149,18 @@ except ImportError:
 
 csp_module = True
 try:
-    import constraint
+    import constraint as cst
 except ImportError:
     csp_module = False
     constraint = None
     print('WARNING [FMK]: python-constraint module is not installed! '
+          'Should be installed to support constraint-based nodes.')
+
+z3_module = True
+try:
+    import z3
+except ImportError:
+    z3_module = False
+    z3 = None
+    print('WARNING [FMK]: python-z3 or z3-solver module is not installed! '
           'Should be installed to support constraint-based nodes.')

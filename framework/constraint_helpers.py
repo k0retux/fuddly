@@ -25,10 +25,14 @@ import copy
 from typing import Tuple, List
 
 from libs.external_modules import *
-if csp_module:
-    from constraint import *
+if z3_module:
+    from z3 import *
+
+_Z3_MODEL_NOT_COMPUTED = 1
 
 class ConstraintError(Exception): pass
+class CSPDefinitionError(Exception): pass
+class CSPUnsat(Exception): pass
 
 class Constraint(object):
 
@@ -74,26 +78,92 @@ class Constraint(object):
         new_cst.__dict__.update(self.__dict__)
         return new_cst
 
+class Z3Constraint(object):
+
+    relation = None
+    vars = None
+    z3vars = None
+    _var_domain = None
+    _orig_relation = None
+    _is_relation_translated = None
+
+    def __init__(self, relation, vars: Tuple, var_to_varns: dict = None):
+        """
+
+        Args:
+            relation: expression that define the constraints between variables
+            vars (list): list of the names of the nodes used in the boolean function in `relation`
+              (in the same order as the parameters of the function).
+            var_to_varns (dict): dictionary that associates for each name in `vars`, the comprehensive
+              reference to the related node, which is a tuple of its name and its namespace.
+        """
+
+        self.vars = vars
+        self.var_to_varns = var_to_varns
+        self.z3vars = {}
+        for v in vars:
+            self.z3vars[v] = Int(v)
+
+        self._is_relation_translated = False
+        self.relation = self._orig_relation = relation
+
+    def provide_translated_relation(self, relation):
+        self.relation = self._orig_relation = relation
+        self._is_relation_translated = True
+
+    @property
+    def is_relation_translated(self):
+        return self._is_relation_translated
+
+    @property
+    def var_domain(self):
+        return self._var_domain
+
+    @var_domain.setter
+    def var_domain(self, var_domain):
+        self._var_domain = var_domain
+
+    def negate(self):
+        self.relation = 'Not(' + self._orig_relation + ')'
+
+    def reset_to_original(self):
+        self.relation = self._orig_relation
+
+    def __copy__(self):
+        new_cst = type(self)(self._orig_relation, self.vars, self.var_to_varns)
+        new_cst.__dict__.update(self.__dict__)
+        return new_cst
+
+
 class CSP(object):
 
     _constraints = None
     _vars = None
+    _z3vars = None
     _var_to_varns = None
     _var_node_mapping = None
     _var_domain = None
     _var_domain_updated = False
     _orig_var_domain = None
     _problem = None
+    _solver = None
     _solutions = None
     _model = None
     _exhausted_solutions = None
     _is_solution_queried = False
     highlight_variables = None
 
-    def __init__(self, constraints: Constraint or List[Constraint] = None, highlight_variables=False):
-        assert csp_module, "the CSP backend is disabled because python-constraint module is not installed!"
+    z3_problem = False
 
-        if isinstance(constraints, Constraint):
+    def __init__(self, constraints: Constraint or List[Constraint] = None, highlight_variables=False):
+        assert csp_module or z3_module, "the CSP backbone is disabled because of missing CSP backends!"
+
+        if isinstance(constraints, (Constraint, Z3Constraint)):
+            if isinstance(constraints, Z3Constraint):
+                self.z3_problem = True
+            if self.z3_problem:
+                assert(isinstance(constraints, Z3Constraint),
+                       "Mix between Z3Constraint and Constraint are not allowed")
             c_copy = copy.copy(constraints)
             self._vars = c_copy.vars
             self._constraints = [c_copy]
@@ -101,7 +171,10 @@ class CSP(object):
         else:
             self._constraints = []
             self._vars = ()
+            self._z3vars = {}
             for r in constraints:
+                if isinstance(r, Z3Constraint):
+                    self.z3_problem = True
                 r_copy = copy.copy(r)
                 self._constraints.append(r_copy)
                 self._vars += r_copy.vars
@@ -113,6 +186,9 @@ class CSP(object):
                         if v not in r_copy.var_to_varns:
                             self._var_to_varns[v] = v
 
+                if isinstance(r, Z3Constraint):
+                    self._z3vars.update(r_copy.z3vars)
+
         self._var_node_mapping = {}
         self._var_domain = {}
         self._var_domain_updated = False
@@ -120,7 +196,10 @@ class CSP(object):
         self.highlight_variables = highlight_variables
 
     def reset(self):
-        self._problem = Problem()
+        if self.z3_problem:
+            self._solver = Solver()
+        else:
+            self._problem = cst.Problem()
         self._solutions = None
         self._model = None
         self._exhausted_solutions = False
@@ -137,9 +216,12 @@ class CSP(object):
     def var_domain_updated(self):
         return self._var_domain_updated
 
-    def set_var_domain(self, var, domain):
+    def set_var_domain(self, var, domain, min=None, max=None):
         assert bool(domain)
-        self._var_domain[var] = copy.copy(domain)
+        if min is None:
+            self._var_domain[var] = copy.copy(domain)
+        else:
+            self._var_domain[var] = (min, max)
         self._var_domain_updated = True
 
     def save_current_var_domains(self):
@@ -167,34 +249,113 @@ class CSP(object):
 
     def _solve_constraints(self):
         for c in self._constraints:
-            for v in c.vars:
-                try:
-                    self._problem.addVariable(v, self._var_domain[v])
-                except ValueError:
-                    # most probable cause: duplicated variable is attempted to be inserted
-                    # (other cause is empty domain which is checked at init)
-                    pass
-            self._problem.addConstraint(c.relation, c.vars)
+            if isinstance(c, Z3Constraint):
+                relation = c.relation
+                for v in c.vars:
+                    z3var = self._z3vars[v]
+                    dom = self._var_domain[v]
+                    if isinstance(dom, tuple) and len(dom) == 2:
+                        min, max = dom
+                        self._solver.add(And([min <= z3var, z3var <= max]))
+                    else:
+                        self._solver.add(Or([z3var == value for value in dom]))
+                    if not c.is_relation_translated:
+                        relation = relation.replace(v, 'self._z3vars["'+ v +'"]')
 
-        self._solutions = self._problem.getSolutionIter()
+                if not c.is_relation_translated:
+                    c.provide_translated_relation(relation)
+
+                self._solver.add(eval(c.relation))
+
+            else:
+                for v in c.vars:
+                    dom = self._var_domain[v]
+                    try:
+                        if isinstance(dom, tuple) and len(dom) == 2:
+                            dom = range(dom[0], dom[1]+1)
+                        self._problem.addVariable(v, dom)
+                    except ValueError:
+                        # most probable cause: duplicated variable is attempted to be inserted
+                        # (other cause is empty domain which is checked at init)
+                        pass
+                self._problem.addConstraint(c.relation, c.vars)
+
+        try:
+            if self.z3_problem:
+                self._solutions = _Z3_MODEL_NOT_COMPUTED
+            else:
+                self._solutions = self._problem.getSolutionIter()
+        except TypeError:
+            self._solutions = None
+            raise CSPDefinitionError(f'\nVariable types in the constraint formula are not consistent'
+                                     f' (root cause: incorrect data model or some fuzzing is'
+                                     f' performed?)'
+                                     f'\n --> variables: {self._vars}'
+                                     f'\n --> domains: {self._var_domain}')
+
+
+    def _next_solution(self):
+        z3mdl = self._solutions
+        if z3mdl is _Z3_MODEL_NOT_COMPUTED:
+            r = self._solver.check()
+            if r == sat:
+                self._solutions = self._solver.model()
+                return self._next_solution()
+            else:
+                raise CSPUnsat()
+
+        else:
+            self._solutions = _Z3_MODEL_NOT_COMPUTED
+            self._solver.add(Or([z3v != z3mdl[z3v] for z3v in self._z3vars.values()]))
+            mdl = {}
+            for var in z3mdl:
+                mdl[str(var)] = z3mdl[var].as_long()
+            return mdl
+
 
     def next_solution(self):
         if self._solutions is None or self._exhausted_solutions:
             self.reset()
-            self._solve_constraints()
             try:
-                mdl = next(self._solutions)
-            except StopIteration:
-                raise ConstraintError(f'No solution found for this CSP\n --> variables: {self._vars}')
-            else:
-                self._model = mdl
-        else:
-            try:
-                mdl = next(self._solutions)
-            except StopIteration:
+                self._solve_constraints()
+            except CSPDefinitionError as err:
                 self._exhausted_solutions = True
+                print(err)
             else:
-                self._model = mdl
+                if self.z3_problem:
+                    try:
+                        self._model = self._next_solution()
+                    except CSPUnsat:
+                        self._exhausted_solutions = True
+                else:
+                    try:
+                        mdl = next(self._solutions)
+                    except StopIteration:
+                        raise ConstraintError(f'No solution found for this CSP\n --> variables: {self._vars}')
+                    except TypeError:
+                        self._exhausted_solutions = True
+                        print(f'\nVariable types in the constraint formula are not consistent'
+                              f' (root cause: incorrect data model or some fuzzing is'
+                              f' performed?)'
+                              f'\n --> variables: {self._vars}'
+                              f'\n --> domains: {self._var_domain}')
+                    else:
+                        self._model = mdl
+        else:
+            if self.z3_problem:
+                try:
+                    mdl = self._next_solution()
+                except CSPUnsat:
+                    self._exhausted_solutions = True
+                else:
+                    self._model = mdl
+            else:
+                try:
+                    mdl = next(self._solutions)
+                except StopIteration:
+                    self._exhausted_solutions = True
+                else:
+                    self._model = mdl
 
         self._is_solution_queried = False
 
