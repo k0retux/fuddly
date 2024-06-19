@@ -640,8 +640,8 @@ class BasicVisitor(NodeConsumerStub):
         else:
             return False
 
-    def wait_for_exhaustion(self, node):
-        return -1
+    # def wait_for_exhaustion(self, node):
+    #     return -1
 
 
 class NonTermVisitor(BasicVisitor):

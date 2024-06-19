@@ -215,7 +215,9 @@ class sd_walk_data_model(StatefulDisruptor):
                                       consider_side_effects_on_sibbling=self.consider_sibbling_change,
                                       reset_when_change=self.deep, fix_constraints=self.fix_all)
         else:
-            consumer = BasicVisitor(respect_order=self.order, ignore_mutable_attr=self.ign_mutable_attr,
+            consumer = BasicVisitor(max_runs_per_node=self.max_runs_per_node,
+                                    min_runs_per_node=self.min_runs_per_node,
+                                    respect_order=self.order, ignore_mutable_attr=self.ign_mutable_attr,
                                     consider_side_effects_on_sibbling=self.consider_sibbling_change,
                                     reset_when_change=self.deep, fix_constraints=self.fix_all)
         sem_crit = NSC(optionalbut1_criteria=self.sem)

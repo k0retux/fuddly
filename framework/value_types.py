@@ -911,104 +911,119 @@ class String(VT_Alt):
                 if v not in self.values_fuzzy:
                     self.values_fuzzy.append(v)
 
-        ### Common Test Cases
-        if self.drawn_val is not None:
-            orig_val = self.drawn_val
+        if self.knowledge_source \
+                and self.knowledge_source.is_info_class_represented(Test) \
+                and self.knowledge_source.is_assumption_valid(Test.OnlyCornerCases):
+
+            if self.drawn_val is not None:
+                val = self.drawn_val
+            else:
+                val = self.values_copy[0]
+            self.values_fuzzy.append(val)
+            if len(self.values_copy) > 1:
+                val = self.values_copy[-1]
+                self.values_fuzzy.append(val)
+
         else:
-            if self.determinist:
-                orig_val = self.values_copy[0]
+            ### Common Test Cases
+            if self.drawn_val is not None:
+                orig_val = self.drawn_val
             else:
-                orig_val = random.choice(self.values_copy)
+                if self.determinist:
+                    orig_val = self.values_copy[0]
+                else:
+                    orig_val = random.choice(self.values_copy)
 
-        sz = len(orig_val)
-        sz_delta_with_max = self.max_encoded_sz - sz
+            sz = len(orig_val)
+            sz_delta_with_max = self.max_encoded_sz - sz
 
-        if sz > 0:
-            val = bp.corrupt_bits(orig_val, n=1)
-            self.values_fuzzy.append(val)
-
-        val = orig_val + b"A"*(sz_delta_with_max + 1)
-        self.values_fuzzy.append(val)
-
-        if len(self.encode(orig_val)) > 0:
-            self.values_fuzzy.append(b'')
-
-        if sz > 0:
-            sz_delta_with_min = sz - self.min_sz
-            val = orig_val[:-sz_delta_with_min-1]
-            if val != b'':
+            if sz > 0:
+                val = bp.corrupt_bits(orig_val, n=1)
                 self.values_fuzzy.append(val)
 
-        if self.max_sz > 0:
-            val = orig_val + b"X"*(self.max_sz*int(100*fuzz_magnitude))
+            val = orig_val + b"A"*(sz_delta_with_max + 1)
             self.values_fuzzy.append(val)
 
-        self.values_fuzzy.append(b'\x00' * sz if sz > 0 else b'\x00')
+            if len(self.encode(orig_val)) > 0:
+                self.values_fuzzy.append(b'')
 
-        if self.alphabet is not None and sz > 0:
-            if self.codec == self.ASCII:
-                base_char_set = set(self.printable_char_set)
-            else:
-                base_char_set = set(self.non_ctrl_char)
+            if sz > 0:
+                sz_delta_with_min = sz - self.min_sz
+                val = orig_val[:-sz_delta_with_min-1]
+                if val != b'':
+                    self.values_fuzzy.append(val)
 
-            unsupported_chars = base_char_set - set(self._bytes2str(self.alphabet))
-            if unsupported_chars:
-                sample = random.choice(tuple(unsupported_chars))[0]
-                test_case = orig_val[:-1] + sample.encode(self.codec)
-                self.values_fuzzy.append(test_case)
-
-        self.values_fuzzy.append(orig_val + b'\r\n' * int(100*fuzz_magnitude))
-
-        ### Conditional Test Cases
-        ctrl_chars_tc = String.fuzz_cases_ctrl_chars(self.knowledge_source, orig_val, sz,
-                                                     self.max_sz, self.codec)
-        if ctrl_chars_tc:
-            add_to_fuzz_list(ctrl_chars_tc)
-
-        c_strings_tc = String.fuzz_cases_c_strings(self.knowledge_source, orig_val, sz,
-                                                   fuzz_magnitude)
-        if c_strings_tc:
-            add_to_fuzz_list(c_strings_tc)
-
-        if self.case_sensitive:
-            fc_letter_cases = String.fuzz_cases_letter_case(self.knowledge_source, orig_val)
-            if fc_letter_cases:
-                add_to_fuzz_list(fc_letter_cases)
-
-        ### CODEC related test cases
-        if self.codec == self.ASCII:
-            val = bytearray(orig_val)
-            if len(val) > 0:
-                val[0] |= 0x80
-                val = bytes(val)
-            else:
-                val = b'\xe9'
-            if val not in self.values_fuzzy:
-                self.values_fuzzy.append(val)
-        elif self.codec == self.UTF16BE or self.codec == self.UTF16LE:
             if self.max_sz > 0:
-                if self.max_encoded_sz % 2 == 1:
-                    nb = self.max_sz // 2
-                    # euro character at the end that 'fully' use the 2 bytes of utf-16
-                    val = ('A' * nb).encode(self.codec) + b'\xac\x20'
-                    if val not in self.values_fuzzy:
-                        self.values_fuzzy.append(val)
+                val = orig_val + b"X"*(self.max_sz*int(100*fuzz_magnitude))
+                self.values_fuzzy.append(val)
 
-        ### Specific test cases added by optional string encoders
-        enc_cases = self.encoding_test_cases(orig_val, self.max_sz, self.min_sz,
-                                             self.min_encoded_sz, self.max_encoded_sz)
-        if enc_cases:
-            self.values_fuzzy += enc_cases
+            self.values_fuzzy.append(b'\x00' * sz if sz > 0 else b'\x00')
 
-        ### Specific test cases added by class that inherits from String()
-        extended_fuzz_cases = self.subclass_specific_test_cases(self.knowledge_source, orig_val, fuzz_magnitude)
-        if extended_fuzz_cases is not None:
-            add_to_fuzz_list(extended_fuzz_cases)
+            if self.alphabet is not None and sz > 0:
+                if self.codec == self.ASCII:
+                    base_char_set = set(self.printable_char_set)
+                else:
+                    base_char_set = set(self.non_ctrl_char)
 
-        ### Specific static test cases added at String() initialization through @extra_fuzzy_list
-        specif = self.get_specific_fuzzy_vals()
-        if specif:
-            add_to_fuzz_list(specif)
+                unsupported_chars = base_char_set - set(self._bytes2str(self.alphabet))
+                if unsupported_chars:
+                    sample = random.choice(tuple(unsupported_chars))[0]
+                    test_case = orig_val[:-1] + sample.encode(self.codec)
+                    self.values_fuzzy.append(test_case)
+
+            self.values_fuzzy.append(orig_val + b'\r\n' * int(100*fuzz_magnitude))
+
+            ### Conditional Test Cases
+            ctrl_chars_tc = String.fuzz_cases_ctrl_chars(self.knowledge_source, orig_val, sz,
+                                                         self.max_sz, self.codec)
+            if ctrl_chars_tc:
+                add_to_fuzz_list(ctrl_chars_tc)
+
+            c_strings_tc = String.fuzz_cases_c_strings(self.knowledge_source, orig_val, sz,
+                                                       fuzz_magnitude)
+            if c_strings_tc:
+                add_to_fuzz_list(c_strings_tc)
+
+            if self.case_sensitive:
+                fc_letter_cases = String.fuzz_cases_letter_case(self.knowledge_source, orig_val)
+                if fc_letter_cases:
+                    add_to_fuzz_list(fc_letter_cases)
+
+            ### CODEC related test cases
+            if self.codec == self.ASCII:
+                val = bytearray(orig_val)
+                if len(val) > 0:
+                    val[0] |= 0x80
+                    val = bytes(val)
+                else:
+                    val = b'\xe9'
+                if val not in self.values_fuzzy:
+                    self.values_fuzzy.append(val)
+            elif self.codec == self.UTF16BE or self.codec == self.UTF16LE:
+                if self.max_sz > 0:
+                    if self.max_encoded_sz % 2 == 1:
+                        nb = self.max_sz // 2
+                        # euro character at the end that 'fully' use the 2 bytes of utf-16
+                        val = ('A' * nb).encode(self.codec) + b'\xac\x20'
+                        if val not in self.values_fuzzy:
+                            self.values_fuzzy.append(val)
+
+            ### Specific test cases added by optional string encoders
+            enc_cases = self.encoding_test_cases(orig_val, self.max_sz, self.min_sz,
+                                                 self.min_encoded_sz, self.max_encoded_sz)
+            if enc_cases:
+                self.values_fuzzy += enc_cases
+
+            ### Specific test cases added by class that inherits from String()
+            extended_fuzz_cases = self.subclass_specific_test_cases(self.knowledge_source, orig_val, fuzz_magnitude)
+            if extended_fuzz_cases is not None:
+                add_to_fuzz_list(extended_fuzz_cases)
+
+            ### Specific static test cases added at String() initialization through @extra_fuzzy_list
+            specif = self.get_specific_fuzzy_vals()
+            if specif:
+                add_to_fuzz_list(specif)
+
 
         self.values_save = self.values
         self.values = self.values_fuzzy
@@ -1353,51 +1368,76 @@ class INT(VT):
         specific_fuzzy_values = self.get_specific_fuzzy_vals()
         supp_list = specific_fuzzy_values if specific_fuzzy_values is not None else []
 
-        val = self.get_current_raw_val()
-        if val is not None:
-            # don't use a set to preserve the order if needed
-            if val+1 not in supp_list:
-                supp_list.append(val+1)
-            if val-1 not in supp_list:
-                supp_list.append(val-1)
-
-            if self.values is not None:
-                orig_set = set(self.values)
-                max_oset = max(orig_set)
-                min_oset = min(orig_set)
-                if min_oset != max_oset:
-                    diff_sorted = sorted(set(range(min_oset, max_oset+1)) - orig_set)
-                    if diff_sorted:
-                        item1 = diff_sorted[0]
-                        item2 = diff_sorted[-1]
-                        if item1 not in supp_list:
-                            supp_list.append(item1)
-                        if item2 not in supp_list:
-                            supp_list.append(item2)
-                    if max_oset+1 not in supp_list:
-                        supp_list.append(max_oset+1)
-                    if min_oset-1 not in supp_list:
-                        supp_list.append(min_oset-1)
-
-            if self.mini is not None:
-                cond1 = False
-                if self.value_space_size != -1:  # meaning not an INT_str
-                    cond1 = (self.mini != 0 or self.maxi != ((1 << self.size) - 1)) and \
-                       (self.mini != -(1 << (self.size-1)) or self.maxi != ((1 << (self.size-1)) - 1))
+        if self.knowledge_source \
+                and self.knowledge_source.is_info_class_represented(Test) \
+                and self.knowledge_source.is_assumption_valid(Test.OnlyCornerCases):
+            val = self.get_current_raw_val()
+            if val is not None:
+                if self.values is not None:
+                    orig_set = set(self.values)
+                    max_oset = max(orig_set)
+                    min_oset = min(orig_set)
                 else:
-                    cond1 = True
+                    assert self.mini is not None
+                    max_oset = self.maxi_gen
+                    min_oset = self.mini_gen
 
-                if cond1:
-                    # we avoid using vt.mini or vt.maxi has they could be undefined (e.g., INT_str)
-                    if self.mini_gen-1 not in supp_list:
-                        supp_list.append(self.mini_gen-1)
-                    if self.maxi_gen+1 not in supp_list:
-                        supp_list.append(self.maxi_gen+1)
+                if max_oset not in supp_list:
+                    supp_list.append(max_oset)
+                if min_oset not in supp_list:
+                    supp_list.append(min_oset)
+                if max_oset - val > 1:
+                    rval = random.randint(val+1,max_oset-1)
+                    supp_list.append(rval)
+                if val - min_oset > 1:
+                    rval = random.randint(min_oset+1,val-1)
+                    supp_list.append(rval)
+        else:
+            val = self.get_current_raw_val()
+            if val is not None:
+                # don't use a set to preserve the order if needed
+                if val+1 not in supp_list:
+                    supp_list.append(val+1)
+                if val-1 not in supp_list:
+                    supp_list.append(val-1)
 
-        if self.fuzzy_values:
-            for v in self.fuzzy_values:
-                if v not in supp_list:
-                    supp_list.append(v)
+                if self.values is not None:
+                    orig_set = set(self.values)
+                    max_oset = max(orig_set)
+                    min_oset = min(orig_set)
+                    if min_oset != max_oset:
+                        diff_sorted = sorted(set(range(min_oset, max_oset+1)) - orig_set)
+                        if diff_sorted:
+                            item1 = diff_sorted[0]
+                            item2 = diff_sorted[-1]
+                            if item1 not in supp_list:
+                                supp_list.append(item1)
+                            if item2 not in supp_list:
+                                supp_list.append(item2)
+                        if max_oset+1 not in supp_list:
+                            supp_list.append(max_oset+1)
+                        if min_oset-1 not in supp_list:
+                            supp_list.append(min_oset-1)
+
+                if self.mini is not None:
+                    cond1 = False
+                    if self.value_space_size != -1:  # meaning not an INT_str
+                        cond1 = (self.mini != 0 or self.maxi != ((1 << self.size) - 1)) and \
+                           (self.mini != -(1 << (self.size-1)) or self.maxi != ((1 << (self.size-1)) - 1))
+                    else:
+                        cond1 = True
+
+                    if cond1:
+                        # we avoid using vt.mini or vt.maxi has they could be undefined (e.g., INT_str)
+                        if self.mini_gen-1 not in supp_list:
+                            supp_list.append(self.mini_gen-1)
+                        if self.maxi_gen+1 not in supp_list:
+                            supp_list.append(self.maxi_gen+1)
+
+            if self.fuzzy_values:
+                for v in self.fuzzy_values:
+                    if v not in supp_list:
+                        supp_list.append(v)
 
         if supp_list:
             supp_list = list(filter(self.is_size_compatible, supp_list))
@@ -1991,8 +2031,13 @@ class INT_str(INT):
 
     def get_fuzzed_vt_list(self):
         vt_list = INT.get_fuzzed_vt_list(self)
-        fuzzed_vals = []
 
+        if self.knowledge_source \
+                and self.knowledge_source.is_info_class_represented(Test) \
+                and self.knowledge_source.is_assumption_valid(Test.OnlyCornerCases):
+            return vt_list
+
+        fuzzed_vals = []
         def handle_size(self, v):
             sz = 1 if v == 0 else math.ceil(math.log(abs(v), self._base))
             if sz <= new_min_size:

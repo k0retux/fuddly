@@ -107,6 +107,7 @@ class Test(Info):
     Cursory = auto()
     Medium = auto()
     Deep = auto()
+    OnlyCornerCases = auto()  # syntax is valid
 
 class OperationMode(Info):
     Determinist = auto()
