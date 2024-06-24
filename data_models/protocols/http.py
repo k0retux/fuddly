@@ -62,7 +62,7 @@ class HTTPModel(DataModel):
 
         obs_fold = CRLF + RWS       # obsolete line folding
 
-        qvalue = "0(.\d{0,3})?|1(.0{0,3})?"
+        qvalue = r"0(.\d{0,3})?|1(.0{0,3})?"
         weight = OWS + ";" + OWS + "q=" + qvalue
 
 
@@ -87,7 +87,7 @@ class HTTPModel(DataModel):
                                  }]
                             },
                            {'name': 'request_target', 'contents': String()},  # ...
-                           {'name': ('HTTP_version', 1), 'contents': '(HTTP)/[0-9]\.[0-9]'}
+                           {'name': ('HTTP_version', 1), 'contents': r'(HTTP)/[0-9]\.[0-9]'}
                        ]},
 
                       {'name': 'status_line',
@@ -96,7 +96,7 @@ class HTTPModel(DataModel):
                        'contents': [
                            {'name': ('HTTP_version', 2), 'clone': ('HTTP_version', 1)},
                            {'name': 'status_code',
-                            'contents': "\d{3}",
+                            'contents': r"\d{3}",
                             'alt': [
                                 {'conf': 'standard',
                                  'shape_type': MH.Pick,
@@ -302,7 +302,7 @@ class HTTPModel(DataModel):
                                       'contents': '100-continue'},
                                      {'name': 'field_value_max_forwards',
                                       'exists_if': (RawCondition('Max-Forwards'), 'field_name_controls'),
-                                      'contents': '\d+'},
+                                      'contents': r'\d+'},
                                      # { ... }
                                  ]}
                             ]},

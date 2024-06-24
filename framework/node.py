@@ -113,7 +113,7 @@ def flatten(nested):
             yield x
 
 
-nodes_weight_re = re.compile('(.*?)\((.*)\)')
+nodes_weight_re = re.compile(r'(.*?)\((.*)\)')
 
 ### Debug Means ###
 
@@ -7167,7 +7167,7 @@ class Node(object):
                     # depth always >=1
                     depth -= 1
 
-                junction_sym = ' \__'
+                junction_sym = r' \__'
                 junction_sym_len = len(junction_sym)
                 if depth == 0:
                     indent_nonterm = ''
@@ -7240,14 +7240,14 @@ class Node(object):
 
                     if val is not None:
                         print_nonterm_func("{:s}  ".format(indent_spc), nl=False, log_func=log_func, pretty_print=pretty_print)
-                        print_contents_func("\_ {:s}".format(val), log_func=log_func, pretty_print=pretty_print)
+                        print_contents_func(r"\_ {:s}".format(val), log_func=log_func, pretty_print=pretty_print)
                     print_nonterm_func("{:s}  ".format(indent_spc), nl=False, log_func=log_func, pretty_print=pretty_print)
                     if raw_limit is not None and raw_len > raw_limit:
-                        print_raw_func("\_raw: {:s}".format(repr(raw[:raw_limit])), nl=False,
+                        print_raw_func(r"\_raw: {:s}".format(repr(raw[:raw_limit])), nl=False,
                                        log_func=log_func, pretty_print=pretty_print)
                         print_raw_func(" ...", hlight=True, log_func=log_func, pretty_print=pretty_print)
                     else:
-                        print_raw_func("\_raw: {:s}".format(repr(raw)), log_func=log_func, pretty_print=pretty_print)
+                        print_raw_func(r"\_raw: {:s}".format(repr(raw)), log_func=log_func, pretty_print=pretty_print)
                 else:
                     is_gen_node = isinstance(node.c[conf_tmp], NodeInternals_GenFunc)
                     if (is_gen_node and display_gen_node) or not is_gen_node:

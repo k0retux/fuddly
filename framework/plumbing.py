@@ -80,7 +80,7 @@ exec('import ' + user_tg_mod)
 
 sig_int_handler = signal.getsignal(signal.SIGINT)
 
-r_pyfile = re.compile(".*\.py$")
+r_pyfile = re.compile(r'.*\.py$')
 def is_python_file(fname):
     return r_pyfile.match(fname)
 
@@ -356,7 +356,7 @@ class FmkPlumbing(object):
     def start(self):
         self.printer.start()
 
-        self.check_clone_re = re.compile('(.*)#(\w{1,30})')
+        self.check_clone_re = re.compile(r'(.*)#(\w{1,30})')
 
         self.config = config(self, path=[config_folder])
 
@@ -783,7 +783,7 @@ class FmkPlumbing(object):
             if not data_models[k]:
                 del data_models[k]
 
-        rexp_strategy = re.compile("(.*)_strategy\.py$")
+        rexp_strategy = re.compile(r'(.*)_strategy\.py$')
 
         if not self._quiet:
             self.print(colorize(FontStyle.BOLD + "="*63+"[ Data Models ]==", rgb=Color.FMKINFOGROUP))
@@ -930,7 +930,7 @@ class FmkPlumbing(object):
             if not projects[k]:
                 del projects[k]
 
-        rexp_proj = re.compile("(.*)_proj\.py$")
+        rexp_proj = re.compile(r'(.*)_proj\.py$')
 
         if not self._quiet:
             self.print(colorize(FontStyle.BOLD + "="*66+"[ Projects ]==", rgb=Color.FMKINFOGROUP))
@@ -1308,7 +1308,7 @@ class FmkPlumbing(object):
 
             extensions = tg.extensions
             if extensions:
-                msg += '\n     \-- extensions:'
+                msg += r'\n     \-- extensions:'
                 for ext in extensions:
                     ext_obj, delay = self._extract_info_from_tg_extensions(ext)
                     ext_name = ext_obj.__name__ if isinstance(ext_obj, type) else ext_obj.__class__.__name__
@@ -3506,7 +3506,7 @@ class FmkPlumbing(object):
                     ui = self.__initialized_dmakers[dmaker_obj][1]
                 else:
                     if action_list_sz == 1:
-                        ui = user_input.merge_with(UI(freeze=True))
+                        ui = UI(freeze=True) if user_input is None else user_input.merge_with(UI(freeze=True))
                     else:
                         ui = user_input
                 initial_generator_info = [dmaker_type, dmaker_name, ui]
@@ -4099,9 +4099,9 @@ class FmkShell(cmd.Cmd):
             '|^disable_fmkdb$|^enable_fmkdb$|^disable_fbk_handlers$|^enable_fbk_handlers$|^help'
             )
 
-        self.dmaker_name_re = re.compile('^([#\-\w]+)(\(?[^\(\)]*\)?)$', re.S)
-        self.input_params_re = re.compile('\((.*)\)', re.S)
-        self.input_param_values_re = re.compile('(.*)=(.*)', re.S)
+        self.dmaker_name_re = re.compile(r'^([#\-\w]+)(\(?[^\(\)]*\)?)$', re.S)
+        self.input_params_re = re.compile(r'\((.*)\)', re.S)
+        self.input_param_values_re = re.compile(r'(.*)=(.*)', re.S)
 
         self.config = config(self, path=[config_folder])
 

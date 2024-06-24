@@ -1942,7 +1942,7 @@ class INT_str(INT):
     endian = VT.Native
     usable = True
 
-    regex_decimal = b'-?\d'
+    regex_decimal = b'-?\\d'
 
     regex_upper_hex = b'-?[0123456789ABCDEF]'
     regex_lower_hex = b'-?[0123456789abcdef]'

@@ -846,7 +846,7 @@ class ProbeMem(Probe):
         for entry in proc_list:
             if entry.find(self.process_name) >= 0:
                 try:
-                    rss = int(re.search('\d+', entry.split()[0]).group(0))
+                    rss = int(re.search(r'\d+', entry.split()[0]).group(0))
                 except:
                     rss = -10
                 break

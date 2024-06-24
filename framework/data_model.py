@@ -126,8 +126,8 @@ class DataModel(object):
             status, off, size, name = atom_for_abs.absorb(data, constraints=abs_csts)
 
             print('{:s} Absorb Status: {!r}, {:d}, {:d}'.format(nm, status, off, size))
-            print(' \_ length of original data: {:d}'.format(len(data)))
-            print(' \_ remaining: {!r}'.format(data[size:size+1000]))
+            print(r' \_ length of original data: {:d}'.format(len(data)))
+            print(r' \_ remaining: {!r}'.format(data[size:size+1000]))
 
             if status == AbsorbStatus.FullyAbsorbed:
                 print("--> Create {:s} from files in '{:s}{:s}' directory"
@@ -206,8 +206,8 @@ class DataModel(object):
             accumulate(colorize("\n*** DECODING ERROR [atom used: '{:s}'] ***", rgb=Color.ERROR)
                        .format(name))
             accumulate('\nAbsorption Status: {!r}, {:d}, {:d}'.format(status, off, size))
-            accumulate('\n \_ length of original data: {:d}'.format(len(data)))
-            accumulate('\n \_ remaining: {!r}'.format(data[size:size+1000]))
+            accumulate(r'\n \_ length of original data: {:d}'.format(len(data)))
+            accumulate(r'\n \_ remaining: {!r}'.format(data[size:size+1000]))
         else:
             accumulate('\n')
             atom.show(log_func=accumulate, display_title=False, pretty_print=colorized)
@@ -367,7 +367,7 @@ class DataModel(object):
         if path is None:
             path = self.get_import_directory_path(subdir=subdir)
 
-        r_file = re.compile(".*\." + extension + "$")
+        r_file = re.compile(r'.*\.' + extension + '$')
         def is_good_file_by_ext(fname):
             return bool(r_file.match(fname))
 

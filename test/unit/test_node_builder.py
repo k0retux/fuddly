@@ -102,19 +102,19 @@ class RegexParserTest(unittest.TestCase):
 
 
     @ddt.data(
-        {'regex': "salut(l\(es)(lou\\\\lous)cmoi",
+        {'regex': "salut(l\\(es)(lou\\\\lous)cmoi",
          'nodes': [
              {"values": ["salut"]},
              {"values": ["l(es"]},
-             {"values": ["lou\lous"]},
+             {"values": [r"lou\lous"]},
              {"values": ["cmoi"]},
          ]},
         {'regex': "hi\x58", 'nodes': [{"values": ["hi\x58"]}]},
         {'regex': "hi\x00hola", 'nodes': [{"values": ["hi\x00hola"]}]},
         {'regex': "\xFFdom", 'nodes': [{"values": ["\xFFdom"]}]},
-        {'regex': "\ddom",
+        {'regex': "\\ddom",
          'nodes': [{"values": [i for i in range(0,10)], "type": vt.INT_str}, {"values": ["dom"]}]},
-        {'regex': "dom[abcd\d]", 'nodes': [{"values": ["dom"]}, {"alphabet": "abcd0123456789"}]},
+        {'regex': "dom[abcd\\d]", 'nodes': [{"values": ["dom"]}, {"alphabet": "abcd0123456789"}]},
         {'regex': "[abcd]\x43", 'nodes': [{"alphabet": "abcd"}, {"values": ["\x43"]}]},
         {'regex': "(abcd)\x53", 'nodes': [{"values": ["abcd"]}, {"values": ["\x53"]}]},
         {'regex': "\x43[abcd]", 'nodes': [{"values": ["\x43"]}, {"alphabet": "abcd"}]},
@@ -123,13 +123,13 @@ class RegexParserTest(unittest.TestCase):
          'nodes': [{"values": [u"\u0443"]}, {"values": [u"abcd"]}]},
         {'regex': u"hi(ab\u0443cd)", "charset": MH.Charset.UNICODE,
          'nodes': [{"values": [u"hi"]}, {"values": [u"ab\u0443cd"]}]},
-        {'regex': u"(333|444)|foo-bar|\d|[th|is]",
+        {'regex': u"(333|444)|foo-bar|\\d|[th|is]",
          'nodes': [
              {"type": fvt.INT_str, "values": [333,444]},
              {"values": [u"foo-bar"]},
              {"values": [i for i in range(0,10)], "type": vt.INT_str},
              {"alphabet": "th|is"}]},
-        {'regex': u"(333|444)|foo-bar|\||[th|is]",
+        {'regex': u"(333|444)|foo-bar|\\||[th|is]",
          'nodes': [
              {"type": fvt.INT_str, "values": [333, 444]},
              {"values": [u"foo-bar", "|"]},
@@ -153,7 +153,7 @@ class RegexParserTest(unittest.TestCase):
 
 
     @ddt.data(
-        {'regex': "[abcd]*toto(|\(ab\)|cd)+what?ever",
+        {'regex': r"[abcd]*toto(|\(ab\)|cd)+what?ever",
          'nodes': [
              {"alphabet": "abcd", "qty": (0, None)},
              {"values": ["toto"]},

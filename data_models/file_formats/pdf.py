@@ -42,7 +42,7 @@ import framework.global_resources as gr
 
 def gather_pdf_objects(path=gr.imported_data_folder):
 
-    r_pdf_file = re.compile(".*\.pdf$")
+    r_pdf_file = re.compile(r'.*\.pdf$')
     def is_pdf_file(fname):
         if r_pdf_file.match(fname):
             return True

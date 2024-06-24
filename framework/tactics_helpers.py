@@ -377,21 +377,21 @@ class Tactics(object):
 
 
     def print_disruptor(self, dmaker_type, disruptor_name):
-        print("### Register Disruptor ###\n" + \
-                  " |_ type: %s\n" % dmaker_type + \
-                  "     \_ total weight: %d\n" % self.get_dmaker_type_total_weight(dmaker_type) + \
-                  " |_ name: %s\n" % disruptor_name + \
-                  " |_ weight: %d\n" % self.get_disruptor_weight(dmaker_type, disruptor_name) + \
-                  " \_ valid data: %r\n" % self.get_disruptor_validness(dmaker_type, disruptor_name)
+        print("### Register Disruptor ###\n" +
+              " |_ type: %s\n" % dmaker_type +
+              "     \\_ total weight: %d\n" % self.get_dmaker_type_total_weight(dmaker_type) +
+              " |_ name: %s\n" % disruptor_name +
+              " |_ weight: %d\n" % self.get_disruptor_weight(dmaker_type, disruptor_name) +
+              " \\_ valid data: %r\n" % self.get_disruptor_validness(dmaker_type, disruptor_name)
               )
 
     def print_generator(self, dmaker_type, generator_name):
-        print("### Register Generator ###\n" + \
-                  " |_ type: %s\n" % dmaker_type + \
-                  "     \_ total weight: %d\n" % self.get_datatype_total_weight(dmaker_type) + \
-                  " |_ name: %s\n" % generator_name + \
-                  " \_ weight: %d\n" % self.get_generator_weight(dmaker_type, generator_name) + \
-                  " \_ valid data: %r\n" % self.get_generator_validness(dmaker_type, generator_name)
+        print("### Register Generator ###\n" +
+              " |_ type: %s\n" % dmaker_type +
+              "     \\_ total weight: %d\n" % self.get_datatype_total_weight(dmaker_type) +
+              " |_ name: %s\n" % generator_name +
+              " \\_ weight: %d\n" % self.get_generator_weight(dmaker_type, generator_name) +
+              " \\_ valid data: %r\n" % self.get_generator_validness(dmaker_type, generator_name)
               )
 
 

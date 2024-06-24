@@ -101,7 +101,7 @@ def json_model_builder(node_name, schema, struct_mutable=True, determinist=False
              'random': not determinist,
              'separator': {'contents': {'name': ('obj_sep', uuid.uuid1()),
                                         'contents': fvt.String(values=[',\n'], max_sz=100,
-                                                               absorb_regexp='\s*,\s*', codec=codec),
+                                                               absorb_regexp=r'\s*,\s*', codec=codec),
                                         'mutable': struct_mutable,
                                         'absorb_csts': AbsNoCsts(size=True, regexp=True)},
                            'prefix': False, 'suffix': False, 'unique': False},
@@ -119,7 +119,7 @@ def json_model_builder(node_name, schema, struct_mutable=True, determinist=False
 
         format = schema.get('format')
         if format == 'ipv4':
-            pattern = '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
+            pattern = r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
 
         if pattern is None or ignore_pattern:
             str_desc = \
@@ -204,7 +204,7 @@ def json_model_builder(node_name, schema, struct_mutable=True, determinist=False
              'custo_clear': MH.Custo.NTerm.FrozenCopy,
              'separator': {'contents': {'name': ('obj_sep', uuid.uuid1()),
                                         'contents': fvt.String(values=[','], max_sz=100,
-                                                               absorb_regexp='\s*,\s*', codec=codec),
+                                                               absorb_regexp=r'\s*,\s*', codec=codec),
                                         'mutable': struct_mutable,
                                         'absorb_csts': AbsNoCsts(size=True, regexp=True)},
                            'prefix': False, 'suffix': False, 'unique': False},
@@ -282,7 +282,7 @@ def json_builder(node_name, sample=None, codec='latin-1',
                      'contents': modeled_v,
                      'separator': {'contents': {'name': ('comma', uuid.uuid1()),
                                                 'contents': fvt.String(values=[','], max_sz=100,
-                                                                       absorb_regexp='\s*,\s*', codec=codec),
+                                                                       absorb_regexp=r'\s*,\s*', codec=codec),
                                                 'mutable': struct_mutable,
                                                 'absorb_csts': AbsNoCsts(size=True, regexp=True)},
                                    'prefix': False, 'suffix': False, 'unique': False} }
@@ -326,7 +326,7 @@ def json_builder(node_name, sample=None, codec='latin-1',
          'random': not determinist,
          'separator': {'contents': {'name': ('comma', uuid.uuid1()),
                                     'contents': fvt.String(values=[','], max_sz=100,
-                                                           absorb_regexp='\s*,\s*', codec=codec),
+                                                           absorb_regexp=r'\s*,\s*', codec=codec),
                                     'mutable': struct_mutable,
                                     'absorb_csts': AbsNoCsts(size=True, regexp=True)},
                        'prefix': False, 'suffix': False, 'unique': False},

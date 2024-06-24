@@ -138,7 +138,7 @@ def tag_builder(tag_name, params=None, refs=None, contents=None, node_name=None,
          'random': not determinist,
          'separator': {'contents': {'name': ('spc', uuid.uuid1()),
                                     'contents': fvt.String(values=[' '], max_sz=100,
-                                                           absorb_regexp='\s+', codec=codec),
+                                                           absorb_regexp=r'\s+', codec=codec),
                                     'mutable': struct_mutable,
                                     'absorb_csts': AbsNoCsts(size=True, regexp=True)},
                        'prefix': False, 'suffix': False, 'unique': False},
@@ -215,7 +215,7 @@ def tag_builder(tag_name, params=None, refs=None, contents=None, node_name=None,
         {'name': tag_name if node_name is None else node_name,
          'separator': {'contents': {'name': ('nl', uuid.uuid1()),
                                     'contents': fvt.String(values=['\n'], max_sz=100,
-                                                           absorb_regexp='\s*', codec=codec),
+                                                           absorb_regexp=r'\s*', codec=codec),
                                     'absorb_csts': AbsNoCsts(regexp=True)},
                        'prefix': nl_prefix, 'suffix': nl_suffix, 'unique': False},
          'contents': cts}
@@ -227,7 +227,7 @@ def tag_builder(tag_name, params=None, refs=None, contents=None, node_name=None,
 
 def xml_decl_builder(determinist=True):
     version_desc = {'name': 'version',
-                    'contents': '[123456789]\.\d'}
+                    'contents': r'[123456789]\.\d'}
 
     encoding_list = ['UTF-8', 'UTF-16', 'ISO-10646-UCS-2','ISO-10646-UCS-4',
                      'ISO-2022-JP', 'Shift_JIS', 'EUC-JP'] + \

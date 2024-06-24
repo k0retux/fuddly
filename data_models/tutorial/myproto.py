@@ -122,8 +122,8 @@ class MyProto_DataModel(DataModel):
                 ok = False
 
             print('Absorb Status: {!r}, {:d}, {:d}, {:s}'.format(status, off, size, name))
-            print(' \_ length of original data: {:d}'.format(len(d)))
-            print(' \_ remaining: {!r}'.format(d[size:size+1000]))
+            print(r' \_ length of original data: {:d}'.format(len(d)))
+            print(r' \_ remaining: {!r}'.format(d[size:size+1000]))
 
             atom.show()
 

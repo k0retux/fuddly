@@ -50,7 +50,7 @@ class Periodic(object):
             self.vtg_ids_list = [vtg_ids]
 
     def __str__(self):
-        desc = 'period={}s \| '.format(self.period)
+        desc = r'period={}s \| '.format(self.period)
         d = self.data
         if isinstance(d, DataProcess):
             desc += 'DP({:s})'.format(d.formatted_str(oneliner=True))
@@ -66,7 +66,7 @@ class Periodic(object):
             desc += '[' + self.__class__.__name__ + ']'
         if self.vtg_ids_list is not None:
             vtg_str = str(self.vtg_ids_list) if len(self.vtg_ids_list) > 1 else str(self.vtg_ids_list[0])
-            desc += ' -(vtg)-\> {:s}\n'.format(vtg_str)
+            desc += r' -(vtg)-\> {:s}\n'.format(vtg_str)
         else:
             desc += '\n'
         desc = desc[:-1]
@@ -547,7 +547,7 @@ class Step(object):
                 else:
                     assert d is None, f'incorrect object: {d}'
                     step_desc += '[' + self.__class__.__name__ + ']'
-                vtgids_str = ' -(vtg)-\> {:s}'.format(str(self.vtg_ids_list[idx])) if self.vtg_ids_list is not None else ''
+                vtgids_str = r' -(vtg)-\> {:s}'.format(str(self.vtg_ids_list[idx])) if self.vtg_ids_list is not None else ''
                 step_desc += vtgids_str + '\n'
             step_desc = step_desc[:-1]
 
@@ -564,11 +564,11 @@ class Step(object):
             if self._do_before_data_processing is None:
                 cbk_before_dataproc_str = ' x '
             else:
-                cbk_before_dataproc_str = ' \<-- {:s}()  '.format(self._do_before_data_processing.__name__)
+                cbk_before_dataproc_str = r' \<-- {:s}()  '.format(self._do_before_data_processing.__name__)
             if self._do_before_sending is None:
                 cbk_before_sending_str = ' x '
             else:
-                cbk_before_sending_str = ' --\> {:s}() '.format(self._do_before_sending.__name__)
+                cbk_before_sending_str = r' --\> {:s}() '.format(self._do_before_sending.__name__)
 
             if self.is_blocked():
                 step_desc = step_desc + '|{:s}'.format(cbk_before_dataproc_str)
@@ -614,11 +614,11 @@ class Step(object):
             desc = '{'
             if self.is_periodic_set():
                 for p in self.periodic_to_set:
-                    desc += 'SET Periodic [{:s}]\l [{:s}]\l|'.format(str(id(p))[-6:], str(p))
+                    desc += r'SET Periodic [{:s}]\l [{:s}]\l|'.format(str(id(p))[-6:], str(p))
 
             if self.is_periodic_cleared():
                 for p in self.periodic_to_clear:
-                    desc += 'CLEAR Periodic [{:s}]\l|'.format(str(p)[-6:])
+                    desc += r'CLEAR Periodic [{:s}]\l|'.format(str(p)[-6:])
             desc = desc[:-1] + '}'
             return desc
         else:
@@ -630,11 +630,11 @@ class Step(object):
             desc = '{'
             if self.has_tasks_to_start():
                 for t in self.tasks_to_start:
-                    desc += 'START Task [{:s}]\l [{:s}]\l|'.format(str(id(t))[-6:], str(t))
+                    desc += r'START Task [{:s}]\l [{:s}]\l|'.format(str(id(t))[-6:], str(t))
 
             if self.has_tasks_to_stop():
                 for t in self.tasks_to_stop:
-                    desc += 'STOP Task [{:s}]\l|'.format(str(t)[-6:])
+                    desc += r'STOP Task [{:s}]\l|'.format(str(t)[-6:])
             desc = desc[:-1] + '}'
             return desc
         else:
@@ -1202,9 +1202,9 @@ class Scenario(object):
                         uinputs = self.env.user_context.get_inputs()
                         for k, v in uinputs.items():
                             v = f'{v!s}'
-                            v = v.replace('{', '\{')
-                            v = v.replace('}', '\}')
-                            uctxt_desc += '{:s} = {:s}\l|'.format(k, v)
+                            v = v.replace('{', r'\{')
+                            v = v.replace('}', r'\}')
+                            uctxt_desc += r'{:s} = {:s}\l|'.format(k, v)
                         uctxt_desc = uctxt_desc[:-1] + '}'
                     else:
                         uctxt_desc = str(self.env.user_context)
