@@ -27,7 +27,7 @@ import re
 import math
 import threading
 import copy
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 from typing import Optional
 
 import framework.global_resources as gr
@@ -36,6 +36,38 @@ import libs.external_modules as em
 from framework.knowledge.feedback_collector import FeedbackSource
 from libs.external_modules import *
 from libs.utils import chunk_lines
+
+
+def register_adapters_and_converters():
+    def adapt_date(val):
+        return val.isoformat()
+
+    def adapt_datetime(val):
+        return val.isoformat(" ")
+
+    def convert_date(val):
+        return datetime.date(*map(int, val.split(b"-")))
+
+    def convert_timestamp(val):
+        datepart, timepart = val.split(b" ")
+        year, month, day = map(int, datepart.split(b"-"))
+        timepart_full = timepart.split(b".")
+        hours, minutes, seconds = map(int, timepart_full[0].split(b":"))
+        if len(timepart_full) == 2:
+            microseconds = int('{:0<6.6}'.format(timepart_full[1].decode()))
+        else:
+            microseconds = 0
+
+        val = datetime(year, month, day, hours, minutes, seconds, microseconds)
+        return val
+
+    sqlite3.register_adapter(date, adapt_date)
+    sqlite3.register_adapter(datetime, adapt_datetime)
+    sqlite3.register_converter("date", convert_date)
+    sqlite3.register_converter("timestamp", convert_timestamp)
+
+
+register_adapters_and_converters()
 
 
 def regexp(expr, item):
