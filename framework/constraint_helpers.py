@@ -153,17 +153,17 @@ class CSP(object):
     _is_solution_queried = False
     highlight_variables = None
 
-    z3_problem = False
+    z3_problem = None
 
-    def __init__(self, constraints: Constraint or List[Constraint] = None, highlight_variables=False):
+    def __init__(self, constraints: Constraint or Z3Constraint or List[Constraint or Z3Constraint],
+                 highlight_variables=False):
         assert csp_module or z3_module, "the CSP backbone is disabled because of missing CSP backends!"
+
+        self.z3_problem = False
 
         if isinstance(constraints, (Constraint, Z3Constraint)):
             if isinstance(constraints, Z3Constraint):
                 self.z3_problem = True
-            if self.z3_problem:
-                assert(isinstance(constraints, Z3Constraint),
-                       "Mix between Z3Constraint and Constraint are not allowed")
             c_copy = copy.copy(constraints)
             self._vars = c_copy.vars
             self._constraints = [c_copy]
@@ -172,9 +172,15 @@ class CSP(object):
             self._constraints = []
             self._vars = ()
             self._z3vars = {}
+            self.z3_problem = isinstance(constraints[0], Z3Constraint)
             for r in constraints:
-                if isinstance(r, Z3Constraint):
-                    self.z3_problem = True
+                if self.z3_problem:
+                    assert isinstance(r, Z3Constraint), \
+                        "Mix of Z3Constraint and Constraint objects are not allowed"
+                else:
+                    assert isinstance(r, Constraint), \
+                        "Mix of Z3Constraint and Constraint objects are not allowed"
+
                 r_copy = copy.copy(r)
                 self._constraints.append(r_copy)
                 self._vars += r_copy.vars

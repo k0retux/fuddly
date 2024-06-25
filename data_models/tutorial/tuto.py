@@ -10,7 +10,7 @@ import framework.dmhelpers.xml as xml
 from framework.dmhelpers.json import *
 from framework.dmhelpers.xml import tag_builder as xtb
 from framework.dmhelpers.xml import xml_decl_builder
-from framework.constraint_helpers import Constraint
+from framework.constraint_helpers import Constraint, Z3Constraint
 
 class MyDF_DataModel(DataModel):
 
@@ -428,7 +428,7 @@ class MyDF_DataModel(DataModel):
          ]}
 
         regex_desc = {'name': 'regex',
-                      'contents': '(333|444)|(foo|bar)|\d|[th|is]'}
+                      'contents': r'(333|444)|(foo|bar)|\d|[th|is]'}
 
 
         xml1_desc = xml.tag_builder('A1', params={'p1':'a', 'p2': ['foo', 'bar'], 'p3': 'c'},
@@ -472,9 +472,9 @@ class MyDF_DataModel(DataModel):
                               params={'auth': ['cert', 'psk'], 'backend': ['ssh', 'serial']},
                               specific_fuzzy_vals={'auth': ['None']}, determinist=False, contents= \
                              [xtb('msg_id', contents=Node('mid', vt=INT_str(min=0))),
-                              xtb('username', contents=['MyUser'], absorb_regexp='\w*'),
+                              xtb('username', contents=['MyUser'], absorb_regexp=r'\w*'),
                               xtb('password', contents=['plopi'],
-                                  absorb_regexp='[^<\s]*')]),
+                                  absorb_regexp=r'[^<\s]*')]),
                           xtb('CMD_1', condition=(RawCondition(val=['CMD_1']), 'cmd_val'), contents= \
                               [{'name': 'msg_id'},
                                xtb('counter', contents=Node('counter_val', vt=UINT8()))]),
@@ -616,6 +616,47 @@ class MyDF_DataModel(DataModel):
              ]}
 
 
+        csp_z3_desc = \
+            {'name': 'csp_z3',
+             'constraints': [
+                 Z3Constraint(relation='Or([x_val >=123, x_val <= 100])',
+                              vars=('x_val', 'y_val', 'z_val')),
+                 Z3Constraint(relation='x_val == 3*y_val + z_val',
+                              vars=('x_val', 'y_val', 'z_val')),
+             ],
+             'constraints_highlight': True,
+             'contents': [
+                 {'name': 'equation',
+                  'contents': String(values=['x = 3y + z'])},
+                 {'name': 'delim_1', 'contents': String(values=[' [',])},
+                 {'name': 'variables',
+                  'separator': {'contents': {'name': 'sep', 'contents': String(values=[', '])},
+                                'prefix': False, 'suffix': False},
+                  'contents': [
+                      {'name': 'x',
+                       'contents': [
+                           {'name': 'x_symbol',
+                            'contents': String(values=['x:', 'X:'])},
+                           {'name': 'x_val',
+                            'contents': INT_str(min=10, max=300)} ]},
+                      {'name': 'y',
+                       'contents': [
+                           {'name': 'y_symbol',
+                            'contents': String(values=['y:', 'Y:'])},
+                           {'name': 'y_val',
+                            'contents': INT_str(min=30, max=40)}]},
+                      {'name': 'z',
+                       'contents': [
+                           {'name': 'z_symbol',
+                            'contents': String(values=['z:', 'Z:'])},
+                           {'name': 'z_val',
+                            'contents': INT_str(min=1, max=3)}]},
+                  ]},
+                 {'name': 'delim_2', 'contents': String(values=[']',])},
+             ]}
+
+
+
         csp_ns_desc = \
             {'name': 'csp_ns',
              'constraints': [Constraint(relation=lambda lat_deg, lon_deg: lat_deg == lon_deg + 1,
@@ -655,7 +696,7 @@ class MyDF_DataModel(DataModel):
                       enc_desc, example_desc,
                       regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc, xml5_desc,
                       json1_desc, json2_desc, file_desc, nested_desc,
-                      csp_desc, csp_ns_desc)
+                      csp_desc, csp_z3_desc, csp_ns_desc)
 
 
 data_model = MyDF_DataModel()

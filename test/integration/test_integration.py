@@ -2144,8 +2144,8 @@ class TestNodeFeatures(unittest.TestCase):
             status, off, size, name = node_abs.absorb(data, constraints=AbsFullCsts())
 
             print('Absorb Status:', status, off, size, name)
-            print(' \_ length of original data:', len(data))
-            print(' \_ remaining:', data[size:])
+            print(' \\_ length of original data:', len(data))
+            print(' \\_ remaining:', data[size:])
 
             node_abs.show()
 
@@ -2325,8 +2325,8 @@ class TestNodeFeatures(unittest.TestCase):
 
             print('-----------------------')
             print('Absorb Status: status=%s, off=%d, sz=%d, name=%s' % (status, off, size, name))
-            print(' \_ length of original data: %d' % len(raw_data))
-            print(' \_ remaining: %r' % raw_data[size:])
+            print(' \\_ length of original data: %d' % len(raw_data))
+            print(' \\_ remaining: %r' % raw_data[size:])
             print('-----------------------')
 
             self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
@@ -2471,7 +2471,7 @@ class TestNodeFeatures(unittest.TestCase):
                  {'name': 'body',
                   'qty': 7,
                   'separator': {'contents': {'name': 'sep_space',
-                                             'contents': String(values=[' '], max_sz=100, absorb_regexp=b'\s+'),
+                                             'contents': String(values=[' '], max_sz=100, absorb_regexp=b'\\s+'),
                                              'absorb_csts': AbsNoCsts(size=True, regexp=True)},
                                 'prefix': False, 'suffix': False, 'unique': True},
                   'contents': [
@@ -3128,10 +3128,10 @@ class TestNode_NonTerm(unittest.TestCase):
         status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
 
         print('Absorb Status:', status, off, size, name)
-        print(' \_ length of original data:', len(raw_data))
-        print(' \_ remaining:', raw_data[size:])
+        print(' \\_ length of original data:', len(raw_data))
+        print(' \\_ remaining:', raw_data[size:])
         raw_data_abs = node_abs.to_bytes()
-        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        print(' \\_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
         # node_abs.show()
 
         self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
@@ -3146,10 +3146,10 @@ class TestNode_NonTerm(unittest.TestCase):
         status, off, size, name = node_abs2.absorb(raw_data2, constraints=AbsFullCsts())
 
         print('Absorb Status:', status, off, size, name)
-        print(' \_ length of original data:', len(raw_data2))
-        print(' \_ remaining:', raw_data2[size:])
+        print(' \\_ length of original data:', len(raw_data2))
+        print(' \\_ remaining:', raw_data2[size:])
         raw_data_abs2 = node_abs2.to_bytes()
-        print(' \_ absorbed data:', repr(raw_data_abs2), len(raw_data_abs2))
+        print(' \\_ absorbed data:', repr(raw_data_abs2), len(raw_data_abs2))
 
         self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
         self.assertEqual(raw_data2, raw_data_abs2)
@@ -3160,7 +3160,7 @@ class TestNode_NonTerm(unittest.TestCase):
              'determinist': True,
              'separator': {'contents': {'name': 'SEP',
                                         'contents': String(values=[' ', '  ', '     '],
-                                                           absorb_regexp='\s+', determinist=False),
+                                                           absorb_regexp='\\s+', determinist=False),
                                         'absorb_csts': AbsNoCsts(regexp=True)},
                            'prefix': True,
                            'suffix': True,
@@ -3215,10 +3215,10 @@ class TestNode_NonTerm(unittest.TestCase):
             status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
 
             print('Absorb Status:', status, off, size, name)
-            print(' \_ length of original data:', len(raw_data))
-            print(' \_ remaining:', raw_data[size:])
+            print(' \\_ length of original data:', len(raw_data))
+            print(' \\_ remaining:', raw_data[size:])
             raw_data_abs = node_abs.to_bytes()
-            print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+            print(' \\_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
 
             # node_abs.show()
 
@@ -3269,10 +3269,10 @@ class TestNode_NonTerm(unittest.TestCase):
         status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
 
         print('\nAbsorb Status:', status, off, size, name)
-        print(' \_ length of original data:', len(raw_data))
-        print(' \_ remaining:', raw_data[size:])
+        print(' \\_ length of original data:', len(raw_data))
+        print(' \\_ remaining:', raw_data[size:])
         raw_data_abs = node_abs.to_bytes()
-        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        print(' \\_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
         node_abs.show()
 
         self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
@@ -3595,10 +3595,10 @@ class TestNode_TypedValue(unittest.TestCase):
         status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
 
         print('Absorb Status:', status, off, size, name)
-        print(' \_ length of original data:', len(raw_data))
-        print(' \_ remaining:', raw_data[size:])
+        print(' \\_ length of original data:', len(raw_data))
+        print(' \\_ remaining:', raw_data[size:])
         raw_data_abs = node_abs.to_bytes()
-        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        print(' \\_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
         node_abs.show()
 
         self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
@@ -3614,10 +3614,10 @@ class TestNode_TypedValue(unittest.TestCase):
         status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
 
         print('Absorb Status:', status, off, size, name)
-        print(' \_ length of original data:', len(raw_data))
-        print(' \_ remaining:', raw_data[size:])
+        print(' \\_ length of original data:', len(raw_data))
+        print(' \\_ remaining:', raw_data[size:])
         raw_data_abs = node_abs.to_bytes()
-        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        print(' \\_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
         node_abs.show()
 
         self.assertEqual(status, AbsorbStatus.Reject)
@@ -3666,10 +3666,10 @@ class TestNode_TypedValue(unittest.TestCase):
         status, off, size, name = node_abs.absorb(raw_data, constraints=AbsFullCsts())
 
         print('Absorb Status:', status, off, size, name)
-        print(' \_ length of original data:', len(raw_data))
-        print(' \_ remaining:', raw_data[size:])
+        print(' \\_ length of original data:', len(raw_data))
+        print(' \\_ remaining:', raw_data[size:])
         raw_data_abs = node_abs.to_bytes()
-        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        print(' \\_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
         node_abs.show()
 
         self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
@@ -3748,10 +3748,10 @@ class TestNode_TypedValue(unittest.TestCase):
         status, off, size, name = node_abs2.absorb(raw_data, constraints=AbsNoCsts(size=True, struct=True))
 
         print('Absorb Status:', status, off, size, name)
-        print(' \_ length of original data:', len(raw_data))
-        print(' \_ remaining:', raw_data[size:])
+        print(' \\_ length of original data:', len(raw_data))
+        print(' \\_ remaining:', raw_data[size:])
         raw_data_abs = node_abs2.to_bytes()
-        print(' \_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
+        print(' \\_ absorbed data:', repr(raw_data_abs), len(raw_data_abs))
         node_abs2.show()
 
         self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
@@ -4018,8 +4018,8 @@ class TestDataModel(unittest.TestCase):
 
                 print('-----------------------')
                 print('Absorb Status: status=%s, off=%d, sz=%d, name=%s' % (status, off, size, name))
-                print(' \_ length of original data: %d' % len(raw_data))
-                print(' \_ remaining: %r' % raw_data[size:])
+                print(' \\_ length of original data: %d' % len(raw_data))
+                print(' \\_ remaining: %r' % raw_data[size:])
                 print('-----------------------')
 
                 self.assertEqual(status, AbsorbStatus.FullyAbsorbed)
@@ -4144,7 +4144,7 @@ class TestDataModelHelpers(unittest.TestCase):
              ]}
 
         HTTP_version_regex = \
-            {'name': regex_node_name, 'contents': "(HTTP)(/)(0|1|2|3|4|5|6|7|8|9)(\.)(0|1|2|3|4|5|6|7|8|9)"}
+            {'name': regex_node_name, 'contents': r"(HTTP)(/)(0|1|2|3|4|5|6|7|8|9)(\.)(0|1|2|3|4|5|6|7|8|9)"}
 
         mb = NodeBuilder()
         node_classic = mb.create_graph_from_desc(HTTP_version_classic)
@@ -4159,9 +4159,9 @@ class TestDataModelHelpers(unittest.TestCase):
 
         self.assertEqual(node_regex.to_bytes(), node_classic.to_bytes())
 
-    @ddt.data(('(HTTP)/[0-9]\.[0-9]|this|is|it[0123456789]', [5, 1, 2]),
-              ('this|.is|it|[0123456789]', [1, 2, 1, 1]),
-              ('|this|is|it[0123456789]|\dyes\-', [1, 2, 2]))
+    @ddt.data((r'(HTTP)/[0-9]\.[0-9]|this|is|it[0123456789]', [5, 1, 2]),
+              (r'this|.is|it|[0123456789]', [1, 2, 1, 1]),
+              (r'|this|is|it[0123456789]|\dyes\-', [1, 2, 2]))
     @ddt.unpack
     def test_regex_shape(self, regexp, shapes):
         revisited_HTTP_version = {'name': 'HTTP_version_classic', 'contents': regexp}
@@ -4203,8 +4203,8 @@ class TestDataModelHelpers(unittest.TestCase):
             status, off, size, name = xml_atom.absorb(sample, constraints=AbsFullCsts())
 
             print('{:s} Absorb Status: {:d}, {:d}, {:s}'.format(status, off, size, name))
-            print(' \_ length of original data: {:d}'.format(len(sample)))
-            print(' \_ remaining: {!r}'.format(sample[size:size+1000]))
+            print(' \\_ length of original data: {:d}'.format(len(sample)))
+            print(' \\_ remaining: {!r}'.format(sample[size:size+1000]))
 
             xml_atom.show()
             assert status == AbsorbStatus.FullyAbsorbed
@@ -4605,7 +4605,7 @@ class TestConstBackend(unittest.TestCase):
         fmk.reload_all(tg_ids=[0])
         fmk.prj.reset_target_mappings()
 
-    def test_twalkcsp_operator(self):
+    def test_twalkcsp_operator_1(self):
         idx = 0
         expected_idx = 8
         expected_outcomes = [b'x = 3y + z (x:123, y:40, z:3)',
@@ -4632,6 +4632,38 @@ class TestConstBackend(unittest.TestCase):
 
         self.assertEqual(idx, expected_idx)
         self.assertEqual(outcomes, expected_outcomes)
+
+    def test_twalkcsp_operator_2(self):
+        idx = 0
+        expected_idx = 11
+        expected_outcomes = [b'x = 3y + z [x:123, y:40, z:3]',
+                             b'x = 3y + z [x:93, y:30, z:3]',
+                             b'x = 3y + z [x:99, y:32, z:3]',
+                             b'x = 3y + z [x:96, y:31, z:3]',
+                             b'x = 3y + z [x:92, y:30, z:2]',
+                             b'x = 3y + z [x:91, y:30, z:1]',
+                             b'x = 3y + z [x:95, y:31, z:2]',
+                             b'x = 3y + z [x:94, y:31, z:1]',
+                             b'x = 3y + z [x:100, y:33, z:1]',
+                             b'x = 3y + z [x:97, y:32, z:1]',
+                             b'x = 3y + z [x:98, y:32, z:2]']
+        outcomes = []
+
+        act = [('CSP_Z3', UI(determinist=True)), ('tWALKcsp')]
+        for j in range(20):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            # d.show()
+            idx += 1
+
+        self.assertEqual(idx, expected_idx)
+        for s in outcomes:
+            self.assertIn(s, expected_outcomes)
 
     def test_twalk_operator(self):
         idx = 0
@@ -4688,7 +4720,7 @@ class TestConstBackend(unittest.TestCase):
         self.assertEqual(outcomes, expected_outcomes)
 
 
-    def test_tconst_operator(self):
+    def test_tconst_operator_1(self):
         idx = 0
         expected_idx = 362
         expected_outcomes = [b'x = 3y + z (x:123, y:40, z:3-',
@@ -4713,3 +4745,40 @@ class TestConstBackend(unittest.TestCase):
 
         self.assertEqual(idx, expected_idx)
         self.assertEqual(outcomes[:6], expected_outcomes)
+
+
+    def test_tconst_operator_2(self):
+        idx = 0
+        expected_idx = 12
+        outcomes = []
+
+        samples_per_constraint = 6
+
+        act = [('CSP_Z3', UI(determinist=True)), ('tCONST', UI(samples_per_cst=samples_per_constraint))]
+        for j in range(40):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+
+            nd = d.content
+            x = nd['csp_z3/variables/x/x_val'][0].get_raw_value()
+            y = nd['csp_z3/variables/y/y_val'][0].get_raw_value()
+            z = nd['csp_z3/variables/z/z_val'][0].get_raw_value()
+
+            # print(f'\nCurrent values - x:{x}, y:{y}, z:{z}')
+            if j <= samples_per_constraint - 1:
+                self.assertFalse(x >= 123 or x <= 100)
+                self.assertTrue(x == 3 * y + z)
+            else:
+                self.assertTrue(x >= 123 or x <= 100)
+                self.assertFalse(x == 3 * y + z)
+
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            # outcomes.append(d.to_bytes())
+            # d.show()
+            idx += 1
+
+        self.assertEqual(idx, expected_idx)
+
