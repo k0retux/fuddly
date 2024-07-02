@@ -1,0 +1,30 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+cexprtk = ">=0.4.1"
+configparser = ">=5.3.0"
+crcmod = ">=1.7"
+cups = "*"
+rpyc = "<7.0.0,>=6.0.0"
+graphviz = "*"
+matplotlib = "*"
+paramiko = "<4.0.0,>=3.4.0"
+pyserial = "*"
+python-constraint = ">=1.4.0"
+z3-solver = ">=4.8"
+pyxdg = "*"
+xtermcolor = "*"
+jsonschema = "*"
+sphinx = "*"
+sphinxcontrib-napoleon = "*"
+sphinx-rtd-theme = "*"
+
+[dev-packages]
+ddt = "*"
+mock = "*"
+
+[requires]
+python_version = "3.12"
