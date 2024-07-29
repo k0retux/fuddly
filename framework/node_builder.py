@@ -867,6 +867,7 @@ class NodeBuilder(object):
                 domain = copy.copy(nd.cc.value_type.values)
                 csp.set_var_domain(v, domain)
             else:
+                assert isinstance(nd.cc.value_type, fvt.INT)
                 domain = range(nd.cc.value_type.mini_gen, nd.cc.value_type.maxi_gen + 1)
                 csp.set_var_domain(v, domain,
                                    min=nd.cc.value_type.mini_gen,

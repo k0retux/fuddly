@@ -1695,7 +1695,13 @@ class sd_constraint_fuzz(StatefulDisruptor):
         current_constraint = self.csp.get_constraint(self._current_constraint_idx)
         variables = self.csp_variables - set(current_constraint.vars)
         for v in variables:
-            self.csp.set_var_domain(v, [self.valid_solution[v]])
+            v_type = self.csp.var_types.get(v)
+            if v_type is None or v_type is z3.Int:
+                self.csp.set_var_domain(v, [self.valid_solution[v]])
+            elif v_type is z3.String:
+                self.csp.set_var_domain(v, [convert_to_internal_repr(self.valid_solution[v])])
+            else:
+                raise NotImplementedError
 
     def _process_next_constraint(self):
         self.csp.restore_var_domains()

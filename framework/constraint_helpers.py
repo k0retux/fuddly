@@ -28,6 +28,8 @@ from libs.external_modules import *
 if z3_module:
     from z3 import *
 
+import framework.global_resources as gr
+
 _Z3_MODEL_NOT_COMPUTED = 1
 
 class ConstraintError(Exception): pass
@@ -87,7 +89,7 @@ class Z3Constraint(object):
     _orig_relation = None
     _is_relation_translated = None
 
-    def __init__(self, relation, vars: Tuple, var_to_varns: dict = None):
+    def __init__(self, relation, vars: Tuple, var_to_varns: dict = None, var_types: dict = None):
         """
 
         Args:
@@ -100,9 +102,14 @@ class Z3Constraint(object):
 
         self.vars = vars
         self.var_to_varns = var_to_varns
+        self.var_types = var_types
         self.z3vars = {}
         for v in vars:
-            self.z3vars[v] = Int(v)
+            if self.var_types is not None and self.var_types[v] is not None:
+                v_type = self.var_types[v]
+            else:
+                v_type = None
+            self.z3vars[v] = v_type(v) if v_type else Int(v)
 
         self._is_relation_translated = False
         self.relation = self._orig_relation = relation
@@ -172,6 +179,7 @@ class CSP(object):
             self._constraints = []
             self._vars = ()
             self._z3vars = {}
+            self._var_types = {}
             self.z3_problem = isinstance(constraints[0], Z3Constraint)
             for r in constraints:
                 if self.z3_problem:
@@ -184,6 +192,8 @@ class CSP(object):
                 r_copy = copy.copy(r)
                 self._constraints.append(r_copy)
                 self._vars += r_copy.vars
+                if self.z3_problem and r_copy.var_types:
+                    self._var_types.update(r_copy.var_types)
                 if r_copy.var_to_varns:
                     if self._var_to_varns is None:
                         self._var_to_varns = {}
@@ -245,6 +255,10 @@ class CSP(object):
     def var_mapping(self):
         return self._var_node_mapping
 
+    @property
+    def var_types(self):
+        return self._var_types
+
     def get_solution(self):
         if not self._model:
             self.next_solution()
@@ -260,11 +274,18 @@ class CSP(object):
                 for v in c.vars:
                     z3var = self._z3vars[v]
                     dom = self._var_domain[v]
-                    if isinstance(dom, tuple) and len(dom) == 2:
-                        min, max = dom
-                        self._solver.add(And([min <= z3var, z3var <= max]))
+                    v_type = self._var_types.get(v)
+                    if v_type is None or v_type is z3.Int:
+                        if isinstance(dom, tuple) and len(dom) == 2:
+                            min, max = dom
+                            self._solver.add(And([min <= z3var, z3var <= max]))
+                        else:
+                            self._solver.add(Or([z3var == value for value in dom]))
+                    elif v_type is z3.String:
+                        self._solver.add(Or([z3var == gr.unconvert_from_internal_repr(value) for value in dom]))
                     else:
-                        self._solver.add(Or([z3var == value for value in dom]))
+                        raise NotImplementedError
+
                     if not c.is_relation_translated:
                         relation = relation.replace(v, 'self._z3vars["'+ v +'"]')
 
@@ -315,7 +336,14 @@ class CSP(object):
             self._solver.add(Or([z3v != z3mdl[z3v] for z3v in self._z3vars.values()]))
             mdl = {}
             for var in z3mdl:
-                mdl[str(var)] = z3mdl[var].as_long()
+                var_str = str(var)
+                v_type = self._var_types.get(var_str)
+                if v_type is None or v_type is z3.Int:
+                    mdl[var_str] = z3mdl[var].as_long()
+                elif v_type is z3.String:
+                    mdl[var_str] = z3mdl[var].as_string()
+                else:
+                    raise NotImplementedError
             return mdl
 
 
