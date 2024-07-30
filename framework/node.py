@@ -3116,6 +3116,14 @@ class NodeInternals_NonTerm(NodeInternals):
                     node.set_attr(NodeInternals.DISABLED)
                     node.set_private((self, mode, ignore_sep_fstate, ignore_separator))
                     subnode_list.append(node)
+
+                # Before returning we add a separator if ever it is mandatory ('always')
+                if self.separator is not None and self.separator.always and not ignore_separator:
+                    new_sep = self._clone_separator(self.separator.node,
+                                                    unique=self.separator.unique,
+                                                    ignore_frozen_state=ignore_sep_fstate)
+                    subnode_list.append(new_sep)
+
                 return
 
         mini, maxi, corrupted = self.nodeqty_corrupt_hook(node, mini, maxi)
