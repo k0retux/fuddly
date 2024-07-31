@@ -620,9 +620,9 @@ class BasicVisitor(NodeConsumerStub):
                 self.firstcall = False
                 return True
             if not node.is_exhausted():
-                node.freeze()
+                node.freeze(restrict_csp=True, resolve_csp=True)
                 node.unfreeze(recursive=False, ignore_entanglement=True)
-                node.freeze()
+                node.freeze(restrict_csp=True, resolve_csp=True)
             return True
 
     def save_node(self, node):
@@ -630,7 +630,7 @@ class BasicVisitor(NodeConsumerStub):
 
     def recover_node(self, node):
         node.reset_state(recursive=False)
-        node.freeze()
+        node.freeze(restrict_csp=True, resolve_csp=True)
 
     def need_reset(self, node):
         if node.is_nonterm():
