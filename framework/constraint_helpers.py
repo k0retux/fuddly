@@ -24,6 +24,8 @@
 import copy
 from typing import Tuple, List
 
+import z3
+
 from libs.external_modules import *
 if z3_module:
     from z3 import *
@@ -236,16 +238,36 @@ class CSP(object):
         assert bool(domain)
         if min is None:
             self._var_domain[var] = copy.copy(domain)
+            if self.z3_problem:
+                v_type = self._var_types.get(var)
+                if isinstance(domain[0], bytes) and (v_type is None or v_type == z3.Int):
+                    # This inconsistency can happen when a disruptor play with the domain of a node
+                    # which is normally a vt.INT and replace it temporarily for the generated
+                    # fuzzing cases by a vt.String.
+                    self._z3vars[var] = z3.String(var)
+                    self._var_types[var] = z3.String
+                elif isinstance(domain[0], int) and v_type == z3.String:
+                    # the domain has been restored we go back to the original domain
+                    self._z3vars[var] = z3.Int(var)
+                    self._var_types[var] = z3.Int
+                else:
+                    pass
         else:
             self._var_domain[var] = (min, max)
         self._var_domain_updated = True
 
     def save_current_var_domains(self):
         self._orig_var_domain = copy.copy(self._var_domain)
+        if self.z3_problem:
+            self._orig_var_types = copy.copy(self._var_types)
+            self._orig_z3vars = copy.copy(self._z3vars)
         self._var_domain_updated = False
 
     def restore_var_domains(self):
         self._var_domain = copy.copy(self._orig_var_domain)
+        if self.z3_problem:
+            self._var_types = copy.copy(self._orig_var_types)
+            self._z3vars = copy.copy(self._orig_z3vars)
         self._var_domain_updated = False
 
     def map_var_to_node(self, var, node):
@@ -292,7 +314,16 @@ class CSP(object):
                 if not c.is_relation_translated:
                     c.provide_translated_relation(relation)
 
-                self._solver.add(eval(c.relation))
+                try:
+                    z3formula = eval(c.relation)
+                except z3types.Z3Exception:
+                    # this case can happen if some variable types have been changed by a disruptor
+                    # to generate specific test cases. (For instance tTYPE will change a vt.INT into
+                    # a vt.String to add specific cases mixing integers and separators.)
+                    # In such cases, it does not make sense to add a constraint anyway.
+                    pass
+                else:
+                    self._solver.add(z3formula)
 
             else:
                 for v in c.vars:
