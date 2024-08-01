@@ -157,14 +157,17 @@ Parameters:
         |      |       they will be set to random mode. Otherwise, if set to 'None',
         |      |       nothing will be done.
         |      | default: None [type: bool]
+        |_ ign_mutable_attr
+        |      | desc: Walk through all the nodes even if their Mutable attribute is
+        |      |       cleared.
+        |      | default: False [type: bool]
         |_ consider_sibbling_change
         |      | desc: While walking through terminal nodes, if sibbling nodes are
         |      |       no more the same because of existence condition for instance,
         |      |       walk through the new nodes.
         |      | default: True [type: bool]
-        |_ ign_mutable_attr
-        |      | desc: Walk through all the nodes even if their Mutable attribute is
-        |      |       cleared.
+        |_ csp_compliance_matters
+        |      | desc: Does the compliance to any defined CSP should be always guaranteed?
         |      | default: False [type: bool]
 
 

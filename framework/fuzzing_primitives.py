@@ -101,6 +101,14 @@ class ModelWalker(object):
         for consumed_node, orig_node_val in gen:
             self._root_node.freeze(resolve_csp=True)
 
+            if consumed_node is None:
+                # this case happen only when the generated data does not comply with a CSP defined
+                # in the model and that the consumers wants compliance with it.
+                print("\n[Warning] While walking the node graph, data has been skipped"
+                      "\n   as a CSP violation has been detected and the current consumer"
+                      "\n   has its attribute 'csp_compliance_matters' set.")
+                continue
+
             self.consumed_node_path = consumed_node.get_path_from(self._root_node)
             if self.consumed_node_path == None:
                 # 'consumed_node_path' can be None if
@@ -322,16 +330,23 @@ class ModelWalker(object):
     def node_consumer_helper(self, node, structure_has_changed, consumed_nodes, parent_node,
                              consumer):
 
-        def _do_if_not_interested(node, orig_node_val):
-            reset = consumer.need_reset(node)
-            if reset and not node.is_exhausted():
-                return node, orig_node_val, True, True # --> x, x, reset, ignore_node
-            elif reset and node.is_exhausted():
-                return None, None, False, True # --> x, x, reset, ignore_node
-            elif node.is_exhausted():
-                return node, orig_node_val, False, True
+        def _do_if_not_interested(nd, orig_val):
+            reset = consumer.need_reset(nd)
+            if reset and not nd.is_exhausted():
+                return nd, orig_val, True, True # --> x, x, reset, ignore_node
+            elif reset and nd.is_exhausted():
+                return None, None, False, True # --> x, x, dont_reset, ignore_node
+            elif nd.is_exhausted():
+                return nd, orig_val, False, True
             else:
-                return node, orig_node_val, False, True
+                return nd, orig_val, False, True
+
+        def is_csp_compliant(nd):
+            if (consumer.csp_compliance_matters and
+                    nd.env.csp and nd.env.csp.no_solution_exists):
+                return False
+            else:
+                return True
 
         orig_node_val = node.to_bytes()
 
@@ -349,7 +364,7 @@ class ModelWalker(object):
 
         if not go_on:
             yield _do_if_not_interested(node, orig_node_val)
-            raise ValueError  # We should never return here, otherwise its a bug we want to alert on
+            raise ValueError  # We should never return here, otherwise it's a bug we want to alert on
 
         consumed_nodes.add(node)
         node.freeze(restrict_csp=True, resolve_csp=True)
@@ -358,19 +373,24 @@ class ModelWalker(object):
         max_steps = consumer.wait_for_exhaustion(node)
         again = True
 
-        # We enter this loop only if the consumer is interested by the
-        # node.
+        # We enter this loop only if the consumer is interested in the node
         while again:
             consume_called_again = False
             reset = consumer.need_reset(node)
 
-            if reset and not node.is_exhausted():
+            if not is_csp_compliant(node):
+                if node.is_exhausted():
+                    yield None, None, False, True  # --> x, x, dont_reset, ignore_node
+                else:
+                    yield None, None, False, False  # --> x, x, dont_reset, dont_ignore_node
+
+            elif reset and not node.is_exhausted():
 
                 yield node, orig_node_val, True, False # --> x, x, reset, dont_ignore_node
             
             elif reset and node.is_exhausted():
 
-                yield None, None, False, True # --> x, x, reset, ignore_node
+                yield None, None, False, True # --> x, x, dont_reset, ignore_node
                 raise ValueError  # We should never return here, otherwise its a bug we want to alert on
 
             elif node.is_exhausted(): # --> (reset and node.is_exhausted()) or (not reset and node.is_exhausted())
@@ -386,7 +406,7 @@ class ModelWalker(object):
                         if consumer.fix_constraints:
                             node.fix_synchronized_nodes()
                         yield _do_if_not_interested(node, orig_node_val)
-                        raise ValueError  # We should never return here, otherwise its a bug we want to alert on
+                        raise ValueError  # We should never return here, otherwise it's a bug we want to alert on
 
                     consume_called_again = True
 
@@ -414,9 +434,6 @@ class ModelWalker(object):
                     node.freeze(restrict_csp=True, resolve_csp=True)
                     if consumer.fix_constraints:
                         node.fix_synchronized_nodes()
-            elif consume_called_again and max_steps != 0:
-                node.freeze(restrict_csp=True, resolve_csp=True)
-                # consume_called_again = False
             else:
                 if not_recovered and (consumer.interested_by(node) or node in consumed_nodes):
                     consumer.recover_node(node)
@@ -432,6 +449,7 @@ class ModelWalker(object):
 
 
 class NodeConsumerStub(object):
+
     def __init__(self, max_runs_per_node=-1, min_runs_per_node=-1, respect_order=True,
                  fuzz_magnitude=1.0, fix_constraints=False, ignore_mutable_attr=False,
                  consider_side_effects_on_sibbling=False,
@@ -457,6 +475,8 @@ class NodeConsumerStub(object):
         self.respect_order = respect_order
 
         self.__node_backup = None
+
+        self._csp_compliance_matters = True
 
         self.init_specific(**kwargs)
 
@@ -597,6 +617,9 @@ class NodeConsumerStub(object):
 
         return cond1 and cond2 and cond3
 
+    @property
+    def csp_compliance_matters(self):
+        return self._csp_compliance_matters
 
 
 class BasicVisitor(NodeConsumerStub):
@@ -786,7 +809,7 @@ class AltConfConsumer(NodeConsumerStub):
 
 class TypedNodeDisruption(NodeConsumerStub):
 
-    def init_specific(self, ignore_separator=False, determinist=True):
+    def init_specific(self, ignore_separator=False, determinist=True, csp_compliance_matters=False):
         mattr = None if self.ignore_mutable_attr else [dm.NodeInternals.Mutable]
         if ignore_separator:
             self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=mattr,
@@ -809,6 +832,8 @@ class TypedNodeDisruption(NodeConsumerStub):
         self.sep_list = None
 
         self.need_reset_when_structure_change = True
+
+        self._csp_compliance_matters = csp_compliance_matters
 
     def preload(self, root_node):
         if not self._ignore_separator:

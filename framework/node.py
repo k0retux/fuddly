@@ -6718,7 +6718,7 @@ class Node(object):
                               return_node_internals=return_node_internals, restrict_csp=restrict_csp)
 
         if self.env is None:
-            print('Warning: freeze() is called on a node that does not have an Env()\n'
+            print('[Warning] freeze() is called on a node that does not have an Env()\n'
                   '  --> node name: {!s}'.format(self.name))
 
         # Step 2 - DJobs resolution
@@ -6744,8 +6744,8 @@ class Node(object):
                     # in this case we let the caller handle this, as we are not responsible
                     raise
                 else:
-                    print(f"\nWarning: no solution found for the current CSP, the generated data will be invalid!\n"
-                          f" --> likely culprit: node '{self.name}' with value {self.get_raw_value()}")
+                    print(f"\n[Warning] no solution found for the current CSP, the generated data will be invalid!"
+                          f"\n   --> likely culprit: node '{self.name}' with value {self.get_raw_value()}")
             else:
                 if solution is not None:  # Does a solution exist?
                     for var, value in solution.items():
@@ -6764,6 +6764,7 @@ class Node(object):
             finally:
                 if self.env.csp.var_domain_updated:
                     self.env.csp.restore_var_domains()
+
         return ret
 
     get_value = freeze

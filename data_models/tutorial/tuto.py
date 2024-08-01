@@ -739,13 +739,27 @@ class MyDF_DataModel(DataModel):
                   ]},
              ]}
 
+
+        csp_basic_desc = \
+            {'name': 'csp_basic',
+             'constraints': [
+                 Z3Constraint(relation='idx != 100',
+                              vars=('idx',)),
+             ],
+             'constraints_highlight': True,
+             'contents': [
+                 {'name': 'prefix', 'contents': String(values=['> '])},
+                 {'name': 'idx', 'contents': INT_str(values=[1,2,3,100,4,5,6,7,100])},
+                 {'name': 'suffix', 'contents': String(values=[' <'])},
+             ]}
+
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
                       shape_desc, for_network_tg1, for_network_tg2, for_net_default_tg, basic_intg,
                       enc_desc, example_desc,
                       regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc, xml5_desc,
                       json1_desc, json2_desc, file_desc, nested_desc,
-                      csp_desc, csp_z3_desc, csp_str_desc, csp_ns_desc)
+                      csp_desc, csp_z3_desc, csp_str_desc, csp_ns_desc, csp_basic_desc)
 
 
 data_model = MyDF_DataModel()

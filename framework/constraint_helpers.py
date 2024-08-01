@@ -149,6 +149,7 @@ class CSP(object):
     _constraints = None
     _vars = None
     _z3vars = None
+    _var_types = None
     _var_to_varns = None
     _var_node_mapping = None
     _var_domain = None
@@ -214,10 +215,17 @@ class CSP(object):
         self.highlight_variables = highlight_variables
 
     def reset(self):
+        # print(f'\n*** DBG RESET - info:'
+        #       f'\n --> variables: {self._vars}'
+        #       f'\n --> Z3 variables: {list(map(type, self._z3vars.values()))}'
+        #       f'\n --> variable types: {self._var_types}'
+        #       f'\n --> domains: {self._var_domain}')
+
         if self.z3_problem:
             self._solver = Solver()
         else:
             self._problem = cst.Problem()
+
         self._solutions = None
         self._model = None
         self._exhausted_solutions = False
@@ -257,17 +265,17 @@ class CSP(object):
         self._var_domain_updated = True
 
     def save_current_var_domains(self):
-        self._orig_var_domain = copy.copy(self._var_domain)
+        self._orig_var_domain = copy.deepcopy(self._var_domain)
         if self.z3_problem:
             self._orig_var_types = copy.copy(self._var_types)
-            self._orig_z3vars = copy.copy(self._z3vars)
+            self._orig_z3vars = copy.deepcopy(self._z3vars)
         self._var_domain_updated = False
 
     def restore_var_domains(self):
-        self._var_domain = copy.copy(self._orig_var_domain)
+        self._var_domain = copy.deepcopy(self._orig_var_domain)
         if self.z3_problem:
             self._var_types = copy.copy(self._orig_var_types)
-            self._z3vars = copy.copy(self._orig_z3vars)
+            self._z3vars = copy.deepcopy(self._orig_z3vars)
         self._var_domain_updated = False
 
     def map_var_to_node(self, var, node):
@@ -282,10 +290,15 @@ class CSP(object):
         return self._var_types
 
     def get_solution(self):
-        if not self._model:
-            self.next_solution()
-
-        self._is_solution_queried = True
+        try:
+            if not self._model:
+                self.next_solution()
+        except:
+            # We propagate the exception to the caller. It generally signifies that
+            # no solution have been found.
+            raise
+        finally:
+            self._is_solution_queried = True
 
         return self._model
 
@@ -321,7 +334,13 @@ class CSP(object):
                     # to generate specific test cases. (For instance tTYPE will change a vt.INT into
                     # a vt.String to add specific cases mixing integers and separators.)
                     # In such cases, it does not make sense to add a constraint anyway.
-                    pass
+                    raise CSPDefinitionError(f'\nVariable types in the constraint formula are not consistent'
+                                             f' (root cause: incorrect data model or some fuzzing is'
+                                             f' performed?)'
+                                             f'\n --> Z3 formula: {c.relation}'
+                                             f'\n --> variables: {self._vars}'
+                                             f'\n --> variable types: {self._var_types}'
+                                             f'\n --> domains: {self._var_domain}')
                 else:
                     self._solver.add(z3formula)
 
@@ -392,10 +411,12 @@ class CSP(object):
                         self._model = self._next_solution()
                     except CSPUnsat:
                         self._exhausted_solutions = True
+                        raise ConstraintError(f'No solution found for this CSP\n --> variables: {self._vars}')
                 else:
                     try:
                         mdl = next(self._solutions)
                     except StopIteration:
+                        self._exhausted_solutions = True
                         raise ConstraintError(f'No solution found for this CSP\n --> variables: {self._vars}')
                     except TypeError:
                         self._exhausted_solutions = True
@@ -455,10 +476,21 @@ class CSP(object):
     def exhausted_solutions(self):
         return self._exhausted_solutions
 
+    @property
+    def no_solution_exists(self):
+        return self._exhausted_solutions
+
     def __copy__(self):
         new_csp = type(self)(constraints=self._constraints)
         new_csp.__dict__.update(self.__dict__)
-        new_csp._var_domain = copy.copy(self._var_domain)
+        new_csp._var_domain = copy.deepcopy(self._var_domain)
+        new_csp._var_types = copy.copy(self._var_types)
+        new_csp._z3vars = copy.deepcopy(self._z3vars)
+        # print(f'\n*** DBG RESET - info:'
+        #       f'\n --> variables: {self._vars}'
+        #       f'\n --> Z3 variables: {list(map(type, self._z3vars.values()))}'
+        #       f'\n --> variable types: {self._var_types}'
+        #       f'\n --> domains: {self._var_domain}')
         new_csp._var_node_mapping = copy.copy(self._var_node_mapping)
         new_csp._solutions = None # the generator cannot be copied
         new_csp._model = copy.copy(self._model)

@@ -4704,19 +4704,12 @@ class TestConstBackend(unittest.TestCase):
         for s in outcomes:
             self.assertIn(s, expected_outcomes)
 
-    def test_twalk_operator(self):
+    def test_twalk_operator_1(self):
         idx = 0
-        expected_idx = 13
+        expected_idx = 6
         expected_outcomes = [b'x = 3y + z (x:123, y:40, z:3)',
                              b'x = 3y + z (X:123, y:40, z:3)',
                              b'x = 3y + z (x:123, y:40, z:3)', # redundancy
-                             b'x = 3y + z (x:124, y:40, z:3)',
-                             b'x = 3y + z (x:125, y:40, z:3)',
-                             b'x = 3y + z (x:126, y:40, z:3)',
-                             b'x = 3y + z (x:127, y:40, z:3)',
-                             b'x = 3y + z (x:128, y:40, z:3)',
-                             b'x = 3y + z (x:129, y:40, z:3)',
-                             b'x = 3y + z (x:130, y:40, z:3)',
                              b'x = 3y + z (x:120, y:39, z:3)',
                              b'x = 3y + z (x:121, y:40, z:1)',
                              b'x = 3y + z (x:122, y:40, z:2)']
@@ -4758,6 +4751,49 @@ class TestConstBackend(unittest.TestCase):
         self.assertEqual(idx, expected_idx)
         self.assertEqual(outcomes, expected_outcomes)
 
+    def test_twalk_operator_2(self):
+        idx = 0
+        expected_idx = 7
+        expected_outcomes = [b'> 1 <', b'> 2 <', b'> 3 <', b'> 4 <', b'> 5 <', b'> 6 <', b'> 7 <']
+        outcomes = []
+
+        act = [('CSP_BASIC', UI(determinist=True)), ('tWALK', UI(path='.*/idx'))]
+        for j in range(20):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            idx += 1
+
+        pp(outcomes)
+
+        self.assertEqual(outcomes, expected_outcomes)
+        self.assertEqual(idx, expected_idx)
+
+    def test_twalk_operator_3(self):
+        idx = 0
+        expected_idx = 8
+        expected_outcomes = [b'> 1 <',
+                             b'> 1 <', # redundancy
+                             b'> 2 <', b'> 3 <', b'> 4 <', b'> 5 <', b'> 6 <', b'> 7 <']
+        outcomes = []
+
+        act = [('CSP_BASIC', UI(determinist=True)), ('tWALK')]
+        for j in range(20):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            idx += 1
+
+        self.assertEqual(outcomes, expected_outcomes)
+        self.assertEqual(idx, expected_idx)
 
     def test_tconst_operator_1(self):
         idx = 0

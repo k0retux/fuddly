@@ -294,6 +294,8 @@ class sd_walk_data_model(StatefulDisruptor):
                       'no more the same because of existence condition for instance, walk through '
                       'the new nodes. (Currently, work only with some specific data model construction.)',
                       False, bool),
+                 'csp_compliance_matters': ('Does the compliance to any defined CSP should be always'
+                                            ' guaranteed?', False, bool)
                  })
 class sd_fuzz_typed_nodes(StatefulDisruptor):
     """
@@ -344,7 +346,8 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
                                             ignore_mutable_attr=self.ign_mutable_attr,
                                             consider_side_effects_on_sibbling=self.consider_sibbling_change,
                                             ignore_separator=self.ign_sep,
-                                            determinist=self.leaf_fuzz_determinism)
+                                            determinist=self.leaf_fuzz_determinism,
+                                            csp_compliance_matters=self.csp_compliance_matters)
         self.consumer.need_reset_when_structure_change = self.deep
         sem_crit = NSC(optionalbut1_criteria=self.sem)
         self.consumer.set_node_interest(path_regexp=self.path, semantics_criteria=sem_crit)
