@@ -661,8 +661,7 @@ class String(VT_Alt):
     def rewind(self):
         sz_vlist_copy = len(self.values_copy)
         sz_vlist = len(self.values)
-        if self.values_copy is not None and \
-           sz_vlist_copy < sz_vlist:
+        if self.values_copy is not None and sz_vlist_copy < sz_vlist:
             val = self.values[sz_vlist - sz_vlist_copy - 1]
             self.values_copy.insert(0, val)
 
@@ -911,10 +910,15 @@ class String(VT_Alt):
                 if v not in self.values_fuzzy:
                     self.values_fuzzy.append(v)
 
-        if self.knowledge_source \
-                and self.knowledge_source.is_info_class_represented(Test) \
-                and self.knowledge_source.is_assumption_valid(Test.OnlyCornerCases):
+        only_corner_cases = False
+        only_invalid_cases = False
+        if self.knowledge_source and self.knowledge_source.is_info_class_represented(Test):
+            if self.knowledge_source.is_assumption_valid(Test.OnlyCornerCases):
+                only_corner_cases = True
+            elif self.knowledge_source.is_assumption_valid(Test.OnlyInvalidCases):
+                only_invalid_cases = True
 
+        if only_corner_cases:
             if self.drawn_val is not None:
                 val = self.drawn_val
             else:
@@ -1024,12 +1028,47 @@ class String(VT_Alt):
             if specif:
                 add_to_fuzz_list(specif)
 
+        if only_invalid_cases:
+            self.values_fuzzy = list(filter(self.is_invalid, self.values_fuzzy))
 
         self.values_save = self.values
         self.values = self.values_fuzzy
         self.values_copy = copy.copy(self.values)
 
         self.drawn_val = None
+
+
+    def is_valid(self, val):
+        sz = len(val)
+        if self.max_sz < sz or self.min_sz > sz:
+            return False
+        if self.is_values_provided:
+            in_samples = val in self.values
+            if in_samples:
+                return True
+            elif val == b'':
+                return False
+            elif not in_samples and self.alphabet is not None:
+                for l in val:
+                    if l not in self.alphabet:
+                        return False
+                else:
+                    return True
+            else:
+                return False
+        else:
+            if self.alphabet is not None:
+                if val == b'':
+                    return False
+                for l in val:
+                    if l not in self.alphabet:
+                        return False
+                else:
+                    return True
+
+    def is_invalid(self, val):
+        return not self.is_valid(val)
+
 
     @staticmethod
     def fuzz_cases_c_strings(knowledge, orig_val, sz, fuzz_magnitude):
@@ -1101,6 +1140,7 @@ class String(VT_Alt):
 
             if sz > 0:
                 fuzzy_values.append(b'\x08'*max_sz) # backspace characters
+
             if sz == max_sz:
                 # also include fixed size string i.e., self.min_sz == self.max_sz
                 for c in String.ctrl_char_set:
@@ -1368,9 +1408,15 @@ class INT(VT):
         specific_fuzzy_values = self.get_specific_fuzzy_vals()
         supp_list = specific_fuzzy_values if specific_fuzzy_values is not None else []
 
-        if self.knowledge_source \
-                and self.knowledge_source.is_info_class_represented(Test) \
-                and self.knowledge_source.is_assumption_valid(Test.OnlyCornerCases):
+        only_corner_cases = False
+        only_invalid_cases = False
+        if self.knowledge_source and self.knowledge_source.is_info_class_represented(Test):
+            if self.knowledge_source.is_assumption_valid(Test.OnlyCornerCases):
+                only_corner_cases = True
+            elif self.knowledge_source.is_assumption_valid(Test.OnlyInvalidCases):
+                only_invalid_cases = True
+
+        if only_corner_cases:
             val = self.get_current_raw_val()
             if val is not None:
                 if self.values is not None:
@@ -1441,6 +1487,9 @@ class INT(VT):
 
         if supp_list:
             supp_list = list(filter(self.is_size_compatible, supp_list))
+            if only_invalid_cases:
+                supp_list = list(filter(self.is_invalid, supp_list))
+
             fuzzed_vt = self.__class__(values=supp_list, fuzz_mode=True)
             return [fuzzed_vt]
 
@@ -1578,6 +1627,18 @@ class INT(VT):
             return True
         else:
             return False
+
+    def is_valid(self, val):
+        if self.values:
+            return val in self.values
+        else:
+            return self.mini <= val <= self.maxi
+
+    def is_invalid(self, val):
+        if self.values:
+            return val not in self.values
+        else:
+            return val < self.mini or val > self.maxi
 
     def get_value(self):
         if self.values is not None:

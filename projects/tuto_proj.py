@@ -47,7 +47,8 @@ logger = Logger(record_data=False, explicit_data_recording=False,
 
 project.add_knowledge(
     Hardware.X86_64,
-    Language.C
+    Language.C,
+    # Test.OnlyInvalidCases
 )
 
 project.register_feedback_handler(TestFbkHandler())

@@ -753,13 +753,26 @@ class MyDF_DataModel(DataModel):
                  {'name': 'suffix', 'contents': String(values=[' <'])},
              ]}
 
+        str_desc = {'name': 'str',
+             'contents': [
+                 {'name': 'str1', 'contents': String(values=['a', 'b', 'c'])},
+                 {'name': 'str2',
+                  'contents': String(values=['x', 'y'], alphabet='xy', min_sz=1, max_sz=3)},
+                 {'name': 'str3',
+                  'contents': String(values=['OK'], alphabet=String.non_ctrl_char+String.ctrl_char_set,
+                                     min_sz=1, max_sz=3)},
+                 {'name': 'idx', 'contents': INT_str(values=[1,2,3,4,5])},
+             ]}
+
+
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
                       shape_desc, for_network_tg1, for_network_tg2, for_net_default_tg, basic_intg,
                       enc_desc, example_desc,
                       regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc, xml5_desc,
                       json1_desc, json2_desc, file_desc, nested_desc,
-                      csp_desc, csp_z3_desc, csp_str_desc, csp_ns_desc, csp_basic_desc)
+                      csp_desc, csp_z3_desc, csp_str_desc, csp_ns_desc, csp_basic_desc,
+                      str_desc)
 
 
 data_model = MyDF_DataModel()
