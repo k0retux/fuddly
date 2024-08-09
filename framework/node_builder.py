@@ -862,16 +862,24 @@ class NodeBuilder(object):
 
         for v in csp.iter_vars():
             nd = self.__get_node_from_db(csp.from_var_to_varns(v), namespace=root_namespace)
+
+            if not isinstance(nd.cc.value_type, (fvt.INT, fvt.String)):
+                raise DataModelDefinitionError(f'CSP definition is only compatible with node '
+                                               f'variables whose type is INT or String. '
+                                               f'[guilty node: {nd.name}]')
+
             csp.map_var_to_node(v, nd)
+            default_val = nd.cc.value_type.default
             if nd.cc.value_type.values is not None:
                 domain = copy.copy(nd.cc.value_type.values)
-                csp.set_var_domain(v, domain)
+                csp.set_var_domain(v, domain, default=default_val)
             else:
                 assert isinstance(nd.cc.value_type, fvt.INT)
-                domain = range(nd.cc.value_type.mini_gen, nd.cc.value_type.maxi_gen + 1)
-                csp.set_var_domain(v, domain,
+                # domain = range(nd.cc.value_type.mini_gen, nd.cc.value_type.maxi_gen + 1)
+                csp.set_var_domain(v, None,
                                    min=nd.cc.value_type.mini_gen,
-                                   max=nd.cc.value_type.maxi_gen)
+                                   max=nd.cc.value_type.maxi_gen,
+                                   default=default_val)
 
         csp.save_current_var_domains()
         node.set_csp(csp)

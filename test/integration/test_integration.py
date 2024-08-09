@@ -4673,6 +4673,9 @@ class TestConstBackend(unittest.TestCase):
         for s in outcomes:
             self.assertIn(s, expected_outcomes)
 
+        ref_str_1 = b'x = 3y + z ('  # default value for delim_1 is ' ('
+        self.assertEqual(outcomes[0][:len(ref_str_1)], ref_str_1)
+
 
     def test_twalkcsp_operator_2(self):
         idx = 0
@@ -4715,6 +4718,14 @@ class TestConstBackend(unittest.TestCase):
                              b'x = 3y + z (x:120, y:39, z:3)',
                              b'x = 3y + z (x:121, y:40, z:1)',
                              b'x = 3y + z (x:122, y:40, z:2)']
+
+        expected_outcomes = [b'x = 3y + z (x:123, y:40, z:3)',
+                             b'x = 3y + z (X:123, y:40, z:3)',
+                             b'x = 3y + z (x:123, y:40, z:3)',
+                             b'x = 3y + z (x:120, y:39, z:3)',
+                             b'x = 3y + z (x:121, y:40, z:1)',
+                             b'x = 3y + z (x:122, y:40, z:2)']
+
         outcomes = []
 
         act = [('CSP', UI(determinist=True)), ('tWALK', UI(path='csp/variables/x'))]
@@ -4729,6 +4740,9 @@ class TestConstBackend(unittest.TestCase):
             # d.show()
             idx += 1
 
+        # time.sleep(0.1)
+        # print('\n*** DEBUG')
+        # pp(outcomes)
         self.assertEqual(idx, expected_idx)
         self.assertEqual(outcomes, expected_outcomes)
 
@@ -4750,14 +4764,24 @@ class TestConstBackend(unittest.TestCase):
             # d.show()
             idx += 1
 
+        # time.sleep(0.1)
+        # print('\n*** DEBUG')
+        # pp(outcomes)
         self.assertEqual(idx, expected_idx)
         self.assertEqual(outcomes, expected_outcomes)
 
     def test_twalk_operator_2(self):
         idx = 0
         expected_idx = 9
-        expected_outcomes = [b'> 8 <', # redundancy
-                             b'> 8 <', b'> 6 <', b'> 1 <', b'> 2 <', b'> 3 <', b'> 4 <', b'> 5 <', b'> 7 <']
+        expected_outcomes = [b'> 6 <',
+                             b'> 6 <', # redundancy
+                             b'> 1 <',
+                             b'> 2 <',
+                             b'> 3 <',
+                             b'> 4 <',
+                             b'> 5 <',
+                             b'> 7 <',
+                             b'> 8 <']
         outcomes = []
 
         act = [('CSP_BASIC', UI(determinist=True,freeze=True)), ('tWALK', UI(path='.*/idx'))]
@@ -4771,16 +4795,24 @@ class TestConstBackend(unittest.TestCase):
             outcomes.append(d.to_bytes())
             idx += 1
 
+        # time.sleep(0.1)
+        # print('\n*** DEBUG')
         # pp(outcomes)
-
         self.assertEqual(outcomes, expected_outcomes)
         self.assertEqual(idx, expected_idx)
 
     def test_twalk_operator_3(self):
         idx = 0
         expected_idx = 9
-        expected_outcomes = [b'> 8 <', # redundancy
-                             b'> 8 <', b'> 6 <', b'> 1 <', b'> 2 <', b'> 3 <', b'> 4 <', b'> 5 <', b'> 7 <']
+        expected_outcomes = [b'> 6 <',
+                             b'> 6 <', # redundancy
+                             b'> 1 <',
+                             b'> 2 <',
+                             b'> 3 <',
+                             b'> 4 <',
+                             b'> 5 <',
+                             b'> 7 <',
+                             b'> 8 <']
         outcomes = []
 
         act = [('CSP_BASIC', UI(determinist=True,freeze=True)), ('tWALK')]
@@ -5023,17 +5055,18 @@ class TestMW_tTYPE(unittest.TestCase):
 
     def test_param_only_corner_cases(self):
 
-        ### 1. tTYPE @only_invalid_cases=True
+        ### 1. tTYPE @only_corner_cases=True @csp_compliance_matters=False
 
         idx = 0
-        expected_idx = 5
+        expected_idx = 6
         expected_outcomes = [
-            b'> 8 <', b'> 100 <', b'> 1 <', b'> 2 <', b'> 8 <'
+            b'> 6 <', b'> 100 <', b'> 1 <', b'> 8 <', b'> 2 <', b'> 6 <'
         ]
 
         outcomes = []
 
-        act = [('CSP_BASIC', UI(determinist=True)), ('tTYPE', UI(only_corner_cases=True))]
+        act = [('CSP_BASIC', UI(determinist=True)),
+               ('tTYPE', UI(only_corner_cases=True,csp_compliance_matters=False))]
         for j in range(40):
             d = fmk.process_data(act)
             if d is None:
@@ -5045,9 +5078,40 @@ class TestMW_tTYPE(unittest.TestCase):
             # d.show()
             idx += 1
 
-        time.sleep(0.1)
-        print('\n*** DEBUG')
-        pp(outcomes)
+        # time.sleep(0.1)
+        # print('\n*** DEBUG')
+        # pp(outcomes)
+        self.assertEqual(idx, expected_idx)
+        for s in outcomes:
+            self.assertIn(s, expected_outcomes)
+
+
+        ### 2. tTYPE @only_corner_cases=True @csp_compliance_matters=True
+
+        idx = 0
+        expected_idx = 5
+        expected_outcomes = [
+            b'> 6 <', b'> 1 <', b'> 8 <', b'> 2 <', b'> 6 <'
+        ]
+
+        outcomes = []
+
+        act = [('CSP_BASIC#2', UI(determinist=True)),
+               ('tTYPE#2', UI(only_corner_cases=True,csp_compliance_matters=True))]
+        for j in range(40):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            # d.show()
+            idx += 1
+
+        # time.sleep(0.1)
+        # print('\n*** DEBUG')
+        # pp(outcomes)
         self.assertEqual(idx, expected_idx)
         for s in outcomes:
             self.assertIn(s, expected_outcomes)

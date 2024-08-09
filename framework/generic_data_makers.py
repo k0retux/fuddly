@@ -320,6 +320,7 @@ class sd_fuzz_typed_nodes(StatefulDisruptor):
     Note: this disruptor includes what tSEP does and goes beyond with respect to separators.
     """
     def setup(self, dm, user_input):
+        assert not (self.only_corner_cases and self.only_invalid_cases)
         return True
 
     def set_seed(self, prev_data):

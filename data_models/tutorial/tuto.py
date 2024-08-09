@@ -591,7 +591,9 @@ class MyDF_DataModel(DataModel):
              'contents': [
                  {'name': 'equation',
                   'contents': String(values=['x = 3y + z'])},
-                 {'name': 'delim_1', 'contents': String(values=[' [', ' ('])},
+                 {'name': 'delim_1',
+                  'contents': String(values=[' [', ' ('])},
+                  # 'default': ' ('},
                  {'name': 'variables',
                   'separator': {'contents': {'name': 'sep', 'contents': String(values=[', '])},
                                 'prefix': False, 'suffix': False},
@@ -677,7 +679,9 @@ class MyDF_DataModel(DataModel):
              'contents': [
                  {'name': 'equation',
                   'contents': String(values=['x = 3y + z'])},
-                 {'name': 'delim_1', 'contents': String(values=[' [', ' ('])},
+                 {'name': 'delim_1',
+                  'contents': String(values=[' [', ' (']),
+                  'default': ' ('},
                  {'name': 'variables',
                   'separator': {'contents': {'name': 'sep', 'contents': String(values=[', '])},
                                 'prefix': False, 'suffix': False},

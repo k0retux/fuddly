@@ -155,6 +155,10 @@ class CSP(object):
     _var_domain = None
     _var_domain_updated = False
     _orig_var_domain = None
+    _var_default_value = None
+    _orig_var_default_value = None
+    _checked_with_default_values = None
+    _default_value_constraints_added = None
     _problem = None
     _solver = None
     _solutions = None
@@ -210,6 +214,7 @@ class CSP(object):
 
         self._var_node_mapping = {}
         self._var_domain = {}
+        self._var_default_value = {}
         self._var_domain_updated = False
 
         self.highlight_variables = highlight_variables
@@ -226,6 +231,8 @@ class CSP(object):
         else:
             self._problem = cst.Problem()
 
+        self._checked_with_default_values = False
+        self._default_value_constraints_added = False
         self._solutions = None
         self._model = None
         self._exhausted_solutions = False
@@ -242,8 +249,7 @@ class CSP(object):
     def var_domain_updated(self):
         return self._var_domain_updated
 
-    def set_var_domain(self, var, domain, min=None, max=None):
-        assert bool(domain)
+    def set_var_domain(self, var, domain, min=None, max=None, default=None):
         if min is None:
             self._var_domain[var] = copy.copy(domain)
             if self.z3_problem:
@@ -262,10 +268,14 @@ class CSP(object):
                     pass
         else:
             self._var_domain[var] = (min, max)
+
+        self._var_default_value[var] = default
+
         self._var_domain_updated = True
 
     def save_current_var_domains(self):
         self._orig_var_domain = copy.deepcopy(self._var_domain)
+        self._orig_var_default_value = copy.copy(self._var_default_value)
         if self.z3_problem:
             self._orig_var_types = copy.copy(self._var_types)
             self._orig_z3vars = copy.deepcopy(self._z3vars)
@@ -273,6 +283,7 @@ class CSP(object):
 
     def restore_var_domains(self):
         self._var_domain = copy.deepcopy(self._orig_var_domain)
+        self._var_default_value = copy.copy(self._orig_var_default_value)
         if self.z3_problem:
             self._var_types = copy.copy(self._orig_var_types)
             self._z3vars = copy.deepcopy(self._orig_z3vars)
@@ -303,21 +314,30 @@ class CSP(object):
         return self._model
 
     def _solve_constraints(self):
+        default_value_constraints = []
         for c in self._constraints:
             if isinstance(c, Z3Constraint):
                 relation = c.relation
                 for v in c.vars:
                     z3var = self._z3vars[v]
                     dom = self._var_domain[v]
+                    default = self._var_default_value.get(v)
                     v_type = self._var_types.get(v)
                     if v_type is None or v_type is z3.Int:
+                        if not self._checked_with_default_values and default is not None:
+                            default_value_constraints.append(z3var == default)
+
                         if isinstance(dom, tuple) and len(dom) == 2:
                             min, max = dom
                             self._solver.add(And([min <= z3var, z3var <= max]))
                         else:
                             self._solver.add(Or([z3var == value for value in dom]))
+
                     elif v_type is z3.String:
+                        if not self._checked_with_default_values and default is not None:
+                            default_value_constraints.append(z3var == gr.unconvert_from_internal_repr(default))
                         self._solver.add(Or([z3var == gr.unconvert_from_internal_repr(value) for value in dom]))
+
                     else:
                         raise NotImplementedError
 
@@ -344,18 +364,30 @@ class CSP(object):
                 else:
                     self._solver.add(z3formula)
 
+                if not self._checked_with_default_values and default_value_constraints:
+                    self._solver.push()
+                    for z3_cst in default_value_constraints:
+                        self._solver.add(z3_cst)
+                    self._default_value_constraints_added = True
+
             else:
                 for v in c.vars:
                     dom = self._var_domain[v]
+                    default = self._var_default_value.get(v)
+                    if not self._checked_with_default_values and default is not None:
+                        dom = [default]
+                        self._default_value_constraints_added = True
+                    elif isinstance(dom, tuple) and len(dom) == 2:
+                        dom = range(dom[0], dom[1] + 1)
+
                     try:
-                        if isinstance(dom, tuple) and len(dom) == 2:
-                            dom = range(dom[0], dom[1]+1)
                         self._problem.addVariable(v, dom)
                     except ValueError:
                         # most probable cause: duplicated variable is attempted to be inserted
                         # (other cause is empty domain which is checked at init)
                         pass
                 self._problem.addConstraint(c.relation, c.vars)
+
 
         try:
             if self.z3_problem:
@@ -370,6 +402,8 @@ class CSP(object):
                                      f'\n --> variables: {self._vars}'
                                      f'\n --> domains: {self._var_domain}')
 
+        self._checked_with_default_values = True
+
 
     def _next_solution(self):
         z3mdl = self._solutions
@@ -383,6 +417,9 @@ class CSP(object):
 
         else:
             self._solutions = _Z3_MODEL_NOT_COMPUTED
+            if self._checked_with_default_values and self._default_value_constraints_added:
+                self._solver.pop()
+                self._default_value_constraints_added = False
             self._solver.add(Or([z3v != z3mdl[z3v] for z3v in self._z3vars.values()]))
             mdl = {}
             for var in z3mdl:
@@ -411,13 +448,17 @@ class CSP(object):
                         self._model = self._next_solution()
                     except CSPUnsat:
                         self._exhausted_solutions = True
-                        raise ConstraintError(f'No solution found for this CSP\n --> variables: {self._vars}')
+                        raise ConstraintError(
+                            f'No solution found for this CSP by keeping any default values within '
+                            f'the DM definition.\n --> variables: {self._vars}')
                 else:
                     try:
                         mdl = next(self._solutions)
                     except StopIteration:
                         self._exhausted_solutions = True
-                        raise ConstraintError(f'No solution found for this CSP\n --> variables: {self._vars}')
+                        raise ConstraintError(
+                            f'No solution found for this CSP by keeping any default values within '
+                            f'the DM definition.\n --> variables: {self._vars}')
                     except TypeError:
                         self._exhausted_solutions = True
                         print(f'\nVariable types in the constraint formula are not consistent'
@@ -436,6 +477,10 @@ class CSP(object):
                 else:
                     self._model = mdl
             else:
+                if self._checked_with_default_values and self._default_value_constraints_added:
+                    self._problem.reset()
+                    self._solve_constraints()
+                    self._default_value_constraints_added = False
                 try:
                     mdl = next(self._solutions)
                 except StopIteration:
@@ -484,6 +529,7 @@ class CSP(object):
         new_csp = type(self)(constraints=self._constraints)
         new_csp.__dict__.update(self.__dict__)
         new_csp._var_domain = copy.deepcopy(self._var_domain)
+        new_csp._var_default_value = copy.copy(self._var_default_value)
         new_csp._var_types = copy.copy(self._var_types)
         new_csp._z3vars = copy.deepcopy(self._z3vars)
         # print(f'\n*** DBG RESET - info:'
