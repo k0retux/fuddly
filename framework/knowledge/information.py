@@ -108,15 +108,6 @@ class Test(Info):
     Medium = auto()
     Deep = auto()
 
-    # OnlyCornerCases is leveraged by tTYPE when it walks through INT() and String()-based nodes.
-    # Only corner cases will be generated through tTYPE when the project has this attribute added
-    OnlyCornerCases = auto()
-
-    # OnlyInvalidCases is leveraged by tTYPE when it walks through INT() and String()-based nodes.
-    # Only invalid cases will be generated through tTYPE when the project has this attribute added.
-    # (Thus, corner cases won't be generated.)
-    OnlyInvalidCases = auto()
-
 class OperationMode(Info):
     Determinist = auto()
     Random = auto()

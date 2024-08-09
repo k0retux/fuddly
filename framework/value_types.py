@@ -126,7 +126,7 @@ class VT(object):
     def get_specific_fuzzy_vals(self):
         raise NotImplementedError
 
-    def get_fuzzed_vt_list(self):
+    def get_fuzzed_vt_list(self, only_corner_cases=False, only_invalid_cases=False):
         return None
 
 
@@ -135,6 +135,9 @@ class VT_Alt(VT):
     def __init__(self):
         self._fuzzy_mode = False
         self._specific_fuzzy_vals = None
+        self._fuzz_magnitude = 1.0
+        self._only_corner_cases = False
+        self._only_invalid_cases = False
 
     @property
     def fuzz_mode_enabled(self):
@@ -144,7 +147,9 @@ class VT_Alt(VT):
         if self._fuzzy_mode:
             self._enable_normal_mode()
         else:
-            self._enable_fuzz_mode()
+            self._enable_fuzz_mode(fuzz_magnitude=self._fuzz_magnitude,
+                                   only_corner_cases=self._only_corner_cases,
+                                   only_invalid_cases=self._only_invalid_cases)
 
         self._fuzzy_mode = not self._fuzzy_mode
         self.after_enabling_mode()
@@ -152,9 +157,14 @@ class VT_Alt(VT):
     def after_enabling_mode(self):
         pass
 
-    def enable_fuzz_mode(self, fuzz_magnitude=1.0):
+    def enable_fuzz_mode(self, fuzz_magnitude=1.0, only_corner_cases=False, only_invalid_cases=False):
         if not self._fuzzy_mode:
-            self._enable_fuzz_mode(fuzz_magnitude=fuzz_magnitude)
+            self._fuzz_magnitude = fuzz_magnitude
+            self._only_corner_cases = only_corner_cases
+            self._only_invalid_cases = only_invalid_cases
+            self._enable_fuzz_mode(fuzz_magnitude=self._fuzz_magnitude,
+                                   only_corner_cases=self._only_corner_cases,
+                                   only_invalid_cases=self._only_invalid_cases)
             self._fuzzy_mode = True
             self.after_enabling_mode()
 
@@ -167,7 +177,7 @@ class VT_Alt(VT):
     def _enable_normal_mode(self):
         raise NotImplementedError
 
-    def _enable_fuzz_mode(self, fuzz_magnitude=1.0):
+    def _enable_fuzz_mode(self, fuzz_magnitude=1.0, only_corner_cases=False, only_invalid_cases=False):
         raise NotImplementedError
 
     def add_specific_fuzzy_vals(self, vals):
@@ -902,21 +912,13 @@ class String(VT_Alt):
 
         self.drawn_val = None
 
-    def _enable_fuzz_mode(self, fuzz_magnitude=1.0):
+    def _enable_fuzz_mode(self, fuzz_magnitude=1.0, only_corner_cases=False, only_invalid_cases=False):
         self.values_fuzzy = []
 
         def add_to_fuzz_list(flist):
             for v in flist:
                 if v not in self.values_fuzzy:
                     self.values_fuzzy.append(v)
-
-        only_corner_cases = False
-        only_invalid_cases = False
-        if self.knowledge_source and self.knowledge_source.is_info_class_represented(Test):
-            if self.knowledge_source.is_assumption_valid(Test.OnlyCornerCases):
-                only_corner_cases = True
-            elif self.knowledge_source.is_assumption_valid(Test.OnlyInvalidCases):
-                only_invalid_cases = True
 
         if only_corner_cases:
             if self.drawn_val is not None:
@@ -1403,42 +1405,47 @@ class INT(VT):
     def copy_attrs_from(self, vt):
         self.endian = vt.endian
 
-    def get_fuzzed_vt_list(self):
-
-        specific_fuzzy_values = self.get_specific_fuzzy_vals()
-        supp_list = specific_fuzzy_values if specific_fuzzy_values is not None else []
-
-        only_corner_cases = False
-        only_invalid_cases = False
-        if self.knowledge_source and self.knowledge_source.is_info_class_represented(Test):
-            if self.knowledge_source.is_assumption_valid(Test.OnlyCornerCases):
-                only_corner_cases = True
-            elif self.knowledge_source.is_assumption_valid(Test.OnlyInvalidCases):
-                only_invalid_cases = True
+    def get_fuzzed_vt_list(self, only_corner_cases=False, only_invalid_cases=False):
 
         if only_corner_cases:
+            supp_list = []
+
             val = self.get_current_raw_val()
             if val is not None:
                 if self.values is not None:
                     orig_set = set(self.values)
                     max_oset = max(orig_set)
                     min_oset = min(orig_set)
+                    if max_oset - val > 1:
+                        subset = orig_set.intersection(range(val+1, max_oset))
+                        # print('\n*** DEBUG A1:', subset)
+                        if subset:
+                            supp_list.append(subset.pop())
+                    if val - min_oset > 1:
+                        subset = orig_set.intersection(range(min_oset+1, val))
+                        # print('\n*** DEBUG A2:', subset)
+                        if subset:
+                            supp_list.append(subset.pop())
                 else:
                     assert self.mini is not None
                     max_oset = self.maxi_gen
                     min_oset = self.mini_gen
+                    if max_oset - val > 1:
+                        rval = random.randint(val+1,max_oset-1)
+                        supp_list.append(rval)
+                    if val - min_oset > 1:
+                        rval = random.randint(min_oset+1,val-1)
+                        supp_list.append(rval)
 
-                if max_oset not in supp_list:
-                    supp_list.append(max_oset)
                 if min_oset not in supp_list:
-                    supp_list.append(min_oset)
-                if max_oset - val > 1:
-                    rval = random.randint(val+1,max_oset-1)
-                    supp_list.append(rval)
-                if val - min_oset > 1:
-                    rval = random.randint(min_oset+1,val-1)
-                    supp_list.append(rval)
+                    supp_list.insert(0, min_oset)
+                if max_oset not in supp_list:
+                    supp_list.insert(0, max_oset)
+
         else:
+            specific_fuzzy_values = self.get_specific_fuzzy_vals()
+            supp_list = specific_fuzzy_values if specific_fuzzy_values is not None else []
+
             val = self.get_current_raw_val()
             if val is not None:
                 # don't use a set to preserve the order if needed
@@ -2090,13 +2097,16 @@ class INT_str(INT):
         return (format_str, regex+regex_prefix)
 
 
-    def get_fuzzed_vt_list(self):
-        vt_list = INT.get_fuzzed_vt_list(self)
+    def get_fuzzed_vt_list(self, only_corner_cases=False, only_invalid_cases=False):
+        vt_list = INT.get_fuzzed_vt_list(self, only_corner_cases=only_corner_cases,
+                                         only_invalid_cases=only_invalid_cases)
+        # print('\n*** DEBUG', vt_list[0].values)
 
-        if self.knowledge_source \
-                and self.knowledge_source.is_info_class_represented(Test) \
-                and self.knowledge_source.is_assumption_valid(Test.OnlyCornerCases):
+        if only_corner_cases:
             return vt_list
+
+        # Note that @only_invalid_cases is not applicable for this type, as every test cases
+        # generated in what follows are invalid per se.
 
         fuzzed_vals = []
         def handle_size(self, v):
@@ -2722,7 +2732,9 @@ class BitField(VT_Alt):
         self.subfield_fuzzy_vals = [None for i in range(len(self.subfield_sizes))]
         self.exhausted = False
 
-    def _enable_fuzz_mode(self, fuzz_magnitude=1.0):
+    def _enable_fuzz_mode(self, fuzz_magnitude=1.0, only_corner_cases=False, only_invalid_cases=False):
+
+        # TODO: add support for @only_corner_cases and @only_invalid_cases
 
         for idx in range(len(self.subfield_fuzzy_vals)):
             sz = self.subfield_sizes[idx]

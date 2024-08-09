@@ -477,6 +477,8 @@ class NodeConsumerStub(object):
         self.__node_backup = None
 
         self._csp_compliance_matters = True
+        self._only_corner_cases = False
+        self._only_invalid_cases = False
 
         self.init_specific(**kwargs)
 
@@ -809,7 +811,8 @@ class AltConfConsumer(NodeConsumerStub):
 
 class TypedNodeDisruption(NodeConsumerStub):
 
-    def init_specific(self, ignore_separator=False, determinist=True, csp_compliance_matters=False):
+    def init_specific(self, ignore_separator=False, determinist=True, csp_compliance_matters=False,
+                      only_corner_cases=False, only_invalid_cases=False):
         mattr = None if self.ignore_mutable_attr else [dm.NodeInternals.Mutable]
         if ignore_separator:
             self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=mattr,
@@ -834,6 +837,8 @@ class TypedNodeDisruption(NodeConsumerStub):
         self.need_reset_when_structure_change = True
 
         self._csp_compliance_matters = csp_compliance_matters
+        self._only_corner_cases = only_corner_cases
+        self._only_invalid_cases = only_invalid_cases
 
     def preload(self, root_node):
         if not self._ignore_separator:
@@ -890,12 +895,15 @@ class TypedNodeDisruption(NodeConsumerStub):
         if issubclass(vt.__class__, vtype.VT_Alt):
             new_vt = copy.copy(vt)
             new_vt.make_private(forget_current_state=False)
-            new_vt.enable_fuzz_mode(fuzz_magnitude=fuzz_magnitude)
+            new_vt.enable_fuzz_mode(fuzz_magnitude=fuzz_magnitude,
+                                    only_corner_cases=self._only_corner_cases,
+                                    only_invalid_cases=self._only_invalid_cases)
             self.current_fuzz_vt_list = [new_vt]
         else:
             self.current_fuzz_vt_list = []
 
-        fuzzed_vt = vt.get_fuzzed_vt_list()
+        fuzzed_vt = vt.get_fuzzed_vt_list(only_corner_cases=self._only_corner_cases,
+                                          only_invalid_cases=self._only_invalid_cases)
         if fuzzed_vt:
             self.current_fuzz_vt_list += fuzzed_vt
 

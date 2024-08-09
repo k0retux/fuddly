@@ -749,15 +749,16 @@ class MyDF_DataModel(DataModel):
              'constraints_highlight': True,
              'contents': [
                  {'name': 'prefix', 'contents': String(values=['> '])},
-                 {'name': 'idx', 'contents': INT_str(values=[1,2,3,100,4,5,6,7,100])},
+                 {'name': 'idx', 'contents': INT_str(values=[1,2,3,100,4,5,6,7,8,100]),
+                  'default': 6},
                  {'name': 'suffix', 'contents': String(values=[' <'])},
              ]}
 
         str_desc = {'name': 'str',
              'contents': [
-                 {'name': 'str1', 'contents': String(values=['a', 'b', 'c'])},
-                 {'name': 'str2',
-                  'contents': String(values=['x', 'y'], alphabet='xy', min_sz=1, max_sz=3)},
+                 # {'name': 'str1', 'contents': String(values=['a', 'b', 'c'])},
+                 # {'name': 'str2',
+                 #  'contents': String(values=['x', 'y'], alphabet='xy', min_sz=1, max_sz=3)},
                  {'name': 'str3',
                   'contents': String(values=['OK'], alphabet=String.non_ctrl_char+String.ctrl_char_set,
                                      min_sz=1, max_sz=3)},

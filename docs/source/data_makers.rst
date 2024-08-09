@@ -169,6 +169,15 @@ Parameters:
         |_ csp_compliance_matters
         |      | desc: Does the compliance to any defined CSP should be always guaranteed?
         |      | default: False [type: bool]
+        |_ only_corner_cases
+        |      | desc: If set to True, when this operator walks through INT() and String()-based
+        |      |       nodes, only valid corner cases will be generated
+        |      | default: False [type: bool]
+        |_ only_invalid_cases
+        |      | desc: If set to True, when this operator walks through INT() and String()-based
+        |      |       nodes, only invalid cases will be generated, meaning valid corner
+        |      |       cases will not be generated.
+        |      | default: False [type: bool]
 
 
 tSTRUCT - Alter Data Structure

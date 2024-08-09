@@ -24,6 +24,8 @@
 ################################################################################
 from __future__ import print_function
 
+import time
+
 import sys
 import unittest
 import ddt
@@ -4753,11 +4755,12 @@ class TestConstBackend(unittest.TestCase):
 
     def test_twalk_operator_2(self):
         idx = 0
-        expected_idx = 7
-        expected_outcomes = [b'> 1 <', b'> 2 <', b'> 3 <', b'> 4 <', b'> 5 <', b'> 6 <', b'> 7 <']
+        expected_idx = 9
+        expected_outcomes = [b'> 8 <', # redundancy
+                             b'> 8 <', b'> 6 <', b'> 1 <', b'> 2 <', b'> 3 <', b'> 4 <', b'> 5 <', b'> 7 <']
         outcomes = []
 
-        act = [('CSP_BASIC', UI(determinist=True)), ('tWALK', UI(path='.*/idx'))]
+        act = [('CSP_BASIC', UI(determinist=True,freeze=True)), ('tWALK', UI(path='.*/idx'))]
         for j in range(20):
             d = fmk.process_data(act)
             if d is None:
@@ -4768,20 +4771,19 @@ class TestConstBackend(unittest.TestCase):
             outcomes.append(d.to_bytes())
             idx += 1
 
-        pp(outcomes)
+        # pp(outcomes)
 
         self.assertEqual(outcomes, expected_outcomes)
         self.assertEqual(idx, expected_idx)
 
     def test_twalk_operator_3(self):
         idx = 0
-        expected_idx = 8
-        expected_outcomes = [b'> 1 <',
-                             b'> 1 <', # redundancy
-                             b'> 2 <', b'> 3 <', b'> 4 <', b'> 5 <', b'> 6 <', b'> 7 <']
+        expected_idx = 9
+        expected_outcomes = [b'> 8 <', # redundancy
+                             b'> 8 <', b'> 6 <', b'> 1 <', b'> 2 <', b'> 3 <', b'> 4 <', b'> 5 <', b'> 7 <']
         outcomes = []
 
-        act = [('CSP_BASIC', UI(determinist=True)), ('tWALK')]
+        act = [('CSP_BASIC', UI(determinist=True,freeze=True)), ('tWALK')]
         for j in range(20):
             d = fmk.process_data(act)
             if d is None:
@@ -4894,6 +4896,158 @@ class TestConstBackend(unittest.TestCase):
             # d.show()
             idx += 1
 
+        self.assertEqual(idx, expected_idx)
+        for s in outcomes:
+            self.assertIn(s, expected_outcomes)
+
+
+class TestMW_tTYPE(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        fmk.run_project(name='tuto', tg_ids=0, dm_name='mydf')
+        fmk.prj.reset_target_mappings()
+        fmk.disable_fmkdb()
+
+    def setUp(self):
+        fmk.reload_all(tg_ids=[0])
+        fmk.prj.reset_target_mappings()
+
+    def test_param_only_invalid_cases(self):
+
+        ### 1. tTYPE @only_invalid_cases=True
+
+        idx = 0
+        expected_idx = 18
+        expected_outcomes = [
+            b'OKAA1',
+            b'1',
+            b'OKXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+            b'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+            b'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+            b'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX1',
+            b'OK\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n'
+            b'\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n'
+            b'\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n'
+            b'\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n'
+            b'\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n'
+            b'\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n1',
+            b'OK%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n'
+            b'%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n'
+            b'%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n'
+            b'%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n'
+            b'%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n'
+            b'%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n'
+            b'%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n'
+            b'%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n'
+            b'%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n'
+            b'%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n'
+            b'%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n1',
+            b'OK%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s'
+            b'%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s'
+            b'%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s'
+            b'%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s'
+            b'%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s'
+            b'%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s'
+            b'%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s'
+            b'%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s'
+            b'%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s'
+            b'%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s'
+            b'%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s1',
+            b'OKA',
+            b'OK%n',
+            b'OK%s',
+            b'OK1%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%'
+            b'n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%'
+            b'n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%n%'
+            b'n%n%n%n%n%n%n%n',
+            b'OK1%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%'
+            b's%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%'
+            b's%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%'
+            b's%s%s%s%s%s%s%s',
+            b'OK1\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r'
+            b'\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r'
+            b'\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r'
+            b'\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r'
+            b'\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r'
+            b'\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n',
+            b'OK0',
+            b'OK6',
+            b'OK-1',
+            b'OK-4294967296',
+            b'OK4294967295',
+            b'OK4294967296'
+        ]
+
+        outcomes = []
+
+        act = [('STR', UI(determinist=True)), ('tTYPE', UI(only_invalid_cases=True))]
+        for j in range(40):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            # d.show()
+            idx += 1
+
+        # time.sleep(0.1)
+        # print('\n*** DEBUG')
+        # pp(outcomes)
+        self.assertEqual(idx, expected_idx)
+        for s in outcomes:
+            self.assertIn(s, expected_outcomes)
+
+        ### 2. tTYPE @only_invalid_cases=False
+
+        idx2 = 0
+        expected_idx2 = 24
+        outcomes = []
+
+        act = [('STR#2', UI(determinist=True)), ('tTYPE#2', UI(only_invalid_cases=False))]
+        for j in range(40):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            # d.show()
+            idx2 += 1
+
+        self.assertAlmostEqual(idx2, expected_idx2, delta=1)
+        self.assertLess(idx,idx2)
+
+
+    def test_param_only_corner_cases(self):
+
+        ### 1. tTYPE @only_invalid_cases=True
+
+        idx = 0
+        expected_idx = 5
+        expected_outcomes = [
+            b'> 8 <', b'> 100 <', b'> 1 <', b'> 2 <', b'> 8 <'
+        ]
+
+        outcomes = []
+
+        act = [('CSP_BASIC', UI(determinist=True)), ('tTYPE', UI(only_corner_cases=True))]
+        for j in range(40):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            # d.show()
+            idx += 1
+
+        time.sleep(0.1)
+        print('\n*** DEBUG')
+        pp(outcomes)
         self.assertEqual(idx, expected_idx)
         for s in outcomes:
             self.assertIn(s, expected_outcomes)
