@@ -4639,7 +4639,6 @@ class TestConstBackend(unittest.TestCase):
             idx += 1
 
         self.assertEqual(idx, expected_idx)
-        # self.assertEqual(outcomes, expected_outcomes)
         for s in outcomes:
             self.assertIn(s, expected_outcomes)
 
@@ -4712,16 +4711,10 @@ class TestConstBackend(unittest.TestCase):
     def test_twalk_operator_1(self):
         idx = 0
         expected_idx = 6
-        expected_outcomes = [b'x = 3y + z (x:123, y:40, z:3)',
-                             b'x = 3y + z (X:123, y:40, z:3)',
-                             b'x = 3y + z (x:123, y:40, z:3)', # redundancy
-                             b'x = 3y + z (x:120, y:39, z:3)',
-                             b'x = 3y + z (x:121, y:40, z:1)',
-                             b'x = 3y + z (x:122, y:40, z:2)']
 
         expected_outcomes = [b'x = 3y + z (x:123, y:40, z:3)',
                              b'x = 3y + z (X:123, y:40, z:3)',
-                             b'x = 3y + z (x:123, y:40, z:3)',
+                             b'x = 3y + z (x:123, y:40, z:3)',  # redundancy
                              b'x = 3y + z (x:120, y:39, z:3)',
                              b'x = 3y + z (x:121, y:40, z:1)',
                              b'x = 3y + z (x:122, y:40, z:2)']
@@ -4748,8 +4741,8 @@ class TestConstBackend(unittest.TestCase):
 
         idx = 0
         expected_idx = 2
-        expected_outcomes = [b'x = 3y + z [x:123, y:40, z:3]',
-                             b'x = 3y + z (x:123, y:40, z:3)']
+        expected_outcomes = [b'x = 3y + z (x:123, y:40, z:3)',
+                             b'x = 3y + z [x:123, y:40, z:3]']
         outcomes = []
 
         act = [('CSP', UI(determinist=True)), ('tWALK', UI(path='csp/delim_1'))]
@@ -4831,13 +4824,15 @@ class TestConstBackend(unittest.TestCase):
 
     def test_tconst_operator_1(self):
         idx = 0
-        expected_idx = 362
-        expected_outcomes = [b'x = 3y + z (x:123, y:40, z:3-',
-                             b'x = 3y + z [x:123, y:40, z:3)',
+        expected_idx = 374
+
+        expected_outcomes = [b'x = 3y + z [x:123, y:40, z:3)',
+                             b'x = 3y + z [x:120, y:39, z:3)',
+                             b'x = 3y + z [x:122, y:40, z:2)',
+                             b'x = 3y + z [x:121, y:40, z:1)',
                              b'x = 3y + z [x:123, y:40, z:3-',
-                             b'x = 3y + z (x:130, y:40, z:3)',
-                             b'x = 3y + z (x:130, y:39, z:3)',
-                             b'x = 3y + z (x:130, y:38, z:3)']
+                             b'x = 3y + z [x:120, y:39, z:3-']
+
         outcomes = []
 
         act = [('CSP', UI(determinist=True)), ('tCONST')]
@@ -4851,6 +4846,10 @@ class TestConstBackend(unittest.TestCase):
             outcomes.append(d.to_bytes())
             # d.show()
             idx += 1
+
+        # time.sleep(4)
+        # print('\n*** DEBUG')
+        # pp(outcomes[:6])
 
         self.assertEqual(idx, expected_idx)
         self.assertEqual(outcomes[:6], expected_outcomes)

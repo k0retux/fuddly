@@ -163,6 +163,7 @@ class CSP(object):
     _solver = None
     _solutions = None
     _model = None
+    _default_model = None  # used in the context of python-constraint
     _exhausted_solutions = None
     _is_solution_queried = False
     highlight_variables = None
@@ -235,6 +236,7 @@ class CSP(object):
         self._default_value_constraints_added = False
         self._solutions = None
         self._model = None
+        self._default_model = None
         self._exhausted_solutions = False
         self._is_solution_queried = False
 
@@ -354,6 +356,7 @@ class CSP(object):
                     # to generate specific test cases. (For instance tTYPE will change a vt.INT into
                     # a vt.String to add specific cases mixing integers and separators.)
                     # In such cases, it does not make sense to add a constraint anyway.
+                    self._checked_with_default_values = True
                     raise CSPDefinitionError(f'\nVariable types in the constraint formula are not consistent'
                                              f' (root cause: incorrect data model or some fuzzing is'
                                              f' performed?)'
@@ -389,20 +392,22 @@ class CSP(object):
                 self._problem.addConstraint(c.relation, c.vars)
 
 
-        try:
-            if self.z3_problem:
-                self._solutions = _Z3_MODEL_NOT_COMPUTED
-            else:
-                self._solutions = self._problem.getSolutionIter()
-        except TypeError:
-            self._solutions = None
-            raise CSPDefinitionError(f'\nVariable types in the constraint formula are not consistent'
-                                     f' (root cause: incorrect data model or some fuzzing is'
-                                     f' performed?)'
-                                     f'\n --> variables: {self._vars}'
-                                     f'\n --> domains: {self._var_domain}')
+        if self.z3_problem:
+            self._solutions = _Z3_MODEL_NOT_COMPUTED
+            self._checked_with_default_values = True
 
-        self._checked_with_default_values = True
+        else:
+            try:
+                self._solutions = self._problem.getSolutionIter()
+            except TypeError:
+                self._solutions = None
+                raise CSPDefinitionError(f'\nVariable types in the constraint formula are not consistent'
+                                         f' (root cause: incorrect data model or some fuzzing is'
+                                         f' performed?)'
+                                         f'\n --> variables: {self._vars}'
+                                         f'\n --> domains: {self._var_domain}')
+            finally:
+                self._checked_with_default_values = True
 
 
     def _next_solution(self):
@@ -468,6 +473,8 @@ class CSP(object):
                               f'\n --> domains: {self._var_domain}')
                     else:
                         self._model = mdl
+                        if self._default_value_constraints_added:
+                            self._default_model = mdl
         else:
             if self.z3_problem:
                 try:
@@ -477,12 +484,21 @@ class CSP(object):
                 else:
                     self._model = mdl
             else:
-                if self._checked_with_default_values and self._default_value_constraints_added:
+                if self._default_value_constraints_added and self._checked_with_default_values:
                     self._problem.reset()
-                    self._solve_constraints()
-                    self._default_value_constraints_added = False
+                    try:
+                        self._solve_constraints()
+                    except CSPDefinitionError as err:
+                        self._exhausted_solutions = True
+                        print(err)
+                    finally:
+                        self._default_value_constraints_added = False
                 try:
                     mdl = next(self._solutions)
+                    if self._default_model is not None:
+                        if mdl == self._default_model:
+                            self._default_model = None
+                            mdl = next(self._solutions)
                 except StopIteration:
                     self._exhausted_solutions = True
                 else:
@@ -540,6 +556,7 @@ class CSP(object):
         new_csp._var_node_mapping = copy.copy(self._var_node_mapping)
         new_csp._solutions = None # the generator cannot be copied
         new_csp._model = copy.copy(self._model)
+        new_csp._default_model = copy.copy(self._default_model)
         new_csp._constraints = []
         for c in self._constraints:
             new_csp._constraints.append(copy.copy(c))
