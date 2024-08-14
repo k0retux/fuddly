@@ -2016,12 +2016,22 @@ different possibilities within ``fuddly``:
 - or by specifying a CSP through the keyword ``constraint``, which leverage constraint programming
   backends (either the python ``constraint`` module or the ``z3-solver`` module)
 
-The CSP specification case is described in more details in what follows.
-To describe constraints in the form of a CSP, you should use the ``constraints`` keyword that allows you
-to provide a list of :class:`framework.constraint_helpers.Constraint` objects, which are the
-building blocks for specifying constraints between multiple nodes.
+The CSP specification case is described in more details in what follows. To describe constraints
+in the form of a CSP, you should use the ``constraints`` keyword that allows you to provide
+either a list of :class:`framework.constraint_helpers.Constraint` objects (backed by the
+``constraint`` module) or a list of :class:`framework.constraint_helpers.Z3Constraint` objects
+(backed by the ``z3-solver`` module), which are the building blocks for specifying constraints
+between multiple nodes.
 
-For instance, let's analyse the following data description (extracted from the ``mydf`` data model in ``tuto.py``).
+.. note::
+
+    The Z3 backend may provide significant performance improvement depending on the context usage.
+    Besides, more flexibility are provided by this backend as it supports character strings natively.
+    More details are provided in what follows.
+
+
+For instance, let's analyse the following data description (extracted from the ``mydf`` data model in ``tuto.py``),
+leveraging :class:`framework.constraint_helpers.Constraint` objects.
 
 .. code-block:: python
    :linenos:
@@ -2052,17 +2062,71 @@ For instance, let's analyse the following data description (extracted from the `
         [...]
 
 You can see that two constraints have been specified (l.3-6) through the specific
-:class:`framework.constraint_helpers.Constraint` objects. The constructor take a mandatory ``relation`` parameter
-expecting a boolean function that should express a relation between any nodes reachable
+:class:`framework.constraint_helpers.Constraint` objects. The constructor take a mandatory ``relation``
+parameter expecting a boolean function that should express a relation between any nodes reachable
 from the non-terminal node on which the ``constraints`` keyword is attached.
 It takes also a ``vars`` parameter expecting a list of the names of the nodes
 used in the boolean function (in the same order as the parameters of the function).
 
+The following example (also extracted from the ``mydf`` data model in ``tuto.py``) is similar to
+the previous one except that the Z3 backend is leveraged instead of the python ``constraint`` module.
+In order to leverage this backend, you only have to use :class:`framework.constraint_helpers.Z3Constraint`
+instead of :class:`framework.constraint_helpers.Constraint` and provide a Z3 formula within the
+``relation`` parameter instead of a boolean function.
+
+.. code-block:: python
+   :linenos:
+   :emphasize-lines: 12, 21
+
+        csp_str_desc = \
+            {'name': 'csp_str',
+             'constraints': [
+                 Z3Constraint(relation='x_val == 3*y_val + z_val',
+                              vars=('x_val', 'y_val', 'z_val')),
+                 Z3Constraint(
+                     relation="Or(["
+                              "And([SubSeq(delim_1, 1, 1) == '(', delim_2 == ')']),"
+                              "And([SubSeq(delim_1, 1, 1) == '[', delim_2 == ']'])"
+                              "])",
+                     vars=('delim_1', 'delim_2'),
+                     var_types={'delim_1': z3.String, 'delim_2': z3.String},
+                 ),
+             ],
+             'constraints_highlight': True,
+             'contents': [
+                 {'name': 'equation',
+                  'contents': String(values=['x = 3y + z'])},
+                 {'name': 'delim_1',
+                  'contents': String(values=[' [', ' (']),
+                  'default': ' ('},
+                 {'name': 'variables',
+                  'separator':
+                      {'contents': {'name': 'sep', 'contents': String(values=[', '])},
+                       'prefix': False, 'suffix': False},
+                  'contents': [
+                      {'name': 'x',
+                       'contents': [
+                           {'name': 'x_symbol',
+                            'contents': String(values=['x:', 'X:'])},
+                           {'name': 'x_val',
+                            'contents': INT_str(min=120, max=130)} ]},
+
+        [...]
+
+
+One difference with :class:`framework.constraint_helpers.Z3Constraint` is that you may provide Z3 formulas
+using variables of different kinds, namely integers and character strings.
+By default, variables will be interpreted as integers, and Z3 integer variables will be created
+to represent them. If you need to describe constraints between ``String()`` nodes, then you have to
+specify that the corresponding variables within the formula are strings. This will be done through
+the ``var_types`` parameter expecting a dictionary, mapping variable names to a Z3 variable type
+(l.12 in the example).
+
 .. note::
 
     The ``constraints`` keyword can be used several times along the description, but all the specified
-    :class:`framework.constraint_helpers.Constraint` will eventually end up in a single CSP.
-
+    :class:`framework.constraint_helpers.Constraint` or :class:`framework.constraint_helpers.Z3Constraint`
+    will eventually end up in a single CSP.
 
 These constraints, will then be resolved at :meth:`framework.node.Node.freeze` time (depending if
 the parameter ``resolve_csp`` is set to True).
@@ -2071,6 +2135,12 @@ with the parameter ``restrict_csp``. This is what is performed by the :class:`fr
 infrastructure when walking a specific node which is part of a CSP, so that the walked node won't be modified
 further to the CSP solving process.
 
+Finally, if ever ``INT()-based`` or ``String()-based`` nodes have default values (like in the example above l.21),
+the first generated data will be compliant with the specified CSP as well as the default values.
+If no solution is found for the CSP with the default values, a :class:`framework.constraint_helpers.ConstraintError`
+exception will be raised.
+
+
 .. note::
 
    The constructor of :class:`framework.constraint_helpers.Constraint` takes also an optional parameter
@@ -2078,8 +2148,3 @@ further to the CSP solving process.
    name in the data description). Refer to ``namespace`` keyword for more details, and to the ``csp_ns`` node
    description in the data model ``mydf`` (in ``tuto.py``).
 
-.. note::
-
-    You can also use the Z3 backend that may provide significant performance improvement depending on the context usage.
-    In order to leverage this backend, you only have to use :class:`framework.constraint_helpers.Z3Constraint` instead of :class:`framework.constraint_helpers.Constraint`
-    and provide Z3 formulas within the ``relation`` parameter instead of boolean function.
