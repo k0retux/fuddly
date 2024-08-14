@@ -672,7 +672,6 @@ class MyDF_DataModel(DataModel):
                               "And([SubSeq(delim_1, 1, 1) == '[', delim_2 == ']'])"
                               "])",
                      vars=('delim_1', 'delim_2'),
-                     var_types={'delim_1': z3.String, 'delim_2': z3.String},
                  ),
              ],
              'constraints_highlight': True,

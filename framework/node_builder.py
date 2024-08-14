@@ -881,7 +881,7 @@ class NodeBuilder(object):
                                    max=nd.cc.value_type.maxi_gen,
                                    default=default_val)
 
-        csp.save_current_var_domains()
+        csp.freeze()
         node.set_csp(csp)
 
 class State(object):

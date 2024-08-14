@@ -91,7 +91,7 @@ class Z3Constraint(object):
     _orig_relation = None
     _is_relation_translated = None
 
-    def __init__(self, relation, vars: Tuple, var_to_varns: dict = None, var_types: dict = None):
+    def __init__(self, relation, vars: Tuple, var_to_varns: dict = None):
         """
 
         Args:
@@ -104,15 +104,6 @@ class Z3Constraint(object):
 
         self.vars = vars
         self.var_to_varns = var_to_varns
-        self.var_types = var_types
-        self.z3vars = {}
-        for v in vars:
-            if self.var_types is not None and self.var_types[v] is not None:
-                v_type = self.var_types[v]
-            else:
-                v_type = None
-            self.z3vars[v] = v_type(v) if v_type else Int(v)
-
         self._is_relation_translated = False
         self.relation = self._orig_relation = relation
 
@@ -200,8 +191,6 @@ class CSP(object):
                 r_copy = copy.copy(r)
                 self._constraints.append(r_copy)
                 self._vars += r_copy.vars
-                if self.z3_problem and r_copy.var_types:
-                    self._var_types.update(r_copy.var_types)
                 if r_copy.var_to_varns:
                     if self._var_to_varns is None:
                         self._var_to_varns = {}
@@ -210,15 +199,29 @@ class CSP(object):
                         if v not in r_copy.var_to_varns:
                             self._var_to_varns[v] = v
 
-                if isinstance(r, Z3Constraint):
-                    self._z3vars.update(r_copy.z3vars)
-
         self._var_node_mapping = {}
         self._var_domain = {}
         self._var_default_value = {}
         self._var_domain_updated = False
 
         self.highlight_variables = highlight_variables
+
+    def freeze(self):
+        if self.z3_problem:
+            for r in self._constraints:
+                for var in r.vars:
+                    dom = self._var_domain[var]
+                    # print(f'\n*** DEBUG: var:{var}, type:{type(dom[0])}')
+                    if isinstance(dom[0], int):
+                        self._var_types[var] = z3.Int
+                    elif isinstance(dom[0], bytes):
+                        self._var_types[var] = z3.String
+                    else:
+                        raise NotImplementedError
+
+                    self._z3vars[var] = self._var_types[var](var)
+
+        self.save_current_var_domains()
 
     def reset(self):
         # print(f'\n*** DBG RESET - info:'

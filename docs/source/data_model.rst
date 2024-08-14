@@ -2076,7 +2076,7 @@ instead of :class:`framework.constraint_helpers.Constraint` and provide a Z3 for
 
 .. code-block:: python
    :linenos:
-   :emphasize-lines: 12, 21
+   :emphasize-lines: 20
 
         csp_str_desc = \
             {'name': 'csp_str',
@@ -2089,7 +2089,6 @@ instead of :class:`framework.constraint_helpers.Constraint` and provide a Z3 for
                               "And([SubSeq(delim_1, 1, 1) == '[', delim_2 == ']'])"
                               "])",
                      vars=('delim_1', 'delim_2'),
-                     var_types={'delim_1': z3.String, 'delim_2': z3.String},
                  ),
              ],
              'constraints_highlight': True,
@@ -2115,12 +2114,9 @@ instead of :class:`framework.constraint_helpers.Constraint` and provide a Z3 for
 
 
 One difference with :class:`framework.constraint_helpers.Z3Constraint` is that you may provide Z3 formulas
-using variables of different kinds, namely integers and character strings.
-By default, variables will be interpreted as integers, and Z3 integer variables will be created
-to represent them. If you need to describe constraints between ``String()`` nodes, then you have to
-specify that the corresponding variables within the formula are strings. This will be done through
-the ``var_types`` parameter expecting a dictionary, mapping variable names to a Z3 variable type
-(l.12 in the example).
+using variables of different kinds, namely integers and character strings. Note that the Z3 variable
+types relevant for mapping ``INT()``-based or ``String()``-based nodes will be automatically created
+for you (respectively ``z3.Int`` and ``z3.String``).
 
 .. note::
 
@@ -2135,7 +2131,7 @@ with the parameter ``restrict_csp``. This is what is performed by the :class:`fr
 infrastructure when walking a specific node which is part of a CSP, so that the walked node won't be modified
 further to the CSP solving process.
 
-Finally, if ever ``INT()-based`` or ``String()-based`` nodes have default values (like in the example above l.21),
+Finally, if ever ``INT()``-based or ``String()``-based nodes have default values (like in the example above l.20),
 the first generated data will be compliant with the specified CSP as well as the default values.
 If no solution is found for the CSP with the default values, a :class:`framework.constraint_helpers.ConstraintError`
 exception will be raised.
