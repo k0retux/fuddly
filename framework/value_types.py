@@ -1497,12 +1497,14 @@ class INT(VT):
             if only_invalid_cases:
                 supp_list = list(filter(self.is_invalid, supp_list))
 
-            fuzzed_vt = self.__class__(values=supp_list, fuzz_mode=True)
+            fuzzed_vt = self._instanciate_obj(values=supp_list, fuzz_mode=True)
             return [fuzzed_vt]
 
         else:
             return None
 
+    def _instanciate_obj(self, values, fuzz_mode=False):
+        return self.__class__(values=values, fuzz_mode=fuzz_mode)
 
     def add_specific_fuzzy_vals(self, vals):
         if self._specific_fuzzy_vals is None:
@@ -2046,6 +2048,11 @@ class INT_str(INT):
         self._reverse = vt._reverse
         self._format_str = vt._format_str
         self._regex = vt._regex
+
+    def _instanciate_obj(self, values, fuzz_mode=False):
+        return self.__class__(values=values, fuzz_mode=fuzz_mode, base=self._base,
+                              letter_case=self._letter_case,
+                              min_size=self._min_size, reverse=self._reverse)
 
     def _prepare_format_str(self, min_size, base, letter_case):
 
