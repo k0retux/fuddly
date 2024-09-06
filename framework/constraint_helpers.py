@@ -191,13 +191,13 @@ class CSP(object):
                 r_copy = copy.copy(r)
                 self._constraints.append(r_copy)
                 self._vars += r_copy.vars
+                if self._var_to_varns is None:
+                    self._var_to_varns = {}
                 if r_copy.var_to_varns:
-                    if self._var_to_varns is None:
-                        self._var_to_varns = {}
                     self._var_to_varns.update(r_copy.var_to_varns)
-                    for v in r_copy.vars:
-                        if v not in r_copy.var_to_varns:
-                            self._var_to_varns[v] = v
+                for v in r_copy.vars:
+                    if not r_copy.var_to_varns or v not in r_copy.var_to_varns:
+                        self._var_to_varns[v] = v
 
         self._var_node_mapping = {}
         self._var_domain = {}
@@ -346,8 +346,14 @@ class CSP(object):
                     else:
                         raise NotImplementedError
 
-                    if not c.is_relation_translated:
-                        relation = relation.replace(v, 'self._z3vars["'+ v +'"]')
+                if not c.is_relation_translated:
+                    tmp_vars = []
+                    for v in c.vars:
+                        tmp_vars.append('!?'+v)
+                    for v, tmp_v in zip(c.vars, tmp_vars):
+                        relation = relation.replace(v, tmp_v)
+                    for v, tmp_v in zip(c.vars, tmp_vars):
+                        relation = relation.replace(tmp_v, 'self._z3vars["'+ v +'"]')
 
                 if not c.is_relation_translated:
                     c.provide_translated_relation(relation)
@@ -549,6 +555,7 @@ class CSP(object):
         new_csp.__dict__.update(self.__dict__)
         new_csp._var_domain = copy.deepcopy(self._var_domain)
         new_csp._var_default_value = copy.copy(self._var_default_value)
+        new_csp._var_to_varns = copy.deepcopy(self._var_to_varns)
         new_csp._var_types = copy.copy(self._var_types)
         new_csp._z3vars = copy.deepcopy(self._z3vars)
         # print(f'\n*** DBG RESET - info:'

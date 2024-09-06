@@ -1751,8 +1751,9 @@ class sd_constraint_fuzz(StatefulDisruptor):
                 return data
 
         if self._first_call:
-            self.seed.unfreeze(recursive=False, dont_change_state=True, walk_csp=True,
-                               walk_csp_step_size=self._step_size)
+            if self._step_size > 1:
+                self.seed.unfreeze(recursive=False, dont_change_state=True, walk_csp=True,
+                                   walk_csp_step_size=self._step_size)
             self._first_call = False
         else:
             self.seed.unfreeze(recursive=False, dont_change_state=True, walk_csp=True,

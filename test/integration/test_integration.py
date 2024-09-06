@@ -4672,8 +4672,8 @@ class TestConstBackend(unittest.TestCase):
         for s in outcomes:
             self.assertIn(s, expected_outcomes)
 
-        ref_str_1 = b'x = 3y + z ('  # default value for delim_1 is ' ('
-        self.assertEqual(outcomes[0][:len(ref_str_1)], ref_str_1)
+        # ref_str_1 = b'x = 3y + z ('  # default value for delim_1 is ' ('
+        # self.assertEqual(outcomes[0][:len(ref_str_1)], ref_str_1)
 
 
     def test_twalkcsp_operator_2(self):
@@ -4824,14 +4824,14 @@ class TestConstBackend(unittest.TestCase):
 
     def test_tconst_operator_1(self):
         idx = 0
-        expected_idx = 374
+        expected_idx = 375
 
-        expected_outcomes = [b'x = 3y + z [x:123, y:40, z:3)',
+        expected_outcomes = [b'x = 3y + z (x:123, y:40, z:3]',
+                             b'x = 3y + z [x:123, y:40, z:3)',
                              b'x = 3y + z [x:120, y:39, z:3)',
                              b'x = 3y + z [x:122, y:40, z:2)',
                              b'x = 3y + z [x:121, y:40, z:1)',
-                             b'x = 3y + z [x:123, y:40, z:3-',
-                             b'x = 3y + z [x:120, y:39, z:3-']
+                             b'x = 3y + z [x:123, y:40, z:3-']
 
         outcomes = []
 
@@ -4914,16 +4914,17 @@ class TestConstBackend(unittest.TestCase):
             fmk._log_data(d)
 
             nd = d.content
-            x = nd['.*/variables/x/x_val'][0].get_raw_value()
-            y = nd['.*/variables/y/y_val'][0].get_raw_value()
-            z = nd['.*/variables/z/z_val'][0].get_raw_value()
+            x = nd['.*/variables/x/val'][0].get_raw_value()
+            y = nd['.*/variables/y/val'][0].get_raw_value()
+            z = nd['.*/variables/z/val'][0].get_raw_value()
 
             print(f'\nCurrent values - x:{x}, y:{y}, z:{z}')
-            if j <= samples_per_constraint - 1:
-                self.assertFalse(x == 3 * y + z)
-            else:
+            if j <= len(expected_outcomes)-1:
                 outcomes.append(d.to_bytes())
                 self.assertTrue(x == 3 * y + z)
+            else:
+                self.assertFalse(x == 3 * y + z)
+
             # d.show()
             idx += 1
 

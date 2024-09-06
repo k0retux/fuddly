@@ -664,8 +664,6 @@ class MyDF_DataModel(DataModel):
         csp_str_desc = \
             {'name': 'csp_str',
              'constraints': [
-                 Z3Constraint(relation='x_val == 3*y_val + z_val',
-                              vars=('x_val', 'y_val', 'z_val')),
                  Z3Constraint(
                      relation="Or(["
                               "And([SubSeq(delim_1, 1, 1) == '(', delim_2 == ')']),"
@@ -679,29 +677,42 @@ class MyDF_DataModel(DataModel):
                  {'name': 'equation',
                   'contents': String(values=['x = 3y + z'])},
                  {'name': 'delim_1',
-                  'contents': String(values=[' [', ' (']),
-                  'default': ' ('},
+                  'contents': String(values=[' [', ' ('])},
+                  # 'default': ' ('},
                  {'name': 'variables',
+                  'namespace': 'varns',
                   'separator': {'contents': {'name': 'sep', 'contents': String(values=[', '])},
                                 'prefix': False, 'suffix': False},
+                  'constraints': [
+                      Z3Constraint(relation='x == 3*y + z',
+                                   vars=('x', 'y', 'z'),
+                                   var_to_varns={
+                                       'x': ('val', 'xns'),
+                                       'y': ('val', 'yns'),
+                                       'z': ('val', 'zns')
+                                   }),
+                  ],
                   'contents': [
                       {'name': 'x',
+                       'namespace': 'xns',
                        'contents': [
-                           {'name': 'x_symbol',
+                           {'name': 'symbol',
                             'contents': String(values=['x:', 'X:'])},
-                           {'name': 'x_val',
+                           {'name': 'val',
                             'contents': INT_str(min=120, max=130)} ]},
                       {'name': 'y',
+                       'namespace': 'yns',
                        'contents': [
-                           {'name': 'y_symbol',
+                           {'name': 'symbol',
                             'contents': String(values=['y:', 'Y:'])},
-                           {'name': 'y_val',
+                           {'name': 'val',
                             'contents': INT_str(min=30, max=40)}]},
                       {'name': 'z',
+                       'namespace': 'zns',
                        'contents': [
-                           {'name': 'z_symbol',
+                           {'name': 'symbol',
                             'contents': String(values=['z:', 'Z:'])},
-                           {'name': 'z_val',
+                           {'name': 'val',
                             'contents': INT_str(min=1, max=3)}]},
                   ]},
                  {'name': 'delim_2', 'contents': String(values=['-', ']', ')'])},

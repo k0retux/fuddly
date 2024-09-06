@@ -108,6 +108,10 @@ class NodeBuilder(object):
         self.default_gen_custo_orig = NodeInternals_GenFunc.default_custo
         self.default_nonterm_custo_orig = NodeInternals_NonTerm.default_custo
 
+        self._constraint_backend_necessary = False
+        self._constraint_highlight = False
+        self._constraints_storage = []
+
         self.dm = dm
         self.delayed_jobs = delayed_jobs
         self._add_env_to_the_node = add_env
@@ -148,6 +152,9 @@ class NodeBuilder(object):
             # func could register new tasks to do
             todo = self._create_todo_list()
             loop += 1
+
+        if self._constraint_backend_necessary:
+            self._enable_constraints(n)
 
         if self.default_gen_custo:
             NodeInternals_GenFunc.default_custo = self.default_gen_custo_orig
@@ -858,28 +865,40 @@ class NodeBuilder(object):
         return node
 
     def _setup_constraints(self, node, constraints, root_namespace, constraint_highlight):
-        csp = CSP(constraints=constraints, highlight_variables=constraint_highlight)
+        self._constraint_backend_necessary = True
+        self._constraints_storage.append((constraints, root_namespace))
+        if constraint_highlight:
+            self._constraint_highlight = True
 
-        for v in csp.iter_vars():
-            nd = self.__get_node_from_db(csp.from_var_to_varns(v), namespace=root_namespace)
+    def _enable_constraints(self, node):
+        constraints = []
+        for cst_list, _ in self._constraints_storage:
+            constraints += cst_list
 
-            if not isinstance(nd.cc.value_type, (fvt.INT, fvt.String)):
-                raise DataModelDefinitionError(f'CSP definition is only compatible with node '
-                                               f'variables whose type is INT or String. '
-                                               f'[guilty node: {nd.name}]')
+        csp = CSP(constraints=constraints, highlight_variables=self._constraint_highlight)
 
-            csp.map_var_to_node(v, nd)
-            default_val = nd.cc.value_type.default
-            if nd.cc.value_type.values is not None:
-                domain = copy.copy(nd.cc.value_type.values)
-                csp.set_var_domain(v, domain, default=default_val)
-            else:
-                assert isinstance(nd.cc.value_type, fvt.INT)
-                # domain = range(nd.cc.value_type.mini_gen, nd.cc.value_type.maxi_gen + 1)
-                csp.set_var_domain(v, None,
-                                   min=nd.cc.value_type.mini_gen,
-                                   max=nd.cc.value_type.maxi_gen,
-                                   default=default_val)
+        for cst_list, ns in self._constraints_storage:
+            for cst in cst_list:
+                for v in cst.vars:
+                    nd = self.__get_node_from_db(csp.from_var_to_varns(v), namespace=ns)
+
+                    if not isinstance(nd.cc.value_type, (fvt.INT, fvt.String)):
+                        raise DataModelDefinitionError(f'CSP definition is only compatible with node '
+                                                       f'variables whose type is INT or String. '
+                                                       f'[guilty node: {nd.name}]')
+
+                    csp.map_var_to_node(v, nd)
+                    default_val = nd.cc.value_type.default
+                    if nd.cc.value_type.values is not None:
+                        domain = copy.copy(nd.cc.value_type.values)
+                        csp.set_var_domain(v, domain, default=default_val)
+                    else:
+                        assert isinstance(nd.cc.value_type, fvt.INT)
+                        # domain = range(nd.cc.value_type.mini_gen, nd.cc.value_type.maxi_gen + 1)
+                        csp.set_var_domain(v, None,
+                                           min=nd.cc.value_type.mini_gen,
+                                           max=nd.cc.value_type.maxi_gen,
+                                           default=default_val)
 
         csp.freeze()
         node.set_csp(csp)

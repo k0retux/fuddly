@@ -21,8 +21,6 @@
 #
 ################################################################################
 
-from __future__ import print_function
-
 import os
 import sys
 import functools
@@ -6677,6 +6675,11 @@ class Node(object):
         return self.env
 
     def set_csp(self, csp: CSP):
+        if self.env is None:
+            print('[ERROR] set_csp() is called on a node that does not have an Env()\n'
+                  '  --> node name: {!s}'.format(self.name))
+            raise NodeError('No Env() object associated to the node')
+
         self.env.csp = copy.copy(csp)
 
     def get_csp(self):

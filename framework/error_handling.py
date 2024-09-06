@@ -35,6 +35,8 @@ class CrossOverError(PopulationError): pass
 class DataModelDefinitionError(Exception): pass
 class DataModelAccessError(Exception): pass
 
+class NodeError(Exception): pass
+
 class ProjectDefinitionError(Exception): pass
 
 class RegexParserError(DataModelDefinitionError): pass
