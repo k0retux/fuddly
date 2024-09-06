@@ -176,7 +176,7 @@ class CSP(object):
             self._var_to_varns = copy.copy(c_copy.var_to_varns)
         else:
             self._constraints = []
-            self._vars = ()
+            self._vars = []
             self._z3vars = {}
             self._var_types = {}
             self.z3_problem = isinstance(constraints[0], Z3Constraint)
@@ -190,7 +190,9 @@ class CSP(object):
 
                 r_copy = copy.copy(r)
                 self._constraints.append(r_copy)
-                self._vars += r_copy.vars
+                for v in r_copy.vars:
+                    if v not in self._vars:
+                        self._vars.append(v)
                 if self._var_to_varns is None:
                     self._var_to_varns = {}
                 if r_copy.var_to_varns:
@@ -315,6 +317,10 @@ class CSP(object):
             raise
         finally:
             self._is_solution_queried = True
+
+        # print('\n***DBG', self._model)
+        # for var in self._model:
+        #     print(f'\n***DBG node_id for {var} : {id(self._var_node_mapping[var]):X}')
 
         return self._model
 
