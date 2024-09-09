@@ -4808,7 +4808,8 @@ class TestConstBackend(unittest.TestCase):
                              b'> 8 <']
         outcomes = []
 
-        act = [('CSP_BASIC', UI(determinist=True,freeze=True)), ('tWALK')]
+        act = [('CSP_BASIC', UI(determinist=True,freeze=True)),
+               ('tWALK', UI(leaf_determinism=True))]
         for j in range(20):
             d = fmk.process_data(act)
             if d is None:
@@ -4821,6 +4822,46 @@ class TestConstBackend(unittest.TestCase):
 
         self.assertEqual(outcomes, expected_outcomes)
         self.assertEqual(idx, expected_idx)
+
+
+    def test_twalk_operator_4(self):
+        idx = 0
+        expected_idx = 12
+        expected_outcomes = [b'<6>',
+                             b'<6>',
+                             b'(6)',
+                             b'<6>',
+                             b'<8>',
+                             b'<3>',
+                             b'<2>',
+                             b'<1>',
+                             b'<5>',
+                             b'<7>',
+                             b'<4>',
+                             b'<6>']
+
+        outcomes = []
+
+        act = [('CSP_DEFAULT', UI(determinist=True,freeze=True)),
+               ('tWALK', UI(leaf_determinism=False))]
+        for j in range(20):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            idx += 1
+
+        # time.sleep(4)
+        # print('\n*** DEBUG')
+        # pp(outcomes)
+
+        self.assertEqual(idx, expected_idx)
+        for s in outcomes:
+            self.assertIn(s, expected_outcomes)
+
 
     def test_tconst_operator_1(self):
         idx = 0

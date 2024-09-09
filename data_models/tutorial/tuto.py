@@ -768,6 +768,28 @@ class MyDF_DataModel(DataModel):
                  {'name': 'suffix', 'contents': String(values=[' <'])},
              ]}
 
+        csp_default_desc = \
+            {'name': 'csp_default',
+             'constraints': [
+                 Z3Constraint(relation='idx != 100',
+                              vars=('idx',)),
+                 Z3Constraint(relation="Or(["
+                                       "And([prefix=='(', suffix==')']),"
+                                       "And([prefix=='<', suffix=='>']),"
+                                       "])",
+                              vars=('prefix', 'suffix'))
+             ],
+             'constraints_highlight': True,
+             'contents': [
+                 {'name': 'prefix', 'contents': String(values=['(', '<']),
+                  'default': '<'},
+                 {'name': 'idx', 'contents': INT_str(values=[1,2,3,100,4,5,6,7,8,100]),
+                  'default': 6},
+                 {'name': 'suffix', 'contents': String(values=[')', '>', '-'])},
+             ]}
+
+
+
         str_desc = {'name': 'str',
              'contents': [
                  # {'name': 'str1', 'contents': String(values=['a', 'b', 'c'])},
@@ -787,7 +809,7 @@ class MyDF_DataModel(DataModel):
                       regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc, xml5_desc,
                       json1_desc, json2_desc, file_desc, nested_desc,
                       csp_desc, csp_z3_desc, csp_str_desc, csp_ns_desc, csp_basic_desc,
-                      str_desc)
+                      csp_default_desc, str_desc)
 
 
 data_model = MyDF_DataModel()

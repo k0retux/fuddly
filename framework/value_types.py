@@ -537,9 +537,11 @@ class String(VT_Alt):
                 self.values = self.values[idx_val:]+self.values[:idx_val]
         else:
             self.values.insert(0, val)
-        self.default = val
 
+        self.default = val
         self.reset_state()
+
+        self.drawn_val = val
 
         if self.encoded_string:
             # off is still valid here (not modified by this method)
@@ -1193,7 +1195,10 @@ class String(VT_Alt):
         if self.determinist:
             ret = self.values_copy.pop(0)
         else:
-            ret = random.choice(self.values_copy)
+            if self.default not in self.values_copy:
+                ret = random.choice(self.values_copy)
+            else:
+                ret = self._str2bytes(self.default)
             self.values_copy.remove(ret)
 
         self.drawn_val = ret

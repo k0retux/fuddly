@@ -9,3 +9,7 @@
 - Add support for absorption of nodes whose existence has not been resolved yet.
   (Counter-part of the generation supported feature.)
 - Clean up test/test_integration.py
+
+[BUGS]
+
+- leaf_determinism=False triggers issues with constraints

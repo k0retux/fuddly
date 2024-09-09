@@ -1989,7 +1989,8 @@ class NodeInternals_TypedValue(NodeInternals_Term):
 
     def _update_value_specific(self, value):
         if isinstance(value, int) and isinstance(self.value_type, (fvt.INT, fvt.BitField)):
-            self.value_type.update_raw_value(value)
+            if not self.value_type.update_raw_value(value):
+                print(f"\n[Warning] {type(self.value_type)} is not compatible with the integer {value}")
         else:
             val, off, size = self.value_type.do_absorb(convert_to_internal_repr(value),
                                                        constraints=AbsNoCsts())
