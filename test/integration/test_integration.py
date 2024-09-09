@@ -4672,8 +4672,8 @@ class TestConstBackend(unittest.TestCase):
         for s in outcomes:
             self.assertIn(s, expected_outcomes)
 
-        # ref_str_1 = b'x = 3y + z ('  # default value for delim_1 is ' ('
-        # self.assertEqual(outcomes[0][:len(ref_str_1)], ref_str_1)
+        ref_str_1 = b'x = 3y + z ('  # default value for delim_1 is ' ('
+        self.assertEqual(outcomes[0][:len(ref_str_1)], ref_str_1)
 
 
     def test_twalkcsp_operator_2(self):

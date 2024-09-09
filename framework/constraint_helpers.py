@@ -318,7 +318,7 @@ class CSP(object):
         finally:
             self._is_solution_queried = True
 
-        # print('\n***DBG', self._model)
+        # print('\n***DBG 3: get_solution', self._model)
         # for var in self._model:
         #     print(f'\n***DBG node_id for {var} : {id(self._var_node_mapping[var]):X}')
 
@@ -326,31 +326,37 @@ class CSP(object):
 
     def _solve_constraints(self):
         default_value_constraints = []
-        for c in self._constraints:
-            if isinstance(c, Z3Constraint):
+        known_vars = set()
+        if isinstance(self._constraints[0], Z3Constraint):
+            for c in self._constraints:
                 relation = c.relation
                 for v in c.vars:
-                    z3var = self._z3vars[v]
-                    dom = self._var_domain[v]
-                    default = self._var_default_value.get(v)
-                    v_type = self._var_types.get(v)
-                    if v_type is None or v_type is z3.Int:
-                        if not self._checked_with_default_values and default is not None:
-                            default_value_constraints.append(z3var == default)
+                    if v not in known_vars:
+                        known_vars.add(v)
+                        z3var = self._z3vars[v]
+                        dom = self._var_domain[v]
+                        default = self._var_default_value.get(v)
+                        v_type = self._var_types.get(v)
+                        if v_type is None or v_type is z3.Int:
+                            if not self._checked_with_default_values and default is not None:
+                                default_value_constraints.append(z3var == default)
 
-                        if isinstance(dom, tuple) and len(dom) == 2:
-                            min, max = dom
-                            self._solver.add(And([min <= z3var, z3var <= max]))
+                            if isinstance(dom, tuple) and len(dom) == 2:
+                                min, max = dom
+                                self._solver.add(And([min <= z3var, z3var <= max]))
+                            else:
+                                self._solver.add(Or([z3var == value for value in dom]))
+
+                        elif v_type is z3.String:
+                            if not self._checked_with_default_values and default is not None:
+                                default_value_constraints.append(
+                                    z3var == gr.unconvert_from_internal_repr(default))
+
+                            self._solver.add(
+                                Or([z3var == gr.unconvert_from_internal_repr(value) for value in dom]))
+
                         else:
-                            self._solver.add(Or([z3var == value for value in dom]))
-
-                    elif v_type is z3.String:
-                        if not self._checked_with_default_values and default is not None:
-                            default_value_constraints.append(z3var == gr.unconvert_from_internal_repr(default))
-                        self._solver.add(Or([z3var == gr.unconvert_from_internal_repr(value) for value in dom]))
-
-                    else:
-                        raise NotImplementedError
+                            raise NotImplementedError
 
                 if not c.is_relation_translated:
                     tmp_vars = []
@@ -382,28 +388,31 @@ class CSP(object):
                 else:
                     self._solver.add(z3formula)
 
-                if not self._checked_with_default_values and default_value_constraints:
-                    self._solver.push()
-                    for z3_cst in default_value_constraints:
-                        self._solver.add(z3_cst)
-                    self._default_value_constraints_added = True
+            if not self._checked_with_default_values and default_value_constraints:
+                self._solver.push()
+                for z3_cst in default_value_constraints:
+                    self._solver.add(z3_cst)
+                self._default_value_constraints_added = True
 
-            else:
+        else:
+            for c in self._constraints:
                 for v in c.vars:
-                    dom = self._var_domain[v]
-                    default = self._var_default_value.get(v)
-                    if not self._checked_with_default_values and default is not None:
-                        dom = [default]
-                        self._default_value_constraints_added = True
-                    elif isinstance(dom, tuple) and len(dom) == 2:
-                        dom = range(dom[0], dom[1] + 1)
+                    if v not in known_vars:
+                        known_vars.add(v)
+                        dom = self._var_domain[v]
+                        default = self._var_default_value.get(v)
+                        if not self._checked_with_default_values and default is not None:
+                            dom = [default]
+                            self._default_value_constraints_added = True
+                        elif isinstance(dom, tuple) and len(dom) == 2:
+                            dom = range(dom[0], dom[1] + 1)
 
-                    try:
-                        self._problem.addVariable(v, dom)
-                    except ValueError:
-                        # most probable cause: duplicated variable is attempted to be inserted
-                        # (other cause is empty domain which is checked at init)
-                        pass
+                        try:
+                            self._problem.addVariable(v, dom)
+                        except ValueError:
+                            # most probable cause: duplicated variable is attempted to be inserted
+                            # (other cause is empty domain which is checked at init)
+                            pass
                 self._problem.addConstraint(c.relation, c.vars)
 
 
@@ -437,7 +446,8 @@ class CSP(object):
 
         else:
             self._solutions = _Z3_MODEL_NOT_COMPUTED
-            if self._checked_with_default_values and self._default_value_constraints_added:
+            if self._default_value_constraints_added:
+                # assert self._checked_with_default_values
                 self._solver.pop()
                 self._default_value_constraints_added = False
             self._solver.add(Or([z3v != z3mdl[z3v] for z3v in self._z3vars.values()]))
