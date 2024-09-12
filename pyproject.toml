@@ -6,18 +6,39 @@ authors = [
 ]
 description = "Fuzzing and Data Manipulation Framework (for GNU/Linux)"
 readme = "README.rst"
-requires-python = ">=3.7"
+requires-python = ">=3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-dynamic = ["dependencies"]
+dependencies = [
+	"cexprtk>=0.4.1",
+	"configparser>=5.3.0",
+	"crcmod>=1.7",
+	"cups",
+	"rpyc<7.0.0,>=6.0.0",
+	"graphviz",
+	"matplotlib",
+	"paramiko<4.0.0,>=3.4.0",
+	"pyserial",
+	"python-constraint>=1.4.0",
+	"z3-solver>=4.8",
+	"pyxdg",
+	"xtermcolor",
+	"jsonschema",
+	"sphinx",
+	"sphinxcontrib-napoleon",
+	"sphinx-rtd-theme",
+]
+
+[project.optional-dependencies]
+tests = [
+	"ddt",
+	"mock",
+]
 
 [options]
 include_package_data = true
-
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools]
 include-package-data = true
@@ -35,3 +56,34 @@ plotty = "fuddly.tools.plotty:main"
 "Bug Tracker" = "https://github.com/k0retux/fuddly/issues"
 "Documentation" = "http://fuddly.readthedocs.io"
 
+# Data models and Projects
+[project.entry-points."fuddly.data_models"]
+jpg = "fuddly.data_models.file_formats.jpg"
+json_dm = "fuddly.data_models.file_formats.json_dm"
+pdf = "fuddly.data_models.file_formats.pdf"
+png = "fuddly.data_models.file_formats.png"
+zip = "fuddly.data_models.file_formats.zip"
+http = "fuddly.data_models.protocols.http"
+pppoe = "fuddly.data_models.protocols.pppoe"
+sms = "fuddly.data_models.protocols.sms"
+usb = "fuddly.data_models.protocols.usb"
+myproto = "fuddly.data_models.tutorial.myproto"
+tuto = "fuddly.data_models.tutorial.tuto"
+
+[project.entry-points."fuddly.data_models_strategies"]
+jpg = "fuddly.data_models.file_formats.jpg_strategy"
+json_dm = "fuddly.data_models.file_formats.json_dm_strategy"
+pdf = "fuddly.data_models.file_formats.pdf_strategy"
+png = "fuddly.data_models.file_formats.png_strategy"
+zip = "fuddly.data_models.file_formats.zip_strategy"
+http = "fuddly.data_models.protocols.http_strategy"
+pppoe = "fuddly.data_models.protocols.pppoe_strategy"
+sms = "fuddly.data_models.protocols.sms_strategy"
+usb = "fuddly.data_models.protocols.usb_strategy"
+myproto = "fuddly.data_models.tutorial.myproto_strategy"
+tuto = "fuddly.data_models.tutorial.tuto_strategy"
+
+[project.entry-points."fuddly.projects"]
+standard_project = "fuddly.projects.generic.standard_proj"
+usb_project = "fuddly.projects.specific.usb_proj"
+tutorial = "fuddly.projects.tuto_proj"
