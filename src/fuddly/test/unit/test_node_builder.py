@@ -1,8 +1,8 @@
-from framework.node_builder import *
-import framework.value_types as vt
+from fuddly.framework.node_builder import *
+import fuddly.framework.value_types as vt
 import unittest
 import ddt
-from test import mock
+from fuddly.test import mock
 
 ASCII_EXT = ''.join([chr(i) for i in range(0, 0xFF + 1)])
 

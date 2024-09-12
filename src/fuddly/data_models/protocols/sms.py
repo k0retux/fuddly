@@ -21,9 +21,9 @@
 #
 ################################################################################
 
-from ...framework.node import *
-from ...framework.value_types import *
-from ...framework.data_model import *
+from fuddly.framework.node import *
+from fuddly.framework.value_types import *
+from fuddly.framework.data_model import *
 
 class SMS_DataModel(DataModel):
 

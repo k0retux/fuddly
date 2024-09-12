@@ -21,9 +21,9 @@
 #
 ################################################################################
 
-from ...framework.data_model import *
-from ...framework.global_resources import *
-from ...framework.value_types import *
+from fuddly.framework.data_model import *
+from fuddly.framework.global_resources import *
+from fuddly.framework.value_types import *
 
 
 class PNG_DataModel(DataModel):

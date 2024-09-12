@@ -23,15 +23,15 @@
 
 import unittest
 
-from test import args
-import test.unit, test.integration
+from fuddly.test import args
+import fuddly.test.unit, fuddly.test.integration
 
-if len(args) == 2 and args[1] == "test":
+if len(args) == 2 and args[1] == "fuddly.test":
     del args[1]
 
 if len(args) == 1:
-    args.append('test.unit')
-    args.append('test.integration')
+    args.append('fuddly.test.unit')
+    args.append('fuddly.test.integration')
 
 unittest.main(verbosity=2, argv=args, defaultTest=None, exit=False)
 

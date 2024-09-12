@@ -26,11 +26,11 @@ from typing import Tuple, List
 
 import z3
 
-from ..libs.external_modules import *
+from fuddly.libs.external_modules import *
 if z3_module:
     from z3 import *
 
-import framework.global_resources as gr
+import fuddly.framework.global_resources as gr
 
 _Z3_MODEL_NOT_COMPUTED = 1
 
@@ -135,6 +135,7 @@ class Z3Constraint(object):
 
 
 class CSP(object):
+
     _constraints = None
     _vars = None
     _z3vars = None
@@ -578,7 +579,7 @@ class CSP(object):
         #       f'\n --> variable types: {self._var_types}'
         #       f'\n --> domains: {self._var_domain}')
         new_csp._var_node_mapping = copy.copy(self._var_node_mapping)
-        new_csp._solutions = None  # the generator cannot be copied
+        new_csp._solutions = None # the generator cannot be copied
         new_csp._model = copy.copy(self._model)
         new_csp._default_model = copy.copy(self._default_model)
         new_csp._constraints = []

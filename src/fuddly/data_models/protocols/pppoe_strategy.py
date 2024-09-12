@@ -21,12 +21,12 @@
 #
 ################################################################################
 
-from ...framework.tactics_helpers import *
-from ...framework.scenario import *
-from ...framework.global_resources import *
-from ...framework.data_model import MH
-from ...framework.target_helpers import *
-from ...framework.data import DataProcess
+from fuddly.framework.tactics_helpers import *
+from fuddly.framework.scenario import *
+from fuddly.framework.global_resources import *
+from fuddly.framework.data_model import MH
+from fuddly.framework.target_helpers import *
+from fuddly.framework.data import DataProcess
 
 tactics = Tactics()
 

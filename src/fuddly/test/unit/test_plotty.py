@@ -1,7 +1,7 @@
 
-import tools.plotty.Formula as Formula
-import tools.plotty.cli.parse.formula as parse_formula
-import tools.plotty.cli.parse.range as parse_range
+import fuddly.tools.plotty.Formula as Formula
+import fuddly.tools.plotty.cli.parse.formula as parse_formula
+import fuddly.tools.plotty.cli.parse.range as parse_range
 
 import unittest
 import ddt

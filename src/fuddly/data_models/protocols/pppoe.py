@@ -21,8 +21,8 @@
 #
 ################################################################################
 
-from ...framework.data_model import *
-from ...framework.value_types import *
+from fuddly.framework.data_model import *
+from fuddly.framework.value_types import *
 
 
 class PPPOE_DataModel(DataModel):

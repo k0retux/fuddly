@@ -38,13 +38,13 @@ import codecs
 
 import builtins
 
-from . import basic_primitives as bp
-from .encoders import *
-from .error_handling import *
-from .global_resources import *
-from .knowledge.information import *
+from fuddly.framework import basic_primitives as bp
+from fuddly.framework.encoders import *
+from fuddly.framework.error_handling import *
+from fuddly.framework.global_resources import *
+from fuddly.framework.knowledge.information import *
 
-from ..libs import debug_facility as dbg
+from fuddly.libs import debug_facility as dbg
 
 DEBUG = dbg.VT_DEBUG
 

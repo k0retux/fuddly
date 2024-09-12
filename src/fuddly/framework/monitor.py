@@ -28,9 +28,9 @@ import time
 import traceback
 import re
 
-from .comm_backends import BackendError
-from ..libs.external_modules import *
-from .global_resources import *
+from fuddly.framework.comm_backends import BackendError
+from fuddly.libs.external_modules import *
+from fuddly.framework.global_resources import *
 
 
 class ProbeUser(object):

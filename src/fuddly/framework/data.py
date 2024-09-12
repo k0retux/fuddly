@@ -23,9 +23,9 @@
 
 import collections
 
-from .global_resources import *
-from .node import Node, Env
-from .database import Database
+from fuddly.framework.global_resources import *
+from fuddly.framework.node import Node, Env
+from fuddly.framework.database import Database
 
 
 class DataBackend(object):
@@ -91,7 +91,7 @@ class NodeBackend(DataBackend):
 
     @property
     def data_maker_name(self):
-        return "g_" + self._node.name
+        return "g_"+self._node.name
 
     def to_str(self):
         return self._node.to_str()
@@ -111,12 +111,8 @@ class NodeBackend(DataBackend):
             self._node.freeze()
 
         if do_copy:
-            content = Node(
-                self._node.name,
-                base_node=self._node,
-                ignore_frozen_state=False,
-                new_env=True,
-            )
+            content = Node(self._node.name, base_node=self._node, ignore_frozen_state=False,
+                           new_env=True)
         else:
             content = self._node
 
@@ -128,12 +124,7 @@ class NodeBackend(DataBackend):
     def __copy__(self):
         new_databackend = type(self)()
         new_databackend.__dict__.update(self.__dict__)
-        n = Node(
-            self._node.name,
-            base_node=self._node,
-            ignore_frozen_state=False,
-            new_env=True,
-        )
+        n = Node(self._node.name, base_node=self._node, ignore_frozen_state=False, new_env=True)
         if new_databackend._dm is not None:
             new_databackend._dm.update_atom(n)
         new_databackend.update_from(n)
@@ -141,6 +132,7 @@ class NodeBackend(DataBackend):
 
 
 class RawBackend(DataBackend):
+
     def update_from(self, obj):
         self._content = convert_to_internal_repr(obj)
 
@@ -176,6 +168,7 @@ class RawBackend(DataBackend):
 
 
 class EmptyBackend(DataBackend):
+
     @property
     def content(self):
         return None
@@ -197,13 +190,13 @@ class EmptyBackend(DataBackend):
         return None
 
     def to_str(self):
-        return "Empty Backend"
+        return 'Empty Backend'
 
     def to_formatted_str(self):
-        return "Empty Backend"
+        return 'Empty Backend'
 
     def to_bytes(self):
-        return b"Empty Backend"
+        return b'Empty Backend'
 
     def get_content(self, do_copy=False, materialize=True):
         return None
@@ -213,6 +206,7 @@ class EmptyBackend(DataBackend):
 
 
 class AttrGroup(object):
+
     def __init__(self, attrs_desc):
         self._attrs = attrs_desc
 
@@ -243,10 +237,13 @@ class AttrGroup(object):
 
 
 class DataAttr(AttrGroup):
+
     Reset_DMakers = 1
 
     def __init__(self, attrs_to_set=None, attrs_to_clear=None):
-        iv = {DataAttr.Reset_DMakers: False}
+        iv = {
+            DataAttr.Reset_DMakers: False
+        }
         AttrGroup.__init__(self, iv)
         if attrs_to_set:
             for a in attrs_to_set:
@@ -257,6 +254,7 @@ class DataAttr(AttrGroup):
 
 
 class Data(object):
+
     _empty_data_backend = EmptyBackend()
 
     def __init__(self, content=None, altered=False, tg_ids=None, description=None):
@@ -286,19 +284,13 @@ class Data(object):
         else:
             self._backend = RawBackend(content)
 
-        self._type = (
-            self._backend.data_maker_type,
-            self._backend.data_maker_name,
-            None,
-        )
+        self._type = (self._backend.data_maker_type, self._backend.data_maker_name, None)
 
     def set_basic_attributes(self, from_data=None):
         self.attrs = DataAttr() if from_data is None else copy.copy(from_data.attrs)
         self._type = None if from_data is None else from_data._type
 
-        self.feedback_timeout = (
-            None if from_data is None else from_data.feedback_timeout
-        )
+        self.feedback_timeout = None if from_data is None else from_data.feedback_timeout
         self.feedback_mode = None if from_data is None else from_data.feedback_mode
 
         self.sending_delay = None if from_data is None else from_data.sending_delay
@@ -314,17 +306,13 @@ class Data(object):
 
         self._blocked = False if from_data is None else from_data._blocked
 
-        self.scenario_dependence = (
-            None if from_data is None else from_data.scenario_dependence
-        )
+        self.scenario_dependence = None if from_data is None else from_data.scenario_dependence
 
         # If True, the data will not interrupt the framework while processing
         # the data even if the data is unusable, The framework will just go on
         # to its next task without handing over to the end user.
         # Used especially by the Scenario Infrastructure.
-        self.on_error_handover_to_user = (
-            True if from_data is None else from_data.on_error_handover_to_user
-        )
+        self.on_error_handover_to_user = True if from_data is None else from_data.on_error_handover_to_user
 
         # This attribute is set to True when the Data content has been retrieved from the fmkDB
         self.from_fmkdb = False if from_data is None else from_data.from_fmkdb
@@ -486,10 +474,8 @@ class Data(object):
         try:
             info_l = self.info[key]
         except KeyError:
-            print(
-                "\n*** The key "
-                "({:s}, {:s}) does not exist! ***".format(dmaker_type, data_maker_name)
-            )
+            print("\n*** The key " \
+                      "({:s}, {:s}) does not exist! ***".format(dmaker_type, data_maker_name))
             print("self.info contents: ", self.info)
             return
 
@@ -507,9 +493,9 @@ class Data(object):
             legacy_info_list = []
             for key, info_container in legacy_info.items():
                 dmaker_type, data_maker_name = key
-                legacy_info_list.append("=== INFO FROM {} ===".format(dmaker_type))
+                legacy_info_list.append('=== INFO FROM {} ==='.format(dmaker_type))
                 for info_l in info_container:
-                    info_l = ["| " + m for m in info_l]
+                    info_l = ['| '+ m for m in info_l]
                     legacy_info_list += info_l
             if legacy_info_list and not self.info_list:
                 self.info_list = legacy_info_list
@@ -639,9 +625,7 @@ class CallBackOps(object):
     Del_PeriodicData = 11  # ask for stopping a periodic sending
     Start_Task = 12  # ask for sending periodically a data
     Stop_Task = 13  # ask for stopping a periodic sending
-    Set_FbkTimeout = (
-        21  # set the time duration for feedback gathering for the further data sending
-    )
+    Set_FbkTimeout = 21  # set the time duration for feedback gathering for the further data sending
     Replace_Data = 30  # replace the data by another one
 
     def __init__(self, remove_cb=False, stop_process_cb=False, ignore_no_data=False):
@@ -677,10 +661,7 @@ class CallBackOps(object):
         elif instr_type == CallBackOps.Start_Task:
             assert id is not None and param is not None
             self.instr[instr_type][id] = (param, period)
-        elif (
-            instr_type == CallBackOps.Del_PeriodicData
-            or instr_type == CallBackOps.Stop_Task
-        ):
+        elif instr_type == CallBackOps.Del_PeriodicData or instr_type == CallBackOps.Stop_Task:
             assert id is not None
             self.instr[instr_type].append(id)
         elif instr_type == CallBackOps.Set_FbkTimeout:
@@ -690,7 +671,7 @@ class CallBackOps(object):
             # param is an opaque
             self.instr[instr_type] = param
         else:
-            raise ValueError("Unrecognized Instruction Type")
+            raise ValueError('Unrecognized Instruction Type')
 
     def get_operations(self):
         return self.instr
@@ -782,10 +763,10 @@ class DataProcess(object):
             self.outcomes.make_free()
 
     def formatted_str(self, oneliner=False):
-        desc = ""
-        suffix = ", proc=" if oneliner else "\n"
+        desc = ''
+        suffix = ', proc=' if oneliner else '\n'
         if None in self._process:
-            suffix = ", no process " if oneliner else " "
+            suffix = ', no process ' if oneliner else ' '
 
         if isinstance(self.seed, str):
             desc += "seed='" + self.seed + "'" + suffix
@@ -803,12 +784,12 @@ class DataProcess(object):
                 break
             for d in proc:
                 if isinstance(d, (list, tuple)):
-                    desc += "{!s}/".format(d[0])
+                    desc += '{!s}/'.format(d[0])
                 else:
                     assert isinstance(d, str)
-                    desc += "{!s}/".format(d)
+                    desc += '{!s}/'.format(d)
             desc = desc[:-1]
-            desc += "," if oneliner else "\n"
+            desc += ',' if oneliner else '\n'
         desc = desc[:-1]  # if oneliner else desc[:-1]
 
         return desc
@@ -826,6 +807,4 @@ class DataProcess(object):
 
 class EmptyDataProcess(object):
     def __init__(self, seed=None, tg_ids=None, auto_regen=False):
-        DataProcess.__init__(
-            self, process=None, seed=seed, tg_ids=tg_ids, auto_regen=auto_regen
-        )
+        DataProcess.__init__(self, process=None, seed=seed, tg_ids=tg_ids, auto_regen=auto_regen)

@@ -24,10 +24,10 @@
 import os
 import random
 
-from ..global_resources import workspace_folder
-from ..target_helpers import Target
-from ..knowledge.feedback_collector import FeedbackCollector
-from ...libs.external_modules import cups_module, cups
+from fuddly.framework.global_resources import workspace_folder
+from fuddly.framework.target_helpers import Target
+from fuddly.framework.knowledge.feedback_collector import FeedbackCollector
+from fuddly.libs.external_modules import cups_module, cups
 
 
 class PrinterTarget(Target):
@@ -37,7 +37,7 @@ class PrinterTarget(Target):
 
     def __init__(self, tmpfile_ext):
         Target.__init__(self)
-        self._suffix = "{:0>12d}".format(random.randint(2**16, 2**32))
+        self._suffix = '{:0>12d}'.format(random.randint(2**16, 2**32))
         self._feedback = FeedbackCollector()
         self._target_ip = None
         self._target_port = None
@@ -46,10 +46,8 @@ class PrinterTarget(Target):
         self.set_tmp_file_extension(tmpfile_ext)
 
     def get_description(self):
-        printer_name = (
-            ", Name: " + self._printer_name if self._printer_name is not None else ""
-        )
-        return "IP: " + self._target_ip + printer_name
+        printer_name = ', Name: ' + self._printer_name if self._printer_name is not None else ''
+        return 'IP: ' + self._target_ip + printer_name
 
     def set_tmp_file_extension(self, tmpfile_ext):
         self._tmpfile_ext = tmpfile_ext
@@ -76,13 +74,11 @@ class PrinterTarget(Target):
         self._cpt = 0
 
         if not cups_module:
-            print(
-                "/!\\ ERROR /!\\: the PrinterTarget has been disabled because python-cups module is not installed"
-            )
+            print('/!\\ ERROR /!\\: the PrinterTarget has been disabled because python-cups module is not installed')
             return False
 
         if not self._target_ip:
-            print("/!\\ ERROR /!\\: the PrinterTarget IP has not been set")
+            print('/!\\ ERROR /!\\: the PrinterTarget IP has not been set')
             return False
 
         if self._target_port is None:
@@ -103,36 +99,27 @@ class PrinterTarget(Target):
             try:
                 params = printers[self._printer_name]
             except:
-                print(
-                    "Printer '%s' is not connected to CUPS server!" % self._printer_name
-                )
+                print("Printer '%s' is not connected to CUPS server!" % self._printer_name)
                 return False
         else:
             self._printer_name, params = printers.popitem()
 
-        print(
-            "\nDevice-URI: %s\nPrinter Name: %s"
-            % (params["device-uri"], self._printer_name)
-        )
+        print("\nDevice-URI: %s\nPrinter Name: %s" % (params["device-uri"], self._printer_name))
 
         return True
 
     def send_data(self, data, from_fmk=False):
         data = data.to_bytes()
         wkspace = workspace_folder
-        file_name = os.path.join(
-            wkspace, "fuzz_test_" + self._suffix + self._tmpfile_ext
-        )
+        file_name = os.path.join(wkspace, 'fuzz_test_' + self._suffix + self._tmpfile_ext)
 
-        with open(file_name, "wb") as f:
+        with open(file_name, 'wb') as f:
             f.write(data)
 
-        inc = "_{:0>5d}".format(self._cpt)
+        inc = '_{:0>5d}'.format(self._cpt)
         self._cpt += 1
 
         try:
-            self.__connection.printFile(
-                self._printer_name, file_name, "job_" + self._suffix + inc, {}
-            )
+            self.__connection.printFile(self._printer_name, file_name, 'job_' + self._suffix + inc, {})
         except cups.IPPError as err:
-            print("CUPS Server Errror: ", err)
+            print('CUPS Server Errror: ', err)

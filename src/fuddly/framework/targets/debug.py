@@ -30,11 +30,11 @@ import threading
 import struct
 from multiprocessing import shared_memory
 
-from ..target_helpers import Target
-from ..basic_primitives import rand_string
-from ..knowledge.feedback_collector import FeedbackCollector
-from ..data import Data
-from ...libs.external_modules import Color
+from fuddly.framework.target_helpers import Target
+from fuddly.framework.basic_primitives import rand_string
+from fuddly.framework.knowledge.feedback_collector import FeedbackCollector
+from fuddly.framework.data import Data
+from fuddly.libs.external_modules import Color
 
 class IncorrectTargetError(Exception): pass
 class ShmemMappingError(Exception): pass

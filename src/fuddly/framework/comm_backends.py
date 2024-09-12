@@ -7,8 +7,8 @@ import threading
 import time
 import getpass
 
-from . import error_handling as eh
-from ..libs.external_modules import ssh_module, ssh, serial_module, serial
+from fuddly.framework import error_handling as eh
+from fuddly.libs.external_modules import ssh_module, ssh, serial_module, serial
 
 class BackendError(Exception):
     def __init__(self, msg, status=-1):

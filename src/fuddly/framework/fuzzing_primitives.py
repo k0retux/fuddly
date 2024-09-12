@@ -27,22 +27,21 @@ import string
 import copy
 import re
 
-sys.path.append(".")
+sys.path.append('.')
 
-from . import value_types as vtype
-from . import node as dm
+from fuddly.framework import value_types as vtype
+from fuddly.framework import node as dm
 
-from .basic_primitives import *
-from ..libs.external_modules import *
+from fuddly.framework.basic_primitives import *
+from fuddly.libs.external_modules import *
 
-from ..libs import debug_facility as dbg
+from fuddly.libs import debug_facility as dbg
 
 DEBUG = dbg.MW_DEBUG
 DEBUG_PRINT = dbg.DEBUG_PRINT
 
-
 class ModelWalker(object):
-    """
+    '''
     We walk through all states of the model and give opportunity to
     the Consumer to act on each node, and to be involved in the
     walking process in some extents.
@@ -54,17 +53,10 @@ class ModelWalker(object):
     Note: the change of a non-terminal node does not reset the
     indirect parents (just the direct parent), otherwise it could lead
     to a combinatorial explosion, with limited interest...
-    """
+    '''
 
-    def __init__(
-        self,
-        root_node,
-        node_consumer,
-        make_determinist=False,
-        make_random=False,
-        max_steps=-1,
-        initial_step=1,
-    ):
+    def __init__(self, root_node, node_consumer, make_determinist=False, make_random=False,
+                 max_steps=-1, initial_step=1):
         self._root_node = root_node
         self._root_node.make_finite(all_conf=True, recursive=True)
 
@@ -80,7 +72,7 @@ class ModelWalker(object):
         self._max_steps = int(max_steps)
         self._initial_step = int(initial_step)
 
-        assert self._max_steps > 0 or self._max_steps == -1
+        assert(self._max_steps > 0 or self._max_steps == -1)
 
         if node_consumer.ignore_mutable_attr:
             mattr = [dm.NodeInternals.Finite]
@@ -88,9 +80,7 @@ class ModelWalker(object):
             mattr = [dm.NodeInternals.Mutable, dm.NodeInternals.Finite]
 
         self.ic = dm.NodeInternalsCriteria(mandatory_attrs=mattr)
-        self.triglast_ic = dm.NodeInternalsCriteria(
-            mandatory_custo=[dm.GenFuncCusto.TriggerLast]
-        )
+        self.triglast_ic = dm.NodeInternalsCriteria(mandatory_custo=[dm.GenFuncCusto.TriggerLast])
 
         self.consumed_node_path = None
 
@@ -101,15 +91,13 @@ class ModelWalker(object):
         self._consumer._root_node = self._root_node
         self._consumer.preload(self._root_node)
 
+
     def __iter__(self):
+
         self._cpt = 1
-        gen = self.walk_graph_rec(
-            [self._root_node],
-            structure_has_changed=False,
-            consumed_nodes=set(),
-            parent_node=self._root_node,
-            consumer=self._consumer,
-        )
+        gen = self.walk_graph_rec([self._root_node], structure_has_changed=False,
+                                  consumed_nodes=set(), parent_node=self._root_node,
+                                  consumer=self._consumer)
         for consumed_node, orig_node_val in gen:
             self._root_node.freeze(resolve_csp=True)
 
@@ -138,32 +126,28 @@ class ModelWalker(object):
             else:
                 pass
 
-            if self._max_steps != -1 and self._cpt >= (
-                self._max_steps + self._initial_step - 1
-            ):
+            if self._max_steps != -1 and self._cpt >= (self._max_steps+self._initial_step-1):
                 self._cpt += 1
                 break
             else:
                 self._cpt += 1
 
         if self._cpt <= self._initial_step and self._cpt > 1:
-            print(
-                "\n*** DEBUG: initial_step idx ({:d}) is after"
-                " the last idx ({:d})!\n".format(self._initial_step, self._cpt - 1)
-            )
+            print("\n*** DEBUG: initial_step idx ({:d}) is after" \
+                      " the last idx ({:d})!\n".format(self._initial_step, self._cpt-1))
             self._initial_step = 1
             self.consumed_node_path = consumed_node.get_path_from(self._root_node)
             if self.consumed_node_path == None:
                 return
             else:
-                yield self._root_node, consumed_node, orig_node_val, self._cpt - 1
+                yield self._root_node, consumed_node, orig_node_val, self._cpt-1
 
         return
 
+
     def _do_reset(self, node, consumer):
-        last_gen = self._root_node.get_reachable_nodes(
-            internals_criteria=self.triglast_ic, resolve_generator=True
-        )
+        last_gen = self._root_node.get_reachable_nodes(internals_criteria=self.triglast_ic,
+                                                       resolve_generator=True)
         for n in last_gen:
             n.unfreeze(ignore_entanglement=True)
         node.unfreeze(recursive=False)
@@ -171,9 +155,8 @@ class ModelWalker(object):
         node.unfreeze(recursive=True, dont_change_state=True, ignore_entanglement=True)
         consumer.do_after_reset(node)
 
-    def walk_graph_rec(
-        self, node_list, structure_has_changed, consumed_nodes, parent_node, consumer
-    ):
+    def walk_graph_rec(self, node_list, structure_has_changed, consumed_nodes, parent_node, consumer):
+
         reset = False
         guilty = None
 
@@ -184,13 +167,7 @@ class ModelWalker(object):
             perform_second_step = True
             again = True
 
-            DEBUG_PRINT(
-                "--(1)-> Node:"
-                + node.name
-                + ", exhausted:"
-                + repr(node.is_exhausted()),
-                level=2,
-            )
+            DEBUG_PRINT('--(1)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()), level=2)
 
             # We enter here at least once, and if a reset on the same
             # node has been triggered (typically for a non-terminal
@@ -207,37 +184,22 @@ class ModelWalker(object):
                 node.freeze()
 
                 # For each node we look for direct subnodes
-                fnodes = node.get_reachable_nodes(
-                    internals_criteria=self.ic,
-                    exclude_self=True,
-                    respect_order=consumer.respect_order,
-                    resolve_generator=True,
-                    relative_depth=1,
-                )
+                fnodes = node.get_reachable_nodes(internals_criteria=self.ic, exclude_self=True,
+                                                  respect_order=consumer.respect_order,
+                                                  resolve_generator=True, relative_depth=1)
                 if DEBUG:
-                    DEBUG_PRINT(
-                        "--(2)-> Node:"
-                        + node.name
-                        + ", exhausted:"
-                        + repr(node.is_exhausted()),
-                        level=2,
-                    )
+                    DEBUG_PRINT('--(2)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()), level=2)
                     for e in fnodes:
-                        DEBUG_PRINT("   |> " + e.name, level=2)
+                        DEBUG_PRINT('   |> ' + e.name, level=2)
 
                 # If we don't find direct subnodes, it means that the
                 # node is terminal, and we go to Step 2. Otherwise, we
                 # call ourselves recursively with the list of subnodes
                 if fnodes:
-                    generator = self.walk_graph_rec(
-                        fnodes,
-                        structure_has_changed,
-                        consumed_nodes,
-                        parent_node=node,
-                        consumer=consumer,
-                    )
+                    generator = self.walk_graph_rec(fnodes, structure_has_changed, consumed_nodes,
+                                                    parent_node=node, consumer=consumer)
                     for consumed_node, orig_node_val in generator:
-                        yield consumed_node, orig_node_val  # YIELD
+                        yield consumed_node, orig_node_val # YIELD
 
                 ### STEP 2 ###
 
@@ -245,30 +207,18 @@ class ModelWalker(object):
                 # for possible uses/modifications. This is performed within our
                 # method node_consumer_helper().
                 if perform_second_step:
+
                     if consumer.consider_side_effects_on_sibbling:
                         original_parent_node_list = None
                         if parent_node.is_nonterm():
-                            original_parent_node_list = set(
-                                parent_node.subnodes_set
-                            ).intersection(set(parent_node.frozen_node_list))
+                            original_parent_node_list = set(parent_node.subnodes_set).intersection(set(parent_node.frozen_node_list))
 
-                    consumer_gen = self.node_consumer_helper(
-                        node,
-                        structure_has_changed,
-                        consumed_nodes,
-                        parent_node=parent_node,
-                        consumer=consumer,
-                    )
-                    for (
-                        consumed_node,
-                        orig_node_val,
-                        reset,
-                        ignore_node,
-                    ) in consumer_gen:
-                        DEBUG_PRINT(
-                            "   [ reset: {!r:s} | ignore_node: {!r:s} | "
-                            "name: {!r:s} ]".format(reset, ignore_node, node.name)
-                        )
+                    consumer_gen = self.node_consumer_helper(node, structure_has_changed, consumed_nodes,
+                                                             parent_node=parent_node, consumer=consumer)
+                    for consumed_node, orig_node_val, reset, ignore_node in consumer_gen:
+
+                        DEBUG_PRINT("   [ reset: {!r:s} | ignore_node: {!r:s} | " \
+                                               "name: {!r:s} ]".format(reset, ignore_node, node.name))
 
                         # Depending on the choice of the consumer, we
                         # can go to Step 1 again with the same node
@@ -298,28 +248,18 @@ class ModelWalker(object):
                             perform_second_step = True
                             again = False
 
-                        yield consumed_node, orig_node_val  # YIELD
+                        yield consumed_node, orig_node_val # YIELD
 
                         if consumer.consider_side_effects_on_sibbling:
                             if parent_node.is_nonterm():
-                                parent_node.unfreeze(
-                                    recursive=True,
-                                    reevaluate_constraints=True,
-                                    ignore_entanglement=True,
-                                )
+                                parent_node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
                                 parent_node.freeze()
-                                new_parent_node_list = set(
-                                    parent_node.subnodes_set
-                                ).intersection(set(parent_node.frozen_node_list))
+                                new_parent_node_list = set(parent_node.subnodes_set).intersection(set(parent_node.frozen_node_list))
 
                                 if original_parent_node_list != new_parent_node_list:
-                                    fnodes = parent_node.get_reachable_nodes(
-                                        internals_criteria=self.ic,
-                                        exclude_self=True,
-                                        respect_order=consumer.respect_order,
-                                        resolve_generator=True,
-                                        relative_depth=1,
-                                    )
+                                    fnodes = parent_node.get_reachable_nodes(internals_criteria=self.ic, exclude_self=True,
+                                                                             respect_order=consumer.respect_order,
+                                                                             resolve_generator=True, relative_depth=1)
                                     if fnodes:
                                         fnodes.remove(node)
                                         # TODO: check if there is a need to instantiate a copy of the
@@ -334,23 +274,17 @@ class ModelWalker(object):
                                         #  - new_consumer = copy.copy(consumer) with a special reset (TBC)
                                         #  - tTYPE or the walker need to be changed somehow so that it could discover
                                         #    other NT shapes linked to node existence.
-                                        generator = self.walk_graph_rec(
-                                            fnodes,
-                                            structure_has_changed,
-                                            consumed_nodes,
-                                            parent_node=parent_node,
-                                            consumer=consumer,
-                                        )
+                                        generator = self.walk_graph_rec(fnodes, structure_has_changed, consumed_nodes,
+                                                                        parent_node=parent_node, consumer=consumer)
                                         for consumed_node, orig_node_val in generator:
-                                            yield consumed_node, orig_node_val  # YIELD
+                                            yield consumed_node, orig_node_val # YIELD
+
 
                 # We reach this case if the consumer is not interested
                 # with 'node'.  Then if the node is not exhausted we
                 # may have new cases where the consumer will find
                 # something (assuming the consumer accepts to reset).
-                elif consumer.need_reset(node) and node.is_attr_set(
-                    dm.NodeInternals.Mutable
-                ):
+                elif consumer.need_reset(node) and node.is_attr_set(dm.NodeInternals.Mutable):
                     again = False if node.is_exhausted() else True
                     # Not consumed so we don't unfreeze() with recursive=True
                     self._do_reset(node, consumer)
@@ -358,11 +292,7 @@ class ModelWalker(object):
                     again = False
 
                 if consumer.consider_side_effects_on_sibbling:
-                    parent_node.unfreeze(
-                        recursive=True,
-                        reevaluate_constraints=True,
-                        ignore_entanglement=True,
-                    )
+                    parent_node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
                     parent_node.freeze()
 
                 if node.is_nonterm():
@@ -373,15 +303,9 @@ class ModelWalker(object):
 
                     idx = node_list.index(node)
 
-                    gen = self.walk_graph_rec(
-                        node_list[:idx],
-                        False,
-                        set(),
-                        parent_node=parent_node,
-                        consumer=consumer,
-                    )
+                    gen = self.walk_graph_rec(node_list[:idx], False, set(), parent_node=parent_node, consumer=consumer)
                     for consumed_node, orig_node_val in gen:
-                        yield consumed_node, orig_node_val  # YIELD
+                        yield consumed_node, orig_node_val # YIELD
 
                     # we need to reassess all the subnodes of the
                     # guilty node that has produced the
@@ -395,10 +319,7 @@ class ModelWalker(object):
                     #     if n in consumed_nodes:
                     #         consumed_nodes.remove(n)
 
-                elif (
-                    structure_has_changed
-                    and not consumer.need_reset_when_structure_change
-                ):
+                elif structure_has_changed and not consumer.need_reset_when_structure_change:
                     structure_has_changed = False
                     # print('--> ', node.name, node, node.is_attr_set(dm.NodeInternals.Mutable), 'exhausted: ', node.is_exhausted())
                     consumed_nodes = set()
@@ -472,9 +393,8 @@ class ModelWalker(object):
                 yield None, None, False, True # --> x, x, dont_reset, ignore_node
                 raise ValueError  # We should never return here, otherwise its a bug we want to alert on
 
-            elif (
-                node.is_exhausted()
-            ):  # --> (reset and node.is_exhausted()) or (not reset and node.is_exhausted())
+            elif node.is_exhausted(): # --> (reset and node.is_exhausted()) or (not reset and node.is_exhausted())
+
                 # DEBUG_PRINT('*** node_consumer_helper(): exhausted')
                 yield node, orig_node_val, False, False
 
@@ -502,6 +422,7 @@ class ModelWalker(object):
             else:
                 yield node, orig_node_val, False, False
 
+
             if max_steps != 0:
                 max_steps -= 1
                 if consume_called_again:
@@ -514,9 +435,7 @@ class ModelWalker(object):
                     if consumer.fix_constraints:
                         node.fix_synchronized_nodes()
             else:
-                if not_recovered and (
-                    consumer.interested_by(node) or node in consumed_nodes
-                ):
+                if not_recovered and (consumer.interested_by(node) or node in consumed_nodes):
                     consumer.recover_node(node)
                     if consumer.fix_constraints:
                         node.fix_synchronized_nodes()
@@ -524,7 +443,9 @@ class ModelWalker(object):
                         yield None, None, True, True
                 again = False
 
+
         return
+
 
 
 class NodeConsumerStub(object):
@@ -545,8 +466,8 @@ class NodeConsumerStub(object):
         self._path_regexp = None
         self._conf = None
 
-        assert max_runs_per_node > 0 or max_runs_per_node == -1
-        assert min_runs_per_node > 0 or min_runs_per_node == -1
+        assert(max_runs_per_node > 0 or max_runs_per_node==-1)
+        assert(min_runs_per_node > 0 or min_runs_per_node==-1)
 
         self.max_runs_per_node = int(max_runs_per_node)
         self.min_runs_per_node = int(min_runs_per_node)
@@ -567,9 +488,7 @@ class NodeConsumerStub(object):
         """
 
     def init_specific(self, **kwargs):
-        self._internals_criteria = dm.NodeInternalsCriteria(
-            negative_node_kinds=[dm.NodeInternals_NonTerm]
-        )
+        self._internals_criteria = dm.NodeInternalsCriteria(negative_node_kinds=[dm.NodeInternals_NonTerm])
         self._semantics_criteria = dm.NodeSemanticsCriteria()
 
     def preload(self, root_node):
@@ -585,7 +504,7 @@ class NodeConsumerStub(object):
         pass
 
     def consume_node(self, node):
-        """
+        '''
         Use this method to modify/alter or just read information on
         @node. This function will be called for each node that satisfy
         the criteria. (to be implemented according to the
@@ -594,12 +513,8 @@ class NodeConsumerStub(object):
         Return True to say that you have correctly consumed the node.
         Return False, if despite your current criteria for node interest,
         you are in fact not interested
-        """
-        DEBUG_PRINT(
-            "*** consume_node() called on: {:s}, (depth: {:d})".format(
-                node.name, node.depth
-            )
-        )
+        '''
+        DEBUG_PRINT('*** consume_node() called on: {:s}, (depth: {:d})'.format(node.name, node.depth))
         if node.is_exhausted():
             return False
         else:
@@ -607,15 +522,15 @@ class NodeConsumerStub(object):
 
     # The methods save_node() & recover_node() does not work for all situations
     def save_node(self, node):
-        """
+        '''
         Generic way to save a node (can impact performance)
-        """
+        '''
         self.__node_backup = node.get_internals_backup()
 
     def recover_node(self, node):
-        """
+        '''
         Generic way to recover a node
-        """
+        '''
         node.set_internals(self.__node_backup)
 
     def still_interested_by(self, node):
@@ -631,12 +546,12 @@ class NodeConsumerStub(object):
         pass
 
     def wait_for_exhaustion(self, node):
-        """
+        '''
         * return -1 to wait until exhaustion
         * return 0 to stop node iteration after consumption (and yielding a value once)
         * return N-1 to stop iteration after at most N step (or before if exhaustion triggers)
-        """
-        return max(self.max_nb_runs_for(node) - 1, -1)
+        '''
+        return max(self.max_nb_runs_for(node)-1, -1)
 
     def max_nb_runs_for(self, node):
         if node.get_fuzz_weight() > 1:
@@ -644,28 +559,24 @@ class NodeConsumerStub(object):
         else:
             return self.min_runs_per_node
 
-    def set_node_interest(
-        self,
-        internals_criteria=None,
-        semantics_criteria=None,
-        owned_confs=None,
-        path_regexp=None,
-        conf=None,
-    ):
-        """
+
+    def set_node_interest(self, internals_criteria=None, semantics_criteria=None,
+                          owned_confs=None, path_regexp=None, conf=None):
+        '''
         @conf: criteria are applied for the provided conf if not None, otherwise current_conf is used
         Note: when all is None, NodeConsumer is interested by every node (that is interested_by() return always True)
-        """
+        '''
         if internals_criteria:
             self._internals_criteria.extend(internals_criteria)
         if semantics_criteria:
             self._semantics_criteria.extend(semantics_criteria)
         if owned_confs:
-            self._owned_confs = owned_confs
+            self._owned_confs=owned_confs
         if path_regexp:
-            self._path_regexp = path_regexp
+            self._path_regexp=path_regexp
         if conf:
-            self._conf = conf
+            self._conf=conf
+
 
     def interested_by(self, node):
         if self._conf is None:
@@ -712,15 +623,15 @@ class NodeConsumerStub(object):
     def csp_compliance_matters(self):
         return self._csp_compliance_matters
 
+
 class BasicVisitor(NodeConsumerStub):
+
     def init_specific(self, reset_when_change=True):
         self._reset_when_change = reset_when_change
         self.reset_state()
 
     def reset_state(self):
-        self._internals_criteria = dm.NodeInternalsCriteria(
-            negative_node_kinds=[dm.NodeInternals_NonTerm]
-        )
+        self._internals_criteria = dm.NodeInternalsCriteria(negative_node_kinds=[dm.NodeInternals_NonTerm])
         self._semantics_criteria = dm.NodeSemanticsCriteria()
         self.need_reset_when_structure_change = self._reset_when_change
         self.firstcall = True
@@ -759,11 +670,10 @@ class BasicVisitor(NodeConsumerStub):
 
 
 class NonTermVisitor(BasicVisitor):
+
     def init_specific(self, reset_when_change=True):
-        self._internals_criteria = dm.NodeInternalsCriteria(
-            node_kinds=[dm.NodeInternals_NonTerm],
-            mandatory_attrs=[dm.NodeInternals.Mutable],
-        )
+        self._internals_criteria = dm.NodeInternalsCriteria(node_kinds=[dm.NodeInternals_NonTerm],
+                                                            mandatory_attrs=[dm.NodeInternals.Mutable])
         self._semantics_criteria = dm.NodeSemanticsCriteria()
         self.need_reset_when_structure_change = reset_when_change
         self.last_node = None
@@ -771,12 +681,8 @@ class NonTermVisitor(BasicVisitor):
 
     def need_reset(self, node):
         # DEBUG_PRINT('--(RESET)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()), level=0)
-        if (
-            node.is_nonterm()
-            and self.last_node is not None
-            and node is not self.last_node
-            and not node.is_exhausted()
-        ):
+        if node.is_nonterm() and self.last_node is not None and \
+                        node is not self.last_node and not node.is_exhausted():
             self.last_node = None
             self.current_node = None
             return True
@@ -799,27 +705,26 @@ class NonTermVisitor(BasicVisitor):
         return False
 
     def wait_for_exhaustion(self, node):
-        return -1  # wait until exhaustion
+        return -1 # wait until exhaustion
+
 
 
 class AltConfConsumer(NodeConsumerStub):
-    """
+    '''
     Note: save_node()/restore_node() are not overloaded although
     default implementation can triggers overhead, because for some
     cases copying the Elt is the better (e.g., for alternate conf on nonterm
     nodes, that reuse same subnodes over the various confs).
-    """
+    '''
 
     def init_specific(self, **kwargs):
         self.__node_backup = None
 
         self.need_reset_when_structure_change = True
 
-        self._internals_criteria = dm.NodeInternalsCriteria(
-            mandatory_attrs=[dm.NodeInternals.Mutable]
-        )
+        self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable])
         self._semantics_criteria = dm.NodeSemanticsCriteria()
-        self._owned_confs = ["MAIN"]
+        self._owned_confs = ['MAIN']
         self.current_consumed_node = None
         self.orig_conf = None
         self.confs_list = None
@@ -845,9 +750,7 @@ class AltConfConsumer(NodeConsumerStub):
                 ok = False
 
             if ok:
-                self.confs_list = list(
-                    filter(lambda c: node.is_conf_existing(c), self.confs_list)
-                )
+                self.confs_list = list(filter(lambda c: node.is_conf_existing(c), self.confs_list))
             else:
                 return False
 
@@ -855,9 +758,7 @@ class AltConfConsumer(NodeConsumerStub):
 
         # case 1
         if node.is_conf_existing(new_conf):
-            DEBUG_PRINT(
-                " *** CONSUME: " + node.name + ", " + repr(node.c.keys()), level=0
-            )
+            DEBUG_PRINT(' *** CONSUME: ' + node.name + ', ' + repr(node.c.keys()), level=0)
             self.orig_conf = node.get_current_conf()
             self.current_consumed_node = node
             node.set_current_conf(conf=new_conf, recursive=False)
@@ -882,7 +783,7 @@ class AltConfConsumer(NodeConsumerStub):
 
     def recover_node(self, node):
         if node is self.current_consumed_node and self.recover:
-            DEBUG_PRINT(" *** RECOVER: " + node.name + ", " + node.get_current_conf())
+            DEBUG_PRINT(' *** RECOVER: ' + node.name + ', ' + node.get_current_conf())
 
             node.reset_state(recursive=True)
             node.get_value()
@@ -901,9 +802,9 @@ class AltConfConsumer(NodeConsumerStub):
 
         if node is self.current_consumed_node:
             if node.get_fuzz_weight() > 1:
-                return max(self.max_runs_per_node - 1, -1)
+                return max(self.max_runs_per_node-1, -1)
             else:
-                return max(self.min_runs_per_node - 1, -1)
+                return max(self.min_runs_per_node-1, -1)
         else:
             return 0
 
@@ -914,16 +815,14 @@ class TypedNodeDisruption(NodeConsumerStub):
                       only_corner_cases=False, only_invalid_cases=False):
         mattr = None if self.ignore_mutable_attr else [dm.NodeInternals.Mutable]
         if ignore_separator:
-            self._internals_criteria = dm.NodeInternalsCriteria(
-                mandatory_attrs=mattr,
-                negative_attrs=[dm.NodeInternals.Separator],
-                node_kinds=[dm.NodeInternals_TypedValue, dm.NodeInternals_GenFunc],
-            )
+            self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=mattr,
+                                                                negative_attrs=[dm.NodeInternals.Separator],
+                                                                node_kinds=[dm.NodeInternals_TypedValue,
+                                                                            dm.NodeInternals_GenFunc])
         else:
-            self._internals_criteria = dm.NodeInternalsCriteria(
-                mandatory_attrs=mattr,
-                node_kinds=[dm.NodeInternals_TypedValue, dm.NodeInternals_GenFunc],
-            )
+            self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=mattr,
+                                                                node_kinds=[dm.NodeInternals_TypedValue,
+                                                                            dm.NodeInternals_GenFunc])
 
         self._semantics_criteria = dm.NodeSemanticsCriteria()
 
@@ -932,7 +831,7 @@ class TypedNodeDisruption(NodeConsumerStub):
         self.current_node = None
         self.orig_internal = None
         self.determinist = determinist
-        self._ignore_separator = ignore_separator
+        self._ignore_separator  = ignore_separator
         self.sep_list = None
 
         self.need_reset_when_structure_change = True
@@ -944,21 +843,13 @@ class TypedNodeDisruption(NodeConsumerStub):
     def preload(self, root_node):
         if not self._ignore_separator:
             ic = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Separator])
-            self.sep_list = set(
-                map(
-                    lambda x: x.to_bytes(),
-                    root_node.get_reachable_nodes(
-                        internals_criteria=ic, resolve_generator=True
-                    ),
-                )
-            )
+            self.sep_list = set(map(lambda x: x.to_bytes(),
+                                    root_node.get_reachable_nodes(internals_criteria=ic, resolve_generator=True)))
             self.sep_list = list(self.sep_list)
 
     def consume_node(self, node):
-        if node.is_genfunc() and (
-            node.is_attr_set(dm.NodeInternals.Freezable)
-            or not node.generated_node.is_typed_value()
-        ):
+        if node.is_genfunc() and (node.is_attr_set(dm.NodeInternals.Freezable) or
+                not node.generated_node.is_typed_value()):
             return False
 
         if node is not self.current_node:
@@ -973,17 +864,12 @@ class TypedNodeDisruption(NodeConsumerStub):
             vt_node = node.generated_node if node.is_genfunc() else node
             self._populate_fuzzy_vt_list(vt_node, self.fuzz_magnitude)
 
-        DEBUG_PRINT(
-            " *** CONSUME: " + node.name + ", " + repr(self.current_fuzz_vt_list),
-            level=0,
-        )
+        DEBUG_PRINT(' *** CONSUME: ' + node.name + ', ' + repr(self.current_fuzz_vt_list), level=0)
 
         if self.current_fuzz_vt_list:
             vt_obj = self.current_fuzz_vt_list.pop(0)
 
-            node.set_values(
-                value_type=vt_obj, ignore_entanglement=True, preserve_node=True
-            )
+            node.set_values(value_type=vt_obj, ignore_entanglement=True, preserve_node=True)
             node.make_finite()
             if self.determinist is None:
                 pass
@@ -1003,6 +889,7 @@ class TypedNodeDisruption(NodeConsumerStub):
             raise ValueError
 
     def _populate_fuzzy_vt_list(self, vt_node, fuzz_magnitude):
+
         vt = vt_node.get_value_type()
 
         if issubclass(vt.__class__, vtype.VT_Alt):
@@ -1030,10 +917,8 @@ class TypedNodeDisruption(NodeConsumerStub):
             try:
                 sep_l.remove(current_val)
             except ValueError:
-                print(
-                    "\n*** WARNING: separator not part of the initial set. (Could happen if "
-                    "separators are generated dynamically)"
-                )
+                print("\n*** WARNING: separator not part of the initial set. (Could happen if "
+                      "separators are generated dynamically)")
             if sep_l:
                 self.current_fuzz_vt_list.insert(0, vtype.String(values=sep_l))
         else:
@@ -1043,9 +928,7 @@ class TypedNodeDisruption(NodeConsumerStub):
                 for sep in self.sep_list:
                     new_val = current_val[:-1] + sep + current_val[-1:]
                     fuzzy_sep_val_list.append(new_val)
-                self.current_fuzz_vt_list.insert(
-                    0, vtype.String(values=fuzzy_sep_val_list)
-                )
+                self.current_fuzz_vt_list.insert(0, vtype.String(values=fuzzy_sep_val_list))
 
     def save_node(self, node):
         pass
@@ -1068,15 +951,15 @@ class TypedNodeDisruption(NodeConsumerStub):
 
 
 class SeparatorDisruption(NodeConsumerStub):
+
     def init_specific(self, separators=None):
-        self._internals_criteria = dm.NodeInternalsCriteria(
-            mandatory_attrs=[dm.NodeInternals.Mutable, dm.NodeInternals.Separator],
-            node_kinds=[dm.NodeInternals_Term],
-        )
+        self._internals_criteria = \
+            dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable, dm.NodeInternals.Separator],
+                                     node_kinds=[dm.NodeInternals_Term])
 
         self._semantics_criteria = dm.NodeSemanticsCriteria()
 
-        self.values = [b""]
+        self.values = [b'']
         if separators is not None:
             self.values += list(separators)
 
@@ -1094,7 +977,7 @@ class SeparatorDisruption(NodeConsumerStub):
         # operation, especially usefull in our case, because we have
         # to preserve dm.NodeInternals.Separator
 
-        node.unfreeze()  # ignore previous state
+        node.unfreeze() # ignore previous state
 
         node.make_finite()
         node.make_determinist()
@@ -1103,19 +986,17 @@ class SeparatorDisruption(NodeConsumerStub):
 
 
 def fuzz_data_tree(top_node, paths_regexp=None):
-    c = dm.NodeInternalsCriteria(
-        mandatory_attrs=[dm.NodeInternals.Mutable],
-        node_kinds=[dm.NodeInternals_NonTerm],
-    )
+
+    c = dm.NodeInternalsCriteria(mandatory_attrs=[dm.NodeInternals.Mutable],
+                             node_kinds=[dm.NodeInternals_NonTerm])
 
     if paths_regexp:
-        node_list = top_node.get_reachable_nodes(
-            path_regexp=paths_regexp, resolve_generator=True
-        )
+        node_list = top_node.get_reachable_nodes(path_regexp=paths_regexp, resolve_generator=True)
     else:
         node_list = [top_node]
 
     for node in node_list:
         l = node.get_reachable_nodes(internals_criteria=c, resolve_generator=True)
         for e in l:
-            e.cc.change_subnodes_csts([("*", "u=.")])
+            e.cc.change_subnodes_csts([('*', 'u=.')])
+

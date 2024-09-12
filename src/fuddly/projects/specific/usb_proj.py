@@ -23,10 +23,10 @@
 
 import time
 
-from ...framework.plumbing import *
-from ...framework.target_helpers import *
-from ...framework.logger import *
-from ...framework.node import *
+from fuddly.framework.plumbing import *
+from fuddly.framework.target_helpers import *
+from fuddly.framework.logger import *
+from fuddly.framework.node import *
 
 project = Project()
 project.default_dm = 'usb'

@@ -1,10 +1,10 @@
 
-from framework.database import Database
+from fuddly.framework.database import Database
 
 from typing import Optional
-from tools.plotty.globals import DBResult
+from fuddly.tools.plotty.globals import DBResult
 
-from tools.plotty.utils import print_error
+from fuddly.tools.plotty.utils import print_error
 
 
 class CachedDatabaseTable:

@@ -23,12 +23,12 @@
 
 import threading
 
-from . import global_resources as gr
-from .data import *
-from .dmhelpers.generic import *
-from .node_builder import NodeBuilder
-from ..libs.external_modules import *
-from ..libs.utils import Accumulator
+from fuddly.framework import global_resources as gr
+from fuddly.framework.data import *
+from fuddly.framework.dmhelpers.generic import *
+from fuddly.framework.node_builder import NodeBuilder
+from fuddly.libs.external_modules import *
+from fuddly.libs.utils import Accumulator
 
 #### Data Model Abstraction
 

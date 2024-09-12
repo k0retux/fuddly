@@ -23,9 +23,9 @@
 
 import unittest
 import ddt
-from test import mock
+from fuddly.test import mock
 
-from framework.node import *
+from fuddly.framework.node import *
 
 @ddt.ddt
 class TestBitFieldCondition(unittest.TestCase):

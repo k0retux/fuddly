@@ -21,10 +21,10 @@
 #
 ################################################################################
 
-from ...framework.data_model import *
-from ...framework.global_resources import *
-from ...framework.node_builder import NodeBuilder
-from ...framework.value_types import *
+from fuddly.framework.data_model import *
+from fuddly.framework.global_resources import *
+from fuddly.framework.node_builder import NodeBuilder
+from fuddly.framework.value_types import *
 
 markers = {
     'SOF': {0: 0xFFC0,

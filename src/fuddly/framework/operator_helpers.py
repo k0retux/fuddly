@@ -25,8 +25,8 @@ from __future__ import print_function
 
 import datetime
 
-from .global_resources import *
-from .tactics_helpers import _handle_user_inputs, _user_input_conformity, _restore_dmaker_internals
+from fuddly.framework.global_resources import *
+from fuddly.framework.tactics_helpers import _handle_user_inputs, _user_input_conformity, _restore_dmaker_internals
 
 class Operation(object):
 

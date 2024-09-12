@@ -34,13 +34,13 @@ import time
 import uuid
 from _socket import error as socket_error
 
-from ..data import Data
-from ..node import Node, NodeSemanticsCriteria
-from ..target_helpers import Target, TargetStuck
-from ..knowledge.feedback_collector import FeedbackCollector
+from fuddly.framework.data import Data
+from fuddly.framework.node import Node, NodeSemanticsCriteria
+from fuddly.framework.target_helpers import Target, TargetStuck
+from fuddly.framework.knowledge.feedback_collector import FeedbackCollector
 
-from ..value_types import *
-from ..node_builder import NodeBuilder
+from fuddly.framework.value_types import *
+from fuddly.framework.node_builder import NodeBuilder
 
 eth_hdr_desc = \
     {'name': 'eth_hdr',

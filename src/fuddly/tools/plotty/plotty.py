@@ -11,16 +11,16 @@ sys.path.insert(0, rootdir)
 
 from typing import Optional
 
-from tools.plotty.globals import PlottyGlobals, PlottyOptions
+from fuddly.tools.plotty.globals import PlottyGlobals, PlottyOptions
 
-from tools.plotty.cli import arguments
-from tools.plotty.plot.PlottyCurve import PlottyCurve
-from tools.plotty.plot.PlottyPointCloud import PlottyPointCloud
-from tools.plotty.PlottyDatabase import PlottyDatabase
-from tools.plotty.plot.PlottyFigure import PlottyFigure
-from tools.plotty.plot.PlottyFigureArea import PlottyFigureArea
-from tools.plotty.plot.PlottyPoint import PlottyPoint
-from tools.plotty.utils import print_error, print_warning
+from fuddly.tools.plotty.cli import arguments
+from fuddly.tools.plotty.plot.PlottyCurve import PlottyCurve
+from fuddly.tools.plotty.plot.PlottyPointCloud import PlottyPointCloud
+from fuddly.tools.plotty.PlottyDatabase import PlottyDatabase
+from fuddly.tools.plotty.plot.PlottyFigure import PlottyFigure
+from fuddly.tools.plotty.plot.PlottyFigureArea import PlottyFigureArea
+from fuddly.tools.plotty.plot.PlottyPoint import PlottyPoint
+from fuddly.tools.plotty.utils import print_error, print_warning
 
 x_type = None
 y_type = None

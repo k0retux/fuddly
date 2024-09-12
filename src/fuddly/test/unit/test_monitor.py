@@ -22,8 +22,8 @@
 ################################################################################
 
 import unittest
-from test import mock
-from framework.monitor import *
+from fuddly.test import mock
+from fuddly.framework.monitor import *
 
 class ProbeUserTest(unittest.TestCase):
     """Test case used to test the 'ProbeUser' class."""

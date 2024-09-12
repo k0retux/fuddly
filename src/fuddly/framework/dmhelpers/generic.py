@@ -21,7 +21,7 @@
 #
 ################################################################################
 
-from ..node import *
+from fuddly.framework.node import *
 
 import datetime
 

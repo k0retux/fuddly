@@ -23,4 +23,4 @@
 
 __all__ = []
 
-from test.integration.test_integration import *
+from fuddly.test.integration.test_integration import *

@@ -28,14 +28,14 @@ try:
 except:
     import Queue as queue
 
-from .monitor import *
-from .knowledge.feedback_handler import *
-from .knowledge.information import InformationCollector
-from .value_types import VT
-from .node import Env
-from .data_model import DataModel
-from .tactics_helpers import DataMaker
-from .scenario import Scenario, ScenarioEnv
+from fuddly.framework.monitor import *
+from fuddly.framework.knowledge.feedback_handler import *
+from fuddly.framework.knowledge.information import InformationCollector
+from fuddly.framework.value_types import VT
+from fuddly.framework.node import Env
+from fuddly.framework.data_model import DataModel
+from fuddly.framework.tactics_helpers import DataMaker
+from fuddly.framework.scenario import Scenario, ScenarioEnv
 
 class Project(object):
 

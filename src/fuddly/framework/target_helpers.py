@@ -24,22 +24,13 @@
 import datetime
 import threading
 
-from .data import Data
-from .knowledge.feedback_collector import FeedbackSource
-from ..libs.external_modules import *
+from fuddly.framework.data import Data
+from fuddly.framework.knowledge.feedback_collector import FeedbackSource
+from fuddly.libs.external_modules import *
 
-
-class TargetStuck(Exception):
-    pass
-
-
-class TargetError(Exception):
-    pass
-
-
-class TargetNotReady(Exception):
-    pass
-
+class TargetStuck(Exception): pass
+class TargetError(Exception): pass
+class TargetNotReady(Exception): pass
 
 class Target(object):
     """
@@ -58,19 +49,15 @@ class Target(object):
     # tg_id = None  # this is set by FmkPlumbing
 
     FBK_WAIT_FULL_TIME = 1
-    fbk_wait_full_time_slot_msg = (
-        "Wait for the full time slot allocated for feedback retrieval"
-    )
+    fbk_wait_full_time_slot_msg = 'Wait for the full time slot allocated for feedback retrieval'
     FBK_WAIT_UNTIL_RECV = 2
-    fbk_wait_until_recv_msg = "Wait until the target has sent something back to us"
+    fbk_wait_until_recv_msg = 'Wait until the target has sent something back to us'
 
     _feedback_mode = None
     supported_feedback_mode = [FBK_WAIT_FULL_TIME, FBK_WAIT_UNTIL_RECV]
 
-    STATUS_THRESHOLD_FOR_RECOVERY = (
-        0  # When a feedback status gathered by FmkPlumbing is
-    )
-    # strictly lesser than this value, .recover_target() will be called
+    STATUS_THRESHOLD_FOR_RECOVERY = 0  # When a feedback status gathered by FmkPlumbing is
+                                       # strictly lesser than this value, .recover_target() will be called
 
     _started = None
 
@@ -95,9 +82,9 @@ class Target(object):
     @staticmethod
     def get_fbk_mode_desc(fbk_mode, short=False):
         if fbk_mode == Target.FBK_WAIT_FULL_TIME:
-            return "wait full time" if short else Target.fbk_wait_full_time_slot_msg
+            return 'wait full time' if short else Target.fbk_wait_full_time_slot_msg
         elif fbk_mode == Target.FBK_WAIT_UNTIL_RECV:
-            return "wait until reception" if short else Target.fbk_wait_until_recv_msg
+            return 'wait until reception' if short else Target.fbk_wait_until_recv_msg
 
     def set_logger(self, logger):
         self._logger = logger
@@ -109,24 +96,16 @@ class Target(object):
         self._project = prj
 
     def _start(self, target_desc, tg_id):
-        self._logger.print_console(
-            "*** Target initialization: ({:d}) {!s} ***\n".format(tg_id, target_desc),
-            nl_before=False,
-            rgb=Color.COMPONENT_START,
-        )
+        self._logger.print_console('*** Target initialization: ({:d}) {!s} ***\n'.format(tg_id, target_desc),
+                                   nl_before=False, rgb=Color.COMPONENT_START)
         self._pending_data = []
         self._pending_data_id = None
         self._started = self.start()
         return self._started
 
     def _stop(self, target_desc, tg_id):
-        self._logger.print_console(
-            "*** Target cleanup procedure for ({:d}) {!s} ***\n".format(
-                tg_id, target_desc
-            ),
-            nl_before=False,
-            rgb=Color.COMPONENT_STOP,
-        )
+        self._logger.print_console('*** Target cleanup procedure for ({:d}) {!s} ***\n'.format(tg_id, target_desc),
+                                   nl_before=False, rgb=Color.COMPONENT_STOP)
         self._pending_data = None
         self._pending_data_id = None
         ret = self.stop()
@@ -300,11 +279,11 @@ class Target(object):
         self.sending_delay = sending_delay
 
     def __str__(self):
-        return self.__class__.__name__ + " [" + self.get_description() + "]"
+        return self.__class__.__name__ + ' [' + self.get_description() + ']'
 
     def get_description(self):
-        prefix = "{:s} | ".format(self.name) if self.name is not None else ""
-        return "{:s}ID: {:s}".format(prefix, str(id(self))[-6:])
+        prefix = '{:s} | '.format(self.name) if self.name is not None else ''
+        return '{:s}ID: {:s}'.format(prefix, str(id(self))[-6:])
 
     def add_pending_data(self, data):
         with self._send_data_lock:
@@ -323,7 +302,7 @@ class Target(object):
         elif len(data_list) > 1:
             self.send_multiple_data_sync(data_list, from_fmk=from_fmk)
         else:
-            raise ValueError("No pending data")
+            raise ValueError('No pending data')
 
     def send_data_sync(self, data: Data, from_fmk=False):
         """
@@ -344,19 +323,13 @@ class Target(object):
                 if from_fmk:
                     self._pending_data_id = data.estimated_data_id
                 if not from_fmk:
-                    self._logger.log_async_data(
-                        data,
-                        sent_date=self._last_sending_date,
-                        target_ref=FeedbackSource(self),
-                        prj_name=self._project.name,
-                        current_data_id=self._pending_data_id,
-                    )
+                    self._logger.log_async_data(data, sent_date=self._last_sending_date,
+                                                target_ref=FeedbackSource(self),
+                                                prj_name=self._project.name,
+                                                current_data_id=self._pending_data_id)
             else:
-                self._logger.print_console(
-                    f"*** Target {self!s} Not ready ***\n",
-                    nl_before=False,
-                    rgb=Color.WARNING,
-                )
+                self._logger.print_console( f"*** Target {self!s} Not ready ***\n",
+                                           nl_before=False, rgb=Color.WARNING)
                 # raise TargetNotReady
 
     def send_multiple_data_sync(self, data_list, from_fmk=False):
@@ -370,25 +343,17 @@ class Target(object):
             if self.is_target_ready_for_new_data():
                 self._last_sending_date = datetime.datetime.now()
                 self.send_multiple_data(data_list, from_fmk=from_fmk)
-                self._project.notify_data_sending(
-                    data_list, self._last_sending_date, self
-                )
+                self._project.notify_data_sending(data_list, self._last_sending_date, self)
                 if from_fmk:
                     self._pending_data_id = data_list[-1].estimated_data_id
                 if not from_fmk:
-                    self._logger.log_async_data(
-                        data_list,
-                        sent_date=self._last_sending_date,
-                        target_ref=FeedbackSource(self),
-                        prj_name=self._project.name,
-                        current_data_id=self._pending_data_id,
-                    )
+                    self._logger.log_async_data( data_list, sent_date=self._last_sending_date,
+                                                target_ref=FeedbackSource(self),
+                                                prj_name=self._project.name,
+                                                current_data_id=self._pending_data_id)
             else:
-                self._logger.print_console(
-                    f"*** Target {self!s} Not ready ***\n",
-                    nl_before=False,
-                    rgb=Color.WARNING,
-                )
+                self._logger.print_console(f'*** Target {self!s} Not ready ***\n',
+                                           nl_before=False, rgb=Color.WARNING)
                 # raise TargetNotReady
 
     def add_extensions(self, probe):
@@ -408,6 +373,7 @@ class Target(object):
 
 
 class EmptyTarget(Target):
+
     _feedback_mode = Target.FBK_WAIT_FULL_TIME
     supported_feedback_mode = [Target.FBK_WAIT_FULL_TIME, Target.FBK_WAIT_UNTIL_RECV]
 
@@ -417,7 +383,7 @@ class EmptyTarget(Target):
 
     def send_data(self, data, from_fmk=False):
         if self.verbose:
-            print(f"\n*** data sent: {data.to_bytes()}")
+            print(f'\n*** data sent: {data.to_bytes()}')
 
     def send_multiple_data(self, data_list, from_fmk=False):
         pass

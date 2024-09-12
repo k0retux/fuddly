@@ -28,11 +28,11 @@ import functools
 import uuid
 from operator import attrgetter
 
-from .tactics_helpers import *
-from .global_resources import UI
-from .scenario import *
-from .error_handling import ExtinctPopulationError, PopulationError, CrossOverError
-from .data import DataProcess
+from fuddly.framework.tactics_helpers import *
+from fuddly.framework.global_resources import UI
+from fuddly.framework.scenario import *
+from fuddly.framework.error_handling import ExtinctPopulationError, PopulationError, CrossOverError
+from fuddly.framework.data import DataProcess
 
 class Population(object):
     """ Population to be used within an evolutionary scenario """

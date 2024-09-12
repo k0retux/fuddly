@@ -28,10 +28,10 @@ import copy
 import collections
 from functools import partial
 
-from .data import *
-from .global_resources import *
-from . import scenario as sc
-from . import node as nd
+from fuddly.framework.data import *
+from fuddly.framework.global_resources import *
+from fuddly.framework import scenario as sc
+from fuddly.framework import node as nd
 
 DEBUG = False
 

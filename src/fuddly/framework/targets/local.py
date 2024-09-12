@@ -28,9 +28,9 @@ import select
 import signal
 import subprocess
 
-from ..global_resources import workspace_folder
-from ..target_helpers import Target
-from ..knowledge.feedback_collector import FeedbackCollector
+from fuddly.framework.global_resources import workspace_folder
+from fuddly.framework.target_helpers import Target
+from fuddly.framework.knowledge.feedback_collector import FeedbackCollector
 
 
 class LocalTarget(Target):

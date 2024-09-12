@@ -28,12 +28,12 @@ import random
 
 from typing import Tuple
 
-from .global_resources import *
-from .data import Data, DataProcess, EmptyDataProcess, DataAttr, NodeBackend
-from .node import Node
-from .target_helpers import Target
-from ..libs.external_modules import *
-from ..libs.utils import find_file, retrieve_app_handler, Task
+from fuddly.framework.global_resources import *
+from fuddly.framework.data import Data, DataProcess, EmptyDataProcess, DataAttr, NodeBackend
+from fuddly.framework.node import Node
+from fuddly.framework.target_helpers import Target
+from fuddly.libs.external_modules import *
+from fuddly.libs.utils import find_file, retrieve_app_handler, Task
 
 data_graph_desc_fstr = "Data('{!a}'...)"
 

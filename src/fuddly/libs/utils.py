@@ -30,8 +30,8 @@ import re
 import inspect
 import uuid
 
-from ..framework.global_resources import config_folder
-from ..framework.config import config
+from fuddly.framework.global_resources import config_folder
+from fuddly.framework.config import config
 import shlex
 
 term = config("FmkPlumbing", path=[config_folder]).terminal
@@ -43,9 +43,7 @@ class Term(object):
         self.keepterm = keepterm
 
     def start(self):
-        self.pipe_path = os.sep + os.path.join(
-            "tmp", "fuddly_term_" + str(uuid.uuid4())
-        )
+        self.pipe_path = os.sep + os.path.join('tmp', 'fuddly_term_' + str(uuid.uuid4()))
         if not os.path.exists(self.pipe_path):
             os.mkfifo(self.pipe_path)
         self.cmd = [term.name]
@@ -58,7 +56,7 @@ class Term(object):
         if term.exec_arg:
             self.cmd.append(term.exec_arg)
         if term.exec_arg_type == "list":
-            self.cmd.extend(["tail", "-f", self.pipe_path])
+            self.cmd.extend(['tail', '-f', self.pipe_path])
         elif term.exec_arg_type == "string":
             self.cmd.append(f"tail -f {self.pipe_path}")
         self._p = None
@@ -132,9 +130,7 @@ class Task(object):
     def cleanup(self):
         pass
 
-    def __init__(
-        self, period=None, init_delay=0, new_window=False, new_window_title=None
-    ):
+    def __init__(self, period=None, init_delay=0, new_window=False, new_window_title=None):
         self.period = period
         self.init_delay = init_delay
         self.fmkops = None
@@ -152,11 +148,7 @@ class Task(object):
 
     def _setup(self):
         if self._new_window:
-            nm = (
-                self.__class__.__name__
-                if self._new_window_title is None
-                else self._new_window_title
-            )
+            nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
             self.term = Term(title=nm, keepterm=True)
             self.term.start()
 
@@ -169,9 +161,9 @@ class Task(object):
 
     def __str__(self):
         if self.period is None:
-            desc = "Oneshot Task"
+            desc = 'Oneshot Task'
         else:
-            desc = "Periodic Task (period={}s)".format(self.period)
+            desc = 'Periodic Task (period={}s)'.format(self.period)
         return desc
 
     def print(self, msg):
@@ -216,7 +208,7 @@ def chunk_lines(string, length, prefix=""):
 
 
 def find_file(filename, root_path):
-    for dirpath, dirnames, filenames in os.walk(os.path.expanduser(root_path)):
+    for (dirpath, dirnames, filenames) in os.walk(os.path.expanduser(root_path)):
         if filename in filenames:
             return dirpath + os.sep + filename
     else:
@@ -229,13 +221,9 @@ def retrieve_app_handler(filename):
         :-1
     ]
 
-    file_path = find_file(
-        desktop_file.decode(), root_path="~/.local/share/applications/"
-    )
+    file_path = find_file(desktop_file.decode(), root_path="~/.local/share/applications/")
     if file_path is None:
-        file_path = find_file(
-            desktop_file.decode(), root_path="/usr/share/applications/"
-        )
+        file_path = find_file(desktop_file.decode(), root_path="/usr/share/applications/")
 
     if file_path is None:
         return None

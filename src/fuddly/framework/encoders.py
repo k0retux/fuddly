@@ -27,7 +27,7 @@ import zlib
 import copy
 import binascii
 
-from .global_resources import *
+from fuddly.framework.global_resources import *
 
 class EncoderUnrecognizedValueError(Exception): pass
 class EncoderSizeNotFoundError(Exception): pass

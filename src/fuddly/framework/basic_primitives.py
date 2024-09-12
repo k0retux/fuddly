@@ -26,7 +26,7 @@ import random
 import string
 import array
 
-from .global_resources import convert_to_internal_repr
+from fuddly.framework.global_resources import convert_to_internal_repr
 
 def rand_string(size=None, min=1, max=10, str_set=string.printable):
 

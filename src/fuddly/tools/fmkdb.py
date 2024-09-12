@@ -32,9 +32,9 @@ currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentfram
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
 
-from framework.database import Database
-from framework.global_resources import get_user_input
-from libs.external_modules import *
+from fuddly.framework.database import Database
+from fuddly.framework.global_resources import get_user_input
+from fuddly.libs.external_modules import *
 
 import argparse
 

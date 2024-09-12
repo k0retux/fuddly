@@ -31,14 +31,14 @@ import itertools
 
 from typing import List, Tuple
 
-from ..libs.external_modules import *
-from ..libs.utils import get_caller_object
-from .data import Data
-from .global_resources import *
-from .database import Database
-from .knowledge.feedback_collector import FeedbackSource
-from ..libs.utils import ExternalDisplay, Accumulator
-from . import global_resources as gr
+from fuddly.libs.external_modules import *
+from fuddly.libs.utils import get_caller_object
+from fuddly.framework.data import Data
+from fuddly.framework.global_resources import *
+from fuddly.framework.database import Database
+from fuddly.framework.knowledge.feedback_collector import FeedbackSource
+from fuddly.libs.utils import ExternalDisplay, Accumulator
+from fuddly.framework import global_resources as gr
 
 
 class Logger(object):

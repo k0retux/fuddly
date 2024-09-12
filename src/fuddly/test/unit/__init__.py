@@ -23,7 +23,7 @@
 
 __all__ = []
 
-from test.unit.test_node import *
-from test.unit.test_node_builder import *
-from test.unit.test_monitor import *
-from test.unit.test_plotty import *
+from fuddly.test.unit.test_node import *
+from fuddly.test.unit.test_node_builder import *
+from fuddly.test.unit.test_monitor import *
+from fuddly.test.unit.test_plotty import *

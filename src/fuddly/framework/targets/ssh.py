@@ -2,46 +2,30 @@ import datetime
 import socket
 import time
 
-from ..target_helpers import Target, TargetError
-from ...libs.external_modules import *
-from ..global_resources import *
-from ..comm_backends import SSH_Backend, BackendError
-from ..knowledge.feedback_collector import FeedbackCollector
+from fuddly.framework.target_helpers import Target, TargetError
+from fuddly.libs.external_modules import *
+from fuddly.framework.global_resources import *
+from fuddly.framework.comm_backends import SSH_Backend, BackendError
+from fuddly.framework.knowledge.feedback_collector import FeedbackCollector
 
-from .. import error_handling as eh
-
+from fuddly.framework import error_handling as eh
 
 class SSHTarget(Target):
+
     NO_PASSWORD = SSH_Backend.NO_PASSWORD
     ASK_PASSWORD = SSH_Backend.ASK_PASSWORD
 
     STATUS_THRESHOLD_FOR_RECOVERY = -2
 
-    def __init__(
-        self,
-        target_addr="localhost",
-        port=12345,
-        bind_address=None,
-        username=None,
-        password=None,
-        pkey_path=None,
-        pkey_password=None,
-        proxy_jump_addr=None,
-        proxy_jump_bind_addr=None,
-        proxy_jump_port=None,
-        proxy_jump_username=None,
-        proxy_jump_password=None,
-        proxy_jump_pkey_path=None,
-        proxy_jump_pkey_password=None,
-        targeted_command=None,
-        file_parameter_path=None,
-        fbk_timeout=0.5,
-        read_stdout=True,
-        read_stderr=True,
-        char_mapping=False,
-        get_pty=False,
-        ref=None,
-    ):
+    def __init__(self, target_addr='localhost', port=12345, bind_address=None,
+                 username=None, password=None, pkey_path=None, pkey_password=None,
+                 proxy_jump_addr=None, proxy_jump_bind_addr=None, proxy_jump_port=None,
+                 proxy_jump_username=None, proxy_jump_password=None,
+                 proxy_jump_pkey_path=None, proxy_jump_pkey_password=None,
+                 targeted_command=None, file_parameter_path=None,
+                 fbk_timeout=0.5, read_stdout=True, read_stderr=True, char_mapping=False,
+                 get_pty=False,
+                 ref=None):
         """
         This generic target enables you to interact with a remote target requiring an SSH connection.
 
@@ -89,25 +73,16 @@ class SSHTarget(Target):
         """
         Target.__init__(self)
         if not ssh_module:
-            raise eh.UnavailablePythonModule("Python module for SSH is not available!")
+            raise eh.UnavailablePythonModule('Python module for SSH is not available!')
 
-        self.ssh_backend = SSH_Backend(
-            target_addr=target_addr,
-            port=port,
-            bind_address=bind_address,
-            username=username,
-            password=password,
-            pkey_path=pkey_path,
-            pkey_password=pkey_password,
-            proxy_jump_addr=proxy_jump_addr,
-            proxy_jump_bind_addr=proxy_jump_bind_addr,
-            proxy_jump_port=proxy_jump_port,
-            proxy_jump_username=proxy_jump_username,
-            proxy_jump_password=proxy_jump_password,
-            proxy_jump_pkey_path=proxy_jump_pkey_path,
-            proxy_jump_pkey_password=proxy_jump_pkey_password,
-            get_pty=get_pty,
-        )
+        self.ssh_backend = SSH_Backend(target_addr=target_addr, port=port, bind_address=bind_address, username=username,
+                                       password=password, pkey_path=pkey_path, pkey_password=pkey_password,
+                                       proxy_jump_addr=proxy_jump_addr, proxy_jump_bind_addr = proxy_jump_bind_addr,
+                                       proxy_jump_port=proxy_jump_port,
+                                       proxy_jump_username=proxy_jump_username, proxy_jump_password=proxy_jump_password,
+                                       proxy_jump_pkey_path=proxy_jump_pkey_path,
+                                       proxy_jump_pkey_password=proxy_jump_pkey_password,
+                                       get_pty=get_pty)
 
         self.read_stdout = read_stdout
         self.read_stderr = read_stderr
@@ -127,9 +102,7 @@ class SSHTarget(Target):
         self.chan_desc = None
 
         self.ssh_backend.start()
-        self.sftp = (
-            self.ssh_backend.client.open_sftp() if self.file_paremeter_path else None
-        )
+        self.sftp = self.ssh_backend.client.open_sftp() if self.file_paremeter_path else None
 
         return True
 
@@ -154,7 +127,7 @@ class SSHTarget(Target):
         if not self.targeted_command:
             cmd = data_str
         elif self.file_paremeter_path:
-            input_f = self.sftp.file(self.file_paremeter_path, mode="w", bufsize=-1)
+            input_f = self.sftp.file(self.file_paremeter_path, mode='w', bufsize=-1)
             input_f.write(data_str)
             input_f.flush()
             cmd = self.targeted_command
@@ -166,36 +139,28 @@ class SSHTarget(Target):
             self._last_ack_date = datetime.datetime.now()
             self._fbk_received = True
         except BackendError as err:
-            self._logger.collect_feedback(
-                content="{}".format(err), status_code=err.status
-            )
+            self._logger.collect_feedback(content='{}'.format(err), status_code=err.status)
             return
 
         if self.read_stdout:
             try:
                 data = self.ssh_backend.read_stdout(self.chan_desc)
                 if data:
-                    self._logger.collect_feedback(
-                        content=data, status_code=0, subref="stdout"
-                    )
+                    self._logger.collect_feedback(content=data, status_code=0, subref='stdout')
             except BackendError as err:
-                self._logger.collect_feedback(
-                    content="{}".format(err), status_code=err.status, subref="stdout"
-                )
+                self._logger.collect_feedback(content='{}'.format(err), status_code=err.status,
+                                              subref='stdout')
 
         if self.read_stderr:
             try:
                 data = self.ssh_backend.read_stderr(self.chan_desc)
                 if data:
-                    self._logger.collect_feedback(
-                        content=data, status_code=0, subref="stderr"
-                    )
+                    self._logger.collect_feedback(content=data, status_code=0, subref='stderr')
             except BackendError as err:
-                self._logger.collect_feedback(
-                    content="{}".format(err), status_code=err.status, subref="stderr"
-                )
+                self._logger.collect_feedback(content='{}'.format(err), status_code=err.status,
+                                              subref='stderr')
 
-    def is_feedback_received(self):  # useless currently as no-threaded send_data
+    def is_feedback_received(self): # useless currently as no-threaded send_data
         return self._fbk_received
 
     def _set_feedback_timeout_specific(self, fbk_timeout):
@@ -206,13 +171,9 @@ class SSHTarget(Target):
         return self._last_ack_date
 
     def get_description(self):
-        prefix = "{:s} | ".format(self.tg_ref) if self.tg_ref is not None else ""
-        desc = "{:s}host:{:s},port:{:d},user:{:s}".format(
-            prefix,
-            self.ssh_backend.host,
-            self.ssh_backend.port,
-            self.ssh_backend.username,
-        )
+        prefix = '{:s} | '.format(self.tg_ref) if self.tg_ref is not None else ''
+        desc = '{:s}host:{:s},port:{:d},user:{:s}'.format(prefix, self.ssh_backend.host,
+                                                          self.ssh_backend.port, self.ssh_backend.username)
         if self.ssh_backend.proxy_jump_addr:
             desc += f" | proxy_jump:{self.ssh_backend.proxy_jump_addr}"
 
@@ -220,3 +181,4 @@ class SSHTarget(Target):
             desc += f" | cmd='{self.targeted_command}'"
 
         return desc
+

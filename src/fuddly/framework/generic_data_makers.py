@@ -27,19 +27,19 @@ import uuid
 
 from copy import *
 
-from .node import *
-from .data import *
-from .tactics_helpers import *
-from .fuzzing_primitives import *
-from .basic_primitives import *
-from .value_types import *
-from .data_model import DataModel
-from .dmhelpers.generic import MH
-from .node import NodeSemanticsCriteria as NSC, NodeInternalsCriteria as NIC
+from fuddly.framework.node import *
+from fuddly.framework.data import *
+from fuddly.framework.tactics_helpers import *
+from fuddly.framework.fuzzing_primitives import *
+from fuddly.framework.basic_primitives import *
+from fuddly.framework.value_types import *
+from fuddly.framework.data_model import DataModel
+from fuddly.framework.dmhelpers.generic import MH
+from fuddly.framework.node import NodeSemanticsCriteria as NSC, NodeInternalsCriteria as NIC
 
 # from framework.plumbing import *
-from .evolutionary_helpers import Population
-from .global_resources import *
+from fuddly.framework.evolutionary_helpers import Population
+from fuddly.framework.global_resources import *
 
 tactics = Tactics()
 

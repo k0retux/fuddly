@@ -21,10 +21,10 @@
 #
 ################################################################################
 
-from ..node import *
-from .generic import *
-from .. import value_types as fvt
-from .. import global_resources as gr
+from fuddly.framework.node import *
+from fuddly.framework.dmhelpers.generic import *
+from fuddly.framework import value_types as fvt
+from fuddly.framework import global_resources as gr
 from enum import Enum
 
 class TAG_TYPE(Enum):

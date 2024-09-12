@@ -23,11 +23,11 @@
 
 import socket
 
-from ...framework.comm_backends import Shell_Backend
-from ...framework.plumbing import *
-from ...framework.targets.local import LocalTarget
-from ...framework.targets.network import NetworkTarget
-from ...framework.targets.printer import PrinterTarget
+from fuddly.framework.comm_backends import Shell_Backend
+from fuddly.framework.plumbing import *
+from fuddly.framework.targets.local import LocalTarget
+from fuddly.framework.targets.network import NetworkTarget
+from fuddly.framework.targets.printer import PrinterTarget
 
 project = Project()
 project.default_dm = ['mydf','jpg']

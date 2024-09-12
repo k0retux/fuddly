@@ -28,18 +28,18 @@ import math
 from pprint import pprint as pp
 import copy
 
-from .dmhelpers.generic import MH
-from .error_handling import DataModelDefinitionError, CharsetError, \
+from fuddly.framework.dmhelpers.generic import MH
+from fuddly.framework.error_handling import DataModelDefinitionError, CharsetError, \
     InitialStateNotFoundError, QuantificationError, StructureError, InconvertibilityError, \
     EscapeError, InvalidRangeError, EmptyAlphabetError
-from .node import Node,\
+from fuddly.framework.node import Node,\
     NodeInternals_Empty, NodeInternals_NonTerm, NodeInternals_GenFunc, NodeInternals_Func, \
     GenFuncCusto, NonTermCusto, FuncCusto, \
     NodeSemantics, SyncScope, SyncQtyFromObj, SyncSizeObj, NodeCondition, SyncExistenceObj, Env, \
     NodeInternalsCriteria, NodeInternals
-from .constraint_helpers import CSP
+from fuddly.framework.constraint_helpers import CSP
 
-from . import value_types as fvt
+from fuddly.framework import value_types as fvt
 
 class NodeBuilder(object):
 

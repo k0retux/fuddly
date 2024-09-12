@@ -1,6 +1,6 @@
-from tools.fmkdb import colorize
+from fuddly.tools.fmkdb import colorize
 
-from libs.external_modules import Color
+from fuddly.libs.external_modules import Color
 
 from typing import Optional
 

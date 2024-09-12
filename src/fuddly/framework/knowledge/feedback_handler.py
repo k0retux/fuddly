@@ -25,16 +25,15 @@ from __future__ import print_function
 
 import functools
 
-from .information import *
-from ...libs.utils import Term
+from fuddly.framework.knowledge.information import *
+from fuddly.libs.utils import Term
 
-from ...libs import debug_facility as dbg
+from fuddly.libs import debug_facility as dbg
 
 if dbg.KNOW_DEBUG:
     DEBUG_PRINT = dbg.DEBUG_PRINT
 else:
     DEBUG_PRINT = dbg.NO_PRINT
-
 
 @functools.total_ordering
 class SimilarityMeasure(object):
@@ -54,7 +53,6 @@ class SimilarityMeasure(object):
     def __add__(self, other):
         new_lvl = (self._level + other._level) // 2
         return SimilarityMeasure(level=new_lvl)
-
 
 UNIQUE = SimilarityMeasure(level=0)
 EQUAL = SimilarityMeasure(level=16)
@@ -94,9 +92,7 @@ class FeedbackHandler(object):
         """
         pass
 
-    def extract_info_from_feedback(
-        self, current_dm, source, timestamp, content, status
-    ):
+    def extract_info_from_feedback(self, current_dm, source, timestamp, content, status):
         """
         *** To be overloaded ***
 
@@ -132,13 +128,9 @@ class FeedbackHandler(object):
         pass
 
     def _start(self, current_dm):
-        self._s = ""
+        self._s = ''
         if self._new_window:
-            nm = (
-                self.__class__.__name__
-                if self._new_window_title is None
-                else self._new_window_title
-            )
+            nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
             self.term = Term(title=nm, keepterm=True)
             self.term.start()
 
@@ -168,23 +160,20 @@ class FeedbackHandler(object):
 
     def flush_collector(self):
         self.print(self._s)
-        self._s = ""
+        self._s = ''
 
     def process_feedback(self, current_dm, source, timestamp, content, status):
         info_set = set()
         truncated_content = None if content is None else content[:60]
 
         DEBUG_PRINT(
-            "\n*** Feedback Entry ***\n"
-            "    source: {!s}\n"
-            " timestamp: {!s}\n"
-            "   content: {!r} ...\n"
-            "    status: {!s}".format(source, timestamp, truncated_content, status)
-        )
+            '\n*** Feedback Entry ***\n'
+            '    source: {!s}\n'
+            ' timestamp: {!s}\n'
+            '   content: {!r} ...\n'
+            '    status: {!s}'.format(source, timestamp, truncated_content, status))
 
-        info = self.extract_info_from_feedback(
-            current_dm, source, timestamp, content, status
-        )
+        info = self.extract_info_from_feedback(current_dm, source, timestamp, content, status)
         if info is not None:
             if isinstance(info, list):
                 for i in info:
@@ -196,14 +185,12 @@ class FeedbackHandler(object):
 
 
 class TestFbkHandler(FeedbackHandler):
-    def extract_info_from_feedback(
-        self, current_dm, source, timestamp, content, status
-    ):
+    def extract_info_from_feedback(self, current_dm, source, timestamp, content, status):
         if content is None:
             return None
-        elif b"Linux" in content:
+        elif b'Linux' in content:
             # OS.Linux.increase_trust()
             return OS.Linux
-        elif b"Windows" in content:
+        elif b'Windows' in content:
             # OS.Windows.increase_trust()
             return OS.Windows

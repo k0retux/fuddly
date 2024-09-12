@@ -32,14 +32,14 @@ import ddt
 
 sys.path.append('.')
 
-from framework.value_types import *
+from fuddly.framework.value_types import *
 
-from framework.fuzzing_primitives import *
-from framework.plumbing import *
-from framework.data_model import *
-from framework.encoders import *
+from fuddly.framework.fuzzing_primitives import *
+from fuddly.framework.plumbing import *
+from fuddly.framework.data_model import *
+from fuddly.framework.encoders import *
 
-from test import ignore_data_model_specifics, run_long_tests, exit_on_import_error
+from fuddly.test import ignore_data_model_specifics, run_long_tests, exit_on_import_error
 
 def setUpModule():
     global fmk, dm, results, node_nterm, node_simple, node_typed
