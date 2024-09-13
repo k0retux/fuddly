@@ -84,6 +84,6 @@ myproto = "fuddly.data_models.tutorial.myproto_strategy"
 tuto = "fuddly.data_models.tutorial.tuto_strategy"
 
 [project.entry-points."fuddly.projects"]
-standard_project = "fuddly.projects.generic.standard_proj"
-usb_project = "fuddly.projects.specific.usb_proj"
-tutorial = "fuddly.projects.tuto_proj"
+standard = "fuddly.projects.generic.standard_proj"
+usb = "fuddly.projects.specific.usb_proj"
+tuto = "fuddly.projects.tuto_proj"
