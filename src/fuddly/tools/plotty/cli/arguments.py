@@ -1,10 +1,10 @@
-from tools.plotty.Formula import Formula
-from tools.plotty.PlottyDatabase import PlottyDatabase
-from tools.plotty.cli.parse.range import parse_int_range_union
-from tools.plotty.globals import GridMatch, PlottyOptions
-from tools.plotty.utils import print_warning, print_error
+from fuddly.tools.plotty.Formula import Formula
+from fuddly.tools.plotty.PlottyDatabase import PlottyDatabase
+from fuddly.tools.plotty.cli.parse.range import parse_int_range_union
+from fuddly.tools.plotty.globals import GridMatch, PlottyOptions
+from fuddly.tools.plotty.utils import print_warning, print_error
 
-from framework.database import Database
+from fuddly.framework.database import Database
 
 import os
 import sys

@@ -221,7 +221,7 @@ if __name__ == "__main__":
     disprove_impact = args.disprove_impact
 
     if decode_data or decode_fbk:
-        from framework.plumbing import *
+        from fuddly.framework.plumbing import *
         fmk = FmkPlumbing(quiet=True)
         fmk.get_data_models(fmkDB_update=False)
         dm_list = copy.copy(fmk.dm_list)

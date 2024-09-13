@@ -1211,7 +1211,7 @@ data_model = PDF_DataModel()
 
 if __name__ == "__main__":
 
-    from framework.plumbing import *
+    from fuddly.framework.plumbing import *
     fmk = FmkPlumbing()
     fmk.start()
 

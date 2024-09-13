@@ -37,7 +37,7 @@ from fuddly.framework.data_model import DataModel
 from fuddly.framework.dmhelpers.generic import MH
 from fuddly.framework.node import NodeSemanticsCriteria as NSC, NodeInternalsCriteria as NIC
 
-# from framework.plumbing import *
+# from fuddly.framework.plumbing import *
 from fuddly.framework.evolutionary_helpers import Population
 from fuddly.framework.global_resources import *
 
