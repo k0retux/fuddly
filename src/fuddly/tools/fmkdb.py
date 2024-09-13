@@ -35,6 +35,7 @@ sys.path.insert(0,parentdir)
 from fuddly.framework.database import Database
 from fuddly.framework.global_resources import get_user_input
 from fuddly.libs.external_modules import *
+from fuddly.framework.plumbing import *
 
 import argparse
 
@@ -169,8 +170,7 @@ def handle_date(date_str):
     return date
 
 
-if __name__ == "__main__":
-
+def main():
     args = parser.parse_args()
 
     fmkdb = args.fmkdb
@@ -221,7 +221,6 @@ if __name__ == "__main__":
     disprove_impact = args.disprove_impact
 
     if decode_data or decode_fbk:
-        from fuddly.framework.plumbing import *
         fmk = FmkPlumbing(quiet=True)
         fmk.get_data_models(fmkDB_update=False)
         dm_list = copy.copy(fmk.dm_list)
@@ -342,3 +341,6 @@ if __name__ == "__main__":
                                          colorized=colorized)
 
     fmkdb.stop()
+
+if __name__ == "__main__":
+    main()

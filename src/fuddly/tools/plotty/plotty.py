@@ -153,6 +153,8 @@ def create_figure_area(
 
 
 def main():
+    arguments.setup_parser()
+    arguments.parse_arguments()
 
     main_area = create_figure_area(
         PlottyOptions.fmkdb[0],
@@ -180,6 +182,4 @@ def main():
 
 
 if __name__ == "__main__":
-    arguments.setup_parser()
-    arguments.parse_arguments()
     main()

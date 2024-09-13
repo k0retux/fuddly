@@ -1,10 +1,10 @@
 
 from matplotlib.axes import Axes
 
-from tools.plotty.plot.PlottyFigure import PlottyFigure
-from tools.plotty.plot.APlottyGeometry import APlottyGeometry
-from tools.plotty.plot.PlottyPoint import PlottyPoint
-from tools.plotty.globals import PlottyGlobals, PlottyOptions
+from fuddly.tools.plotty.plot.PlottyFigure import PlottyFigure
+from fuddly.tools.plotty.plot.APlottyGeometry import APlottyGeometry
+from fuddly.tools.plotty.plot.PlottyPoint import PlottyPoint
+from fuddly.tools.plotty.globals import PlottyGlobals, PlottyOptions
 
 
 class PlottyCurve(APlottyGeometry):

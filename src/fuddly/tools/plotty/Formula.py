@@ -1,5 +1,5 @@
 from matplotlib.dates import date2num
-from fuddly.tools.plotty.cli import parse
+from fuddly.tools.plotty.cli.parse.formula import parse_formula
 
 import cexprtk
 
@@ -66,7 +66,7 @@ class Formula:
 
     @classmethod
     def from_string(cls, formula: str) -> Optional['Formula']:
-        exprs = parse.formula.parse_formula(formula)
+        exprs = parse_formula(formula)
         if exprs is None:
             return None
         lhs, rhs = exprs

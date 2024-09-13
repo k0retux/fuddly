@@ -7,8 +7,8 @@ from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from matplotlib.dates import DateFormatter
 
-from tools.plotty.globals import GridMatch, PlottyOptions
-from tools.plotty.plot.PlottyPoint import PlottyPoint
+from fuddly.tools.plotty.globals import GridMatch, PlottyOptions
+from fuddly.tools.plotty.plot.PlottyPoint import PlottyPoint
 
 
 class PlottyFigure:

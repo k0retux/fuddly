@@ -1,7 +1,7 @@
 
-from tools.plotty.globals import PlottyGlobals, PlottyOptions
-from tools.plotty.plot.PlottyFigure import PlottyFigure
-from tools.plotty.plot.APlottyGeometry import APlottyGeometry
+from fuddly.tools.plotty.globals import PlottyGlobals, PlottyOptions
+from fuddly.tools.plotty.plot.PlottyFigure import PlottyFigure
+from fuddly.tools.plotty.plot.APlottyGeometry import APlottyGeometry
 
 from matplotlib.axes import Axes
 
