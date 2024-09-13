@@ -16,7 +16,7 @@ Description:
   Generate basic data based on a pattern and different parameters.
 
 Reference:
-  :class:`framework.generic_data_makers.g_generic_pattern`
+  :class:`fuddly.framework.generic_data_makers.g_generic_pattern`
 
 Parameters:
     .. code-block:: none
@@ -77,7 +77,7 @@ Description:
   Note: this disruptor includes what tSEP does and goes beyond with respect to separators.
 
 Reference:
-  :class:`framework.generic_data_makers.sd_fuzz_typed_nodes`
+  :class:`fuddly.framework.generic_data_makers.sd_fuzz_typed_nodes`
 
 Parameters:
   .. code-block:: none
@@ -190,11 +190,11 @@ Description:
   If `deep` is set, enable more corruption cases on the data structure, based on the internals of
   each non-terminal node:
 
-    - the minimum and maximum amount of the subnodes of each non-terminal nodes
+    - the minimum and maximum amount of the sub-nodes of each non-terminal nodes
     - ...
 
 Reference:
-  :class:`framework.generic_data_makers.sd_struct_constraints`
+  :class:`fuddly.framework.generic_data_makers.sd_struct_constraints`
 
 Parameters:
   .. code-block:: none
@@ -241,7 +241,7 @@ Description:
   alternate configuration.
 
 Reference:
-  :class:`framework.generic_data_makers.sd_switch_to_alternate_conf`
+  :class:`fuddly.framework.generic_data_makers.sd_switch_to_alternate_conf`
 
 Parameters:
   .. code-block:: none
@@ -282,7 +282,7 @@ Description:
     constraint.
 
 Reference:
-  :class:`framework.generic_data_makers.sd_constraint_fuzz`
+  :class:`fuddly.framework.generic_data_makers.sd_constraint_fuzz`
 
 Parameters:
   .. code-block:: none
@@ -315,7 +315,7 @@ Description:
   provided data.
 
 Reference:
-  :class:`framework.generic_data_makers.sd_fuzz_separator_nodes`
+  :class:`fuddly.framework.generic_data_makers.sd_fuzz_separator_nodes`
 
 Parameters:
   .. code-block:: none
@@ -368,7 +368,7 @@ Description:
   alteration* is performed by this disruptor.
 
 Reference:
-  :class:`framework.generic_data_makers.sd_walk_data_model`
+  :class:`fuddly.framework.generic_data_makers.sd_walk_data_model`
 
 Parameters:
   .. code-block:: none
@@ -441,7 +441,7 @@ Description:
     This operator walk through the solutions of the CSP.
 
 Reference:
-  :class:`framework.generic_data_makers.sd_walk_csp_solutions`
+  :class:`fuddly.framework.generic_data_makers.sd_walk_csp_solutions`
 
 Parameters:
   .. code-block:: none
@@ -470,7 +470,7 @@ Description:
    Add some data within the retrieved input.
 
 Reference:
-  :class:`framework.generic_data_makers.d_add_data`
+  :class:`fuddly.framework.generic_data_makers.d_add_data`
 
 Parameters:
   .. code-block:: none
@@ -505,7 +505,7 @@ Description:
     @op. If no path is provided, the root node will be used.
 
 Reference:
-  :class:`framework.generic_data_makers.d_operate_on_nodes`
+  :class:`fuddly.framework.generic_data_makers.d_operate_on_nodes`
 
 Parameters:
   .. code-block:: none
@@ -545,7 +545,7 @@ Description:
     - Or the changed is performed based on a dictionary provided through the parameter `multi_mod`
 
 Reference:
-  :class:`framework.generic_data_makers.d_modify_nodes`
+  :class:`fuddly.framework.generic_data_makers.d_modify_nodes`
 
 Parameters:
   .. code-block:: none
@@ -585,16 +585,16 @@ CALL - Call Function
 ++++++++++++++++++++
 
 Description:
-    Call the function provided with the first parameter being the :class:`framework.data.Data`
+    Call the function provided with the first parameter being the :class:`fuddly.framework.data.Data`
     object received as input of this disruptor, and optionally with additional parameters
-    if `params` is set. The function should return a :class:`framework.data.Data` object.
+    if `params` is set. The function should return a :class:`fuddly.framework.data.Data` object.
 
     The signature of the function should be compatible with:
 
     ``func(data, *args) --> Data()``
 
 Reference:
-  :class:`framework.generic_data_makers.d_modify_nodes`
+  :class:`fuddly.framework.generic_data_makers.d_modify_nodes`
 
 Parameters:
   .. code-block:: none
@@ -620,7 +620,7 @@ Description:
   produce a new data.
 
 Reference:
-  :class:`framework.generic_data_makers.d_next_node_content`
+  :class:`fuddly.framework.generic_data_makers.d_next_node_content`
 
 Parameters:
   .. code-block:: none
@@ -654,7 +654,7 @@ Description:
            into existence conditions.
 
 Reference:
-  :class:`framework.generic_data_makers.d_fix_constraints`
+  :class:`fuddly.framework.generic_data_makers.d_fix_constraints`
 
 Parameters:
   .. code-block:: none
@@ -677,7 +677,7 @@ Description:
   Switch to an alternate configuration.
 
 Reference:
-  :class:`framework.generic_data_makers.d_switch_to_alternate_conf`
+  :class:`fuddly.framework.generic_data_makers.d_switch_to_alternate_conf`
 
 Parameters:
   .. code-block:: none
@@ -704,7 +704,7 @@ Description:
   Corrupt bits on some nodes of the data model.
 
 Reference:
-  :class:`framework.generic_data_makers.d_corrupt_node_bits`
+  :class:`fuddly.framework.generic_data_makers.d_corrupt_node_bits`
 
 Parameters:
   .. code-block:: none
@@ -732,7 +732,7 @@ Description:
   Corrupt bit at a specific byte.
 
 Reference:
-  :class:`framework.generic_data_makers.d_corrupt_bits_by_position`
+  :class:`fuddly.framework.generic_data_makers.d_corrupt_bits_by_position`
 
 Parameters:
   .. code-block:: none
@@ -755,7 +755,7 @@ Description:
   Call an external program to deal with the data.
 
 Reference:
-  :class:`framework.generic_data_makers.d_call_external_program`
+  :class:`fuddly.framework.generic_data_makers.d_call_external_program`
 
 Parameters:
   .. code-block:: none
@@ -780,7 +780,7 @@ Description:
   Truncate the data (or part of the data) to the provided size.
 
 Reference:
-  :class:`framework.generic_data_makers.d_max_size`
+  :class:`fuddly.framework.generic_data_makers.d_max_size`
 
 Parameters:
   .. code-block:: none
@@ -802,7 +802,7 @@ Description:
   unordered ones).
 
 Reference:
-  :class:`framework.generic_data_makers.d_fuzz_model_structure`
+  :class:`fuddly.framework.generic_data_makers.d_fuzz_model_structure`
 
 Parameters:
   .. code-block:: none
@@ -822,7 +822,7 @@ Description:
   state during the copy.
 
 Reference:
-  :class:`framework.generic_data_makers.d_shallow_copy`
+  :class:`fuddly.framework.generic_data_makers.d_shallow_copy`
 
 .. note:: Random seeds are generally set while loading the data
           model. This disruptor enables you to reset the seeds for the

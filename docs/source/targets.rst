@@ -4,7 +4,7 @@ Generic Targets
 ***************
 
 The following section present some generic targets that inherit from
-:class:`framework.target_helpers.Target`. They can be directly used as is,
+:class:`fuddly.framework.target_helpers.Target`. They can be directly used as is,
 within your project files (refer to :ref:`tuto:project`), or for some
 of them they can also be customized by inheriting from them and
 implementing some intended methods acting as hooks within the generic
@@ -17,13 +17,13 @@ for more information on that topic).
 Additionally, if the generic target support feedback retrieval, the way it
 is retrieved is guided by a feedback timeout and one of the following mode:
 
-- :const:`framework.target_helpers.Target.FBK_WAIT_FULL_TIME`: Wait for the full
+- :const:`fuddly.framework.target_helpers.Target.FBK_WAIT_FULL_TIME`: Wait for the full
   time slot allocated for feedback retrieval
-- :const:`framework.target_helpers.Target.FBK_WAIT_UNTIL_RECV`: Wait until the
+- :const:`fuddly.framework.target_helpers.Target.FBK_WAIT_UNTIL_RECV`: Wait until the
   target has sent something back to us
 
-The feedback timeout is set through :meth:`framework.target_helpers.Target.set_feedback_timeout`,
-while the modes are set through :meth:`framework.target_helpers.Target.set_feedback_mode`.
+The feedback timeout is set through :meth:`fuddly.framework.target_helpers.Target.set_feedback_timeout`,
+while the modes are set through :meth:`fuddly.framework.target_helpers.Target.set_feedback_mode`.
 
 .. note::
    Depending on the generic target, all the feedback modes are not supported.
@@ -32,7 +32,7 @@ NetworkTarget
 =============
 
 Reference:
-  :class:`framework.targets.network.NetworkTarget`
+  :class:`fuddly.framework.targets.network.NetworkTarget`
 
 Description:
   This generic target enables you to interact with a network target in
@@ -41,15 +41,15 @@ Description:
   customized by inheriting from it. Especially, the following methods
   are expected to be overloaded, depending on the user needs:
 
-  - :meth:`framework.targets.network.NetworkTarget._custom_data_handling_before_emission()`
+  - :meth:`fuddly.framework.targets.network.NetworkTarget._custom_data_handling_before_emission()`
     for performing some actions related to the data that will be emitted
     right after.
-  - :meth:`framework.targets.network.NetworkTarget._feedback_handling()` for
+  - :meth:`fuddly.framework.targets.network.NetworkTarget._feedback_handling()` for
     filtering/handling feedback in some ways before transferring it to
     ``fuddly``.
-  - :meth:`framework.targets.network.NetworkTarget.initialize()` for doing
+  - :meth:`fuddly.framework.targets.network.NetworkTarget.initialize()` for doing
     specific actions at target initialization.
-  - :meth:`framework.targets.network.NetworkTarget.terminate()` for doing
+  - :meth:`fuddly.framework.targets.network.NetworkTarget.terminate()` for doing
     specific actions at target termination.
 
 
@@ -63,8 +63,8 @@ Feedback:
 
 
 Supported Feedback Mode:
-  - :const:`framework.target_helpers.Target.FBK_WAIT_FULL_TIME`
-  - :const:`framework.target_helpers.Target.FBK_WAIT_UNTIL_RECV`
+  - :const:`fuddly.framework.target_helpers.Target.FBK_WAIT_FULL_TIME`
+  - :const:`fuddly.framework.target_helpers.Target.FBK_WAIT_UNTIL_RECV`
 
 
 Usage Example:
@@ -109,7 +109,7 @@ Usage Example:
      identifier has to be provided (``fbk_id``), and will be used to
      refer to the interface at different points in time. Main
      interfaces (the first one and the ones defined through
-     :meth:`framework.targets.network.NetworkTarget.register_new_interface()`)
+     :meth:`fuddly.framework.targets.network.NetworkTarget.register_new_interface()`)
      has also an identifier but it is set automatically by the
      ``NetworkTarget``.
 
@@ -118,7 +118,7 @@ Usage Example:
      feedback from all the interfaces; ``sending_delay`` for sending
      data to the target (client mode) or waiting for client connections before
      sending data to them (server mode). Note this method is specific to
-     this target and remains consistent with :meth:`framework.target_helpers.Target.set_feedback_timeout`.
+     this target and remains consistent with :meth:`fuddly.framework.target_helpers.Target.set_feedback_timeout`.
 
 
 
@@ -126,7 +126,7 @@ LocalTarget
 ===========
 
 Reference:
-  :class:`framework.targets.local.LocalTarget`
+  :class:`fuddly.framework.targets.local.LocalTarget`
 
 Description:
   This generic target enables you to interact with a program running
@@ -134,9 +134,9 @@ Description:
   inheriting from it. The following methods are expected to be
   overloaded, depending on the user needs:
 
-  - :meth:`framework.targets.local.LocalTarget.initialize()` for doing
+  - :meth:`fuddly.framework.targets.local.LocalTarget.initialize()` for doing
     specific actions at target initialization.
-  - :meth:`framework.targets.local.LocalTarget.terminate()` for doing
+  - :meth:`fuddly.framework.targets.local.LocalTarget.terminate()` for doing
     specific actions at target termination.
 
 Feedback:
@@ -146,7 +146,7 @@ Feedback:
   some feedback with negative status or even parsed by a user-provided function.
 
 Supported Feedback Mode:
-  - :const:`framework.target_helpers.Target.FBK_WAIT_UNTIL_RECV`
+  - :const:`fuddly.framework.target_helpers.Target.FBK_WAIT_UNTIL_RECV`
 
 
 Usage example:
@@ -154,7 +154,7 @@ Usage example:
       :linenos:
       :emphasize-lines: 3
 
-       import framework.global_resources as gr
+       import fuddly.framework.global_resources as gr
 
        tg = LocalTarget(tmpfile_ext='.zip')
        tg.set_target_path('unzip')
@@ -173,7 +173,7 @@ Usage example:
      the command to execute for interacting with the targeted
      program. This parameter will be put after the file name, but you
      can also add parameters before it through the method
-     :meth:`framework.targets.local.LocalTarget.set_pre_args()`. Note the use
+     :meth:`fuddly.framework.targets.local.LocalTarget.set_pre_args()`. Note the use
      of the variable ``workspace_folder`` that points to the
      ``fuddly`` workspace directory which is typically used when
      temporary files need to be created.
@@ -183,7 +183,7 @@ SSHTarget
 =========
 
 Reference:
-  :class:`framework.targets.ssh.SSHTarget`
+  :class:`fuddly.framework.targets.ssh.SSHTarget`
 
 Description:
   This generic target enables you to interact with a remote target requiring an SSH connection.
@@ -192,8 +192,8 @@ Feedback:
   This target will automatically provide the results of the commands sent through SSH.
 
 Supported Feedback Mode:
-  - :const:`framework.target_helpers.Target.FBK_WAIT_FULL_TIME`
-  - :const:`framework.target_helpers.Target.FBK_WAIT_UNTIL_RECV`
+  - :const:`fuddly.framework.target_helpers.Target.FBK_WAIT_FULL_TIME`
+  - :const:`fuddly.framework.target_helpers.Target.FBK_WAIT_UNTIL_RECV`
 
 Usage Example:
    .. code-block:: python
@@ -206,7 +206,7 @@ PrinterTarget
 =============
 
 Reference:
-  :class:`framework.targets.printer.PrinterTarget`
+  :class:`fuddly.framework.targets.printer.PrinterTarget`
 
 Description:
   This generic target enables you to interact with a IPP server.
@@ -243,7 +243,7 @@ SIMTarget
 =========
 
 Reference:
-  :class:`framework.targets.sim.SIMTarget`
+  :class:`fuddly.framework.targets.sim.SIMTarget`
 
 Description:
   This generic target enables you to interact with a SIM card through a serial line
@@ -254,7 +254,7 @@ Feedback:
   through the serial line used to interact with the SIM card.
 
 Supported Feedback Mode:
-  - :const:`framework.target_helpers.Target.FBK_WAIT_FULL_TIME`
+  - :const:`fuddly.framework.target_helpers.Target.FBK_WAIT_FULL_TIME`
 
 Usage Example:
    .. code-block:: python
@@ -269,7 +269,7 @@ TestTarget
 ==========
 
 Reference:
-  :class:`framework.targets.debug.TestTarget`
+  :class:`fuddly.framework.targets.debug.TestTarget`
 
 Description:
   This generic target enables you to stimulate a virtual target that could be useful for test
@@ -281,8 +281,8 @@ Feedback:
   it could repeat the received data as its feedback.
 
 Supported Feedback Mode:
-  - :const:`framework.target_helpers.Target.FBK_WAIT_FULL_TIME`
-  - :const:`framework.target_helpers.Target.FBK_WAIT_UNTIL_RECV`
+  - :const:`fuddly.framework.target_helpers.Target.FBK_WAIT_FULL_TIME`
+  - :const:`fuddly.framework.target_helpers.Target.FBK_WAIT_UNTIL_RECV`
 
 Usage Example:
    .. code-block:: python
