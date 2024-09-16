@@ -761,7 +761,6 @@ class FmkPlumbing(object):
 
     @EnforceOrder(initial_func=True, final_state="get_projs")
     def get_data_models(self, fmkDB_update=True):
-        # TODO modules: restore loading from fs
         self._get_data_models_from_fs(fmkDB_update)
         self._get_data_models_from_modules(fmkDB_update)
 
@@ -837,7 +836,12 @@ class FmkPlumbing(object):
         if not self._quiet:
             self.print(colorize(FontStyle.BOLD + "="*63+"[ Data Models (python modules) ]==", rgb=Color.FMKINFOGROUP))
         for module in dms:
-            dm_params = self._import_dm_from_module(module, False)
+            try:
+                dm_params = self._import_dm_from_module(module, False)
+            except DataModelDuplicateError as e:
+                self.print(colorize(f"*** The data model '{e.name}' was already defined, ignoring... ***", rgb=Color.WARNING))
+                continue
+
             if dm_params is not None:
                 self._add_data_model(dm_params['dm'], dm_params['tactics'], dm_params['dm_rld_args'], 
                                      reload_dm=False)
@@ -846,7 +850,6 @@ class FmkPlumbing(object):
                 if fmkDB_update:
                     # populate FMK DB
                     self._fmkDB_insert_dm_and_dmakers(dm_params['dm'].name, dm_params['tactics'])
-
             else:
                 self.import_successfull = False
 
@@ -943,8 +946,11 @@ class FmkPlumbing(object):
         data_model = module.data_model
         if data_model.name is None:
             data_model.name = name
+
+        if not reload_dm and self._name2dm.get(data_model.name) is not None:
+            raise DataModelDuplicateError(data_model.name)
+
         self._name2dm[data_model.name] = data_model
-        dm_rld_args = (module_ep, data_model.name)
 
         # TODO should tactics be able to be a list ?
         tactics=None
@@ -965,7 +971,7 @@ class FmkPlumbing(object):
         return {
             'dm': data_model,
             'tactics': tactics,
-            'dm_rld_args': dm_rld_args,
+            'dm_rld_args': (module_ep, data_model.name),
         }
 
     def _add_data_model(self, data_model, strategy, dm_rld_args,
@@ -994,7 +1000,6 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=["get_projs"], final_state="20_load_prj")
     def get_projects(self, fmkDB_update=True):
-        # TODO modules: restore fs imports
         self._get_projects_fs(fmkDB_update)
         self._get_projects_module(fmkDB_update)
 
@@ -1065,7 +1070,11 @@ class FmkPlumbing(object):
             self.print(colorize(FontStyle.BOLD + "="*66+"[ Projects (modules) ]==", rgb=Color.FMKINFOGROUP))
 
         for module in projects:
-            prj_params = self._import_project_from_module(module, False)
+            try:
+                prj_params = self._import_project_from_module(module, False)
+            except ProjectDuplicateError as e:
+                self.print(colorize(f"*** The project '{e.name}' was already defined, ignoring... ***", rgb=Color.WARNING))
+                continue
 
             if prj_params is not None:
                 self._add_project(prj_params["project"], prj_params["target"],
@@ -1189,6 +1198,22 @@ class FmkPlumbing(object):
             traceback.print_exc(file=self.printer)
             self.print('-'*60)
             return None
+
+         
+        # Projects
+        project = module.project
+        if project.name is None:
+            project.name = name
+
+        if not reload_prj and self._name2prj.get(project.name) is not None:
+            raise ProjectDuplicateError(project.name)
+
+        self._name2prj[project.name] = project
+        project.set_exportable_fmk_ops(self._exportable_fmk_ops)
+        if project.evol_processes:
+            for proc in project.evol_processes:
+                built_evol_sc = EvolutionaryScenariosFactory.build(self._exportable_fmk_ops, *proc)
+                project.register_scenarios(built_evol_sc)
             
         # Logger
         logger = None
@@ -1200,18 +1225,6 @@ class FmkPlumbing(object):
         logger.set_external_display(self.external_display)
         if logger.name is None:
             logger.name = name
-         
-        # Projects
-        project = module.project
-        project.set_exportable_fmk_ops(self._exportable_fmk_ops)
-        if project.evol_processes:
-            for proc in project.evol_processes:
-                built_evol_sc = EvolutionaryScenariosFactory.build(self._exportable_fmk_ops, *proc)
-                project.register_scenarios(built_evol_sc)
-        if project.name is None:
-            project.name = name
-
-        self._name2prj[name] = project
 
         # Targets
         target=[]
@@ -1266,12 +1279,11 @@ class FmkPlumbing(object):
                 if prj.name == project.name:
                     break
             else:
-                raise ValueError
+                raise ValueError(porject.name)
             old_prj = prj
             self.prj_list.remove(prj)
             self.prj_list.append(project)
         else:
-            # TODO: Catch this higher up and ignore double imports ?
             raise ValueError("A project with the name '%s' already exist!" % project.name)
 
         if old_prj is not None:

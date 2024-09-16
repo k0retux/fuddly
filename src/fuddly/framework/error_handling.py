@@ -34,12 +34,21 @@ class CrossOverError(PopulationError): pass
 
 class DataModelDefinitionError(Exception): pass
 class DataModelAccessError(Exception): pass
+class DataModelDuplicateError(ValueError):
+    def __init__(self, name=None):
+        super().__init__(f"A data model with the name '{name}' already exist!")
+        self.name = name
 
 class NodeError(Exception): pass
 
 class ProjectDefinitionError(Exception): pass
+class ProjectDuplicateError(ValueError):
+    def __init__(self, name):
+        super().__init__(f"A project with the name '{name}' already exist!")
+        self.name = name
 
 class RegexParserError(DataModelDefinitionError): pass
+
 
 class EscapeError(RegexParserError):
 
