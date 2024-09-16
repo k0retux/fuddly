@@ -1,5 +1,8 @@
 
-import tools.plotty.plotty as sut 
+import tools.plotty.Formula as Formula
+import tools.plotty.cli.parse.formula as parse_formula
+import tools.plotty.cli.parse.range as parse_range
+
 import unittest
 import ddt
 
@@ -21,10 +24,10 @@ class PlottyTest(unittest.TestCase):
     )
     @ddt.unpack
     def test_should_find_all_variables_when_given_well_formed_expression(self, expression, variables=set(), functions=set()):
-        found_variables, found_functions = sut.collect_names(expression)
+        math_expression = Formula.MathExpression(expression)
 
-        self.assertSetEqual(found_variables, variables)
-        self.assertSetEqual(found_functions, functions)
+        self.assertSetEqual(set(math_expression.variable_names), variables)
+        self.assertSetEqual(set(math_expression.function_names), functions)
 
 
     @ddt.data(
@@ -34,10 +37,10 @@ class PlottyTest(unittest.TestCase):
         {'formula': "sqrt((1-a*exp(2t) + w^pi) ~ (sin(2x / pi) + cos(pi/y) ))  "}
     )
     @ddt.unpack
-    def test_should_return_true_when_given_valid_formula(self, formula):
-        _, _, valid_formula = sut.split_formula(formula)
+    def test_should_return_parts_when_given_valid_formula(self, formula):
+        result = parse_formula.parse_formula(formula)
 
-        self.assertTrue(valid_formula)
+        self.assertIsNotNone(result)
 
 
     @ddt.data(
@@ -48,9 +51,9 @@ class PlottyTest(unittest.TestCase):
     )
     @ddt.unpack
     def test_should_return_false_when_given_invalid_formula(self, formula):
-        _, _, valid_formula = sut.split_formula(formula)
+        result = parse_formula.parse_formula(formula)
 
-        self.assertFalse(valid_formula)
+        self.assertIsNone(result)
 
 
     @ddt.data(
@@ -69,57 +72,64 @@ class PlottyTest(unittest.TestCase):
     )
     @ddt.unpack
     def test_should_properly_split_and_trim_when_given_valid_formula(self, formula, left_expr, right_expr):
-        left, right, _ = sut.split_formula(formula)
+        result = parse_formula.parse_formula(formula)
+        self.assertIsNotNone(result)
 
+        left, right = result
         self.assertEqual(left, left_expr)
         self.assertEqual(right, right_expr)
     
 #endregion
     
-#region Interval
+#region Range
+
     @ddt.data(
-        {'interval': "1..4", 'expected_set': set(range(1,4))},
-        {'interval': "0..1", 'expected_set': set(range(1))},
-        {'interval': "547..960", 'expected_set': set(range(547,960))},
+        {'range': ""},
+        {'range': "not..a_range"},
+        {'range': "definitely..not..a_range"},
+        {'range': "10..1"},
+        {'range': "100..1i0"},
+        {'range': "10.."},
+        {'range': "..10"},
     )
     @ddt.unpack
-    def test_should_retrieve_all_integers_given_well_formed_interval(self, interval, expected_set):
-        result = sut.parse_interval(interval)
+    def test_should_output_none_on_invalid_ranges(self, range):
+        result = parse_range.parse_int_range(range)
 
-        self.assertSetEqual(result, expected_set)
+        self.assertIsNone(result)
 
 
     @ddt.data(
-        {'interval': ""},
-        {'interval': "not..an_interval"},
-        {'interval': "definitely..not..an_interval"},
-        {'interval': "10..1"},
-        {'interval': "100..1i0"},
-        {'interval': "10.."},
-        {'interval': "..10"},
+        {'range': "1..4", 'expected_set': set(range(1, 4))},
+        {'range': "0..1", 'expected_set': set(range(0, 1))},
+        {'range': "547..960", 'expected_set': set(range(547,960))},
     )
     @ddt.unpack
-    def test_should_output_empty_set_on_invalid_intervals(self, interval):
-        result = sut.parse_interval(interval)
+    def test_should_retrieve_all_integers_given_well_formed_range(self, range, expected_set):
+        result = parse_range.parse_int_range(range)
+        print(result)
+        self.assertIsNotNone(result)
 
-        self.assertSetEqual(result, set())
+        self.assertSetEqual(set(result), expected_set)
 
 
     @ddt.data(
-        {'interval_union': "1..4", 'expected_set': set(range(1,4))},
-        {'interval_union': "0..5, 5..10", 'expected_set': set(range(0,10))},
-        {'interval_union': "0..120, 100..120", 'expected_set': set(range(120))},
+        {'range_union': "1..4", 'expected_set': set([range(1, 4)])},
+        {'range_union': "0..5, 5..10", 'expected_set': set([range(0, 5), range(5, 10)])},
+        {'range_union': "0..120, 100..120", 'expected_set': set([range(0,120), range(100, 120)])},
         {
-            'interval_union': "0..120, 130..140, 150..200", 
-            'expected_set': set(range(120)).union(set(range(130,140))).union(set(range(150,200)))
+            'range_union': "0..120, 130..140, 150..200", 
+            'expected_set': set([range(0, 120), range(130, 140), range(150, 200)])
         },
     )
     @ddt.unpack
-    def test_should_properly_merge_intervals_of_intervals_union(self, interval_union, expected_set):
-        result = sut.parse_interval_union(interval_union)
-        self.assertSetEqual(result, expected_set)
+    def test_should_find_all_ranges_of_ranges_union(self, range_union, expected_set):
+        result = parse_range.parse_int_range_union(range_union)
+
+        self.assertSetEqual(set(result), expected_set)
 
 #endregion
+
 
     def dummy_test():
         pass
