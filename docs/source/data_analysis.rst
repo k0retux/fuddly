@@ -13,6 +13,8 @@ FmkDB Toolkit
 =============
 
 To interact with the database a convenient toolkit is provided (``<root of fuddly>/tools/fmkdb.py``).
+If you have installed ``fuddly`` through a package manager, you most likely can also run it with the 
+``fmkdb`` command, directly on the command line.
 
 Usage Examples
 --------------
@@ -158,8 +160,10 @@ Hereunder is shown the output of ``<root of fuddly>/tools/fmkdb.py -h``.
 Plotty
 ======
 
-Plotty is a tool used to vizualize data from the fmkDB.
+Plotty is a tool used to visualize data from the fmkDB.
 To interact with the database a convenient toolkit is provided (``<root of fuddly>/tools/plotty/*``).
+If you have installed ``fuddly`` through a package manager, you most likely can also run it with the 
+``plotty`` command, directly on the command line.
 
 Usage Examples
 --------------
@@ -169,7 +173,7 @@ To do that, you can use the plotty CLI, at ``<root of fuddly>/tools/plotty/plott
 
   ./tools/plotty.py -ids '0..100|2'
 
-Plots the SEND_DATE in function of the ID of every message which has en even ID beetween 0 and 100. 
+Plots the SEND_DATE in function of the ID of every message which has en even ID between 0 and 100. 
 A lot of display and formatting options are available to build your own plotting experience ♥‿♥
 
 For further information refer to the help by issuing::
@@ -239,4 +243,4 @@ Given a simple command line::
     
   ./tools/plotty/plotty.py -id '2..12' -l t -al t i -df "%M:%S.%f" -poi 3
 
-It is already possible to vizualize trends, behaviors and anomalies. Comparison becomes easier !
+It is already possible to visualize trends, behaviors and anomalies. Comparison becomes easier !

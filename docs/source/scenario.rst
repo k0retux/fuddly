@@ -47,8 +47,8 @@ Let's begin with a simple example that interconnect 3 steps in a loop without an
    :linenos:
    :emphasize-lines: 4, 9, 20, 22
 
-    from framework.tactics_helpers import Tactics
-    from framework.scenario import *
+    from fuddly.framework.tactics_helpers import Tactics
+    from fuddly.framework.scenario import *
 
     tactics = Tactics()
 
@@ -79,7 +79,7 @@ Note that scenarios can be described:
 In what follows we illustrate how to describe scenarios in the context of the data model ``mydf`` defined in
 ``tuto.py`` (refer to :ref:`dm:mydf` for further explanation on file organization). Describing scenarios
 in the context of a project will be the same except for the scenarios registration step, where the method
-:meth:`framework.project.Project.register_scenarios` will have to be used to make them
+:meth:`fuddly.framework.project.Project.register_scenarios` will have to be used to make them
 available within the framework.
 
 In our example, the registration goes through the special object ``tactics`` (line 4) of ``tuto_strategy.py``
@@ -87,7 +87,7 @@ which is usually used to register the data makers (`disruptors` or
 `generators`) specific to a data model (refer to :ref:`tuto:disruptors` for details), but also used
 to register scenarios as shown in line 20.
 
-From line 9 to 13 we define 4 :class:`framework.scenario.Step`:
+From line 9 to 13 we define 4 :class:`fuddly.framework.scenario.Step`:
 
 - The first one commands the framework to send a data of type ``exist_cond`` (which is the name of a data registered
   in the data model ``mydf``) as well as starting 2 periodic tasks (threaded entities of the framework) that
@@ -119,7 +119,7 @@ From line 9 to 13 we define 4 :class:`framework.scenario.Step`:
 
 The linking of these steps is carried out from the line 15 to 18. Some callbacks are defined and are
 explained in a later section. Then in line 20,
-a :class:`framework.scenario.Scenario` object is created with the name ``ex1`` which is used by ``Fuddly``
+a :class:`fuddly.framework.scenario.Scenario` object is created with the name ``ex1`` which is used by ``Fuddly``
 for naming the `generator` that implements this scenario. It prefixes it with the string ``SC_`` leading to
 the name ``SC_EX1``. The `scenario` is then linked to the initial `step` in line 18.
 
@@ -129,7 +129,7 @@ the name ``SC_EX1``. The `scenario` is then linked to the initial `step` in line
    the scenario (through the ``ScenarioEnv`` object shared between them and described in a later section).
 
    This parameter can be filled with any object. Anyway, the preferable object class to use is
-   :class:`framework.global_resources.UI` which is the container class also used to pass parameters
+   :class:`fuddly.framework.global_resources.UI` which is the container class also used to pass parameters
    to ``Generators`` and ``Disruptors``.
 
 The execution of this scenario will follow the pattern::
@@ -181,9 +181,9 @@ Then after another call::
 Steps
 -----
 
-The main objective of a :class:`framework.scenario.Step` is to command the generation and sending
+The main objective of a :class:`fuddly.framework.scenario.Step` is to command the generation and sending
 of one or multiple data to targets selected in the framework. The data generation depends on
-what has been provided to the parameter ``data_desc`` of a :class:`framework.scenario.Step`. This
+what has been provided to the parameter ``data_desc`` of a :class:`fuddly.framework.scenario.Step`. This
 is described in the section :ref:`sc:dataprocess`.
 
 Note that the data generated in one step will be sent by default to the first loaded target. If the
@@ -197,7 +197,7 @@ for such purpose and are applied to the current target (by the framework) when t
 
 A step can additionally triggers the execution of periodic tasks that will emit some user-specified
 data (note the execution will trigger after feedback retrieval from the framework). This is done by
-providing a list of :class:`framework.scenario.Periodic`
+providing a list of :class:`fuddly.framework.scenario.Periodic`
 to the parameter ``set_periodic``. And, in order to stop previously started periodic tasks,
 the parameter ``clear_periodic`` have to be filled with a list of references on the relevant
 periodic tasks.
@@ -206,7 +206,7 @@ periodic tasks.
   such features.
 
 A step can also start a periodic or a one-shot task whose content could be entirely specified by
-the user. This is done by providing a list of :class:`libs.utils.Task`
+the user. This is done by providing a list of :class:`fuddly.libs.utils.Task`
 to the parameter ``start_tasks``. And, in order to stop previously started periodic tasks,
 the parameter ``stop_tasks`` have to be filled with a list of references on the relevant
 periodic tasks. Details on tasks are provided here :ref:`tuto:tasks`.
@@ -216,7 +216,7 @@ step and executed while the framework is handling the step (that is generating d
 by the step and sending it):
 
 - If some code need to be executed when a step is reached and before any data is processed
-  from it, you can leverage the parameter ``do_before_data_processing`` of the :class:`framework.scenario.Step` class.
+  from it, you can leverage the parameter ``do_before_data_processing`` of the :class:`fuddly.framework.scenario.Step` class.
   It has to be provided with a function satisfying the following signature:
 
       .. code-block:: python
@@ -224,11 +224,11 @@ by the step and sending it):
 
           def before_data_generation_cbk(env, step)
 
-  where ``step`` is a reference to the :class:`framework.scenario.Step` on which the action is
-  executed, and ``env`` is a reference to the scenario environment :class:`framework.scenario.ScenarioEnv`.
+  where ``step`` is a reference to the :class:`fuddly.framework.scenario.Step` on which the action is
+  executed, and ``env`` is a reference to the scenario environment :class:`fuddly.framework.scenario.ScenarioEnv`.
 
 - And if some code need to be executed within a step after data has been processed and just before
-  its sending, you can leverage the parameter ``do_before_sending`` of the :class:`framework.scenario.Step` class.
+  its sending, you can leverage the parameter ``do_before_sending`` of the :class:`fuddly.framework.scenario.Step` class.
   It has to be provided with a function satisfying the following signature:
 
       .. code-block:: python
@@ -239,16 +239,16 @@ by the step and sending it):
   where the parameters have the same meaning as previously.
 
 Note also that a step once executed will display a description related to what it did. You can override
-this description by providing the ``step_desc`` parameter of a :class:`framework.scenario.Step`
+this description by providing the ``step_desc`` parameter of a :class:`fuddly.framework.scenario.Step`
 constructor with a python string.
 
-Finally, some subclasses of :class:`framework.scenario.Step` have been defined to make a scenario description
+Finally, some subclasses of :class:`fuddly.framework.scenario.Step` have been defined to make a scenario description
 easier:
 
-- :class:`framework.scenario.FinalStep`: When such kind of step is reached, it terminates the execution
+- :class:`fuddly.framework.scenario.FinalStep`: When such kind of step is reached, it terminates the execution
   of the scenario. It is equivalent to a ``Step`` with its ``final`` attribute set to ``True``.
 
-- :class:`framework.scenario.NoDataStep`: This kind of step should be used when the purpose is not to
+- :class:`fuddly.framework.scenario.NoDataStep`: This kind of step should be used when the purpose is not to
   generate and send data but only to use other step features (e.g., feedback timeout or mode).
   Besides, the step callback ``do_before_data_processing`` will still be triggered if some
   code need to be executed (but ``do_before_sending`` will not). And all the transitions from
@@ -259,7 +259,7 @@ easier:
 Transitions
 -----------
 
-When two steps are connected together thanks to the method :meth:`framework.scenario.Step.connect_to`
+When two steps are connected together thanks to the method :meth:`fuddly.framework.scenario.Step.connect_to`
 some callbacks can be specified to perform any user-relevant action before crossing the
 transition that links up the two steps, but also to decide if this transition can be crossed.
 They act as transition conditions.
@@ -274,7 +274,7 @@ will be chosen and no other callback will be executed (except all the callbacks 
 selected transition) before a next step need to be selected.
 
 Two types of callback can be associated to a transition through the parameters
-``cbk_after_sending`` and ``cbk_after_fbk`` of the method :meth:`framework.scenario.Step.connect_to`.
+``cbk_after_sending`` and ``cbk_after_fbk`` of the method :meth:`fuddly.framework.scenario.Step.connect_to`.
 A brief explanation is provided below:
 
 ``cbk_after_sending``
@@ -285,13 +285,13 @@ A brief explanation is provided below:
 
   The ``current_step`` is the one that is in progress and which is connected to ``next_step`` by
   the transition containing the current callback. The ``scenario_env`` parameter is a reference to the
-  scenario environment :class:`framework.scenario.ScenarioEnv`, which is shared
+  scenario environment :class:`fuddly.framework.scenario.ScenarioEnv`, which is shared
   between all the steps and transitions of a scenario.
 
-  .. note:: A scenario environment :class:`framework.scenario.ScenarioEnv` provides some information like
-       an attribute ``dm`` which is initialized with the :class:`framework.data_model.DataModel`
+  .. note:: A scenario environment :class:`fuddly.framework.scenario.ScenarioEnv` provides some information like
+       an attribute ``dm`` which is initialized with the :class:`fuddly.framework.data_model.DataModel`
        related to the scenario; or an attribute ``target`` which is initialized with the current target
-       in use (a subclass of :class:`framework.target.Target`).
+       in use (a subclass of :class:`fuddly.framework.target.Target`).
 
        A scenario environment can also be used as a shared memory for all the steps and transitions of a
        scenario.
@@ -305,16 +305,16 @@ A brief explanation is provided below:
 
   This type of callback takes the additional parameter ``feedback`` filled by the framework with
   the target and/or probes feedback further to the current step data sending. It is an object
-  :class:`framework.database.FeedbackGate` that provides the handful method
-  :meth:`framework.database.FeedbackGate.iter_entries` which returns a generator that iterates
+  :class:`fuddly.framework.database.FeedbackGate` that provides the handful method
+  :meth:`fuddly.framework.database.FeedbackGate.iter_entries` which returns a generator that iterates
   over:
 
     - all the feedback entries associated to a specific feedback ``source`` provided as a
       parameter---and for each entry the triplet ``(status, timestamp, content)`` is provided;
     - all the feedback entries if the ``source`` parameter is ``None``---and for each entry the 4-uplet
       ``(source, status, timestamp, content)`` is provided. Note that for such kind of iteration, the
-      :class:`framework.database.FeedbackGate` object can also be directly used as
-      an iterator---avoiding a call to :meth:`framework.database.FeedbackGate.iter_entries`.
+      :class:`fuddly.framework.database.FeedbackGate` object can also be directly used as
+      an iterator---avoiding a call to :meth:`fuddly.framework.database.FeedbackGate.iter_entries`.
 
   This object can also be tested as a boolean object, returning False if there is no feedback at all.
 
@@ -324,7 +324,7 @@ provided to the callbacks registered on the next transitions. These callbacks co
 for an identifier within the feedback and then update the next step to make it sending
 a message with the right identifier.
 
-A step has a property ``node`` that provides the root node (:class:`framework.node.Node`)
+A step has a property ``node`` that provides the root node (:class:`fuddly.framework.node.Node`)
 of the modeled data it contains or `None` if the data associated to the step is a raw data
 (like ``Data('raw data')``). Any callback can then alter the ``node`` of a step in order to update it
 with usefull information. In our example, the ``node`` is updated with the identifier (refer to
@@ -332,7 +332,7 @@ line 10-11 of the following code snippet).
 
 .. note:: Accessing to ``next_step.content`` from a callback will provide `None` in the case the next
    step include a raw data. In the case it includes a ``DataProcess``, ``next_step.content`` will
-   provide the :class:`framework.node.Node` corresponding to the ``DataProcess``'s ``seed`` or
+   provide the :class:`fuddly.framework.node.Node` corresponding to the ``DataProcess``'s ``seed`` or
    ``None`` (if no seed is available or the seed is raw data). In the latter case, the data process would
    not have been carried out at the time of the callback execution, hence the ``None`` value.
    (Refer to the section :ref:`sc:dataprocess`)
@@ -384,7 +384,7 @@ service for instance. This is illustrated in the following example in the lines 
 
     sc2 = Scenario('ex2', anchor=step1)
 
-In line 25 a :class:`framework.scenario.FinalStep` (a step with its ``final`` attribute set to `True`)
+In line 25 a :class:`fuddly.framework.scenario.FinalStep` (a step with its ``final`` attribute set to `True`)
 is used to terminate the scenario as well as all the associated periodic tasks that are still running.
 Note that if a callback set the ``final`` attribute of the ``next_step`` to `True`,
 it will trigger the termination of the scenario if this ``next_step`` is indeed the one that will
@@ -393,12 +393,12 @@ be selected next.
 .. note:: A step with its ``final`` attribute set to ``True`` will never trigger the sending of the
    data it contains.
 
-Remark also the :class:`framework.scenario.NoDataStep` in line 19 (``step3``) which is a step that
+Remark also the :class:`fuddly.framework.scenario.NoDataStep` in line 19 (``step3``) which is a step that
 does not provide data. Thus, the framework won't send anything during the execution of this kind
 of step. Anyway, it is still possible to set or clear some `periodic` in this step (or changing
 feedback timeout, ...)
 
-.. note:: A :class:`framework.scenario.NoDataStep` is actually a step
+.. note:: A :class:`fuddly.framework.scenario.NoDataStep` is actually a step
    on which ``make_blocked()`` has been called on it and where ``make_free()`` do nothing.
 
 The execution of this scenario will follow the pattern::
@@ -440,11 +440,11 @@ The execution of this scenario will follow the pattern::
 
 
 In addition to the callbacks, a transition can be guarded by booleans linked to specific conditions.
-They have to be specified as parameters of the method :meth:`framework.scenario.Step.connect_to`.
+They have to be specified as parameters of the method :meth:`fuddly.framework.scenario.Step.connect_to`.
 The current defined condition is:
 
  - `DataProcess completed` (parameter is ``dp_completed_guard``): which means, for a step hosting
-   a :class:`framework.data.DataProcess`, that if no more data can be issued by it the
+   a :class:`fuddly.framework.data.DataProcess`, that if no more data can be issued by it the
    condition is satisfied, and thus the transition can be crossed.
    This is illustrated by the following example:
 
@@ -465,21 +465,21 @@ The current defined condition is:
 Data Generation Process
 -----------------------
 
-The data produced by a :class:`framework.scenario.Step` or a :class:`framework.scenario.Periodic`
+The data produced by a :class:`fuddly.framework.scenario.Step` or a :class:`fuddly.framework.scenario.Periodic`
 is described by a `data descriptor` which can be:
 
 - a python string referring to the name of a registered data from a data model;
 
-- a :class:`framework.data.Data`;
+- a :class:`fuddly.framework.data.Data`;
 
-- a :class:`framework.data.DataProcess`.
+- a :class:`fuddly.framework.data.DataProcess`.
 
 
-A :class:`framework.data.DataProcess` is composed of a chain of generators and/or disruptors
+A :class:`fuddly.framework.data.DataProcess` is composed of a chain of generators and/or disruptors
 (with or without parameters) and optionally a ``seed`` on which the chain of disruptor will be applied to (if no
 generator is provided at the start of the chain).
 
-A :class:`framework.data.DataProcess` can trigger the end of the scenario if a disruptor in the
+A :class:`fuddly.framework.data.DataProcess` can trigger the end of the scenario if a disruptor in the
 chain yields (meaning it has terminated its job with the provided data: it is *exhausted*).
 If you prefer that the scenario goes on, then
 you have to set the ``auto_regen`` parameter to ``True``. In such a case, when the step embedding
@@ -487,8 +487,8 @@ the data process will be reached again, the framework will rerun the chain. This
 the exhausted disruptor and make new data available to it (by pulling data from preceding data makers
 in the chain or by using the *seed* again).
 
-Additional *data maker chains* can be added to a :class:`framework.data.DataProcess` thanks to
-:meth:`framework.data.DataProcess.append_new_process`. Switching from the current process to the
+Additional *data maker chains* can be added to a :class:`fuddly.framework.data.DataProcess` thanks to
+:meth:`fuddly.framework.data.DataProcess.append_new_process`. Switching from the current process to the
 next one is carried out when the current one is interrupted by a yielding disruptor.
 Note that in the case the data process has its
 ``auto_regen`` parameter set to ``True``, the current interrupted chain won't be rerun until every other
@@ -497,7 +497,7 @@ chain has also get a chance to be executed.
 .. seealso:: Refer to :ref:`tuto:dmaker-chain` for more information on disruptor chaining.
 
 .. note:: It follows the same pattern as the instructions that can set a virtual operator
-   (:ref:`tuto:operator`). It is actually what the method :meth:`framework.plumbing.FmkPlumbing.process_data`
+   (:ref:`tuto:operator`). It is actually what the method :meth:`fuddly.framework.plumbing.FmkPlumbing.process_data`
    takes as parameters.
 
 Here under examples of steps leveraging the different ways to describe their data to send.
@@ -516,12 +516,12 @@ Here under examples of steps leveraging the different ways to describe their dat
 Steps may be configured to change the process of data generation. The following methods are defined
 for such purpose:
 
-- :meth:`framework.scenario.Step.make_blocked` and :meth:`framework.scenario.Step.make_free`
-- :meth:`framework.scenario.Step.set_dmaker_reset` and :meth:`framework.scenario.Step.clear_dmaker_reset`
+- :meth:`fuddly.framework.scenario.Step.make_blocked` and :meth:`fuddly.framework.scenario.Step.make_free`
+- :meth:`fuddly.framework.scenario.Step.set_dmaker_reset` and :meth:`fuddly.framework.scenario.Step.clear_dmaker_reset`
 
 
 Finally, it is possible for a ``Step`` to describe multiple data to send at once;
-meaning the framework will be ordered to use :meth:`framework.target.Target.send_multiple_data`
+meaning the framework will be ordered to use :meth:`fuddly.framework.target.Target.send_multiple_data`
 (refer to :ref:`targets-def`). For that purpose, you have to provide the ``Step`` constructor with
 a list of `data descriptors` (instead of one).
 
@@ -541,7 +541,7 @@ respectively the virtual target ID ``0`` and the virtual target ID ``1``::
   step2 = Step(... vtg_ids=1)
 
 Then, in order to use this scenario in your project you will have to provide a mapping with real targets
-thanks to the method :meth:`framework.project.Project.map_targets_to_scenario`. For instance in the
+thanks to the method :meth:`fuddly.framework.project.Project.map_targets_to_scenario`. For instance in the
 ``tuto`` project (refer to the file ``projects/tuto_proj.py``), a mapping is created for the
 scenario ``ex1``::
 
@@ -561,7 +561,7 @@ Overview
 --------
 
 ``Fuddly`` implements different approaches to assess the robustness of a target with respect to
-its protocol handling, assuming a :class:`framework.scenario.Scenario` has been defined to
+its protocol handling, assuming a :class:`fuddly.framework.scenario.Scenario` has been defined to
 describe the protocol:
 
 1. **Invert the transition conditions**: For each scenario step having guarded transitions, a
@@ -666,7 +666,7 @@ Note also that by default, after the alteration outcomes have been triggered (in
 ``case 2`` step has run), then a reinitialization sequence is initiated, in order to continue with the
 next altered scenario case. The reinitialisation sequence is by default a simple connection
 to the anchor of the scenario. But if the scenario has been provided with
-a reinitialization sequence (through the ``reinit_anchor`` parameter of :class:`framework.scenario.Scenario`),
+a reinitialization sequence (through the ``reinit_anchor`` parameter of :class:`fuddly.framework.scenario.Scenario`),
 this will be used instead. Our scenario example provide such reinitialization sequence
 (line 23-24 of the previous code snippet) and the picture depicts the use of it (all steps that
 follow the corrupted one are connected to it as well as the corrupted one in last resort if

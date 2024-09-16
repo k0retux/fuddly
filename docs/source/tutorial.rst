@@ -14,7 +14,9 @@ Using ``fuddly`` simple UI: ``Fuddly Shell``
 A simple UI---called Fuddly Shell---allows to interact with ``fuddly`` in
 an easy way. In this tutorial we present the usual commands that can
 be used during a fuzzing session. But first we have to launch it by
-running the ``<root of fuddly>/fuddly_shell.py`` script.
+running the ``<root of fuddly>/fuddly_shell.py`` script. (Or just 
+``fuddly_shell`` in the terminal if fuddly has been installed through a 
+package manager)
 
 .. note::
    This script basically does the following:
@@ -141,7 +143,7 @@ experiment without a real target. But let's say you want to fuzz the
    In order to define new targets, look at :ref:`targets-def`.
 
 .. seealso::   
-   ``Target`` (\ :class:`framework.target_helpers.Target`) configuration cannot
+   ``Target`` (\ :class:`fuddly.framework.target_helpers.Target`) configuration cannot
    be changed dynamically within ``Fuddly Shell``. But you can do it
    through any python interpreter, by directly manipulating the
    related ``Target`` object. Look at :ref:`fuddly-advanced`.
@@ -283,7 +285,7 @@ issuing the following command with 3 as <target ID> will invoke the ``unzip`` pr
 
      >> send ZIP 3 5
 
-Note that a :class:`framework.data_model.DataModel` can define any number of data
+Note that a :class:`fuddly.framework.data_model.DataModel` can define any number of data
 types---to model for instance the various atoms within a data format,
 or to represent some specific use cases, ...
 
@@ -738,7 +740,7 @@ You can also reset all the data makers at once by issuing the following command:
 
 
 Another way that can reveal itself to be useful (especially within
-:class:`framework.tactics_helper.Operator`--- refer to
+:class:`fuddly.framework.tactics_helper.Operator`--- refer to
 :ref:`tuto:operator`) is to clone a data maker. By doing so, you have
 a new independent data maker that can be used in another *data maker
 chain*. To create a clone, just add ``#ID`` (where ``ID`` shall be
@@ -778,7 +780,7 @@ already launched, simply issue the command ``load_data_model
 Use an Operator to Send Malformed Data
 --------------------------------------
 
-``Operators`` (\ :class:`framework.tactics_helper.Operator`) are useful
+``Operators`` (\ :class:`fuddly.framework.tactics_helper.Operator`) are useful
 to automate the fuzzing process, that is to automatically collect
 target feedback when its worth it, to automatically save test cases
 that affect the target and to automatically decide on the following
@@ -900,7 +902,7 @@ will need to issue the following commands:
 .. code-block:: python
    :linenos:
 
-   from framework.plumbing import *
+   from fuddly.framework.plumbing import *
 
    fmk = FmkPlumbing()
    fmk.start()
@@ -908,7 +910,7 @@ will need to issue the following commands:
 From now on you can use ``fuddly`` through the
 object ``fmk``. Every commands defined by ``Fuddly Shell`` (refer to
 :ref:`tuto:start-fuzzshell`) are backed by a method of the class
-:class:`framework.plumbing.FmkPlumbing`.
+:class:`fuddly.framework.plumbing.FmkPlumbing`.
 
 Here under some basic commands to launch the project ``tuto``, a virtual testing target and the
 ``ZIP`` data model:
@@ -1077,7 +1079,7 @@ you have the ``xtermcolor`` python library):
    CRC error
 
 The previous commands can be factorized through the method
-:meth:`framework.plumbing.FmkPlumbing.process_data_and_send()`
+:meth:`fuddly.framework.plumbing.FmkPlumbing.process_data_and_send()`
 
 For instance fuzzing the targets 7 and 8 simultaneously (that handle ZIP format) until exhaustion
 of test cases can be done thanks to the following lines:
@@ -1095,8 +1097,8 @@ of test cases can be done thanks to the following lines:
 
     fmk.process_data_and_send(dp, max_loop=-1, tg_ids=[7,8])
 
-We did not discuss all the methods available from :class:`framework.plumbing.FmkPlumbing`but you
-should now be more familiar with :class:`framework.plumbing.FmkPlumbing` and go on with its exploration.
+We did not discuss all the methods available from :class:`fuddly.framework.plumbing.FmkPlumbing`but you
+should now be more familiar with :class:`fuddly.framework.plumbing.FmkPlumbing` and go on with its exploration.
 
 Finally, in order to exit the framework, the following method should be called (otherwise,
 various threads would block the correct termination of the framework)::
@@ -1313,9 +1315,9 @@ is a simple skeleton for ``mydf.py``:
    :linenos:
    :emphasize-lines: 5, 8, 17
 
-   from framework.node import *
-   from framework.value_types import *
-   from framework.data_model import *
+   from fuddly.framework.node import *
+   from fuddly.framework.value_types import *
+   from fuddly.framework.data_model import *
 
    class MyDF_DataModel(DataModel):
 
@@ -1342,22 +1344,22 @@ is a simple skeleton for ``mydf.py``:
           (:ref:`tuto:start-fuzzshell`).
 
 In this skeleton, you can notice that you have to define a class that
-inherits from the :class:`framework.data_model.DataModel` class,
+inherits from the :class:`fuddly.framework.data_model.DataModel` class,
 as seen in line 5. The definition of the data types of a data format
 will be written in python within the method
-:meth:`framework.data_model.DataModel.build_data_model()`.  In
+:meth:`fuddly.framework.data_model.DataModel.build_data_model()`.  In
 the previous listing, the data types (also called *atoms*) are represented by ``d1``, ``d2``
 and ``d3``. Once defined, they should be registered within the data
 model, by calling
-:func:`framework.data_model.DataModel.register()` on them.
+:func:`fuddly.framework.data_model.DataModel.register()` on them.
 
 .. note::
    In the frame of your data model if you want to instantiate atoms from samples:
 
    - Add your samples there: ``<fuddly data folder>/imported_data/<NAME of DM>/``
 
-   - Within the method :meth:`framework.data_model.DataModel.build_data_model()`, and once you defined
-     your atoms, call the method :meth:`framework.data_model.DataModel.register_atom_for_decoding()`
+   - Within the method :meth:`fuddly.framework.data_model.DataModel.build_data_model()`, and once you defined
+     your atoms, call the method :meth:`fuddly.framework.data_model.DataModel.register_atom_for_decoding()`
      to register the atom that will be used to model your samples. (To perform this action the framework
      leverages the node absorption mechanism -- :ref:`tuto:dm-absorption`.)
      For a usage example, refer to the ZIP data model.
@@ -1366,20 +1368,20 @@ model, by calling
      through specific Generators automatically created for you.
 
    If you need more flexibility in this sample absorption process, you should overwrite
-   the method :meth:`framework.data_model.DataModel._atom_absorption_additional_actions()` as illsutrated
+   the method :meth:`fuddly.framework.data_model.DataModel._atom_absorption_additional_actions()` as illsutrated
    by the JPG data model.
 
    Finally, if you need even more flexibility in order to create atoms from samples, because
    node absorption is not satisfactory in your context, then you could overload the method
-   :meth:`framework.data_model.DataModel._create_atom_from_raw_data_specific()`.
+   :meth:`fuddly.framework.data_model.DataModel._create_atom_from_raw_data_specific()`.
    Refer to the JSON data model for an illustration, where this method is overloaded in order to create
    either atoms that represent JSON schemas or atoms that model some JSON data; depending on the JSON
    files provided in ``<fuddly data folder>/imported_data/json``.
 
 .. note::
-   The method :meth:`framework.data_model.DataModel.register_atom_for_decoding()` is also leveraged
-   by the decoding feature of the class :class:`framework.data_model.DataModel`, which is implemented
-   by the method :meth:`framework.data_model.DataModel.decode()`.
+   The method :meth:`fuddly.framework.data_model.DataModel.register_atom_for_decoding()` is also leveraged
+   by the decoding feature of the class :class:`fuddly.framework.data_model.DataModel`, which is implemented
+   by the method :meth:`fuddly.framework.data_model.DataModel.decode()`.
 
    Indeed, the decoding feature will look for a valid atom for performing the absorption of the
    provided binary string in order to be able to decode it. And this search depends on the atoms you
@@ -1545,7 +1547,7 @@ lines 44
 
 
 To register such a description within the data model ``MyDF`` you can
-directly use :func:`framework.data_model.DataModel.register()`
+directly use :func:`fuddly.framework.data_model.DataModel.register()`
 as seen in the previous example. But if you want to access afterwards
 to the defined nodes, you can also transform this description to a
 graph, before registering it, like this:
@@ -1609,7 +1611,7 @@ match the imaginary TestNode data model we just described in section
 .. code-block:: python
    :linenos:
 
-   from framework.plumbing import *
+   from fuddly.framework.plumbing import *
 
    fmk = FmkPlumbing()
 
@@ -1674,7 +1676,7 @@ requirements.
 
 By default, when you perform an absorption, every data model
 constraints will be enforce. If you want to free some ones, you need
-to provide a :class:`framework.node.AbsCsts` object---specifying the constraints you
+to provide a :class:`fuddly.framework.node.AbsCsts` object---specifying the constraints you
 want---when calling the method ``.absorb()``.
 
 Currently, there is four kinds of constraints:
@@ -1705,8 +1707,8 @@ Currently, there is four kinds of constraints:
   ``exists_if_not`` attribute.
 
 
-There is also the shortcuts :class:`framework.node.AbsNoCsts` and
-:class:`framework.node.AbsFullCsts` which respectively set no
+There is also the shortcuts :class:`fuddly.framework.node.AbsNoCsts` and
+:class:`fuddly.framework.node.AbsFullCsts` which respectively set no
 constraints, or all constraints. Thus, if you want to only respect
 ``size`` and ``struct`` constraints, you can provide the object
 ``AbsNoCsts(size=True,struct=True)`` to the ``.absorb()`` method, like
@@ -1718,7 +1720,7 @@ what follows:
 
 In some cases, it could also be useful to only set absorption
 constraints to some nodes. To do so, you can call the method
-:func:`framework.node.Node.enforce_absorb_constraints()` on the
+:func:`fuddly.framework.node.Node.enforce_absorb_constraints()` on the
 related nodes with your chosen constraints. You can also add a
 specific field ``absorb_csts`` (refer to :ref:`dm:keywords` and
 :ref:`dm:patterns`) within a data model description to reach the same
@@ -1831,9 +1833,9 @@ remove the *helper* stuff, while still keeping the
              accordingly to the typed value contents. They are more
              elaborated than the example *helper* function defined
              above. Look at the code
-             :func:`framework.value_types.INT.absorb_auto_helper()`
+             :func:`fuddly.framework.value_types.INT.absorb_auto_helper()`
              and/or
-             :func:`framework.value_types.String.absorb_auto_helper()`
+             :func:`fuddly.framework.value_types.String.absorb_auto_helper()`
              in order to better understand how it works.
 
 Even if ``fuddly`` can handle by itself this classic cases, you
@@ -1874,8 +1876,8 @@ starts with:
 .. code-block:: python
    :linenos:
 
-   from framework.plumbing import *
-   from framework.tactics_helper import *
+   from fuddly.framework.plumbing import *
+   from fuddly.framework.tactics_helper import *
 
    tactics = Tactics()
 
@@ -1883,14 +1885,14 @@ starts with:
    ``Fuddly`` registers for each data model the related
    dynamically-created generators, and if defined, specific
    disruptors. For that purpose, an object
-   :class:`framework.tactics_helper.Tactics` has to be instantiated and
+   :class:`fuddly.framework.tactics_helper.Tactics` has to be instantiated and
    referenced by the global variable ``tactics``.
 
 Then, to define a specific disruptor for your data model you basically
-have to define a subclass of :class:`framework.tactics_helper.Disruptor`
-or :class:`framework.tactics_helper.StatefulDisruptor`, and use the
+have to define a subclass of :class:`fuddly.framework.tactics_helper.Disruptor`
+or :class:`fuddly.framework.tactics_helper.StatefulDisruptor`, and use the
 decorator ``@disruptor`` on it to register it. The first parameter of
-this decorator has to be the :class:`framework.tactics_helper.Tactics`
+this decorator has to be the :class:`fuddly.framework.tactics_helper.Tactics`
 object you declare at the beginning of ``mydf_strategy.py``.
 
 .. code-block:: python
@@ -1907,12 +1909,12 @@ object you declare at the beginning of ``mydf_strategy.py``.
           
 
 For stateful disruptor you also need to implement the method
-:meth:`framework.tactics_helper.StatefulDisruptor.set_seed`. It will be called
+:meth:`fuddly.framework.tactics_helper.StatefulDisruptor.set_seed`. It will be called
 only when the disruptor needs a new data to consume. Thus, it will be
 called the very first time, and then each time the disruptor notify
 ``fuddly`` that it needs a new data to consume. This notification is
-done by calling :meth:`framework.tactics_helper.StatefulDisruptor.handover`
-within :meth:`framework.tactics_helper.StatefulDisruptor.disrupt_data`. The
+done by calling :meth:`fuddly.framework.tactics_helper.StatefulDisruptor.handover`
+within :meth:`fuddly.framework.tactics_helper.StatefulDisruptor.disrupt_data`. The
 following code block illustrates such kind of disruptor:
 
 .. code-block:: python
@@ -1937,9 +1939,9 @@ following code block illustrates such kind of disruptor:
       return data
 
 .. note:: Remark the call to the method
-   :meth:`framework.data.Data.update_from` (line 13). Such
+   :meth:`fuddly.framework.data.Data.update_from` (line 13). Such
    construction comes from the fact ``fuddly`` uses a data-model
-   independent *container* (:class:`framework.data.Data`) for
+   independent *container* (:class:`fuddly.framework.data.Data`) for
    passing modeled data from one sub-system to another. This container
    is also used, for logging purpose, to register the sequence of
    modifications performed on the data (especially the disruptor
@@ -1978,13 +1980,13 @@ stateful disruptor that performs operations on the provided data, for
 each of its node (or for specific nodes of interest), one node at a
 time.
 
-Basically, the class :class:`framework.fuzzing_primitives.ModelWalker`
+Basically, the class :class:`fuddly.framework.fuzzing_primitives.ModelWalker`
 takes a modeled data as a parameter and an instance of a subclass of
-:class:`framework.fuzzing_primitives.NodeConsumerStub`---acting like a
+:class:`fuddly.framework.fuzzing_primitives.NodeConsumerStub`---acting like a
 *visitor* but being able to modify the nodes it visits. This special
 *visitor* has to establish the criteria of the nodes on which it is
 interested in and it has to implement the method
-:meth:`framework.fuzzing_primitives.NodeConsumerStub.consume_node` to
+:meth:`fuddly.framework.fuzzing_primitives.NodeConsumerStub.consume_node` to
 perform the intended modification on such nodes.
 
 .. note:: The *Model Walker* infrastructure will by default also
@@ -2001,7 +2003,7 @@ perform the intended modification on such nodes.
 	  ``True``. Refer to :ref:`dis:generic-disruptors`.
 
 Let's take the following generic consumer
-:class:`framework.fuzzing_primitives.SeparatorDisruption`, that
+:class:`fuddly.framework.fuzzing_primitives.SeparatorDisruption`, that
 replaces, one at a time, every separators of a modeled data with
 another inappropriate separator.
 
@@ -2040,21 +2042,21 @@ In brief, at initialization, we define the kind of nodes on which we
 are interested in doing some operations (line 4-6). We then register
 the list of separator words allowed for this data. The core of our
 modification is implemented within the method
-:meth:`framework.fuzzing_primitives.SeparatorDisruption.consume_node`,
+:meth:`fuddly.framework.fuzzing_primitives.SeparatorDisruption.consume_node`,
 which is called by the model walker each time it encounters a node of
 interest, that is in our case a separator. In this method we change
 the separator node such as it will expand as any separator words
 except the legitimate one. After
-:meth:`framework.fuzzing_primitives.SeparatorDisruption.consume_node` is
+:meth:`fuddly.framework.fuzzing_primitives.SeparatorDisruption.consume_node` is
 called, the model walker will iterate over each defined shapes for
 this node (by issuing continuously
-:meth:`framework.node.Node.get_value()` then
-:meth:`framework.node.Node.unfreeze()`) until exhaustion or after
+:meth:`fuddly.framework.node.Node.get_value()` then
+:meth:`fuddly.framework.node.Node.unfreeze()`) until exhaustion or after
 a predefined limit.
 
 .. note:: Saving and restoring the consumed nodes is performed
           automatically by
-          :class:`framework.fuzzing_primitives.NodeConsumerStub`, but
+          :class:`fuddly.framework.fuzzing_primitives.NodeConsumerStub`, but
           depending on your needs you can override the related
           methods.
 
@@ -2074,7 +2076,7 @@ snippet:
 
 If we put all things together, we can write our *separator* disruptor
 like this (which is a simpler version of the generic disruptor
-:class:`framework.generic_data_makers.d_fuzz_separator_nodes`):
+:class:`fuddly.framework.generic_data_makers.d_fuzz_separator_nodes`):
 
 .. code-block:: python
    :linenos:
@@ -2121,11 +2123,11 @@ show the beginning of ``generic/standard_proj.py``:
    :linenos:
    :emphasize-lines: 7, 12-13, 38
 
-   from framework.project import *
-   from framework.monitor import *
-   from framework.operator_helpers import *
-   from framework.plumbing import *
-   import framework.global_resources as gr
+   from fuddly.framework.project import *
+   from fuddly.framework.monitor import *
+   from fuddly.framework.operator_helpers import *
+   from fuddly.framework.plumbing import *
+   import fuddly.framework.global_resources as gr
 
    project = Project()
    project.default_dm = ['mydf', 'zip']
@@ -2163,14 +2165,14 @@ show the beginning of ``generic/standard_proj.py``:
 
 A project file should contain at a minimum:
 
-- a :class:`framework.project.Project` object (referenced by a variable ``project``)
-- a :class:`framework.logger.Logger` object (:ref:`logger-def`, referenced by a variable ``logger``)
+- a :class:`fuddly.framework.project.Project` object (referenced by a variable ``project``)
+- a :class:`fuddly.framework.logger.Logger` object (:ref:`logger-def`, referenced by a variable ``logger``)
 
 and optionally:
 
 - targets (referenced by a variable ``targets``, :ref:`targets-def`)
 - scenarios (:ref:`scenario-infra`) that can be registered into a project through the method
-  :meth:`framework.project.Project.register_scenarios`
+  :meth:`fuddly.framework.project.Project.register_scenarios`
 - probes (:ref:`tuto:probes`)
 - tasks (:ref:`tuto:tasks`)
 - operators (:ref:`tuto:operator`)
@@ -2179,10 +2181,10 @@ A default data model or a list of data models can be added to the
 project through its attribute ``default_dm``. ``fuddly`` will use this
 if the project is directly launched, that is either by issuing the
 command ``run_project`` in the ``fuddly`` shell or by using the
-method :meth:`framework.plumbing.FmkPlumbing.run_project()` through any
+method :meth:`fuddly.framework.plumbing.FmkPlumbing.run_project()` through any
 ``python`` interpreter.
 
-.. note:: An :class:`framework.target_helpers.EmptyTarget` is automatically
+.. note:: An :class:`fuddly.framework.target_helpers.EmptyTarget` is automatically
           added by ``fuddly`` to any project, for dry runs. So it does
           not matter if you don't define a target at the beginning.
 
@@ -2199,9 +2201,9 @@ the project file.
 Within the tutorial project (``projects/tuto_proj.py``), multiple
 targets have been defined:
 
-- three different :class:`framework.targets.local.LocalTarget` for interacting with local programs;
-- a :class:`framework.targets.printer.PrinterTarget` to communicate with a CUPS server;
-- and finally a :class:`framework.targets.network.NetworkTarget` that is setup
+- three different :class:`fuddly.framework.targets.local.LocalTarget` for interacting with local programs;
+- a :class:`fuddly.framework.targets.printer.PrinterTarget` to communicate with a CUPS server;
+- and finally a :class:`fuddly.framework.targets.network.NetworkTarget` that is setup
   with two interfaces from which data can be sent to (and feedback
   retrieved from), plus an additional feedback source.
 
@@ -2229,15 +2231,15 @@ In order to play with the routing you can use the specific data ``4TG1`` and
              targets that you can use directly or inherit from.
 
 If you need to implement your own ``Target`` you have at least to
-inherit from :class:`framework.target_helpers.Target` and overload the method
-:meth:`framework.target_helpers.Target.send_data()` which is called by
+inherit from :class:`fuddly.framework.target_helpers.Target` and overload the method
+:meth:`fuddly.framework.target_helpers.Target.send_data()` which is called by
 ``fuddly`` each time data is sent to the target. Additionally,
-implementing :meth:`framework.target_helpers.Target.send_multiple_data()`
+implementing :meth:`fuddly.framework.target_helpers.Target.send_multiple_data()`
 enables to send various data simultaneously to the target. If we take
 the previous ``NetworkTarget`` example, all the registered interfaces can be
 stimulated at once through this method.
 
-.. seealso:: Other methods of :class:`framework.target_helpers.Target` are
+.. seealso:: Other methods of :class:`fuddly.framework.target_helpers.Target` are
              defined to be overloaded. Look at their descriptions to
              learn more about what can be customized.
 
@@ -2246,7 +2248,7 @@ stimulated at once through this method.
 Defining the Logger
 +++++++++++++++++++
 
-You should declare a :class:`framework.logger.Logger` in your project
+You should declare a :class:`fuddly.framework.logger.Logger` in your project
 file, and specify the parameters that make sense for your
 situation. The ``Logger`` will then be used by ``fuddly`` for keeping
 history of your interaction with the target (e.g., data sent, feedback
@@ -2284,11 +2286,11 @@ Some parameters allows to customize the behavior of the logger, such as:
   This parameter does not interfere with data recording within ``FmkDB``.
 
 - ``explicit_data_recording``: which is used for logging outcomes further to
-  an :class:`framework.operator_helpers.Operator` instruction. If set to
+  an :class:`fuddly.framework.operator_helpers.Operator` instruction. If set to
   ``True``, the operator would have to state explicitly if it wants
   the just emitted data to be recorded. Such instruction is typically
   used within its method
-  :meth:`framework.operator_helpers.Operator.do_after_all()`, where the
+  :meth:`fuddly.framework.operator_helpers.Operator.do_after_all()`, where the
   Operator can take its decision after the observation of the target
   feedback and/or probes outputs.
 
@@ -2307,7 +2309,7 @@ Defining Operators
 
 In order to automatize what a human operator could perform to interact
 with one or more targets, the abstracted class
-:class:`framework.operator_helpers.Operator` can be inherited. The purpose
+:class:`fuddly.framework.operator_helpers.Operator` can be inherited. The purpose
 of this class is to give you the opportunity to plan the operations
 you want to perform on the target (data type to send, type of
 modifications to perform on data before sending it, and so on). Thus,
@@ -2336,7 +2338,7 @@ process.
 
 
 To define an operator you have to define a class that inherits from
-:class:`framework.operator_helpers.Operator`. Then, to register it within
+:class:`fuddly.framework.operator_helpers.Operator`. Then, to register it within
 your project, the decorator ``@operator`` has to be used with at least
 the reference of the project as the first parameter.
 
@@ -2379,15 +2381,15 @@ Here under is presented a skeleton of an Operator:
 
 
 
-The methods :meth:`framework.operator_helpers.Operator.start()` and
-:meth:`framework.operator_helpers.Operator.stop()` are the obvious ones
+The methods :meth:`fuddly.framework.operator_helpers.Operator.start()` and
+:meth:`fuddly.framework.operator_helpers.Operator.stop()` are the obvious ones
 that you have to implement if you want to customize the
 initialization and termination of your operator.
 
 The core of your operator will be implemented within the method
-:meth:`framework.operator_helpers.Operator.plan_next_operation()` which
+:meth:`fuddly.framework.operator_helpers.Operator.plan_next_operation()` which
 will order ``fuddly`` to perform some operations based on the
-:meth:`framework.operator_helpers.Operation` object that you will return
+:meth:`fuddly.framework.operator_helpers.Operation` object that you will return
 to it. A basic example illustrating the implementation of this method
 is given here under:
 
@@ -2409,7 +2411,7 @@ We instruct ``fuddly`` to execute a *disruptor chain* made of the
 ``SEPARATOR`` *generator* (transparently created by ``fuddly`` from
 the eponymous data type in the data model ``mydf``) and the
 ``tSTRUCT`` *disruptor* with some parameters (given through
-:class:`framework.tactics_helpers.UI`). And we handle the case when the
+:class:`fuddly.framework.tactics_helpers.UI`). And we handle the case when the
 *chain* has been drained. More precisely, we decide to give up when
 ``fuddly`` inform us that the stateful disruptor ``tSTRUCT`` has fully
 consumed its input, and cannot provide more outputs without
@@ -2421,7 +2423,7 @@ re-enabling a previous stateful disruptor or in our case the
              insight into disruptors.
 
 Finally, the method
-:meth:`framework.operator_helpers.Operator.do_after_all()` is executed
+:meth:`fuddly.framework.operator_helpers.Operator.do_after_all()` is executed
 by ``fuddly`` after the planned operation has been handled, in order
 for the operator to provide some last-minute instructions related to
 the previous operation. Typically, it is the moment where the operator
@@ -2434,10 +2436,10 @@ the following section :ref:`tuto:probes`.
 
 	  - ``fmk_ops``: an object that exports ``fuddly``'s specific
             methods to the operator, more precisely it is a reference
-            to :class:`framework.plumbing.ExportableFMKOps`.
+            to :class:`fuddly.framework.plumbing.ExportableFMKOps`.
 
 	  - ``dm``: a reference to the current
-            :class:`framework.data_model.DataModel`.
+            :class:`fuddly.framework.data_model.DataModel`.
 
 	  - ``monitor``: a reference to the monitor subsystem, in
             order to start/stop probes and get status from them.
@@ -2449,7 +2451,7 @@ the following section :ref:`tuto:probes`.
 	  - ``fmk_feedback``: an object that provides feedback from
             ``fuddly`` to the operator about the last operation it
             performed. The class of this object is
-            :class:`framework.plumbing.FmkFeedback`.
+            :class:`fuddly.framework.plumbing.FmkFeedback`.
 
 
 .. _tuto:probes:
@@ -2458,10 +2460,10 @@ Defining Probes
 +++++++++++++++
 
 Probes are special objects that have to implement the method
-:meth:`framework.monitor.Probe.main()` which is called either continuously
+:meth:`fuddly.framework.monitor.Probe.main()` which is called either continuously
 (the basic *probe*) or after a specific event in the sending process (the *blocking
 probes*). In order to be started, they have to be first associated to one or more
-:class:`framework.target_helpers.Target` of the project. Then, when such a target is started,
+:class:`fuddly.framework.target_helpers.Target` of the project. Then, when such a target is started,
 ``fuddly`` take care of running the probes.
 
 Probes are executed independently from each other (they run within their own thread). They
@@ -2474,7 +2476,7 @@ Depending on the kind of probes you want, you will have to choose
 between two decorators:
 
 - ``@probe`` for basic probes which run continuously once started. Note there is a delay between each
-  call to :meth:`framework.monitor.Probe.main()` which is configurable.
+  call to :meth:`fuddly.framework.monitor.Probe.main()` which is configurable.
 
 - ``@blocking_probe`` for probe which will be run just once after each
   data emission (default) or after each target feedback retrieval. The default behaviour can be
@@ -2531,8 +2533,8 @@ information from the target is given here under:
 
 
 .. note::
-    You can implement :meth:`framework.monitor.Probe.start` and/or
-    :meth:`framework.monitor.Probe.stop` methods if
+    You can implement :meth:`fuddly.framework.monitor.Probe.start` and/or
+    :meth:`fuddly.framework.monitor.Probe.stop` methods if
     you need to do some stuff during their initialization and termination.
 
 The return status of a probe has to comply with some rules in order to get ``fuddly``
@@ -2544,7 +2546,7 @@ handle status as expected. Status rules are described below:
 
     1. logging feedback from the probes as well as the status they return to facilitate further
        investigation;
-    2. trying to recover the target, by calling :meth:`framework.target_helpers.Target.recover_target`.
+    2. trying to recover the target, by calling :meth:`fuddly.framework.target_helpers.Target.recover_target`.
 
 To quickly retrieve the data that negatively impacted a target and which
 have been recorded within the FmkDB (refer to :ref:`logger-def`) you can
@@ -2554,7 +2556,7 @@ status has been recorded, coming either from:
 
 - a probe;
 - an operator (more about that in what follows);
-- or the :class:`framework.target_helpers.Target` itself (refer to the error status
+- or the :class:`fuddly.framework.target_helpers.Target` itself (refer to the error status
   that are transmitted by the generic targets---:ref:`targets`).
 
 
@@ -2586,7 +2588,7 @@ containing the probe itself and the delay expressed in seconds. Here under an ex
 
 Finally, you can also leverage probes from within an Operator. If you want to get a status
 from probes each time your planned operations have been executed by ``fuddly``, you can do
-it within the method :meth:`framework.operator_helpers.Operator.do_after_all()`.
+it within the method :meth:`fuddly.framework.operator_helpers.Operator.do_after_all()`.
 Let's illustrate this with the following example:
 
 .. code-block:: python
@@ -2639,11 +2641,11 @@ record the data (line 26).
     the data, otherwise it will never be logged.
 
 Finally we convey the operator verdict to
-``fuddly`` through the :class:`framework.operator_helpers.LastInstruction` object
+``fuddly`` through the :class:`fuddly.framework.operator_helpers.LastInstruction` object
 it returns, by setting a negative status and some feedback on it.
 
 .. note:: Setting a negative status through
-   :class:`framework.operator_helpers.LastInstruction` will make ``fuddly`` act the same
+   :class:`fuddly.framework.operator_helpers.LastInstruction` will make ``fuddly`` act the same
    as for a negative status from a probe. In addition, the operator will be shutdown.
 
 .. _tuto:tasks:
@@ -2655,22 +2657,22 @@ Contrary to probes (:ref:`tuto:probes`), Tasks are not sequenced by the framewor
 They can be periodic or one-shot and their logic need to be defined entirely by the user.
 They can be started either when a target is launched (see below) or by a step of a scenario (refer to :ref:`sc:steps`).
 
-To implement the logic of the task, you need to inherit from :class:`libs.utils.Task` and to
+To implement the logic of the task, you need to inherit from :class:`fuddly.libs.utils.Task` and to
 implement the :meth:`__call__` method. This method is then called either once or with a period that
 is specified in the constructor.
 When run by the framework this task has some attributes automatically filled that you can leverage
 in your logic:
 
-- :attr:`libs.utils.Task.feedback_gate`: provide an access to the last 10 seconds of feedback.
-  (:class:`framework.database.FeedbackGate`)
-- :attr:`libs.utils.Task.dm`: current loaded data model.
-- :attr:`libs.utils.Task.targets`: enabled targets.
-- :attr:`libs.utils.Task.fmkops`: provide access to some framework operations
-  (:class:`framework.plumbing.ExportableFMKOps`).
+- :attr:`fuddly.libs.utils.Task.feedback_gate`: provide an access to the last 10 seconds of feedback.
+  (:class:`fuddly.framework.database.FeedbackGate`)
+- :attr:`fuddly.libs.utils.Task.dm`: current loaded data model.
+- :attr:`fuddly.libs.utils.Task.targets`: enabled targets.
+- :attr:`fuddly.libs.utils.Task.fmkops`: provide access to some framework operations
+  (:class:`fuddly.framework.plumbing.ExportableFMKOps`).
 
 Moreover, you could also print some information in another terminal window dedicated to the task.
-For such case, you should set the parameter ``new_window`` of the :class:`libs.utils.Task` constructor to
-``True``, then use a specific API composed of :meth:`libs.utils.Task.print` and :meth:`libs.utils.Task.print_nl`.
+For such case, you should set the parameter ``new_window`` of the :class:`fuddly.libs.utils.Task` constructor to
+``True``, then use a specific API composed of :meth:`fuddly.libs.utils.Task.print` and :meth:`fuddly.libs.utils.Task.print_nl`.
 
 Like with probes (:ref:`tuto:probes`), you can associate tasks to ``targets`` in order to execute
 them when a target is enabled. But they need to be instantiated first (while probes are only referenced

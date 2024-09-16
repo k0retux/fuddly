@@ -1,0 +1,37 @@
+[project]
+name = "fuddly"
+version = "0.30"
+authors = [
+  { name="Eric Lacombe", email="eric.lacombe@security-labs.org" },
+]
+description = "Fuzzing and Data Manipulation Framework (for GNU/Linux)"
+readme = "README.rst"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dynamic = ["dependencies"]
+
+[options]
+include_package_data = true
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.package-data]
+fuddly = ["framework/fmk_db.sql"]
+
+[project.scripts]
+fuddly_shell = "fuddly.fuddly_shell:main"
+fmkdb = "fuddly.tools.fmkdb:main"
+plotty = "fuddly.tools.plotty:main"
+
+[project.urls]
+"Homepage" = "https://github.com/k0retux/fuddly"
+"Bug Tracker" = "https://github.com/k0retux/fuddly/issues"
+"Documentation" = "http://fuddly.readthedocs.io"
+

@@ -13,7 +13,7 @@ The *Knowledge Infrastructure* enables to:
   the hardware, and so on) in your project file (refer to :ref:`kn:adding`);
 
 - and to leverage this knowledge in relevant fuddly subsystems or in user-defined scenarios,
-  disruptors, ... (refer to :ref:`kn:leverage`). For instance, fuzzing a :class:`framework.value_types.Filename`
+  disruptors, ... (refer to :ref:`kn:leverage`). For instance, fuzzing a :class:`fuddly.framework.value_types.Filename`
   typed-node with the disruptor tTYPE will adapt the generated data relative to the OS, Language,
   and so on if this information is available.
 
@@ -28,7 +28,7 @@ Get Knowledge about the Targets Under Test
 Defining a Feedback Handler to Create Knowledge from Targets' and Probes' Feedback
 ==================================================================================
 
-The :class:`knwoledge.feedback_handler.FeedbackHandler` class provides the frame to create knowledge based on
+The :class:`fuddly.knowledge.feedback_handler.FeedbackHandler` class provides the frame to create knowledge based on
 feedback retrieved by fuddly (essentially from targets themselves and the probes that
 monitor them).
 
@@ -61,18 +61,18 @@ This handler is defined as follows:
                 return OS.Windows
 
 
-It implements the method :meth:`knowledge.feedback_handler.FeedbackHandler.extract_info_from_feedback` that is
+It implements the method :meth:`fuddly.knowledge.feedback_handler.FeedbackHandler.extract_info_from_feedback` that is
 called each time feedback are retrieved from a target or a probe with parameters enabling you to process it,
 and return information about the target (in this case either :const:`OS.Linux` or :const:`OS.Windows`)
 if it can or ``None`` if it is not able.
 
-The information concept is implemented through the class :class:`framework.knowledge.information.Info`,
+The information concept is implemented through the class :class:`fuddly.framework.knowledge.information.Info`,
 and provide specific methods to increase
 or decrease the confidence that we have about a specific information. Each time a feedback handler return
 specific information like ``OS.Linux`` for instance, the framework would increase the confidence it has on it
-through the method :meth:`framework.knowledge.information.Info.increase_trust`. Note that at any
+through the method :meth:`fuddly.framework.knowledge.information.Info.increase_trust`. Note that at any
 given time you can look at the current confidence level for any information by using the
-:meth:`framework.knowledge.information.Info.show_trust` method.
+:meth:`fuddly.framework.knowledge.information.Info.show_trust` method.
 
 The accumulation of information and the computed confidence level for each piece of it make up the
 knowledge on the targets under test.
@@ -91,17 +91,17 @@ That will provide something similar to the following output::
 
 As dealing with feedback can be specific to your projects, you can obviously define
 your own feedback handlers for matching your specific needs. In order to do that you will have to
-create a new class that inherits from :class:`knwoledge.feedback_handler.FeedbackHandler`
-and implements your specific behaviors. Then you will only need to register it in your :class:`framework.project.Project`
+create a new class that inherits from :class:`fuddly.knowledge.feedback_handler.FeedbackHandler`
+and implements your specific behaviors. Then you will only need to register it in your :class:`fuddly.framework.project.Project`
 in order for its methods to be called automatically by fuddly at the relevant times.
 
 .. note::
     Even if initial purpose of feedback handlers is to create knowledge from retrieved information, it can be
     used to trigger other kinds of actions that fit your needs.
 
-:class:`knowledge.feedback_handler.FeedbackHandler` provides other methods that could be useful to overload
+:class:`fuddly.knowledge.feedback_handler.FeedbackHandler` provides other methods that could be useful to overload
 to extract more information about the context of the feedback. Indeed, the method
-:meth:`knowledge.feedback_handler.FeedbackHandler.notify_data_sending` is called each time data is sent
+:meth:`fuddly.knowledge.feedback_handler.FeedbackHandler.notify_data_sending` is called each time data is sent
 and provide you with useful contextual information:
 
 - the sent data;
@@ -120,7 +120,7 @@ be something known from the beginning. If you know you are dealing with a C prog
 is executed on an x86 architecture, then you would like to provide this knowledge right ahead, so
 that fuddly could leverage them to optimize its fuzzing for instance.
 
-In order to provide such knowledge, you simply have to call :meth:`framework.project.Project.add_knowledge`
+In order to provide such knowledge, you simply have to call :meth:`fuddly.framework.project.Project.add_knowledge`
 in your project file with your knowledge on the targets.
 
 .. code-block:: python
@@ -136,14 +136,14 @@ Information Categories and How to Define More
 
 The current information categories are:
 
-- :class:`framework.knowledge.information.OS`
-- :class:`framework.knowledge.information.Hardware`
-- :class:`framework.knowledge.information.Language`
-- :class:`framework.knowledge.information.InputHandling`
+- :class:`fuddly.framework.knowledge.information.OS`
+- :class:`fuddly.framework.knowledge.information.Hardware`
+- :class:`fuddly.framework.knowledge.information.Language`
+- :class:`fuddly.framework.knowledge.information.InputHandling`
 
 Depending on your project, you may want to define new specific information categories. In such case,
 You will simply have to define new python enumeration that inherits from
-:class:`framework.knowledge.information.Info` in your project file. Then, you would need to use them
+:class:`fuddly.framework.knowledge.information.Info` in your project file. Then, you would need to use them
 in specific feedback handler (refer to :ref:`kn:handle-fbk`) in order to leverage them within
 specific scenarios or disruptors for instance.
 
@@ -160,10 +160,10 @@ Automatic Fuddly Adaptation to Knowledge
 Currently, data models that use the following node types
 within their description will benefit from knowledge about the targets under test:
 
-- :class:`framework.value_types.String`: Specific cases related to :class:`framework.knowledge.information.Language`
+- :class:`fuddly.framework.value_types.String`: Specific cases related to :class:`fuddly.framework.knowledge.information.Language`
   are added.
-- :class:`framework.value_types.Filename`: Specific cases related to
-  :class:`framework.knowledge.information.OS` and :class:`framework.knowledge.information.Language`
+- :class:`fuddly.framework.value_types.Filename`: Specific cases related to
+  :class:`fuddly.framework.knowledge.information.OS` and :class:`fuddly.framework.knowledge.information.Language`
   are added.
 
 If knowledge on the targets are provided to the framework (either from the project file or because
@@ -182,12 +182,12 @@ Knowledge on the targets under tests can be used by various components of the fr
 available to the user in various context like:
 
 - Scenario specification (refer to :ref:`scenario-infra`) where all callbacks can access the knowledge pool through the scenario environment
-  (:class:`framework.scenario.ScenarioEnv`) under the attribute `knowledge_source`.
+  (:class:`fuddly.framework.scenario.ScenarioEnv`) under the attribute `fuddly.knowledge_source`.
 
 - Disruptors or generators implementation (refer to :ref:`tuto:disruptors`), through the attribute
-  :attr:`framework.tactics_helpers.DataMaker.knowledge_source`.
+  :attr:`fuddly.framework.tactics_helpers.DataMaker.knowledge_source`.
 
 - Data model description (refer to :ref:`data-model`), through the attribute
-  :attr:`framework.data_model.DataModel.knowledge_source`.
+  :attr:`fuddly.framework.data_model.DataModel.knowledge_source`.
 
-These parameters refer to a global object defined for the project as a set of :class:`framework.knowledge.information.Info`.
+These parameters refer to a global object defined for the project as a set of :class:`fuddly.framework.knowledge.information.Info`.

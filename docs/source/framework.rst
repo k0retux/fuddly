@@ -5,7 +5,7 @@ framework package
 framework.basic_primitives module
 ---------------------------------
 
-.. automodule:: framework.basic_primitives
+.. automodule:: fuddly.framework.basic_primitives
     :members:
     :undoc-members:
     :show-inheritance:
@@ -13,7 +13,7 @@ framework.basic_primitives module
 framework.data module
 ---------------------
 
-.. automodule:: framework.data
+.. automodule:: fuddly.framework.data
     :members:
     :undoc-members:
     :private-members:
@@ -24,7 +24,7 @@ framework.data module
 framework.data_model module
 ---------------------------
 
-.. automodule:: framework.data_model
+.. automodule:: fuddly.framework.data_model
     :members:
     :undoc-members:
     :private-members:
@@ -35,7 +35,7 @@ framework.data_model module
 framework.node module
 ---------------------
 
-.. automodule:: framework.node
+.. automodule:: fuddly.framework.node
     :members:
     :undoc-members:
     :private-members:
@@ -46,7 +46,7 @@ framework.node module
 framework.node_builder module
 -----------------------------
 
-.. automodule:: framework.node_builder
+.. automodule:: fuddly.framework.node_builder
     :members:
     :undoc-members:
     :private-members:
@@ -58,7 +58,7 @@ framework.node_builder module
 framework.value_types module
 ----------------------------
 
-.. automodule:: framework.value_types
+.. automodule:: fuddly.framework.value_types
     :members:
     :undoc-members:
     :show-inheritance:
@@ -70,7 +70,7 @@ framework.value_types module
 framework.generic_data_makers module
 ------------------------------------
 
-.. automodule:: framework.generic_data_makers
+.. automodule:: fuddly.framework.generic_data_makers
     :members:
     :undoc-members:
     :show-inheritance:
@@ -82,7 +82,7 @@ framework.generic_data_makers module
 framework.target_helpers module
 -------------------------------
 
-.. automodule:: framework.target_helpers
+.. automodule:: fuddly.framework.target_helpers
     :members:
     :undoc-members:
     :show-inheritance:
@@ -93,7 +93,7 @@ framework.target_helpers module
 framework.targets.network module
 --------------------------------
 
-.. automodule:: framework.targets.network
+.. automodule:: fuddly.framework.targets.network
     :members:
     :undoc-members:
     :show-inheritance:
@@ -104,7 +104,7 @@ framework.targets.network module
 framework.targets.local module
 ------------------------------
 
-.. automodule:: framework.targets.local
+.. automodule:: fuddly.framework.targets.local
     :members:
     :undoc-members:
     :show-inheritance:
@@ -115,7 +115,7 @@ framework.targets.local module
 framework.targets.sim module
 ----------------------------
 
-.. automodule:: framework.targets.sim
+.. automodule:: fuddly.framework.targets.sim
     :members:
     :undoc-members:
     :show-inheritance:
@@ -126,7 +126,7 @@ framework.targets.sim module
 framework.targets.ssh module
 ----------------------------
 
-.. automodule:: framework.targets.ssh
+.. automodule:: fuddly.framework.targets.ssh
     :members:
     :undoc-members:
     :show-inheritance:
@@ -137,7 +137,7 @@ framework.targets.ssh module
 framework.targets.printer module
 --------------------------------
 
-.. automodule:: framework.targets.printer
+.. automodule:: fuddly.framework.targets.printer
     :members:
     :undoc-members:
     :show-inheritance:
@@ -148,7 +148,7 @@ framework.targets.printer module
 framework.targets.debug module
 ------------------------------
 
-.. automodule:: framework.targets.debug
+.. automodule:: fuddly.framework.targets.debug
     :members:
     :undoc-members:
     :show-inheritance:
@@ -159,7 +159,7 @@ framework.targets.debug module
 framework.project module
 ------------------------
 
-.. automodule:: framework.project
+.. automodule:: fuddly.framework.project
     :members:
     :undoc-members:
     :show-inheritance:
@@ -171,7 +171,7 @@ framework.project module
 framework.operator_helpers module
 ---------------------------------
 
-.. automodule:: framework.operator_helpers
+.. automodule:: fuddly.framework.operator_helpers
     :members:
     :undoc-members:
     :show-inheritance:
@@ -183,7 +183,7 @@ framework.operator_helpers module
 framework.logger module
 -----------------------
 
-.. automodule:: framework.logger
+.. automodule:: fuddly.framework.logger
    :members:
    :undoc-members:
    :show-inheritance:
@@ -194,7 +194,7 @@ framework.logger module
 framework.monitor module
 ------------------------
 
-.. automodule:: framework.monitor
+.. automodule:: fuddly.framework.monitor
    :members:
    :undoc-members:
    :show-inheritance:
@@ -206,7 +206,7 @@ framework.monitor module
 framework.comm_backends module
 ------------------------------
 
-.. automodule:: framework.comm_backends
+.. automodule:: fuddly.framework.comm_backends
    :members:
    :undoc-members:
    :show-inheritance:
@@ -218,7 +218,7 @@ framework.comm_backends module
 framework.tactics_helpers module
 --------------------------------
 
-.. automodule:: framework.tactics_helpers
+.. automodule:: fuddly.framework.tactics_helpers
    :members:
    :undoc-members:
    :show-inheritance:
@@ -229,7 +229,7 @@ framework.tactics_helpers module
 framework.fuzzing_primitives module
 -----------------------------------
 
-.. automodule:: framework.fuzzing_primitives
+.. automodule:: fuddly.framework.fuzzing_primitives
    :members:
    :undoc-members:
    :show-inheritance:
@@ -240,7 +240,7 @@ framework.fuzzing_primitives module
 framework.encoders module
 -------------------------
 
-.. automodule:: framework.encoders
+.. automodule:: fuddly.framework.encoders
    :members:
    :undoc-members:
    :show-inheritance:
@@ -252,7 +252,7 @@ framework.encoders module
 framework.database module
 -------------------------
 
-.. automodule:: framework.database
+.. automodule:: fuddly.framework.database
    :members:
    :undoc-members:
    :show-inheritance:
@@ -263,7 +263,7 @@ framework.database module
 framework.scenario module
 -------------------------
 
-.. automodule:: framework.scenario
+.. automodule:: fuddly.framework.scenario
    :members:
    :undoc-members:
    :show-inheritance:
@@ -274,7 +274,7 @@ framework.scenario module
 framework.dmhelpers.generic module
 ----------------------------------
 
-.. automodule:: framework.dmhelpers.generic
+.. automodule:: fuddly.framework.dmhelpers.generic
    :members:
    :undoc-members:
    :show-inheritance:
@@ -286,7 +286,7 @@ framework.dmhelpers.generic module
 framework.dmhelpers.xml module
 ------------------------------
 
-.. automodule:: framework.dmhelpers.xml
+.. automodule:: fuddly.framework.dmhelpers.xml
    :members:
    :undoc-members:
    :show-inheritance:
@@ -298,7 +298,7 @@ framework.dmhelpers.xml module
 framework.evolutionary_helpers module
 -------------------------------------
 
-.. automodule:: framework.evolutionary_helpers
+.. automodule:: fuddly.framework.evolutionary_helpers
    :members:
    :undoc-members:
    :show-inheritance:
@@ -309,7 +309,7 @@ framework.evolutionary_helpers module
 framework.knowledge.feedback_collector module
 ---------------------------------------------
 
-.. automodule:: framework.knowledge.feedback_collector
+.. automodule:: fuddly.framework.knowledge.feedback_collector
    :members:
    :undoc-members:
    :show-inheritance:
@@ -320,7 +320,7 @@ framework.knowledge.feedback_collector module
 framework.knowledge.feedback_handler module
 -------------------------------------------
 
-.. automodule:: framework.knowledge.feedback_handler
+.. automodule:: fuddly.framework.knowledge.feedback_handler
    :members:
    :undoc-members:
    :show-inheritance:
@@ -331,7 +331,7 @@ framework.knowledge.feedback_handler module
 framework.knowledge.information module
 --------------------------------------
 
-.. automodule:: framework.knowledge.information
+.. automodule:: fuddly.framework.knowledge.information
    :members:
    :undoc-members:
    :show-inheritance:
@@ -342,7 +342,7 @@ framework.knowledge.information module
 framework.constraint_helpers module
 -----------------------------------
 
-.. automodule:: framework.constraint_helpers
+.. automodule:: fuddly.framework.constraint_helpers
    :members:
    :undoc-members:
    :show-inheritance:
@@ -354,7 +354,7 @@ framework.constraint_helpers module
 framework.plumbing module
 -------------------------
 
-.. automodule:: framework.plumbing
+.. automodule:: fuddly.framework.plumbing
    :members:
    :undoc-members:
    :exclude-members: __dict__, __weakref__, FmkShell, EnforceOrder, FmkFeedback, is_python_file
@@ -363,7 +363,7 @@ framework.plumbing module
 libs.utils module
 -----------------
 
-.. automodule:: libs.utils
+.. automodule:: fuddly.libs.utils
     :members:
     :undoc-members:
     :show-inheritance: __dict__, __weakref__
@@ -374,7 +374,7 @@ libs.utils module
    framework.plumbing module
    -----------------------
 
-   .. automodule:: framework.plumbing
+   .. automodule:: fuddly.framework.plumbing
        :members:
        :undoc-members:
 
@@ -382,7 +382,7 @@ libs.utils module
    framework.error_handling module
    -----------------------------
 
-   .. automodule:: framework.error_handling
+   .. automodule:: fuddly.framework.error_handling
        :members:
        :undoc-members:
        :show-inheritance:
@@ -392,7 +392,7 @@ libs.utils module
    framework.test module
    -------------------
 
-   .. automodule:: framework.test
+   .. automodule:: fuddly.framework.test
        :members:
        :undoc-members:
        :show-inheritance:
@@ -400,7 +400,7 @@ libs.utils module
    Module contents
    ---------------
 
-   .. automodule:: framework
+   .. automodule:: fuddly.framework
        :members:
        :undoc-members:
        :show-inheritance:
