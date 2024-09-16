@@ -59,10 +59,6 @@ from fuddly.libs.utils import *
 
 from fuddly.framework import generic_data_makers
 
-# TODO modules: are these imports still needed
-from fuddly import data_models  # needed by importlib.reload
-from fuddly import projects  # needed by importlib.reload
-
 from fuddly.framework.global_resources import *
 from fuddly.libs.utils import *
 
@@ -954,7 +950,6 @@ class FmkPlumbing(object):
 
         self._name2dm[data_model.name] = data_model
 
-        # TODO should tactics be able to be a list ?
         tactics=None
         try:
             tactics=strategy_module.tactics
