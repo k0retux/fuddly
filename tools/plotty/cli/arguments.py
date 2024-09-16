@@ -2,7 +2,7 @@ from tools.plotty.Formula import Formula
 from tools.plotty.PlottyDatabase import PlottyDatabase
 from tools.plotty.cli.parse.range import parse_int_range_union
 from tools.plotty.globals import GridMatch, PlottyOptions
-from utils import print_warning, print_error
+from tools.plotty.utils import print_warning, print_error
 
 from framework.database import Database
 

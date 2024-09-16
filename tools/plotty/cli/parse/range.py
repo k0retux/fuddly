@@ -1,4 +1,4 @@
-from utils import print_error, try_parse_int, print_warning
+from tools.plotty.utils import print_error, try_parse_int, print_warning
 
 from typing import Optional
 
