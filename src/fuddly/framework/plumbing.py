@@ -946,6 +946,8 @@ class FmkPlumbing(object):
         data_model = module.data_model
         if data_model.name is None:
             data_model.name = name
+        else:
+            name = data_model.name
 
         if not reload_dm and self._name2dm.get(data_model.name) is not None:
             raise DataModelDuplicateError(data_model.name)
@@ -1204,6 +1206,8 @@ class FmkPlumbing(object):
         project = module.project
         if project.name is None:
             project.name = name
+        else:
+            name = project.name
 
         if not reload_prj and self._name2prj.get(project.name) is not None:
             raise ProjectDuplicateError(project.name)
