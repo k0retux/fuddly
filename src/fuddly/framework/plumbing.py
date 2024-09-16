@@ -67,10 +67,7 @@ from fuddly.framework.global_resources import *
 from fuddly.libs.utils import *
 
 import importlib
-if sys.version_info < (3, 10):
-    from importlib_metadata import entry_points
-else:
-    from importlib.metadata import entry_points
+from importlib.metadata import entry_points
 
 import io
 
@@ -834,7 +831,7 @@ class FmkPlumbing(object):
                         self.import_successfull = False
 
     def _get_data_models_from_modules(self, fmkDB_update=True):
-        group_name="fuddly.data_models" # TODO Put this in a config somewhere
+        group_name=gr.ep_group_names["data_models"]
         dms = entry_points(group=group_name)
 
         if not self._quiet:
@@ -917,12 +914,12 @@ class FmkPlumbing(object):
             return dm_params
 
     def _import_dm_from_module(self, module_ep, reload_dm=False):
-        group_name="fuddly.data_models" # TODO Put this in a config somewhere
+        group_name=gr.ep_group_names["data_models"]
         dm_params = {}
         name = module_ep.name
         strategies = dict()
 
-        for st in entry_points(group=group_name+"_strategies"):
+        for st in entry_points(group=gr.ep_group_names["strategies"]):
             strategies[st.name] = st
 
         try:
@@ -1061,7 +1058,7 @@ class FmkPlumbing(object):
                     self.import_successfull = False
 
     def _get_projects_module(self, fmkDB_update=True):
-        group_name="fuddly.projects" # TODO Put this in a config somewhere
+        group_name=gr.ep_group_names["projects"]
         projects = entry_points(group=group_name)
 
         if not self._quiet:
@@ -1274,7 +1271,7 @@ class FmkPlumbing(object):
             self.prj_list.remove(prj)
             self.prj_list.append(project)
         else:
-            # TODO: Catch this hieght up and ignore double imports ?
+            # TODO: Catch this higher up and ignore double imports ?
             raise ValueError("A project with the name '%s' already exist!" % project.name)
 
         if old_prj is not None:

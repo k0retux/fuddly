@@ -65,6 +65,13 @@ if not xdg_mod_error and not os.path.exists(fuddly_data_folder):
 else:
     use_xdg = False
 
+
+ep_group_names = {
+    "data_models": "fuddly.data_models",
+    "strategies":  "fuddly.data_models_strategies",
+    "projects":    "fuddly.projects",
+}
+
 ensure_dir(fuddly_data_folder)
 
 exported_data_folder = fuddly_data_folder + 'exported_data' + os.sep
