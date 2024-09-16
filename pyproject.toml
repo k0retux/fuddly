@@ -11,34 +11,13 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-dependencies = [
-	"cexprtk>=0.4.1",
-	"configparser>=5.3.0",
-	"crcmod>=1.7",
-	"cups",
-	"rpyc<7.0.0,>=6.0.0",
-	"graphviz",
-	"matplotlib",
-	"paramiko<4.0.0,>=3.4.0",
-	"pyserial",
-	"python-constraint>=1.4.0",
-	"z3-solver>=4.8",
-	"pyxdg",
-	"xtermcolor",
-	"jsonschema",
-	"sphinx",
-	"sphinxcontrib-napoleon",
-	"sphinx-rtd-theme",
-]
-
-[project.optional-dependencies]
-tests = [
-	"ddt",
-	"mock",
-]
+dynamic = ["dependencies"]
 
 [options]
 include_package_data = true
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools]
 include-package-data = true
