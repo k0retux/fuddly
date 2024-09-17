@@ -65,7 +65,6 @@ if not xdg_mod_error and not os.path.exists(fuddly_data_folder):
 else:
     use_xdg = False
 
-
 ep_group_names = {
     "data_models": "fuddly.data_models",
     "strategies":  "fuddly.data_models_strategies",
@@ -150,6 +149,19 @@ def is_string_compatible(val):
 
 def get_user_input(msg):
     return input(msg)
+
+def _is_running_from_fs():
+    from importlib.metadata import (files,PackageNotFoundError)
+    try:
+        # Get the __init__.py file from the root of an installed fuddly package
+        f = [ f for f in files("fuddly") if str(f) in "fuddly/__init__.py"][0]
+    except PackageNotFoundError:
+        # Fuddly is not installed so we are (almost) certainly running from the sources
+        return True
+    import fuddly
+    return fuddly.__path__[0] != str(f.locate().parent)
+
+is_running_from_fs = _is_running_from_fs()
 
 # Generic container for user inputs
 

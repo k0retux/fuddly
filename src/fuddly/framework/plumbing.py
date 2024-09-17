@@ -73,11 +73,11 @@ sys.path.insert(0, external_libs_folder)
 #TODO These are not needed right ?
 #user_dm_mod = os.path.basename(os.path.normpath(user_data_models_folder))
 #user_prj_mod = os.path.basename(os.path.normpath(user_projects_folder))
-user_tg_mod = os.path.basename(os.path.normpath(user_targets_folder))
+#user_tg_mod = os.path.basename(os.path.normpath(user_targets_folder))
 
 #exec("import " + user_dm_mod)
 #exec("import " + user_prj_mod)
-exec("import " + user_tg_mod)
+#exec("import " + user_tg_mod)
 
 sig_int_handler = signal.getsignal(signal.SIGINT)
 
@@ -767,6 +767,9 @@ class FmkPlumbing(object):
                                      Database.DEFAULT_GEN_NAME, True, True)
 
     def _get_data_models_from_fs(self, fmkDB_update=True):
+        if not self._quiet:
+            self.print(colorize(FontStyle.BOLD + "=" * 63 + "[ Data Models (filesystem) ]==", rgb=Color.FMKINFOGROUP))
+
         data_models = collections.OrderedDict()
 
         def populate_data_models(path, prefix=""):
@@ -784,7 +787,9 @@ class FmkPlumbing(object):
                         break
                 break
 
-        populate_data_models(gr.data_models_folder, prefix="fuddly/")
+        if gr.is_running_from_fs:
+            self.print("*** Running directly from sources, loading internal data_models ***")
+            populate_data_models(gr.data_models_folder, prefix="fuddly/")
         populate_data_models(gr.user_data_models_folder)
 
         dms = copy.copy(data_models)
@@ -797,8 +802,6 @@ class FmkPlumbing(object):
 
         rexp_strategy = re.compile(r'(.*)_strategy\.py$')
 
-        if not self._quiet:
-            self.print(colorize(FontStyle.BOLD + "=" * 63 + "[ Data Models (filesystem) ]==", rgb=Color.FMKINFOGROUP))
 
         for dname, file_list in data_models.items():
             if not self._quiet:
@@ -827,16 +830,18 @@ class FmkPlumbing(object):
                         self.import_successfull = False
 
     def _get_data_models_from_modules(self, fmkDB_update=True):
-        group_name=gr.ep_group_names["data_models"]
-        dms = entry_points(group=group_name)
-
         if not self._quiet:
             self.print(colorize(FontStyle.BOLD + "="*63+"[ Data Models (python modules) ]==", rgb=Color.FMKINFOGROUP))
+
+        group_name=gr.ep_group_names["data_models"]
+        dms = entry_points(group=group_name)
         for module in dms:
             try:
                 dm_params = self._import_dm_from_module(module, False)
             except DataModelDuplicateError as e:
-                self.print(colorize(f"*** The data model '{e.name}' was already defined, ignoring... ***", rgb=Color.WARNING))
+                if not self._quiet:
+                    self.print(colorize(f"*** The data model '{e.name}' was already defined, "
+                                        f"ignoring... [{module.module}] ***", rgb=Color.WARNING))
                 continue
 
             if dm_params is not None:
@@ -1002,6 +1007,9 @@ class FmkPlumbing(object):
         self._get_projects_module(fmkDB_update)
 
     def _get_projects_fs(self, fmkDB_update=True):
+        if not self._quiet:
+            self.print(colorize(FontStyle.BOLD + "=" * 66 + "[ Projects (filesystem) ]==", rgb=Color.FMKINFOGROUP))
+
         projects = collections.OrderedDict()
 
         def populate_projects(path, prefix=""):
@@ -1019,7 +1027,10 @@ class FmkPlumbing(object):
                         break
                 break
 
-        populate_projects(gr.projects_folder, prefix="fuddly/")
+        if gr.is_running_from_fs:
+            self.print("*** Running directly from sources, loading internal projects ***")
+            populate_projects(gr.projects_folder, prefix="fuddly/")
+
         populate_projects(gr.user_projects_folder)
 
         prjs = copy.copy(projects)
@@ -1031,9 +1042,6 @@ class FmkPlumbing(object):
                 del projects[k]
 
         rexp_proj = re.compile(r'(.*)_proj\.py$')
-
-        if not self._quiet:
-            self.print(colorize(FontStyle.BOLD + "=" * 66 + "[ Projects (filesystem) ]==", rgb=Color.FMKINFOGROUP))
 
         for dname, file_list in projects.items():
             if not self._quiet:
@@ -1071,7 +1079,9 @@ class FmkPlumbing(object):
             try:
                 prj_params = self._import_project_from_module(module, False)
             except ProjectDuplicateError as e:
-                self.print(colorize(f"*** The project '{e.name}' was already defined, ignoring... ***", rgb=Color.WARNING))
+                if not self._quiet:
+                    self.print(colorize(f"*** The project '{e.name}' was already defined, "
+                                        f"ignoring... [{module.module}] ***", rgb=Color.WARNING))
                 continue
 
             if prj_params is not None:
