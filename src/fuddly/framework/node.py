@@ -1568,11 +1568,14 @@ class NodeInternals_GenFunc(NodeInternals):
     @property
     def generated_node(self):
         if self._generated_node is None:
+            enable_color = False
+            if self.env and self.env._color_enabled:
+                self.env._color_enabled = False
+                enable_color = True
+
             if self.generator_arg is not None and self.node_arg is not None:
                 if self.provide_helpers:
-                    ret = self.generator_func(
-                        self.node_arg, self.generator_arg, self._node_helpers
-                    )
+                    ret = self.generator_func(self.node_arg, self.generator_arg, self._node_helpers)
                 else:
                     ret = self.generator_func(self.node_arg, self.generator_arg)
             elif self.node_arg is not None:
@@ -1590,6 +1593,9 @@ class NodeInternals_GenFunc(NodeInternals):
                     ret = self.generator_func(self._node_helpers)
                 else:
                     ret = self.generator_func()
+
+            if enable_color:
+                self.env._color_enabled = True
 
             if isinstance(ret, tuple):
                 ret, private_val = ret
@@ -1636,9 +1642,7 @@ class NodeInternals_GenFunc(NodeInternals):
         if generator_arg is not None:
             self.generator_arg = generator_arg
 
-    def _get_value(
-        self, conf=None, recursive=True, return_node_internals=False, restrict_csp=False
-    ):
+    def _get_value(self, conf=None, recursive=True, return_node_internals=False, restrict_csp=False):
         if self.custo.trigger_last_mode and not self._trigger_registered:
             assert self.env is not None
             self._trigger_registered = True
@@ -1662,13 +1666,14 @@ class NodeInternals_GenFunc(NodeInternals):
             return_node_internals=return_node_internals,
             restrict_csp=restrict_csp,
         )
+
         return (ret, False)
 
     def _get_delayed_value(self, conf=None, recursive=True, restrict_csp=False):
         self.reset_generator()
-        ret = self.generated_node._get_value(
-            conf=conf, recursive=recursive, restrict_csp=restrict_csp
-        )
+        ret = self.generated_node._get_value(conf=conf, recursive=recursive,
+                                             restrict_csp=restrict_csp)
+
         return (ret, False)
 
     def get_raw_value(self, **kwargs):
