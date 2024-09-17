@@ -178,8 +178,7 @@ def main():
     figure.plot_areas()
     figure.show()
 
-    sys.exit(PlottyGlobals.EXIT_SUCCESS)
-
 
 if __name__ == "__main__":
     main()
+    sys.exit(PlottyGlobals.EXIT_SUCCESS)
