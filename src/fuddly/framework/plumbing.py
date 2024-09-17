@@ -2337,7 +2337,7 @@ class FmkPlumbing(object):
 
             data_desc = data_desc if isinstance(data_desc, list) else [data_desc]
             cpt = 0
-            data_to_send = []
+            sent_data = []
             while cpt < max_loop or max_loop == -1:
                 cpt += 1
                 data_list = []
@@ -2351,23 +2351,28 @@ class FmkPlumbing(object):
                         data.tg_ids = tg_ids
                     data_list.append(data)
 
-                data_to_send += data_list
-                go_on = self.send_data_and_log(data_list, verbose=verbose,
-                                               console_display=console_display)
+                go_on, sdata = self.send_data_and_log(data_list, verbose=verbose,
+                                                      console_display=console_display)
+                for d in sdata:
+                    sent_data.append(d)
+
                 if not go_on:
                     break
 
         else:
             cpt = 0
-            data_to_send = []
+            sent_data = []
             while cpt < max_loop or max_loop == -1:
                 cpt += 1
-                data_to_send.append(data)
-                go_on = self.send_data_and_log(data, verbose=verbose, console_display=console_display)
+                go_on, sdata = self.send_data_and_log(data, verbose=verbose,
+                                                      console_display=console_display)
+                for d in sdata:
+                    sent_data.append(d)
+
                 if not go_on:
                     break
 
-        return data_to_send
+        return sent_data
 
     @EnforceOrder(accepted_states=["S2"])
     def send_data_and_log(self, data_list, verbose=False, console_display=True):
@@ -2381,21 +2386,21 @@ class FmkPlumbing(object):
         try:
             data_list = self._do_sending_and_logging_init(data_list)
         except (TargetFeedbackError, UserInterruption):
-            return False
+            return False, None
 
         # we delay sending after calling self._do_sending_and_logging_init(data_list)
         # as this delay can be changed while data is handled by this method.
         go_on = self._delay_sending()
         if not go_on:
-            return False
+            return False, None
 
         if not data_list:
-            return True
+            return True, None
 
         data_list = self._send_data(data_list)
 
         if self._sending_error or self._stop_sending:
-            return False
+            return False, None
 
         if data_list is None:
             # In this case:
@@ -2405,7 +2410,7 @@ class FmkPlumbing(object):
             # - or the framework is requested to go on even if there are no data to send (e.g., a
             #   DataProcess of a Scenario has completed and it exists a transition for that condition
             #   in the scenario).
-            return True
+            return True, None
 
         # All feedback entries that are available for relevant framework users (scenario
         # callbacks, operators, ...) are flushed just after sending a new data because it
@@ -2480,7 +2485,7 @@ class FmkPlumbing(object):
         if not console_display:
             self.lg.display_on_term = lg_display_on_term_save
 
-        return cont0 and cont1 and cont2
+        return cont0 and cont1 and cont2, data_list
 
     @EnforceOrder(accepted_states=["S2"])
     def _send_data(self, data_list: Sequence[Data]):

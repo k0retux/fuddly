@@ -4220,7 +4220,7 @@ class TestDataModelHelpers(unittest.TestCase):
             if data is None:
                 break
 
-            go_on = fmk.send_data_and_log([data])
+            go_on, _ = fmk.send_data_and_log([data])
             bstr_len = len(data.to_bytes())
             assert bstr_len == data_sizes[i], f'i: {i}, len(data.to_bytes()): {bstr_len}'
 
@@ -4241,7 +4241,7 @@ class TestDataModelHelpers(unittest.TestCase):
             if node_to_check.to_bytes() == b'None':
                 # one case should trigger this condition
                 specific_cases_checked = True
-            go_on = fmk.send_data_and_log([data])
+            go_on, _ = fmk.send_data_and_log([data])
             if not go_on:
                 raise ValueError
         else:
@@ -4444,7 +4444,7 @@ class TestFMK(unittest.TestCase):
         base_qty = 0
         for i in range(100):
             data = fmk.process_data(['SC_NO_REGEN'])
-            go_on = fmk.send_data_and_log([data])
+            go_on, _ = fmk.send_data_and_log([data])
             if not go_on:
                 base_qty = i
                 break
@@ -4465,7 +4465,7 @@ class TestFMK(unittest.TestCase):
 
         for i in range(base_qty * 3):
             data = fmk.process_data(['SC_AUTO_REGEN'])
-            go_on = fmk.send_data_and_log([data])
+            go_on, _ = fmk.send_data_and_log([data])
             if not go_on:
                 raise ValueError
 
@@ -4486,7 +4486,7 @@ class TestFMK(unittest.TestCase):
         for i in range(10):
             prev_data = data
             data = fmk.process_data(['SC_EX1'])
-            ok = fmk.send_data_and_log([data])  # needed to make the scenario progress
+            ok, _ = fmk.send_data_and_log([data])  # needed to make the scenario progress
             if not ok:
                 raise ValueError
 
@@ -4505,7 +4505,7 @@ class TestFMK(unittest.TestCase):
                 self.assertTrue(data is None)
             if data is not None:
                 steps.append(data.origin.current_step)
-                ok = fmk.send_data_and_log([data])  # needed to make the scenario progress
+                ok, _ = fmk.send_data_and_log([data])  # needed to make the scenario progress
                 if not ok:
                     raise ValueError
             if i == 0:
@@ -4524,7 +4524,7 @@ class TestFMK(unittest.TestCase):
         for i in range(6):
             data = fmk.process_data(['SC_EX3'])
             steps.append(data.origin.current_step)
-            ok = fmk.send_data_and_log([data])  # needed to make the scenario progress
+            ok, _ = fmk.send_data_and_log([data])  # needed to make the scenario progress
             if not ok:
                 raise ValueError
 
@@ -4549,7 +4549,7 @@ class TestFMK(unittest.TestCase):
                 if i == 1:
                     scenario = data.origin
                 steps.append(data.origin.current_step)
-                ok = fmk.send_data_and_log([data])  # needed to make the scenario progress
+                ok, _ = fmk.send_data_and_log([data])  # needed to make the scenario progress
                 if not ok:
                     raise ValueError
 
