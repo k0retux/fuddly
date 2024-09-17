@@ -1000,7 +1000,7 @@ class String(VT_Alt):
                 val = self.drawn_val
             else:
                 val = self.values_copy[0]
-            self.values_fuzzy.append(val)
+            # self.values_fuzzy.append(val)
             if len(self.values_copy) > 1:
                 val = self.values_copy[-1]
                 self.values_fuzzy.append(val)
@@ -1550,7 +1550,7 @@ class INT(VT):
                         rval = random.randint(min_oset+1,val-1)
                         supp_list.append(rval)
 
-                if min_oset not in supp_list:
+                if min_oset not in supp_list and min_oset != val:
                     supp_list.insert(0, min_oset)
                 if max_oset not in supp_list:
                     supp_list.insert(0, max_oset)
