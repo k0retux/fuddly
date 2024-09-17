@@ -966,7 +966,6 @@ class FmkPlumbing(object):
     def _import_project(self, prefix, name, reload_prj=False):
         module=None
         try:
-            self.print(f"Importing {prefix}{name}_proj")
             module = importlib.import_module(prefix + name + "_proj")
             if reload_prj:
                 self.print(f"Trying to reload {prefix}{name}_proj")
@@ -2353,8 +2352,9 @@ class FmkPlumbing(object):
 
                 go_on, sdata = self.send_data_and_log(data_list, verbose=verbose,
                                                       console_display=console_display)
-                for d in sdata:
-                    sent_data.append(d)
+                if sdata:
+                    for d in sdata:
+                        sent_data.append(d)
 
                 if not go_on:
                     break
@@ -2366,8 +2366,10 @@ class FmkPlumbing(object):
                 cpt += 1
                 go_on, sdata = self.send_data_and_log(data, verbose=verbose,
                                                       console_display=console_display)
-                for d in sdata:
-                    sent_data.append(d)
+
+                if sdata:
+                    for d in sdata:
+                        sent_data.append(d)
 
                 if not go_on:
                     break
@@ -3473,7 +3475,7 @@ class FmkPlumbing(object):
                         (dmaker_obj in self.__initialized_dmakers and self.__initialized_dmakers[dmaker_obj][0]):
                     ui = self.__initialized_dmakers[dmaker_obj][1]
                 else:
-                    if action_list_sz == 1:
+                    if action_list_sz == 1 and isinstance(dmaker_obj, DynGenerator):
                         ui = UI(freeze=True) if user_input is None else user_input.merge_with(UI(freeze=True))
                     else:
                         ui = user_input
