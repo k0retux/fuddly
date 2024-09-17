@@ -30,8 +30,6 @@ import struct
 import random
 import zlib
 
-sys.path.append('.')
-
 from fuddly.framework.plumbing import *
 from fuddly.framework.node import *
 from fuddly.framework.data_model import *

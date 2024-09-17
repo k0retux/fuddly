@@ -30,8 +30,6 @@ import sys
 import unittest
 import ddt
 
-sys.path.append('.')
-
 from fuddly.framework.value_types import *
 
 from fuddly.framework.fuzzing_primitives import *

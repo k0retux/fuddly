@@ -27,8 +27,6 @@ import string
 import copy
 import re
 
-sys.path.append('.')
-
 from fuddly.framework import value_types as vtype
 from fuddly.framework import node as dm
 
