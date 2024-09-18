@@ -49,19 +49,6 @@ usb = "fuddly.data_models.protocols.usb"
 myproto = "fuddly.data_models.tutorial.myproto"
 tuto = "fuddly.data_models.tutorial.tuto"
 
-[project.entry-points."fuddly.data_models_strategies"]
-jpg = "fuddly.data_models.file_formats.jpg_strategy"
-json_dm = "fuddly.data_models.file_formats.json_dm_strategy"
-pdf = "fuddly.data_models.file_formats.pdf_strategy"
-png = "fuddly.data_models.file_formats.png_strategy"
-zip = "fuddly.data_models.file_formats.zip_strategy"
-http = "fuddly.data_models.protocols.http_strategy"
-pppoe = "fuddly.data_models.protocols.pppoe_strategy"
-sms = "fuddly.data_models.protocols.sms_strategy"
-usb = "fuddly.data_models.protocols.usb_strategy"
-myproto = "fuddly.data_models.tutorial.myproto_strategy"
-tuto = "fuddly.data_models.tutorial.tuto_strategy"
-
 [project.entry-points."fuddly.projects"]
 standard = "fuddly.projects.generic.standard_proj"
 usb = "fuddly.projects.specific.usb_proj"

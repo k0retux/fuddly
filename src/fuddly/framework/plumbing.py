@@ -850,15 +850,13 @@ class FmkPlumbing(object):
             # loading from a python module
             if type(prefix) is importlib.metadata.EntryPoint:
                 load_from_module=True
-
                 module = prefix.load()
-                module_strat = prefix.strategy
 
             # loading from a file
             else:
                 module = importlib.import_module(prefix + name)
-                module_strat = importlib.import_module(module.__package__ + ".strategy")
 
+            module_strat = importlib.import_module(module.__package__ + ".strategy")
             if reload_dm:
                 importlib.reload(module)
                 importlib.reload(module_strat)
