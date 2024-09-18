@@ -71,13 +71,13 @@ sys.path.insert(0, fuddly_data_folder)
 sys.path.insert(0, external_libs_folder)
 
 #TODO These are not needed right ?
-#user_dm_mod = os.path.basename(os.path.normpath(user_data_models_folder))
-#user_prj_mod = os.path.basename(os.path.normpath(user_projects_folder))
-#user_tg_mod = os.path.basename(os.path.normpath(user_targets_folder))
+user_dm_mod = os.path.basename(os.path.normpath(user_data_models_folder))
+user_prj_mod = os.path.basename(os.path.normpath(user_projects_folder))
+user_tg_mod = os.path.basename(os.path.normpath(user_targets_folder))
 
-#exec("import " + user_dm_mod)
-#exec("import " + user_prj_mod)
-#exec("import " + user_tg_mod)
+exec("import " + user_dm_mod)
+exec("import " + user_prj_mod)
+exec("import " + user_tg_mod)
 
 sig_int_handler = signal.getsignal(signal.SIGINT)
 
@@ -773,57 +773,50 @@ class FmkPlumbing(object):
         data_models = collections.OrderedDict()
 
         def populate_data_models(path, prefix=""):
-            dm_dir = os.path.basename(os.path.normpath(path))
-            for (dirpath, dirnames, filenames) in os.walk(path):
-                if filenames:
-                    data_models[prefix + dm_dir] = []
-                    data_models[prefix + dm_dir].extend(filenames)
-                for d in dirnames:
-                    full_path = os.path.join(path, d)
-                    rel_path = os.path.join(dm_dir, d)
-                    data_models[prefix + rel_path] = []
-                    for (dth, dnames, fnm) in os.walk(full_path):
-                        data_models[prefix + rel_path].extend(fnm)
-                        break
-                break
+            from pathlib import Path
+            from os.path import dirname,basename
+
+            if path[-1] == '/':
+                path = path[:-1]
+            if prefix != "" and prefix[-1] != '/':
+                prefix = prefix + '/'
+
+            base_path = dirname(path)
+            _, dirs, _ = next(os.walk(path))
+            for dirpath in dirs:
+                p = Path(os.path.join(path, dirpath))
+                inits = [ dirname(x) for x in  p.glob('**/__init__.py') ]
+                strats = [ dirname(x) for x in  p.glob('**/strategy.py') ]
+                modules = list(set(inits) & set(strats))
+                for m in modules:
+                    relpath = dirname(m)[len(base_path)+1:]
+                    key=prefix+relpath
+                    if data_models.get(key) is None:
+                        data_models[key] = []
+                    data_models[key].append(basename(m))
 
         if gr.is_running_from_fs:
-            self.print("*** Running directly from sources, loading internal data_models ***")
-            populate_data_models(gr.data_models_folder, prefix="fuddly/")
+            if not self._quiet:
+                self.print(colorize("*** Running directly from sources, loading internal data_models ***", rgb=Color.WARNING))
+            populate_data_models(gr.data_models_folder, prefix="fuddly")
         populate_data_models(gr.user_data_models_folder)
 
-        dms = copy.copy(data_models)
-        for k in dms:
-            data_models[k] = list(filter(is_python_file, data_models[k]))
-            if "__init__.py" in data_models[k]:
-                data_models[k].remove("__init__.py")
-            if not data_models[k]:
-                del data_models[k]
-
-        rexp_strategy = re.compile(r'(.*)_strategy\.py$')
-
-
-        for dname, file_list in data_models.items():
+        for dname, names in data_models.items():
             if not self._quiet:
-                self.print(colorize(">>> Look for Data Models within '%s' directory" % dname,
-                               rgb=Color.FMKINFOSUBGROUP))
+                self.print(colorize(f">>> Look for Data Models within '{dname}' directory",
+                                    rgb=Color.FMKINFOSUBGROUP))
             prefix = dname.replace(os.sep, ".") + "."
-            for f in file_list:
-                res = rexp_strategy.match(f)
-                if res is None:
-                    continue
-                name = res.group(1)
-                if name + ".py" in file_list:
-                    dm_params = self._import_dm(prefix, name)
-                    if dm_params is not None:
-                        self._add_data_model(dm_params["dm"], dm_params["tactics"], dm_params["dm_rld_args"],
-                                             reload_dm=False)
-                        self.__dyngenerators_created[dm_params["dm"]] = False
-                        if fmkDB_update:
-                            # populate FMK DB
-                            self._fmkDB_insert_dm_and_dmakers(dm_params["dm"].name, dm_params["tactics"])
-                    else:
-                        self.import_successfull = False
+            for name in names:
+                dm_params = self._import_dm(prefix, name)
+                if dm_params is not None:
+                    self._add_data_model(dm_params["dm"], dm_params["tactics"], dm_params["dm_rld_args"],
+                                         reload_dm=False)
+                    self.__dyngenerators_created[dm_params["dm"]] = False
+                    if fmkDB_update:
+                        # populate FMK DB
+                        self._fmkDB_insert_dm_and_dmakers(dm_params["dm"].name, dm_params["tactics"])
+                else:
+                    self.import_successfull = False
 
     def _get_data_models_from_modules(self, fmkDB_update=True):
         if not self._quiet:
@@ -854,17 +847,18 @@ class FmkPlumbing(object):
     def _import_dm(self, prefix, name, reload_dm=False):
         load_from_module=False
         try:
-            # Reloading from a python module
+            # loading from a python module
             if type(prefix) is importlib.metadata.EntryPoint:
-                # The prefix is directly a module in this case
-                module = prefix.load()
                 load_from_module=True
 
-            # Reloading from a file
+                module = prefix.load()
+                module_strat = prefix.strategy
+
+            # loading from a file
             else:
                 module = importlib.import_module(prefix + name)
+                module_strat = importlib.import_module(module.__package__ + ".strategy")
 
-            module_strat = module.strategy
             if reload_dm:
                 importlib.reload(module)
                 importlib.reload(module_strat)
@@ -912,10 +906,10 @@ class FmkPlumbing(object):
 
         if not self._quiet:
             if reload_dm:
-                self.print(colorize(f"*** Data Model '{dm_params['name']}' updated ***",
+                self.print(colorize(f"*** Data Model '{dm_params['dm'].name}' updated ***",
                                     rgb=Color.DATA_MODEL_LOADED))
             else:
-                self.print(colorize(f"*** Found Data Model: '{dm_params['name']}' ***",
+                self.print(colorize(f"*** Found Data Model: '{dm_params['dm'].name}' ***",
                                     rgb=Color.FMKSUBINFO))
 
         return dm_params
@@ -970,10 +964,11 @@ class FmkPlumbing(object):
                         break
                 break
 
-        if gr.is_running_from_fs:
-            self.print("*** Running directly from sources, loading internal projects ***")
-            populate_projects(gr.projects_folder, prefix="fuddly/")
 
+        if gr.is_running_from_fs:
+            if not self._quiet:
+                self.print(colorize("*** Running directly from sources, loading internal projects ***", rgb=Color.WARNING))
+            populate_projects(gr.projects_folder, prefix="fuddly/")
         populate_projects(gr.user_projects_folder)
 
         prjs = copy.copy(projects)
@@ -984,7 +979,7 @@ class FmkPlumbing(object):
             if not projects[k]:
                 del projects[k]
 
-        rexp_proj = re.compile(r'(.*)_proj\.py$')
+        rexp_proj = re.compile(r'(.*)\.py$')
 
         for dname, file_list in projects.items():
             if not self._quiet:
@@ -1041,14 +1036,21 @@ class FmkPlumbing(object):
             # The prefix is the module in this case 
             return self._import_project_from_module(prefix, reload_prj=True)
         else: # Reloading from a file
-            return self._import_project_from_fs(prefix, name, reload_prj=True)
+            try:
+                self._import_project_from_fs(prefix, name, reload_prj=True)
+            except:
+                self._import_project_from_fs(prefix, name + "_proj", reload_prj=True)
+
+            return 
 
     def _import_project_from_fs(self, prefix, name, reload_prj=False):
         module=None
         try:
-            module = importlib.import_module(prefix + name + "_proj")
+            module = importlib.import_module(prefix + name)
             if reload_prj:
                 importlib.reload(module)
+            if name.endswith("_proj"):
+                name = name[:-len("_proj")]
         except:
             if self._quiet:
                 return None
