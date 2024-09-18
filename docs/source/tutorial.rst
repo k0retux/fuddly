@@ -1229,7 +1229,7 @@ differences within the same data model.
 Finally, it is also possible to associate various kind of attributes
 to the nodes:
 
-- classic ones like Mutable, Determinist, Finite, ...
+- classic ones like Mutable, Deterministic, Finite, ...
 
 - semantic ones that allows to group nodes based on some specific
   meanings (for instance a PDF page), in order to enable higher level
@@ -1293,6 +1293,10 @@ a PNG file in line 7---from ``2`` to ``-1`` (meaning infinity).
 
 Defining the Imaginary MyDF Data Model
 ++++++++++++++++++++++++++++++++++++++
+
+.. seealso:: You can also create a python package and install it to your system.
+             Fuddly can automagically detect them and use them when configured properly.
+             See :ref:`packaging` for more information on the subject
 
 Assuming we want to model an imaginary data format called `MyDF`.  Two
 files need to be created either within ``<root of fuddly>/data_models/`` or within
