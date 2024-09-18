@@ -814,14 +814,10 @@ class FmkPlumbing(object):
                     continue
                 name = res.group(1)
                 if name + ".py" in file_list:
-                    dm_params = self._import_dm_from_fs(prefix, name)
+                    dm_params = self._import_dm(prefix, name)
                     if dm_params is not None:
-                        self._add_data_model(
-                            dm_params["dm"],
-                            dm_params["tactics"],
-                            dm_params["dm_rld_args"],
-                            reload_dm=False,
-                        )
+                        self._add_data_model(dm_params["dm"], dm_params["tactics"], dm_params["dm_rld_args"],
+                                             reload_dm=False)
                         self.__dyngenerators_created[dm_params["dm"]] = False
                         if fmkDB_update:
                             # populate FMK DB
@@ -837,7 +833,7 @@ class FmkPlumbing(object):
         dms = entry_points(group=group_name)
         for module in dms:
             try:
-                dm_params = self._import_dm_from_module(module, False)
+                dm_params = self._import_dm(module, module.name)
             except DataModelDuplicateError as e:
                 if not self._quiet:
                     self.print(colorize(f"*** The data model '{e.name}' was already defined, "
@@ -856,126 +852,73 @@ class FmkPlumbing(object):
                 self.import_successfull = False
 
     def _import_dm(self, prefix, name, reload_dm=False):
-        if type(prefix) is importlib.metadata.EntryPoint: # Reloading from a python module
-            # The prefix is the module in this case 
-            return self._import_dm_from_module(prefix, reload_dm=True)
-        else: # Reloading from a file
-            return self._import_dm_from_fs(prefix, name, reload_dm=True)
-
-    def _import_dm_from_fs(self, prefix, name, reload_dm=False):
-        module = None
-        module_strat = None
+        load_from_module=False
         try:
-            module = importlib.import_module(prefix + name)
-            module_strat = importlib.import_module(prefix + name + "_strategy")
+            # Reloading from a python module
+            if type(prefix) is importlib.metadata.EntryPoint:
+                # The prefix is directly a module in this case
+                module = prefix.load()
+                load_from_module=True
+
+            # Reloading from a file
+            else:
+                module = importlib.import_module(prefix + name)
+
+            module_strat = module.strategy
             if reload_dm:
                 importlib.reload(module)
                 importlib.reload(module_strat)
         except:
-            if self._quiet:
-                return None
-
-            if reload_dm:
-                self.print(colorize("*** Problem during reload of '%s.py' and/or '%s_strategy.py' ***" % (name, name), rgb=Color.ERROR))
-            else:
-                self.print(colorize("*** Problem during import of '%s.py' and/or '%s_strategy.py' ***" % (name, name), rgb=Color.ERROR))
-            self.print("-" * 60)
-            traceback.print_exc(file=self.printer)
-            self.print("-" * 60)
-
-            return None
-
-        else:
-            dm_params = {}
-
-            dm_params["dm_rld_args"] = (prefix, name)
-
-            try:
-                dm_params["dm"] = module.data_model
-            except:
-                if not self._quiet:
-                    self.print(colorize("*** ERROR: '%s.py' shall contain a global variable 'data_model' ***" % (name), rgb=Color.ERROR))
-                return None
-            try:
-                dm_params["tactics"] = module_strat.tactics
-            except:
-                if not self._quiet:
-                    self.print(colorize("*** ERROR: '%s_strategy.py' shall contain a global variable 'tactics' ***" % (name), rgb=Color.ERROR))
-                return None
-
-            dm_params["tactics"].set_additional_info(fmkops=self._exportable_fmk_ops,
-                                                     related_dm=dm_params["dm"])
-
-            if dm_params["dm"].name is None:
-                dm_params["dm"].name = name
-            self._name2dm[dm_params["dm"].name] = dm_params["dm"]
-
             if not self._quiet:
                 if reload_dm:
-                    self.print(colorize("*** Data Model '%s' updated ***" % dm_params["dm"].name, rgb=Color.DATA_MODEL_LOADED))
+                    self.print(colorize(f"*** Problem during reload of '{name}' and/or "
+                                        f"'{name}/strategy.py' ***", rgb=Color.ERROR))
                 else:
-                    self.print(colorize("*** Found Data Model: '%s' ***" % dm_params["dm"].name, rgb=Color.FMKSUBINFO))
+                    self.print(colorize(f"*** Problem during import of '{name}' and/or "
+                                        f"'{name}/strategy' ***", rgb=Color.ERROR))
 
-            return dm_params
-
-    def _import_dm_from_module(self, module_ep, reload_dm=False):
-        group_name=gr.ep_group_names["data_models"]
-        dm_params = {}
-        name = module_ep.name
-        strategies = dict()
-
-        for st in entry_points(group=gr.ep_group_names["strategies"]):
-            strategies[st.name] = st
-
-        try:
-            module = module_ep.load()
-            strategy_module = strategies[name].load()
-            if reload_dm:
-                importlib.reload(module)
-                importlib.reload(strategy_module)
-        except:
-            if self._quiet:
-                return None
-            if reload_dm:
-                self.print(colorize(f"*** Problem during reload of '{name}' ***", rgb=Color.ERROR))
-            else:
-                self.print(colorize(f"*** Problem during import of '{name}' ***", rgb=Color.ERROR))
-            self.print("-" * 60)
-            traceback.print_exc(file=self.printer)
-            self.print("-" * 60)
+                self.print("-" * 60)
+                traceback.print_exc(file=self.printer)
+                self.print("-" * 60)
             return None
 
-        data_model = module.data_model
-        if data_model.name is None:
-            data_model.name = name
-        else:
-            name = data_model.name
-
-        if not reload_dm and self._name2dm.get(data_model.name) is not None:
-            raise DataModelDuplicateError(data_model.name)
-
-        self._name2dm[data_model.name] = data_model
-
-        tactics=None
+        dm_params = {}
+        dm_params['dm_rld_args'] = (prefix, name),
         try:
-            tactics=strategy_module.tactics
+            dm_params['dm'] = module.data_model
+        except:
+            if not self._quiet:
+                self.print(colorize("*** ERROR: '{name}' shall contain a global variable 'data_model' ***",
+                                    rgb=Color.ERROR))
+            return None
+        try:
+            dm_params['tactics'] = module_strat.tactics
         except AttributeError:
             if not self._quiet:
-                self.print(colorize(f"*** ERROR: '{name}' shall contain a global variable 'tactics' ***", rgb=Color.ERROR))
-                return None
+                self.print(colorize(f"*** ERROR: '{name}' shall contain a global variable 'tactics' ***",
+                                    rgb=Color.ERROR))
+            return None
 
-        tactics.set_additional_info(fmkops=self._exportable_fmk_ops, related_dm=data_model)
+        dm_params['tactics'].set_additional_info(fmkops=self._exportable_fmk_ops,
+                                                 related_dm=dm_params['dm'])
+
+        if dm_params['dm'].name is None:
+            dm_params['dm'].name = name
+
+        if load_from_module and not reload_dm and self._name2dm.get(dm_params['dm'].name) is not None:
+            raise DataModelDuplicateError(dm_params['dm'].name)
+
+        self._name2dm[dm_params['dm'].name] = dm_params['dm']
+
         if not self._quiet:
             if reload_dm:
-                self.print(colorize(f"*** Data Model '{name}' updated ***", rgb=Color.DATA_MODEL_LOADED))
+                self.print(colorize(f"*** Data Model '{dm_params['name']}' updated ***",
+                                    rgb=Color.DATA_MODEL_LOADED))
             else:
-                self.print(colorize(f"*** Found Data Model: '{name}' ***", rgb=Color.FMKSUBINFO))
+                self.print(colorize(f"*** Found Data Model: '{dm_params['name']}' ***",
+                                    rgb=Color.FMKSUBINFO))
 
-        return {
-            'dm': data_model,
-            'tactics': tactics,
-            'dm_rld_args': (module_ep, data_model.name),
-        }
+        return dm_params
 
     def _add_data_model(self, data_model, strategy, dm_rld_args,
                         reload_dm=False):
