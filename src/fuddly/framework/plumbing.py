@@ -875,7 +875,7 @@ class FmkPlumbing(object):
             return None
 
         dm_params = {}
-        dm_params['dm_rld_args'] = (prefix, name),
+        dm_params['dm_rld_args'] = (prefix, name)
         try:
             dm_params['dm'] = module.data_model
         except:
@@ -1034,19 +1034,20 @@ class FmkPlumbing(object):
             # The prefix is the module in this case 
             return self._import_project_from_module(prefix, reload_prj=True)
         else: # Reloading from a file
-            try:
-                self._import_project_from_fs(prefix, name, reload_prj=True)
-            except:
-                self._import_project_from_fs(prefix, name + "_proj", reload_prj=True)
-
-            return 
+            return self._import_project_from_fs(prefix, name, reload_prj=True)
 
     def _import_project_from_fs(self, prefix, name, reload_prj=False):
         module=None
+
         try:
+            if importlib.util.find_spec(prefix + name) is None:
+                self.print("Adding '_proj' suffix to name")
+                name=name+"_proj"
+
             module = importlib.import_module(prefix + name)
             if reload_prj:
                 importlib.reload(module)
+
             if name.endswith("_proj"):
                 name = name[:-len("_proj")]
         except:
@@ -1054,9 +1055,9 @@ class FmkPlumbing(object):
                 return None
 
             if reload_prj:
-                self.print(colorize("*** Problem during reload of '%s_proj.py' ***" % (name), rgb=Color.ERROR))
+                self.print(colorize(f"*** Problem during reload of '{name}.py'/'{name}_proj.py' ***", rgb=Color.ERROR))
             else:
-                self.print(colorize("*** Problem during import of '%s_proj.py' ***" % (name), rgb=Color.ERROR))
+                self.print(colorize(f"*** Problem during import of '{name}.py'/'{name}_proj.py' ***", rgb=Color.ERROR))
             self.print("-" * 60)
             traceback.print_exc(file=self.printer)
             self.print("-" * 60)
