@@ -153,7 +153,7 @@ def _is_running_from_fs():
     from importlib.metadata import (files,PackageNotFoundError)
     try:
         # Get the __init__.py file from the root of an installed fuddly package
-        f = [ f for f in files("fuddly") if str(f) in "fuddly/__init__.py"][0]
+        f = [x for x in files("fuddly") if str(x) == "fuddly/__init__.py"][0]
     except PackageNotFoundError:
         # Fuddly is not installed so we are (almost) certainly running from the sources
         return True
