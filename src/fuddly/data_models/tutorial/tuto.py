@@ -1,3 +1,5 @@
+import string
+
 import sys
 import z3
 
@@ -781,7 +783,7 @@ class MyDF_DataModel(DataModel):
              ],
              'constraints_highlight': True,
              'contents': [
-                 {'name': 'prefix', 'contents': String(values=['(', '<']),
+                 {'name': 'prefix', 'contents': String(values=['('], alphabet='(<'), #String(values=['(', '<']),
                   'default': '<'},
                  {'name': 'idx', 'contents': INT_str(values=[1,2,3,100,4,5,6,7,8,100]),
                   'default': 6},
@@ -790,7 +792,8 @@ class MyDF_DataModel(DataModel):
 
 
 
-        str_desc = {'name': 'str',
+        str_desc = \
+            {'name': 'str',
              'contents': [
                  # {'name': 'str1', 'contents': String(values=['a', 'b', 'c'])},
                  # {'name': 'str2',

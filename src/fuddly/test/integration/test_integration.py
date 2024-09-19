@@ -1053,7 +1053,7 @@ class TestMisc(unittest.TestCase):
                 break
 
         print('\nTurn number when Node has changed: %r, number of test cases: %d' % (turn_nb_list, i))
-        good_list = [1, 12, 22, 32, 42, 48, 54, 64, 74, 84, 95, 105, 115, 125, 135, 141, 151, 161, 171, 180, 189, 203, 218]
+        good_list = [1, 12, 22, 32, 42, 48, 54, 64, 74, 84, 95, 105, 115, 125, 135, 141, 151, 161, 171]
         msg = "If Fuzzy_<TypedValue>.values have been modified in size, the good_list should be updated.\n" \
               "If BitField are in random mode [currently put in determinist mode], the fuzzy_mode can produce more" \
               " or less value depending on drawn value when .get_value() is called (if the drawn value is" \
@@ -1925,7 +1925,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of imgs: %d' % idx, rgb=Color.INFO))
 
-        self.assertEqual(idx, 112)
+        self.assertEqual(idx, 92)
 
     def test_USB(self):
         dm_usb = fmk.get_data_model_by_name('usb')
@@ -1941,7 +1941,7 @@ class TestModelWalker(unittest.TestCase):
 
         print(colorize('number of confs: %d' % idx, rgb=Color.INFO))
 
-        self.assertIn(idx, [479])
+        self.assertIn(idx, [413])
 
 
 @ddt.ddt
@@ -4831,20 +4831,20 @@ class TestConstBackend(unittest.TestCase):
                              b'<6>',
                              b'(6)',
                              b'<6>',
+                             b'<2>',
                              b'<8>',
                              b'<3>',
-                             b'<2>',
-                             b'<1>',
-                             b'<5>',
-                             b'<7>',
                              b'<4>',
+                             b'<7>',
+                             b'<5>',
+                             b'<1>',
                              b'<6>']
 
         outcomes = []
 
         act = [('CSP_DEFAULT', UI(determinist=True,freeze=True)),
                ('tWALK', UI(leaf_determinism=False))]
-        for j in range(20):
+        for j in range(40):
             d = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
@@ -4854,7 +4854,7 @@ class TestConstBackend(unittest.TestCase):
             outcomes.append(d.to_bytes())
             idx += 1
 
-        # time.sleep(4)
+        # time.sleep(1)
         # print('\n*** DEBUG')
         # pp(outcomes)
 
@@ -5099,9 +5099,9 @@ class TestMW_tTYPE(unittest.TestCase):
         ### 1. tTYPE @only_corner_cases=True @csp_compliance_matters=False
 
         idx = 0
-        expected_idx = 6
+        expected_idx = 4
         expected_outcomes = [
-            b'> 6 <', b'> 100 <', b'> 1 <', b'> 8 <', b'> 2 <', b'> 6 <'
+            b'> 100 <', b'> 1 <', b'> 8 <', b'> 2 <',
         ]
 
         outcomes = []
@@ -5130,9 +5130,9 @@ class TestMW_tTYPE(unittest.TestCase):
         ### 2. tTYPE @only_corner_cases=True @csp_compliance_matters=True
 
         idx = 0
-        expected_idx = 5
+        expected_idx = 3
         expected_outcomes = [
-            b'> 6 <', b'> 1 <', b'> 8 <', b'> 2 <', b'> 6 <'
+            b'> 1 <', b'> 8 <', b'> 2 <',
         ]
 
         outcomes = []

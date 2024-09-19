@@ -159,11 +159,20 @@ class VT_Alt(VT):
             self._fuzz_magnitude = fuzz_magnitude
             self._only_corner_cases = only_corner_cases
             self._only_invalid_cases = only_invalid_cases
-            self._enable_fuzz_mode(fuzz_magnitude=self._fuzz_magnitude,
-                                   only_corner_cases=self._only_corner_cases,
-                                   only_invalid_cases=self._only_invalid_cases)
-            self._fuzzy_mode = True
-            self.after_enabling_mode()
+            ok = self._enable_fuzz_mode(fuzz_magnitude=self._fuzz_magnitude,
+                                        only_corner_cases=self._only_corner_cases,
+                                        only_invalid_cases=self._only_invalid_cases)
+
+            if ok:
+                self._fuzzy_mode = True
+                self.after_enabling_mode()
+            else:
+                pass
+
+            return ok
+
+        else:
+            return False
 
     def enable_normal_mode(self):
         if self._fuzzy_mode:
@@ -335,15 +344,21 @@ class String(VT_Alt):
             min_sz: Minimum valid size for the character strings for the node backed by
               this *String object*. If not set, this parameter will be
               automatically inferred by looking at the parameter ``values``
-              whether this latter is provided.
+              if provided.
+              Note this size parameter should take into account the ``codec`` parameter,
+              meaning that ``min_sz`` will be leveraged upon strings encoded with the
+              specified ``codec``.
             max_sz: Maximum valid size for the character strings for the node backed by this
               *String object*. If not set, this parameter will be
               automatically inferred by looking at the parameter ``values``
-              whether this latter is provided.
+              if provided.
+              Note this size parameter should take into account the ``codec`` parameter,
+              meaning that ``max_sz`` will be leveraged upon strings encoded with the
+              specified ``codec``.
             determinist: If set to ``True`` generated values will be in a deterministic
               order, otherwise in a random order.
             codec: codec to use for encoding the string (e.g., 'latin-1', 'utf8')
-            case_sensitive: If the string is set to be case sensitive then specific additional
+            case_sensitive: If the string is set to be case-sensitive then specific additional
               test cases will be generated in fuzzing mode.
             default: If not None, this value will be provided by default at first and also each time
               :meth:`framework.value_types.String.reset_state() is called`.
@@ -682,16 +697,19 @@ class String(VT_Alt):
     def reset_state(self):
         if self.values is None:
             assert not self.is_values_provided
-            self._populate_values(
-                force_max_enc_sz=self.max_enc_sz_provided,
-                force_min_enc_sz=self.min_enc_sz_provided,
-            )
+            self._populate_values(enforce_max_enc_sz=self.max_enc_sz_provided,
+                                  enforce_min_enc_sz=self.min_enc_sz_provided)
             self._ensure_enc_sizes_consistency()
         else:
             if self.default is not None and self.default != self.values[0]:
                 # this case may pass if a successful absorption changed the first value in the list
                 self.values.remove(self.default)
                 self.values.insert(0, self.default)
+
+            if self.alphabet is not None:
+                self._append_representative_values(enforce_max_enc_sz=self.max_enc_sz_provided,
+                                                   enforce_min_enc_sz=self.min_enc_sz_provided)
+                self._ensure_enc_sizes_consistency()
 
         self.values_copy = copy.copy(self.values)
 
@@ -708,11 +726,6 @@ class String(VT_Alt):
             self.values_copy.insert(0, val)
 
         self.drawn_val = None
-
-    def _check_size_constraints(self, value):
-        sz = len(value)
-        if self.max_sz < sz or self.min_sz > sz:
-            raise DataModelDefinitionError
 
     def set_description(
         self,
@@ -763,8 +776,16 @@ class String(VT_Alt):
                 raise DataModelDefinitionError
             else:
                 pass
+
+            # distinguish cases where values is provided or created based on size
+            self.is_values_provided = True
+            self.user_provided_list = copy.copy(self.values)
+
             self.values = self._str2bytes(values)
+
         else:
+            self.is_values_provided = False
+            self.user_provided_list = None
             self.values = None
 
         if size is not None:
@@ -798,29 +819,21 @@ class String(VT_Alt):
 
         if self.values is not None:
             for val in self.values:
-                if not self._check_constraints(
-                    val,
-                    force_max_enc_sz=self.max_enc_sz_provided,
-                    force_min_enc_sz=self.min_enc_sz_provided,
-                    update_list=False,
-                ):
+                if not self._check_constraints(val, enforce_max_enc_sz=self.max_enc_sz_provided,
+                                               enforce_min_enc_sz=self.min_enc_sz_provided,
+                                               update_list=False):
                     raise DataModelDefinitionError
 
                 if self.alphabet is not None:
                     for l in val:
                         if l not in self.alphabet:
-                            raise ValueError(
-                                "The value '%s' does not conform to the alphabet!" % val
+                            raise DataModelDefinitionError(
+                                f"The value '{val}' does not conform to the alphabet!"
                             )
 
-            self.values_copy = copy.copy(self.values)
-            self.is_values_provided = True  # distinguish cases where
-            # values is provided or
-            # created based on size
-            self.user_provided_list = copy.copy(self.values)
-        else:
-            self.is_values_provided = False
-            self.user_provided_list = None
+            if self.alphabet is not None:
+                self._append_representative_values(enforce_max_enc_sz=self.max_enc_sz_provided,
+                                                   enforce_min_enc_sz=self.min_enc_sz_provided)
 
         self.determinist = determinist
 
@@ -833,81 +846,96 @@ class String(VT_Alt):
         else:
             self.default = None
 
+        if self.values is not None:
+            self.values_copy = copy.copy(self.values)
+
+
     def _ensure_enc_sizes_consistency(self):
         if not self.encoded_string:
             # For a non-Encoding type, the size of the string is always lesser or equal than the size
             # of the encoded string (utf8, ...). Hence the byte string size is still >= to the string size.
             # As self.max_encoded_sz is needed for absorption, we do the following heuristic (when
             # information is missing).
-            if self.max_encoded_sz is None or (
-                not self.max_enc_sz_provided and self.max_encoded_sz < self.max_sz
-            ):
+            if (self.max_encoded_sz is None or
+                    (not self.max_enc_sz_provided and self.max_encoded_sz < self.max_sz)):
                 self.max_encoded_sz = self.max_sz
-            if self.min_encoded_sz is None or (
-                not self.min_enc_sz_provided and self.min_encoded_sz > self.min_sz
-            ):
+            if (self.min_encoded_sz is None or
+                    (not self.min_enc_sz_provided and self.min_encoded_sz > self.min_sz)):
                 self.min_encoded_sz = self.min_sz
 
-    def _check_constraints(
-        self, value, force_max_enc_sz, force_min_enc_sz, update_list=False
-    ):
-        self._check_size_constraints(value)
+    def _check_constraints(self, value: bytes, enforce_max_sz=False, enforce_min_sz=False,
+                           enforce_max_enc_sz=False, enforce_min_enc_sz=False, update_list=False):
+
+        def check_size_constraints(sz, enforce_max_sz, enforce_min_sz):
+            if sz > self.max_sz:
+                if enforce_max_sz:
+                    raise DataModelDefinitionError
+                else:
+                    self.max_sz = sz
+
+            if sz < self.min_sz:
+                if enforce_min_sz:
+                    raise DataModelDefinitionError
+                else:
+                    self.min_sz = sz
+
+        # value is encoded through self._str2bytes which takes into account the self.codec
+        # but not a potential encoder (done later)
+        val_sz = len(value)
+        check_size_constraints(val_sz, enforce_max_sz=enforce_max_sz, enforce_min_sz=enforce_min_sz)
+
         if self.encoded_string:
             try:
                 enc_val = self.encode(value)
             except:
                 return False
             val_sz = len(enc_val)
-            if not force_max_enc_sz and not force_min_enc_sz:
+            if not enforce_max_enc_sz and not enforce_min_enc_sz:
                 if self.max_encoded_sz is None or val_sz > self.max_encoded_sz:
                     self.max_encoded_sz = val_sz
                 if self.min_encoded_sz is None or val_sz < self.min_encoded_sz:
                     self.min_encoded_sz = val_sz
-                if update_list:
+                if update_list and value not in self.values:
                     self.values.append(value)
                 return True
-            elif force_max_enc_sz and not force_min_enc_sz:
+            elif enforce_max_enc_sz and not enforce_min_enc_sz:
                 if val_sz <= self.max_encoded_sz:
                     if self.min_encoded_sz is None or val_sz < self.min_encoded_sz:
                         self.min_encoded_sz = val_sz
-                    if update_list:
+                    if update_list and value not in self.values:
                         self.values.append(value)
                     return True
                 else:
                     return False
-            elif not force_max_enc_sz and force_min_enc_sz:
+            elif not enforce_max_enc_sz and enforce_min_enc_sz:
                 if val_sz >= self.min_encoded_sz:
                     if self.max_encoded_sz is None or val_sz > self.max_encoded_sz:
                         self.max_encoded_sz = val_sz
-                    if update_list:
+                    if update_list and value not in self.values:
                         self.values.append(value)
                     return True
                 else:
                     return False
             else:
                 if val_sz <= self.max_encoded_sz and val_sz >= self.min_encoded_sz:
-                    if update_list:
+                    if update_list and value not in self.values:
                         self.values.append(value)
                     return True
                 else:
                     return False
         else:
-            val_sz = len(value)
             if self.max_encoded_sz is None or val_sz > self.max_encoded_sz:
                 self.max_encoded_sz = val_sz
             if self.min_encoded_sz is None or val_sz < self.min_encoded_sz:
                 self.min_encoded_sz = val_sz
-            if update_list:
+            if update_list and value not in self.values:
                 self.values.append(value)
+
             return True
 
     def _check_constraints_and_update(self, val):
-        if self._check_constraints(
-            val,
-            force_max_enc_sz=self.max_enc_sz_provided,
-            force_min_enc_sz=self.min_enc_sz_provided,
-            update_list=False,
-        ):
+        if self._check_constraints(val, enforce_max_enc_sz=self.max_enc_sz_provided,
+                                   enforce_min_enc_sz=self.min_enc_sz_provided, update_list=False):
             if self.values is None:
                 # This case is happening when only @alphabet is provided. Thus, the default value
                 # will be added at the time self._populate_values() is called.
@@ -924,40 +952,49 @@ class String(VT_Alt):
         else:
             raise DataModelDefinitionError
 
-    def _populate_values(self, force_max_enc_sz=False, force_min_enc_sz=False):
-        self.values = []
-        alpbt = (
-            string.printable
-            if self.alphabet is None
-            else self._bytes2str(self.alphabet)
-        )
-        if self.default is not None:
-            self._check_constraints(
-                self._str2bytes(self.default),
-                force_max_enc_sz=force_max_enc_sz,
-                force_min_enc_sz=force_min_enc_sz,
-                update_list=True,
-            )
+    def _append_representative_values(self, enforce_max_enc_sz=False, enforce_min_enc_sz=False):
+        assert self.values is not None
+        alpbt = (string.printable if self.alphabet is None else self._bytes2str(self.alphabet))
         if self.min_sz < self.max_sz:
             self._check_constraints(
                 self._str2bytes(bp.rand_string(size=self.max_sz, str_set=alpbt)),
-                force_max_enc_sz=force_max_enc_sz,
-                force_min_enc_sz=force_min_enc_sz,
-                update_list=True,
-            )
+                enforce_max_sz=False, enforce_min_sz=False,
+                enforce_max_enc_sz=enforce_max_enc_sz, enforce_min_enc_sz=enforce_min_enc_sz,
+                update_list=True)
             self._check_constraints(
                 self._str2bytes(bp.rand_string(size=self.min_sz, str_set=alpbt)),
-                force_max_enc_sz=force_max_enc_sz,
-                force_min_enc_sz=force_min_enc_sz,
-                update_list=True,
-            )
+                enforce_max_sz=False, enforce_min_sz=False,
+                enforce_max_enc_sz=enforce_max_enc_sz, enforce_min_enc_sz=enforce_min_enc_sz,
+                update_list=True)
         else:
             self._check_constraints(
                 self._str2bytes(bp.rand_string(size=self.max_sz, str_set=alpbt)),
-                force_max_enc_sz=force_max_enc_sz,
-                force_min_enc_sz=force_min_enc_sz,
-                update_list=True,
-            )
+                enforce_max_sz=False, enforce_min_sz=False,
+                enforce_max_enc_sz=enforce_max_enc_sz, enforce_min_enc_sz=enforce_min_enc_sz,
+                update_list=True)
+
+
+    def _populate_values(self, enforce_max_enc_sz=False, enforce_min_enc_sz=False):
+        self.values = []
+        alpbt = (string.printable if self.alphabet is None else self._bytes2str(self.alphabet))
+        if self.default is not None:
+            self._check_constraints(self._str2bytes(self.default),
+                                    enforce_max_enc_sz=enforce_max_enc_sz,
+                                    enforce_min_enc_sz=enforce_min_enc_sz, update_list=True)
+        if self.min_sz < self.max_sz:
+            self._check_constraints(
+                self._str2bytes(bp.rand_string(size=self.max_sz, str_set=alpbt)),
+                enforce_max_enc_sz=enforce_max_enc_sz, enforce_min_enc_sz=enforce_min_enc_sz,
+                update_list=True)
+            self._check_constraints(
+                self._str2bytes(bp.rand_string(size=self.min_sz, str_set=alpbt)),
+                enforce_max_enc_sz=enforce_max_enc_sz, enforce_min_enc_sz=enforce_min_enc_sz,
+                update_list=True)
+        else:
+            self._check_constraints(
+                self._str2bytes(bp.rand_string(size=self.max_sz, str_set=alpbt)),
+                enforce_max_enc_sz=enforce_max_enc_sz, enforce_min_enc_sz=enforce_min_enc_sz,
+                update_list=True)
         if self.min_sz + 1 < self.max_sz:
             NB_VALS_MAX = 3
             for idx in range(NB_VALS_MAX):
@@ -967,12 +1004,10 @@ class String(VT_Alt):
                     val = bp.rand_string(
                         min=self.min_sz + 1, max=self.max_sz - 1, str_set=alpbt
                     )
-                    if self._check_constraints(
-                        self._str2bytes(val),
-                        force_max_enc_sz=force_max_enc_sz,
-                        force_min_enc_sz=force_min_enc_sz,
-                        update_list=True,
-                    ):
+                    if self._check_constraints(self._str2bytes(val),
+                                               enforce_max_enc_sz=enforce_max_enc_sz,
+                                               enforce_min_enc_sz=enforce_min_enc_sz,
+                                               update_list=True):
                         nb_vals += 1
                     else:
                         retry_cpt += 1
@@ -996,14 +1031,24 @@ class String(VT_Alt):
                     self.values_fuzzy.append(v)
 
         if only_corner_cases:
-            if self.drawn_val is not None:
-                val = self.drawn_val
-            else:
-                val = self.values_copy[0]
-            # self.values_fuzzy.append(val)
-            if len(self.values_copy) > 1:
-                val = self.values_copy[-1]
-                self.values_fuzzy.append(val)
+            if len(self.values) > 1:
+                max_sz = 0
+                min_sz = None
+                max_val = None
+                min_val = None
+                for v in self.values[1:]:
+                    sz = len(v)
+                    if sz > max_sz:
+                        max_sz = sz
+                        max_val = v
+                    elif min_sz is None or sz < min_sz:
+                        min_sz = sz
+                        min_val = v
+
+                if max_val is not None and max_val is not self.drawn_val:
+                    self.values_fuzzy.append(max_val)
+                if min_val is not None and min_val != max_val and min_val is not self.drawn_val:
+                    self.values_fuzzy.append(min_val)
 
         else:
             ### Common Test Cases
@@ -1109,10 +1154,16 @@ class String(VT_Alt):
             self.values_fuzzy = list(filter(self.is_invalid, self.values_fuzzy))
 
         self.values_save = self.values
-        self.values = self.values_fuzzy
-        self.values_copy = copy.copy(self.values)
 
-        self.drawn_val = None
+        if self.values_fuzzy:
+            self.values = self.values_fuzzy
+            self.values_copy = copy.copy(self.values)
+            self.drawn_val = None
+
+            return True
+
+        else:
+            return False
 
 
     def is_valid(self, val):
@@ -1265,10 +1316,8 @@ class String(VT_Alt):
 
     def get_value(self):
         if not self.values:
-            self._populate_values(
-                force_max_enc_sz=self.max_enc_sz_provided,
-                force_min_enc_sz=self.min_enc_sz_provided,
-            )
+            self._populate_values(enforce_max_enc_sz=self.max_enc_sz_provided,
+                                  enforce_min_enc_sz=self.min_enc_sz_provided)
             self._ensure_enc_sizes_consistency()
         if not self.values_copy:
             self.values_copy = copy.copy(self.values)
@@ -1312,7 +1361,7 @@ class String(VT_Alt):
     def set_size_from_constraints(self, size=None, encoded_size=None):
         # This method is used only for absorption purpose, thus no modification
         # is performed on self.values. To be reconsidered in the case the method
-        # has to be used for an another purpose.
+        # has to be used for another purpose.
 
         assert size is not None or encoded_size is not None
         if encoded_size is not None:
@@ -1480,10 +1529,10 @@ class INT(VT):
             self._check_constraints_and_update(default)
             self.default = default
 
-    def _check_constraints_and_update(self, val, no_update=False):
+    def _check_constraints_and_update(self, val, update=True):
         if self.values:
             if val in self.values:
-                if not no_update and val != self.values[0]:
+                if update and val != self.values[0]:
                     self.values.remove(val)
                     self.values.insert(0, val)
                     self.values_copy = copy.copy(self.values)
@@ -1493,7 +1542,7 @@ class INT(VT):
                 raise DataModelDefinitionError
         else:
             if self.mini_gen <= val <= self.maxi_gen:
-                if not no_update:
+                if update:
                     self.idx = val - self.mini_gen
                 else:
                     pass
@@ -1552,7 +1601,7 @@ class INT(VT):
 
                 if min_oset not in supp_list and min_oset != val:
                     supp_list.insert(0, min_oset)
-                if max_oset not in supp_list:
+                if max_oset not in supp_list and max_oset != val:
                     supp_list.insert(0, max_oset)
 
         else:
@@ -1779,7 +1828,10 @@ class INT(VT):
             if self.determinist:
                 val = self.values_copy.pop(0)
             else:
-                val = random.choice(self.values_copy)
+                if self.default not in self.values_copy:
+                    val = random.choice(self.values_copy)
+                else:
+                    val = self.default
                 self.values_copy.remove(val)
             if not self.values_copy:
                 self.values_copy = copy.copy(self.values)
@@ -1798,13 +1850,28 @@ class INT(VT):
             else:
                 # Finite mode is implemented in this way when 'max -
                 # min' is considered too big to be transformed as an
-                # 'values'. It avoids cunsuming too much memory and
+                # 'values'. It avoids consuming too much memory and
                 # provide an end result that seems sufficient for such
                 # situation
-                val = random.randint(self.mini_gen, self.maxi_gen)
-                self.idx += 1
+                if self.default is not None:
+                    delta_from_mini = self.default - self.mini_gen
+                    if self.idx == delta_from_mini:
+                        val = self.default
+                        self.idx = 1 if delta_from_mini != 1 else 2
+                    else:
+                        if delta_from_mini - 1 >= 0 and self.idx == delta_from_mini - 1:
+                            self.idx = delta_from_mini + 1
+                        elif delta_from_mini == 0:
+                            self.idx += 1
+                        else:
+                            self.idx += 1
+                        val = random.randint(self.mini_gen, self.maxi_gen)
+                else:
+                    self.idx += 1
+                    val = random.randint(self.mini_gen, self.maxi_gen)
+
                 if self.idx > abs(self.maxi_gen - self.mini_gen):
-                    self.idx = 0
+                    self.idx = 0 if self.default is None else self.default - self.mini_gen
                     self.exhausted = True
                 else:
                     self.exhausted = False

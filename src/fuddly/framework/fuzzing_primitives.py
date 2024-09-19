@@ -869,6 +869,8 @@ class TypedNodeDisruption(NodeConsumerStub):
         if self.current_fuzz_vt_list:
             vt_obj = self.current_fuzz_vt_list.pop(0)
 
+            DEBUG_PRINT(f' *** Test cases for node "{node.name}": {vt_obj.values}\n', level=0)
+
             node.set_values(value_type=vt_obj, ignore_entanglement=True, preserve_node=True)
             node.make_finite()
             if self.determinist is None:
@@ -886,7 +888,8 @@ class TypedNodeDisruption(NodeConsumerStub):
 
             return True
         else:
-            raise ValueError
+            return False
+            # raise ValueError
 
     def _populate_fuzzy_vt_list(self, vt_node, fuzz_magnitude):
 
@@ -895,10 +898,11 @@ class TypedNodeDisruption(NodeConsumerStub):
         if issubclass(vt.__class__, vtype.VT_Alt):
             new_vt = copy.copy(vt)
             new_vt.make_private(forget_current_state=False)
-            new_vt.enable_fuzz_mode(fuzz_magnitude=fuzz_magnitude,
-                                    only_corner_cases=self._only_corner_cases,
-                                    only_invalid_cases=self._only_invalid_cases)
-            self.current_fuzz_vt_list = [new_vt]
+            ok = new_vt.enable_fuzz_mode(fuzz_magnitude=fuzz_magnitude,
+                                         only_corner_cases=self._only_corner_cases,
+                                         only_invalid_cases=self._only_invalid_cases)
+
+            self.current_fuzz_vt_list = [new_vt] if ok else []
         else:
             self.current_fuzz_vt_list = []
 
