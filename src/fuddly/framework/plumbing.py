@@ -880,7 +880,7 @@ class FmkPlumbing(object):
             dm_params['dm'] = module.data_model
         except:
             if not self._quiet:
-                self.print(colorize("*** ERROR: '{name}' shall contain a global variable 'data_model' ***",
+                self.print(colorize(f"*** ERROR: '{name}' shall contain a global variable 'data_model' ***",
                                     rgb=Color.ERROR))
             return None
         try:
