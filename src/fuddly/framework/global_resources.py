@@ -158,6 +158,9 @@ def _is_running_from_fs():
     except PackageNotFoundError:
         # Fuddly is not installed so we are (almost) certainly running from the sources
         return True
+    except:
+        print("Unable to properly detect where we are ran from. Assuming sources.")
+        return True
     import fuddly
     return fuddly.__path__[0] != str(f.locate().parent)
 
