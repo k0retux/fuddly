@@ -19,8 +19,6 @@ find your objects.
 
 These entry points are identified by group names that are known to fuddly. They are the following:
 
-.. TODO:: project script and info might need groups of their own
-
 * fuddly.projects
 * fuddly.data_models
 
@@ -41,13 +39,7 @@ Using the tutorial as an example, you would package it by creating the following
    
    [project.entry-points."fuddly.data_models"]
    mydf = "modulename.mydf"
-   
-   [project.entry-points."fuddly.data_models_strategies"]
-   mydf = "modulename.mydf_strategy"
 
-
-Given the current implementation, the strategy and data_model need to use the same name/key on the left side 
-of the key-value pairs in the entry point sections.
 
 .. note:: When build a package like this, your source files need to be either in directory named like your module, 
           or in a src directory with a subdirectory named like your module, this second format is prefered.

@@ -79,8 +79,10 @@ monitoring means as well as some scenarios and/or virtual operators.
 .. note::
 
    Projects and data models files are retrieved either from
-   ``<root of fuddly>/{projects,data_models}/`` or from
-   ``<fuddly data folder>/{projects,data_models}/``.
+   ``<root of fuddly>/{projects,data_models}/``,
+   ``<fuddly data folder>/{projects,data_models}/`` or from isntalled
+   python modules exposing them through importlib entry_points.
+   see :ref:`packaging` for more information on that
 
    Note that when the Fuddly shell is launched, the path of the
    fuddly data folder is displayed as well as its configuration folder.
@@ -1298,22 +1300,28 @@ Defining the Imaginary MyDF Data Model
              Fuddly can automagically detect them and use them when configured properly.
              See :ref:`packaging` for more information on the subject
 
-Assuming we want to model an imaginary data format called `MyDF`.  Two
-files need to be created either within ``<root of fuddly>/data_models/`` or within
-``<fuddly data folder>/user_data_models/`` (or within any subdirectory):
+Assuming we want to model an imaginary data format called `MyDF`. A
+folder need to be created either within ``<root of fuddly>/data_models/`` or within
+``<fuddly data folder>/user_data_models/`` (or within any subdirectory).
+This folder shall be named ``mydf`` and contain 2 files:
 
-``mydf.py``
+``__init__.py``
   Contain the implementation of the data model related to
   ``MyDF`` data format, **which is the topic of the current section**.
 
-``mydf_strategy.py``
+``strategy.py``
   Contain optional disruptors specific to the data model
   (:ref:`tuto:disruptors`)
+
+.. note:: Actually, ``__init__.py`` only needs to contain the ``data_model`` variable,
+          containing an instance of ``MyDF_DataModel`` and ``strategy.py`` a ``tactics``
+          variables with an instance of a ``Tactics`` object. As long as this is respected,
+          the code can be wherever.
 
 By default, ``fuddly`` will use the prefix ``mydf`` for referencing
 the data model. But it can be overloaded within the data model
 definition, as it is done in the following example (in line 8) which
-is a simple skeleton for ``mydf.py``:
+is a simple skeleton for ``__init__.py``:
 
 .. code-block:: python
    :linenos:
@@ -1331,20 +1339,20 @@ is a simple skeleton for ``mydf.py``:
       def build_data_model(self):
 
          # Data Type Definition
-	 d1 = ...
-	 d2 = ...
-	 d3 = ...
+         d1 = ...
+         d2 = ...
+         d3 = ...
 
-	 self.register(d1, d2, d3)
+         self.register(d1, d2, d3)
 
 
    data_model = MyDF_DataModel()
 
 
 .. note:: All elements discussed during this tutorial, related to the
-          data model ``mydf``, are implemented within ``tuto.py`` and
-          ``tuto_strategy.py``. Don't hesitate to play with what are
-          defined within, Either with ``ipython`` or ``Fuddly Shell``
+          data model ``mydf``, are implemented within ``tuto/__init__.py`` and
+          ``tuto/strategy.py``. Don't hesitate to play with what are
+          defined within. Either with ``ipython`` or ``Fuddly Shell``
           (:ref:`tuto:start-fuzzshell`).
 
 In this skeleton, you can notice that you have to define a class that
