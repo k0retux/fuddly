@@ -19,11 +19,10 @@ find your objects.
 
 These entry points are identified by group names that are known to fuddly. They are the following:
 
-.. TODO:: Strategies might be merged into data_models and project script + info might need groups of their own
+.. TODO:: project script and info might need groups of their own
 
 * fuddly.projects
 * fuddly.data_models
-* fuddly.data_models_strategies
 
 Using the tutorial as an example, you would package it by creating the following pyproject.toml 
 
