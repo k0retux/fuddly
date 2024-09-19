@@ -150,18 +150,18 @@ def get_user_input(msg):
     return input(msg)
 
 def _is_running_from_fs():
-    from importlib.metadata import (files,PackageNotFoundError)
+    from importlib.metadata import (Distribution,PackageNotFoundError)
     try:
-        # Get the __init__.py file from the root of an installed fuddly package
-        f = [x for x in files("fuddly") if str(x) == "fuddly/__init__.py"][0]
+        f = Distribution.from_name("fuddly")
     except PackageNotFoundError:
         # Fuddly is not installed so we are (almost) certainly running from the sources
         return True
-    except:
-        print("Unable to properly detect where we are ran from. Assuming sources.")
-        return True
+
     import fuddly
-    return fuddly.__path__[0] != str(f.locate().parent)
+    # Importlib.metadata does only looks at python packages that have metadata (installed ones)
+    # import will find the local fuddly also if it is in your PYTHONPATH
+    # This comparaison will be true if the fuddly imported is not the one installed on the system (if there is one)
+    return os.path.dirname(fuddly.__path__[0]) != str(f._path.parent)
 
 is_running_from_fs = _is_running_from_fs()
 
