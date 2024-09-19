@@ -808,15 +808,16 @@ class FmkPlumbing(object):
             prefix = dname.replace(os.sep, ".") + "."
             for name in names:
                 dm_params = self._import_dm(prefix, name)
-                if dm_params is not None:
-                    self._add_data_model(dm_params["dm"], dm_params["tactics"], dm_params["dm_rld_args"],
-                                         reload_dm=False)
-                    self.__dyngenerators_created[dm_params["dm"]] = False
-                    if fmkDB_update:
-                        # populate FMK DB
-                        self._fmkDB_insert_dm_and_dmakers(dm_params["dm"].name, dm_params["tactics"])
-                else:
+                if dm_params is None:
                     self.import_successfull = False
+                    continue
+
+                self._add_data_model(dm_params["dm"], dm_params["tactics"], dm_params["dm_rld_args"],
+                                     reload_dm=False)
+                self.__dyngenerators_created[dm_params["dm"]] = False
+                if fmkDB_update:
+                    # populate FMK DB
+                    self._fmkDB_insert_dm_and_dmakers(dm_params["dm"].name, dm_params["tactics"])
 
     def _get_data_models_from_modules(self, fmkDB_update=True):
         if not self._quiet:
@@ -833,16 +834,17 @@ class FmkPlumbing(object):
                                         f"ignoring... [{module.module}] ***", rgb=Color.WARNING))
                 continue
 
-            if dm_params is not None:
-                self._add_data_model(dm_params['dm'], dm_params['tactics'], dm_params['dm_rld_args'], 
-                                     reload_dm=False)
-                name = dm_params['dm'].name
-                self.__dyngenerators_created[dm_params['dm']] = False
-                if fmkDB_update:
-                    # populate FMK DB
-                    self._fmkDB_insert_dm_and_dmakers(dm_params['dm'].name, dm_params['tactics'])
-            else:
+            if dm_params is None:
                 self.import_successfull = False
+                continue 
+
+            self._add_data_model(dm_params['dm'], dm_params['tactics'], dm_params['dm_rld_args'], 
+                                 reload_dm=False)
+            name = dm_params['dm'].name
+            self.__dyngenerators_created[dm_params['dm']] = False
+            if fmkDB_update:
+                # populate FMK DB
+                self._fmkDB_insert_dm_and_dmakers(dm_params['dm'].name, dm_params['tactics'])
 
     def _import_dm(self, prefix, name, reload_dm=False):
         load_from_module=False
@@ -1181,7 +1183,7 @@ class FmkPlumbing(object):
             logger.name = name
 
         # Targets
-        target=[]
+        targets=[]
         try:
             targets = module.targets
         except AttributeError:
@@ -1233,7 +1235,7 @@ class FmkPlumbing(object):
                 if prj.name == project.name:
                     break
             else:
-                raise ValueError(porject.name)
+                raise ValueError(project.name)
             old_prj = prj
             self.prj_list.remove(prj)
             self.prj_list.append(project)
