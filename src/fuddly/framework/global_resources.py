@@ -67,7 +67,6 @@ else:
 
 ep_group_names = {
     "data_models": "fuddly.data_models",
-    "strategies":  "fuddly.data_models_strategies",
     "projects":    "fuddly.projects",
 }
 

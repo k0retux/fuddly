@@ -49,7 +49,6 @@ class ProjectDuplicateError(ValueError):
 
 class RegexParserError(DataModelDefinitionError): pass
 
-
 class EscapeError(RegexParserError):
 
     def __init__(self, char=None):
