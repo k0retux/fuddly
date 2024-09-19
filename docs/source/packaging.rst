@@ -24,7 +24,7 @@ These entry points are identified by group names that are known to fuddly. They 
 
 Using the tutorial as an example, you would package it by creating the following pyproject.toml 
 
-:ref:`dm:mydf` 
+See :ref:`dm:mydf` for the implementation.
 
 .. code-block:: toml
 
