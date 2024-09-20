@@ -70,15 +70,6 @@ import io
 sys.path.insert(0, fuddly_data_folder)
 sys.path.insert(0, external_libs_folder)
 
-#TODO These are not needed right ?
-user_dm_mod = os.path.basename(os.path.normpath(user_data_models_folder))
-user_prj_mod = os.path.basename(os.path.normpath(user_projects_folder))
-user_tg_mod = os.path.basename(os.path.normpath(user_targets_folder))
-
-exec("import " + user_dm_mod)
-exec("import " + user_prj_mod)
-exec("import " + user_tg_mod)
-
 sig_int_handler = signal.getsignal(signal.SIGINT)
 
 r_pyfile = re.compile(r'.*\.py$')
@@ -785,9 +776,11 @@ class FmkPlumbing(object):
             _, dirs, _ = next(os.walk(path))
             for dirpath in dirs:
                 p = Path(os.path.join(path, dirpath))
+                # We only load modules that have a __init__.py, dm.py and strategy.py
                 inits = [ dirname(x) for x in  p.glob('**/__init__.py') ]
+                dms = [ dirname(x) for x in  p.glob('**/dm.py') ]
                 strats = [ dirname(x) for x in  p.glob('**/strategy.py') ]
-                modules = list(set(inits) & set(strats))
+                modules = list(set(inits) & set(strats) & set(dms))
                 for m in modules:
                     relpath = dirname(m)[len(base_path)+1:]
                     key=prefix+relpath
@@ -858,10 +851,9 @@ class FmkPlumbing(object):
             else:
                 module = importlib.import_module(prefix + name)
 
-            module_strat = importlib.import_module(module.__package__ + ".strategy")
             if reload_dm:
-                importlib.reload(module)
-                importlib.reload(module_strat)
+                importlib.reload(module.strategy)
+                importlib.reload(module.dm)
         except:
             if not self._quiet:
                 if reload_dm:
@@ -877,14 +869,14 @@ class FmkPlumbing(object):
         dm_params = {}
         dm_params["dm_rld_args"] = (prefix, name)
         try:
-            dm_params["dm"] = module.data_model
+            dm_params["dm"] = module.dm.data_model
         except:
             if not self._quiet:
                 self.print(colorize(f"*** ERROR: '{name}' shall contain a global variable 'data_model' ***",
                                     rgb=Color.ERROR))
             return None
         try:
-            dm_params["tactics"] = module_strat.tactics
+            dm_params["tactics"] = module.strategy.tactics
         except AttributeError:
             if not self._quiet:
                 self.print(colorize(f"*** ERROR: '{name}' shall contain a global variable 'tactics' ***",
