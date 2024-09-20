@@ -1303,9 +1303,9 @@ Defining the Imaginary MyDF Data Model
 Assuming we want to model an imaginary data format called `MyDF`. A
 folder need to be created either within ``<root of fuddly>/data_models/`` or within
 ``<fuddly data folder>/user_data_models/`` (or within any subdirectory).
-This folder shall be named ``mydf`` and contain 2 files:
+This folder shall be named ``mydf`` and contain 3 files:
 
-``__init__.py``
+``dm.py``
   Contain the implementation of the data model related to
   ``MyDF`` data format, **which is the topic of the current section**.
 
@@ -1313,15 +1313,15 @@ This folder shall be named ``mydf`` and contain 2 files:
   Contain optional disruptors specific to the data model
   (:ref:`tuto:disruptors`)
 
-.. note:: Actually, ``__init__.py`` only needs to contain the ``data_model`` variable,
-          containing an instance of ``MyDF_DataModel`` and ``strategy.py`` a ``tactics``
-          variables with an instance of a ``Tactics`` object. As long as this is respected,
-          the code can be wherever.
+``__init__.py``
+  This needs to be include for python to recognize the folder as a module
+  and needs to contain at least ``from . import (dm, strategy)`` so that
+  the 2 submodule are included when the module itself is loaded.
 
 By default, ``fuddly`` will use the prefix ``mydf`` for referencing
 the data model. But it can be overloaded within the data model
 definition, as it is done in the following example (in line 8) which
-is a simple skeleton for ``__init__.py``:
+is a simple skeleton for ``dm.py``:
 
 .. code-block:: python
    :linenos:
@@ -1350,7 +1350,7 @@ is a simple skeleton for ``__init__.py``:
 
 
 .. note:: All elements discussed during this tutorial, related to the
-          data model ``mydf``, are implemented within ``tuto/__init__.py`` and
+          data model ``mydf``, are implemented within ``tuto/dm.py`` and
           ``tuto/strategy.py``. Don't hesitate to play with what are
           defined within. Either with ``ipython`` or ``Fuddly Shell``
           (:ref:`tuto:start-fuzzshell`).
@@ -1882,7 +1882,7 @@ Defining Specific Disruptors
 Overview
 ++++++++
 
-Specific disruptors have to be implemented within ``mydf_strategy.py``. This file should
+Specific disruptors have to be implemented within ``mydf/strategy.py``. This file should
 starts with:
 
 .. code-block:: python
@@ -1905,7 +1905,7 @@ have to define a subclass of :class:`fuddly.framework.tactics_helper.Disruptor`
 or :class:`fuddly.framework.tactics_helper.StatefulDisruptor`, and use the
 decorator ``@disruptor`` on it to register it. The first parameter of
 this decorator has to be the :class:`fuddly.framework.tactics_helper.Tactics`
-object you declare at the beginning of ``mydf_strategy.py``.
+object you declare at the beginning of ``mydf/strategy.py``.
 
 .. code-block:: python
    :linenos:
@@ -2129,7 +2129,7 @@ The environment---composed of at least one target, a logger, and
 optionnaly some monitoring means and virtual operators---is setup
 within a project file located within ``<root of fuddly>/projects/`` or within
 ``<fuddly data folder>/user_projects/``. To illustrate that let's
-show the beginning of ``generic/standard_proj.py``:
+show the beginning of ``generic/standard.py``:
 
 .. code-block:: python
    :linenos:
@@ -2210,7 +2210,7 @@ Many targets can be defined in a project file. They have to be
 referenced within a list pointed by the global variable ``targets`` of
 the project file.
 
-Within the tutorial project (``projects/tuto_proj.py``), multiple
+Within the tutorial project (``projects/tuto.py``), multiple
 targets have been defined:
 
 - three different :class:`fuddly.framework.targets.local.LocalTarget` for interacting with local programs;
@@ -2357,7 +2357,7 @@ the reference of the project as the first parameter.
 .. seealso:: Parameters can be defined for an operator, in order to
              make it more customizable. The way to describe them is
              the same as for *disruptors*. Look into the file
-             ``projects/generic/standard_proj.py`` for some examples.
+             ``projects/generic/standard.py`` for some examples.
 
 Here under is presented a skeleton of an Operator:
 
