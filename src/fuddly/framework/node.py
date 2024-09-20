@@ -41,8 +41,6 @@ from pprint import pprint as pp
 from enum import Enum
 from random import shuffle
 
-sys.path.append(".")
-
 from fuddly.framework.basic_primitives import *
 from fuddly.libs.external_modules import *
 from fuddly.framework.global_resources import *

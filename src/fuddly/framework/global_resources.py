@@ -65,6 +65,11 @@ if not xdg_mod_error and not os.path.exists(fuddly_data_folder):
 else:
     use_xdg = False
 
+ep_group_names = {
+    "data_models": "fuddly.data_models",
+    "projects":    "fuddly.projects",
+}
+
 ensure_dir(fuddly_data_folder)
 
 exported_data_folder = fuddly_data_folder + 'exported_data' + os.sep
@@ -143,6 +148,22 @@ def is_string_compatible(val):
 
 def get_user_input(msg):
     return input(msg)
+
+def _is_running_from_fs():
+    from importlib.metadata import (Distribution,PackageNotFoundError)
+    try:
+        f = Distribution.from_name("fuddly")
+    except PackageNotFoundError:
+        # Fuddly is not installed so we are (almost) certainly running from the sources
+        return True
+
+    import fuddly
+    # Importlib.metadata does only looks at python packages that have metadata (installed ones)
+    # import will find the local fuddly also if it is in your PYTHONPATH
+    # This comparaison will be true if the fuddly imported is not the one installed on the system (if there is one)
+    return os.path.dirname(fuddly.__path__[0]) != str(f._path.parent)
+
+is_running_from_fs = _is_running_from_fs()
 
 # Generic container for user inputs
 

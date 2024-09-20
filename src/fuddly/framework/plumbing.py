@@ -59,26 +59,16 @@ from fuddly.libs.utils import *
 
 from fuddly.framework import generic_data_makers
 
-from fuddly import data_models  # needed by importlib.reload
-from fuddly import projects  # needed by importlib.reload
-
 from fuddly.framework.global_resources import *
 from fuddly.libs.utils import *
 
 import importlib
+from importlib.metadata import entry_points
 
 import io
 
 sys.path.insert(0, fuddly_data_folder)
 sys.path.insert(0, external_libs_folder)
-
-user_dm_mod = os.path.basename(os.path.normpath(user_data_models_folder))
-user_prj_mod = os.path.basename(os.path.normpath(user_projects_folder))
-user_tg_mod = os.path.basename(os.path.normpath(user_targets_folder))
-
-exec("import " + user_dm_mod)
-exec("import " + user_prj_mod)
-exec("import " + user_tg_mod)
 
 sig_int_handler = signal.getsignal(signal.SIGINT)
 
@@ -759,125 +749,160 @@ class FmkPlumbing(object):
 
     @EnforceOrder(initial_func=True, final_state="get_projs")
     def get_data_models(self, fmkDB_update=True):
-        data_models = collections.OrderedDict()
-
-        def populate_data_models(path, prefix=""):
-            dm_dir = os.path.basename(os.path.normpath(path))
-            for (dirpath, dirnames, filenames) in os.walk(path):
-                if filenames:
-                    data_models[prefix + dm_dir] = []
-                    data_models[prefix + dm_dir].extend(filenames)
-                for d in dirnames:
-                    full_path = os.path.join(path, d)
-                    rel_path = os.path.join(dm_dir, d)
-                    data_models[prefix + rel_path] = []
-                    for (dth, dnames, fnm) in os.walk(full_path):
-                        data_models[prefix + rel_path].extend(fnm)
-                        break
-                break
-
-        populate_data_models(gr.data_models_folder, prefix="fuddly/")
-        populate_data_models(gr.user_data_models_folder)
-
-        dms = copy.copy(data_models)
-        for k in dms:
-            data_models[k] = list(filter(is_python_file, data_models[k]))
-            if "__init__.py" in data_models[k]:
-                data_models[k].remove("__init__.py")
-            if not data_models[k]:
-                del data_models[k]
-
-        rexp_strategy = re.compile(r'(.*)_strategy\.py$')
-
-        if not self._quiet:
-            self.print(colorize(FontStyle.BOLD + "=" * 63 + "[ Data Models ]==", rgb=Color.FMKINFOGROUP))
-
-        for dname, file_list in data_models.items():
-            if not self._quiet:
-                self.print(colorize(">>> Look for Data Models within '%s' directory" % dname,
-                               rgb=Color.FMKINFOSUBGROUP))
-            prefix = dname.replace(os.sep, ".") + "."
-            for f in file_list:
-                res = rexp_strategy.match(f)
-                if res is None:
-                    continue
-                name = res.group(1)
-                if name + ".py" in file_list:
-                    dm_params = self._import_dm(prefix, name)
-                    if dm_params is not None:
-                        self._add_data_model(
-                            dm_params["dm"],
-                            dm_params["tactics"],
-                            dm_params["dm_rld_args"],
-                            reload_dm=False,
-                        )
-                        self.__dyngenerators_created[dm_params["dm"]] = False
-                        if fmkDB_update:
-                            # populate FMK DB
-                            self._fmkDB_insert_dm_and_dmakers(dm_params["dm"].name, dm_params["tactics"])
-                    else:
-                        self.import_successfull = False
+        self._get_data_models_from_fs(fmkDB_update)
+        self._get_data_models_from_modules(fmkDB_update)
 
         if fmkDB_update:
             self.fmkDB.insert_data_model(Database.DEFAULT_DM_NAME)
             self.fmkDB.insert_dmaker(Database.DEFAULT_DM_NAME, Database.DEFAULT_GTYPE_NAME,
                                      Database.DEFAULT_GEN_NAME, True, True)
 
+    def _get_data_models_from_fs(self, fmkDB_update=True):
+        if not self._quiet:
+            self.print(colorize(FontStyle.BOLD + "=" * 63 + "[ Data Models (filesystem) ]==", rgb=Color.FMKINFOGROUP))
+
+        data_models = collections.OrderedDict()
+
+        def populate_data_models(path, prefix=""):
+            from pathlib import Path
+            from os.path import dirname,basename
+
+            if path[-1] == '/':
+                path = path[:-1]
+            if prefix != "" and prefix[-1] != '/':
+                prefix = prefix + '/'
+
+            base_path = dirname(path)
+            _, dirs, _ = next(os.walk(path))
+            for dirpath in dirs:
+                p = Path(os.path.join(path, dirpath))
+                # We only load modules that have a __init__.py, dm.py and strategy.py
+                inits = [ dirname(x) for x in  p.glob('**/__init__.py') ]
+                dms = [ dirname(x) for x in  p.glob('**/dm.py') ]
+                strats = [ dirname(x) for x in  p.glob('**/strategy.py') ]
+                modules = list(set(inits) & set(strats) & set(dms))
+                for m in modules:
+                    relpath = dirname(m)[len(base_path)+1:]
+                    key=prefix+relpath
+                    if data_models.get(key) is None:
+                        data_models[key] = []
+                    data_models[key].append(basename(m))
+
+        if gr.is_running_from_fs:
+            if not self._quiet:
+                self.print(colorize("*** Running directly from sources, loading internal data_models ***", rgb=Color.WARNING))
+            populate_data_models(gr.data_models_folder, prefix="fuddly")
+        populate_data_models(gr.user_data_models_folder)
+
+        for dname, names in data_models.items():
+            if not self._quiet:
+                self.print(colorize(f">>> Look for Data Models within '{dname}' directory",
+                                    rgb=Color.FMKINFOSUBGROUP))
+            prefix = dname.replace(os.sep, ".") + "."
+            for name in names:
+                dm_params = self._import_dm(prefix, name)
+                if dm_params is None:
+                    self.import_successfull = False
+                    continue
+
+                self._add_data_model(dm_params["dm"], dm_params["tactics"], dm_params["dm_rld_args"],
+                                     reload_dm=False)
+                self.__dyngenerators_created[dm_params["dm"]] = False
+                if fmkDB_update:
+                    # populate FMK DB
+                    self._fmkDB_insert_dm_and_dmakers(dm_params["dm"].name, dm_params["tactics"])
+
+    def _get_data_models_from_modules(self, fmkDB_update=True):
+        if not self._quiet:
+            self.print(colorize(FontStyle.BOLD + "="*63+"[ Data Models (python modules) ]==", rgb=Color.FMKINFOGROUP))
+
+        group_name=gr.ep_group_names["data_models"]
+        dms = entry_points(group=group_name)
+        for module in dms:
+            try:
+                dm_params = self._import_dm(module, module.name)
+            except DataModelDuplicateError as e:
+                if not self._quiet:
+                    self.print(colorize(f"*** The data model '{e.name}' was already defined, "
+                                        f"ignoring... [{module.module}] ***", rgb=Color.WARNING))
+                continue
+
+            if dm_params is None:
+                self.import_successfull = False
+                continue 
+
+            self._add_data_model(dm_params["dm"], dm_params["tactics"], dm_params["dm_rld_args"],
+                                 reload_dm=False)
+            name = dm_params["dm"].name
+            self.__dyngenerators_created[dm_params["dm"]] = False
+            if fmkDB_update:
+                # populate FMK DB
+                self._fmkDB_insert_dm_and_dmakers(dm_params["dm"].name, dm_params["tactics"])
+
     def _import_dm(self, prefix, name, reload_dm=False):
-        module = None
-        module_strat = None
+        load_from_module=False
         try:
-            module = importlib.import_module(prefix + name)
-            module_strat = importlib.import_module(prefix + name + "_strategy")
-            if reload_dm:
-                importlib.reload(module)
-                importlib.reload(module_strat)
-        except:
-            if self._quiet:
-                return None
+            # loading from a python module
+            if type(prefix) is importlib.metadata.EntryPoint:
+                load_from_module=True
+                module = prefix.load()
 
-            if reload_dm:
-                self.print(colorize("*** Problem during reload of '%s.py' and/or '%s_strategy.py' ***" % (name, name), rgb=Color.ERROR))
+            # loading from a file
             else:
-                self.print(colorize("*** Problem during import of '%s.py' and/or '%s_strategy.py' ***" % (name, name), rgb=Color.ERROR))
-            self.print("-" * 60)
-            traceback.print_exc(file=self.printer)
-            self.print("-" * 60)
+                module = importlib.import_module(prefix + name)
 
-            return None
-
-        else:
-            dm_params = {}
-
-            dm_params["dm_rld_args"] = (prefix, name)
-
-            try:
-                dm_params["dm"] = module.data_model
-            except:
-                if not self._quiet:
-                    self.print(colorize("*** ERROR: '%s.py' shall contain a global variable 'data_model' ***" % (name), rgb=Color.ERROR))
-                return None
-            try:
-                dm_params["tactics"] = module_strat.tactics
-            except:
-                if not self._quiet:
-                    self.print(colorize("*** ERROR: '%s_strategy.py' shall contain a global variable 'tactics' ***" % (name), rgb=Color.ERROR))
-                return None
-
-            dm_params["tactics"].set_additional_info(fmkops=self._exportable_fmk_ops,
-                                                     related_dm=dm_params["dm"])
-
-            if dm_params["dm"].name is None:
-                dm_params["dm"].name = name
-            self._name2dm[dm_params["dm"].name] = dm_params["dm"]
-
+            if reload_dm:
+                importlib.reload(module.strategy)
+                importlib.reload(module.dm)
+        except:
             if not self._quiet:
                 if reload_dm:
-                    self.print(colorize("*** Data Model '%s' updated ***" % dm_params["dm"].name, rgb=Color.DATA_MODEL_LOADED))
+                    self.print(colorize(f"*** Problem during reload of '{name}' ***", rgb=Color.ERROR))
                 else:
-                    self.print(colorize("*** Found Data Model: '%s' ***" % dm_params["dm"].name, rgb=Color.FMKSUBINFO))
+                    self.print(colorize(f"*** Problem during import of '{name}' ***", rgb=Color.ERROR))
 
-            return dm_params
+                self.print("-" * 60)
+                traceback.print_exc(file=self.printer)
+                self.print("-" * 60)
+            return None
+
+        dm_params = {}
+        dm_params["dm_rld_args"] = (prefix, name)
+        try:
+            dm_params["dm"] = module.dm.data_model
+        except:
+            if not self._quiet:
+                self.print(colorize(f"*** ERROR: '{name}' shall contain a global variable 'data_model' ***",
+                                    rgb=Color.ERROR))
+            return None
+        try:
+            dm_params["tactics"] = module.strategy.tactics
+        except AttributeError:
+            if not self._quiet:
+                self.print(colorize(f"*** ERROR: '{name}' shall contain a global variable 'tactics' ***",
+                                    rgb=Color.ERROR))
+            return None
+
+        dm_params["tactics"].set_additional_info(fmkops=self._exportable_fmk_ops,
+                                                 related_dm=dm_params['dm'])
+
+        if dm_params["dm"].name is None:
+            dm_params["dm"].name = name
+
+        if load_from_module and not reload_dm and self._name2dm.get(dm_params['dm'].name) is not None:
+            raise DataModelDuplicateError(dm_params['dm'].name)
+
+        self._name2dm[dm_params["dm"].name] = dm_params["dm"]
+
+        if not self._quiet:
+            if reload_dm:
+                self.print(colorize(f"*** Data Model '{dm_params['dm'].name}' updated ***",
+                                    rgb=Color.DATA_MODEL_LOADED))
+            else:
+                self.print(colorize(f"*** Found Data Model: '{dm_params['dm'].name}' ***",
+                                    rgb=Color.FMKSUBINFO))
+
+        return dm_params
 
     def _add_data_model(self, data_model, strategy, dm_rld_args,
                         reload_dm=False):
@@ -905,6 +930,13 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=["get_projs"], final_state="20_load_prj")
     def get_projects(self, fmkDB_update=True):
+        self._get_projects_fs(fmkDB_update)
+        self._get_projects_module(fmkDB_update)
+
+    def _get_projects_fs(self, fmkDB_update=True):
+        if not self._quiet:
+            self.print(colorize(FontStyle.BOLD + "=" * 66 + "[ Projects (filesystem) ]==", rgb=Color.FMKINFOGROUP))
+
         projects = collections.OrderedDict()
 
         def populate_projects(path, prefix=""):
@@ -922,7 +954,11 @@ class FmkPlumbing(object):
                         break
                 break
 
-        populate_projects(gr.projects_folder, prefix="fuddly/")
+
+        if gr.is_running_from_fs:
+            if not self._quiet:
+                self.print(colorize("*** Running directly from sources, loading internal projects ***", rgb=Color.WARNING))
+            populate_projects(gr.projects_folder, prefix="fuddly/")
         populate_projects(gr.user_projects_folder)
 
         prjs = copy.copy(projects)
@@ -933,10 +969,7 @@ class FmkPlumbing(object):
             if not projects[k]:
                 del projects[k]
 
-        rexp_proj = re.compile(r'(.*)_proj\.py$')
-
-        if not self._quiet:
-            self.print(colorize(FontStyle.BOLD + "=" * 66 + "[ Projects ]==", rgb=Color.FMKINFOGROUP))
+        rexp_proj = re.compile(r'(.*)\.py$')
 
         for dname, file_list in projects.items():
             if not self._quiet:
@@ -949,7 +982,7 @@ class FmkPlumbing(object):
                 if res is None:
                     continue
                 name = res.group(1)
-                prj_params = self._import_project(prefix, name)
+                prj_params = self._import_project_from_fs(prefix, name)
                 if prj_params is not None:
                     self._add_project(
                         prj_params["project"],
@@ -963,21 +996,59 @@ class FmkPlumbing(object):
                 else:
                     self.import_successfull = False
 
+    def _get_projects_module(self, fmkDB_update=True):
+        group_name=gr.ep_group_names["projects"]
+        projects = entry_points(group=group_name)
+
+        if not self._quiet:
+            self.print(colorize(FontStyle.BOLD + "="*66+"[ Projects (modules) ]==", rgb=Color.FMKINFOGROUP))
+
+        for module in projects:
+            try:
+                prj_params = self._import_project_from_module(module, False)
+            except ProjectDuplicateError as e:
+                if not self._quiet:
+                    self.print(colorize(f"*** The project '{e.name}' was already defined, "
+                                        f"ignoring... [{module.module}] ***", rgb=Color.WARNING))
+                continue
+
+            if prj_params is not None:
+                self._add_project(prj_params["project"], prj_params["target"],
+                                  prj_params["logger"], prj_params["prj_rld_args"],
+                                  reload_prj=False)
+                if fmkDB_update:
+                    self.fmkDB.insert_project(prj_params["project"].name)
+            else:
+                self.import_successfull = False
+
     def _import_project(self, prefix, name, reload_prj=False):
+        if type(prefix) is importlib.metadata.EntryPoint: # Reloading from a python module
+            # The prefix is the module in this case 
+            return self._import_project_from_module(prefix, reload_prj=True)
+        else: # Reloading from a file
+            return self._import_project_from_fs(prefix, name, reload_prj=True)
+
+    def _import_project_from_fs(self, prefix, name, reload_prj=False):
         module=None
+
         try:
-            module = importlib.import_module(prefix + name + "_proj")
+            if importlib.util.find_spec(prefix + name) is None:
+                name=name+"_proj"
+
+            module = importlib.import_module(prefix + name)
             if reload_prj:
-                self.print(f"Trying to reload {prefix}{name}_proj")
                 importlib.reload(module)
+
+            if name.endswith("_proj"):
+                name = name[:-len("_proj")]
         except:
             if self._quiet:
                 return None
 
             if reload_prj:
-                self.print(colorize("*** Problem during reload of '%s_proj.py' ***" % (name), rgb=Color.ERROR))
+                self.print(colorize(f"*** Problem during reload of '{name}.py' ***", rgb=Color.ERROR))
             else:
-                self.print(colorize("*** Problem during import of '%s_proj.py' ***" % (name), rgb=Color.ERROR))
+                self.print(colorize(f"*** Problem during import of '{name}.py' ***", rgb=Color.ERROR))
             self.print("-" * 60)
             traceback.print_exc(file=self.printer)
             self.print("-" * 60)
@@ -1056,6 +1127,94 @@ class FmkPlumbing(object):
 
             return prj_params
 
+    def _import_project_from_module(self, module_ep, reload_prj=False):
+        name = module_ep.name
+        try:
+            module = module_ep.load()
+            if reload_prj:
+                importlib.reload(module)
+        except ImportError:
+            if self._quiet:
+                return None
+            self.print(colorize(f"*** ERROR loading the '{name}' project module ***", rgb=Color.ERROR))
+            self.print('-'*60)
+            traceback.print_exc(file=self.printer)
+            self.print('-'*60)
+            return None
+
+         
+        # Projects
+        project = module.project
+        if project.name is None:
+            project.name = name
+        else:
+            name = project.name
+
+        if not reload_prj and self._name2prj.get(project.name) is not None:
+            raise ProjectDuplicateError(project.name)
+
+        self._name2prj[project.name] = project
+        project.set_exportable_fmk_ops(self._exportable_fmk_ops)
+        if project.evol_processes:
+            for proc in project.evol_processes:
+                built_evol_sc = EvolutionaryScenariosFactory.build(self._exportable_fmk_ops, *proc)
+                project.register_scenarios(built_evol_sc)
+            
+        # Logger
+        logger = None
+        try:
+            logger = module.logger
+        except AttributeError:
+            logger = Logger(name)
+        logger.fmkDB = self.fmkDB
+        logger.set_external_display(self.external_display)
+        if logger.name is None:
+            logger.name = name
+
+        # Targets
+        targets=[]
+        try:
+            targets = module.targets
+        except AttributeError:
+            pass
+        targets.insert(0, EmptyTarget(verbose=self.config.targets.empty_tg.verbose))
+
+        new_targets = []
+        for obj in targets:
+            if isinstance(obj, (tuple, list)):
+                tg = obj[0]
+                obj = obj[1:]
+                tg.del_extensions()
+                for p in obj:
+                    tg.add_extensions(p)
+            else:
+                assert issubclass(obj.__class__, Target), 'project: {!s}'.format(name)
+                tg = obj
+                tg.del_extensions()
+            tg.set_project(project)
+            new_targets.append(tg)
+        targets = new_targets
+
+        for idx, tg_id in enumerate(self._tg_ids):
+            if tg_id >= len(targets):
+                self.print(colorize(f"*** Incorrect Target ID detected: {tg_id} --> replace with 0 ***",
+                                    rgb=Color.WARNING))
+                self._tg_ids[idx] = 0
+
+        if not self._quiet:
+            if reload_prj:
+                self.print(colorize(f"*** Project '{name}' updated ***", 
+                                    rgb=Color.FMKSUBINFO))
+            else:
+                self.print(colorize(f"*** Found Project: '{name}' ***", rgb=Color.FMKSUBINFO))
+
+        return {
+            "project": project,
+            "target": targets,
+            "logger": logger,
+            "prj_rld_args": (copy.copy(module_ep), name),
+        }
+
     def _add_project(self, project, targets, logger, prj_rld_args, reload_prj=False):
         if project.name not in map(lambda x: x.name, self.prj_list):
             self.prj_list.append(project)
@@ -1065,7 +1224,7 @@ class FmkPlumbing(object):
                 if prj.name == project.name:
                     break
             else:
-                raise ValueError
+                raise ValueError(project.name)
             old_prj = prj
             self.prj_list.remove(prj)
             self.prj_list.append(project)

@@ -6,7 +6,7 @@ authors = [
 ]
 description = "Fuzzing and Data Manipulation Framework (for GNU/Linux)"
 readme = "README.rst"
-requires-python = ">=3.7"
+requires-python = ">=3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
@@ -35,3 +35,21 @@ plotty = "fuddly.tools.plotty:main"
 "Bug Tracker" = "https://github.com/k0retux/fuddly/issues"
 "Documentation" = "http://fuddly.readthedocs.io"
 
+# Data models and Projects
+[project.entry-points."fuddly.data_models"]
+jpg = "fuddly.data_models.file_formats.jpg"
+json_dm = "fuddly.data_models.file_formats.json_dm"
+pdf = "fuddly.data_models.file_formats.pdf"
+png = "fuddly.data_models.file_formats.png"
+zip = "fuddly.data_models.file_formats.zip"
+http = "fuddly.data_models.protocols.http"
+pppoe = "fuddly.data_models.protocols.pppoe"
+sms = "fuddly.data_models.protocols.sms"
+usb = "fuddly.data_models.protocols.usb"
+myproto = "fuddly.data_models.tutorial.myproto"
+tuto = "fuddly.data_models.tutorial.tuto"
+
+[project.entry-points."fuddly.projects"]
+standard = "fuddly.projects.generic.standard"
+usb = "fuddly.projects.specific.usb"
+tuto = "fuddly.projects.tuto"

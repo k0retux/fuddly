@@ -62,8 +62,7 @@ def main():
     shell = FmkShell("Fuddly Shell", fmk)
     shell.cmdloop()
 
-    sys.exit(0)
-
 
 if __name__ == "__main__":
     main()
+    sys.exit(0)

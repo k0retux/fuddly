@@ -79,8 +79,10 @@ monitoring means as well as some scenarios and/or virtual operators.
 .. note::
 
    Projects and data models files are retrieved either from
-   ``<root of fuddly>/{projects,data_models}/`` or from
-   ``<fuddly data folder>/{projects,data_models}/``.
+   ``<root of fuddly>/{projects,data_models}/``,
+   ``<fuddly data folder>/{projects,data_models}/`` or from isntalled
+   python modules exposing them through importlib entry_points.
+   see :ref:`packaging` for more information on that
 
    Note that when the Fuddly shell is launched, the path of the
    fuddly data folder is displayed as well as its configuration folder.
@@ -1229,7 +1231,7 @@ differences within the same data model.
 Finally, it is also possible to associate various kind of attributes
 to the nodes:
 
-- classic ones like Mutable, Determinist, Finite, ...
+- classic ones like Mutable, Deterministic, Finite, ...
 
 - semantic ones that allows to group nodes based on some specific
   meanings (for instance a PDF page), in order to enable higher level
@@ -1294,22 +1296,32 @@ a PNG file in line 7---from ``2`` to ``-1`` (meaning infinity).
 Defining the Imaginary MyDF Data Model
 ++++++++++++++++++++++++++++++++++++++
 
-Assuming we want to model an imaginary data format called `MyDF`.  Two
-files need to be created either within ``<root of fuddly>/data_models/`` or within
-``<fuddly data folder>/user_data_models/`` (or within any subdirectory):
+.. seealso:: You can also create a python package and install it to your system.
+             Fuddly can automagically detect them and use them when configured properly.
+             See :ref:`packaging` for more information on the subject
 
-``mydf.py``
+Assuming we want to model an imaginary data format called `MyDF`. A
+folder need to be created either within ``<root of fuddly>/data_models/`` or within
+``<fuddly data folder>/user_data_models/`` (or within any subdirectory).
+This folder shall be named ``mydf`` and contain 3 files:
+
+``dm.py``
   Contain the implementation of the data model related to
   ``MyDF`` data format, **which is the topic of the current section**.
 
-``mydf_strategy.py``
+``strategy.py``
   Contain optional disruptors specific to the data model
   (:ref:`tuto:disruptors`)
+
+``__init__.py``
+  This needs to be include for python to recognize the folder as a module
+  and needs to contain at least ``from . import (dm, strategy)`` so that
+  the 2 submodule are included when the module itself is loaded.
 
 By default, ``fuddly`` will use the prefix ``mydf`` for referencing
 the data model. But it can be overloaded within the data model
 definition, as it is done in the following example (in line 8) which
-is a simple skeleton for ``mydf.py``:
+is a simple skeleton for ``dm.py``:
 
 .. code-block:: python
    :linenos:
@@ -1327,20 +1339,20 @@ is a simple skeleton for ``mydf.py``:
       def build_data_model(self):
 
          # Data Type Definition
-	 d1 = ...
-	 d2 = ...
-	 d3 = ...
+         d1 = ...
+         d2 = ...
+         d3 = ...
 
-	 self.register(d1, d2, d3)
+         self.register(d1, d2, d3)
 
 
    data_model = MyDF_DataModel()
 
 
 .. note:: All elements discussed during this tutorial, related to the
-          data model ``mydf``, are implemented within ``tuto.py`` and
-          ``tuto_strategy.py``. Don't hesitate to play with what are
-          defined within, Either with ``ipython`` or ``Fuddly Shell``
+          data model ``mydf``, are implemented within ``tuto/dm.py`` and
+          ``tuto/strategy.py``. Don't hesitate to play with what are
+          defined within. Either with ``ipython`` or ``Fuddly Shell``
           (:ref:`tuto:start-fuzzshell`).
 
 In this skeleton, you can notice that you have to define a class that
@@ -1870,7 +1882,7 @@ Defining Specific Disruptors
 Overview
 ++++++++
 
-Specific disruptors have to be implemented within ``mydf_strategy.py``. This file should
+Specific disruptors have to be implemented within ``mydf/strategy.py``. This file should
 starts with:
 
 .. code-block:: python
@@ -1893,7 +1905,7 @@ have to define a subclass of :class:`fuddly.framework.tactics_helper.Disruptor`
 or :class:`fuddly.framework.tactics_helper.StatefulDisruptor`, and use the
 decorator ``@disruptor`` on it to register it. The first parameter of
 this decorator has to be the :class:`fuddly.framework.tactics_helper.Tactics`
-object you declare at the beginning of ``mydf_strategy.py``.
+object you declare at the beginning of ``mydf/strategy.py``.
 
 .. code-block:: python
    :linenos:
@@ -2117,7 +2129,7 @@ The environment---composed of at least one target, a logger, and
 optionnaly some monitoring means and virtual operators---is setup
 within a project file located within ``<root of fuddly>/projects/`` or within
 ``<fuddly data folder>/user_projects/``. To illustrate that let's
-show the beginning of ``generic/standard_proj.py``:
+show the beginning of ``generic/standard.py``:
 
 .. code-block:: python
    :linenos:
@@ -2198,7 +2210,7 @@ Many targets can be defined in a project file. They have to be
 referenced within a list pointed by the global variable ``targets`` of
 the project file.
 
-Within the tutorial project (``projects/tuto_proj.py``), multiple
+Within the tutorial project (``projects/tuto.py``), multiple
 targets have been defined:
 
 - three different :class:`fuddly.framework.targets.local.LocalTarget` for interacting with local programs;
@@ -2345,7 +2357,7 @@ the reference of the project as the first parameter.
 .. seealso:: Parameters can be defined for an operator, in order to
              make it more customizable. The way to describe them is
              the same as for *disruptors*. Look into the file
-             ``projects/generic/standard_proj.py`` for some examples.
+             ``projects/generic/standard.py`` for some examples.
 
 Here under is presented a skeleton of an Operator:
 

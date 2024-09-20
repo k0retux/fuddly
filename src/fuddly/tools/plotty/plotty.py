@@ -5,10 +5,6 @@ import sys
 import inspect
 
 
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-rootdir = os.path.dirname(os.path.dirname(currentdir))
-sys.path.insert(0, rootdir)
-
 from typing import Optional
 
 from fuddly.tools.plotty.globals import PlottyGlobals, PlottyOptions
@@ -178,8 +174,7 @@ def main():
     figure.plot_areas()
     figure.show()
 
-    sys.exit(PlottyGlobals.EXIT_SUCCESS)
-
 
 if __name__ == "__main__":
     main()
+    sys.exit(PlottyGlobals.EXIT_SUCCESS)
