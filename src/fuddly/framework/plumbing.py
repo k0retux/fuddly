@@ -838,13 +838,13 @@ class FmkPlumbing(object):
                 self.import_successfull = False
                 continue 
 
-            self._add_data_model(dm_params['dm'], dm_params['tactics'], dm_params['dm_rld_args'], 
+            self._add_data_model(dm_params["dm"], dm_params["tactics"], dm_params["dm_rld_args"],
                                  reload_dm=False)
-            name = dm_params['dm'].name
-            self.__dyngenerators_created[dm_params['dm']] = False
+            name = dm_params["dm"].name
+            self.__dyngenerators_created[dm_params["dm"]] = False
             if fmkDB_update:
                 # populate FMK DB
-                self._fmkDB_insert_dm_and_dmakers(dm_params['dm'].name, dm_params['tactics'])
+                self._fmkDB_insert_dm_and_dmakers(dm_params["dm"].name, dm_params["tactics"])
 
     def _import_dm(self, prefix, name, reload_dm=False):
         load_from_module=False
@@ -865,11 +865,9 @@ class FmkPlumbing(object):
         except:
             if not self._quiet:
                 if reload_dm:
-                    self.print(colorize(f"*** Problem during reload of '{name}' and/or "
-                                        f"'{name}/strategy.py' ***", rgb=Color.ERROR))
+                    self.print(colorize(f"*** Problem during reload of '{name}' ***", rgb=Color.ERROR))
                 else:
-                    self.print(colorize(f"*** Problem during import of '{name}' and/or "
-                                        f"'{name}/strategy' ***", rgb=Color.ERROR))
+                    self.print(colorize(f"*** Problem during import of '{name}' ***", rgb=Color.ERROR))
 
                 self.print("-" * 60)
                 traceback.print_exc(file=self.printer)
@@ -877,32 +875,32 @@ class FmkPlumbing(object):
             return None
 
         dm_params = {}
-        dm_params['dm_rld_args'] = (prefix, name)
+        dm_params["dm_rld_args"] = (prefix, name)
         try:
-            dm_params['dm'] = module.data_model
+            dm_params["dm"] = module.data_model
         except:
             if not self._quiet:
                 self.print(colorize(f"*** ERROR: '{name}' shall contain a global variable 'data_model' ***",
                                     rgb=Color.ERROR))
             return None
         try:
-            dm_params['tactics'] = module_strat.tactics
+            dm_params["tactics"] = module_strat.tactics
         except AttributeError:
             if not self._quiet:
                 self.print(colorize(f"*** ERROR: '{name}' shall contain a global variable 'tactics' ***",
                                     rgb=Color.ERROR))
             return None
 
-        dm_params['tactics'].set_additional_info(fmkops=self._exportable_fmk_ops,
+        dm_params["tactics"].set_additional_info(fmkops=self._exportable_fmk_ops,
                                                  related_dm=dm_params['dm'])
 
-        if dm_params['dm'].name is None:
-            dm_params['dm'].name = name
+        if dm_params["dm"].name is None:
+            dm_params["dm"].name = name
 
         if load_from_module and not reload_dm and self._name2dm.get(dm_params['dm'].name) is not None:
             raise DataModelDuplicateError(dm_params['dm'].name)
 
-        self._name2dm[dm_params['dm'].name] = dm_params['dm']
+        self._name2dm[dm_params["dm"].name] = dm_params["dm"]
 
         if not self._quiet:
             if reload_dm:
@@ -1043,7 +1041,6 @@ class FmkPlumbing(object):
 
         try:
             if importlib.util.find_spec(prefix + name) is None:
-                self.print("Adding '_proj' suffix to name")
                 name=name+"_proj"
 
             module = importlib.import_module(prefix + name)
@@ -1057,9 +1054,9 @@ class FmkPlumbing(object):
                 return None
 
             if reload_prj:
-                self.print(colorize(f"*** Problem during reload of '{name}.py'/'{name}_proj.py' ***", rgb=Color.ERROR))
+                self.print(colorize(f"*** Problem during reload of '{name}.py' ***", rgb=Color.ERROR))
             else:
-                self.print(colorize(f"*** Problem during import of '{name}.py'/'{name}_proj.py' ***", rgb=Color.ERROR))
+                self.print(colorize(f"*** Problem during import of '{name}.py' ***", rgb=Color.ERROR))
             self.print("-" * 60)
             traceback.print_exc(file=self.printer)
             self.print("-" * 60)
