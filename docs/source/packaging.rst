@@ -52,6 +52,19 @@ You can then produce a python .whl with ``python -m build --wheel`` and install 
 manager)
 
 
+.. _pkg:samples:
+Samples
+-------
+
+When you packages you data model, you can add a ``samples`` folder to your ``data_model`` modules.
+In this namespace, you can add samples that your model can use to instantiate atoms.
+(This is simply a python namespace and not a module, trying to import from it will fail but it can
+be used to get the path of the resource so it can then be read from your code)
+
+This folder will automatically be found by fuddly when it load the data model through the 
+:meth:`fuddly.framework.data_model.DataModel.import_file_content()` method.
+
+
 Load order
 ----------
 
@@ -63,6 +76,11 @@ targets, etc, in fuddly's data folder.
 
 .. note:: A side effect of this is that fuddly cannot differentiate between 2 python modules defining objects with 
           the same name and a module and an object in the data folder sharing the same name.
+
+Similarly, samples have a priority/load order.
+They are loaded from a module first, then the user's ``imported_data`` folder in fuddly's data folder.
+When files have the same name in different locations, the latest will override earlier files, i.e. the user's 
+``imported_data`` folder override any other sample with the same name.
 
 
 Fuddly

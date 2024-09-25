@@ -336,8 +336,13 @@ You can see that two generators are available for this data model. In
 this case---the ZIP data model---the first one will generate modeled
 ZIP archive based uniquely on the data model, whereas the other ones
 (``ZIP_00``, ``ZIP_01``, ...)  generate modeled ZIP archives based on
-the sample files available within the directory
-``<fuddly data folder>/imported_data/zip/``.
+the sample files available within one of the following locations: 
+
+- ``<fuddly data folder>/imported_data/zip/``
+- a ``zip.samples`` namespace in a third-party module (found through the ``fuddly.data_models`` importlib entry_point)
+
+Samples from fuddly's data folder have priority over those in modules.
+
 
 For each one of these generators, some parameters are associated:
 
@@ -1369,6 +1374,7 @@ model, by calling
    In the frame of your data model if you want to instantiate atoms from samples:
 
    - Add your samples there: ``<fuddly data folder>/imported_data/<NAME of DM>/``
+     (You can also package them with you module see :ref:`pkg:samples`.)
 
    - Within the method :meth:`fuddly.framework.data_model.DataModel.build_data_model()`, and once you defined
      your atoms, call the method :meth:`fuddly.framework.data_model.DataModel.register_atom_for_decoding()`
