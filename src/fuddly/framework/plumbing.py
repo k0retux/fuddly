@@ -870,11 +870,13 @@ class FmkPlumbing(object):
         dm_params["dm_rld_args"] = (prefix, name)
         try:
             dm_params["dm"] = module.dm.data_model
+            dm_params["dm"].module_name = module.__package__
         except:
             if not self._quiet:
                 self.print(colorize(f"*** ERROR: '{name}' shall contain a global variable 'data_model' ***",
                                     rgb=Color.ERROR))
             return None
+
         try:
             dm_params["tactics"] = module.strategy.tactics
         except AttributeError:

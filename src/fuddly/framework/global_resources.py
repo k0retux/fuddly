@@ -47,9 +47,12 @@ def ensure_file(f):
 
 
 fuddly_version = '0.30'
-
+ep_group_names = {
+    "data_models": "fuddly.data_models",
+    "projects":    "fuddly.projects",
+}
 framework_folder = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-framework_folder  = '.' if framework_folder == '' else framework_folder
+framework_folder = '.' if framework_folder == '' else framework_folder
 
 app_folder = os.path.dirname(framework_folder)
 app_folder = '.' if app_folder == '' else app_folder
@@ -64,11 +67,6 @@ if not xdg_mod_error and not os.path.exists(fuddly_data_folder):
         new_fuddly_data_folder = True
 else:
     use_xdg = False
-
-ep_group_names = {
-    "data_models": "fuddly.data_models",
-    "projects":    "fuddly.projects",
-}
 
 ensure_dir(fuddly_data_folder)
 

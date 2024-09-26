@@ -3944,7 +3944,7 @@ class TestDataModel(unittest.TestCase):
             with open(gr.workspace_folder + 'TEST_FUZZING_' + n, 'wb') as f:
                 f.write(png_buff)
 
-            filename = os.path.join(dm.get_import_directory_path(), n)
+            filename = os.path.join(dm.get_user_import_directory_path(), n)
             with open(filename, 'rb') as orig:
                 orig_buff = orig.read()
 
@@ -3969,7 +3969,7 @@ class TestDataModel(unittest.TestCase):
             with open(gr.workspace_folder + 'TEST_FUZZING_' + n, 'wb') as f:
                 f.write(jpg_buff)
 
-            filename = os.path.join(dm.get_import_directory_path(), n)
+            filename = os.path.join(dm.get_user_import_directory_path(), n)
             with open(filename, 'rb') as orig:
                 orig_buff = orig.read()
 
@@ -4107,7 +4107,7 @@ class TestDataModel(unittest.TestCase):
             with open(gr.workspace_folder + 'TEST_FUZZING_' + n, 'wb') as f:
                 f.write(zip_buff)
 
-            filename = os.path.join(dm.get_import_directory_path(), n)
+            filename = os.path.join(dm.get_user_import_directory_path(), n)
             with open(filename, 'rb') as orig:
                 orig_buff = orig.read()
 

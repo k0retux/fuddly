@@ -30,6 +30,8 @@ from fuddly.framework.node_builder import NodeBuilder
 from fuddly.libs.external_modules import *
 from fuddly.libs.utils import Accumulator
 
+import importlib
+
 #### Data Model Abstraction
 
 class DataModel(object):
@@ -39,6 +41,7 @@ class DataModel(object):
 
     file_extension = 'bin'
     name = None
+    module_name = None
 
     knowledge_source = None
 
@@ -365,28 +368,41 @@ class DataModel(object):
         if extension is None:
             extension = self.file_extension
         if path is None:
-            path = self.get_import_directory_path(subdir=subdir)
+            path = self.get_user_import_directory_path(subdir=subdir)
+
+        files = {}
+
+        # Get from packages (entry_points and fuddly)
+        try:
+            module_path = importlib.resources.files(self.module_name).joinpath("samples")
+            _, _, filenames = next(os.walk(module_path))
+            for f in filenames:
+                files[f]=os.path.join(module_path, f)
+        except StopIteration:
+            # The folder doesn't exist
+            pass
+
+        # Imported data from the specified or default path (ususally the fuddly_data_folder)
+        # This takes priority over all other files since it arrives last in the list
+        _, _, filenames = next(os.walk(path))
+        for f in filenames:
+            files[f] = os.path.join(path, f)
 
         r_file = re.compile(r'.*\.' + extension + '$')
-        def is_good_file_by_ext(fname):
-            return bool(r_file.match(fname))
+        def is_good_file_by_ext(info):
+            return bool(r_file.match(info[0]))
 
-        def is_good_file_by_fname(fname):
-            return filename == fname
-
-        files = []
-        for (dirpath, dirnames, filenames) in os.walk(path):
-            files.extend(filenames)
-            break
+        def is_good_file_by_fname(info):
+            return filename == info[0]
 
         if filename is None:
-            files = list(filter(is_good_file_by_ext, files))
+            files = list(filter(is_good_file_by_ext, files.items()))
         else:
-            files = list(filter(is_good_file_by_fname, files))
+            files = list(filter(is_good_file_by_fname, files.items()))
         msgs = {}
 
-        for idx, name in enumerate(files):
-            with open(os.path.join(path, name), 'rb') as f:
+        for (idx, (name, filepath)) in enumerate(files):
+            with open(filepath, 'rb') as f:
                 buff = f.read()
                 d_abs = absorber(buff, idx, name)
                 if d_abs is not None:
@@ -394,7 +410,7 @@ class DataModel(object):
 
         return msgs
 
-    def get_import_directory_path(self, subdir=None):
+    def get_user_import_directory_path(self, subdir=None):
         if subdir is None:
             subdir = self.name
         if subdir is None:
