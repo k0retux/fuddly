@@ -1467,7 +1467,7 @@ class FmkPlumbing(object):
 
             extensions = tg.extensions
             if extensions:
-                msg += r'\n     \-- extensions:'
+                msg += '\n     \\-- extensions:'
                 for ext in extensions:
                     ext_obj, delay = self._extract_info_from_tg_extensions(ext)
                     ext_name = ext_obj.__name__ if isinstance(ext_obj, type) else ext_obj.__class__.__name__
@@ -5272,8 +5272,6 @@ class FmkShell(cmd.Cmd):
         if actions is None:
             self.__error_msg = "Syntax Error!"
             return False
-
-        action = [((actions[0], args[2]), actions[1])]
 
         conf = self.config.send_loop.aligned_options
         kwargs = {

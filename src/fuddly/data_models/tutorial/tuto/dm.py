@@ -804,6 +804,44 @@ class MyDF_DataModel(DataModel):
                  {'name': 'idx', 'contents': INT_str(values=[1,2,3,4,5])},
              ]}
 
+        rnd_desc = \
+            {'name': 'rnd',
+             'shape_type': MH.Random,
+             'determinist': False,
+             'separator': {'contents': {'name': 'sep', 'contents': String(values=['/'])},
+                           'prefix': True, 'suffix': False, 'unique': True, 'always': False},
+             'contents': [
+                 {'name': 'int2',
+                  'qty': (1),
+                  'contents': INT_str(values=[7])},
+                 {'name': 'ignore_me',
+                  'contents': [
+                      {'name': 'ignore_me',
+                       'qty': (0, 1), 'default_qty': 0,
+                       'contents': String(values=['ignore_me'])},
+                  ]},
+                 {'name': 'dlyd_alpha2_ignore',
+                  'exists_if': (RawCondition(val='1'), 'int'),
+                  'qty': (0),
+                  'contents': String(values=['B'])},
+                 {'name': 'alpha',
+                  'contents': String(values=['x', 'y', 'z'])},
+                 {'name': 'dlyd_alpha1',
+                  'exists_if': (RawCondition(val='1'), 'int'),
+                  'qty': (1),
+                  'contents': String(values=['A'])},
+                 {'name': 'dlyd_alpha3',
+                  'exists_if': (RawCondition(val='1'), 'int'),
+                  'qty': (3),
+                  'contents': String(values=['C'])},
+                 {'name': 'int',
+                  # 'exists_if': (RawCondition(val='9'), 'int3'),
+                  'contents': INT_str(values=[1, 2, 3])},
+                 # {'name': 'int3',
+                 #  'contents': INT_str(values=[9])},
+             ]}
+
+
 
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
@@ -812,7 +850,7 @@ class MyDF_DataModel(DataModel):
                       regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc, xml5_desc,
                       json1_desc, json2_desc, file_desc, nested_desc,
                       csp_desc, csp_z3_desc, csp_str_desc, csp_ns_desc, csp_basic_desc,
-                      csp_default_desc, str_desc)
+                      csp_default_desc, str_desc, rnd_desc)
 
 
 data_model = MyDF_DataModel()

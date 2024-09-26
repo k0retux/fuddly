@@ -1478,7 +1478,7 @@ class NodeInternals_GenFunc(NodeInternals):
                 if DEBUG:
                     print(
                         "/!\\ WARNING /!\\ [Copy of a NonTerm Node]\n"
-                        " A copied Func_Elt has its 'node_arg' attribute"
+                        " A copied Generator node has its 'node_arg' attribute"
                         " that does not point to an Node of the copied Node tree"
                     )
                     print("--> guilty: ", func_node_arg.name)
@@ -3411,15 +3411,9 @@ class NodeInternals_NonTerm(NodeInternals):
                 new_list.append([delim, [sublist[0], copy.copy(sublist[1])]])
         return new_list
 
-    def _construct_subnodes(
-        self,
-        node_desc,
-        subnode_list,
-        mode,
-        ignore_sep_fstate,
-        ignore_separator=False,
-        lazy_mode=True,
-    ):
+    def _construct_subnodes(self, node_desc, subnode_list, mode, ignore_sep_fstate,
+                            ignore_separator=False,
+                            lazy_mode=True):
         def _sync_size_handling(node):
             obj = node.synchronized_with(SyncScope.Size)
             if obj is not None:
@@ -3438,7 +3432,7 @@ class NodeInternals_NonTerm(NodeInternals):
                     subnode_list.append(node)
 
                 # Before returning we add a separator if ever it is mandatory ('always')
-                if self.separator is not None and self.separator.always and not ignore_separator:
+                if self.separator is not None and not ignore_separator and self.separator.always:
                     new_sep = self._clone_separator(self.separator.node,
                                                     unique=self.separator.unique,
                                                     ignore_frozen_state=ignore_sep_fstate)
@@ -3454,10 +3448,8 @@ class NodeInternals_NonTerm(NodeInternals):
             if self._reevaluation_pending:
                 nb = self._nodes_drawn_qty.get(node.name)
                 if nb is None:
-                    print(
-                        f"\n*** Warning[_construct_subnodes]: {node.name} node has no reference "
-                        f"in self._nodes_drawn_qty, thus fallback to random qty"
-                    )
+                    print(f"\n*** Warning[_construct_subnodes]: {node.name} node has no reference"
+                          f"\n  in self._nodes_drawn_qty, thus fallback to random qty")
                     nb = random.randint(mini, maxi)
             else:
                 nb = random.randint(mini, maxi)
@@ -3475,16 +3467,12 @@ class NodeInternals_NonTerm(NodeInternals):
         )
 
         if nb == 0:
-            if (
-                self.separator is not None
-                and self.separator.always
-                and not ignore_separator
-            ):
-                new_sep = self._clone_separator(
-                    self.separator.node,
-                    unique=self.separator.unique,
-                    ignore_frozen_state=ignore_sep_fstate,
-                )
+            if (self.separator is not None
+                    and self.separator.always
+                    and not ignore_separator):
+                new_sep = self._clone_separator(self.separator.node,
+                                                unique=self.separator.unique,
+                                                ignore_frozen_state=ignore_sep_fstate)
                 subnode_list.append(new_sep)
 
         new_node = None
@@ -3559,11 +3547,9 @@ class NodeInternals_NonTerm(NodeInternals):
             #     print(new_node.name, new_node.frozen_node_list)
 
             if self.separator is not None and not ignore_separator:
-                new_sep = self._clone_separator(
-                    self.separator.node,
-                    unique=self.separator.unique,
-                    ignore_frozen_state=ignore_sep_fstate,
-                )
+                new_sep = self._clone_separator(self.separator.node,
+                                                unique=self.separator.unique,
+                                                ignore_frozen_state=ignore_sep_fstate)
                 subnode_list.append(new_sep)
 
         # set_clone_info() and other methods are applied for 's' mode
@@ -3942,9 +3928,7 @@ class NodeInternals_NonTerm(NodeInternals):
                         if node is None:
                             continue
                         else:
-                            self._construct_subnodes(
-                                node, sublist_tmp, delim[0], ignore_sep_fstate
-                            )
+                            self._construct_subnodes(node, sublist_tmp, delim[0], ignore_sep_fstate)
 
                     else:
                         raise ValueError(f"delim: '{delim}'")
@@ -3953,17 +3937,15 @@ class NodeInternals_NonTerm(NodeInternals):
 
                 self.frozen_node_list += sublist_tmp
 
-        for e in self.subnodes_set:
-            e.tmp_ref_count = 1
+        for n in self.subnodes_set:
+            n.tmp_ref_count = 1
 
         if self.separator is not None:
-            if (
-                not self.separator.suffix
-                and self.frozen_node_list
-                and self.frozen_node_list[-1].is_attr_set(NodeInternals.AutoSeparator)
-            ):
+            if (not self.separator.suffix and self.frozen_node_list
+                    and self.frozen_node_list[-1].is_attr_set(NodeInternals.AutoSeparator)):
                 self.frozen_node_list.pop(-1)
-            self._clone_separator_cleanup()
+
+            self._clone_separator_decrease_refcount()
 
         self._reevaluation_pending = False
         return (self.frozen_node_list, True)
@@ -4060,16 +4042,27 @@ class NodeInternals_NonTerm(NodeInternals):
         node_list, was_not_frozen = self.get_subnodes_with_csts()
 
         djob_group_created = False
+        djob_group = None
         disabled_node = False
         node_with_no_children = False
         removed_cpt = 0
 
-        for idx, n in enumerate(copy.copy(node_list)):
+        # print(f'\n*** DBG 00 .get_subnodes_with_csts() called')
+        # print_node_list(node_list)
+
+        original_node_list = copy.copy(node_list)
+        idx_ref = -1
+        for idx, n in enumerate(original_node_list):
+            # Note that self.frozen_node_list is the node_list returned by
+            # .get_subnodes_with_csts()
+            idx_ref += 1
+
+            # print(f'\n*** DBG 0 loop node_list idx:{idx} name:{n.name}')
             if n.is_attr_set(NodeInternals.DISABLED):
                 val = Node.DEFAULT_DISABLED_NODEINT
-                if not n.env.is_djob_registered(
-                    key=id(n), prio=Node.DJOBS_PRIO_nterm_existence
-                ):
+                if not n.env.is_djob_registered(key=id(n), prio=Node.DJOBS_PRIO_nterm_existence):
+                    # print(f'\n*** DBG 1 register_djob ({n.name}) (idx_ref={idx_ref}, len={len(node_list)}):')
+                    # print_node_list(node_list)
                     if not djob_group_created:
                         djob_group_created = True
                         djob_group = DJobGroup(node_list)
@@ -4078,7 +4071,7 @@ class NodeInternals_NonTerm(NodeInternals):
                         group=djob_group,
                         key=id(n),
                         cleanup=NodeInternals_NonTerm._cleanup_delayed_nodes,
-                        args=[n, node_list, len(l), conf, recursive],
+                        args=[n, node_list, idx_ref, conf, recursive],
                         prio=Node.DJOBS_PRIO_nterm_existence,
                     )
                     disabled_node = True
@@ -4087,23 +4080,30 @@ class NodeInternals_NonTerm(NodeInternals):
                                    return_node_internals=True, restrict_csp=restrict_csp)
 
                 if node_with_no_children and n.is_attr_set(NodeInternals.AutoSeparator):
-                    # print(f'\nNode with no children - step 2 / {idx} {n.name}')
-                    # print_node_list(self.frozen_node_list)
                     node_with_no_children = False
+                    assert idx > 0
                     self.frozen_node_list.pop(idx)
+                    self._clone_separator_decrease_refcount()
+                    self.frozen_node_list.pop(idx-1)
+                    idx_ref -= 2
+                    # print(f'\n*** DBG 3.2 Node with no children - step 2 '
+                    #       f'(idx={idx} idx_ref={idx_ref} - {n.name})')
+                    # print_node_list(self.frozen_node_list)
                     continue
                 elif (self.separator is not None and not self.separator.always
                         and not n.is_attr_set(NodeInternals.AutoSeparator)
                         and n.is_nonterm() and n.has_no_children()):
-                    # print(f'\nNode with no children - step 1 / {idx} {n.name}')
+                    # print(f'\n*** DBG 3.1 Node with no children - step 1 '
+                    #       f'(idx={idx} idx_ref={idx_ref} - {n.name})')
                     # print_node_list(self.frozen_node_list)
                     node_with_no_children = True
                     continue
                 else:
                     node_with_no_children = False
 
-            if disabled_node and self.separator is not None and isinstance(val, NodeInternals) and val.is_attr_set(NodeInternals.AutoSeparator) \
-                    and not self.separator.always: # and not self.separator.suffix
+            if (disabled_node and self.separator is not None and isinstance(val, NodeInternals)
+                    and val.is_attr_set(NodeInternals.AutoSeparator)
+                    and not self.separator.always): # and not self.separator.suffix
 
                 # TODO: The case "suffix False and always True" should be already handled at
                 #  self.get_subnodes_with_csts()
@@ -4111,6 +4111,7 @@ class NodeInternals_NonTerm(NodeInternals):
                 disabled_node = False
                 self.frozen_node_list.pop(idx - removed_cpt)
                 removed_cpt += 1
+                idx_ref -= 1
                 continue
 
             disabled_node = False
@@ -4118,17 +4119,15 @@ class NodeInternals_NonTerm(NodeInternals):
             # 'val' is always a NodeInternals except if non-term encoding has been carried out
             l.append(val)
 
-        # if self.debug:
-        #     print(f'\nEND LOOP {last_idx}')
-
         if self.separator is not None and l:
             if (not self.separator.always and not self.separator.suffix
                     and isinstance(l[-1], NodeInternals) and l[-1].is_attr_set(NodeInternals.AutoSeparator)):
                 l.pop(-1)
                 self.frozen_node_list.pop(-1)
+                self._clone_separator_decrease_refcount()
 
         if node_list:
-            node_env = node_list[0].env
+            node_env = self.env #node_list[0].env
         else:
             return (handle_encoding(l), was_not_frozen)
 
@@ -4138,11 +4137,10 @@ class NodeInternals_NonTerm(NodeInternals):
             node_env._reentrancy_cpt = 0
             return (handle_encoding(l), was_not_frozen)
 
-        if (
-            node_env
-            and node_env.delayed_jobs_enabled
-            and node_env.djobs_exists(Node.DJOBS_PRIO_nterm_existence)
-        ):
+        if (node_env
+                and node_env.delayed_jobs_enabled
+                and node_env.djobs_exists(Node.DJOBS_PRIO_nterm_existence)):
+
             groups = node_env.get_all_djob_groups(prio=Node.DJOBS_PRIO_nterm_existence)
             if groups is not None:
                 for gr in groups:
@@ -4155,21 +4153,43 @@ class NodeInternals_NonTerm(NodeInternals):
                             shall_exist = self._existence_from_node(n)
                             node_env._reentrancy_cpt = 0
 
-                            if shall_exist:
+                            if (shall_exist and
+                                    node_env.is_djob_registered(key=id(n),
+                                                                prio=Node.DJOBS_PRIO_nterm_existence)):
+
                                 djobs = node_env.get_djobs_by_gid(
-                                    id(gr), prio=Node.DJOBS_PRIO_nterm_existence
+                                    id(gr),
+                                    prio=Node.DJOBS_PRIO_nterm_existence
                                 )
+
                                 func, args, cleanup = djobs[id(n)]
                                 job_idx = args[2]
                                 node_qty = func(*args)
-                                if node_qty > 0:
-                                    node_env.remove_djob(
-                                        gr, id(n), prio=Node.DJOBS_PRIO_nterm_existence
-                                    )
+                                # func() could have triggered some cleanup (like with
+                                # NodeInternals_NonTerm._expand_delayed_nodes).
+                                # Thus, no need to call .remove_djob()
+                                if (node_qty > 0 and
+                                        node_env.is_djob_registered(key=id(n),
+                                                                    prio=Node.DJOBS_PRIO_nterm_existence)):
+
+                                    node_env.remove_djob(gr, id(n),
+                                                         prio=Node.DJOBS_PRIO_nterm_existence)
                                 if node_qty > 1:
                                     for func, args, cleanup in djobs.values():
                                         if args[2] > job_idx:
                                             args[2] += node_qty - 1
+
+                                if node_qty == 0:
+                                    # In this case the node didn't provide any value to add to the
+                                    # result, node_list has been modified by ._expand_delayed_nodes()
+                                    # to remove the related node.
+                                    # We thus change @idx_ref of registered djobs that comes after.
+                                    for func, args, cleanup in djobs.values():
+                                        if args[2] > job_idx:
+                                            args[2] -= 1
+
+                                    # print(f'\n*** DBG node removed idx:{job_idx} - name:{n.name}')
+
 
         return (handle_encoding(l), was_not_frozen)
 
@@ -4195,25 +4215,45 @@ class NodeInternals_NonTerm(NodeInternals):
         node.set_private(None)
         node.clear_attr(NodeInternals.DISABLED)
         expand_list = []
-        node_internals._construct_subnodes(
-            node,
-            expand_list,
-            mode,
-            ignore_sep_fstate,
-            ignore_separator,
-            lazy_mode=False,
-        )
-        if expand_list:
-            if node_internals.separator is not None and len(node_list) == idx - 1:
-                if not node_internals.separator.suffix and expand_list[-1].is_attr_set(
-                    NodeInternals.AutoSeparator
-                ):
-                    expand_list.pop(-1)
-                node_internals._clone_separator_cleanup()
 
+        node_internals._construct_subnodes(node, expand_list, mode,
+                                           ignore_sep_fstate, ignore_separator,
+                                           lazy_mode=False)
+
+        node_list_sz = len(node_list)
+        if idx < node_list_sz:
             node_list.pop(idx)
+        else:
+            print(f'\n'
+                  f'*** WARNING: Unexpected behavior (node name: {node.name})\n'
+                  f' --> idx ({idx}) is bigger than the size of the node list ({node_list_sz})\n'
+                  f' --> assumption: some cleanup happened on the node list prior to the\n'
+                  f'     position of the node "{node.name}" and no update was done.')
+            # print_node_list(node_list)
+            # raise NotImplementedError('BUG')
+
+        if expand_list:
+            if node_internals.separator is not None and idx == node_list_sz-1:
+                # This case should never happen as a delayed node expansion should not exist
+                # at the end of a node_list. Indeed, if ever there is an existence condition
+                # (that may trigger a delayed job) associated to the last node, it will take
+                # at worse a previous node as a parameter, which will be resolved and will not
+                # trigger a delayed expansion job.
+                # TODO: other cases may exist when the existence condition is linked to
+                #       something which is not a node.
+                if (not node_internals.separator.suffix and
+                        expand_list[-1].is_attr_set(NodeInternals.AutoSeparator)):
+                    expand_list.pop(-1)
+                    node_internals._clone_separator_decrease_refcount()
+
+            # print(f'\n*** DBG1 expand_nodes ({node.name}) (idx={idx}, len={len(node_list)}):')
+            # print_node_list(node_list)
+
             for i, n in enumerate(expand_list):
                 node_list.insert(idx + i, n)
+
+            # print(f'\n*** DBG2 expand_nodes (idx={idx}, len={len(node_list)}):\n')
+            # print_node_list(node_list)
 
         return len(expand_list)
 
@@ -4424,12 +4464,11 @@ class NodeInternals_NonTerm(NodeInternals):
         for n in self.subnodes_set:
             n.tmp_ref_count = 1
 
-    def _clone_separator(
-        self, sep_node, unique, force_clone=False, ignore_frozen_state=True
-    ):
+    def _clone_separator(self, sep_node, unique, force_clone=False, ignore_frozen_state=True):
         if (sep_node.tmp_ref_count > 1 and unique) or force_clone:
-            nid = sep_node.name + ":" + str(sep_node.tmp_ref_count)
+            nid = sep_node.name + ":" + str(sep_node.tmp_ref_count_sep_name)
             sep_node.tmp_ref_count += 1
+            sep_node.tmp_ref_count_sep_name += 1
             node = Node(
                 nid,
                 base_node=sep_node,
@@ -4439,6 +4478,7 @@ class NodeInternals_NonTerm(NodeInternals):
             node._reset_depth(parent_depth=sep_node.depth - 1)
         else:
             sep_node.tmp_ref_count += 1
+            self.separator.node.tmp_ref_count_sep_name = 1
             node = sep_node
 
         return node
@@ -4446,6 +4486,15 @@ class NodeInternals_NonTerm(NodeInternals):
     def _clone_separator_cleanup(self):
         if self.separator is not None:
             self.separator.node.tmp_ref_count = 1
+            self.separator.node.tmp_ref_count_sep_name = 1
+
+    def _clone_separator_decrease_refcount(self):
+        if self.separator is not None:
+            if self.separator.node.tmp_ref_count > 1:
+                self.separator.node.tmp_ref_count -= 1
+
+
+
 
     @staticmethod
     def _size_from_node(node, for_encoded_size=False):
@@ -6301,6 +6350,7 @@ class Node(object):
 
         self.depth = 0
         self.tmp_ref_count = 1
+        self.tmp_ref_count_sep_name = 1
 
         self.abs_postpone_sent_back = (
             None  # used for absorption to transfer a resolved postpone
@@ -6802,6 +6852,7 @@ class Node(object):
         self.fuzz_weight = backup.fuzz_weight
         self.depth = backup.depth
         self.tmp_ref_count = backup.tmp_ref_count
+        self.tmp_ref_count_sep_name = backup.tmp_ref_count_sep_name
         self.internals = backup.internals
         self.current_conf = backup.current_conf
         self.entangled_nodes = backup.entangled_nodes
@@ -8680,14 +8731,6 @@ class Env(object):
     def get_data_model(self):
         return self._dm
 
-    # @property
-    # def knowledge_source(self):
-    #     return self._knowledge_source
-    #
-    # @knowledge_source.setter
-    # def knowledge_source(self, src):
-    #     self._knowledge_source = src
-
     def add_node_to_corrupt(self, node, corrupt_type=None, corrupt_op=lambda x: x):
         if node.entangled_nodes:
             for n in node.entangled_nodes:
@@ -8817,9 +8860,9 @@ class Env(object):
         else:
             return False
 
-    def is_djob_registered(self, key, prio):
+    def is_djob_registered(self, key=None, prio=1):
         if self._djob_keys and prio in self._djob_keys:
-            return key in self._djob_keys[prio]
+            return True if key is None else key in self._djob_keys[prio]
         else:
             return False
 
