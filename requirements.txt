@@ -1,3 +1,4 @@
+argcomplete
 cexprtk>=0.4.1
 configparser>=5.3.0
 crcmod>=1.7
