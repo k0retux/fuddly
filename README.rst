@@ -50,21 +50,21 @@ Launch fuddly test cases
 ------------------------
 
 The package ``test`` include all unit & integration test cases
-of ``fuddly`` itself. Usage is as follows:
+of ``fuddly`` itself. From the ``src/`` directory, usage is as follows:
 
 - To launch all the tests, issue the command::
 
-    >> python -m test -a
+    >> python -m fuddly.test -a
 
 - To launch all the tests but the longer ones, issue the command::
 
-    >> python -m test
+    >> python -m fuddly.test
 
 - To avoid data model specific test cases use the option ``--ignore-dm-specifics``
 
 - To launch a specific test category issue the following command::
 
-    >> python -m test test.<test_package>.<test_module>.<Test_Class>.<test_method>
+    >> python -m fuddly.test fuddly.test.<test_package>.<test_module>.<Test_Class>.<test_method>
 
 
 Miscellaneous
@@ -103,7 +103,6 @@ Dependencies
   - `texlive`_ (optional): Needed to generate PDF documentation
   - `readthedocs theme`_ (optional): Privileged html theme for sphinx
 
-.. _six: http://pythonhosted.org/six/
 .. _sqlite3: https://www.sqlite.org/
 .. _xtermcolor: https://github.com/broadinstitute/xtermcolor
 .. _graphviz: https://pypi.python.org/pypi/graphviz
