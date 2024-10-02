@@ -27,6 +27,8 @@ import string
 import copy
 import re
 
+from pprint import pprint as pp
+
 from fuddly.framework import value_types as vtype
 from fuddly.framework import node as dm
 
@@ -259,7 +261,8 @@ class ModelWalker(object):
                                                                              respect_order=consumer.respect_order,
                                                                              resolve_generator=True, relative_depth=1)
                                     if fnodes:
-                                        fnodes.remove(node)
+                                        if node in fnodes:
+                                            fnodes.remove(node)
                                         # TODO: check if there is a need to instantiate a copy of the
                                         #  current consumer with a specific state.
                                         #  For BasicVisitor, there is no need, as the only state is
@@ -520,15 +523,15 @@ class NodeConsumerStub(object):
 
     # The methods save_node() & recover_node() does not work for all situations
     def save_node(self, node):
-        '''
+        """
         Generic way to save a node (can impact performance)
-        '''
+        """
         self.__node_backup = node.get_internals_backup()
 
     def recover_node(self, node):
-        '''
+        """
         Generic way to recover a node
-        '''
+        """
         node.set_internals(self.__node_backup)
 
     def still_interested_by(self, node):

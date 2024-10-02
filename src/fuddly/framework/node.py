@@ -2716,8 +2716,14 @@ class NodeInternals_NonTerm(NodeInternals):
         self.cursor_maj = None
         self.previous_cursor_min = None
         self.previous_cursor_maj = None
+
+        self.pick_section_amount = None
         self.current_pick_section = None
         self.current_picked_node_idx = None
+
+        self.unordered_section_amount = None
+        self.current_unordered_section = None
+        self.unordered_section_case_idx = None
 
         self.reset()
 
@@ -2773,12 +2779,87 @@ class NodeInternals_NonTerm(NodeInternals):
 
         """
 
+        def unordered_section_not_in_progress():
+            return (self.exhausted_unordered_cases < 0
+                    or self.exhausted_unordered_cases == self.unordered_section_amount)
+
+        def pick_section_not_in_progress():
+            return (self.exhausted_pick_cases < 0
+                    or self.exhausted_pick_cases == self.pick_section_amount)
+
+        def exhausted_unordered():
+            return self.exhausted_unordered_cases == self.unordered_section_amount
+
+        def exhausted_pick():
+            return self.exhausted_pick_cases == self.pick_section_amount
+
         flatten_list = []
-        pick_section_amount = 0
+        pick_section_num = 0
+        next_pick_section = None
+
+        unordered_section_num = 0
+        next_unordered_section = None
+
+        if self.exhausted_pick_cases == -1 and self.exhausted_unordered_cases == -1:
+            self.unordered_section_amount = 0
+            self.pick_section_amount = 0
+            for idx, delim, sublist in self.__iter_csts_verbose(node_list):
+                if delim[1:3] == "=.":
+                    self.unordered_section_amount += 1
+                elif delim[1:3] == "=+":
+                    self.pick_section_amount += 1
+
+            if self.pick_section_amount == 0:
+                self.exhausted_pick_cases = 0
+            if self.unordered_section_amount == 0:
+                self.exhausted_unordered_cases = 0
+
+
         for idx, delim, sublist in self.__iter_csts_verbose(node_list):
-            if delim[1] == ">" or delim[1:3] == "=.":
-                for i, node in enumerate(sublist):
-                    flatten_list.append(node)
+            if delim[1] == ">":
+                flatten_list += sublist
+
+            elif delim[1:3] == "=.":
+                if exhausted_pick() and self.pick_section_amount > 0:
+                    # we don't start at 0 to avoid redundancy, as the 0 was already
+                    # selected while iterating over pick shapes.
+                    self.unordered_section_case_idx = 1
+
+                if (unordered_section_num != self.current_unordered_section
+                        or not pick_section_not_in_progress()
+                        or exhausted_unordered()):
+                    flatten_list += sublist
+                elif (0 == self.unordered_section_case_idx
+                      and unordered_section_num == self.current_unordered_section):
+                    self.exhausted_unordered_cases += 1
+                    self.unordered_section_case_idx += 1
+                    flatten_list += sublist
+                else:
+                    new_l = []
+                    sublist_sz = len(sublist)
+                    assert sublist_sz > 0
+                    if sublist_sz % 2 == 0:
+                        part1 = sublist[:sublist_sz//2]
+                        part2 = sublist[sublist_sz//2:]
+                        for p1, p2 in zip(part1, part2):
+                            new_l.append(p2)
+                            new_l.append(p1)
+                    else:
+                        if sublist_sz == 1:
+                            new_l.append(sublist[0])
+                        else:
+                            part1 = sublist[:sublist_sz//2]
+                            part2 = sublist[sublist_sz//2:-1]
+                            for p1, p2 in zip(part1, part2, strict=True):
+                                new_l.append(p2)
+                                new_l.append(p1)
+                            new_l.insert(-1, sublist[-1])
+
+                    flatten_list += new_l
+                    next_unordered_section = self.current_unordered_section + 1
+                    self.unordered_section_case_idx = 1
+
+                unordered_section_num += 1
 
             elif delim[1:3] == "=+":
                 node_sublist = []
@@ -2796,13 +2877,74 @@ class NodeInternals_NonTerm(NodeInternals):
                         if shall_exist is None or shall_exist:
                             node_sublist.append(node)
 
-                pick_section_amount += 1
-                flatten_list.append(node_sublist)
+                if exhausted_pick():
+                    flatten_list.append(node_sublist[0])
+
+                elif (pick_section_num == self.current_pick_section
+                        and unordered_section_not_in_progress()):
+
+                    if (self.current_pick_section == 0 and self.current_picked_node_idx == 0):
+                        self.exhausted_pick_cases += 1
+                        if exhausted_unordered() and self.unordered_section_amount > 0:
+                            # we don't start at 0 to avoid redundancy, as the 0 was already
+                            # selected while iterating over unordered shapes.
+                            self.current_picked_node_idx = 1
+
+                    flatten_list.append(node_sublist[self.current_picked_node_idx])
+                    self.current_picked_node_idx += 1
+
+                    if len(node_sublist) <= self.current_picked_node_idx:
+                        # we need to move on to the next pick section and if there is no
+                        # more then we are exhausted.
+                        next_pick_section = self.current_pick_section + 1
+                        self.current_picked_node_idx = 1 # we don't start at 0 to avoid redundancy
+                        if self.current_pick_section > 0:
+                            self.exhausted_pick_cases += 1
+                else:
+                    flatten_list.append(node_sublist[0])
+
+                pick_section_num += 1
+
 
             else:
                 raise ValueError
 
-        return flatten_list, pick_section_amount
+
+        # print(f'\n*** DBG 1 unordered:\n'
+        #       f'  --> amount: {self.unordered_section_amount}\n'
+        #       f'  --> exhausted {self.exhausted_unordered_cases}')
+        # print(f'\n*** DBG 1 pick:\n'
+        #       f'  --> amount: {self.pick_section_amount}\n'
+        #       f'  --> exhausted {self.exhausted_pick_cases}')
+        if self.unordered_section_amount == next_unordered_section:
+            self.exhausted_unordered_cases = self.unordered_section_amount
+            self.current_unordered_section = 0
+            self.unordered_section_case_idx = 0
+        else:
+            if next_unordered_section is not None:
+                self.current_unordered_section = next_unordered_section
+            else:
+                pass
+
+
+        if self.pick_section_amount == next_pick_section:
+            self.exhausted_pick_cases = self.pick_section_amount
+            self.current_pick_section = 0
+            self.current_picked_node_idx = 0
+        else:
+            if next_pick_section is not None:
+                self.current_pick_section = next_pick_section
+            else:
+                pass
+
+        # print(f'\n*** DBG 2 unordered:\n'
+        #       f'  --> amount: {self.unordered_section_amount}\n'
+        #       f'  --> exhausted {self.exhausted_unordered_cases}')
+        # print(f'\n*** DBG 2 pick:\n'
+        #       f'  --> amount: {self.pick_section_amount}\n'
+        #       f'  --> exhausted {self.exhausted_pick_cases}')
+
+        return flatten_list
 
     def import_subnodes_basic(self, node_list, separator=None, preserve_node=False):
         self.reset(preserve_node=preserve_node)
@@ -3019,16 +3161,13 @@ class NodeInternals_NonTerm(NodeInternals):
             new_nodes_drawn_qty = None
             new_exhaust_info = None
         else:
-            # new_exhaust_info = [self.exhausted, copy.copy(self.excluded_components),
-            #                     self.shape_exhausted, self.current_nodelist_sz, self.expanded_nodelist_origsz,
-            #                     self.component_seed, self._perform_first_step]
-
             new_exhaust_info = [
                 self.exhausted_shapes,
                 copy.copy(self.excluded_components),
                 self.combinatory_complete,
                 self.component_seed,
                 self.exhausted_pick_cases,
+                self.exhausted_unordered_cases
             ]
 
             new_nodes_drawn_qty = copy.copy(self._nodes_drawn_qty)
@@ -3114,13 +3253,10 @@ class NodeInternals_NonTerm(NodeInternals):
                     )
 
     def get_subnodes_csts_copy(self, node_dico=None):
-        node_dico = (
-            {} if node_dico is None else node_dico
-        )  # node_dico[old_node] --> new_node
+        node_dico = {} if node_dico is None else node_dico  # node_dico[old_node] --> new_node
         csts_copy = []
-        for weight, lnode_list in split_with(
-            lambda x: isinstance(x, int), self.subnodes_order
-        ):
+
+        for weight, lnode_list in split_with(lambda x: isinstance(x, int), self.subnodes_order):
             csts_copy.append(weight)
             l = []
 
@@ -3145,9 +3281,7 @@ class NodeInternals_NonTerm(NodeInternals):
                     new_sublist.append(sublist[0])  # add the total weight
                     new_sslist = []
                     for node in sublist[1]:
-                        if isinstance(
-                            node, int
-                        ):  # it is not a node but the weight of the node
+                        if isinstance(node, int):  # it is not a node but the weight of the node
                             new_sslist.append(node)  # add the relative weight
                         else:
                             if node not in node_dico:
@@ -3567,19 +3701,27 @@ class NodeInternals_NonTerm(NodeInternals):
 
         return
 
+
+    def _exhausted_scheme_cases(self):
+        return (self.exhausted_pick_cases == self.pick_section_amount
+                and self.exhausted_unordered_cases == self.unordered_section_amount)
+
+    def _uninitialized_scheme_cases(self):
+        return (self.exhausted_pick_cases == -1 and self.exhausted_unordered_cases == -1)
+
+
     def get_subnodes_with_csts(self):
         """
-        Generate the structure of the non terminal node.
+        Generate the structure of the non-terminal node.
         """
 
         def compute_next_shape(determinist, finite):
-            if not self.exhausted_pick_cases:
+            if not self._exhausted_scheme_cases() and not self._uninitialized_scheme_cases():
                 self.excluded_components.pop(-1)
 
             if determinist:
-                node_list, idx = self._get_next_heavier_component(
-                    self.subnodes_order, excluded_idx=self.excluded_components
-                )
+                node_list, idx = self._get_next_heavier_component(self.subnodes_order,
+                                                                  excluded_idx=self.excluded_components)
                 self.excluded_components.append(idx)
                 # 'len(self.subnodes_order)' is always even
                 exhausted_shape = (
@@ -3589,59 +3731,25 @@ class NodeInternals_NonTerm(NodeInternals):
 
             else:
                 if finite:
-                    (
-                        node_list,
-                        idx,
-                        self.component_seed,
-                    ) = self._get_next_random_component(
-                        self.subnodes_order, excluded_idx=self.excluded_components
-                    )
+                    node_list, idx, self.component_seed = (
+                        self._get_next_random_component(self.subnodes_order,
+                                                        excluded_idx=self.excluded_components))
                     self.excluded_components.append(idx)
                     exhausted_shape = (
                         len(self.excluded_components) == len(self.subnodes_order) // 2
                     )
 
                 else:
-                    node_list = self._get_random_component(
-                        self.subnodes_order, self.subnodes_order_total_weight
-                    )
+                    node_list = self._get_random_component(self.subnodes_order,
+                                                           self.subnodes_order_total_weight)
                     exhausted_shape = False
 
             if determinist:
-                node_list, pick_section_amount = self.flatten_node_list(node_list)
-                if pick_section_amount > 0:
-                    self.exhausted_pick_cases = False
-                    new_node_list = []
-                    pick_section = 0
-                    next_pick_section = None
-                    self.exhausted_pick_cases = False
-                    for obj in node_list:
-                        if isinstance(obj, Node):
-                            new_node_list.append(obj)
-                        else:
-                            if pick_section == self.current_pick_section:
-                                new_node_list.append(obj[self.current_picked_node_idx])
-                                self.current_picked_node_idx += 1
-                                if len(obj) <= self.current_picked_node_idx:
-                                    # we need to move on to the next pick section and if there is no
-                                    # more then we are exhausted.
-                                    next_pick_section = self.current_pick_section + 1
-                                    self.current_picked_node_idx = 1
-                                    if pick_section_amount == next_pick_section:
-                                        self.exhausted_pick_cases = True
-                            else:
-                                new_node_list.append(obj[0])
-                            pick_section += 1
+                node_list = self.flatten_node_list(node_list)
 
-                    if self.exhausted_pick_cases:
-                        self.current_pick_section = 0
-                        self.current_picked_node_idx = 0
-                    elif next_pick_section is not None:
-                        self.current_pick_section = next_pick_section
-
-                    node_list = new_node_list
-
-            self.exhausted_shapes = exhausted_shape and self.exhausted_pick_cases
+                self.exhausted_shapes = exhausted_shape and self._exhausted_scheme_cases()
+            else:
+                self.exhausted_shapes = exhausted_shape
 
             return node_list
 
@@ -5675,12 +5783,15 @@ class NodeInternals_NonTerm(NodeInternals):
                     if self.current_flattened_nodelist is None:
                         # This case happens when we have been cloned with 'ignore_frozen_state'
                         # and not frozen since then, or cloned from a node that has never been frozen.
-                        # Thus nothing to do, the parameters are correctly initialized.
+                        # Thus, nothing to do, the parameters are correctly initialized.
                         pass
                     else:
                         self.combinatory_complete = False
                         self.cursor_maj = self.previous_cursor_maj
                         self.cursor_min = self.previous_cursor_min
+                        # if self.current_flattened_nodelist:
+                        #     # TBC we need to protect against an empty list which may happen
+                        #     # if qty of subnodes == 0
                         nd = self.current_flattened_nodelist[self.previous_cursor_min]
                         self.subnodes_attrs[nd].unroll()
                         for nd in self.current_flattened_nodelist:
@@ -5789,10 +5900,15 @@ class NodeInternals_NonTerm(NodeInternals):
             self.exhausted_shapes = False
             self.excluded_components = []
             self.combinatory_complete = True
-            self.exhausted_pick_cases = True
             self.component_seed = None
+            self.exhausted_pick_cases = -1
+            self.pick_section_amount = 0
             self.current_pick_section = 0
             self.current_picked_node_idx = 0
+            self.exhausted_unordered_cases = -1
+            self.unordered_section_amount = 0
+            self.current_unordered_section = 0
+            self.unordered_section_case_idx = 0
             self.cursor_maj = 0
             self.cursor_min = 0
             self.previous_cursor_maj = 0
@@ -5806,6 +5922,7 @@ class NodeInternals_NonTerm(NodeInternals):
             self.combinatory_complete = new_info[2]
             self.component_seed = new_info[3]
             self.exhausted_pick_cases = new_info[4]
+            self.exhausted_unordered_cases = new_info[5]
 
         if nodes_drawn_qty is None:
             self._nodes_drawn_qty = {}

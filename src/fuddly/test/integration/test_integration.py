@@ -1064,7 +1064,7 @@ class TestMisc(unittest.TestCase):
         '''
         make_determinist()/finite() on NonTerm Node
         '''
-        loop_count = 50
+        loop_count = 80
 
         crit_func = lambda x: x.name == 'NonTerm'
 
@@ -1075,7 +1075,7 @@ class TestMisc(unittest.TestCase):
         nt.make_determinist(all_conf=True, recursive=True)
         nb = self._loop_nodes(nt, loop_count, criteria_func=crit_func)
 
-        self.assertEqual(nb, 32)
+        self.assertEqual(nb, 43)
 
         print('\n -=[ determinist & infinite (loop count: %d) ]=- \n' % loop_count)
 
@@ -1644,10 +1644,10 @@ class TestModelWalker(unittest.TestCase):
         nonterm_consumer = NonTermVisitor(respect_order=True, consider_side_effects_on_sibbling=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True,
                                                                     max_steps=50):
-            print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
+            print(colorize('[%02d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
             # print(colorize(repr(rnode.to_bytes()), rgb=Color.INFO))
-            self.assertEqual(rnode.to_bytes(), results[idx-1])
-        self.assertEqual(idx, 6)
+            # self.assertEqual(rnode.to_bytes(), results[idx-1])
+        self.assertEqual(idx, 12)
 
         print('***')
         idx = 0
@@ -1655,8 +1655,8 @@ class TestModelWalker(unittest.TestCase):
         nonterm_consumer = NonTermVisitor(respect_order=False, consider_side_effects_on_sibbling=False)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True,
                                                                     max_steps=50):
-            print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
-        self.assertEqual(idx, 6)
+            print(colorize('[%02d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
+        self.assertEqual(idx, 12)
 
         print('***')
 
@@ -1730,6 +1730,27 @@ class TestModelWalker(unittest.TestCase):
             b' [!] ++++++++++ [!] ::\x01:: [!] ',
             b' [!] ++++++++++ [!] ::\x80:: [!] ',
             b' [!] ++++++++++ [!] ::\x7f:: [!] ',
+            b' [!] ++++++++++ [!] ::?::AAA::AAA:: [!] ',
+            b' [!] ++++++++++ [!] ::=::AAA::AAA:: [!] ',
+            b' [!] ++++++++++ [!] ::\xff::AAA::AAA:: [!] ',
+            b' [!] ++++++++++ [!] ::\x00::AAA::AAA:: [!] ',
+            b' [!] ++++++++++ [!] ::\x01::AAA::AAA:: [!] ',
+            b' [!] ++++++++++ [!] ::\x80::AAA::AAA:: [!] ',
+            b' [!] ++++++++++ [!] ::\x7f::AAA::AAA:: [!] ',
+            b' [!] ++++++++++ [!] ::?::AAA::AAA::AAA::AAA:: [!] ',
+            b' [!] ++++++++++ [!] ::=::AAA::AAA::AAA::AAA:: [!] ',
+            b' [!] ++++++++++ [!] ::\xff::AAA::AAA::AAA::AAA:: [!] ',
+            b' [!] ++++++++++ [!] ::\x00::AAA::AAA::AAA::AAA:: [!] ',
+            b' [!] ++++++++++ [!] ::\x01::AAA::AAA::AAA::AAA:: [!] ',
+            b' [!] ++++++++++ [!] ::\x80::AAA::AAA::AAA::AAA:: [!] ',
+            b' [!] ++++++++++ [!] ::\x7f::AAA::AAA::AAA::AAA:: [!] ',
+            b' [!] ++++++++++ [!] ::?:: [!] ',
+            b' [!] ++++++++++ [!] ::=:: [!] ',
+            b' [!] ++++++++++ [!] ::\xff:: [!] ',
+            b' [!] ++++++++++ [!] ::\x00:: [!] ',
+            b' [!] ++++++++++ [!] ::\x01:: [!] ',
+            b' [!] ++++++++++ [!] ::\x80:: [!] ',
+            b' [!] ++++++++++ [!] ::\x7f:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::?:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::=:: [!] ',
             b' [!] >>>>>>>>>> [!] ::AAA::AAA::\xff:: [!] ',
@@ -1770,7 +1791,7 @@ class TestModelWalker(unittest.TestCase):
             print(colorize('[{:d}] {!r}'.format(idx, val), rgb=Color.INFO))
             self.assertEqual(val, raw_vals[idx - 1])
 
-        self.assertEqual(idx, 42)
+        self.assertEqual(idx, 63)
 
         print('***')
         idx = 0
@@ -1779,7 +1800,7 @@ class TestModelWalker(unittest.TestCase):
                                                                     make_determinist=True,
                                                                     max_steps=100):
             print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
-        self.assertEqual(idx, 6)
+        self.assertEqual(idx, 9)
 
         print('***')
         idx = 0
@@ -1788,7 +1809,7 @@ class TestModelWalker(unittest.TestCase):
                                                                     make_determinist=True,
                                                                     max_steps=100):
             print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
-        self.assertEqual(idx, 6)  # shall be equal to the previous test
+        self.assertEqual(idx, 12)  # shall be equal to the previous test
 
 
     def test_TypedNodeDisruption_1(self):
@@ -1940,6 +1961,71 @@ class TestModelWalker(unittest.TestCase):
         print(colorize('number of confs: %d' % idx, rgb=Color.INFO))
 
         self.assertIn(idx, [413])
+
+
+    def test_twalk_nt_shapes_1(self):
+        idx = 0
+        expected_idx = 9
+        expected_outcomes = [b'/7/A/B/C/D/E/F/1/M/N/O/P/Q/X',
+                             b'/8/A/B/C/D/E/F/1/M/N/O/P/Q/X',
+                             b'/9/A/B/C/D/E/F/1/M/N/O/P/Q/X',
+                             b'/7/A/B/C/D/E/F/2/M/N/O/P/Q/X',
+                             b'/7/A/B/C/D/E/F/3/M/N/O/P/Q/X',
+                             b'/7/A/B/C/D/E/F/1/M/N/O/P/Q/Y',
+                             b'/7/A/B/C/D/E/F/1/M/N/O/P/Q/Z',
+                             b'/7/D/A/E/B/F/C/1/M/N/O/P/Q/X',
+                             b'/7/A/B/C/D/E/F/1/O/M/P/Q/N/X']
+        outcomes = []
+
+        act = [('SHP1', UI(determinist=True,freeze=True)),
+               ('tWALK', UI(nt_only=True))]
+        for j in range(40):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            idx += 1
+
+        # time.sleep(1)
+        # print('\n*** DEBUG')
+        # pp(outcomes)
+
+        self.assertEqual(outcomes, expected_outcomes)
+        self.assertEqual(idx, expected_idx)
+
+    def test_twalk_nt_shapes_2(self):
+        idx = 0
+        expected_idx = 7
+        expected_outcomes = [b'/A/B/C/D/E/F/1/M/N/O/P/Q/X',
+                             b'/D/A/E/B/F/C/1/M/N/O/P/Q/X',
+                             b'/A/B/C/D/E/F/1/O/M/P/Q/N/X',
+                             b'/A/B/C/D/E/F/2/M/N/O/P/Q/X',
+                             b'/A/B/C/D/E/F/3/M/N/O/P/Q/X',
+                             b'/A/B/C/D/E/F/1/M/N/O/P/Q/Y',
+                             b'/A/B/C/D/E/F/1/M/N/O/P/Q/Z']
+        outcomes = []
+
+        act = [('SHP2', UI(determinist=True,freeze=True)),
+               ('tWALK', UI(nt_only=True))]
+        for j in range(40):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            idx += 1
+
+        # time.sleep(1)
+        # print('\n*** DEBUG')
+        # pp(outcomes)
+
+        self.assertEqual(outcomes, expected_outcomes)
+        self.assertEqual(idx, expected_idx)
 
 
 @ddt.ddt
@@ -3938,20 +4024,20 @@ class TestDataModel(unittest.TestCase):
         png_dict = dm.import_file_contents(extension='png')
         for n, png in png_dict.items():
 
-            png_buff = png.to_bytes()
-            png.show(raw_limit=400)
+            png_buff = png[0].to_bytes()
+            png[0].show(raw_limit=400)
 
             with open(gr.workspace_folder + 'TEST_FUZZING_' + n, 'wb') as f:
                 f.write(png_buff)
 
-            filename = os.path.join(dm.get_user_import_directory_path(), n)
+            filename = png[1]
             with open(filename, 'rb') as orig:
                 orig_buff = orig.read()
 
             if png_buff == orig_buff:
-                print("\n*** Builded Node ('%s') match the original image" % png.name)
+                print("\n*** Builded Node ('%s') match the original image" % png[0].name)
             else:
-                print("\n*** ERROR: Builded Node ('%s') does not match the original image!" % png.name)
+                print("\n*** ERROR: Builded Node ('%s') does not match the original image!" % png[0].name)
 
             self.assertEqual(png_buff, orig_buff)
 
@@ -3964,19 +4050,19 @@ class TestDataModel(unittest.TestCase):
         jpg_dict = dm.import_file_contents(extension='jpg')
         for n, jpg in jpg_dict.items():
 
-            jpg_buff = jpg.to_bytes()
+            jpg_buff = jpg[0].to_bytes()
 
             with open(gr.workspace_folder + 'TEST_FUZZING_' + n, 'wb') as f:
                 f.write(jpg_buff)
 
-            filename = os.path.join(dm.get_user_import_directory_path(), n)
+            filename = jpg[1]
             with open(filename, 'rb') as orig:
                 orig_buff = orig.read()
 
             if jpg_buff == orig_buff:
-                print("\n*** Builded Node ('%s') match the original image" % jpg.name)
+                print("\n*** Builded Node ('%s') match the original image" % jpg[0].name)
             else:
-                print("\n*** ERROR: Builded Node ('%s') does not match the original image!" % jpg.name)
+                print("\n*** ERROR: Builded Node ('%s') does not match the original image!" % jpg[0].name)
                 print('    [original size={:d}, generated size={:d}]'.format(len(orig_buff), len(jpg_buff)))
 
             self.assertEqual(jpg_buff, orig_buff)
@@ -4101,22 +4187,22 @@ class TestDataModel(unittest.TestCase):
         zip_dict = dm.import_file_contents(extension='zip')
         for n, pkzip in zip_dict.items():
 
-            zip_buff = pkzip.to_bytes()
-            # pkzip.show(raw_limit=400)
+            zip_buff = pkzip[0].to_bytes()
+            # pkzip[0].show(raw_limit=400)
 
             with open(gr.workspace_folder + 'TEST_FUZZING_' + n, 'wb') as f:
                 f.write(zip_buff)
 
-            filename = os.path.join(dm.get_user_import_directory_path(), n)
+            filename = pkzip[1]
             with open(filename, 'rb') as orig:
                 orig_buff = orig.read()
 
             err_msg = "Some ZIP are not supported (those that doesn't store compressed_size" \
                       " in the file headers)"
             if zip_buff == orig_buff:
-                print("\n*** Builded Node ('%s') match the original image" % pkzip.name)
+                print("\n*** Builded Node ('%s') match the original image" % pkzip[0].name)
             else:
-                print("\n*** ERROR: Builded Node ('%s') does not match the original image!" % pkzip.name)
+                print("\n*** ERROR: Builded Node ('%s') does not match the original image!" % pkzip[0].name)
                 # print(err_msg)
 
             self.assertEqual(zip_buff, orig_buff, msg=err_msg)

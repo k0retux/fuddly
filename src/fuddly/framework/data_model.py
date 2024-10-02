@@ -328,7 +328,7 @@ class DataModel(object):
             self._dm_db = dm_db
             self.build_data_model()
             raw_data = self.import_file_contents(extension=self.file_extension)
-            self.register(*raw_data.values())
+            self.register(*list(map(lambda x: x[0], raw_data.values())))
             self._built = True
 
     def merge_with(self, data_model):
@@ -406,7 +406,7 @@ class DataModel(object):
                 buff = f.read()
                 d_abs = absorber(buff, idx, name)
                 if d_abs is not None:
-                    msgs[name] = d_abs
+                    msgs[name] = (d_abs, filepath)
 
         return msgs
 

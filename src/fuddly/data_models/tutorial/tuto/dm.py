@@ -330,7 +330,7 @@ class MyDF_DataModel(DataModel):
                        {'name': 'body',
                         'separator': {'contents': {'name': 'sep2',
                                                    'contents': String(values=['::'])}},
-                        'shape_type': MH.Random, # ignored in determnist mode
+                        'shape_type': MH.Random,
                         'contents': [
                             {'contents': String(values=['AAA', 'BBB']),
                              'qty': (0, 4),
@@ -807,7 +807,7 @@ class MyDF_DataModel(DataModel):
         rnd_desc = \
             {'name': 'rnd',
              'shape_type': MH.Random,
-             'determinist': False,
+             'determinist': True,
              'separator': {'contents': {'name': 'sep', 'contents': String(values=['/'])},
                            'prefix': True, 'suffix': False, 'unique': True, 'always': False},
              'contents': [
@@ -842,6 +842,124 @@ class MyDF_DataModel(DataModel):
              ]}
 
 
+        shape_type_1_desc = \
+            {'name': 'shp1',
+             # 'shape_type': MH.Random,
+             # 'determinist': True,
+             'separator': {'contents': {'name': 'sep', 'contents': String(values=['/'])},
+                           'prefix': True, 'suffix': False, 'unique': True, 'always': False},
+             'contents': [
+                 {'section_type': MH.Pick,
+                  'contents': [
+                      {'name': '7',
+                       'contents': String(values=['7'])},
+                      {'name': '8',
+                       'contents': String(values=['8'])},
+                      {'name': '9',
+                       'contents': String(values=['9'])},
+                  ]},
+                 {'section_type': MH.Random,
+                  'contents': [
+                      {'name': 'A',
+                       'contents': String(values=['A'])},
+                      {'name': 'B',
+                       'contents': String(values=['B'])},
+                      {'name': 'C',
+                       'contents': String(values=['C'])},
+                      {'name': 'D',
+                       'contents': String(values=['D'])},
+                      {'name': 'E',
+                       'contents': String(values=['E'])},
+                      {'name': 'F',
+                       'contents': String(values=['F'])},
+                  ]},
+                 {'section_type': MH.Pick,
+                  'contents': [
+                      {'name': '1',
+                       'contents': String(values=['1'])},
+                      {'name': '2',
+                       'contents': String(values=['2'])},
+                      {'name': '3',
+                       'contents': String(values=['3'])},
+                  ]},
+                 {'section_type': MH.Random,
+                  'contents': [
+                      {'name': 'M',
+                       'contents': String(values=['M'])},
+                      {'name': 'N',
+                       'contents': String(values=['N'])},
+                      {'name': 'O',
+                       'contents': String(values=['O'])},
+                      {'name': 'P',
+                       'contents': String(values=['P'])},
+                      {'name': 'Q',
+                       'contents': String(values=['Q'])},
+                  ]},
+                 {'section_type': MH.Pick,
+                  'contents': [
+                      {'name': 'X',
+                       'contents': String(values=['X'])},
+                      {'name': 'Y',
+                       'contents': String(values=['Y'])},
+                      {'name': 'Z',
+                       'contents': String(values=['Z'])},
+                  ]},
+             ]}
+
+
+        shape_type_2_desc = \
+            {'name': 'shp2',
+             'separator': {'contents': {'name': 'sep', 'contents': String(values=['/'])},
+                           'prefix': True, 'suffix': False, 'unique': True, 'always': False},
+             'contents': [
+                 {'section_type': MH.Random,
+                  'contents': [
+                      {'name': 'A',
+                       'contents': String(values=['A'])},
+                      {'name': 'B',
+                       'contents': String(values=['B'])},
+                      {'name': 'C',
+                       'contents': String(values=['C'])},
+                      {'name': 'D',
+                       'contents': String(values=['D'])},
+                      {'name': 'E',
+                       'contents': String(values=['E'])},
+                      {'name': 'F',
+                       'contents': String(values=['F'])},
+                  ]},
+                 {'section_type': MH.Pick,
+                  'contents': [
+                      {'name': '1',
+                       'contents': String(values=['1'])},
+                      {'name': '2',
+                       'contents': String(values=['2'])},
+                      {'name': '3',
+                       'contents': String(values=['3'])},
+                  ]},
+                 {'section_type': MH.Random,
+                  'contents': [
+                      {'name': 'M',
+                       'contents': String(values=['M'])},
+                      {'name': 'N',
+                       'contents': String(values=['N'])},
+                      {'name': 'O',
+                       'contents': String(values=['O'])},
+                      {'name': 'P',
+                       'contents': String(values=['P'])},
+                      {'name': 'Q',
+                       'contents': String(values=['Q'])},
+                  ]},
+                 {'section_type': MH.Pick,
+                  'contents': [
+                      {'name': 'X',
+                       'contents': String(values=['X'])},
+                      {'name': 'Y',
+                       'contents': String(values=['Y'])},
+                      {'name': 'Z',
+                       'contents': String(values=['Z'])},
+                  ]},
+             ]}
+
 
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
@@ -850,7 +968,8 @@ class MyDF_DataModel(DataModel):
                       regex_desc, xml1_desc, xml2_desc, xml3_desc, xml4_desc, xml5_desc,
                       json1_desc, json2_desc, file_desc, nested_desc,
                       csp_desc, csp_z3_desc, csp_str_desc, csp_ns_desc, csp_basic_desc,
-                      csp_default_desc, str_desc, rnd_desc)
+                      csp_default_desc, str_desc, rnd_desc,
+                      shape_type_1_desc, shape_type_2_desc)
 
 
 data_model = MyDF_DataModel()
