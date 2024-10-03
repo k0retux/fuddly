@@ -984,7 +984,7 @@ class FmkPlumbing(object):
                 if res is None:
                     continue
                 name = res.group(1)
-                prj_params = self._import_project_from_fs(prefix, name)
+                prj_params = self._import_project(prefix, name)
                 if prj_params is not None:
                     self._add_project(
                         prj_params["project"],
@@ -1007,7 +1007,7 @@ class FmkPlumbing(object):
 
         for module in projects:
             try:
-                prj_params = self._import_project_from_module(module, False)
+                prj_params = self._import_project(module, module.name)
             except ProjectDuplicateError as e:
                 if not self._quiet:
                     self.print(colorize(f"*** The project '{e.name}' was already defined, "
@@ -1024,146 +1024,63 @@ class FmkPlumbing(object):
                 self.import_successfull = False
 
     def _import_project(self, prefix, name, reload_prj=False):
-        if type(prefix) is importlib.metadata.EntryPoint: # Reloading from a python module
-            # The prefix is the module in this case 
-            return self._import_project_from_module(prefix, reload_prj=True)
-        else: # Reloading from a file
-            return self._import_project_from_fs(prefix, name, reload_prj=True)
+        load_from_module=False
+        try: 
+            if type(prefix) is importlib.metadata.EntryPoint: # Reloading from a python module
+                # The prefix is the module in this case 
+                load_from_module=True
+                module = prefix.load()
 
-    def _import_project_from_fs(self, prefix, name, reload_prj=False):
-        module=None
+            else: # Reloading from a file
+                if importlib.util.find_spec(prefix + name) is None:
+                    name += "_proj"
+                module = importlib.import_module(prefix + name)
+                name = name.removesuffix("_proj")
 
-        try:
-            if importlib.util.find_spec(prefix + name) is None:
-                name=name+"_proj"
-
-            module = importlib.import_module(prefix + name)
             if reload_prj:
                 importlib.reload(module)
-
-            if name.endswith("_proj"):
-                name = name[:-len("_proj")]
         except:
             if self._quiet:
                 return None
 
             if reload_prj:
-                self.print(colorize(f"*** Problem during reload of '{name}.py' ***", rgb=Color.ERROR))
+                self.print(colorize(f"*** Problem during reload of '{name}'/'{name}_proj' ***", rgb=Color.ERROR))
             else:
-                self.print(colorize(f"*** Problem during import of '{name}.py' ***", rgb=Color.ERROR))
+                self.print(colorize(f"*** Problem during import of '{name}'/'{name}_proj' ***", rgb=Color.ERROR))
             self.print("-" * 60)
             traceback.print_exc(file=self.printer)
             self.print("-" * 60)
 
             return None
 
-        else:
-            prj_params = {}
+        prj_params = {}
+        prj_params["prj_rld_args"] = (prefix, name)
 
-            prj_params["prj_rld_args"] = (prefix, name)
-
-            try:
-                prj_params["project"] = module.project
-            except:
-                if not self._quiet:
-                    self.print(colorize("*** ERROR: '%s_proj.py' shall contain a global variable 'project' ***" % (name), rgb=Color.ERROR))
-                return None
-            else:
-                prj = prj_params["project"]
-                prj.set_exportable_fmk_ops(self._exportable_fmk_ops)
-                if prj.evol_processes:
-                    for proc in prj.evol_processes:
-                        built_evol_sc = EvolutionaryScenariosFactory.build(self._exportable_fmk_ops, *proc)
-                        prj.register_scenarios(built_evol_sc)
-
-            try:
-                logger = module.logger
-            except:
-                logger = Logger(name)
-            logger.fmkDB = self.fmkDB
-            logger.set_external_display(self.external_display)
-            if logger.name is None:
-                logger.name = name
-            prj_params["logger"] = logger
-            try:
-                targets = module.targets
-                targets.insert(0, EmptyTarget(verbose=self.config.targets.empty_tg.verbose))
-            except:
-                tg = EmptyTarget(verbose=self.config.targets.empty_tg.verbose)
-                tg.set_project(prj)
-                targets = [tg]
-            else:
-                new_targets = []
-                for obj in targets:
-                    if isinstance(obj, (tuple, list)):
-                        tg = obj[0]
-                        obj = obj[1:]
-                        tg.del_extensions()
-                        for p in obj:
-                            tg.add_extensions(p)
-                    else:
-                        assert issubclass(obj.__class__, Target), "project: {!s}".format(name)
-                        tg = obj
-                        tg.del_extensions()
-                    tg.set_project(prj)
-                    new_targets.append(tg)
-                targets = new_targets
-
-            for idx, tg_id in enumerate(self._tg_ids):
-                if tg_id >= len(targets):
-                    self.print(colorize("*** Incorrect Target ID detected: {:d} --> replace with 0 ***".format(tg_id),
-                                   rgb=Color.WARNING))
-                    self._tg_ids[idx] = 0
-
-            prj_params["target"] = targets
-
-            if prj_params["project"].name is None:
-                prj_params["project"].name = name
-            self._name2prj[prj_params["project"].name] = prj_params["project"]
-
-            if not self._quiet:
-                if reload_prj:
-                    self.print(colorize("*** Project '%s' updated ***" % prj_params["project"].name, rgb=Color.FMKSUBINFO))
-                else:
-                    self.print(colorize("*** Found Project: '%s' ***" % prj_params["project"].name, rgb=Color.FMKSUBINFO))
-
-            return prj_params
-
-    def _import_project_from_module(self, module_ep, reload_prj=False):
-        name = module_ep.name
+        # Project
         try:
-            module = module_ep.load()
-            if reload_prj:
-                importlib.reload(module)
-        except ImportError:
-            if self._quiet:
-                return None
-            self.print(colorize(f"*** ERROR loading the '{name}' project module ***", rgb=Color.ERROR))
-            self.print('-'*60)
-            traceback.print_exc(file=self.printer)
-            self.print('-'*60)
+            prj_params["project"] = module.project
+        except:
+            if not self._quiet:
+                self.print(colorize(f"*** ERROR: '{name}'/'{name}_proj' shall contain a global variable 'project' ***", rgb=Color.ERROR))
             return None
 
-         
-        # Projects
-        project = module.project
-        if project.name is None:
-            project.name = name
+        if prj_params["project"].name is None:
+            prj_params["project"].name = name
         else:
-            name = project.name
+            name = prj_params["project"].name
 
-        if not reload_prj and self._name2prj.get(project.name) is not None:
-            raise ProjectDuplicateError(project.name)
+        if load_from_module and (not reload_prj and self._name2prj.get(prj_params["project"].name) is not None):
+            raise ProjectDuplicateError(prj_params["project"].name)
 
-        self._name2prj[project.name] = project
-        project.set_exportable_fmk_ops(self._exportable_fmk_ops)
-        if project.evol_processes:
-            for proc in project.evol_processes:
+        self._name2prj[prj_params["project"].name] = prj_params["project"]
+        prj = prj_params["project"]
+        prj.set_exportable_fmk_ops(self._exportable_fmk_ops)
+        if prj.evol_processes:
+            for proc in prj.evol_processes:
                 built_evol_sc = EvolutionaryScenariosFactory.build(self._exportable_fmk_ops, *proc)
-                project.register_scenarios(built_evol_sc)
-            
+                prj.register_scenarios(built_evol_sc)
+
         # Logger
-        logger = None
         try:
             logger = module.logger
         except AttributeError:
@@ -1172,15 +1089,17 @@ class FmkPlumbing(object):
         logger.set_external_display(self.external_display)
         if logger.name is None:
             logger.name = name
+        prj_params["logger"] = logger
 
         # Targets
-        targets=[]
         try:
             targets = module.targets
+            targets.insert(0, EmptyTarget(verbose=self.config.targets.empty_tg.verbose))
         except AttributeError:
-            pass
-        targets.insert(0, EmptyTarget(verbose=self.config.targets.empty_tg.verbose))
-
+            tg = EmptyTarget(verbose=self.config.targets.empty_tg.verbose)
+            tg.set_project(prj)
+            targets = [tg]
+        
         new_targets = []
         for obj in targets:
             if isinstance(obj, (tuple, list)):
@@ -1193,7 +1112,7 @@ class FmkPlumbing(object):
                 assert issubclass(obj.__class__, Target), 'project: {!s}'.format(name)
                 tg = obj
                 tg.del_extensions()
-            tg.set_project(project)
+            tg.set_project(prj_params["project"])
             new_targets.append(tg)
         targets = new_targets
 
@@ -1203,19 +1122,15 @@ class FmkPlumbing(object):
                                     rgb=Color.WARNING))
                 self._tg_ids[idx] = 0
 
+        prj_params["target"] = targets
+
         if not self._quiet:
             if reload_prj:
-                self.print(colorize(f"*** Project '{name}' updated ***", 
-                                    rgb=Color.FMKSUBINFO))
+                self.print(colorize(f"*** Project '{name}' updated ***", rgb=Color.FMKSUBINFO))
             else:
                 self.print(colorize(f"*** Found Project: '{name}' ***", rgb=Color.FMKSUBINFO))
 
-        return {
-            "project": project,
-            "target": targets,
-            "logger": logger,
-            "prj_rld_args": (copy.copy(module_ep), name),
-        }
+        return prj_params
 
     def _add_project(self, project, targets, logger, prj_rld_args, reload_prj=False):
         if project.name not in map(lambda x: x.name, self.prj_list):
