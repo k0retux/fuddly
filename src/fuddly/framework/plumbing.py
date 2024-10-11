@@ -382,7 +382,7 @@ class FmkPlumbing(object):
             raise ProjectDefinitionError("Error with some Project imports")
 
         if not self._quiet:
-            self.print(colorize(FontStyle.BOLD + "=" * 44 + "[ Fuddly Home Information ]==\n",
+            self.print(colorize(FontStyle.BOLD + "=" * 68 + "[ Fuddly Home Information ]==\n",
                            rgb=Color.FMKINFOGROUP))
 
         if not self._quiet and hasattr(gr, "new_fuddly_data_folder"):
@@ -759,7 +759,7 @@ class FmkPlumbing(object):
 
     def _get_data_models_from_fs(self, fmkDB_update=True):
         if not self._quiet:
-            self.print(colorize(FontStyle.BOLD + "=" * 63 + "[ Data Models (filesystem) ]==", rgb=Color.FMKINFOGROUP))
+            self.print(colorize(FontStyle.BOLD + "=" * 67 + "[ Data Models (filesystem) ]==", rgb=Color.FMKINFOGROUP))
 
         data_models = collections.OrderedDict()
 
@@ -937,7 +937,7 @@ class FmkPlumbing(object):
 
     def _get_projects_fs(self, fmkDB_update=True):
         if not self._quiet:
-            self.print(colorize(FontStyle.BOLD + "=" * 66 + "[ Projects (filesystem) ]==", rgb=Color.FMKINFOGROUP))
+            self.print(colorize(FontStyle.BOLD + "=" * 70 + "[ Projects (filesystem) ]==", rgb=Color.FMKINFOGROUP))
 
         projects = collections.OrderedDict()
 
@@ -1003,7 +1003,7 @@ class FmkPlumbing(object):
         projects = entry_points(group=group_name)
 
         if not self._quiet:
-            self.print(colorize(FontStyle.BOLD + "="*66+"[ Projects (modules) ]==", rgb=Color.FMKINFOGROUP))
+            self.print(colorize(FontStyle.BOLD + "="*66+"[ Projects (python modules) ]==", rgb=Color.FMKINFOGROUP))
 
         for module in projects:
             try:

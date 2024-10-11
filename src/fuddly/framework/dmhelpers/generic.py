@@ -43,8 +43,24 @@ class MH(object):
     Generator = 2
     Leaf = 3
     Regex = 5
+    Recursive = 6
 
     RawNode = 4  # if a Node() is provided
+
+    class RecursiveLink(object):
+
+        def __init__(self, node_ref,
+                     recursion_threshold=NodeInternals_Recursive.DEFAULT_RECURSION_THRESHOLD):
+            self._node_ref = node_ref
+            self._recursion_threshold = recursion_threshold
+
+        @property
+        def node_ref(self):
+            return self._node_ref
+
+        @property
+        def recursion_threshold(self):
+            return self._recursion_threshold
 
     ##################################
     ### Non-Terminal Node Specific ###

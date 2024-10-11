@@ -4680,6 +4680,355 @@ class TestFMK(unittest.TestCase):
         fmk.process_data_and_send(DataProcess(['SC_EVOL2']), verbose=False, max_loop=-1)
 
 
+class TestNode_Recursive(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        fmk.run_project(name='tuto', tg_ids=0, dm_name='mydf')
+        fmk.prj.reset_target_mappings()
+        fmk.disable_fmkdb()
+
+    def setUp(self):
+        fmk.reload_all(tg_ids=[0])
+        fmk.prj.reset_target_mappings()
+
+
+
+    def test_rec_generation_0(self):
+        idx = 0
+        expected_idx = 5
+        expected_outcomes = [
+            b'TLV12SA9my_string',
+            b'TLV17TLV12SA9my_string',
+            b'TLV22TLV17TLV12SA9my_string',
+            b'TLV27TLV22TLV17TLV12SA9my_string',
+            b'TLV32TLV27TLV22TLV17TLV12SA9my_string'
+        ]
+        outcomes = []
+
+        atom = fmk.dm.get_atom('rec0')
+
+        rec_node = atom['.*/value/tlv_a'][0]
+        idx = 0
+        while not rec_node.is_exhausted() and idx < 20:
+            idx += 1
+            val = atom.to_bytes()
+            outcomes.append(val)
+            print(f'\n*** Turn #{idx} - atom value:'
+                  f'\n     | {val}\n')
+            # atom.show()
+            rec_node.unfreeze(recursive=False)
+
+        # time.sleep(0.1)
+        # print('\n*** DEBUG')
+        # pp(outcomes, width=150)
+        self.assertEqual(idx, expected_idx)
+        for o, e_o in zip(outcomes, expected_outcomes):
+            self.assertEqual(o, e_o)
+
+
+    def test_rec_generation_1(self):
+        idx = 0
+        expected_idx = 5
+        expected_outcomes = [
+            b'TLVSAmy_string912',
+            b'TLVTLVSAmy_string91217',
+            b'TLVTLVTLVSAmy_string9121722',
+            b'TLVTLVTLVTLVSAmy_string912172227',
+            b'TLVTLVTLVTLVTLVSAmy_string91217222732'
+        ]
+        outcomes = []
+
+        atom = fmk.dm.get_atom('rec1')
+
+        rec_node = atom['.*/value/tlv_a'][0]
+        idx = 0
+        while not rec_node.is_exhausted() and idx < 20:
+            idx += 1
+            val = atom.to_bytes()
+            outcomes.append(val)
+            print(f'\n*** Turn #{idx} - atom value:'
+                  f'\n     | {val}\n')
+            # atom.show()
+            rec_node.unfreeze(recursive=False)
+
+        # time.sleep(0.1)
+        # print('\n*** DEBUG')
+        # pp(outcomes, width=150)
+        self.assertEqual(idx, expected_idx)
+        for o, e_o in zip(outcomes, expected_outcomes):
+            self.assertEqual(o, e_o)
+
+
+    def test_rec_generation_2(self):
+        idx = 0
+        expected_idx = 6
+        expected_outcomes = [
+            b'TLV27SA9my_stringSB11your_string',
+            b'TLV47TLV27SA9my_stringSB11your_stringSB11your_string',
+            b'TLV67TLV47TLV27SA9my_stringSB11your_stringSB11your_stringSB11your_string',
+            b'TLV87TLV67TLV47TLV27SA9my_stringSB11your_stringSB11your_stringSB11your_stringSB11your_string',
+            b'TLV107TLV87TLV67TLV47TLV27SA9my_stringSB11your_stringSB11your_stringSB11your_stringSB11your_stringSB11your_string',
+            b'TLV128TLV107TLV87TLV67TLV47TLV27SA9my_stringSB11your_stringSB11your_stringSB11your_stringSB11your_stringSB11your_stringSB11your_string'
+        ]
+        outcomes = []
+
+        atom = fmk.dm.get_atom('rec2')
+
+        rec_node = atom['.*/value/tlv_a'][0]
+        idx = 0
+        while not rec_node.is_exhausted() and idx < 20:
+            idx += 1
+            val = atom.to_bytes()
+            outcomes.append(val)
+            print(f'\n*** Turn #{idx} - atom value:'
+                  f'\n     | {val}\n')
+            # atom.show()
+            rec_node.unfreeze(recursive=False)
+
+        # time.sleep(0.1)
+        # print('\n*** DEBUG')
+        # pp(outcomes, width=150)
+        self.assertEqual(idx, expected_idx)
+        for o, e_o in zip(outcomes, expected_outcomes):
+            self.assertEqual(o, e_o)
+
+
+
+    def test_twalk_operator_0_1(self):
+        idx = 0
+        expected_idx = 7
+        expected_outcomes = [
+            b'TLV12SA9my_string',
+            b'SA9my_string',
+            b'SB11your_string',
+            b'TLV17TLV12SA9my_string',
+            b'TLV22TLV17TLV12SA9my_string',
+            b'TLV27TLV22TLV17TLV12SA9my_string',
+            b'TLV32TLV27TLV22TLV17TLV12SA9my_string'
+        ]
+        outcomes = []
+
+        act = [('REC0', UI(determinist=True)),
+               ('tWALK', UI(path=None))]
+        for j in range(20):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            time.sleep(0.1)
+            # d.show()
+            idx += 1
+
+        # time.sleep(0.1)
+        # print('\n*** DEBUG')
+        # pp(outcomes, width=150)
+
+        self.assertEqual(idx, expected_idx)
+        for o, e_o in zip(outcomes, expected_outcomes):
+            self.assertEqual(o, e_o)
+
+    def test_twalk_operator_0_2(self):
+        idx = 0
+        expected_idx = 5
+        # shall be the same expected value than test_rec_generation_0()
+        expected_outcomes = [
+            b'TLV12SA9my_string',
+            b'TLV17TLV12SA9my_string',
+            b'TLV22TLV17TLV12SA9my_string',
+            b'TLV27TLV22TLV17TLV12SA9my_string',
+            b'TLV32TLV27TLV22TLV17TLV12SA9my_string'
+        ]
+        outcomes = []
+
+        act = [('REC0', UI(determinist=True)),
+               ('tWALK', UI(path='rec0/value'))]
+        for j in range(20):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            time.sleep(0.1)
+            # d.show()
+            idx += 1
+
+        # time.sleep(0.1)
+        # print('\n*** DEBUG')
+        # pp(outcomes, width=150)
+
+        self.assertEqual(idx, expected_idx)
+        for o, e_o in zip(outcomes, expected_outcomes):
+            self.assertEqual(o, e_o)
+
+
+    def test_twalk_operator_1(self):
+        idx = 0
+        expected_idx = 7
+        expected_outcomes = [
+            b'TLVSAmy_string912',
+            b'SAmy_string9',
+            b'SByour_string11',
+            b'TLVTLVSAmy_string91217',
+            b'TLVTLVTLVSAmy_string9121722',
+            b'TLVTLVTLVTLVSAmy_string912172227',
+            b'TLVTLVTLVTLVTLVSAmy_string91217222732'
+        ]
+        outcomes = []
+
+        act = [('REC1', UI(determinist=True)),
+               ('tWALK', UI(path=None))]
+        for j in range(20):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            time.sleep(0.1)
+            # d.show()
+            idx += 1
+
+        # time.sleep(0.1)
+        # print('\n*** DEBUG')
+        # pp(outcomes, width=150)
+
+        self.assertEqual(idx, expected_idx)
+        for o, e_o in zip(outcomes, expected_outcomes):
+            self.assertEqual(o, e_o)
+
+    def test_twalk_operator_2(self):
+        idx = 0
+        expected_idx = 11
+        expected_outcomes = [
+            b'TLV27SA9my_stringSB11your_string',
+            b'SA9my_string',
+            b'SB11your_string',
+            b'TLV47TLV27SA9my_stringSB11your_stringSB11your_string',
+            b'TLV67TLV47TLV27SA9my_stringSB11your_stringSB11your_stringSB11your_string',
+            b'TLV87TLV67TLV47TLV27SA9my_stringSB11your_stringSB11your_stringSB11your_stringSB11your_string',
+            b'TLV107TLV87TLV67TLV47TLV27SA9my_stringSB11your_stringSB11your_stringSB11your_stringSB11your_stringSB11your_string',
+            b'TLV128TLV107TLV87TLV67TLV47TLV27SA9my_stringSB11your_stringSB11your_stringSB11your_stringSB11your_stringSB11your_stringSB11your_string',
+            b'TLV44SA9my_stringTLV27SA9my_stringSB11your_string',
+            b'TLV61SA9my_stringTLV44SA9my_stringTLV27SA9my_stringSB11your_string',
+            b'TLV78SA9my_stringTLV61SA9my_stringTLV44SA9my_stringTLV27SA9my_stringSB11your_string'
+        ]
+        outcomes = []
+
+        act = [('REC2', UI(determinist=True)),
+               ('tWALK', UI(path=None))]
+        for j in range(20):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            time.sleep(0.1)
+            # d.show()
+            idx += 1
+
+        # time.sleep(0.1)
+        # print('\n*** DEBUG')
+        # pp(outcomes, width=150)
+
+        self.assertEqual(idx, expected_idx)
+        for o, e_o in zip(outcomes, expected_outcomes):
+            self.assertEqual(o, e_o)
+
+
+    def test_twalk_operator_3(self):
+
+        # Exploration by tWALK is incomplete wrt. tlv_b. But it is expected
+        # as when the model walker changes the value of the node `type`
+        # it cannot notice that the structure of a child or grandson (tlv_b) has changed.
+        # TODO: `consider_sibbling_change` triggers also some wrong side effects.
+        #  Need to be disabled in this case.
+
+        idx = 0
+        expected_idx = 9
+        expected_outcomes = [
+            b'TLVA12SA9my_string',
+            b'SA9my_string',
+            b'SB11your_string',
+            b'TLVB15SB11your_string',
+            b'TLVA18TLVA12SA9my_string',
+            b'TLVA24TLVA18TLVA12SA9my_string',
+            b'TLVA30TLVA24TLVA18TLVA12SA9my_string',
+            b'TLVA36TLVA30TLVA24TLVA18TLVA12SA9my_string',
+            b'TLVA42TLVA36TLVA30TLVA24TLVA18TLVA12SA9my_string'
+        ]
+        outcomes = []
+
+        act = [('REC3', UI(determinist=True)),
+               ('tWALK', UI(path=None, consider_sibbling_change=False))]
+        for j in range(20):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            time.sleep(0.1)
+            # d.show()
+            idx += 1
+
+        # time.sleep(0.1)
+        # print('\n*** DEBUG')
+        # pp(outcomes, width=150)
+
+        self.assertEqual(idx, expected_idx)
+        for o, e_o in zip(outcomes, expected_outcomes):
+            self.assertEqual(o, e_o)
+
+
+    def test_twalk_operator_4(self):
+        idx = 0
+        expected_idx = 9
+        expected_outcomes = [
+            b'TLVA12SA9my_string',
+            b'SA9my_string',
+            b'SB11your_string',
+            b'TLVB0',
+            b'TLVA18TLVA12SA9my_string',
+            b'TLVA24TLVA18TLVA12SA9my_string',
+            b'TLVA30TLVA24TLVA18TLVA12SA9my_string',
+            b'TLVA36TLVA30TLVA24TLVA18TLVA12SA9my_string',
+            b'TLVA42TLVA36TLVA30TLVA24TLVA18TLVA12SA9my_string'
+        ]
+        outcomes = []
+
+        act = [('REC4', UI(determinist=True)),
+               ('tWALK', UI(path=None))]
+        for j in range(20):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            time.sleep(0.1)
+            # d.show()
+            idx += 1
+
+        # time.sleep(0.1)
+        # print('\n*** DEBUG')
+        # pp(outcomes, width=150)
+
+        self.assertEqual(idx, expected_idx)
+        for o, e_o in zip(outcomes, expected_outcomes):
+            self.assertEqual(o, e_o)
+
+
+
 class TestConstBackend(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

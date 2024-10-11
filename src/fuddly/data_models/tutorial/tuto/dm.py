@@ -961,6 +961,163 @@ class MyDF_DataModel(DataModel):
              ]}
 
 
+        ns_desc = \
+            {'name': 'ns',
+             'contents': [
+                 {'name': 'str1', 'contents': String(values=['STR1_IN_ROOTNS'])},
+                 {'name': 'wrapped_str',
+                  'namespace': 'ns_2',
+                  'contents': [
+                      {'name': 'wrapped_str',
+                       'namespace': 'ns_3',
+                       'contents': [
+                           {'name': 'str1', 'contents': String(values=['.STR1_IN_NS3'])},
+                       ]},
+                      {'name': 'str1', 'contents': String(values=['.STR1_IN_NS2'])},
+                  ]}
+             ]}
+
+
+
+        tlv_rec0_desc = \
+            {'name': 'rec0',
+             'debug': True,
+             'contents': [
+                 {'name': 'type', 'contents': String(values=['SA','SB','TLV']),
+                  'default': 'TLV'},
+                 {'name': 'length', 'contents': LEN(vt=INT_str),
+                  'mutable': False,
+                  'node_args': 'value'},
+                 {'name': 'value',
+                  'contents': [
+                      {'name': 'str_a',
+                       'exists_if': (RawCondition('SA'), 'type'),
+                       'contents': String(values=['my_string'])},
+                      {'name': 'str_b',
+                       'exists_if': (RawCondition('SB'), 'type'),
+                       'contents': String(values=['your_string'])},
+                      {'name': 'tlv_a',
+                       'exists_if': (RawCondition('TLV'), 'type'),
+                       'contents': MH.RecursiveLink('rec0', recursion_threshold=5),
+                       'default_node': {'name': 'def_node_a',
+                                        'contents': String(values=['SA9my_string'])}},
+                  ]},
+             ]}
+
+
+        tlv_rec1_desc = \
+            {'name': 'rec1',
+             'debug': True,
+             'contents': [
+                 {'name': 'type', 'contents': String(values=['SA','SB','TLV']),
+                  'default': 'TLV'},
+                 {'name': 'value',
+                  'contents': [
+                      {'name': 'str_a',
+                       'exists_if': (RawCondition('SA'), 'type'),
+                       'contents': String(values=['my_string'])},
+                      {'name': 'str_b',
+                       'exists_if': (RawCondition('SB'), 'type'),
+                       'contents': String(values=['your_string'])},
+                      {'name': 'tlv_a',
+                       'exists_if': (RawCondition('TLV'), 'type'),
+                       'contents': MH.RecursiveLink('rec1', recursion_threshold=5),
+                       'default_node': {'name': 'def_node_a',
+                                        'contents': String(values=['SAmy_string9'])}},
+                  ]},
+                 {'name': 'length', 'contents': LEN(vt=INT_str),
+                  'mutable': False,
+                  'node_args': 'value'},
+             ]}
+
+        tlv_rec2_desc = \
+            {'name': 'rec2',
+             'debug': True,
+             'contents': [
+                 {'name': 'type', 'contents': String(values=['SA','SB','TLV']),
+                  'default': 'TLV'},
+                 {'name': 'length', 'contents': LEN(vt=INT_str),
+                  'mutable': False,
+                  'node_args': 'value'},
+                 {'name': 'value',
+                  'contents': [
+                      {'name': 'str_a',
+                       'exists_if': (RawCondition('SA'), 'type'),
+                       'contents': String(values=['my_string'])},
+                      {'name': 'str_b',
+                       'exists_if': (RawCondition('SB'), 'type'),
+                       'contents': String(values=['your_string'])},
+                      {'name': 'tlv_a',
+                       'exists_if': (RawCondition('TLV'), 'type'),
+                       'contents': MH.RecursiveLink('rec2', recursion_threshold=6),
+                       'default_node': {'name': 'def_node_a',
+                                        'contents': String(values=['SA9my_string'])}},
+                      {'name': 'tlv_b',
+                       'exists_if': (RawCondition('TLV'), 'type'),
+                       'contents': MH.RecursiveLink('rec2', recursion_threshold=4),
+                       'default_node': {'name': 'def_node_b',
+                                        'contents': String(values=['SB11your_string'])}},
+                  ]},
+             ]}
+
+        tlv_rec3_desc = \
+            {'name': 'rec3',
+             'debug': True,
+             'contents': [
+                 {'name': 'type', 'contents': String(values=['SA','SB','TLVA','TLVB']),
+                  'default': 'TLVA'},
+                 {'name': 'length', 'contents': LEN(vt=INT_str),
+                  'mutable': False,
+                  'node_args': 'value'},
+                 {'name': 'value',
+                  'contents': [
+                      {'name': 'str_a',
+                       'exists_if': (RawCondition('SA'), 'type'),
+                       'contents': String(values=['my_string'])},
+                      {'name': 'str_b',
+                       'exists_if': (RawCondition('SB'), 'type'),
+                       'contents': String(values=['your_string'])},
+                      {'name': 'tlv_a',
+                       'exists_if': (RawCondition('TLVA'), 'type'),
+                       'contents': MH.RecursiveLink('rec3', recursion_threshold=6),
+                       'default_node': {'name': 'def_node_a',
+                                        'contents': String(values=['SA9my_string'])}},
+                      {'name': 'tlv_b',
+                       'exists_if': (RawCondition('TLVB'), 'type'),
+                       'contents': MH.RecursiveLink('rec3', recursion_threshold=4),
+                       'default_node': {'name': 'def_node_b',
+                                        'contents': String(values=['SB11your_string'])}},
+                  ]},
+             ]}
+
+
+        tlv_rec4_desc = \
+            {'name': 'rec4',
+             'debug': True,
+             'contents': [
+                 {'name': 'type', 'contents': String(values=['SA','SB','TLVA','TLVB']),
+                  'default': 'TLVA'},
+                 {'name': 'length', 'contents': LEN(vt=INT_str),
+                  'mutable': False,
+                  'node_args': 'value'},
+                 {'name': 'value',
+                  'contents': [
+                      {'name': 'str_a',
+                       'exists_if': (RawCondition('SA'), 'type'),
+                       'contents': String(values=['my_string'])},
+                      {'name': 'tlv_a',
+                       'exists_if': (RawCondition('TLVA'), 'type'),
+                       'contents': MH.RecursiveLink('rec4', recursion_threshold=6),
+                       'default_node': {'name': 'def_node_a',
+                                        'contents': String(values=['SA9my_string'])}},
+                      {'name': 'str_b',
+                       'exists_if': (RawCondition('SB'), 'type'),
+                       'contents': String(values=['your_string'])},
+                  ]},
+             ]}
+
+
+
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
                       shape_desc, for_network_tg1, for_network_tg2, for_net_default_tg, basic_intg,
@@ -969,7 +1126,8 @@ class MyDF_DataModel(DataModel):
                       json1_desc, json2_desc, file_desc, nested_desc,
                       csp_desc, csp_z3_desc, csp_str_desc, csp_ns_desc, csp_basic_desc,
                       csp_default_desc, str_desc, rnd_desc,
-                      shape_type_1_desc, shape_type_2_desc)
+                      shape_type_1_desc, shape_type_2_desc, ns_desc,
+                      tlv_rec0_desc, tlv_rec1_desc, tlv_rec2_desc, tlv_rec3_desc, tlv_rec4_desc)
 
 
 data_model = MyDF_DataModel()

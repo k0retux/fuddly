@@ -81,6 +81,7 @@ class ModelWalker(object):
 
         self.ic = dm.NodeInternalsCriteria(mandatory_attrs=mattr)
         self.triglast_ic = dm.NodeInternalsCriteria(mandatory_custo=[dm.GenFuncCusto.TriggerLast])
+        self.rec_nic = dm.NodeInternalsCriteria(node_kinds=[dm.NodeInternals_Recursive])
 
         self.consumed_node_path = None
 
@@ -167,7 +168,10 @@ class ModelWalker(object):
             perform_second_step = True
             again = True
 
-            DEBUG_PRINT('--(1)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()), level=2)
+            if DEBUG:
+                DEBUG_PRINT('--(1)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()), level=2)
+                for n in node_list:
+                    DEBUG_PRINT('   |> ' + n.name, level=2)
 
             # We enter here at least once, and if a reset on the same
             # node has been triggered (typically for a non-terminal
@@ -178,7 +182,7 @@ class ModelWalker(object):
 
                 ### STEP 1 ###
 
-                # We freeze the node before making a research on it,
+                # We freeze the node before making research on it,
                 # otherwise we could catch some nodes that won't exist
                 # in the node we will finally output.
                 node.freeze()
@@ -212,6 +216,16 @@ class ModelWalker(object):
                         original_parent_node_list = None
                         if parent_node.is_nonterm():
                             original_parent_node_list = set(parent_node.subnodes_set).intersection(set(parent_node.frozen_node_list))
+
+                            if DEBUG:
+                                DEBUG_PRINT(f'--(3a)-> Parent Node: {parent_node.name} - Current Node: {node.name}', level=2)
+                                DEBUG_PRINT('  |-> orig subnodes_set:', level=2)
+                                for n in parent_node.subnodes_set:
+                                    DEBUG_PRINT('   |> ' + n.name, level=2)
+
+                                DEBUG_PRINT('  |-> orig frozen_node_list:', level=2)
+                                for n in parent_node.frozen_node_list:
+                                    DEBUG_PRINT('   |> ' + n.name, level=2)
 
                     consumer_gen = self.node_consumer_helper(node, structure_has_changed, consumed_nodes,
                                                              parent_node=parent_node, consumer=consumer)
@@ -252,14 +266,55 @@ class ModelWalker(object):
 
                         if consumer.consider_side_effects_on_sibbling:
                             if parent_node.is_nonterm():
-                                parent_node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
+                                # node_list = parent_node.get_reachable_nodes(exclude_self=True,
+                                #                                             internals_criteria=self.rec_nic,
+                                #                                             ignore_fstate=True,
+                                #                                             resolve_generator=True,
+                                #                                             relative_depth=1)
+                                # if node_list:
+                                #     for n in node_list:
+                                #         # TODO: does not work to fix recursive nodes walking with consider_sibbling_change...
+                                #         DEBUG_PRINT(
+                                #             f'--(3b.0a)-> Parent Node: {parent_node.name} '
+                                #             f' - Recursive node detected: {n.name} '
+                                #             f'--> reevaluate_constraints on linked ancestor: {n.recursive_node.name}',
+                                #             level=2)
+                                #         n.recursive_node.unfreeze(recursive=True, dont_change_state=False,
+                                #                                   reevaluate_constraints=True, ignore_entanglement=True)
+                                #         n.recursive_node.freeze(restrict_csp=True, resolve_csp=True)
+                                #         # n.recursive_node.show()
+                                # else:
+                                #     DEBUG_PRINT(
+                                #         f'--(3b.0b)-> Parent Node: {parent_node.name} '
+                                #         f' - No recursive node detected',
+                                #         level=2)
+                                parent_node.unfreeze(recursive=True, dont_change_state=False,
+                                                     reevaluate_constraints=True, ignore_entanglement=True)
                                 parent_node.freeze()
+
                                 new_parent_node_list = set(parent_node.subnodes_set).intersection(set(parent_node.frozen_node_list))
+
+                                if DEBUG:
+                                    DEBUG_PRINT(f'--(3b.1)-> Parent Node: {parent_node.name} - Current Node: {node.name}', level=2)
+                                    DEBUG_PRINT('  |-> subnodes_set:', level=2)
+                                    for n in parent_node.subnodes_set:
+                                        DEBUG_PRINT('   |> ' + n.name, level=2)
+
+                                    DEBUG_PRINT('  |-> frozen_node_list:', level=2)
+                                    for n in parent_node.frozen_node_list:
+                                        DEBUG_PRINT('   |> ' + n.name, level=2)
+
 
                                 if original_parent_node_list != new_parent_node_list:
                                     fnodes = parent_node.get_reachable_nodes(internals_criteria=self.ic, exclude_self=True,
                                                                              respect_order=consumer.respect_order,
-                                                                             resolve_generator=True, relative_depth=1)
+                                                                             resolve_generator=True, ignore_fstate=False,
+                                                                             relative_depth=1)
+                                    if DEBUG:
+                                        DEBUG_PRINT('--(3c)-> Parent Node:' + parent_node.name, level=2)
+                                        for n in fnodes:
+                                            DEBUG_PRINT('   |> ' + n.name, level=2)
+
                                     if fnodes:
                                         if node in fnodes:
                                             fnodes.remove(node)
@@ -644,11 +699,12 @@ class BasicVisitor(NodeConsumerStub):
         else:
             if self.firstcall:
                 self.firstcall = False
-                return True
-            if not node.is_exhausted():
+
+            elif not node.is_exhausted():
                 node.freeze(restrict_csp=True, resolve_csp=True)
                 node.unfreeze(recursive=False, ignore_entanglement=True)
                 node.freeze(restrict_csp=True, resolve_csp=True)
+
             return True
 
     def save_node(self, node):

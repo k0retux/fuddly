@@ -51,22 +51,24 @@ class NodeBuilder(object):
     VERYLOW_PRIO = 4
 
     valid_keys = [
-        # generic description keys
+        # Generic description keys
         'name', 'contents', 'qty', 'clone', 'type', 'alt', 'conf',
         'custo_set', 'custo_clear', 'evolution_func', 'description',
         'default_qty', 'namespace', 'from_namespace', 'highlight',
         'constraints', 'constraints_highlight',
-        # NonTerminal description keys
+        # NonTerminal Node description keys
         'weight', 'shape_type', 'section_type', 'duplicate_mode', 'weights',
         'separator', 'prefix', 'suffix', 'unique', 'always',
         'encoder',
-        # Generator/Function description keys
+        # Generator/Function Node description keys
         'node_args', 'other_args', 'provide_helpers', 'trigger_last',
-        # Typed-node description keys
+        # Typed-Node description keys
         'specific_fuzzy_vals', 'default',
+        # Recursive Node description keys
+        'default_node',
         # Import description keys
         'import_from', 'data_id',
-        # node properties description keys
+        # Node properties description keys
         'determinist', 'random', 'finite', 'infinite', 'mutable',
         'clear_attrs', 'set_attrs',
         'absorb_csts', 'absorb_helper',
@@ -76,7 +78,7 @@ class NodeBuilder(object):
         'exists_if/and', 'exists_if/or',
         'sync_size_with', 'sync_enc_size_with',
         'post_freeze', 'charset',
-        # used for debugging purpose
+        # Used for debugging purpose
         'debug'
     ]
 
@@ -191,6 +193,8 @@ class NodeBuilder(object):
                 ntype = MH.Generator
             elif isinstance(contents, str) and pre_ntype in [None, MH.Regex]:
                 ntype = MH.Regex
+            elif isinstance(contents, MH.RecursiveLink) and pre_ntype in [None, MH.Recursive]:
+                ntype = MH.Recursive
             else:
                 ntype = MH.Leaf
             return ntype
@@ -201,6 +205,7 @@ class NodeBuilder(object):
         dispatcher = {MH.NonTerminal: self._create_non_terminal_node,
                       MH.Regex: self._create_non_terminal_node_from_regex,
                       MH.Generator:  self._create_generator_node,
+                      MH.Recursive: self._create_recursive_node,
                       MH.Leaf: self._create_leaf_node,
                       MH.RawNode: self._update_provided_node}
 
@@ -342,6 +347,29 @@ class NodeBuilder(object):
 
         self._handle_custo(n, desc, conf)
         self._handle_common_attr(n, desc, conf, current_ns=namespace)
+
+        return n
+
+    def _create_recursive_node(self, desc, node=None, namespace=None):
+
+        n, conf = self.__pre_handling(desc, node, namespace=namespace)
+
+        contents = desc.get('contents')
+        if isinstance(contents, MH.RecursiveLink):
+            recursive_link = contents
+            default_node_desc = desc.get('default_node', None)
+            if default_node_desc is not None:
+                default_node = self._create_graph_from_desc(default_node_desc, n)
+            else:
+                default_node = None
+
+            self._register_todo(n, self._complete_recursive_node,
+                                args=(recursive_link, default_node, desc, conf, namespace),
+                                unpack_args=True,
+                                prio=self.HIGH_PRIO)
+
+        else:
+            raise ValueError(f"*** ERROR: {contents!r} is an invalid contents!")
 
         return n
 
@@ -616,7 +644,7 @@ class NodeBuilder(object):
             node.conf(conf).set_specific_fuzzy_values(vals)
         def_val = desc.get('default', None)
         if def_val is not None:
-            if not node.is_typed_value(conf=conf):
+            if not node.is_typed_value(conf=conf) and not node.is_rec(conf=conf):
                 raise DataModelDefinitionError("'default' is only usable with Typed-nodes."
                                                " [guilty node: '{:s}']".format(node.name))
             node.set_default_value(def_val, conf=conf)
@@ -847,6 +875,21 @@ class NodeBuilder(object):
         node_args = self._create_graph_from_desc(args, None)
         internals = node.cc if conf is None else node.c[conf]
         internals.set_generator_func_arg(generator_node_arg=node_args)
+
+    def _complete_recursive_node(self, node, recursive_link, default_node, desc,
+                                 conf, current_ns):
+
+        from_ns = desc.get('from_namespace', None)
+        ns = current_ns if from_ns is None else from_ns
+
+        rec_node = self.__get_node_from_db(recursive_link.node_ref, namespace=ns)
+        node.set_recursive_node(rec_node, conf=conf)
+        node.set_default_node(default_node)
+        node.set_hosting_node_name(node.name)
+        node.set_recursion_threshold(recursive_link.recursion_threshold)
+
+        self._handle_custo(node, desc, conf)
+        self._handle_common_attr(node, desc, conf, current_ns=current_ns)
 
     def _set_env(self, node, args):
         env = Env()
