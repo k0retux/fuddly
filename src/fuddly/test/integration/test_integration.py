@@ -4818,7 +4818,7 @@ class TestNode_Recursive(unittest.TestCase):
             fmk._setup_new_sending()
             fmk._log_data(d)
             outcomes.append(d.to_bytes())
-            time.sleep(0.1)
+            # time.sleep(0.1)
             # d.show()
             idx += 1
 
@@ -4853,7 +4853,7 @@ class TestNode_Recursive(unittest.TestCase):
             fmk._setup_new_sending()
             fmk._log_data(d)
             outcomes.append(d.to_bytes())
-            time.sleep(0.1)
+            # time.sleep(0.1)
             # d.show()
             idx += 1
 
@@ -4890,7 +4890,7 @@ class TestNode_Recursive(unittest.TestCase):
             fmk._setup_new_sending()
             fmk._log_data(d)
             outcomes.append(d.to_bytes())
-            time.sleep(0.1)
+            # time.sleep(0.1)
             # d.show()
             idx += 1
 
@@ -4930,7 +4930,7 @@ class TestNode_Recursive(unittest.TestCase):
             fmk._setup_new_sending()
             fmk._log_data(d)
             outcomes.append(d.to_bytes())
-            time.sleep(0.1)
+            # time.sleep(0.1)
             # d.show()
             idx += 1
 
@@ -4948,8 +4948,6 @@ class TestNode_Recursive(unittest.TestCase):
         # Exploration by tWALK is incomplete wrt. tlv_b. But it is expected
         # as when the model walker changes the value of the node `type`
         # it cannot notice that the structure of a child or grandson (tlv_b) has changed.
-        # TODO: `consider_sibbling_change` triggers also some wrong side effects.
-        #  Need to be disabled in this case.
 
         idx = 0
         expected_idx = 9
@@ -4966,8 +4964,9 @@ class TestNode_Recursive(unittest.TestCase):
         ]
         outcomes = []
 
+        # @consider_sibbling_change is set to True by default
         act = [('REC3', UI(determinist=True)),
-               ('tWALK', UI(path=None, consider_sibbling_change=False))]
+               ('tWALK', UI(path=None, consider_sibbling_change=True))]
         for j in range(20):
             d = fmk.process_data(act)
             if d is None:
@@ -4975,8 +4974,8 @@ class TestNode_Recursive(unittest.TestCase):
                 break
             fmk._setup_new_sending()
             fmk._log_data(d)
+            # time.sleep(0.1)
             outcomes.append(d.to_bytes())
-            time.sleep(0.1)
             # d.show()
             idx += 1
 
@@ -5015,7 +5014,6 @@ class TestNode_Recursive(unittest.TestCase):
             fmk._setup_new_sending()
             fmk._log_data(d)
             outcomes.append(d.to_bytes())
-            time.sleep(0.1)
             # d.show()
             idx += 1
 
@@ -5026,7 +5024,6 @@ class TestNode_Recursive(unittest.TestCase):
         self.assertEqual(idx, expected_idx)
         for o, e_o in zip(outcomes, expected_outcomes):
             self.assertEqual(o, e_o)
-
 
 
 class TestConstBackend(unittest.TestCase):

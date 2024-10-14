@@ -273,21 +273,20 @@ class ModelWalker(object):
                                 #                                             relative_depth=1)
                                 # if node_list:
                                 #     for n in node_list:
-                                #         # TODO: does not work to fix recursive nodes walking with consider_sibbling_change...
                                 #         DEBUG_PRINT(
                                 #             f'--(3b.0a)-> Parent Node: {parent_node.name} '
                                 #             f' - Recursive node detected: {n.name} '
                                 #             f'--> reevaluate_constraints on linked ancestor: {n.recursive_node.name}',
                                 #             level=2)
-                                #         n.recursive_node.unfreeze(recursive=True, dont_change_state=False,
-                                #                                   reevaluate_constraints=True, ignore_entanglement=True)
+                                #
+                                #         n.recursive_node.unfreeze(recursive=False, reevaluate_constraints=True)
                                 #         n.recursive_node.freeze(restrict_csp=True, resolve_csp=True)
-                                #         # n.recursive_node.show()
                                 # else:
                                 #     DEBUG_PRINT(
                                 #         f'--(3b.0b)-> Parent Node: {parent_node.name} '
                                 #         f' - No recursive node detected',
                                 #         level=2)
+
                                 parent_node.unfreeze(recursive=True, dont_change_state=False,
                                                      reevaluate_constraints=True, ignore_entanglement=True)
                                 parent_node.freeze()

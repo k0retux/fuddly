@@ -981,7 +981,6 @@ class MyDF_DataModel(DataModel):
 
         tlv_rec0_desc = \
             {'name': 'rec0',
-             'debug': True,
              'contents': [
                  {'name': 'type', 'contents': String(values=['SA','SB','TLV']),
                   'default': 'TLV'},
@@ -1007,7 +1006,6 @@ class MyDF_DataModel(DataModel):
 
         tlv_rec1_desc = \
             {'name': 'rec1',
-             'debug': True,
              'contents': [
                  {'name': 'type', 'contents': String(values=['SA','SB','TLV']),
                   'default': 'TLV'},
@@ -1032,7 +1030,6 @@ class MyDF_DataModel(DataModel):
 
         tlv_rec2_desc = \
             {'name': 'rec2',
-             'debug': True,
              'contents': [
                  {'name': 'type', 'contents': String(values=['SA','SB','TLV']),
                   'default': 'TLV'},
@@ -1062,7 +1059,6 @@ class MyDF_DataModel(DataModel):
 
         tlv_rec3_desc = \
             {'name': 'rec3',
-             'debug': True,
              'contents': [
                  {'name': 'type', 'contents': String(values=['SA','SB','TLVA','TLVB']),
                   'default': 'TLVA'},
@@ -1093,7 +1089,6 @@ class MyDF_DataModel(DataModel):
 
         tlv_rec4_desc = \
             {'name': 'rec4',
-             'debug': True,
              'contents': [
                  {'name': 'type', 'contents': String(values=['SA','SB','TLVA','TLVB']),
                   'default': 'TLVA'},

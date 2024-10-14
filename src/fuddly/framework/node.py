@@ -1445,9 +1445,8 @@ class NodeInternals_Recursive(NodeInternals):
                                                              ignore_frozen_state=True,
                                                              new_env=False)
                     self._clone_from_get_value = False
-                    new_node.unfreeze(recursive=True, dont_change_state=True,
-                                      reevaluate_constraints=True, ignore_entanglement=True)
-                    new_node.freeze(restrict_csp=True, resolve_csp=True)
+                    new_node.unfreeze(recursive=True, reevaluate_constraints=True)
+                    new_node.freeze()
                     node_list = new_node.get_reachable_nodes(exclude_self=True,
                                                              internals_criteria=self.nic,
                                                              ignore_fstate=False,
@@ -1460,13 +1459,16 @@ class NodeInternals_Recursive(NodeInternals):
                             #  main operational cases.
                             rec_node = nd
                             rec_node.set_contents(self._recursive_generated_node)
-                            new_node.unfreeze(recursive=False, dont_change_state=False,
-                                              reevaluate_constraints=True, ignore_entanglement=True)
-                            new_node.freeze(restrict_csp=True, resolve_csp=True)
+                            # new_node.unfreeze(recursive=False, reevaluate_constraints=True)
+                            # new_node.freeze()
                             self._recursive_generated_node = new_node
                             break
                     else:
-                        # print(f'\n*** DBG: hosting_node: "{self._hosting_node_name}"')
+                        print(f'\n*** DBG (RecursiveNode._get_value) ***'
+                              f'  --> hosting_node: "{self._hosting_node_name}"')
+                        hash_tab = new_node.get_all_paths()
+                        for k, nd in hash_tab.items():
+                            print(f'{k} --> {nd.name}')
                         raise NotImplementedError(f'BUG {self._hosting_node_name}')
 
             else:
@@ -4391,9 +4393,6 @@ class NodeInternals_NonTerm(NodeInternals):
         node_with_no_children = False
         removed_cpt = 0
 
-        # print(f'\n*** DBG 00 .get_subnodes_with_csts() called')
-        # print_node_list(node_list)
-
         original_node_list = copy.copy(node_list)
         idx_ref = -1
         for idx, n in enumerate(original_node_list):
@@ -4401,12 +4400,9 @@ class NodeInternals_NonTerm(NodeInternals):
             # .get_subnodes_with_csts()
             idx_ref += 1
 
-            # print(f'\n*** DBG 0 loop node_list idx:{idx} name:{n.name}')
             if n.is_attr_set(NodeInternals.DISABLED):
                 val = Node.DEFAULT_DISABLED_NODEINT
                 if not n.env.is_djob_registered(key=id(n), prio=Node.DJOBS_PRIO_nterm_existence):
-                    # print(f'\n*** DBG 1 register_djob ({n.name}) (idx_ref={idx_ref}, len={len(node_list)}):')
-                    # print_node_list(node_list)
                     if not djob_group_created:
                         djob_group_created = True
                         djob_group = DJobGroup(node_list)
@@ -4420,16 +4416,10 @@ class NodeInternals_NonTerm(NodeInternals):
                     )
                     disabled_node = True
             else:
-                # if n.debug:
-                #     print(f'\n===DBG 0=== n._get_val "{n.name}" from NT')
                 val = n._get_value(conf=conf, recursive=recursive,
                                    return_node_internals=True, restrict_csp=restrict_csp)
                 # 'val' is always a NodeInternals or a list of NodeInternals
                 # except if non-term encoding has been carried out
-
-                # if n.debug:
-                #     print(f'\n===DBG 1=== n._get_val "{n.name}" from NT {val}')
-
 
                 if node_with_no_children and n.is_attr_set(NodeInternals.AutoSeparator):
                     node_with_no_children = False
@@ -4438,16 +4428,10 @@ class NodeInternals_NonTerm(NodeInternals):
                     self._clone_separator_decrease_refcount()
                     self.frozen_node_list.pop(idx-1)
                     idx_ref -= 2
-                    # print(f'\n*** DBG 3.2 Node with no children - step 2 '
-                    #       f'(idx={idx} idx_ref={idx_ref} - {n.name})')
-                    # print_node_list(self.frozen_node_list)
                     continue
                 elif (self.separator is not None and not self.separator.always
                         and not n.is_attr_set(NodeInternals.AutoSeparator)
                         and n.is_nonterm() and n.has_no_children()):
-                    # print(f'\n*** DBG 3.1 Node with no children - step 1 '
-                    #       f'(idx={idx} idx_ref={idx_ref} - {n.name})')
-                    # print_node_list(self.frozen_node_list)
                     node_with_no_children = True
                     continue
                 else:
@@ -4615,21 +4599,19 @@ class NodeInternals_NonTerm(NodeInternals):
     def _cleanup_delayed_nodes(node, node_list, idx, conf, rec):
         node.set_private(None)
         node.clear_attr(NodeInternals.DISABLED)
-        if idx < len(node_list):
-            node_list.pop(idx)
+        if node in node_list:
+            # idx shall not be used. Indeed, if multiple delayed nodes in the same node_list
+            # need to be cleaned up we cannot make assumption on the calling order,
+            # and the idx remains only valid in descending order.
+            node_list.remove(node)
 
-    def set_separator_node(
-        self, sep_node, prefix=True, suffix=True, unique=False, always=False
-    ):
+    def set_separator_node(self, sep_node, prefix=True, suffix=True, unique=False, always=False):
         check_err = set()
         for n in self.subnodes_set:
             check_err.add(n.name)
         if sep_node.name in check_err:
-            print(
-                "\n*** The separator node name shall not be used by a subnode "
-                + "of this non-terminal node"
-            )
-            raise ValueError
+            raise ValueError("\n*** The separator node name shall not be used by a subnode of "
+                             "this non-terminal node")
         self.separator = NodeSeparator(
             sep_node, prefix=prefix, suffix=suffix, unique=unique, always=always
         )
@@ -6015,10 +5997,15 @@ class NodeInternals_NonTerm(NodeInternals):
         # mutable = True
         if recursive:
             if reevaluate_constraints and mutable:
-                # In order to re-evaluate existence condition of
-                # child node we have to recompute the previous state,
+                # In order to re-evaluate existence condition of child nodes we have to recompute
+                # the previous state of the subnodes. Indeed, after a freeze, the
+                # subnodes state is updated to be able to deliver the next value after
+                # a new unfreeze/freeze sequence. But in the case of an
+                # unfreeze(reevaluate_constraints=True), we don't want to progress in subnodes
+                # walking (that will deliver the next value).
+                # Thus, we have to recompute the previous state of the subnodes
                 # which is the purpose of the following code. We also
-                # re-evaluate generator and function.
+                # re-evaluate generators, functions and recursive nodes.
                 iterable = self.frozen_node_list
                 determinist = self.is_attr_set(NodeInternals.Determinist)
                 finite = self.is_attr_set(NodeInternals.Finite)
@@ -6051,15 +6038,14 @@ class NodeInternals_NonTerm(NodeInternals):
                 if iterable is not None:
                     for n in iterable:
                         self._cleanup_entangled_nodes_from(n)
-                        if n.is_nonterm(conf) or n.is_genfunc(conf) or n.is_func(conf):
-                            n.unfreeze(
-                                conf=conf,
-                                recursive=True,
-                                dont_change_state=dont_change_state,
-                                ignore_entanglement=ignore_entanglement,
-                                only_generators=only_generators,
-                                reevaluate_constraints=reevaluate_constraints,
-                            )
+                        if (n.is_nonterm(conf) or n.is_genfunc(conf) or n.is_rec(conf)
+                                or n.is_func(conf)):
+                            n.unfreeze(conf=conf,
+                                       recursive=True,
+                                       dont_change_state=dont_change_state,
+                                       ignore_entanglement=ignore_entanglement,
+                                       only_generators=only_generators,
+                                       reevaluate_constraints=reevaluate_constraints)
 
                 self.frozen_node_list = None
                 for n in self.subnodes_set:
@@ -6074,14 +6060,12 @@ class NodeInternals_NonTerm(NodeInternals):
 
             if not reevaluate_constraints and iterable is not None:
                 for n in iterable:
-                    n.unfreeze(
-                        conf=conf,
-                        recursive=True,
-                        dont_change_state=dont_change_state,
-                        ignore_entanglement=ignore_entanglement,
-                        only_generators=only_generators,
-                        reevaluate_constraints=reevaluate_constraints,
-                    )
+                    n.unfreeze(conf=conf,
+                               recursive=True,
+                               dont_change_state=dont_change_state,
+                               ignore_entanglement=ignore_entanglement,
+                               only_generators=only_generators,
+                               reevaluate_constraints=reevaluate_constraints)
 
         if (
             not dont_change_state
