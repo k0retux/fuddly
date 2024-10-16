@@ -787,7 +787,7 @@ class NodeBuilder(object):
             self._register_todo(node, self._clone_from_dict, args=(ref, desc, current_ns),
                                 prio=self.LOW_PRIO)
         else:
-            node.set_contents(self.node_dico[ref], preserve_node=False)
+            node.set_contents(self.node_dico[ref], keep_base_node_attrs=False)
             self._handle_custo(node, desc, conf=None)
             self._handle_common_attr(node, desc, conf=None, current_ns=current_ns)
 

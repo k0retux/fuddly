@@ -169,9 +169,13 @@ class ModelWalker(object):
             again = True
 
             if DEBUG:
-                DEBUG_PRINT('--(1)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()), level=2)
-                for n in node_list:
-                    DEBUG_PRINT('   |> ' + n.name, level=2)
+                DEBUG_PRINT('  ' * parent_node.depth +
+                            f'(1|from: {parent_node.name})--> '
+                            f'processed node: {node.name}, exhausted: {node.is_exhausted()}',
+                            level=1)
+                DEBUG_PRINT('  ' * parent_node.depth +
+                            f'  |- current node_list: {list(map(lambda x: x.name, node_list))}',
+                            level=2)
 
             # We enter here at least once, and if a reset on the same
             # node has been triggered (typically for a non-terminal
@@ -192,9 +196,9 @@ class ModelWalker(object):
                                                   respect_order=consumer.respect_order,
                                                   resolve_generator=True, relative_depth=1)
                 if DEBUG:
-                    DEBUG_PRINT('--(2)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()), level=2)
-                    for e in fnodes:
-                        DEBUG_PRINT('   |> ' + e.name, level=2)
+                    DEBUG_PRINT('  ' * parent_node.depth +
+                                f'  |_ children found: {list(map(lambda x: x.name, fnodes))}',
+                                level=1)
 
                 # If we don't find direct subnodes, it means that the
                 # node is terminal, and we go to Step 2. Otherwise, we
@@ -218,21 +222,28 @@ class ModelWalker(object):
                             original_parent_node_list = set(parent_node.subnodes_set).intersection(set(parent_node.frozen_node_list))
 
                             if DEBUG:
-                                DEBUG_PRINT(f'--(3a)-> Parent Node: {parent_node.name} - Current Node: {node.name}', level=2)
-                                DEBUG_PRINT('  |-> orig subnodes_set:', level=2)
+                                DEBUG_PRINT(f'--(A1)-> Parent Node: {parent_node.name} - '
+                                            f'Current Node: {node.name}', level=3)
+                                DEBUG_PRINT('  |-> orig subnodes_set:', level=3)
                                 for n in parent_node.subnodes_set:
-                                    DEBUG_PRINT('   |> ' + n.name, level=2)
+                                    DEBUG_PRINT('   |> ' + n.name, level=3)
 
-                                DEBUG_PRINT('  |-> orig frozen_node_list:', level=2)
+                                DEBUG_PRINT('  |-> orig frozen_node_list:', level=3)
                                 for n in parent_node.frozen_node_list:
-                                    DEBUG_PRINT('   |> ' + n.name, level=2)
+                                    DEBUG_PRINT('   |> ' + n.name, level=3)
 
                     consumer_gen = self.node_consumer_helper(node, structure_has_changed, consumed_nodes,
                                                              parent_node=parent_node, consumer=consumer)
                     for consumed_node, orig_node_val, reset, ignore_node in consumer_gen:
 
-                        DEBUG_PRINT("   [ reset: {!r:s} | ignore_node: {!r:s} | " \
-                                               "name: {!r:s} ]".format(reset, ignore_node, node.name))
+                        if DEBUG:
+                            DEBUG_PRINT('  ' * parent_node.depth +
+                                        f'(2|from: {parent_node.name})--> processed node: {node.name}, '
+                                        f'consumed_node: {consumed_node.name}',
+                                        level=1)
+                            DEBUG_PRINT('  ' * parent_node.depth +
+                                        f"  [ reset: {reset} | ignore_node: {ignore_node} | "
+                                        f"name: {node.name} ]", level=1)
 
                         # Depending on the choice of the consumer, we
                         # can go to Step 1 again with the same node
@@ -274,7 +285,7 @@ class ModelWalker(object):
                                 # if node_list:
                                 #     for n in node_list:
                                 #         DEBUG_PRINT(
-                                #             f'--(3b.0a)-> Parent Node: {parent_node.name} '
+                                #             f'--(A1.a)-> Parent Node: {parent_node.name} '
                                 #             f' - Recursive node detected: {n.name} '
                                 #             f'--> reevaluate_constraints on linked ancestor: {n.recursive_node.name}',
                                 #             level=2)
@@ -283,7 +294,7 @@ class ModelWalker(object):
                                 #         n.recursive_node.freeze(restrict_csp=True, resolve_csp=True)
                                 # else:
                                 #     DEBUG_PRINT(
-                                #         f'--(3b.0b)-> Parent Node: {parent_node.name} '
+                                #         f'--(A1.b)-> Parent Node: {parent_node.name} '
                                 #         f' - No recursive node detected',
                                 #         level=2)
 
@@ -294,14 +305,15 @@ class ModelWalker(object):
                                 new_parent_node_list = set(parent_node.subnodes_set).intersection(set(parent_node.frozen_node_list))
 
                                 if DEBUG:
-                                    DEBUG_PRINT(f'--(3b.1)-> Parent Node: {parent_node.name} - Current Node: {node.name}', level=2)
-                                    DEBUG_PRINT('  |-> subnodes_set:', level=2)
+                                    DEBUG_PRINT(f'--(A2)-> Parent Node: {parent_node.name} - '
+                                                f'Current Node: {node.name}', level=3)
+                                    DEBUG_PRINT('  |-> subnodes_set:', level=3)
                                     for n in parent_node.subnodes_set:
-                                        DEBUG_PRINT('   |> ' + n.name, level=2)
+                                        DEBUG_PRINT('   |> ' + n.name, level=3)
 
-                                    DEBUG_PRINT('  |-> frozen_node_list:', level=2)
+                                    DEBUG_PRINT('  |-> frozen_node_list:', level=3)
                                     for n in parent_node.frozen_node_list:
-                                        DEBUG_PRINT('   |> ' + n.name, level=2)
+                                        DEBUG_PRINT('   |> ' + n.name, level=3)
 
 
                                 if original_parent_node_list != new_parent_node_list:
@@ -310,9 +322,9 @@ class ModelWalker(object):
                                                                              resolve_generator=True, ignore_fstate=False,
                                                                              relative_depth=1)
                                     if DEBUG:
-                                        DEBUG_PRINT('--(3c)-> Parent Node:' + parent_node.name, level=2)
+                                        DEBUG_PRINT('--(A3)-> Parent Node:' + parent_node.name, level=3)
                                         for n in fnodes:
-                                            DEBUG_PRINT('   |> ' + n.name, level=2)
+                                            DEBUG_PRINT('   |> ' + n.name, level=3)
 
                                     if fnodes:
                                         if node in fnodes:
@@ -435,22 +447,30 @@ class ModelWalker(object):
 
             if not is_csp_compliant(node):
                 if node.is_exhausted():
+                    DEBUG_PRINT('  ' * node.depth + f'  /_ node_consumer_helper.0a ({node.name}):'
+                                                    f' csp compliance, exhausted case _/', level=2)
                     yield None, None, False, True  # --> x, x, dont_reset, ignore_node
                 else:
+                    DEBUG_PRINT('  ' * node.depth + f'  /_ node_consumer_helper.0b ({node.name}):'
+                                                    f' csp compliance, non exhausted case _/',
+                                level=2)
                     yield None, None, False, False  # --> x, x, dont_reset, dont_ignore_node
 
             elif reset and not node.is_exhausted():
-
+                DEBUG_PRINT('  ' * node.depth + f'  /_ node_consumer_helper.1 ({node.name}):'
+                                                f' need_reset and not exhausted case _/', level=2)
                 yield node, orig_node_val, True, False # --> x, x, reset, dont_ignore_node
 
             elif reset and node.is_exhausted():
+                DEBUG_PRINT('  ' * node.depth + f'  /_ node_consumer_helper.2 ({node.name}):'
+                                                f' need_reset and exhausted case _/', level=2)
 
                 yield None, None, False, True # --> x, x, dont_reset, ignore_node
                 raise ValueError  # We should never return here, otherwise its a bug we want to alert on
 
             elif node.is_exhausted(): # --> (reset and node.is_exhausted()) or (not reset and node.is_exhausted())
-
-                # DEBUG_PRINT('*** node_consumer_helper(): exhausted')
+                DEBUG_PRINT('  ' * node.depth + f'  /_ node_consumer_helper.3 ({node.name}):'
+                                                f' exhausted case _/', level=2)
                 yield node, orig_node_val, False, False
 
                 if consumer.interested_by(node):
@@ -475,9 +495,16 @@ class ModelWalker(object):
                     return
 
             else:
+                DEBUG_PRINT('  ' * node.depth +
+                            f'  /_ node_consumer_helper.4 ({node.name}): default case _/', level=2)
                 yield node, orig_node_val, False, False
 
-
+            DEBUG_PRINT('  ' * node.depth +
+                        f'  /_ node_consumer_helper ({node.name}) loop again? {again} _/\n' +
+                        '  ' * node.depth +
+                        f'   | max_steps: {max_steps}, consume_called_again: {consume_called_again},'
+                        f' not_recovered: {not_recovered}',
+                        level=2)
             if max_steps != 0:
                 max_steps -= 1
                 if consume_called_again:
@@ -681,14 +708,20 @@ class NodeConsumerStub(object):
 
 class BasicVisitor(NodeConsumerStub):
 
-    def init_specific(self, reset_when_change=True):
-        self._reset_when_change = reset_when_change
+    def init_specific(self, reset_when_change=True, walk_within_recursive_node=False):
+        self.need_reset_when_structure_change = reset_when_change
+        self.walk_within_recursive_node = walk_within_recursive_node
+        self._semantics_criteria = dm.NodeSemanticsCriteria()
+        if self.walk_within_recursive_node:
+            self._internals_criteria = dm.NodeInternalsCriteria(
+                negative_node_kinds=[dm.NodeInternals_NonTerm, dm.NodeInternals_Recursive])
+        else:
+            self._internals_criteria = dm.NodeInternalsCriteria(
+                negative_node_kinds=[dm.NodeInternals_NonTerm])
+
         self.reset_state()
 
     def reset_state(self):
-        self._internals_criteria = dm.NodeInternalsCriteria(negative_node_kinds=[dm.NodeInternals_NonTerm])
-        self._semantics_criteria = dm.NodeSemanticsCriteria()
-        self.need_reset_when_structure_change = self._reset_when_change
         self.firstcall = True
 
     def consume_node(self, node):
@@ -714,7 +747,7 @@ class BasicVisitor(NodeConsumerStub):
         node.freeze(restrict_csp=True, resolve_csp=True)
 
     def need_reset(self, node):
-        if node.is_nonterm():
+        if node.is_nonterm() or (self.walk_within_recursive_node and node.is_rec()):
             if not node.is_exhausted():
                 self.firstcall = True
             return True
@@ -727,35 +760,46 @@ class BasicVisitor(NodeConsumerStub):
 
 class NonTermVisitor(BasicVisitor):
 
-    def init_specific(self, reset_when_change=True):
-        self._internals_criteria = dm.NodeInternalsCriteria(node_kinds=[dm.NodeInternals_NonTerm],
-                                                            mandatory_attrs=[dm.NodeInternals.Mutable])
+    def init_specific(self, reset_when_change=True, walk_within_recursive_node=False):
+        self._internals_criteria = dm.NodeInternalsCriteria(
+            node_kinds=[dm.NodeInternals_NonTerm, dm.NodeInternals_Recursive],
+            mandatory_attrs=[dm.NodeInternals.Mutable])
         self._semantics_criteria = dm.NodeSemanticsCriteria()
         self.need_reset_when_structure_change = reset_when_change
         self.last_node = None
         self.current_node = None
 
+        self.firstcall = True
+
     def need_reset(self, node):
         # DEBUG_PRINT('--(RESET)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()), level=0)
-        if node.is_nonterm() and self.last_node is not None and \
-                        node is not self.last_node and not node.is_exhausted():
-            self.last_node = None
-            self.current_node = None
-            return True
+        if node.is_nonterm():
+            if not node.is_exhausted():
+                self.firstcall = True
+
+            if self.last_node is not None and node is not self.last_node and not node.is_exhausted():
+                self.last_node = None
+                self.current_node = None
+                return True
+            else:
+                return False
         else:
             return False
 
     def consume_node(self, node):
-        self.last_node = self.current_node
-        self.current_node = node
-
-        if node.is_exhausted() and self.last_node is not None:
-            return False
+        if node.is_rec():
+            return BasicVisitor.consume_node(self, node)
         else:
-            # last_name = self.last_node.name if self.last_node else 'None'
-            # DEBUG_PRINT('--(1)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()) + \
-            #             ', curr: ' + self.current_node.name + ', last: ' + last_name, level=0)
-            return True
+            self.last_node = self.current_node
+            self.current_node = node
+
+            if node.is_exhausted() and self.last_node is not None:
+                return False
+            else:
+                # last_name = self.last_node.name if self.last_node else 'None'
+                # DEBUG_PRINT('--(1)-> Node:' + node.name + ', exhausted:' + repr(node.is_exhausted()) + \
+                #             ', curr: ' + self.current_node.name + ', last: ' + last_name, level=0)
+                return True
 
     def still_interested_by(self, node):
         return False
@@ -998,7 +1042,7 @@ class TypedNodeDisruption(NodeConsumerStub):
         node.cc.set_attrs_from(self.orig_all_attrs)
 
     def need_reset(self, node):
-        if node.is_nonterm():
+        if node.is_nonterm() or node.is_rec():
             return True
         else:
             return False

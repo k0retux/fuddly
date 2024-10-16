@@ -8,22 +8,14 @@
 [ENHANCEMENT]
 
 - Complete Recursive Node implementation
-  - absorption implementation
+  - Absorption implementation
 
 - Enhance ModelWalking exploration when the structure of a child node changed because of
   a change in an ancestor node value.
-  This situation may exist with Recursive and Generator nodes. An exemple is in tuto.py
-  with `tlv_rec3_desc`. Indeed with this descriptor `tlv_b` will never be explored, as when
-  the model walker changes the value of the node `type` it cannot notice that the structure of
-  a grandson has changed.
 
-  Also the option `consider_sibbling_change` of ModelWalker trigger some wrong side-effects
-  with the example `tlv_rec3_desc` (where different existence conditions are used for both
-  recursive nodes).
-
-  Ideas to solve it:
-  - using a specific SyncObj that will be added in the non terminal node that is recursively
-    linked to the Recursive node may be a solution for the case of Recursive node
+  Exploration by tWALK with @walk_within_recursive_node set to True make basically recursive nodes
+  handled as non-terminal nodes. This solves the exploration problem when @consider_sibbling_change
+  is also set to True.
 
 - Add full support of String(alphabet=...) in CSP Z3
 - Add support for absorption of nodes whose existence has not been resolved yet.

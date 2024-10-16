@@ -165,7 +165,9 @@ def truncate_info(info, max_size=60):
                  'order': ('When set to True, the walking order is strictly guided ' \
                            'by the data structure. Otherwise, fuzz weight (if specified ' \
                            'in the data model) is used for ordering.', True, bool),
-                 'nt_only': ('Walk through non-terminal nodes only.', False, bool),
+                 'nt_only': ('Walk through non-terminal nodes only (taking into account '
+                             'recursive nodes).', False, bool),
+                 'walk_within_recursive_node' : ('Walk also within recursive nodes.', False, bool),
                  'deep': ('When set to True, if a node structure has changed, the modelwalker ' \
                           'will reset its walk through the children nodes.', True, bool),
                  'consider_sibbling_change':
@@ -213,13 +215,14 @@ class sd_walk_data_model(StatefulDisruptor):
         if self.nt_only:
             consumer = NonTermVisitor(respect_order=self.order, ignore_mutable_attr=self.ign_mutable_attr,
                                       consider_side_effects_on_sibbling=self.consider_sibbling_change,
-                                      reset_when_change=self.deep, fix_constraints=self.fix_all)
+                                      fix_constraints=self.fix_all, reset_when_change=self.deep)
         else:
             consumer = BasicVisitor(max_runs_per_node=self.max_runs_per_node,
                                     min_runs_per_node=self.min_runs_per_node,
                                     respect_order=self.order, ignore_mutable_attr=self.ign_mutable_attr,
                                     consider_side_effects_on_sibbling=self.consider_sibbling_change,
-                                    reset_when_change=self.deep, fix_constraints=self.fix_all)
+                                    fix_constraints=self.fix_all, reset_when_change=self.deep,
+                                    walk_within_recursive_node=self.walk_within_recursive_node)
         sem_crit = NSC(optionalbut1_criteria=self.sem)
         consumer.set_node_interest(path_regexp=self.path, semantics_criteria=sem_crit)
         self.modelwalker = ModelWalker(prev_content, consumer, max_steps=self.max_steps, initial_step=self.init)

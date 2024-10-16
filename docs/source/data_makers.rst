@@ -417,7 +417,11 @@ Parameters:
         |      |       data model) is used for ordering
         |      | default: True [type: bool]
         |_ nt_only
-        |      | desc: walk through non-terminal nodes only
+        |      | desc: Walk through non-terminal nodes only (taking into account recursive
+        |      |       nodes).
+        |      | default: False [type: bool]
+        |_ walk_within_recursive_node
+        |      | desc: Walk also within recursive nodes.
         |      | default: False [type: bool]
         |_ deep
         |      | desc: when set to True, if a node structure has changed, the modelwalker

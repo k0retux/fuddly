@@ -746,21 +746,24 @@ class NodeInternals(object):
         self.customize(self.default_custo)
         self._init_specific(arg)
 
-    def set_contents_from(self, node_internals):
+    def set_contents_from(self, node_internals, ignore_sync_attrs=False):
         if node_internals is None or node_internals.__class__ == NodeInternals_Empty:
             return
 
         self._env = node_internals._env
         self.private = node_internals.private
         self.__attrs = node_internals.__attrs
-        self._sync_with = node_internals._sync_with
+        if not ignore_sync_attrs:
+            self._sync_with = node_internals._sync_with
         self.absorb_constraints = node_internals.absorb_constraints
 
         if self.__class__ == node_internals.__class__:
             self.custo = node_internals.custo
             self.absorb_helper = node_internals.absorb_helper
         else:
-            if self._sync_with is not None and SyncScope.Size in self._sync_with:
+            if ignore_sync_attrs:
+                pass
+            elif self._sync_with is not None and SyncScope.Size in self._sync_with:
                 # This SyncScope is currently only supported by String-based
                 # NodeInternals_TypedValue
                 del self._sync_with[SyncScope.Size]
@@ -847,12 +850,16 @@ class NodeInternals(object):
                 delayed_node_internals.add(self)
             self._sync_with = copy.copy(self._sync_with)
 
-        self._make_private_specific(ignore_frozen_state, accept_external_entanglement, **kwargs)
+        self._make_private_specific(ignore_frozen_state, accept_external_entanglement,
+                                    delayed_node_internals, **kwargs)
         self.custo = copy.copy(self.custo)
 
     # Called near the end of Node copy (Node.set_contents) to update
     # node references inside the NodeInternals
     def _update_node_refs(self, node_dico, debug):
+        if self._sync_with is None:
+            return
+
         sync_nodes = copy.copy(self._sync_with)
 
         for scope, obj in sync_nodes.items():
@@ -863,6 +870,10 @@ class NodeInternals(object):
             else:
                 node, param = obj
                 new_node = node_dico.get(node, None)
+                # if node.debug:
+                # print(f'\n***DBG update_sync for {id(self)}: {node.name}, {param}')
+                # if new_node:
+                #     print( f'\n  --> new node ref: {new_node.name}, {id(new_node)}')
                 new_param = copy.copy(param)
                 if new_node is not None:
                     self._sync_with[scope] = (new_node, new_param)
@@ -881,7 +892,15 @@ class NodeInternals(object):
                     #       " \_ name: '%s' \n" \
                     #       " \_ updated_node: '%s', scope: '%r'\n" % (node, node.name, debug, scope))
 
-    def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement, **kwargs):
+    def _dbg_show_internals(self, msg):
+        print(f'\n*** [{msg}] Node Internals ({id(self)}) ***')
+        if self._sync_with:
+            for scope, obj in self._sync_with.items():
+                node, param = obj
+                print(f'\n - sync with: {node.name} (NdInt: {id(node.cc)}), {param}')
+
+    def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement,
+                               delayed_node_internals, **kwargs):
         pass
 
     def absorb(self, blob, constraints, conf, pending_postpone_desc=None):
@@ -1439,6 +1458,7 @@ class NodeInternals_Recursive(NodeInternals):
                 if self._recursive_generated_node is None:
                     def_node = self._default_node.get_clone(new_env=False)
                     self._recursive_generated_node = def_node
+                    self._recursive_generated_node.cc._sync_with = self._sync_with
                 else:
                     self._clone_from_get_value = True
                     new_node = self.recursive_node.get_clone(name=new_name,
@@ -1458,9 +1478,12 @@ class NodeInternals_Recursive(NodeInternals):
                             #  (convoluted ones) but it is OK for now as it should cover
                             #  main operational cases.
                             rec_node = nd
-                            rec_node.set_contents(self._recursive_generated_node)
-                            # new_node.unfreeze(recursive=False, reevaluate_constraints=True)
-                            # new_node.freeze()
+                            # rec_node.cc._dbg_show_internals(f'1 caller:{id(self)}')
+                            rec_node.set_contents(self._recursive_generated_node,
+                                                  keep_own_sync_attrs=True)
+                            # rec_node.cc._dbg_show_internals(f'2 caller:{id(self)}')
+                            new_node.unfreeze(recursive=False, reevaluate_constraints=True)
+                            new_node.freeze()
                             self._recursive_generated_node = new_node
                             break
                     else:
@@ -1488,6 +1511,9 @@ class NodeInternals_Recursive(NodeInternals):
     def is_exhausted(self):
         return self._exhausted
 
+    def structure_will_change(self):
+        return not self.is_exhausted()
+
     def reset_state(self, recursive=False, exclude_self=False, conf=None, ignore_entanglement=False):
         self._recursive_generated_node = None
         self._stop_recursion = False
@@ -1500,9 +1526,8 @@ class NodeInternals_Recursive(NodeInternals):
         if self._recursive_generated_node is not None:
             self._recursive_generated_node._reset_depth(parent_depth=self.pdepth)
 
-
     def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement,
-                               node_dico=None):
+                               delayed_node_internals, node_dico=None):
 
         new_recursive_node = node_dico[self.recursive_node]
         self.recursive_node = new_recursive_node
@@ -1516,9 +1541,21 @@ class NodeInternals_Recursive(NodeInternals):
             self._recursive_generated_node = self._recursive_generated_node.get_clone(new_env=False)
             self._default_node = self._default_node.get_clone(new_env=False)
 
+        delayed_node_internals.add(self._default_node.cc)
+
     def get_raw_value(self, **kwargs):
         assert self._recursive_generated_node is not None
         return self._recursive_generated_node.get_raw_value(**kwargs)
+
+    def is_frozen(self):
+        if self.is_attr_set(NodeInternals.Mutable):
+            return self._recursive_generated_node is not None
+        else:
+            return (
+                None
+                if self._recursive_generated_node is None
+                else self._recursive_generated_node.is_frozen()
+            )
 
     def unfreeze(self, conf=None, recursive=False, dont_change_state=False,
                  ignore_entanglement=False, only_generators=False, reevaluate_constraints=False):
@@ -1668,7 +1705,8 @@ class NodeInternals_GenFunc(NodeInternals):
                 self.generated_node.clear_attr(name, recursive=True)
         return True
 
-    def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement, **kwargs):
+    def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement,
+                               delayed_node_internals, **kwargs):
         # Note that the 'node_arg' attribute is directly dealt with in
         # Node.__init__() during copy (which calls self.make_args_private()),
         # because the new Node to point to is unknown at this local
@@ -1956,16 +1994,12 @@ class NodeInternals_GenFunc(NodeInternals):
                 pass
 
     def is_exhausted(self):
-        if self.is_attr_set(NodeInternals.Mutable) and self.is_attr_set(
-            NodeInternals.Finite
-        ):
+        if self.is_attr_set(NodeInternals.Mutable) and self.is_attr_set(NodeInternals.Finite):
             # we return True because it does not make sense to return
             # self.generated_node.is_exhausted(), as self.generated_node
             # will change over unfreeze() calls
             return True
-        elif self.is_attr_set(NodeInternals.Mutable) and not self.is_attr_set(
-            NodeInternals.Finite
-        ):
+        elif self.is_attr_set(NodeInternals.Mutable) and not self.is_attr_set(NodeInternals.Finite):
             return False
         else:
             return (
@@ -2147,7 +2181,8 @@ class NodeInternals_Term(NodeInternals):
     def _convert_to_internal_repr(val):
         return convert_to_internal_repr(val)
 
-    def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement, **kwargs):
+    def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement,
+                               delayed_node_internals, **kwargs):
         if ignore_frozen_state:
             self.frozen_node = None
         else:
@@ -3356,7 +3391,8 @@ class NodeInternals_NonTerm(NodeInternals):
 
                             modified_csts[id(node_list)].append(idx)
 
-    def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement, **kwargs):
+    def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement,
+                               delayed_node_internals, **kwargs):
         if self.encoder:
             self.encoder = copy.copy(self.encoder)
             if ignore_frozen_state:
@@ -6723,14 +6759,10 @@ class Node(object):
                 else:
                     self.env = base_node.env
 
-            node_dico = self.set_contents(
-                base_node,
-                copy_dico=copy_dico,
-                ignore_frozen_state=ignore_frozen_state,
-                accept_external_entanglement=accept_external_entanglement,
-                acceptance_set=acceptance_set,
-                preserve_node=False,
-            )
+            node_dico = self.set_contents(base_node, copy_dico=copy_dico,
+                                          ignore_frozen_state=ignore_frozen_state,
+                                          accept_external_entanglement=accept_external_entanglement,
+                                          acceptance_set=acceptance_set, keep_base_node_attrs=False)
 
             if new_env and self.env is not None:
                 self.env.update_node_refs(
@@ -6817,15 +6849,9 @@ class Node(object):
 
         return new_node
 
-    def set_contents(
-        self,
-        base_node,
-        copy_dico=None,
-        ignore_frozen_state=False,
-        accept_external_entanglement=False,
-        acceptance_set=None,
-        preserve_node=True,
-    ):
+    def set_contents(self, base_node, copy_dico=None, ignore_frozen_state=False,
+                     accept_external_entanglement=False, acceptance_set=None,
+                     keep_base_node_attrs=True, keep_own_sync_attrs=False):
         """
         Set the contents of the node based on the one provided within
         `base_node`. This method performs a deep copy of `base_node`,
@@ -6838,8 +6864,10 @@ class Node(object):
           base_node (Node): Used as a template to create the new node.
           ignore_frozen_state (bool): If True, the clone process of
             base_node will ignore its current state.
-          preserve_node (bool): preserve the :class:`NodeInternals` attributes (making sense to preserve)
-            of the possible overwritten NodeInternals.
+          keep_base_node_attrs (bool): Keep relevant :class:`NodeInternals` attributes from base_node
+            when creating the new :class:`NodeInternals` for this node.
+          keep_own_sync_attrs (bool): Keep our current :class:`NodeInternals` sync attributes for
+            already existing configuration.
           accept_external_entanglement (bool): If True, during the cloning
             process of base_node, every entangled nodes outside the current graph will be referenced
             within the new node without being copied. Otherwise, a *Warning* message will be raised.
@@ -6855,7 +6883,12 @@ class Node(object):
         self.description = base_node.description
         self._post_freeze_handler = base_node._post_freeze_handler
 
+        sync_with = None
         if self.internals:
+            if keep_own_sync_attrs:
+                sync_with = {}
+                for conf in self.internals:
+                    sync_with[conf] = self.internals[conf]._sync_with
             self.internals = {}
         if self.entangled_nodes:
             self.entangled_nodes = None
@@ -6881,14 +6914,20 @@ class Node(object):
             self.add_conf(conf)
 
             new_internals = copy.copy(base_node.internals[conf])
-            if preserve_node:
+
+            if keep_own_sync_attrs and sync_with is not None:
+                if conf in sync_with:
+                    new_internals._sync_with = sync_with[conf]
+
+            if keep_base_node_attrs:
                 new_internals.make_private(
                     ignore_frozen_state=ignore_frozen_state,
                     accept_external_entanglement=accept_external_entanglement,
                     delayed_node_internals=delayed_node_internals,
-                    forget_original_sync_objs=True,
+                    forget_original_sync_objs=False if keep_own_sync_attrs else True,
                 )
-                new_internals.set_contents_from(self.internals[conf])
+                new_internals.set_contents_from(self.internals[conf],
+                                                ignore_sync_attrs=keep_own_sync_attrs)
             else:
                 new_internals.make_private(
                     ignore_frozen_state=ignore_frozen_state,
@@ -6961,8 +7000,8 @@ class Node(object):
 
 
         # We deal with node refs within NodeInternals, once the node_dico is complete
-        for n in delayed_node_internals:
-            n._update_node_refs(node_dico, debug=n)
+        for ni in delayed_node_internals:
+            ni._update_node_refs(node_dico, debug=ni)
 
         if self.env is not None and self.env.csp is not None:
             for v in self.env.csp.iter_vars():
@@ -8769,7 +8808,19 @@ class Node(object):
                             node_type, args, raw_len
                         )
                     else:
+                        if DEBUG:
+                            syncw_str = ''
+                            syncw = node.c[conf_tmp]._sync_with
+                            if syncw:
+                                for scope, obj in syncw.items():
+                                    if isinstance(obj, SyncSizeObj):
+                                        continue
+                                    nd, param = obj
+                                    syncw_str = f', sync with: {nd.name} (NdInt: {id(nd.c[conf_tmp])})'
+
                         type_and_args = "[{:s}] size={:d}B".format(node_type, raw_len)
+                        if DEBUG:
+                            type_and_args += f', NdInt: {id(node.c[conf_tmp])}{syncw_str}'
                     print_nonterm_func(
                         prefix, nl=False, log_func=log_func, pretty_print=pretty_print
                     )
@@ -8877,8 +8928,9 @@ class Node(object):
                     elif is_recursive_node:
                         rec_node = node.c[conf_tmp].recursive_node
                         rec_node_path = str(rec_node.get_path_from(self, conf=conf_tmp))
+                        extended_attr = f' NdInt: {id(node.c[conf_tmp])}' if DEBUG else ''
                         print_recursive_func(
-                            f" [{node_type} | linked node: {rec_node_path}]",
+                            f" [{node_type} | linked node: {rec_node_path}]" + extended_attr,
                             nl=False,
                             log_func=log_func,
                             pretty_print=pretty_print,
@@ -8891,8 +8943,18 @@ class Node(object):
                             pretty_print=pretty_print,
                         )
                     else:
+                        if DEBUG:
+                            syncw_str = ''
+                            syncw = node.c[conf_tmp]._sync_with
+                            if syncw:
+                                for scope, obj in syncw.items():
+                                    if isinstance(obj, SyncSizeObj):
+                                        continue
+                                    nd, param = obj
+                                    syncw_str = f'sync with: {nd.name} (NdInt: {id(nd.c[conf_tmp])})'
+
                         print_nonterm_func(
-                            " [{:s}]".format(node_type),
+                            f" [{node_type}] {syncw_str}" if DEBUG else f" [{node_type}]",
                             nl=False,
                             log_func=log_func,
                             pretty_print=pretty_print,

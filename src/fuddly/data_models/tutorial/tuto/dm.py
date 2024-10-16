@@ -1112,6 +1112,35 @@ class MyDF_DataModel(DataModel):
              ]}
 
 
+        tlv_rec5_desc = \
+            {'name': 'rec5',
+             'contents': [
+                 {'name': 'type', 'contents': String(values=['SA','SB','TLV']),
+                  'default': 'TLV'},
+                 {'name': 'length', 'contents': LEN(vt=INT_str),
+                  'mutable': False,
+                  'node_args': 'value'},
+                 {'name': 'value',
+                  'contents': [
+                      {'name': 'str_a',
+                       'exists_if': (RawCondition('SA'), 'type'),
+                       'contents': String(values=['my_string'])},
+                      {'name': 'str_b',
+                       'exists_if': (RawCondition('SB'), 'type'),
+                       'contents': String(values=['your_string'])},
+                      {'name': 'tlv_a',
+                       'exists_if': (RawCondition('TLV'), 'type'),
+                       'debug': True,
+                       'contents': MH.RecursiveLink('rec5', recursion_threshold=4),
+                       'default_node': {'name': 'def_node_a',
+                                        'debug': True,
+                                        # 'exists_if': (RawCondition('TLV'), 'type'),
+                                        'contents': String(values=['SA7FromTLV',
+                                                                   'SB9_From_TLV',
+                                                                   'SB10*From*TLV*'])}},
+                  ]},
+             ]}
+
 
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
@@ -1122,7 +1151,8 @@ class MyDF_DataModel(DataModel):
                       csp_desc, csp_z3_desc, csp_str_desc, csp_ns_desc, csp_basic_desc,
                       csp_default_desc, str_desc, rnd_desc,
                       shape_type_1_desc, shape_type_2_desc, ns_desc,
-                      tlv_rec0_desc, tlv_rec1_desc, tlv_rec2_desc, tlv_rec3_desc, tlv_rec4_desc)
+                      tlv_rec0_desc, tlv_rec1_desc, tlv_rec2_desc, tlv_rec3_desc, tlv_rec4_desc,
+                      tlv_rec5_desc)
 
 
 data_model = MyDF_DataModel()
