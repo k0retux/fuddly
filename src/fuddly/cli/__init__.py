@@ -125,7 +125,7 @@ def main(argv: List[str] = None):
         )
         p.add_argument(
             "target", 
-            choices=["dm", "data-model", "project"], 
+            choices=["dm", "data-model", "project:skeleton", "project:exemple" ], 
             metavar = "target",
             help="Type of object to create. [dm, data-model, project]",
         )
