@@ -820,7 +820,9 @@ class FmkPlumbing(object):
         dms = entry_points(group=group_name)
         for module in dms:
             try:
-                dm_params = self._import_dm(module, module.name)
+                *prefix, name = module.module.split(".")
+                prefix = ".".join(prefix)
+                dm_params = self._import_dm(prefix + ".", name)
             except DataModelDuplicateError as e:
                 if not self._quiet:
                     self.print(colorize(f"*** The data model '{e.name}' was already defined, "
@@ -840,17 +842,8 @@ class FmkPlumbing(object):
                 self._fmkDB_insert_dm_and_dmakers(dm_params["dm"].name, dm_params["tactics"])
 
     def _import_dm(self, prefix, name, reload_dm=False):
-        load_from_module=False
         try:
-            # loading from a python module
-            if type(prefix) is importlib.metadata.EntryPoint:
-                load_from_module=True
-                module = prefix.load()
-
-            # loading from a file
-            else:
-                module = importlib.import_module(prefix + name)
-
+            module = importlib.import_module(prefix + name)
             if reload_dm:
                 importlib.reload(module.strategy)
                 importlib.reload(module.dm)
@@ -891,7 +884,7 @@ class FmkPlumbing(object):
         if dm_params["dm"].name is None:
             dm_params["dm"].name = name
 
-        if load_from_module and not reload_dm and self._name2dm.get(dm_params['dm'].name) is not None:
+        if not reload_dm and self._name2dm.get(dm_params['dm'].name) is not None:
             raise DataModelDuplicateError(dm_params['dm'].name)
 
         self._name2dm[dm_params["dm"].name] = dm_params["dm"]
@@ -1000,7 +993,10 @@ class FmkPlumbing(object):
 
         for module in projects:
             try:
-                prj_params = self._import_project(module, module.name)
+                # module_name.submodule.name -> (module_name.submdule., name)
+                *prefix, name = module.module.split(".")
+                prefix = ".".join(prefix)
+                prj_params = self._import_project(prefix + ".", name)
             except ProjectDuplicateError as e:
                 if not self._quiet:
                     self.print(colorize(f"*** The project '{e.name}' was already defined, "
@@ -1017,18 +1013,11 @@ class FmkPlumbing(object):
                 self.import_successfull = False
 
     def _import_project(self, prefix, name, reload_prj=False):
-        load_from_module=False
         try: 
-            if type(prefix) is importlib.metadata.EntryPoint: # Reloading from a python module
-                # The prefix is the module in this case 
-                load_from_module=True
-                module = prefix.load()
-
-            else: # Reloading from a file
-                if importlib.util.find_spec(prefix + name) is None:
-                    name += "_proj"
-                module = importlib.import_module(prefix + name)
-                name = name.removesuffix("_proj")
+            if importlib.util.find_spec(prefix + name) is None:
+                name += "_proj"
+            module = importlib.import_module(prefix + name)
+            name = name.removesuffix("_proj")
 
             if reload_prj:
                 importlib.reload(module)
@@ -1065,7 +1054,7 @@ class FmkPlumbing(object):
         else:
             name = prj_params["project"].name
 
-        if load_from_module and (not reload_prj and self._name2prj.get(prj_params["project"].name) is not None):
+        if not reload_prj and self._name2prj.get(prj_params["project"].name) is not None:
             raise ProjectDuplicateError(prj_params["project"].name)
 
         self._name2prj[prj_params["project"].name] = prj_params["project"]
