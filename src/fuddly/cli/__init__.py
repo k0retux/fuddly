@@ -157,15 +157,16 @@ def main(argv: List[str] = None):
 
     with subparsers.add_parser("workspace", help="Manage fuddly's workspace") as p:
         parsers["workspace"] = p
-        p.add_argument(
-            "clean",
-            nargs="?",
-            help="Remove everything from the workspace",
-        )
-        p.add_argument(
-            "show",
-            nargs="?",
+        group = p.add_mutually_exclusive_group()
+        group.add_argument(
+            "--show",
+            action="store_true",
             help="Print the path to the workspace",
+        )
+        group.add_argument(
+            "--clean",
+            action="store_true",
+            help="Remove everything from the workspace",
         )
 
     # Needed because we set exit_on_error=False in the constructor
