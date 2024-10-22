@@ -941,21 +941,30 @@ class FmkPlumbing(object):
 
         projects = collections.OrderedDict()
 
-        def populate_projects(path, prefix=""):
-            prj_dir = os.path.basename(os.path.normpath(path))
-            for (dirpath, dirnames, filenames) in os.walk(path):
-                if filenames:
-                    projects[prefix + prj_dir] = []
-                    projects[prefix + prj_dir].extend(filenames)
-                for d in dirnames:
-                    full_path = os.path.join(path, d)
-                    rel_path = os.path.join(prj_dir, d)
-                    projects[prefix + rel_path] = []
-                    for (dth, dnames, fnm) in os.walk(full_path):
-                        projects[prefix + rel_path].extend(fnm)
-                        break
-                break
+        def populate_projects(search_path, prefix=""):
+            prj_dir = os.path.basename(os.path.normpath(search_path))
+            (path, dirs, files) = next(os.walk(search_path))
+            if "__init__.py" in files:
+                # Normapath remove the / that will most likely be at the end of prefix
+                projects[os.path.normpath(prefix)] = [os.path.basename(search_path)]
+                return
 
+            for d in [x for x in dirs if x != "__pycache__"]:
+                # Done recursively manually even though walk does go down a depth of one folder
+                # but only one folder, so it would be nicer to do it ourselves
+                populate_projects(
+                    os.path.join(search_path, d),
+                    os.path.join(prefix, prj_dir) + os.sep
+                )
+
+            files = list(
+                    map(
+                        lambda x: x.removesuffix(".py"),
+                        filter(lambda x: x.endswith(".py"), files)
+                    )
+                )
+            if len(files) != 0:
+                projects[prefix+prj_dir] = files
 
         if gr.is_running_from_fs:
             if not self._quiet:
@@ -963,27 +972,11 @@ class FmkPlumbing(object):
             populate_projects(gr.projects_folder, prefix="fuddly/")
         populate_projects(gr.user_projects_folder)
 
-        prjs = copy.copy(projects)
-        for k in prjs:
-            projects[k] = list(filter(is_python_file, projects[k]))
-            if "__init__.py" in projects[k]:
-                projects[k].remove("__init__.py")
-            if not projects[k]:
-                del projects[k]
-
-        rexp_proj = re.compile(r'(.*)\.py$')
-
         for dname, file_list in projects.items():
             if not self._quiet:
-                self.print(
-                    colorize(">>> Look for Projects within '%s' Directory" % dname,
-                             rgb=Color.FMKINFOSUBGROUP))
+                self.print(colorize(f">>> Look for Projects within '{dname}' Directory", rgb=Color.FMKINFOSUBGROUP))
             prefix = dname.replace(os.sep, ".") + "."
-            for f in file_list:
-                res = rexp_proj.match(f)
-                if res is None:
-                    continue
-                name = res.group(1)
+            for name in file_list:
                 prj_params = self._import_project(prefix, name)
                 if prj_params is not None:
                     self._add_project(
@@ -1039,6 +1032,9 @@ class FmkPlumbing(object):
 
             if reload_prj:
                 importlib.reload(module)
+                for i in list(filter(lambda x: x.startswith(prefix+name), sys.modules.keys())):
+                    importlib.reload(sys.modules[i])
+
         except:
             if self._quiet:
                 return None
