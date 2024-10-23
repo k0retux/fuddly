@@ -3,11 +3,16 @@ import fuddly.cli.argparse_wrapper as argparse
 import importlib
 import sys
 
+def get_tools() -> list():
+    import pkgutil
+    tools=importlib.import_module("fuddly.tools")
+    return list(map(lambda x: x.name, pkgutil.walk_packages(tools.__path__)))
+
 def start(args: argparse.Namespace) -> int:
 
     if args.list:
-        print("Get the list of tools")
-        raise NotImplementedError("Not implemented")
+        for i in get_tools():
+            print(i)
         return 0
 
     sys.argv=[]

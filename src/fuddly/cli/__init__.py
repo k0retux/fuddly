@@ -30,6 +30,9 @@ import importlib
 import argcomplete 
 from argcomplete.completers import ChoicesCompleter, SuppressCompleter
 
+from .run import get_scripts, script_argument_completer
+from .tool import get_tools
+
 from typing import List
 from fuddly.cli import * 
 from fuddly.cli.error import CliException
@@ -80,7 +83,6 @@ def main(argv: List[str] = None):
         )
 
     with subparsers.add_parser("run", help="Run a fuddly project script") as p:
-        from .run import get_scripts, script_argument_completer
         # XXX Should you be able to run script from outside the script dir(s?) ?
         parsers["run"] = p
         group = p.add_argument_group()
@@ -134,6 +136,11 @@ def main(argv: List[str] = None):
             help="Name to give the create target.",
         )
 
+    def tool_argument_completer(prefix, parsed_args, **kwargs):
+        argcomplete.warn(f"Prefix: {prefix}\nparsed_args: {parsed_args}\nkwargs: {kwargs}")
+        return ["test1","test2"]
+
+
     with subparsers.add_parser("tool", help="Execute a fuddly tool") as p:
         parsers["tool"] = p
         with p.add_mutually_exclusive_group() as g:
@@ -147,7 +154,7 @@ def main(argv: List[str] = None):
                 "tool",
                 nargs='?',
                 help="Name of the tool to launch",
-            )
+            ).completer=ChoicesCompleter(get_tools())
 
         # TODO add completion for tools
         p.add_argument(
@@ -155,7 +162,7 @@ def main(argv: List[str] = None):
             action="append",
             nargs=argparse.REMAINDER,
             help="Arguments to passthrough to the tool",
-        ).completer = SuppressCompleter() 
+        ).completer = tool_argument_completer
 
     with subparsers.add_parser("workspace", help="Manage fuddly's workspace") as p:
         parsers["workspace"] = p

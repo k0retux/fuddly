@@ -2,12 +2,6 @@ import argparse
 from argparse import *
 import os
 
-class ContextArgumentParser(argparse.ArgumentParser):
-    def __enter__(self):
-        return self
-    def __exit__(self, ex_type, ex_value, ex_traceback):
-        pass
-
 def contextualize(obj):
     def ctx_manager_enter(self):
         return self
@@ -16,7 +10,7 @@ def contextualize(obj):
     obj.__enter__ = ctx_manager_enter
     obj.__exit__ = ctx_manager_exit
 
-# Hack to make groups work in "with" context
+# Hack to make argparse work in "with" context
 contextualize(argparse._MutuallyExclusiveGroup)
 contextualize(argparse._ArgumentGroup)
 contextualize(argparse.ArgumentParser)
