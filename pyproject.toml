@@ -20,9 +20,7 @@ include_package_data = true
 dependencies = {file = ["requirements.txt"]}
 
 [project.scripts]
-fuddly_shell = "fuddly.fuddly_shell:main"
-fmkdb = "fuddly.tools.fmkdb:main"
-plotty = "fuddly.tools.plotty:main"
+fuddly = "fuddly.cli:main"
 
 [project.urls]
 "Homepage" = "https://github.com/k0retux/fuddly"
