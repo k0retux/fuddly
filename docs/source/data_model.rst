@@ -282,6 +282,8 @@ custo_set, custo_clear
     existence condition and that this condition cannot be resolved at
     the time the generator would normally trigger (which is
     when it is reached while walking through the graph).
+  - ``MH.Custo.Gen.PropagateMutableAttr``: By default, this mode is *disabled*.
+    If enabled, The Mutable attribute of the Generator node is propagated to its generated node.
 
   For *function* node, the customizable behaviors mode are:
 
@@ -291,6 +293,16 @@ custo_set, custo_clear
     the *function* node (without being frozen first).
   - ``MH.Custo.Func.CloneExtNodeArgs``: By default, this mode is *disabled*.
     Refer to the description of the corresponding *generator node* mode.
+
+  For *recursive* node, the customizable behaviors mode are:
+
+  - ``MH.Custo.Rec.AlwaysUpdateFrozenNode``: By default, this mode is *enabled*.
+    If enabled, the generated recursive node is always reevaluated. This is relevant when
+    a node within the generated recursive node is changed without the involvement of the recursive
+    node itself. It is what happens, for instance, when using the Model Walking infrastructure
+    with ``tTYPE`` or ``tWALK(walk_within_recursive_node=True)``.
+    If disabled, the generated recursive node is saved until unfreeze/reset_state is called,
+    in order to avoid systematic reevaluation.
 
 
 .. _dm:nt-keywords:

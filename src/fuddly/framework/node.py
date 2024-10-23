@@ -617,15 +617,15 @@ class RecursiveCusto(NodeCustomization):
     To be provided to :meth:`NodeInternals.customize`
     """
 
-    ResetOnReevaluation = 1
+    AlwaysUpdateFrozenNode = 1
 
     _custo_items = {
-        ResetOnReevaluation: False,
+        AlwaysUpdateFrozenNode: True,
     }
 
     @property
-    def reset_when_reevaluation_requested(self):
-        return self._custo_items[self.ResetOnReevaluation]
+    def always_update_frozen_node(self):
+        return self._custo_items[self.AlwaysUpdateFrozenNode]
 
 
 class GenFuncCusto(NodeCustomization):
@@ -638,12 +638,14 @@ class GenFuncCusto(NodeCustomization):
     CloneExtNodeArgs = 2
     ResetOnUnfreeze = 3
     TriggerLast = 4
+    PropagateMutableAttr = 5
 
     _custo_items = {
         ForwardConfChange: True,
         CloneExtNodeArgs: False,
         ResetOnUnfreeze: True,
         TriggerLast: False,
+        PropagateMutableAttr: False,
     }
 
     @property
@@ -661,6 +663,10 @@ class GenFuncCusto(NodeCustomization):
     @property
     def trigger_last_mode(self):
         return self._custo_items[self.TriggerLast]
+
+    @property
+    def propagate_mutable_attr(self):
+        return self._custo_items[self.PropagateMutableAttr]
 
 
 class FuncCusto(NodeCustomization):
@@ -746,24 +752,21 @@ class NodeInternals(object):
         self.customize(self.default_custo)
         self._init_specific(arg)
 
-    def set_contents_from(self, node_internals, ignore_sync_attrs=False):
+    def set_contents_from(self, node_internals):
         if node_internals is None or node_internals.__class__ == NodeInternals_Empty:
             return
 
         self._env = node_internals._env
         self.private = node_internals.private
         self.__attrs = node_internals.__attrs
-        if not ignore_sync_attrs:
-            self._sync_with = node_internals._sync_with
+        self._sync_with = node_internals._sync_with
         self.absorb_constraints = node_internals.absorb_constraints
 
         if self.__class__ == node_internals.__class__:
             self.custo = node_internals.custo
             self.absorb_helper = node_internals.absorb_helper
         else:
-            if ignore_sync_attrs:
-                pass
-            elif self._sync_with is not None and SyncScope.Size in self._sync_with:
+            if self._sync_with is not None and SyncScope.Size in self._sync_with:
                 # This SyncScope is currently only supported by String-based
                 # NodeInternals_TypedValue
                 del self._sync_with[SyncScope.Size]
@@ -892,12 +895,16 @@ class NodeInternals(object):
                     #       " \_ name: '%s' \n" \
                     #       " \_ updated_node: '%s', scope: '%r'\n" % (node, node.name, debug, scope))
 
-    def _dbg_show_internals(self, msg):
-        print(f'\n*** [{msg}] Node Internals ({id(self)}) ***')
+    def _dbg_show_internals(self, msg, node_name=None):
+        if node_name is None:
+            ext = f'Node Internals ({id(self)})'
+        else:
+            ext = f'Node Internals of {node_name} ({id(self)})'
+        print(f'\n ==[{msg}] {ext}) ==')
         if self._sync_with:
             for scope, obj in self._sync_with.items():
                 node, param = obj
-                print(f'\n - sync with: {node.name} (NdInt: {id(node.cc)}), {param}')
+                print(f'  - sync with: {node.name} (NdInt: {id(node.cc)}), {param}')
 
     def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement,
                                delayed_node_internals, **kwargs):
@@ -1158,6 +1165,15 @@ class NodeInternals(object):
     def reset_depth_specific(self, depth):
         pass
 
+    def reset_fuzz_weight(self, recursive):
+        pass
+
+    def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria,
+                                owned_conf, conf, path_regexp, exclude_self,
+                                respect_order, relative_depth, top_node, ignore_fstate,
+                                resolve_generator=False,
+                                return_parent=False):
+        raise NotImplementedError
 
 class NodeInternalsCriteria(object):
     def __init__(
@@ -1393,21 +1409,13 @@ class NodeInternals_Empty(NodeInternals):
         print("\n*** Empty Node: {!s}".format(hex(id(self))))
         # raise AttributeError
 
-    def get_child_nodes_by_attr(
-        self,
-        internals_criteria,
-        semantics_criteria,
-        owned_conf,
-        conf,
-        path_regexp,
-        exclude_self,
-        respect_order,
-        relative_depth,
-        top_node,
-        ignore_fstate,
-        resolve_generator=False,
-    ):
+    def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria,
+                                owned_conf, conf, path_regexp, exclude_self,
+                                respect_order, relative_depth, top_node, ignore_fstate,
+                                resolve_generator=False,
+                                return_parent=False):
         return None
+
 
 
 class NodeInternals_Recursive(NodeInternals):
@@ -1427,6 +1435,7 @@ class NodeInternals_Recursive(NodeInternals):
 
         # attributes initialized by .reset_state()
         self._recursive_generated_node = None
+        self._frozen_recursive_node = None
         self._call_recursion_count = None
         self._stop_recursion = None
         self._clone_from_get_value = None
@@ -1453,69 +1462,98 @@ class NodeInternals_Recursive(NodeInternals):
                 if self._call_recursion_count == self._recursion_threshold:
                     self._exhausted = True
 
-                new_name = self.recursive_node.name+'#'+self._hosting_node_name
-
                 if self._recursive_generated_node is None:
                     def_node = self._default_node.get_clone(new_env=False)
                     self._recursive_generated_node = def_node
-                    self._recursive_generated_node.cc._sync_with = self._sync_with
                 else:
+                    new_name = self.recursive_node.name + '<' + self._hosting_node_name
+
                     self._clone_from_get_value = True
                     new_node = self.recursive_node.get_clone(name=new_name,
-                                                             ignore_frozen_state=True,
+                                                             ignore_frozen_state=False,
                                                              new_env=False)
                     self._clone_from_get_value = False
+
                     new_node.unfreeze(recursive=True, reevaluate_constraints=True)
                     new_node.freeze()
+
                     node_list = new_node.get_reachable_nodes(exclude_self=True,
                                                              internals_criteria=self.nic,
                                                              ignore_fstate=False,
-                                                             resolve_generator=True)
+                                                             resolve_generator=False, # side effects if True
+                                                             return_parent=True)
 
-                    for nd in node_list:
-                        if nd.name == self._hosting_node_name:
+                    for nd, parent in node_list:
+
+                        if nd.cc._hosting_node_name == self._hosting_node_name:
                             # TODO: this comparison does not cover every possible scenarios
-                            #  (convoluted ones) but it is OK for now as it should cover
+                            #  (convoluted ones, when there is collision between node names)
+                            #  but it is OK for now as it should cover
                             #  main operational cases.
-                            rec_node = nd
-                            # rec_node.cc._dbg_show_internals(f'1 caller:{id(self)}')
+                            orig_node = parent.get_subnode_by_name(self._hosting_node_name)
+                            if orig_node is not None:
+                                min, max = parent.get_subnode_minmax(orig_node)
+                                if min == max == 1:
+                                    parent.reset_state(recursive=False, exclude_self=False)
+                                else:
+                                    parent.set_subnode_minmax(orig_node, min=1, max=1, reset_state=True)
+                            else:
+                                raise NotImplementedError(f'BUG {nd.name} (NdInt: {id(nd.cc)},'
+                                                          f'parent: (NdInt: {id(parent.cc)}')
+                            rec_node = orig_node
                             rec_node.set_contents(self._recursive_generated_node,
+                                                  copy_base_node_attrs=True,
                                                   keep_own_sync_attrs=True)
-                            # rec_node.cc._dbg_show_internals(f'2 caller:{id(self)}')
                             new_node.unfreeze(recursive=False, reevaluate_constraints=True)
                             new_node.freeze()
                             self._recursive_generated_node = new_node
                             break
                     else:
-                        print(f'\n*** DBG (RecursiveNode._get_value) ***'
-                              f'  --> hosting_node: "{self._hosting_node_name}"')
-                        hash_tab = new_node.get_all_paths()
-                        for k, nd in hash_tab.items():
-                            print(f'{k} --> {nd.name}')
+                        print(f'\n*** DBG (RecursiveNode._get_value) ***\n'
+                              f'  --> hosting_node: "{self._hosting_node_name}"\n'
+                              f'  --> node_list:')
+                        for nd, parent in node_list:
+                            print(f'_ {nd.name} (NdInt: {id(nd.cc)}),'
+                                  f' hosting_node: "{nd.cc._hosting_node_name}"')
+                            print_node_list(parent.subnodes_set)
+                        new_node.show(debug=True)
+                        # hash_tab = new_node.get_all_paths()
+                        # for k, nd in hash_tab.items():
+                        #     print(f'{k} --> {nd.name}')
                         raise NotImplementedError(f'BUG {self._hosting_node_name}')
+
+                self._recursive_generated_node._reset_depth(parent_depth=self.pdepth)
 
             else:
                 self._stop_recursion = True
 
-        self._recursive_generated_node._reset_depth(parent_depth=self.pdepth)
+        else:
+            pass
 
-        ret = self._recursive_generated_node._get_value(
-            conf=conf,
-            recursive=recursive,
-            return_node_internals=return_node_internals,
-            restrict_csp=restrict_csp,
-        )
+        if self.custo.always_update_frozen_node or self._frozen_recursive_node is None:
+            # If `always_update_frozen_node` is set, self._recursive_generated_node is always
+            # reevaluated. This is relevant when a node within self._recursive_generated_node
+            # is changed without the involvement of the recursive node itself. It is what happens,
+            # for instance, when using the Model Walking infrastructure with `tTYPE` or
+            # `tWALK(walk_within_recursive_node=True)`.
+            self._frozen_recursive_node = self._recursive_generated_node._get_value(
+                conf=conf,
+                recursive=recursive,
+                return_node_internals=return_node_internals,
+                restrict_csp=restrict_csp,
+            )
 
-        return (ret, False)
+        return (self._frozen_recursive_node, False)
 
     def is_exhausted(self):
         return self._exhausted
 
-    def structure_will_change(self):
-        return not self.is_exhausted()
+    # def structure_will_change(self):
+    #     return not self.is_exhausted()
 
     def reset_state(self, recursive=False, exclude_self=False, conf=None, ignore_entanglement=False):
         self._recursive_generated_node = None
+        self._frozen_recursive_node = None
         self._stop_recursion = False
         self._call_recursion_count = 0
         self._clone_from_get_value = False
@@ -1525,51 +1563,65 @@ class NodeInternals_Recursive(NodeInternals):
         self.pdepth = depth
         if self._recursive_generated_node is not None:
             self._recursive_generated_node._reset_depth(parent_depth=self.pdepth)
+        else:
+            # we ignore this case as the caller could call us within a batch without knowing
+            # if it is relevant or not
+            pass
+            # raise NodeNotFrozen(f'self._recursive_generated_node is None')
+
+    def reset_fuzz_weight(self, recursive):
+        if recursive:
+            if self._recursive_generated_node is not None:
+                self._recursive_generated_node.reset_fuzz_weight(recursive=recursive)
+            else:
+                # we ignore this case as the caller could call us within a batch without knowing
+                # if it is relevant or not
+                pass
+                # raise NodeNotFrozen(f'self._recursive_generated_node is None')
 
     def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement,
                                delayed_node_internals, node_dico=None):
 
-        new_recursive_node = node_dico[self.recursive_node]
-        self.recursive_node = new_recursive_node
+        if node_dico is not None:
+            new_recursive_node = node_dico[self.recursive_node]
+            self.recursive_node = new_recursive_node
+        else:
+            # This case exists when the recursive node is duplicated through
+            # NodeInternals_NonTerm._construct_subnodes().
+            # Thus we want to keep the same self.recursive_node as the duplicated node.
+            pass
 
         if ignore_frozen_state or self._recursive_generated_node is None:
             self.reset_state()
-            self._default_node = self._default_node.get_clone(new_env=False)
+            self._default_node = self._default_node.get_clone(new_env=False,
+                                                              ignore_frozen_state=False)
         elif self._clone_from_get_value:
             self._clone_from_get_value = False
+            self._frozen_recursive_node = None
         else:
-            self._recursive_generated_node = self._recursive_generated_node.get_clone(new_env=False)
-            self._default_node = self._default_node.get_clone(new_env=False)
+            self._recursive_generated_node = self._recursive_generated_node.get_clone(new_env=False,
+                                                                                      ignore_frozen_state=False)
+            self._default_node = self._default_node.get_clone(new_env=False,
+                                                              ignore_frozen_state=False)
 
-        delayed_node_internals.add(self._default_node.cc)
 
     def get_raw_value(self, **kwargs):
         assert self._recursive_generated_node is not None
         return self._recursive_generated_node.get_raw_value(**kwargs)
 
     def is_frozen(self):
-        if self.is_attr_set(NodeInternals.Mutable):
-            return self._recursive_generated_node is not None
-        else:
-            return (
-                None
-                if self._recursive_generated_node is None
-                else self._recursive_generated_node.is_frozen()
-            )
+        return self._frozen_recursive_node is not None
 
     def unfreeze(self, conf=None, recursive=False, dont_change_state=False,
                  ignore_entanglement=False, only_generators=False, reevaluate_constraints=False):
+
+        self._frozen_recursive_node = None
         if recursive:
-            if (self.custo.reset_when_reevaluation_requested
-                    and reevaluate_constraints and not only_generators):
-                # TODO: this default behavior has to be analyzed
-                self.reset_state()
-            else:
-                self._recursive_generated_node.unfreeze(conf=conf, recursive=recursive,
-                                                        dont_change_state=dont_change_state,
-                                                        ignore_entanglement=ignore_entanglement,
-                                                        only_generators=only_generators,
-                                                        reevaluate_constraints=reevaluate_constraints)
+            self._recursive_generated_node.unfreeze(conf=conf, recursive=recursive,
+                                                    dont_change_state=dont_change_state,
+                                                    ignore_entanglement=ignore_entanglement,
+                                                    only_generators=only_generators,
+                                                    reevaluate_constraints=reevaluate_constraints)
         else:
             if not dont_change_state and not only_generators:
                 self._stop_recursion = False
@@ -1584,18 +1636,21 @@ class NodeInternals_Recursive(NodeInternals):
         self.env = env
         if self._default_node is not None:
             self._default_node.set_env(env)
+        if self._recursive_generated_node is not None:
+            self._recursive_generated_node.set_env(env)
 
     def _make_specific(self, name):
-        # We don't propagate Mutable & Freezable to the generated_node,
-        # because these attributes are used to change the behaviour of
-        # the GenFunc.
         if self._default_node is not None:
             self._default_node.set_attr(name, recursive=True)
+        if self._recursive_generated_node is not None:
+            self._recursive_generated_node.set_attr(name, recursive=True)
         return True
 
     def _unmake_specific(self, name):
         if self._default_node is not None:
             self._default_node.clear_attr(name, recursive=True)
+        if self._recursive_generated_node is not None:
+            self._recursive_generated_node.clear_attr(name, recursive=True)
         return True
 
 
@@ -1621,10 +1676,12 @@ class NodeInternals_Recursive(NodeInternals):
             # graph while it is currently manipulated in some way.
             pass
 
+    def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria,
+                                owned_conf, conf, path_regexp, exclude_self,
+                                respect_order, relative_depth, top_node, ignore_fstate,
+                                resolve_generator=False,
+                                return_parent=False):
 
-    def get_child_nodes_by_attr(self,internals_criteria,semantics_criteria,owned_conf,
-                                conf,path_regexp,exclude_self,respect_order,relative_depth,top_node,
-                                ignore_fstate,resolve_generator=False):
         if self._recursive_generated_node is None and resolve_generator:
             self._get_value(conf=conf)
 
@@ -1641,6 +1698,7 @@ class NodeInternals_Recursive(NodeInternals):
                 top_node=top_node,
                 ignore_fstate=ignore_fstate,
                 resolve_generator=resolve_generator,
+                return_parent=return_parent
             )
         else:
             return None
@@ -1679,6 +1737,7 @@ class NodeInternals_GenFunc(NodeInternals):
         # because these attributes are used to change the behaviour of
         # the GenFunc.
         if name in [
+            NodeInternals.Mutable,
             NodeInternals.Determinist,
             NodeInternals.Finite,
             NodeInternals.Abs_Postpone,
@@ -1688,11 +1747,16 @@ class NodeInternals_GenFunc(NodeInternals):
             if name == NodeInternals.Determinist:
                 self._node_helpers.determinist = True
             if self._generated_node is not None:
-                self.generated_node.set_attr(name, recursive=True)
+                if name == NodeInternals.Mutable:
+                    if self.custo.propagate_mutable_attr:
+                        self.generated_node.set_attr(name, recursive=True)
+                else:
+                    self.generated_node.set_attr(name, recursive=True)
         return True
 
     def _unmake_specific(self, name):
         if name in [
+            NodeInternals.Mutable,
             NodeInternals.Determinist,
             NodeInternals.Finite,
             NodeInternals.Abs_Postpone,
@@ -1702,7 +1766,11 @@ class NodeInternals_GenFunc(NodeInternals):
             if name == NodeInternals.Determinist:
                 self._node_helpers.determinist = False
             if self._generated_node is not None:
-                self.generated_node.clear_attr(name, recursive=True)
+                if name == NodeInternals.Mutable:
+                    if self.custo.propagate_mutable_attr:
+                        self.generated_node.clear_attr(name, recursive=True)
+                else:
+                    self.generated_node.clear_attr(name, recursive=True)
         return True
 
     def _make_private_specific(self, ignore_frozen_state, accept_external_entanglement,
@@ -1715,12 +1783,9 @@ class NodeInternals_GenFunc(NodeInternals):
             self._generated_node = None
             self._trigger_registered = False
         else:
-            self._generated_node = Node(
-                self._generated_node.name,
-                base_node=self._generated_node,
-                ignore_frozen_state=ignore_frozen_state,
-                accept_external_entanglement=accept_external_entanglement,
-            )
+            self._generated_node = Node(self._generated_node.name, base_node=self._generated_node,
+                                        ignore_frozen_state=ignore_frozen_state,
+                                        accept_external_entanglement=accept_external_entanglement)
             self._generated_node._reset_depth(parent_depth=self.pdepth)
             self._generated_node.set_env(self.env)
         self.generator_arg = copy.copy(self.generator_arg)
@@ -1762,12 +1827,8 @@ class NodeInternals_GenFunc(NodeInternals):
                     )
 
                 if self.custo.clone_ext_node_args_mode:
-                    node = Node(
-                        func_node_arg.name,
-                        base_node=func_node_arg,
-                        copy_dico=node_dico,
-                        accept_external_entanglement=False,
-                    )
+                    node = Node(func_node_arg.name, base_node=func_node_arg,
+                                accept_external_entanglement=False, copy_dico=node_dico)
                 else:
                     node = func_node_arg
 
@@ -1806,12 +1867,8 @@ class NodeInternals_GenFunc(NodeInternals):
                                 " within a nonterm node that does not contain the node args."
                             )
                         if self.custo.clone_ext_node_args_mode:
-                            node = Node(
-                                e.name,
-                                base_node=e,
-                                copy_dico=node_dico,
-                                accept_external_entanglement=False,
-                            )
+                            node = Node(e.name, base_node=e, accept_external_entanglement=False,
+                                        copy_dico=node_dico)
                         else:
                             node = e
 
@@ -1883,6 +1940,13 @@ class NodeInternals_GenFunc(NodeInternals):
                 self._generated_node.make_finite(all_conf=True, recursive=True)
             if self.is_attr_set(NodeInternals.Highlight):
                 self._generated_node.set_attr(NodeInternals.Highlight, recursive=True)
+            else:
+                self._generated_node.clear_attr(NodeInternals.Highlight, recursive=True)
+            if self.custo.propagate_mutable_attr:
+                if self.is_attr_set(NodeInternals.Mutable):
+                    self._generated_node.set_attr(NodeInternals.Mutable, recursive=True)
+                else:
+                    self._generated_node.clear_attr(NodeInternals.Mutable, recursive=True)
 
         return self._generated_node
 
@@ -2094,20 +2158,11 @@ class NodeInternals_GenFunc(NodeInternals):
         if self._generated_node is not None:
             self._generated_node._reset_depth(parent_depth=self.pdepth)
 
-    def get_child_nodes_by_attr(
-        self,
-        internals_criteria,
-        semantics_criteria,
-        owned_conf,
-        conf,
-        path_regexp,
-        exclude_self,
-        respect_order,
-        relative_depth,
-        top_node,
-        ignore_fstate,
-        resolve_generator=False,
-    ):
+    def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria,
+                                owned_conf, conf, path_regexp, exclude_self,
+                                respect_order, relative_depth, top_node, ignore_fstate,
+                                resolve_generator=False,
+                                return_parent=False):
         return self.generated_node.get_reachable_nodes(
             internals_criteria,
             semantics_criteria,
@@ -2120,6 +2175,7 @@ class NodeInternals_GenFunc(NodeInternals):
             top_node=top_node,
             ignore_fstate=ignore_fstate,
             resolve_generator=resolve_generator,
+            return_parent=return_parent
         )
 
     def set_child_current_conf(self, node, conf, reverse, ignore_entanglement):
@@ -2356,20 +2412,11 @@ class NodeInternals_Term(NodeInternals):
     def reset_depth_specific(self, depth):
         pass
 
-    def get_child_nodes_by_attr(
-        self,
-        internals_criteria,
-        semantics_criteria,
-        owned_conf,
-        conf,
-        path_regexp,
-        exclude_self,
-        respect_order,
-        relative_depth,
-        top_node,
-        ignore_fstate,
-        resolve_generator=False,
-    ):
+    def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria,
+                                owned_conf, conf, path_regexp, exclude_self,
+                                respect_order, relative_depth, top_node, ignore_fstate,
+                                resolve_generator=False,
+                                return_parent=False):
         return None
 
     def set_child_current_conf(self, node, conf, reverse, ignore_entanglement):
@@ -2596,12 +2643,8 @@ class NodeInternals_Func(NodeInternals_Term):
                         " within a nonterm node that does not contain the node args."
                     )
                 if self.custo.clone_ext_node_args_mode:
-                    node = Node(
-                        func_node_arg.name,
-                        base_node=func_node_arg,
-                        copy_dico=node_dico,
-                        accept_external_entanglement=False,
-                    )
+                    node = Node(func_node_arg.name, base_node=func_node_arg,
+                                accept_external_entanglement=False, copy_dico=node_dico)
                 else:
                     node = func_node_arg
 
@@ -2640,12 +2683,8 @@ class NodeInternals_Func(NodeInternals_Term):
                                 " within a nonterm node that does not contain the node args."
                             )
                         if self.custo.clone_ext_node_args_mode:
-                            node = Node(
-                                e.name,
-                                base_node=e,
-                                copy_dico=node_dico,
-                                accept_external_entanglement=False,
-                            )
+                            node = Node(e.name, base_node=e, accept_external_entanglement=False,
+                                        copy_dico=node_dico)
                         else:
                             node = e
 
@@ -2835,11 +2874,8 @@ class NodeSeparator(object):
             self.node = node_dico[self.node]
         else:
             orig_node = self.node
-            self.node = Node(
-                self.node.name,
-                base_node=self.node,
-                ignore_frozen_state=ignore_frozen_state,
-            )
+            self.node = Node(self.node.name, base_node=self.node,
+                             ignore_frozen_state=ignore_frozen_state)
             node_dico[orig_node] = self.node
 
 
@@ -3412,9 +3448,7 @@ class NodeInternals_NonTerm(NodeInternals):
 
         if self.separator is not None:
             new_separator = copy.copy(self.separator)
-            new_separator.make_private(
-                node_dico, ignore_frozen_state=ignore_frozen_state
-            )
+            new_separator.make_private(node_dico, ignore_frozen_state=ignore_frozen_state)
         else:
             new_separator = None
 
@@ -3629,8 +3663,15 @@ class NodeInternals_NonTerm(NodeInternals):
         else:
             return None
 
-    def set_subnode_minmax(self, node, min=None, max=None):
-        assert node in self.subnodes_attrs
+    def set_subnode_minmax(self, node, min=None, max=None, default_qty=None,
+                           reset_state=True):
+        # assert node in self.subnodes_attrs
+        if node not in self.subnodes_attrs:
+            print(f'*** DBG {node.name} {id(node)} ***')
+            print(self.subnodes_attrs)
+            for k, v in self.subnodes_attrs.items():
+                print(f'- {k.name} {id(k)}, {v}')
+            raise ValueError('@node is not a direct child')
 
         if min is not None and max is None:
             assert min > -2
@@ -3644,7 +3685,20 @@ class NodeInternals_NonTerm(NodeInternals):
         else:
             raise ValueError("No values are provided!")
 
-        self.reset_state(recursive=False, exclude_self=False)
+        if default_qty is None:
+            orig_default_qty = self.subnodes_attrs[node].default_qty
+            if orig_default_qty > max:
+                self.subnodes_attrs[node].default_qty = max
+            elif orig_default_qty < min:
+                self.subnodes_attrs[node].default_qty = min
+            else:
+                pass
+        else:
+            assert min <= default_qty <= max
+            self.subnodes_attrs[node].default_qty = default_qty
+
+        if reset_state:
+            self.reset_state(recursive=False, exclude_self=False)
 
     def get_subnode_default_qty(self, node):
         if node in self.subnodes_attrs:
@@ -3895,16 +3949,27 @@ class NodeInternals_NonTerm(NodeInternals):
                     # if self.is_attr_set(NodeInternals.Determinist):
                     ignore_fstate = not self.custo.frozen_copy_mode
 
-                    node_to_copy = (
-                        base_node if transformed_node is None else transformed_node
-                    )
-                    new_node = Node(
-                        nid,
-                        base_node=node_to_copy,
-                        ignore_frozen_state=ignore_fstate,
-                        accept_external_entanglement=True,
-                        acceptance_set=set(external_entangled_nodes + subnode_list),
-                    )
+                    node_to_copy = base_node if transformed_node is None else transformed_node
+                    if node_to_copy.is_rec():
+                        if not node_to_copy.is_frozen() and node_to_copy.is_rec():
+                            # With the ModelWalker infrastructure, a node can be
+                            # in an unfrozen state while we enter here.
+                            # Indeed, when consider_side_effects_on_sibbling is set,
+                            # the parent node of the node_to_copy is unfrozen to
+                            # reevaluate the constraints, then when it is frozen again
+                            # _construct_subnodes is called while node_to_copy has still
+                            # not been frozen. This is a problem with recursive nodes.
+                            # TODO: describe why.
+                            node_to_copy.freeze()
+                        new_node = node_to_copy.get_clone(nid, ignore_frozen_state=False,
+                                                          new_env=False)
+                        new_node.set_hosting_node_name(base_node.name)
+                    else:
+                        new_node = Node(nid, base_node=node_to_copy,
+                                        ignore_frozen_state=ignore_fstate,
+                                        accept_external_entanglement=True,
+                                        acceptance_set=set(external_entangled_nodes + subnode_list))
+
                     new_node._reset_depth(parent_depth=base_node.depth - 1)
 
                     # For dynamically created Node(), don't propagate the fuzz weight
@@ -3948,7 +4013,8 @@ class NodeInternals_NonTerm(NodeInternals):
                 raise ValueError
 
             subnode_list.append(new_node)
-            to_entangle.add(new_node)
+            if not new_node.is_rec():
+                to_entangle.add(new_node)
 
             # if new_node.is_nonterm():   ### TODO debug
             #     print(new_node.name, new_node.frozen_node_list)
@@ -4663,6 +4729,13 @@ class NodeInternals_NonTerm(NodeInternals):
         if self.frozen_node_list is None:
             raise ValueError("current node is not yet frozen!")
 
+    def get_subnode_by_name(self, name):
+        for n in self.subnodes_set:
+            if n.name == name:
+                return n
+        else:
+            return None
+
     def get_subnode(self, num):
         self._precondition_subnode_ops()
         return self.frozen_node_list[num]
@@ -4817,12 +4890,8 @@ class NodeInternals_NonTerm(NodeInternals):
         if node_no > 0 or force_clone:
             base_node.tmp_ref_count += 1
             nid = base_node.name + ":" + str(base_node.tmp_ref_count)
-            node = Node(
-                nid,
-                base_node=base_node,
-                ignore_frozen_state=ignore_frozen_state,
-                accept_external_entanglement=False,
-            )
+            node = Node(nid, base_node=base_node, ignore_frozen_state=ignore_frozen_state,
+                        accept_external_entanglement=False)
             node._reset_depth(parent_depth=base_node.depth - 1)
             if base_node.is_nonterm() and not base_node.cc.custo.mutable_clone_mode:
                 node.reset_fuzz_weight(recursive=True)
@@ -4841,12 +4910,8 @@ class NodeInternals_NonTerm(NodeInternals):
             nid = sep_node.name + ":" + str(sep_node.tmp_ref_count_sep_name)
             sep_node.tmp_ref_count += 1
             sep_node.tmp_ref_count_sep_name += 1
-            node = Node(
-                nid,
-                base_node=sep_node,
-                ignore_frozen_state=ignore_frozen_state,
-                accept_external_entanglement=False,
-            )
+            node = Node(nid, base_node=sep_node, ignore_frozen_state=ignore_frozen_state,
+                        accept_external_entanglement=False)
             node._reset_depth(parent_depth=sep_node.depth - 1)
         else:
             sep_node.tmp_ref_count += 1
@@ -6271,20 +6336,11 @@ class NodeInternals_NonTerm(NodeInternals):
         for e in iterable:
             e._reset_depth(depth)
 
-    def get_child_nodes_by_attr(
-        self,
-        internals_criteria,
-        semantics_criteria,
-        owned_conf,
-        conf,
-        path_regexp,
-        exclude_self,
-        respect_order,
-        relative_depth,
-        top_node,
-        ignore_fstate,
-        resolve_generator=False,
-    ):
+    def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria,
+                                owned_conf, conf, path_regexp, exclude_self,
+                                respect_order, relative_depth, top_node, ignore_fstate,
+                                resolve_generator=False,
+                                return_parent=False):
         if self.frozen_node_list is not None and not ignore_fstate:
             iterable = self.frozen_node_list
         else:
@@ -6300,8 +6356,8 @@ class NodeInternals_NonTerm(NodeInternals):
         else:
             s = set()
 
-        for e in iterable:
-            nlist = e.get_reachable_nodes(
+        for node in iterable:
+            nlist = node.get_reachable_nodes(
                 internals_criteria,
                 semantics_criteria,
                 owned_conf,
@@ -6313,13 +6369,29 @@ class NodeInternals_NonTerm(NodeInternals):
                 top_node=top_node,
                 ignore_fstate=ignore_fstate,
                 resolve_generator=resolve_generator,
+                return_parent=return_parent
             )
 
             if respect_order:
-                for e in nlist:
-                    if e not in s:
-                        s.append(e)
+                for n in nlist:
+                    if n not in s:
+                        if return_parent:
+                            if n[0] in iterable:
+                                s.append((n[0], self))
+                            else:
+                                s.append(n)
+
+                        else:
+                            s.append(n)
             else:
+                if return_parent:
+                    new_nlist = set()
+                    for n in nlist:
+                        if n[0] in iterable:
+                            new_nlist.add((n[0], self))
+                        else:
+                            new_nlist.add(n)
+                    nlist = new_nlist
                 s = s.union(nlist)
 
         return s
@@ -6671,21 +6743,10 @@ class Node(object):
     CORRUPT_NODE_QTY = 7
     CORRUPT_SIZE_SYNC = 8
 
-    def __init__(
-        self,
-        name,
-        base_node=None,
-        copy_dico=None,
-        ignore_frozen_state=False,
-        accept_external_entanglement=False,
-        acceptance_set=None,
-        subnodes=None,
-        values=None,
-        value_type=None,
-        vt=None,
-        new_env=False,
-        description=None,
-    ):
+    def __init__(self, name, base_node=None,
+                 ignore_frozen_state=False, accept_external_entanglement=False, acceptance_set=None,
+                 subnodes=None, values=None, value_type=None, vt=None, new_env=False,
+                 description=None, copy_dico=None):
         """
         Args:
           name (str): Name of the node. Every children node of a node shall have a unique name.
@@ -6739,21 +6800,18 @@ class Node(object):
         # node back to where it was defined
         self.abs_postpone_sent_back = None
 
-        if (
-            base_node is not None
-            and subnodes is None
-            and values is None
-            and value_type is None
-        ):
+        if (base_node is not None
+                and subnodes is None
+                and values is None
+                and value_type is None):
+
             self._delayed_jobs_called = base_node._delayed_jobs_called
 
             if base_node.env is None:
                 self.env = None
             else:
                 if new_env:
-                    self.env = (
-                        Env() if ignore_frozen_state else copy.copy(base_node.env)
-                    )
+                    self.env = Env() if ignore_frozen_state else copy.copy(base_node.env)
                     if ignore_frozen_state:
                         self.env.csp = copy.copy(base_node.env.csp)
                 else:
@@ -6762,21 +6820,17 @@ class Node(object):
             node_dico = self.set_contents(base_node, copy_dico=copy_dico,
                                           ignore_frozen_state=ignore_frozen_state,
                                           accept_external_entanglement=accept_external_entanglement,
-                                          acceptance_set=acceptance_set, keep_base_node_attrs=False)
+                                          acceptance_set=acceptance_set,
+                                          copy_base_node_attrs=True,
+                                          keep_own_sync_attrs=False)
 
             if new_env and self.env is not None:
-                self.env.update_node_refs(
-                    node_dico, ignore_frozen_state=ignore_frozen_state
-                )
+                self.env.update_node_refs(node_dico, ignore_frozen_state=ignore_frozen_state)
             elif DEBUG:
-                print(
-                    "\n*** WARNING: the copied node '%s' don't have an Env() "
-                    "associated with it!\n" % base_node.name
-                )
+                print("\n*** WARNING: the copied node '%s' don't have an Env() "
+                      "associated with it!\n" % base_node.name)
 
-            if self.env is not None and self.env.djobs_exists(
-                Node.DJOBS_PRIO_dynhelpers
-            ):
+            if self.env is not None and self.env.djobs_exists(Node.DJOBS_PRIO_dynhelpers):
                 self.env.execute_basic_djobs(Node.DJOBS_PRIO_dynhelpers)
 
         else:
@@ -6801,14 +6855,10 @@ class Node(object):
             else:
                 self.make_empty()
 
-    def get_clone(
-        self,
-        name=None,
-        ignore_frozen_state=False,
-        accept_external_entanglement=False,
-        acceptance_set=None,
-        new_env=True,
-    ):
+    def get_clone(self, name=None,
+                  ignore_frozen_state=False,
+                  accept_external_entanglement=False, acceptance_set=None,
+                  new_env=True):
         """Create a new node. To be used within a graph-based data model.
 
         Args:
@@ -6827,14 +6877,10 @@ class Node(object):
         if name is None:
             name = self.name
 
-        return Node(
-            name,
-            base_node=self,
-            ignore_frozen_state=ignore_frozen_state,
-            accept_external_entanglement=accept_external_entanglement,
-            acceptance_set=acceptance_set,
-            new_env=new_env,
-        )
+        return Node(name, base_node=self,
+                    ignore_frozen_state=ignore_frozen_state,
+                    accept_external_entanglement=accept_external_entanglement,
+                    acceptance_set=acceptance_set, new_env=new_env)
 
     def __copy__(self):
         # This copy is only used internally by NodeInternals_NonTerm.get_subnodes_with_csts()
@@ -6851,7 +6897,7 @@ class Node(object):
 
     def set_contents(self, base_node, copy_dico=None, ignore_frozen_state=False,
                      accept_external_entanglement=False, acceptance_set=None,
-                     keep_base_node_attrs=True, keep_own_sync_attrs=False):
+                     copy_base_node_attrs=False, keep_own_sync_attrs=False):
         """
         Set the contents of the node based on the one provided within
         `base_node`. This method performs a deep copy of `base_node`,
@@ -6864,8 +6910,9 @@ class Node(object):
           base_node (Node): Used as a template to create the new node.
           ignore_frozen_state (bool): If True, the clone process of
             base_node will ignore its current state.
-          keep_base_node_attrs (bool): Keep relevant :class:`NodeInternals` attributes from base_node
-            when creating the new :class:`NodeInternals` for this node.
+          copy_base_node_attrs (bool): copy :class:`NodeInternals` attributes from base_node
+            when creating the new :class:`NodeInternals` for this node, otherwise keep relevant
+            attributes from `self`.
           keep_own_sync_attrs (bool): Keep our current :class:`NodeInternals` sync attributes for
             already existing configuration.
           accept_external_entanglement (bool): If True, during the cloning
@@ -6915,26 +6962,25 @@ class Node(object):
 
             new_internals = copy.copy(base_node.internals[conf])
 
-            if keep_own_sync_attrs and sync_with is not None:
-                if conf in sync_with:
-                    new_internals._sync_with = sync_with[conf]
+            if copy_base_node_attrs:
+                if keep_own_sync_attrs and sync_with is not None:
+                    if conf in sync_with:
+                        new_internals._sync_with = sync_with[conf]
 
-            if keep_base_node_attrs:
-                new_internals.make_private(
-                    ignore_frozen_state=ignore_frozen_state,
-                    accept_external_entanglement=accept_external_entanglement,
-                    delayed_node_internals=delayed_node_internals,
-                    forget_original_sync_objs=False if keep_own_sync_attrs else True,
-                )
-                new_internals.set_contents_from(self.internals[conf],
-                                                ignore_sync_attrs=keep_own_sync_attrs)
-            else:
                 new_internals.make_private(
                     ignore_frozen_state=ignore_frozen_state,
                     accept_external_entanglement=accept_external_entanglement,
                     delayed_node_internals=delayed_node_internals,
                     forget_original_sync_objs=False,
                 )
+            else:
+                new_internals.make_private(
+                    ignore_frozen_state=ignore_frozen_state,
+                    accept_external_entanglement=accept_external_entanglement,
+                    delayed_node_internals=delayed_node_internals,
+                    forget_original_sync_objs=True
+                )
+                new_internals.set_contents_from(self.internals[conf])
 
             self.internals[conf] = new_internals
             self.internals[conf].env = self.env
@@ -7239,13 +7285,8 @@ class Node(object):
         return self.internals[conf]
 
     def get_internals_backup(self):
-        return Node(
-            self.name,
-            base_node=self,
-            ignore_frozen_state=False,
-            accept_external_entanglement=True,
-            new_env=False,
-        )
+        return Node(self.name, base_node=self, ignore_frozen_state=False,
+                    accept_external_entanglement=True, new_env=False)
 
     def set_internals(self, backup):
         self.name = backup.name
@@ -7730,6 +7771,7 @@ class Node(object):
         top_node=None,
         ignore_fstate=False,
         resolve_generator=False,
+        return_parent=False,
         relative_depth=-1,
     ):
         """
@@ -7807,32 +7849,26 @@ class Node(object):
             )
 
             if (owned_conf == None) or node.is_conf_existing(owned_conf):
-                if __compliant(
-                    node, config, top_node, side_effect_risk=side_effect_risk
-                ):
-                    s.append(node)
+                if __compliant(node, config, top_node, side_effect_risk=side_effect_risk):
+                    s.append((node, None) if return_parent else node)
 
             if not resolve_generator and side_effect_risk:
                 return s
 
             if rdepth <= -1 or rdepth > 0:
-                s2 = internal.get_child_nodes_by_attr(
-                    internals_criteria=internals_criteria,
-                    semantics_criteria=semantics_criteria,
-                    owned_conf=owned_conf,
-                    conf=next_conf,
-                    path_regexp=path_regexp,
-                    exclude_self=False,
-                    respect_order=respect_order,
-                    relative_depth=rdepth - 1,
-                    top_node=top_node,
-                    ignore_fstate=ignore_fstate,
-                    resolve_generator=resolve_generator,
-                )
+                s2 = internal.get_child_nodes_by_attr(internals_criteria=internals_criteria,
+                                                      semantics_criteria=semantics_criteria,
+                                                      owned_conf=owned_conf, conf=next_conf,
+                                                      path_regexp=path_regexp, exclude_self=False,
+                                                      respect_order=respect_order,
+                                                      relative_depth=rdepth - 1, top_node=top_node,
+                                                      ignore_fstate=ignore_fstate,
+                                                      resolve_generator=resolve_generator,
+                                                      return_parent=return_parent)
                 if s2:
-                    for e in s2:
-                        if e not in s:
-                            s.append(e)
+                    for n in s2:
+                        if n not in s:
+                            s.append(n)
 
             return s
 
@@ -7852,14 +7888,20 @@ class Node(object):
         else:
             l1 = []
             l2 = []
-            for e in nodes:
-                if e.get_fuzz_weight() > 1:
-                    l1.append(e)
+            for n in nodes:
+                fuzz_weight = n[0].get_fuzz_weight() if return_parent else n.get_fuzz_weight()
+                if fuzz_weight > 1:
+                    l1.append(n)
                 else:
-                    l2.append(e)
-            l1 = sorted(l1, key=lambda x: -x.get_fuzz_weight())
+                    l2.append(n)
+            if return_parent:
+                l1 = sorted(l1, key=lambda x: -x[0].get_fuzz_weight())
+                l2 = sorted(l2, key=lambda x: x[0].name)
+            else:
+                l1 = sorted(l1, key=lambda x: -x.get_fuzz_weight())
+                l2 = sorted(l2, key=lambda x: x.name)
 
-            return l1 + sorted(l2, key=lambda x: x.name)
+            return l1 + l2
 
     @staticmethod
     def filter_out_entangled_nodes(node_list):
@@ -8612,23 +8654,13 @@ class Node(object):
                 pretty_print=pretty_print,
             )
 
-    def show(
-        self,
-        conf=None,
-        verbose=True,
-        print_name_func=None,
-        print_contents_func=None,
-        print_raw_func=None,
-        print_nonterm_func=None,
-        print_recursive_func=None,
-        print_type_func=None,
-        alpha_order=False,
-        raw_limit=None,
-        log_func=sys.stdout.write,
-        pretty_print=True,
-        display_title=True,
-        display_gen_node=True,
-    ):
+    def show(self, conf=None, verbose=True,
+            print_name_func=None, print_contents_func=None, print_raw_func=None,
+            print_nonterm_func=None, print_recursive_func=None, print_type_func=None,
+            alpha_order=False, raw_limit=None,
+            log_func=sys.stdout.write, pretty_print=True,
+            display_title=True, display_gen_node=True,
+            debug=False):
         if print_name_func is None:
             print_name_func = self._print_name
         if print_nonterm_func is None:
@@ -8808,18 +8840,22 @@ class Node(object):
                             node_type, args, raw_len
                         )
                     else:
-                        if DEBUG:
+                        if debug:
                             syncw_str = ''
                             syncw = node.c[conf_tmp]._sync_with
                             if syncw:
                                 for scope, obj in syncw.items():
-                                    if isinstance(obj, SyncSizeObj):
+                                    if isinstance(obj, SyncObj):
                                         continue
                                     nd, param = obj
-                                    syncw_str = f', sync with: {nd.name} (NdInt: {id(nd.c[conf_tmp])})'
+                                    syncw_str += (f', sync with: {nd.name} '
+                                                 f'(NdInt: {id(nd.c[conf_tmp])})')
+
+                            syncw_str += (f', mutable: '
+                                          f'{node.c[conf_tmp].is_attr_set(NodeInternals.Mutable)}')
 
                         type_and_args = "[{:s}] size={:d}B".format(node_type, raw_len)
-                        if DEBUG:
+                        if debug:
                             type_and_args += f', NdInt: {id(node.c[conf_tmp])}{syncw_str}'
                     print_nonterm_func(
                         prefix, nl=False, log_func=log_func, pretty_print=pretty_print
@@ -8928,7 +8964,21 @@ class Node(object):
                     elif is_recursive_node:
                         rec_node = node.c[conf_tmp].recursive_node
                         rec_node_path = str(rec_node.get_path_from(self, conf=conf_tmp))
-                        extended_attr = f' NdInt: {id(node.c[conf_tmp])}' if DEBUG else ''
+                        if debug:
+                            syncw_str = ''
+                            syncw = node.c[conf_tmp]._sync_with
+                            if syncw:
+                                for scope, obj in syncw.items():
+                                    if isinstance(obj, SyncObj):
+                                        continue
+                                    nd, param = obj
+                                    syncw_str += f', sync with: {nd.name} (NdInt: {id(nd.c[conf_tmp])})'
+                            extended_attr = f' NdInt: {id(node.c[conf_tmp])}{syncw_str}'
+                            extended_attr += (f', mutable: '
+                                              f'{node.c[conf_tmp].is_attr_set(NodeInternals.Mutable)}')
+                        else:
+                            extended_attr = ''
+
                         print_recursive_func(
                             f" [{node_type} | linked node: {rec_node_path}]" + extended_attr,
                             nl=False,
@@ -8943,18 +8993,21 @@ class Node(object):
                             pretty_print=pretty_print,
                         )
                     else:
-                        if DEBUG:
+                        if debug:
                             syncw_str = ''
                             syncw = node.c[conf_tmp]._sync_with
                             if syncw:
                                 for scope, obj in syncw.items():
-                                    if isinstance(obj, SyncSizeObj):
+                                    if isinstance(obj, SyncObj):
                                         continue
                                     nd, param = obj
-                                    syncw_str = f'sync with: {nd.name} (NdInt: {id(nd.c[conf_tmp])})'
+                                    syncw_str = f', sync with: {nd.name} (NdInt: {id(nd.c[conf_tmp])})'
+
+                            syncw_str += (f', mutable: '
+                                          f'{node.c[conf_tmp].is_attr_set(NodeInternals.Mutable)}')
 
                         print_nonterm_func(
-                            f" [{node_type}] {syncw_str}" if DEBUG else f" [{node_type}]",
+                            f" [{node_type}]{syncw_str}" if debug else f" [{node_type}]",
                             nl=False,
                             log_func=log_func,
                             pretty_print=pretty_print,

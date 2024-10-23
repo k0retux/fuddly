@@ -39,6 +39,7 @@ from fuddly.framework.encoders import *
 
 from fuddly.test import ignore_data_model_specifics, run_long_tests, exit_on_import_error
 
+
 def setUpModule():
     global fmk, dm, results, node_nterm, node_simple, node_typed
 
@@ -55,7 +56,7 @@ def setUpModule():
     evt1.set_fuzz_weight(10)
 
     evt2 = Node('EVT2')
-    evt2.set_values(value_type=UINT16_le(min=50, max=2**16-1))
+    evt2.set_values(value_type=UINT16_le(min=50, max=2 ** 16 - 1))
     # evt2.set_values(value_type=UINT16_le())
     evt2.set_fuzz_weight(9)
 
@@ -64,8 +65,8 @@ def setUpModule():
 
     sub1 = Node('SUB1')
     sub1.set_subnodes_with_csts([
-            1, ['u>', [sep1, 3], [evt1, 2], [sep1, 3]]
-            ])
+        1, ['u>', [sep1, 3], [evt1, 2], [sep1, 3]]
+    ])
 
     sp = Node('S', values=[' '])
 
@@ -74,20 +75,20 @@ def setUpModule():
 
     sub2 = Node('SUB2')
     sub2.set_subnodes_with_csts([
-            1, ['u>', [sep2, 3], [ssub, 1], [sep2, 3]]
-            ])
+        1, ['u>', [sep2, 3], [ssub, 1], [sep2, 3]]
+    ])
 
     sep = Node('sep', values=['   -=||=-   '])
     prefix = Node('Pre', values=['[1] ', '[2] ', '[3] ', '[4] '])
     prefix.make_determinist()
 
     te3 = Node('EVT3')
-    te3.set_values(value_type=BitField(subfield_sizes=[4,4], endian=VT.LittleEndian,
+    te3.set_values(value_type=BitField(subfield_sizes=[4, 4], endian=VT.LittleEndian,
                                        subfield_values=[[0x5, 0x6], [0xF, 0xC]]))
     te3.set_fuzz_weight(8)
 
     te4 = Node('EVT4')
-    te4.set_values(value_type=BitField(subfield_sizes=[4,4], endian=VT.LittleEndian,
+    te4.set_values(value_type=BitField(subfield_sizes=[4, 4], endian=VT.LittleEndian,
                                        subfield_val_extremums=[[4, 8], [3, 15]]))
     te4.set_fuzz_weight(7)
 
@@ -97,14 +98,15 @@ def setUpModule():
     te5.set_fuzz_weight(6)
 
     te6 = Node('EVT6')
-    vt = BitField(subfield_limits=[2,6,8,10], subfield_values=[[2,1],[2,15,3],[2,3,0],[1]],
+    vt = BitField(subfield_limits=[2, 6, 8, 10],
+                  subfield_values=[[2, 1], [2, 15, 3], [2, 3, 0], [1]],
                   padding=0, lsb_padding=True, endian=VT.LittleEndian)
     te6.set_values(value_type=vt)
     te6.set_fuzz_weight(5)
 
     te7 = Node('EVT7')
-    vt = BitField(subfield_sizes=[4,4,4],
-                  subfield_values=[[4,2,1], None, [2,3,0]],
+    vt = BitField(subfield_sizes=[4, 4, 4],
+                  subfield_values=[[4, 2, 1], None, [2, 3, 0]],
                   subfield_val_extremums=[None, [3, 15], None],
                   padding=0, lsb_padding=False, endian=VT.BigEndian)
     te7.set_values(value_type=vt)
@@ -117,7 +119,7 @@ def setUpModule():
     ### Node Graph: Simple ###
 
     tval1_bottom = Node('TV1_bottom')
-    vt = UINT16_be(values=[1,2,3,4,5,6])
+    vt = UINT16_be(values=[1, 2, 3, 4, 5, 6])
 
     tval1_bottom.set_values(value_type=vt)
     tval1_bottom.make_determinist()
@@ -126,7 +128,7 @@ def setUpModule():
     sep_bottom_alt = Node('sep_bottom_alt', values=[' ;; '])
 
     tval2_bottom = Node('TV2_bottom')
-    vt = UINT16_be(values=[0x42,0x43,0x44])
+    vt = UINT16_be(values=[0x42, 0x43, 0x44])
     tval2_bottom.set_values(value_type=vt)
 
     alt_tag = Node('AltTag', values=[' |AltTag| ', ' +AltTag+ '])
@@ -134,36 +136,38 @@ def setUpModule():
 
     bottom = Node('Bottom_NT')
     bottom.set_subnodes_with_csts([
-            1, ['u>', [sep_bottom, 1], [tval1_bottom, 1], [sep_bottom, 1], [tval2_bottom, 1]]
-            ])
+        1, ['u>', [sep_bottom, 1], [tval1_bottom, 1], [sep_bottom, 1], [tval2_bottom, 1]]
+    ])
 
     val1_bottom2 = Node('V1_bottom2', values=['=BOTTOM_2=', '**BOTTOM_2**', '~~BOTTOM_2~~'])
     val1_bottom2.add_conf('ALT')
-    val1_bottom2.set_values(['=ALT_BOTTOM_2=', '**ALT_BOTTOM_2**', '~~ALT_BOTTOM_2~~', '__ALT_BOTTOM_2__'], conf='ALT')
+    val1_bottom2.set_values(
+        ['=ALT_BOTTOM_2=', '**ALT_BOTTOM_2**', '~~ALT_BOTTOM_2~~', '__ALT_BOTTOM_2__'], conf='ALT')
     val1_bottom2.add_conf('ALT_2')
-    val1_bottom2.set_values(['=2ALT2_BOTTOM_2=', '**2ALT2_BOTTOM_2**', '~~2ALT2_BOTTOM_2~~'], conf='ALT_2')
+    val1_bottom2.set_values(['=2ALT2_BOTTOM_2=', '**2ALT2_BOTTOM_2**', '~~2ALT2_BOTTOM_2~~'],
+                            conf='ALT_2')
     val1_bottom2.set_fuzz_weight(2)
 
     val1_bottom2_cpy = val1_bottom2.get_clone('V1_bottom2_cpy')
 
     bottom2 = Node('Bottom_2_NT')
     bottom2.set_subnodes_with_csts([
-            5, ['u>', [sep_bottom, 1], [val1_bottom2, 1]],
-            1, ['u>', [sep_bottom_alt, 1], [val1_bottom2_cpy, 2], [sep_bottom_alt, 1]]
-            ])
+        5, ['u>', [sep_bottom, 1], [val1_bottom2, 1]],
+        1, ['u>', [sep_bottom_alt, 1], [val1_bottom2_cpy, 2], [sep_bottom_alt, 1]]
+    ])
     bottom2.add_conf('ALT')
     bottom2.set_subnodes_with_csts([
-            5, ['u>', [alt_tag, 1], [val1_bottom2, 1], [alt_tag, 1]],
-            1, ['u>', [alt_tag_cpy, 2], [val1_bottom2_cpy, 2], [alt_tag_cpy, 2]]
-            ], conf='ALT')
+        5, ['u>', [alt_tag, 1], [val1_bottom2, 1], [alt_tag, 1]],
+        1, ['u>', [alt_tag_cpy, 2], [val1_bottom2_cpy, 2], [alt_tag_cpy, 2]]
+    ], conf='ALT')
 
     tval2_bottom3 = Node('TV2_bottom3')
     vt = UINT32_be(values=[0xF, 0x7])
     tval2_bottom3.set_values(value_type=vt)
     bottom3 = Node('Bottom_3_NT')
     bottom3.set_subnodes_with_csts([
-            1, ['u>', [sep_bottom, 1], [tval2_bottom3, 1]]
-            ])
+        1, ['u>', [sep_bottom, 1], [tval2_bottom3, 1]]
+    ])
 
     val1_middle = Node('V1_middle', values=['=MIDDLE=', '**MIDDLE**', '~~MIDDLE~~'])
     sep_middle = Node('sep_middle', values=[' :: '])
@@ -174,14 +178,14 @@ def setUpModule():
 
     middle = Node('Middle_NT')
     middle.set_subnodes_with_csts([
-            5, ['u>', [val1_middle, 1], [sep_middle, 1], [bottom, 1]],
-            3, ['u>', [val1_middle_cpy1, 2], [sep_middle, 1], [bottom2, 1]],
-            1, ['u>', [val1_middle_cpy2, 3], [sep_middle, 1], [bottom3, 1]]
-            ])
+        5, ['u>', [val1_middle, 1], [sep_middle, 1], [bottom, 1]],
+        3, ['u>', [val1_middle_cpy1, 2], [sep_middle, 1], [bottom2, 1]],
+        1, ['u>', [val1_middle_cpy2, 3], [sep_middle, 1], [bottom3, 1]]
+    ])
     middle.add_conf('ALT')
     middle.set_subnodes_with_csts([
-            5, ['u>', [alt_tag2, 1], [val1_middle, 1], [sep_middle, 1], [bottom, 1], [alt_tag2, 1]]
-            ], conf='ALT')
+        5, ['u>', [alt_tag2, 1], [val1_middle, 1], [sep_middle, 1], [bottom, 1], [alt_tag2, 1]]
+    ], conf='ALT')
 
     val1_top = Node('V1_top', values=['=TOP=', '**TOP**', '~~TOP~~'])
     sep_top = Node('sep_top', values=[' -=|#|=- ', ' -=|@|=- '])
@@ -191,26 +195,27 @@ def setUpModule():
 
     e_simple = Node('Simple')
     e_simple.set_subnodes_with_csts([
-            1, ['u>', [prefix1, 1], [prefix2, 1], [sep_top, 1], [val1_top, 1], [sep_top, 1], [middle, 1]]
-            ])
+        1,
+        ['u>', [prefix1, 1], [prefix2, 1], [sep_top, 1], [val1_top, 1], [sep_top, 1], [middle, 1]]
+    ])
 
     ### Node Graph: NonTerm ###
 
     e = Node('TV2')
-    vt = UINT16_be(values=[1,2,3,4,5,6])
+    vt = UINT16_be(values=[1, 2, 3, 4, 5, 6])
     e.set_values(value_type=vt)
     sep3 = Node('sep3', values=[' # '])
     nt = Node('Bottom_NT')
     nt.set_subnodes_with_csts([
-            1, ['u>', [e, 1], [sep3, 1], [e, 1]]
-            ])
+        1, ['u>', [e, 1], [sep3, 1], [e, 1]]
+    ])
 
     sep = Node('sep', values=[' # '])
     sep2 = Node('sep2', values=[' -|#|- '])
 
     e_val1 = Node('V1', values=['A', 'B', 'C'])
     e_val1_cpy = e_val1.get_clone('V1_cpy')
-    e_typedval1 = Node('TV1', value_type=UINT16_be(values=[1,2,3,4,5,6]))
+    e_typedval1 = Node('TV1', value_type=UINT16_be(values=[1, 2, 3, 4, 5, 6]))
     e_val2 = Node('V2', values=['X', 'Y', 'Z'])
     e_val3 = Node('V3', values=['<', '>'])
 
@@ -219,15 +224,14 @@ def setUpModule():
 
     e_nonterm = Node('NonTerm')
     e_nonterm.set_subnodes_with_csts([
-            100, ['u>', [e_val1, 1, 6], [sep, 1], [e_typedval1, 1, 6],
-                  [sep2, 1],
-                  'u=+(2,3,3)', [e_val1_cpy, 1], [e_val2, 1, 3], [e_val3, 1],
-                  'u>', [sep2, 1],
-                  'u=..', [e_val1, 1, 6], [sep, 1], [e_typedval1, 1, 6]],
-            50, ['u>', [e_val_random, 0, 1], [sep, 1], [nt, 1]],
-            90, ['u>', [e_val_random2, 3]]
-            ])
-
+        100, ['u>', [e_val1, 1, 6], [sep, 1], [e_typedval1, 1, 6],
+              [sep2, 1],
+              'u=+(2,3,3)', [e_val1_cpy, 1], [e_val2, 1, 3], [e_val3, 1],
+              'u>', [sep2, 1],
+              'u=..', [e_val1, 1, 6], [sep, 1], [e_typedval1, 1, 6]],
+        50, ['u>', [e_val_random, 0, 1], [sep, 1], [nt, 1]],
+        90, ['u>', [e_val_random2, 3]]
+    ])
 
     node_simple = e_simple
     node_simple.set_env(Env())
@@ -235,6 +239,7 @@ def setUpModule():
     node_nterm.set_env(Env())
     node_typed = typed_node
     node_typed.set_env(Env())
+
 
 def tearDownModule():
     global fmk
@@ -262,7 +267,6 @@ class TestBasics(unittest.TestCase):
         ku.set_values(tux_subparts_1)
         kv.set_values(tux_subparts_2)
 
-
         tux_subparts_3 = ['[<]MARCHONS', '[<]TESTONS']
         kv.add_conf('ALT')
         kv.set_values(tux_subparts_3, conf='ALT')
@@ -272,7 +276,7 @@ class TestBasics(unittest.TestCase):
         ku.set_values(value_type=String(values=tux_subparts_4, codec='utf8'), conf='ALT')
 
         idx = Node('IDX')
-        idx.set_values(value_type=SINT16_be(min=4,max=40))
+        idx.set_values(value_type=SINT16_be(min=4, max=40))
 
         tx.set_subnodes_basic([tx_h, idx, ku_h, ku, kv_h, kv])
         tx_cpy = tx.get_clone('TX_cpy')
@@ -288,13 +292,12 @@ class TestBasics(unittest.TestCase):
 
         tc.set_subnodes_basic([tc_h, ku_h2, ku2, kv_h2, kv2])
 
-
         mark3 = Node('MARK3', values=[' ~(X)~ '])
 
         tc.add_conf('ALT')
         tc.set_subnodes_basic([mark3, tc_h, ku2, kv_h2], conf='ALT')
-        tc_cpy1= tc.get_clone('TC_cpy1')
-        tc_cpy2= tc.get_clone('TC_cpy2')
+        tc_cpy1 = tc.get_clone('TC_cpy1')
+        tc_cpy2 = tc.get_clone('TC_cpy2')
 
         mark = Node('MARK', values=[' [#] '])
 
@@ -319,8 +322,7 @@ class TestBasics(unittest.TestCase):
             15, ['u>', [mark, 1],
                  'u=.', [tux_h_cpy, 1, 3], [tc, 3],
                  'u=.', [mark, 1], [tx, 1], [idx2, 1]]
-            ])
-
+        ])
 
         mark2 = Node('MARK2', values=[' ~(..)~ '])
 
@@ -354,7 +356,6 @@ class TestBasics(unittest.TestCase):
 
         cls.node_tux = tux.get_clone()
         cls.node_ex1 = node_ex1
-
 
     def setUp(self):
         pass
@@ -549,7 +550,6 @@ class TestBasics(unittest.TestCase):
 
         self.assertTrue(res6)
 
-
     def test_node_paths(self):
 
         print('\n### TEST 12: get_all_path() test')
@@ -573,7 +573,6 @@ class TestBasics(unittest.TestCase):
         for i in node_ex1.iter_paths(only_paths=True):
             print(i)
 
-
         node_ex1 = self.node_ex1.get_clone()
 
         print('Flatten 1: ', repr(node_ex1.to_bytes()))
@@ -581,7 +580,8 @@ class TestBasics(unittest.TestCase):
         l = node_ex1.get_value()
         hk = list(node_ex1.iter_paths(only_paths=True))
 
-        print('\n### TEST 1: cross check self.node.get_all_paths().keys() and get_nodes_names() ###')
+        print(
+            '\n### TEST 1: cross check self.node.get_all_paths().keys() and get_nodes_names() ###')
 
         print('*** Hkeys from self.node.iter_paths(only_paths=True):')
         hk = sorted(hk)
@@ -643,7 +643,6 @@ class TestBasics(unittest.TestCase):
 
         self.assertTrue(val1 != val2)
 
-
     def test_node_search_by_path_01(self):
 
         print('\n### Test get_first_node_by_path() ###')
@@ -652,11 +651,15 @@ class TestBasics(unittest.TestCase):
 
         print('\n*** 1: call 3 times get_first_node_by_path()')
 
-        print('name: %s, result: %s' % ('TUX', tux2.get_first_node_by_path('TUX').get_path_from(tux2)))
-        print('name: %s, result: %s' % ('TX', tux2.get_first_node_by_path('TX').get_path_from(tux2)))
-        print('name: %s, result: %s' % ('KU', tux2.get_first_node_by_path('KU', conf='ALT').get_path_from(tux2)))
         print('name: %s, result: %s' % (
-        'MARK3', tux2.get_first_node_by_path('MARK3', conf='ALT').get_path_from(tux2, conf='ALT')))
+        'TUX', tux2.get_first_node_by_path('TUX').get_path_from(tux2)))
+        print(
+            'name: %s, result: %s' % ('TX', tux2.get_first_node_by_path('TX').get_path_from(tux2)))
+        print('name: %s, result: %s' % (
+        'KU', tux2.get_first_node_by_path('KU', conf='ALT').get_path_from(tux2)))
+        print('name: %s, result: %s' % (
+            'MARK3',
+            tux2.get_first_node_by_path('MARK3', conf='ALT').get_path_from(tux2, conf='ALT')))
 
         print('\n*** 2: call get_first_node_by_path() with real regexp')
 
@@ -733,7 +736,6 @@ class TestBasics(unittest.TestCase):
         print(l3)
 
         self.assertTrue(len(l3) == 2)
-
 
     def test_node_search_and_update(self):
 
@@ -823,7 +825,6 @@ class TestBasics(unittest.TestCase):
 
         self.assertEqual((c_l1 > c_l2) - (c_l1 < c_l2), 0)
 
-
     def test_node_alternate_conf(self):
 
         nonascii_test_str = u'\u00c2'.encode(internal_repr_codec)
@@ -896,7 +897,6 @@ class TestBasics(unittest.TestCase):
 
         self.assertTrue(res3)
 
-
     def test_fuzzing_primitives(self):
         print('\n### TEST 10: test fuzzing primitives')
 
@@ -907,7 +907,6 @@ class TestBasics(unittest.TestCase):
 
         fuzz_data_tree(node_ex1)
         node_ex1.show()
-
 
     def test_node_nt_pick_section(self):
         print('\n### TEST 9: test the constraint type: =+(w1,w2,...)\n' \
@@ -926,8 +925,6 @@ class TestBasics(unittest.TestCase):
                 # print(msg)
 
         self.assertTrue(res)
-
-
 
 
 class TestMisc(unittest.TestCase):
@@ -1019,7 +1016,8 @@ class TestMisc(unittest.TestCase):
         prev_path = None
         turn_nb_list = []
         tn_consumer = TypedNodeDisruption()
-        for rnode, node, orig_node_val, i in ModelWalker(evt, tn_consumer, make_determinist=True, max_steps=300):
+        for rnode, node, orig_node_val, i in ModelWalker(evt, tn_consumer, make_determinist=True,
+                                                         max_steps=300):
             print('=======[ %d ]========' % i)
             print('  orig:    ', orig_rnode)
             print('  ----')
@@ -1040,25 +1038,28 @@ class TestMisc(unittest.TestCase):
                 print('  node finite:        ', node.cc.is_attr_set(NodeInternals.Finite))
                 if not issubclass(vt.__class__, VT_Alt):
                     print('  node vt endian:         ', node.cc.get_value_type().endian)
-                print('  node orig value:        (hexlified) {0!s:s}, {0!s:s}'.format(binascii.hexlify(orig_node_val),
-                                                                                      orig_node_val))
-                print('  node corrupted value:   (hexlified) {0!s:s}, {0!s:s}'.format(binascii.hexlify(node.to_bytes()),
-                                                                                      node.to_bytes()))
+                print('  node orig value:        (hexlified) {0!s:s}, {0!s:s}'.format(
+                    binascii.hexlify(orig_node_val),
+                    orig_node_val))
+                print('  node corrupted value:   (hexlified) {0!s:s}, {0!s:s}'.format(
+                    binascii.hexlify(node.to_bytes()),
+                    node.to_bytes()))
                 # node.show()
             else:
                 turn_nb_list.append(i)
                 print('\n--> Fuzzing terminated!\n')
                 break
 
-        print('\nTurn number when Node has changed: %r, number of test cases: %d' % (turn_nb_list, i))
-        good_list = [1, 12, 22, 32, 42, 48, 54, 64, 74, 84, 95, 105, 115, 125, 135, 141, 151, 161, 171]
+        print(
+            '\nTurn number when Node has changed: %r, number of test cases: %d' % (turn_nb_list, i))
+        good_list = [1, 12, 22, 32, 42, 48, 54, 64, 74, 84, 95, 105, 115, 125, 135, 141, 151, 161,
+                     171]
         msg = "If Fuzzy_<TypedValue>.values have been modified in size, the good_list should be updated.\n" \
               "If BitField are in random mode [currently put in determinist mode], the fuzzy_mode can produce more" \
               " or less value depending on drawn value when .get_value() is called (if the drawn value is" \
               " the max for instance, drawn_value+1 will not be produced)"
 
         self.assertTrue(turn_nb_list == good_list, msg=msg)
-
 
     def test_NonTerm_Attr_01(self):
         '''
@@ -1125,7 +1126,8 @@ class TestMisc(unittest.TestCase):
         node_copy = Node('BF_copy', base_node=node, ignore_frozen_state=True)
         node_copy.set_env(Env())
         node_copy.make_determinist(all_conf=True, recursive=True)
-        self._loop_nodes(node_copy, loop_count, criteria_func=lambda x: True, transform=binascii.b2a_hex,
+        self._loop_nodes(node_copy, loop_count, criteria_func=lambda x: True,
+                         transform=binascii.b2a_hex,
                          result_vector=[b'a04c', b'904c', b'e04f'])
 
         print('\n -=[ determinist & finite (loop count: %d) ]=- \n' % loop_count)
@@ -1134,7 +1136,8 @@ class TestMisc(unittest.TestCase):
         node_copy2.set_env(Env())
         node_copy2.make_determinist(all_conf=True, recursive=True)
         node_copy2.make_finite(all_conf=True, recursive=True)
-        it_df = self._loop_nodes(node_copy2, loop_count, criteria_func=lambda x: True, transform=binascii.b2a_hex,
+        it_df = self._loop_nodes(node_copy2, loop_count, criteria_func=lambda x: True,
+                                 transform=binascii.b2a_hex,
                                  result_vector=[b'a04c', b'904c', b'e04f'])
 
         print('\n -=[ random & finite (loop count: %d) ]=- \n' % loop_count)
@@ -1143,7 +1146,8 @@ class TestMisc(unittest.TestCase):
         node_copy3.set_env(Env())
         node_copy3.make_random(all_conf=True, recursive=True)
         node_copy3.make_finite(all_conf=True, recursive=True)
-        it_rf = self._loop_nodes(node_copy3, loop_count, criteria_func=lambda x: True, transform=binascii.b2a_hex)
+        it_rf = self._loop_nodes(node_copy3, loop_count, criteria_func=lambda x: True,
+                                 transform=binascii.b2a_hex)
 
         self.assertEqual(it_df, it_rf)
         self.assertEqual(it_df, 12)
@@ -1247,7 +1251,8 @@ class TestMisc(unittest.TestCase):
 
         # Note that 4 in subfield 1 and 16 in subfield 2 are ignored
         # --> 6 different values are output before looping
-        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_values=[[2, 1], [2, 15, 3], [2, 3, 0], [1]],
+        t = BitField(subfield_limits=[2, 6, 8, 10],
+                     subfield_values=[[2, 1], [2, 15, 3], [2, 3, 0], [1]],
                      padding=0, lsb_padding=True, endian=VT.LittleEndian, determinist=True)
         for i in range(30):
             val = binascii.b2a_hex(t.get_value())
@@ -1279,7 +1284,8 @@ class TestMisc(unittest.TestCase):
         print('\n******** subfield_val_extremums\n')
 
         # --> 14 different values are output before looping
-        t = BitField(subfield_limits=[2, 6, 8, 10], subfield_val_extremums=[[1, 2], [4, 12], [0, 3], [2, 3]],
+        t = BitField(subfield_limits=[2, 6, 8, 10],
+                     subfield_val_extremums=[[1, 2], [4, 12], [0, 3], [2, 3]],
                      padding=0, lsb_padding=True, endian=VT.LittleEndian, determinist=True)
         for i in range(30):
             val = binascii.b2a_hex(t.get_value())
@@ -1580,7 +1586,8 @@ class TestModelWalker(unittest.TestCase):
     def test_NodeConsumerStub_1(self):
         nt = node_simple.get_clone()
         default_consumer = NodeConsumerStub()
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 49)
@@ -1588,7 +1595,8 @@ class TestModelWalker(unittest.TestCase):
     def test_NodeConsumerStub_2(self):
         nt = node_simple.get_clone()
         default_consumer = NodeConsumerStub(max_runs_per_node=-1, min_runs_per_node=2)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 35)
@@ -1596,15 +1604,18 @@ class TestModelWalker(unittest.TestCase):
     def test_BasicVisitor(self):
         nt = node_simple.get_clone()
         default_consumer = BasicVisitor(respect_order=True, consider_side_effects_on_sibbling=False)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 55)
 
         print('***')
         nt = node_simple.get_clone()
-        default_consumer = BasicVisitor(respect_order=False, consider_side_effects_on_sibbling=False)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer, make_determinist=True,
+        default_consumer = BasicVisitor(respect_order=False,
+                                        consider_side_effects_on_sibbling=False)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, default_consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=200):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 37)
@@ -1613,8 +1624,10 @@ class TestModelWalker(unittest.TestCase):
         print('***')
         idx = 0
         simple = node_simple.get_clone()
-        nonterm_consumer = NonTermVisitor(respect_order=True, consider_side_effects_on_sibbling=False)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True,
+        nonterm_consumer = NonTermVisitor(respect_order=True,
+                                          consider_side_effects_on_sibbling=False)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=20):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 4)
@@ -1622,8 +1635,10 @@ class TestModelWalker(unittest.TestCase):
         print('***')
         idx = 0
         simple = node_simple.get_clone()
-        nonterm_consumer = NonTermVisitor(respect_order=False, consider_side_effects_on_sibbling=False)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer, make_determinist=True,
+        nonterm_consumer = NonTermVisitor(respect_order=False,
+                                          consider_side_effects_on_sibbling=False)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, nonterm_consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=20):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 4)
@@ -1641,8 +1656,10 @@ class TestModelWalker(unittest.TestCase):
 
         idx = 0
         data = fmk.dm.get_external_atom(dm_name='mydf', data_id='shape')
-        nonterm_consumer = NonTermVisitor(respect_order=True, consider_side_effects_on_sibbling=False)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True,
+        nonterm_consumer = NonTermVisitor(respect_order=True,
+                                          consider_side_effects_on_sibbling=False)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=50):
             print(colorize('[%02d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
             # print(colorize(repr(rnode.to_bytes()), rgb=Color.INFO))
@@ -1652,8 +1669,10 @@ class TestModelWalker(unittest.TestCase):
         print('***')
         idx = 0
         data = fmk.dm.get_external_atom(dm_name='mydf', data_id='shape')
-        nonterm_consumer = NonTermVisitor(respect_order=False, consider_side_effects_on_sibbling=False)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer, make_determinist=True,
+        nonterm_consumer = NonTermVisitor(respect_order=False,
+                                          consider_side_effects_on_sibbling=False)
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, nonterm_consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=50):
             print(colorize('[%02d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
         self.assertEqual(idx, 12)
@@ -1784,7 +1803,8 @@ class TestModelWalker(unittest.TestCase):
                                    node_kinds=[NodeInternals_TypedValue],
                                    negative_node_subkinds=[String, Filename])
         tn_consumer.set_node_interest(internals_criteria=ic)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, tn_consumer, make_determinist=True,
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, tn_consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=200):
             val = rnode.to_bytes()
             # print(colorize('{!r}'.format(val), rgb=Color.INFO))
@@ -1811,13 +1831,13 @@ class TestModelWalker(unittest.TestCase):
             print(colorize('[%d] ' % idx + rnode.to_ascii(), rgb=Color.INFO))
         self.assertEqual(idx, 12)  # shall be equal to the previous test
 
-
     def test_TypedNodeDisruption_1(self):
         nt = node_simple.get_clone()
         tn_consumer = TypedNodeDisruption()
         ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         tn_consumer.set_node_interest(internals_criteria=ic)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True,
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=300):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 21)
@@ -1827,7 +1847,8 @@ class TestModelWalker(unittest.TestCase):
         tn_consumer = TypedNodeDisruption(max_runs_per_node=3, min_runs_per_node=3)
         ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         tn_consumer.set_node_interest(internals_criteria=ic)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True,
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=100):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 9)
@@ -1841,7 +1862,8 @@ class TestModelWalker(unittest.TestCase):
         tn_consumer = TypedNodeDisruption(max_runs_per_node=1)
         # ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         # tn_consumer.set_node_interest(internals_criteria=ic)
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer, make_determinist=True,
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(nt, tn_consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=-1):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertAlmostEqual(idx, 346, delta=2)
@@ -1875,15 +1897,20 @@ class TestModelWalker(unittest.TestCase):
         # ic = NodeInternalsCriteria(negative_node_subkinds=[String])
         # tn_consumer.set_node_interest(internals_criteria=ic)
         for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, tn_consumer,
-                                                                    make_determinist=True, max_steps=7):
-            print(colorize('\n[%d] ' % idx + repr(rnode['smscmd/TP-DCS$'][0].to_bytes()), rgb=Color.INFO))
+                                                                    make_determinist=True,
+                                                                    max_steps=7):
+            print(colorize('\n[%d] ' % idx + repr(rnode['smscmd/TP-DCS$'][0].to_bytes()),
+                           rgb=Color.INFO))
             print('node name: ' + consumed_node.name)
             print('original value:  {!s} ({!s})'.format(binascii.b2a_hex(orig_node_val),
                                                         bin(struct.unpack('B', orig_node_val)[0])))
             print('corrupted value: {!s} ({!s})'.format(binascii.b2a_hex(consumed_node.to_bytes()),
-                                                        bin(struct.unpack('B', consumed_node.to_bytes())[0])))
-            print('result: {!s} ({!s})'.format(binascii.b2a_hex(rnode['smscmd/TP-DCS$'][0].to_bytes()),
-                                               bin(struct.unpack('B', rnode['smscmd/TP-DCS$'][0].to_bytes())[0])))
+                                                        bin(struct.unpack('B',
+                                                                          consumed_node.to_bytes())[
+                                                                0])))
+            print('result: {!s} ({!s})'.format(
+                binascii.b2a_hex(rnode['smscmd/TP-DCS$'][0].to_bytes()),
+                bin(struct.unpack('B', rnode['smscmd/TP-DCS$'][0].to_bytes())[0])))
             rnode['smscmd/TP-DCS$'][0].show()
             self.assertEqual(rnode['smscmd/TP-DCS'][0].to_bytes(), corrupt_table[idx])
 
@@ -1892,7 +1919,8 @@ class TestModelWalker(unittest.TestCase):
         consumer = AltConfConsumer(max_runs_per_node=-1, min_runs_per_node=-1)
         consumer.set_node_interest(owned_confs=['ALT'])
 
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True,
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=100):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 15)
@@ -1902,7 +1930,8 @@ class TestModelWalker(unittest.TestCase):
         consumer = AltConfConsumer(max_runs_per_node=2, min_runs_per_node=1)
         consumer.set_node_interest(owned_confs=['ALT'])
 
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True,
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=100):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 8)
@@ -1912,7 +1941,8 @@ class TestModelWalker(unittest.TestCase):
         consumer = AltConfConsumer(max_runs_per_node=-1, min_runs_per_node=-1)
         consumer.set_node_interest(owned_confs=['ALT', 'ALT_2'])
 
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True,
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=100):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 24)
@@ -1922,7 +1952,8 @@ class TestModelWalker(unittest.TestCase):
         consumer = AltConfConsumer(max_runs_per_node=-1, min_runs_per_node=-1)
         consumer.set_node_interest(owned_confs=['ALT_2', 'ALT'])
 
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer, make_determinist=True,
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(simple, consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=50):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 24)
@@ -1953,7 +1984,8 @@ class TestModelWalker(unittest.TestCase):
         data = dm_usb.get_atom('CONF')
         consumer = TypedNodeDisruption()
         consumer.need_reset_when_structure_change = True
-        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, consumer, make_determinist=True,
+        for rnode, consumed_node, orig_node_val, idx in ModelWalker(data, consumer,
+                                                                    make_determinist=True,
                                                                     max_steps=600):
             pass
             # print(colorize('[%d] '%idx + repr(rnode.to_bytes()), rgb=Color.INFO))
@@ -1961,7 +1993,6 @@ class TestModelWalker(unittest.TestCase):
         print(colorize('number of confs: %d' % idx, rgb=Color.INFO))
 
         self.assertIn(idx, [413])
-
 
     def test_twalk_nt_shapes_1(self):
         idx = 0
@@ -1977,7 +2008,7 @@ class TestModelWalker(unittest.TestCase):
                              b'/7/A/B/C/D/E/F/1/O/M/P/Q/N/X']
         outcomes = []
 
-        act = [('SHP1', UI(determinist=True,freeze=True)),
+        act = [('SHP1', UI(determinist=True, freeze=True)),
                ('tWALK', UI(nt_only=True))]
         for j in range(40):
             d = fmk.process_data(act)
@@ -2008,7 +2039,7 @@ class TestModelWalker(unittest.TestCase):
                              b'/A/B/C/D/E/F/1/M/N/O/P/Q/Z']
         outcomes = []
 
-        act = [('SHP2', UI(determinist=True,freeze=True)),
+        act = [('SHP2', UI(determinist=True, freeze=True)),
                ('tWALK', UI(nt_only=True))]
         for j in range(40):
             d = fmk.process_data(act)
@@ -2040,42 +2071,42 @@ class TestNodeFeatures(unittest.TestCase):
 
     def test_djobs(self):
         tag_desc = \
-        {'name': 'tag',
-         'contents': [
-             {'name': 'type',
-              'contents': UINT16_be(values=[0x0101,0x0102,0x0103,0x0104, 0]),
-              'absorb_csts': AbsFullCsts()},
-             {'name': 'len',
-              'contents': UINT16_be(),
-              'absorb_csts': AbsNoCsts()},
-             {'name': 'value',
-              'contents': [
-                  {'name': 'v000', # Final Tag (optional)
-                   'exists_if': (IntCondition(0), 'type'),
-                   'sync_enc_size_with': 'len',
-                   'contents': String(size=0)},
-                  {'name': 'v101', # Service Name
-                   'exists_if': (IntCondition(0x0101), 'type'),
-                   'sync_enc_size_with': 'len',
-                   'contents': String(values=[u'my \u00fcber service'], codec='utf8'),
-                   },
-                  {'name': 'v102', # AC name
-                   'exists_if': (IntCondition(0x0102), 'type'),
-                   'sync_enc_size_with': 'len',
-                   'contents': String(values=['AC name'], codec='utf8'),
-                   },
-                  {'name': 'v103', # Host Identifier
-                   'exists_if': (IntCondition(0x0103), 'type'),
-                   'sync_enc_size_with': 'len',
-                   'contents': String(values=['Host Identifier']),
-                   },
-                  {'name': 'v104', # Cookie
-                   'exists_if': (IntCondition(0x0104), 'type'),
-                   'sync_enc_size_with': 'len',
-                   'contents': String(values=['Cookie'], min_sz=0, max_sz=1000),
-                   },
-              ]}
-        ]}
+            {'name': 'tag',
+             'contents': [
+                 {'name': 'type',
+                  'contents': UINT16_be(values=[0x0101, 0x0102, 0x0103, 0x0104, 0]),
+                  'absorb_csts': AbsFullCsts()},
+                 {'name': 'len',
+                  'contents': UINT16_be(),
+                  'absorb_csts': AbsNoCsts()},
+                 {'name': 'value',
+                  'contents': [
+                      {'name': 'v000',  # Final Tag (optional)
+                       'exists_if': (IntCondition(0), 'type'),
+                       'sync_enc_size_with': 'len',
+                       'contents': String(size=0)},
+                      {'name': 'v101',  # Service Name
+                       'exists_if': (IntCondition(0x0101), 'type'),
+                       'sync_enc_size_with': 'len',
+                       'contents': String(values=[u'my \u00fcber service'], codec='utf8'),
+                       },
+                      {'name': 'v102',  # AC name
+                       'exists_if': (IntCondition(0x0102), 'type'),
+                       'sync_enc_size_with': 'len',
+                       'contents': String(values=['AC name'], codec='utf8'),
+                       },
+                      {'name': 'v103',  # Host Identifier
+                       'exists_if': (IntCondition(0x0103), 'type'),
+                       'sync_enc_size_with': 'len',
+                       'contents': String(values=['Host Identifier']),
+                       },
+                      {'name': 'v104',  # Cookie
+                       'exists_if': (IntCondition(0x0104), 'type'),
+                       'sync_enc_size_with': 'len',
+                       'contents': String(values=['Cookie'], min_sz=0, max_sz=1000),
+                       },
+                  ]}
+             ]}
 
         mb = NodeBuilder(delayed_jobs=True)
         d = mb.create_graph_from_desc(tag_desc)
@@ -2181,7 +2212,8 @@ class TestNodeFeatures(unittest.TestCase):
 
         top = Node('top')
         top.set_subnodes_with_csts([
-            1, ['u=+(2,2,1,5,1)', [nint_1, 1], [nint_2, 1], [nstr_1, 1], [nint_3, 2], [nstr_2, 1, 3]]
+            1,
+            ['u=+(2,2,1,5,1)', [nint_1, 1], [nint_2, 1], [nstr_1, 1], [nint_3, 2], [nstr_2, 1, 3]]
         ])
 
         top.set_env(Env())
@@ -2269,7 +2301,8 @@ class TestNodeFeatures(unittest.TestCase):
 
         nstr_1 = Node('cool', value_type=String(values=['TBD1'], size=4, codec='ascii'))
         nstr_1.enforce_absorb_constraints(AbsNoCsts(regexp=True))
-        nstr_2 = Node('str2', value_type=String(values=['TBD2TBD2', '12345678'], size=8, codec='ascii'))
+        nstr_2 = Node('str2',
+                      value_type=String(values=['TBD2TBD2', '12345678'], size=8, codec='ascii'))
 
         nint_50 = Node('nint50', value_type=UINT8(values=[0xaf, 0xbf, 0xcf]))
         nint_51 = Node('nint51', value_type=UINT16_be(values=[0xcfab, 0xeffe]))
@@ -2279,8 +2312,10 @@ class TestNodeFeatures(unittest.TestCase):
         middle1.set_subnodes_with_csts([
             3, ['u>', [nint_1_alt, 2]],
             2, ['u>', [nint_1, 1, 10], [nint_2, 2], [nstr_1, 1], [nint_3, 2], [nstr_2, 1]],
-            1, ['u>', [nint_1_alt_cpy, 1], [nint_3_cpy, 1], 'u=+', [nstr_2, 1], [nint_1_cpy, 2], 'u>', [nstr_1, 1],
-                'u=.', [nint_50, 1], [nint_51, 1], [nstr_50, 2, 3]]
+            1,
+            ['u>', [nint_1_alt_cpy, 1], [nint_3_cpy, 1], 'u=+', [nstr_2, 1], [nint_1_cpy, 2], 'u>',
+             [nstr_1, 1],
+             'u=.', [nint_50, 1], [nint_51, 1], [nstr_50, 2, 3]]
         ])
 
         yeah = Node('yeah', value_type=String(values=['TBD', 'YEAH!'], max_sz=10, codec='ascii'))
@@ -2480,7 +2515,6 @@ class TestNodeFeatures(unittest.TestCase):
 
         self.assertEqual(result, raw)
 
-
     @ddt.data(
         # gt_val test cases
         {'opcode_val': [5], 'val': None, 'gt_val': 4, 'result': b'\x05[cond_checked]'},
@@ -2544,20 +2578,21 @@ class TestNodeFeatures(unittest.TestCase):
 
         self.assertEqual(params['result'], raw)
 
-
     def test_generalized_exist_cond(self):
 
         gen_exist_desc = \
             {'name': 'gen_exist_cond',
              'separator': {'contents': {'name': 'sep_nl',
-                                        'contents': String(values=['\n'], max_sz=100, absorb_regexp='[\r\n|\n]+'),
+                                        'contents': String(values=['\n'], max_sz=100,
+                                                           absorb_regexp='[\r\n|\n]+'),
                                         'absorb_csts': AbsNoCsts(regexp=True)},
                            'prefix': False, 'suffix': False, 'unique': True},
              'contents': [
                  {'name': 'body',
                   'qty': 7,
                   'separator': {'contents': {'name': 'sep_space',
-                                             'contents': String(values=[' '], max_sz=100, absorb_regexp=b'\\s+'),
+                                             'contents': String(values=[' '], max_sz=100,
+                                                                absorb_regexp=b'\\s+'),
                                              'absorb_csts': AbsNoCsts(size=True, regexp=True)},
                                 'prefix': False, 'suffix': False, 'unique': True},
                   'contents': [
@@ -2589,8 +2624,9 @@ class TestNodeFeatures(unittest.TestCase):
                            {'name': ('key', 2),
                             'contents': String(values=['name='])},
                            {'name': 'param',
-                            'contents': CYCLE(['NOTSUP1', 'Date', 'Time', 'NOTSUP2', 'NOTSUP3', 'Location'],
-                                                 depth=2)}
+                            'contents': CYCLE(
+                                ['NOTSUP1', 'Date', 'Time', 'NOTSUP2', 'NOTSUP3', 'Location'],
+                                depth=2)}
                        ]}
                   ]}
              ]}
@@ -2714,7 +2750,6 @@ class TestNodeFeatures(unittest.TestCase):
         result = b'\xf6\xc8'
         self.assertEqual(result, raw)
 
-
         abs_test_desc = \
             {'name': 'test',
              'contents': [
@@ -2728,58 +2763,58 @@ class TestNodeFeatures(unittest.TestCase):
                        'contents': BitField(subfield_sizes=[8], endian=VT.BigEndian,
                                             subfield_values=[
                                                 [0xAA]],
-                                            ) },
+                                            )},
                       {'name': 'msb',
                        'determinist': True,
                        'contents': BitField(subfield_sizes=[4], endian=VT.BigEndian,
                                             subfield_values=[
-                                                [0b1111,0b1101,0b1100,0b0000]],
-                                            ) },
+                                                [0b1111, 0b1101, 0b1100, 0b0000]],
+                                            )},
                       {'name': 'lsb1',
                        'determinist': True,
                        'exists_if': (BitFieldCondition(sf=0, val=[0b1111]), 'msb'),
-                       'contents': BitField(subfield_sizes=[2,1,1,8], endian=VT.BigEndian,
-                                            subfield_values=[[0b10,0b11,0b00,0b01],
-                                                                [1,0],
-                                                                [0],[0xFE]]
-                                            ) },
+                       'contents': BitField(subfield_sizes=[2, 1, 1, 8], endian=VT.BigEndian,
+                                            subfield_values=[[0b10, 0b11, 0b00, 0b01],
+                                                             [1, 0],
+                                                             [0], [0xFE]]
+                                            )},
                       {'name': 'lsb2',
                        'determinist': True,
-                       'exists_if': (BitFieldCondition(sf=0, val=[0b1101,0b1100]), 'msb'),
-                       'contents': BitField(subfield_sizes=[2,1,1], endian=VT.BigEndian,
-                                            subfield_values=[[0b10,0b11,0b00,0b01],
-                                                                [0],
-                                                                [0,1]]
-                                            ) },
+                       'exists_if': (BitFieldCondition(sf=0, val=[0b1101, 0b1100]), 'msb'),
+                       'contents': BitField(subfield_sizes=[2, 1, 1], endian=VT.BigEndian,
+                                            subfield_values=[[0b10, 0b11, 0b00, 0b01],
+                                                             [0],
+                                                             [0, 1]]
+                                            )},
                       {'name': 'lsb31',
                        'determinist': True,
                        'exists_if': (BitFieldCondition(sf=0, val=[0]), 'msb'),
                        'contents': BitField(subfield_sizes=[3], endian=VT.BigEndian,
                                             subfield_values=[
-                                                [0,4]
+                                                [0, 4]
                                             ]
-                                            ) },
+                                            )},
 
                       {'name': 'lsb32',
                        'determinist': True,
                        'exists_if': (BitFieldCondition(sf=0, val=[0]), 'msb'),
                        'contents': BitField(subfield_sizes=[8], endian=VT.BigEndian,
                                             subfield_values=[
-                                                [0,0x5c]
+                                                [0, 0x5c]
                                             ]
-                                            ) },
+                                            )},
 
                       {'name': 'lsb33',
                        'determinist': True,
                        'exists_if': (BitFieldCondition(sf=0, val=[0]), 'msb'),
                        'contents': BitField(subfield_sizes=[1], endian=VT.BigEndian,
                                             subfield_values=[
-                                                [0,1]
+                                                [0, 1]
                                             ]
-                                            ) },
-                 ]},
-                {'name': 'suffix',
-                 'contents': String(values=['suffix'])}
+                                            )},
+                  ]},
+                 {'name': 'suffix',
+                  'contents': String(values=['suffix'])}
              ]}
 
         mb = NodeBuilder()
@@ -2833,7 +2868,6 @@ class TestNodeFeatures(unittest.TestCase):
 
         self.assertEqual(result, raw)
 
-
     def test_node_search_primitive_01(self):
 
         data = fmk.dm.get_external_atom(dm_name='mydf', data_id='exist_cond')
@@ -2875,7 +2909,6 @@ class TestNodeFeatures(unittest.TestCase):
         n = ex_node.get_first_node_by_path('ex/data_group/data1')
         print('\n*** node', n.name)
 
-
         ic = NodeInternalsCriteria(required_csts=[SyncScope.Existence])
 
         def exec_search(**kwargs):
@@ -2893,7 +2926,6 @@ class TestNodeFeatures(unittest.TestCase):
 
         l = ex_node['data_group/data1'][0].get_all_paths_from(ex_node)
         print(l)
-
 
     def test_node_search_primitive_03(self):
         test_node = fmk.dm.get_atom('TestNode')
@@ -2916,7 +2948,6 @@ class TestNodeFeatures(unittest.TestCase):
 
         self.assertEqual(test_node['Unknown path'], None)
 
-
     def test_node_search_performance(self):
 
         ex_node = fmk.dm.get_atom('ex')
@@ -2924,31 +2955,38 @@ class TestNodeFeatures(unittest.TestCase):
 
         t0 = datetime.datetime.now()
         for _ in range(30):
-            l0 = list(ex_node.iter_nodes_by_path(path_regexp='.*', flush_cache=True, resolve_generator=True))
+            l0 = list(ex_node.iter_nodes_by_path(path_regexp='.*', flush_cache=True,
+                                                 resolve_generator=True))
         now = datetime.datetime.now()
-        print('\n*** Execution time of .iter_nodes_by_path(flush_cache=True): {}'.format((now - t0).total_seconds()))
+        print('\n*** Execution time of .iter_nodes_by_path(flush_cache=True): {}'.format(
+            (now - t0).total_seconds()))
 
         for n in l0:
             print(n.name)
 
         t0 = datetime.datetime.now()
         for _ in range(30):
-            l1 = list(ex_node.iter_nodes_by_path(path_regexp='.*', flush_cache=False, resolve_generator=True))
+            l1 = list(ex_node.iter_nodes_by_path(path_regexp='.*', flush_cache=False,
+                                                 resolve_generator=True))
         now = datetime.datetime.now()
-        print('\n*** Execution time of .iter_nodes_by_path(flush_cache=False): {}'.format((now - t0).total_seconds()))
+        print('\n*** Execution time of .iter_nodes_by_path(flush_cache=False): {}'.format(
+            (now - t0).total_seconds()))
 
         for n in l1:
             print(n.name)
 
         t0 = datetime.datetime.now()
         for _ in range(30):
-            nd = ex_node.get_first_node_by_path(path_regexp='.*', flush_cache=False, resolve_generator=True)
+            nd = ex_node.get_first_node_by_path(path_regexp='.*', flush_cache=False,
+                                                resolve_generator=True)
         now = datetime.datetime.now()
-        print('\n*** Execution time of .get_first_node_by_path(flush_cache=False): {}'.format((now - t0).total_seconds()))
+        print('\n*** Execution time of .get_first_node_by_path(flush_cache=False): {}'.format(
+            (now - t0).total_seconds()))
 
         t0 = datetime.datetime.now()
         for _ in range(30):
-            l2 = ex_node.get_reachable_nodes(path_regexp='.*', respect_order=True, resolve_generator=True)
+            l2 = ex_node.get_reachable_nodes(path_regexp='.*', respect_order=True,
+                                             resolve_generator=True)
         now = datetime.datetime.now()
         print('\n*** Execution time of .get_reachable_nodes: {}'.format((now - t0).total_seconds()))
 
@@ -2957,6 +2995,7 @@ class TestNodeFeatures(unittest.TestCase):
 
         self.assertEqual(l0, l1)
         self.assertEqual(l1, l2)
+
 
 @ddt.ddt
 class TestNode_NonTerm(unittest.TestCase):
@@ -2967,56 +3006,55 @@ class TestNode_NonTerm(unittest.TestCase):
     def setUp(self):
         pass
 
-    @ddt.data((True, True),(True,False),(False,True),(False,False))
+    @ddt.data((True, True), (True, False), (False, True), (False, False))
     @ddt.unpack
     def test_combinatory_1(self, mimick_twalk, full_comb_mode):
         test_desc = \
-        {'name': 'test',
-         'custo_set': MH.Custo.NTerm.CycleClone,
-         'contents': [
-             {'name': 'prefix',
-              'qty': (0,4),
-              'default_qty': 1,
-              'contents': String(values=['-', '+'])},
+            {'name': 'test',
+             'custo_set': MH.Custo.NTerm.CycleClone,
+             'contents': [
+                 {'name': 'prefix',
+                  'qty': (0, 4),
+                  'default_qty': 1,
+                  'contents': String(values=['-', '+'])},
 
-             {'section_type': MH.Pick,
-              'weights': (3,2,1),
-              'contents': [
-                  {'name': 'pre1', 'contents': String(values=['x'])},
-                  {'name': 'pre2', 'contents': String(values=['y'])},
-                  {'name': 'pre3', 'contents': String(values=['z'])}
-              ]},
+                 {'section_type': MH.Pick,
+                  'weights': (3, 2, 1),
+                  'contents': [
+                      {'name': 'pre1', 'contents': String(values=['x'])},
+                      {'name': 'pre2', 'contents': String(values=['y'])},
+                      {'name': 'pre3', 'contents': String(values=['z'])}
+                  ]},
 
-             {'name': 'digit',
-              'qty': (0,10),
-              'default_qty': 2,
-              'contents': [
-                  {'weight': 50,
-                   'contents': [
-                       {'name': 'n1', 'contents': String(values=['1'])}
-                   ]},
-                  {'weight': 40,
-                   'contents': [
-                       {'name': 'n2', 'contents': String(values=['2'])}
-                   ]},
-                  {'weight': 30,
-                   'contents': [
-                       {'name': 'n3', 'contents': String(values=['3'])}
-                   ]},
-                  {'weight': 20,
-                   'contents': [
-                       {'name': 'n4', 'contents': String(values=['4'])}
-                   ]},
-              ]},
-              {'section_type': MH.Pick,
-               'weights': (2,1,3),
-               'contents': [
-                   {'name': 'suf2', 'contents': String(values=['b'])},
-                   {'name': 'suf3', 'contents': String(values=['c'])},
-                   {'name': 'suf1', 'contents': String(values=['a'])}
-               ]}
-         ]}
-
+                 {'name': 'digit',
+                  'qty': (0, 10),
+                  'default_qty': 2,
+                  'contents': [
+                      {'weight': 50,
+                       'contents': [
+                           {'name': 'n1', 'contents': String(values=['1'])}
+                       ]},
+                      {'weight': 40,
+                       'contents': [
+                           {'name': 'n2', 'contents': String(values=['2'])}
+                       ]},
+                      {'weight': 30,
+                       'contents': [
+                           {'name': 'n3', 'contents': String(values=['3'])}
+                       ]},
+                      {'weight': 20,
+                       'contents': [
+                           {'name': 'n4', 'contents': String(values=['4'])}
+                       ]},
+                  ]},
+                 {'section_type': MH.Pick,
+                  'weights': (2, 1, 3),
+                  'contents': [
+                      {'name': 'suf2', 'contents': String(values=['b'])},
+                      {'name': 'suf3', 'contents': String(values=['c'])},
+                      {'name': 'suf1', 'contents': String(values=['a'])}
+                  ]}
+             ]}
 
         mb = NodeBuilder(add_env=True)
         nd = mb.create_graph_from_desc(test_desc)
@@ -3056,7 +3094,7 @@ class TestNode_NonTerm(unittest.TestCase):
         nd.custo.full_combinatory_mode = full_comb_mode
         for i in range(1, 200):
             print(f'\n###### data #{i}')
-            if mimick_twalk: # with fix_all
+            if mimick_twalk:  # with fix_all
                 nd.unfreeze(recursive=False)
                 nd.freeze()
                 nd.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
@@ -3066,7 +3104,7 @@ class TestNode_NonTerm(unittest.TestCase):
             data = nd.to_bytes()
             print(data)
             if not full_comb_mode:
-                self.assertEqual(data, data_ref[i-1], f'i = {i-1}')
+                self.assertEqual(data, data_ref[i - 1], f'i = {i - 1}')
 
             if nd.is_exhausted():
                 break
@@ -3076,8 +3114,6 @@ class TestNode_NonTerm(unittest.TestCase):
         else:
             self.assertEqual(i, 25)
 
-
-
     @ddt.data(
         (True, True, False), (True, False, False), (False, True, False), (False, False, False),
         (True, True, True), (True, False, True), (False, True, True), (False, False, True)
@@ -3086,52 +3122,52 @@ class TestNode_NonTerm(unittest.TestCase):
     def test_combinatory_2(self, mimick_twalk, clone_mode, full_comb_mode):
 
         test_desc = \
-        {'name': 'test',
-         'custo_set': MH.Custo.NTerm.CycleClone,
-         'custo_clear': MH.Custo.NTerm.MutableClone,
-         'contents': [
-             {'name': 'scst1', 'qty': 2, 'contents': String(values=['s'])},
-             {'name': 'scst2', 'qty': 2, 'contents': String(values=['s'])},
+            {'name': 'test',
+             'custo_set': MH.Custo.NTerm.CycleClone,
+             'custo_clear': MH.Custo.NTerm.MutableClone,
+             'contents': [
+                 {'name': 'scst1', 'qty': 2, 'contents': String(values=['s'])},
+                 {'name': 'scst2', 'qty': 2, 'contents': String(values=['s'])},
 
-             {'name': 'pre3',
-              'qty': (1,4),
-              'default_qty': 3,
-              'contents': String(values=['-', '+'])},
+                 {'name': 'pre3',
+                  'qty': (1, 4),
+                  'default_qty': 3,
+                  'contents': String(values=['-', '+'])},
 
-             {'name': 'mcst1', 'qty': 2, 'contents': String(values=['s'])},
-             {'name': 'mcst2', 'qty': 2, 'contents': String(values=['s'])},
+                 {'name': 'mcst1', 'qty': 2, 'contents': String(values=['s'])},
+                 {'name': 'mcst2', 'qty': 2, 'contents': String(values=['s'])},
 
-             {'name': 'digit1',
-              'qty': (0,10),
-              'default_qty': 2,
-              'contents': String(values=['1']),
-              },
+                 {'name': 'digit1',
+                  'qty': (0, 10),
+                  'default_qty': 2,
+                  'contents': String(values=['1']),
+                  },
 
-             {'name': 'mcst3', 'qty': 2, 'contents': String(values=['s'])},
+                 {'name': 'mcst3', 'qty': 2, 'contents': String(values=['s'])},
 
-             {'name': 'digit2',
-              'qty': (3,7),
-              'default_qty': 5,
-              'contents': String(values=['2']),
-              },
-             {'name': 'digit3',
-              'qty': (0,1),
-              'default_qty': 0,
-              'contents': String(values=['3']),
-              },
+                 {'name': 'digit2',
+                  'qty': (3, 7),
+                  'default_qty': 5,
+                  'contents': String(values=['2']),
+                  },
+                 {'name': 'digit3',
+                  'qty': (0, 1),
+                  'default_qty': 0,
+                  'contents': String(values=['3']),
+                  },
 
-             {'section_type': MH.Pick,
-              'weights': (2,1,3),
-              'contents': [
-                  {'name': 'suf2', 'contents': String(values=['b'])},
-                  {'name': 'suf3', 'contents': String(values=['c'])},
-                  {'name': 'suf1', 'contents': String(values=['a'])}
-              ]},
+                 {'section_type': MH.Pick,
+                  'weights': (2, 1, 3),
+                  'contents': [
+                      {'name': 'suf2', 'contents': String(values=['b'])},
+                      {'name': 'suf3', 'contents': String(values=['c'])},
+                      {'name': 'suf1', 'contents': String(values=['a'])}
+                  ]},
 
-             {'name': 'ecst1', 'qty': 2, 'contents': String(values=['s'])},
-             {'name': 'ecst2', 'qty': 2, 'contents': String(values=['s'])},
+                 {'name': 'ecst1', 'qty': 2, 'contents': String(values=['s'])},
+                 {'name': 'ecst2', 'qty': 2, 'contents': String(values=['s'])},
 
-         ]}
+             ]}
 
         mb = NodeBuilder(add_env=True)
         nd = mb.create_graph_from_desc(test_desc)
@@ -3153,7 +3189,7 @@ class TestNode_NonTerm(unittest.TestCase):
             if clone_mode:
                 nd = nd.get_clone()
             print(f'\n###### data #{i}')
-            if mimick_twalk: # with fix_all
+            if mimick_twalk:  # with fix_all
                 nd.unfreeze(recursive=False)
                 nd.freeze()
                 nd.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
@@ -3163,7 +3199,7 @@ class TestNode_NonTerm(unittest.TestCase):
             data = nd.to_bytes()
             print(data)
             if not full_comb_mode:
-                idx = (i-1) % 8
+                idx = (i - 1) % 8
                 if i > 16:
                     str_ref = data_ref[idx][:-5] + b'cssss'
                 elif i > 8:
@@ -3171,7 +3207,7 @@ class TestNode_NonTerm(unittest.TestCase):
                 else:
                     str_ref = data_ref[idx]
 
-                self.assertEqual(data, str_ref, f'i = {i-1}')
+                self.assertEqual(data, str_ref, f'i = {i - 1}')
 
             if nd.is_exhausted():
                 break
@@ -3180,7 +3216,6 @@ class TestNode_NonTerm(unittest.TestCase):
             self.assertEqual(i, 162)  # 3 x 54
         else:
             self.assertEqual(i, 24)  # 3 x 8
-
 
     def test_infinity(self):
         infinity_desc = \
@@ -3225,7 +3260,7 @@ class TestNode_NonTerm(unittest.TestCase):
 
         print('\n*** Test with big raw data\n\nOriginal data:')
         raw_data2 = b'A' * (NodeInternals_NonTerm.INFINITY_LIMIT + 30) + b'H' * (
-        NodeInternals_NonTerm.INFINITY_LIMIT + 1) + \
+                NodeInternals_NonTerm.INFINITY_LIMIT + 1) + \
                     b'Z' * (NodeInternals_NonTerm.INFINITY_LIMIT - 1)
         print(repr(raw_data2), len(raw_data2))
 
@@ -3379,17 +3414,18 @@ class TestNode_NonTerm(unittest.TestCase):
         ex_node.show()
         new_node = Node('my_node2', values=['New node added!!!!'])
         data2_node = ex_node['ex/data_group/data2'][0]
-        ex_node['ex/data_group'][0].add(new_node, after=data2_node, min=new_node_min_qty, max=new_node_max_qty)
+        ex_node['ex/data_group'][0].add(new_node, after=data2_node, min=new_node_min_qty,
+                                        max=new_node_max_qty)
         ex_node.show()
 
         nt_node = ex_node['ex/data_group'][0]
         self.assertEqual(nt_node.get_subnode_idx(new_node),
-                         nt_node.get_subnode_idx(ex_node['ex/data_group/data2'][0])+1)
+                         nt_node.get_subnode_idx(ex_node['ex/data_group/data2'][0]) + 1)
 
         ex_node.unfreeze()
         ex_node.show()
         self.assertEqual(nt_node.get_subnode_idx(new_node),
-                         nt_node.get_subnode_idx(ex_node['ex/data_group/data2:3'][0])+1)
+                         nt_node.get_subnode_idx(ex_node['ex/data_group/data2:3'][0]) + 1)
 
         print('\n*** Test Case 2 ***\n')
 
@@ -3411,15 +3447,18 @@ class TestNode_NonTerm(unittest.TestCase):
         ex_node = fmk.dm.get_atom('ex')
         ex_node.show()
         new_node = Node('my_node2', values=['New node added!!!!'])
-        ex_node['ex/data_group'][0].add(new_node, idx=None, min=new_node_min_qty, max=new_node_max_qty)
+        ex_node['ex/data_group'][0].add(new_node, idx=None, min=new_node_min_qty,
+                                        max=new_node_max_qty)
         ex_node.show()
 
         nt_node = ex_node['ex/data_group'][0]
-        self.assertEqual(nt_node.get_subnode_idx(new_node), nt_node.get_subnode_qty()-new_node_min_qty)
+        self.assertEqual(nt_node.get_subnode_idx(new_node),
+                         nt_node.get_subnode_qty() - new_node_min_qty)
 
         ex_node.unfreeze()
         ex_node.show()
-        self.assertEqual(nt_node.get_subnode_idx(new_node), nt_node.get_subnode_qty()-new_node_min_qty)
+        self.assertEqual(nt_node.get_subnode_idx(new_node),
+                         nt_node.get_subnode_qty() - new_node_min_qty)
 
 
 class TestNode_TypedValue(unittest.TestCase):
@@ -3436,7 +3475,7 @@ class TestNode_TypedValue(unittest.TestCase):
                       subfield_values=[[4, 2, 1], None, [10, 11, 15]],
                       subfield_val_extremums=[None, [5, 9], None],
                       padding=0, lsb_padding=False, endian=VT.BigEndian,
-                      defaults=[2,8,15])
+                      defaults=[2, 8, 15])
         node = Node('BF', vt=bf)
         node.set_env(Env())
 
@@ -3445,7 +3484,7 @@ class TestNode_TypedValue(unittest.TestCase):
         node.show()
         b1 = node.to_bytes()
 
-        node.set_default_value([1,5,11])
+        node.set_default_value([1, 5, 11])
         node.show()
         b2 = node.to_bytes()
 
@@ -3464,14 +3503,13 @@ class TestNode_TypedValue(unittest.TestCase):
         self.assertEqual(b3, b'\x0f\x74')
         self.assertEqual(b4, b'\x0f\x74')
 
-
     def test_bitfield_walking(self):
 
         bf = BitField(subfield_sizes=[2, 1, 2, 3], endian=VT.BigEndian,
-                      subfield_val_extremums=[[0, 3], [0, 1], [0,2], [1, 4]],
+                      subfield_val_extremums=[[0, 3], [0, 1], [0, 2], [1, 4]],
                       defaults=[0b11, 0, None, 2])
 
-        reference_values = [67,64,65,66, 71, 75,83, 99,131,35]
+        reference_values = [67, 64, 65, 66, 71, 75, 83, 99, 131, 35]
 
         print('\n*** with extremums:\n')
         l = []
@@ -3489,7 +3527,7 @@ class TestNode_TypedValue(unittest.TestCase):
         self.assertListEqual(l, reference_values)
 
         bf = BitField(subfield_sizes=[2, 1, 2, 3], endian=VT.BigEndian,
-                      subfield_values =[[0, 1, 2, 3], [0, 1], [0, 1, 2], [1, 2, 3, 4]],
+                      subfield_values=[[0, 1, 2, 3], [0, 1], [0, 1, 2], [1, 2, 3, 4]],
                       defaults=[0b11, 0, None, 2])
 
         print('\n*** with value list:\n')
@@ -3506,7 +3544,6 @@ class TestNode_TypedValue(unittest.TestCase):
             print(bf.pretty_print(), bf.is_exhausted())
 
         self.assertListEqual(l, reference_values)
-
 
     def test_integer(self):
         node = Node('Int1', vt=UINT8(min=9, max=40, determinist=True, default=21))
@@ -3530,7 +3567,7 @@ class TestNode_TypedValue(unittest.TestCase):
         self.assertNotEqual(i3, 35)
         self.assertEqual(i4, 35)
 
-        node = Node('Int2', vt=UINT8(values=[9,10,21,32,40], determinist=True, default=21))
+        node = Node('Int2', vt=UINT8(values=[9, 10, 21, 32, 40], determinist=True, default=21))
         node.set_env(Env())
 
         node_abs = node.get_clone()
@@ -3560,7 +3597,6 @@ class TestNode_TypedValue(unittest.TestCase):
         self.assertEqual(i3, 40)
         self.assertEqual(i4, 40)
 
-
     def test_str_basics(self):
         node = Node('test', vt=String(min_sz=2, max_sz=100, alphabet='ABCDEFGH', default='CAFE'))
         node.set_env(Env())
@@ -3586,7 +3622,9 @@ class TestNode_TypedValue(unittest.TestCase):
         self.assertEqual(str4, 'BABA')
         self.assertNotEqual(str2, 'BABA')
 
-        node = Node('test', vt=String(values=['ABC', 'GAG'], min_sz=2, max_sz=100, alphabet='ABCDEFGH', default='CAFE'))
+        node = Node('test',
+                    vt=String(values=['ABC', 'GAG'], min_sz=2, max_sz=100, alphabet='ABCDEFGH',
+                              default='CAFE'))
         node.set_env(Env())
 
         node_abs = node.get_clone()
@@ -3595,7 +3633,7 @@ class TestNode_TypedValue(unittest.TestCase):
         node.walk()
         str1 = node.to_str()
 
-        print('*** node.to_str():\n{}\n{}'.format(str0,str1)) #, str1, str2, str3, str4))
+        print('*** node.to_str():\n{}\n{}'.format(str0, str1))  # , str1, str2, str3, str4))
 
         self.assertEqual(str0, 'CAFE')
         self.assertEqual(str1, 'ABC')
@@ -3612,13 +3650,13 @@ class TestNode_TypedValue(unittest.TestCase):
         self.assertEqual(str2, 'FACE')
         self.assertEqual(str3, 'FACE')
 
-
     def test_filename(self):
 
         node1 = Node('fname', vt=Filename(values=['myfile.txt'], case_sensitive=False))
         node1.set_env(Env())
 
-        node2 = Node('fname', vt=Filename(values=['myfile.txt'], case_sensitive=False, uri_parsing=True))
+        node2 = Node('fname',
+                     vt=Filename(values=['myfile.txt'], case_sensitive=False, uri_parsing=True))
         node2.set_env(Env())
 
         node3 = Node('fname', vt=Filename(values=['base/myfile.txt'], case_sensitive=False))
@@ -3634,7 +3672,9 @@ class TestNode_TypedValue(unittest.TestCase):
 
         for node, nb_tc in node_list:
             tn_consumer = TypedNodeDisruption(fuzz_magnitude=1.0)
-            for rnode, consumed_node, orig_node_val, idx in ModelWalker(node, tn_consumer, make_determinist=True, max_steps=-1):
+            for rnode, consumed_node, orig_node_val, idx in ModelWalker(node, tn_consumer,
+                                                                        make_determinist=True,
+                                                                        max_steps=-1):
                 data = rnode.to_bytes()
                 sz = len(data)
                 print(colorize('[{:d}] ({:04d}) {!r}'.format(idx, sz, data), rgb=Color.INFO))
@@ -3825,13 +3865,15 @@ class TestNode_TypedValue(unittest.TestCase):
         node_abs.show()
 
         raw_data = b'\x0C' + b'\xC6\x67' + b'garbage'  # \xC6\x67 --> invalid UTF8
-        status, off, size, name = node_abs.absorb(raw_data, constraints=AbsNoCsts(size=True, struct=True))
+        status, off, size, name = node_abs.absorb(raw_data,
+                                                  constraints=AbsNoCsts(size=True, struct=True))
 
         self.assertEqual(status, AbsorbStatus.Reject)
 
         raw_data = b'\x05' + b'\xC3\xBCber' + b'padding'  # \xC3\xBC = ü in UTF8
 
-        status, off, size, name = node_abs2.absorb(raw_data, constraints=AbsNoCsts(size=True, struct=True))
+        status, off, size, name = node_abs2.absorb(raw_data,
+                                                   constraints=AbsNoCsts(size=True, struct=True))
 
         print('Absorb Status:', status, off, size, name)
         print(' \\_ length of original data:', len(raw_data))
@@ -4037,7 +4079,8 @@ class TestDataModel(unittest.TestCase):
             if png_buff == orig_buff:
                 print("\n*** Builded Node ('%s') match the original image" % png[0].name)
             else:
-                print("\n*** ERROR: Builded Node ('%s') does not match the original image!" % png[0].name)
+                print("\n*** ERROR: Builded Node ('%s') does not match the original image!" % png[
+                    0].name)
 
             self.assertEqual(png_buff, orig_buff)
 
@@ -4062,12 +4105,15 @@ class TestDataModel(unittest.TestCase):
             if jpg_buff == orig_buff:
                 print("\n*** Builded Node ('%s') match the original image" % jpg[0].name)
             else:
-                print("\n*** ERROR: Builded Node ('%s') does not match the original image!" % jpg[0].name)
-                print('    [original size={:d}, generated size={:d}]'.format(len(orig_buff), len(jpg_buff)))
+                print("\n*** ERROR: Builded Node ('%s') does not match the original image!" % jpg[
+                    0].name)
+                print('    [original size={:d}, generated size={:d}]'.format(len(orig_buff),
+                                                                             len(jpg_buff)))
 
             self.assertEqual(jpg_buff, orig_buff)
 
-    @unittest.skipIf(ignore_data_model_specifics, "Tutorial specific test cases, cover various construction")
+    @unittest.skipIf(ignore_data_model_specifics,
+                     "Tutorial specific test cases, cover various construction")
     def test_tuto_specifics(self):
         '''Tutorial specific test cases, cover various data model patterns and
         absorption.'''
@@ -4103,7 +4149,8 @@ class TestDataModel(unittest.TestCase):
                 print('-----------------------')
 
                 print('-----------------------')
-                print('Absorb Status: status=%s, off=%d, sz=%d, name=%s' % (status, off, size, name))
+                print(
+                    'Absorb Status: status=%s, off=%d, sz=%d, name=%s' % (status, off, size, name))
                 print(' \\_ length of original data: %d' % len(raw_data))
                 print(' \\_ remaining: %r' % raw_data[size:])
                 print('-----------------------')
@@ -4128,7 +4175,8 @@ class TestDataModel(unittest.TestCase):
 
         # dm.pkzip.show(raw_limit=400)
         # dm.pkzip.reset_state(recursive=True)
-        status, off, size, name = abszip.absorb(zip_buff, constraints=AbsNoCsts(size=True, struct=True))
+        status, off, size, name = abszip.absorb(zip_buff,
+                                                constraints=AbsNoCsts(size=True, struct=True))
         # abszip.show(raw_limit=400)
 
         print('\n*** Absorb Status:', status, off, size, name)
@@ -4155,10 +4203,12 @@ class TestDataModel(unittest.TestCase):
             # fields are automatically updated
             off_before = off_before[0].to_bytes()
             print('offset before:', off_before)
-            csz_before = abszip['ZIP/file_list/file/header/common_attrs/compressed_size'][0].to_bytes()
+            csz_before = abszip['ZIP/file_list/file/header/common_attrs/compressed_size'][
+                0].to_bytes()
             print('compressed_size before:', csz_before)
 
-            abszip['ZIP/file_list/file/header/common_attrs/compressed_size'][0].set_current_conf('MAIN')
+            abszip['ZIP/file_list/file/header/common_attrs/compressed_size'][0].set_current_conf(
+                'MAIN')
 
             NEWVAL = b'TEST'
             print(abszip['ZIP/file_list/file/data'][0].absorb(NEWVAL, constraints=AbsNoCsts()))
@@ -4174,7 +4224,8 @@ class TestDataModel(unittest.TestCase):
 
             off_after = abszip['ZIP/cdir/cdir_hdr:2/file_hdr_off'][0].to_bytes()
             print('offset after: ', off_after)
-            csz_after = abszip['ZIP/file_list/file/header/common_attrs/compressed_size'][0].to_bytes()
+            csz_after = abszip['ZIP/file_list/file/header/common_attrs/compressed_size'][
+                0].to_bytes()
             print('compressed_size after:', csz_after)
 
             # Should not be equal in the general case
@@ -4202,7 +4253,8 @@ class TestDataModel(unittest.TestCase):
             if zip_buff == orig_buff:
                 print("\n*** Builded Node ('%s') match the original image" % pkzip[0].name)
             else:
-                print("\n*** ERROR: Builded Node ('%s') does not match the original image!" % pkzip[0].name)
+                print("\n*** ERROR: Builded Node ('%s') does not match the original image!" % pkzip[
+                    0].name)
                 # print(err_msg)
 
             self.assertEqual(zip_buff, orig_buff, msg=err_msg)
@@ -4222,15 +4274,17 @@ class TestDataModelHelpers(unittest.TestCase):
              'contents': [
                  {'name': 'HTTP_name', 'contents': String(values=["HTTP"])},
                  {'name': 'slash', 'contents': String(values=["/"])},
-                 {'name': 'major_version_digit', 'contents': String(size=1, values=["0", "1", "2", "3", "4",
-                                                                                      "5", "6", "7", "8", "9"])},
+                 {'name': 'major_version_digit',
+                  'contents': String(size=1, values=["0", "1", "2", "3", "4",
+                                                     "5", "6", "7", "8", "9"])},
 
                  {'name': '.', 'contents': String(values=["."])},
                  {'name': 'minor_version_digit', 'clone': 'major_version_digit'},
              ]}
 
         HTTP_version_regex = \
-            {'name': regex_node_name, 'contents': r"(HTTP)(/)(0|1|2|3|4|5|6|7|8|9)(\.)(0|1|2|3|4|5|6|7|8|9)"}
+            {'name': regex_node_name,
+             'contents': r"(HTTP)(/)(0|1|2|3|4|5|6|7|8|9)(\.)(0|1|2|3|4|5|6|7|8|9)"}
 
         mb = NodeBuilder()
         node_classic = mb.create_graph_from_desc(HTTP_version_classic)
@@ -4258,7 +4312,8 @@ class TestDataModelHelpers(unittest.TestCase):
         excluded_idx = []
 
         while True:
-            node_list, idx = node.cc._get_next_heavier_component(node.subnodes_order, excluded_idx=excluded_idx)
+            node_list, idx = node.cc._get_next_heavier_component(node.subnodes_order,
+                                                                 excluded_idx=excluded_idx)
             if len(node_list) == 0:
                 break
             excluded_idx.append(idx)
@@ -4283,14 +4338,13 @@ class TestDataModelHelpers(unittest.TestCase):
             '\n<LOGIN backend="ssh" auth="cert">\t \n<msg_id>\n56\n\t\n</msg_id>\n<username>\nMyUser'
             '\n</username>\n<password>\nohohoh!  \n</password>\n</LOGIN>\n</command>']
 
-
         for idx, sample in enumerate(xml5_samples):
             xml_atom = fmk.dm.get_atom('xml5')
             status, off, size, name = xml_atom.absorb(sample, constraints=AbsFullCsts())
 
             print('{:s} Absorb Status: {:d}, {:d}, {:s}'.format(status, off, size, name))
             print(' \\_ length of original data: {:d}'.format(len(sample)))
-            print(' \\_ remaining: {!r}'.format(sample[size:size+1000]))
+            print(' \\_ remaining: {!r}'.format(sample[size:size + 1000]))
 
             xml_atom.show()
             assert status == AbsorbStatus.FullyAbsorbed
@@ -4332,8 +4386,9 @@ class TestDataModelHelpers(unittest.TestCase):
             raise ValueError
 
         # number of test cases
-        self.assertIn(i, [21,22])
+        self.assertIn(i, [21, 22])
         self.assertTrue(specific_cases_checked)
+
 
 class TestFMK(unittest.TestCase):
     @classmethod
@@ -4395,7 +4450,8 @@ class TestFMK(unittest.TestCase):
 
         outcomes = []
 
-        act = [('EXIST_COND', UI(determinist=True)), ('tWALK', UI(consider_sibbling_change=False)), 'tSTRUCT']
+        act = [('EXIST_COND', UI(determinist=True)), ('tWALK', UI(consider_sibbling_change=False)),
+               'tSTRUCT']
         for i in range(4):
             for j in range(10):
                 d = fmk.process_data(act)
@@ -4409,7 +4465,8 @@ class TestFMK(unittest.TestCase):
                 idx += 1
 
         self.assertEqual(outcomes[:2], expected_outcomes[:2])
-        self.assertTrue(outcomes[2:4] == expected_outcomes[2:4] or outcomes[2:4] == expected_outcomes_24_alt)
+        self.assertTrue(
+            outcomes[2:4] == expected_outcomes[2:4] or outcomes[2:4] == expected_outcomes_24_alt)
         self.assertEqual(outcomes[-2:], expected_outcomes[-2:])
         self.assertEqual(idx, expected_idx)
 
@@ -4455,7 +4512,7 @@ class TestFMK(unittest.TestCase):
 
     def test_operator_1(self):
 
-        fmk.reload_all(tg_ids=[7,8])
+        fmk.reload_all(tg_ids=[7, 8])
 
         fmk.launch_operator('MyOp', user_input=UI(max_steps=100, mode=1))
         last_data_id = max(fmk.lg._last_data_IDs.values())
@@ -4470,12 +4527,13 @@ class TestFMK(unittest.TestCase):
             if 'Exhausted data maker' in info[0]:
                 break
         else:
-            raise ValueError('the data maker should be exhausted and trigger the end of the operator')
+            raise ValueError(
+                'the data maker should be exhausted and trigger the end of the operator')
 
     @unittest.skipIf(not run_long_tests, "Long test case")
     def test_operator_2(self):
 
-        fmk.reload_all(tg_ids=[7,8])
+        fmk.reload_all(tg_ids=[7, 8])
 
         myop = fmk.get_operator(name='MyOp')
         fmk.launch_operator('MyOp')
@@ -4540,7 +4598,6 @@ class TestFMK(unittest.TestCase):
         full_code_vector = [(str(e), e.msg) for e in err_list]
         print('\n*** Retrieved error code vector: {!r}'.format(full_code_vector))
 
-
         self.assertEqual(code_vector, ['DataUnusable', 'HandOver', 'DataUnusable', 'HandOver',
                                        'DPHandOver', 'NoMoreData'])
         self.assertEqual(base_qty, 51)
@@ -4552,7 +4609,6 @@ class TestFMK(unittest.TestCase):
             go_on, _ = fmk.send_data_and_log([data])
             if not go_on:
                 raise ValueError
-
 
     @unittest.skipIf(not run_long_tests, "Long test case")
     def test_scenario_infra_02(self):
@@ -4691,17 +4747,15 @@ class TestNode_Recursive(unittest.TestCase):
         fmk.reload_all(tg_ids=[0])
         fmk.prj.reset_target_mappings()
 
-
-
     def test_rec_generation_0(self):
         idx = 0
         expected_idx = 5
         expected_outcomes = [
-            b'TLV12SA9my_string',
-            b'TLV17TLV12SA9my_string',
-            b'TLV22TLV17TLV12SA9my_string',
-            b'TLV27TLV22TLV17TLV12SA9my_string',
-            b'TLV32TLV27TLV22TLV17TLV12SA9my_string'
+            b'TLV10SA7our_str',
+            b'TLV15TLV10SA7our_str',
+            b'TLV20TLV15TLV10SA7our_str',
+            b'TLV25TLV20TLV15TLV10SA7our_str',
+            b'TLV30TLV25TLV20TLV15TLV10SA7our_str'
         ]
         outcomes = []
 
@@ -4718,13 +4772,60 @@ class TestNode_Recursive(unittest.TestCase):
             # atom.show()
             rec_node.unfreeze(recursive=False)
 
+        time.sleep(0.1)
+        print('\n*** DEBUG')
+        pp(outcomes, width=150)
+        self.assertEqual(idx, expected_idx)
+        for o, e_o in zip(outcomes, expected_outcomes):
+            self.assertEqual(o, e_o)
+
+    def test_rec_generation_0b(self):
+        idx = 0
+        expected_idx = 10
+        expected_outcomes = [
+            b'TLV37SA7our_strSA11another_strSA9their_str',
+            b'TLV42TLV10SA7our_strSA11another_strSA9their_str',
+            b'TLV47TLV15TLV10SA7our_strSA11another_strSA9their_str',
+            b'TLV52TLV20TLV15TLV10SA7our_strSA11another_strSA9their_str',
+            b'TLV57TLV25TLV20TLV15TLV10SA7our_strSA11another_strSA9their_str',
+            b'TLV37SA7our_strSA11another_strSA9their_str',
+            b'TLV42TLV10SA7our_strSA11another_strSA9their_str',
+            b'TLV47TLV15TLV10SA7our_strSA11another_strSA9their_str',
+            b'TLV52TLV20TLV15TLV10SA7our_strSA11another_strSA9their_str',
+            b'TLV57TLV25TLV20TLV15TLV10SA7our_strSA11another_strSA9their_str'
+        ]
+        outcomes = []
+
+        atom = fmk.dm.get_atom('rec0b')
+
+        rec_node = atom['.*/value/tlv_a$'][0]
+        idx = 0
+        while not rec_node.is_exhausted() and idx < 40:
+            idx += 1
+            val = atom.to_bytes()
+            outcomes.append(val)
+            print(f'\n*** Turn #{idx} - atom value:'
+                  f'\n     | {val}\n')
+            atom.show()
+            rec_node.unfreeze(recursive=False)
+
+        rec_node.reset_state()
+
+        while not rec_node.is_exhausted() and idx < 40:
+            idx += 1
+            val = atom.to_bytes()
+            outcomes.append(val)
+            print(f'\n*** Turn #{idx} - atom value:'
+                  f'\n     | {val}\n')
+            # atom.show()
+            rec_node.unfreeze(recursive=False)
+
         # time.sleep(0.1)
         # print('\n*** DEBUG')
         # pp(outcomes, width=150)
         self.assertEqual(idx, expected_idx)
         for o, e_o in zip(outcomes, expected_outcomes):
             self.assertEqual(o, e_o)
-
 
     def test_rec_generation_1(self):
         idx = 0
@@ -4757,7 +4858,6 @@ class TestNode_Recursive(unittest.TestCase):
         self.assertEqual(idx, expected_idx)
         for o, e_o in zip(outcomes, expected_outcomes):
             self.assertEqual(o, e_o)
-
 
     def test_rec_generation_2(self):
         idx = 0
@@ -4792,19 +4892,19 @@ class TestNode_Recursive(unittest.TestCase):
         for o, e_o in zip(outcomes, expected_outcomes):
             self.assertEqual(o, e_o)
 
-
-
     def test_twalk_operator_0_1(self):
         idx = 0
-        expected_idx = 7
+        expected_idx = 9
         expected_outcomes = [
-            b'TLV12SA9my_string',
+            b'TLV10SA7our_str',
             b'SA9my_string',
             b'SB11your_string',
-            b'TLV17TLV12SA9my_string',
-            b'TLV22TLV17TLV12SA9my_string',
-            b'TLV27TLV22TLV17TLV12SA9my_string',
-            b'TLV32TLV27TLV22TLV17TLV12SA9my_string'
+            b'TLV15SA11another_str',
+            b'TLV12SA9their_str',
+            b'TLV15TLV10SA7our_str',
+            b'TLV20TLV15TLV10SA7our_str',
+            b'TLV25TLV20TLV15TLV10SA7our_str',
+            b'TLV30TLV25TLV20TLV15TLV10SA7our_str'
         ]
         outcomes = []
 
@@ -4822,9 +4922,9 @@ class TestNode_Recursive(unittest.TestCase):
             # d.show()
             idx += 1
 
-        time.sleep(0.1)
-        print('\n*** DEBUG')
-        pp(outcomes, width=150)
+        # time.sleep(0.1)
+        # print('\n*** DEBUG')
+        # pp(outcomes, width=150)
 
         self.assertEqual(idx, expected_idx)
         for o, e_o in zip(outcomes, expected_outcomes):
@@ -4832,14 +4932,16 @@ class TestNode_Recursive(unittest.TestCase):
 
     def test_twalk_operator_0_2(self):
         idx = 0
-        expected_idx = 5
+        expected_idx = 7
         # shall be the same expected value than test_rec_generation_0()
         expected_outcomes = [
-            b'TLV12SA9my_string',
-            b'TLV17TLV12SA9my_string',
-            b'TLV22TLV17TLV12SA9my_string',
-            b'TLV27TLV22TLV17TLV12SA9my_string',
-            b'TLV32TLV27TLV22TLV17TLV12SA9my_string'
+            b'TLV10SA7our_str',
+            b'TLV15SA11another_str',
+            b'TLV12SA9their_str',
+            b'TLV15TLV10SA7our_str',
+            b'TLV20TLV15TLV10SA7our_str',
+            b'TLV25TLV20TLV15TLV10SA7our_str',
+            b'TLV30TLV25TLV20TLV15TLV10SA7our_str'
         ]
         outcomes = []
 
@@ -4865,6 +4967,202 @@ class TestNode_Recursive(unittest.TestCase):
         for o, e_o in zip(outcomes, expected_outcomes):
             self.assertEqual(o, e_o)
 
+    def test_twalk_operator_0_3(self):
+        # TODO: Exploration by tWALK(walk_within_recursive_node=True, consider_sibbling_change=True)
+        #   trigger some redundancies.
+
+        idx = 0
+        expected_idx = 37
+        expected_outcomes = [
+            b'TLV10SA7our_str',
+            b'SA9my_string',
+            b'SB11your_string',
+            b'TLV15SA11another_str',
+            b'TLV12SA9their_str',
+            b'TLV15TLV10SA7our_str',
+            b'TLV12SA9my_string',
+            b'TLV15SB11your_string',
+            b'TLV20TLV15SA11another_str',
+            b'TLV17TLV12SA9their_str',
+            b'TLV20TLV15TLV10SA7our_str',
+            b'TLV12SA9my_string',
+            b'TLV15SB11your_string',
+            b'TLV17TLV12SA9my_string',
+            b'TLV20TLV15SB11your_string',
+            b'TLV25TLV20TLV15SA11another_str',
+            b'TLV22TLV17TLV12SA9their_str',
+            b'TLV25TLV20TLV15TLV10SA7our_str',
+            b'TLV12SA9my_string',
+            b'TLV15SB11your_string',
+            b'TLV17TLV12SA9my_string',
+            b'TLV20TLV15SB11your_string',
+            b'TLV22TLV17TLV12SA9my_string',
+            b'TLV25TLV20TLV15SB11your_string',
+            b'TLV30TLV25TLV20TLV15SA11another_str',
+            b'TLV27TLV22TLV17TLV12SA9their_str',
+            b'TLV30TLV25TLV20TLV15TLV10SA7our_str',
+            b'TLV12SA9my_string',
+            b'TLV15SB11your_string',
+            b'TLV17TLV12SA9my_string',
+            b'TLV20TLV15SB11your_string',
+            b'TLV22TLV17TLV12SA9my_string',
+            b'TLV25TLV20TLV15SB11your_string',
+            b'TLV27TLV22TLV17TLV12SA9my_string',
+            b'TLV30TLV25TLV20TLV15SB11your_string',
+            b'TLV35TLV30TLV25TLV20TLV15SA11another_str',
+            b'TLV32TLV27TLV22TLV17TLV12SA9their_str'
+        ]
+        outcomes = []
+        redundant_outcomes = []
+
+        act = [('REC0', UI(determinist=True)),
+               ('tWALK', UI(path=None, clone_node=True, walk_within_recursive_node=True,
+                            consider_sibbling_change=True))]
+        for j in range(50):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            bdata = d.to_bytes()
+            if bdata in outcomes:
+                redundant_outcomes.append(bdata)
+            outcomes.append(bdata)
+            # time.sleep(0.1)
+            # d.show(debug=True)
+            idx += 1
+
+        time.sleep(0.1)
+        print('\n*** DEBUG outcomes:')
+        pp(outcomes, width=150)
+        print('\n*** DEBUG redundant_outcomes:')
+        pp(redundant_outcomes, width=150)
+
+        self.assertEqual(idx, expected_idx)
+        for o, e_o in zip(outcomes, expected_outcomes):
+            self.assertEqual(o, e_o)
+
+    def test_twalk_operator_0b_1(self):
+        idx = 0
+        expected_idx = 9
+        expected_outcomes = [
+            b'TLV37SA7our_strSA11another_strSA9their_str',
+            b'SA9my_string',
+            b'SB11your_string',
+            b'TLV37SA11another_strSA9their_strSA7our_str',
+            b'TLV37SA9their_strSA7our_strSA11another_str',
+            b'TLV50TLV10SA7our_strSA15SA11another_strSB12SA9their_str',
+            b'TLV63TLV15TLV10SA7our_strSA19SA15SA11another_strSB16SB12SA9their_str',
+            b'TLV76TLV20TLV15TLV10SA7our_strSA23SA19SA15SA11another_strSB20SB16SB12SA9their_str',
+            b'TLV89TLV25TLV20TLV15TLV10SA7our_strSA27SA23SA19SA15SA11another_strSB24SB20SB16SB12SA9their_str'
+        ]
+        outcomes = []
+        redundant_outcomes = []
+
+        act = [('REC0B', UI(determinist=True)),
+               ('tWALK', UI(path=None, clone_node=True, consider_sibbling_change=True,
+                            walk_within_recursive_node=False))]
+        for j in range(20):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            bdata = d.to_bytes()
+            if bdata in outcomes:
+                redundant_outcomes.append(bdata)
+            outcomes.append(bdata)
+            # time.sleep(0.1)
+            # d.show(debug=True)
+            idx += 1
+
+        time.sleep(0.1)
+        print('\n*** DEBUG outcomes:')
+        pp(outcomes, width=150)
+        print('\n*** DEBUG redundant_outcomes:')
+        pp(redundant_outcomes, width=150)
+
+        self.assertEqual(idx, expected_idx)
+        for o, e_o in zip(outcomes, expected_outcomes):
+            self.assertEqual(o, e_o)
+
+    def test_twalk_operator_0b_2(self):
+        # TODO: Exploration by tWALK(walk_within_recursive_node=True, consider_sibbling_change=True)
+        #   trigger some redundancies.
+
+        idx = 0
+        expected_idx = 37
+        expected_outcomes = [
+            b'TLV37SA7our_strSA11another_strSA9their_str',
+            b'SA9my_string',
+            b'SB11your_string',
+            b'TLV37SA11another_strSA9their_strSA7our_str',
+            b'TLV37SA9their_strSA7our_strSA11another_str',
+            b'TLV50TLV10SA7our_strSA15SA11another_strSB12SA9their_str',
+            b'TLV37SA9my_stringSB9my_stringTLV9my_string',
+            b'TLV46SB11your_stringTLV11your_stringSA11your_string',
+            b'TLV50TLV15SA11another_strSA12SA9their_strSB10SA7our_str',
+            b'TLV50TLV12SA9their_strSA10SA7our_strSB15SA11another_str',
+            b'TLV63TLV15TLV10SA7our_strSA19SA15SA11another_strSB16SB12SA9their_str',
+            b'TLV37SA9my_stringSB9my_stringTLV9my_string',
+            b'TLV46SB11your_stringTLV11your_stringSA11your_string',
+            b'TLV50TLV12SA9my_stringSA12SB9my_stringSB13TLV9my_string',
+            b'TLV59TLV15SB11your_stringSA16TLV11your_stringSB15SA11your_string',
+            b'TLV63TLV20TLV15SA11another_strSA16SA12SA9their_strSB14SB10SA7our_str',
+            b'TLV63TLV17TLV12SA9their_strSA14SA10SA7our_strSB19SB15SA11another_str',
+            b'TLV76TLV20TLV15TLV10SA7our_strSA23SA19SA15SA11another_strSB20SB16SB12SA9their_str',
+            b'TLV37SA9my_stringSB9my_stringTLV9my_string',
+            b'TLV46SB11your_stringTLV11your_stringSA11your_string',
+            b'TLV50TLV12SA9my_stringSA12SB9my_stringSB13TLV9my_string',
+            b'TLV59TLV15SB11your_stringSA16TLV11your_stringSB15SA11your_string',
+            b'TLV63TLV17TLV12SA9my_stringSA16SA12SB9my_stringSB17SB13TLV9my_string',
+            b'TLV72TLV20TLV15SB11your_stringSA20SA16TLV11your_stringSB19SB15SA11your_string',
+            b'TLV76TLV25TLV20TLV15SA11another_strSA20SA16SA12SA9their_strSB18SB14SB10SA7our_str',
+            b'TLV76TLV22TLV17TLV12SA9their_strSA18SA14SA10SA7our_strSB23SB19SB15SA11another_str',
+            b'TLV89TLV25TLV20TLV15TLV10SA7our_strSA27SA23SA19SA15SA11another_strSB24SB20SB16SB12SA9their_str',
+            b'TLV37SA9my_stringSB9my_stringTLV9my_string',
+            b'TLV46SB11your_stringTLV11your_stringSA11your_string',
+            b'TLV50TLV12SA9my_stringSA12SB9my_stringSB13TLV9my_string',
+            b'TLV59TLV15SB11your_stringSA16TLV11your_stringSB15SA11your_string',
+            b'TLV63TLV17TLV12SA9my_stringSA16SA12SB9my_stringSB17SB13TLV9my_string',
+            b'TLV72TLV20TLV15SB11your_stringSA20SA16TLV11your_stringSB19SB15SA11your_string',
+            b'TLV76TLV22TLV17TLV12SA9my_stringSA20SA16SA12SB9my_stringSB21SB17SB13TLV9my_string',
+            b'TLV85TLV25TLV20TLV15SB11your_stringSA24SA20SA16TLV11your_stringSB23SB19SB15SA11your_string',
+            b'TLV89TLV30TLV25TLV20TLV15SA11another_strSA24SA20SA16SA12SA9their_strSB22SB18SB14SB10SA7our_str',
+            b'TLV89TLV27TLV22TLV17TLV12SA9their_strSA22SA18SA14SA10SA7our_strSB27SB23SB19SB15SA11another_str'
+        ]
+        outcomes = []
+        redundant_outcomes = []
+
+        act = [('REC0B', UI(determinist=True)),
+               ('tWALK', UI(path=None, clone_node=False, consider_sibbling_change=True,
+                            walk_within_recursive_node=True))]
+        for j in range(50):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            bdata = d.to_bytes()
+            if bdata in outcomes:
+                redundant_outcomes.append(bdata)
+            outcomes.append(bdata)
+            # time.sleep(0.1)
+            # d.show(debug=True)
+            idx += 1
+
+        time.sleep(0.1)
+        print('\n*** DEBUG outcomes:')
+        pp(outcomes, width=150)
+        print('\n*** DEBUG redundant_outcomes:')
+        pp(redundant_outcomes, width=150)
+
+        self.assertEqual(idx, expected_idx)
+        for o, e_o in zip(outcomes, expected_outcomes):
+            self.assertEqual(o, e_o)
 
     def test_twalk_operator_1(self):
         idx = 0
@@ -4942,7 +5240,6 @@ class TestNode_Recursive(unittest.TestCase):
         for o, e_o in zip(outcomes, expected_outcomes):
             self.assertEqual(o, e_o)
 
-
     def test_twalk_operator_3(self):
         # Exploration by tWALK(walk_within_recursive_node=False) is incomplete wrt. tlv_b.
         # But it is expected as when the model walker changes the value of the node `type`
@@ -4986,7 +5283,6 @@ class TestNode_Recursive(unittest.TestCase):
         for o, e_o in zip(outcomes, expected_outcomes):
             self.assertEqual(o, e_o)
 
-
     def test_twalk_operator_4(self):
         idx = 0
         expected_idx = 9
@@ -5024,45 +5320,47 @@ class TestNode_Recursive(unittest.TestCase):
         for o, e_o in zip(outcomes, expected_outcomes):
             self.assertEqual(o, e_o)
 
-
     def test_twalk_operator_5(self):
-        # TODO: Exploration by tWALK(walk_within_recursive_node=True, consider_sibbling_change=True)
-        #   trigger some redundancies.
-
         idx = 0
-        expected_idx = 26
+        expected_idx = 31
         expected_outcomes = [
-            b'TLV10SA7FromTLV',
-            b'SA9my_string',
-            b'SB11your_string',
-            b'TLV12SB9_From_TLV',
-            b'TLV14SB10*From*TLV*',
-            b'TLV15TLV10SA7FromTLV',
-            b'TLV12SA9my_string',
-            b'TLV15SB11your_string',
-            b'TLV17TLV12SB9_From_TLV',
-            b'TLV19TLV14SB10*From*TLV*',
-            b'TLV20TLV15TLV10SA7FromTLV',
-            b'TLV12SA9my_string',
-            b'TLV15SB11your_string',
-            b'TLV17TLV12SA9my_string',
-            b'TLV20TLV15SB11your_string',
-            b'TLV22TLV17TLV12SB9_From_TLV',
-            b'TLV24TLV19TLV14SB10*From*TLV*',
-            b'TLV25TLV20TLV15TLV10SA7FromTLV',
-            b'TLV12SA9my_string',
-            b'TLV15SB11your_string',
-            b'TLV17TLV12SA9my_string',
-            b'TLV20TLV15SB11your_string',
-            b'TLV22TLV17TLV12SA9my_string',
-            b'TLV25TLV20TLV15SB11your_string',
-            b'TLV27TLV22TLV17TLV12SB9_From_TLV',
-            b'TLV29TLV24TLV19TLV14SB10*From*TLV*'
+            b'(Mix20Hero5GimliObject3Bow <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'[Mix20Hero5GimliObject3Bow <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Hero7Gandalf <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Object5Staff <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix22Object3BowObject5Sword <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix22Object5SwordHero5Gimli <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix31Mix10Hero5GimliHero10Object3Bow <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix27Hero7GandalfObject8E\xe4rendil <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix22Object5StaffMix6Hammer <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix33Mix10Object3BowHero12Object5Sword <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix33Mix12Object5SwordHero10Hero5Gimli <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix42Mix15Mix10Hero5GimliHero16Hero10Object3Bow <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix27Hero7GandalfObject8E\xe4rendil <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix22Object5StaffMix6Hammer <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix38Mix12Hero7GandalfHero15Object8E\xe4rendil <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix33Mix12Object5StaffHero10Mix6Hammer <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix44Mix15Mix10Object3BowHero18Hero12Object5Sword <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix44Mix17Mix12Object5SwordHero16Hero10Hero5Gimli <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix42Mix15Mix10Hero5GimliHero16Hero10Object3Bow <World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix42Mix15Mix10Hero5GimliHero16Hero10Object3Bow |World35Land7NumenorRiver6AnduinLand6Gondor>)',
+            b'(Mix42Mix15Mix10Hero5GimliHero16Hero10Object3Bow <Land8Pelargir>)',
+            b'(Mix42Mix15Mix10Hero5GimliHero16Hero10Object3Bow <River8Nimrodel>)',
+            b'(Mix42Mix15Mix10Hero5GimliHero16Hero10Object3Bow <World35River6AnduinLand6GondorLand7Numenor>)',
+            b'(Mix42Mix15Mix10Hero5GimliHero16Hero10Object3Bow <World35Land6GondorLand7NumenorRiver6Anduin>)',
+            b'(Mix42Mix15Mix10Hero5GimliHero16Hero10Object3Bow <World55World12Land7NumenorLand12River6AnduinRiver11Land6Gondor>)',
+            b'(Mix42Mix15Mix10Hero5GimliHero16Hero10Object3Bow <World42Land8PelargirRiver9OsgiliathWorld8Pelargir>)',
+            b'(Mix42Mix15Mix10Hero5GimliHero16Hero10Object3Bow <World44River8NimrodelWorld10BrandywineLand8Nimrodel>)',
+            b'(Mix42Mix15Mix10Hero5GimliHero16Hero10Object3Bow <World55World12River6AnduinLand11Land6GondorRiver12Land7Numenor>)',
+            b'(Mix42Mix15Mix10Hero5GimliHero16Hero10Object3Bow <World55World11Land6GondorLand12Land7NumenorRiver12River6Anduin>)',
+            b'(Mix42Mix15Mix10Hero5GimliHero16Hero10Object3Bow <World55World12Land7NumenorLand12River6AnduinRiver11Land6Gondor|)',
+            b'(Mix42Mix15Mix10Hero5GimliHero16Hero10Object3Bow <World55World12Land7NumenorLand12River6AnduinRiver11Land6Gondor>]'
         ]
         outcomes = []
+        redundant_outcomes = []
 
-        act = [('REC5', UI(determinist=True)),
-               ('tWALK', UI(path=None, clone_node=True, walk_within_recursive_node=True,
+        act = [('RECBIG', UI(determinist=True)),
+               ('tWALK', UI(path=None, clone_node=False, walk_within_recursive_node=True,
                             consider_sibbling_change=True))]
         for j in range(50):
             d = fmk.process_data(act)
@@ -5071,36 +5369,41 @@ class TestNode_Recursive(unittest.TestCase):
                 break
             fmk._setup_new_sending()
             fmk._log_data(d)
+            bdata = d.to_bytes()
+            if bdata in outcomes:
+                redundant_outcomes.append(bdata)
+            outcomes.append(bdata)
             # time.sleep(0.1)
-            outcomes.append(d.to_bytes())
-            # d.show()
+            # d.show(debug=True)
             idx += 1
 
-        # time.sleep(0.1)
-        # print('\n*** DEBUG')
-        # pp(outcomes, width=150)
+        time.sleep(0.1)
+        print('\n*** DEBUG outcomes:')
+        pp(outcomes, width=150)
+        print('\n*** DEBUG redundant_outcomes:')
+        pp(redundant_outcomes, width=150)
 
         self.assertEqual(idx, expected_idx)
         for o, e_o in zip(outcomes, expected_outcomes):
             self.assertEqual(o, e_o)
 
-
     def test_twalk_nonterm_operator(self):
         # TODO: fix redundant test case
 
         idx = 0
-        expected_idx = 5
+        expected_idx = 6
         expected_outcomes = [
-            b'TLV10SA7FromTLV',
-            b'TLV15TLV10SA7FromTLV',
-            b'TLV20TLV15TLV10SA7FromTLV',
-            b'TLV25TLV20TLV15TLV10SA7FromTLV',
-            b'TLV10SA7FromTLV'  # redundant
+            b'TLV10SA7our_str',
+            b'TLV15TLV10SA7our_str',
+            b'TLV20TLV15TLV10SA7our_str',
+            b'TLV25TLV20TLV15TLV10SA7our_str',
+            b'TLV30TLV25TLV20TLV15TLV10SA7our_str',
+            b'TLV10SA7our_str'  # redundant
         ]
         outcomes = []
 
-        act = [('REC5', UI(determinist=True)),
-               ('tWALK', UI(path=None, nt_only=True))] #min_node_tc=2, max_node_tc=2))]
+        act = [('REC0', UI(determinist=True)),
+               ('tWALK', UI(path=None, nt_only=True))]
         for j in range(10):
             d = fmk.process_data(act)
             if d is None:
@@ -5110,7 +5413,7 @@ class TestNode_Recursive(unittest.TestCase):
             fmk._log_data(d)
             # time.sleep(0.1)
             outcomes.append(d.to_bytes())
-            d.show()
+            # d.show()
             idx += 1
 
         # time.sleep(0.1)
@@ -5125,33 +5428,39 @@ class TestNode_Recursive(unittest.TestCase):
         # TODO: verify
 
         idx = 0
-        expected_idx = 135
+        expected_idx = 196
         expected_outcomes = [
         ]
         outcomes = []
+        redundant_outcomes = []
 
-        act = [('REC5', UI(determinist=True)),
-               ('tTYPE', UI(path=None, min_node_tc=-1, max_node_tc=-1))]
-        for j in range(200):
+        act = [('REC0', UI(determinist=True)),
+               ('tTYPE', UI(min_node_tc=-1, max_node_tc=-1))]
+        for j in range(300):
             d = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
             fmk._setup_new_sending()
             fmk._log_data(d)
-            # time.sleep(0.01)
-            outcomes.append(d.to_bytes())
-            # d.show()
+            bdata = d.to_bytes()
+            if bdata in outcomes:
+                redundant_outcomes.append(bdata)
+            outcomes.append(bdata)
+            # time.sleep(0.1)
+            # d.show(debug=True)
             idx += 1
 
         # time.sleep(0.1)
-        # print('\n*** DEBUG')
+        # print('\n*** DEBUG outcomes:')
         # pp(outcomes, width=150)
+        # print('\n*** DEBUG redundant_outcomes:')
+        # pp(redundant_outcomes, width=150)
 
-        self.assertEqual(idx, expected_idx)
+        self.assertAlmostEqual(idx, expected_idx, delta=2)
         for o, e_o in zip(outcomes, expected_outcomes):
             self.assertEqual(o, e_o)
-
+        self.assertListEqual(redundant_outcomes, [])
 
 class TestConstBackend(unittest.TestCase):
     @classmethod
@@ -5163,7 +5472,6 @@ class TestConstBackend(unittest.TestCase):
     def setUp(self):
         fmk.reload_all(tg_ids=[0])
         fmk.prj.reset_target_mappings()
-
 
     twalkcsp_operator_1x_expected_outcomes = [
         b'x = 3y + z (x:123, y:40, z:3)',
@@ -5231,7 +5539,6 @@ class TestConstBackend(unittest.TestCase):
 
         ref_str_1 = b'x = 3y + z ('  # default value for delim_1 is ' ('
         self.assertEqual(outcomes[0][:len(ref_str_1)], ref_str_1)
-
 
     def test_twalkcsp_operator_2(self):
         idx = 0
@@ -5324,7 +5631,7 @@ class TestConstBackend(unittest.TestCase):
         idx = 0
         expected_idx = 9
         expected_outcomes = [b'> 6 <',
-                             b'> 6 <', # redundancy
+                             b'> 6 <',  # redundancy
                              b'> 1 <',
                              b'> 2 <',
                              b'> 3 <',
@@ -5334,7 +5641,7 @@ class TestConstBackend(unittest.TestCase):
                              b'> 8 <']
         outcomes = []
 
-        act = [('CSP_BASIC', UI(determinist=True,freeze=True)), ('tWALK', UI(path='.*/idx'))]
+        act = [('CSP_BASIC', UI(determinist=True, freeze=True)), ('tWALK', UI(path='.*/idx'))]
         for j in range(20):
             d = fmk.process_data(act)
             if d is None:
@@ -5355,7 +5662,7 @@ class TestConstBackend(unittest.TestCase):
         idx = 0
         expected_idx = 9
         expected_outcomes = [b'> 6 <',
-                             b'> 6 <', # redundancy
+                             b'> 6 <',  # redundancy
                              b'> 1 <',
                              b'> 2 <',
                              b'> 3 <',
@@ -5365,7 +5672,7 @@ class TestConstBackend(unittest.TestCase):
                              b'> 8 <']
         outcomes = []
 
-        act = [('CSP_BASIC', UI(determinist=True,freeze=True)),
+        act = [('CSP_BASIC', UI(determinist=True, freeze=True)),
                ('tWALK', UI(leaf_determinism=True))]
         for j in range(20):
             d = fmk.process_data(act)
@@ -5379,7 +5686,6 @@ class TestConstBackend(unittest.TestCase):
 
         self.assertEqual(outcomes, expected_outcomes)
         self.assertEqual(idx, expected_idx)
-
 
     def test_twalk_operator_4(self):
         idx = 0
@@ -5399,7 +5705,7 @@ class TestConstBackend(unittest.TestCase):
 
         outcomes = []
 
-        act = [('CSP_DEFAULT', UI(determinist=True,freeze=True)),
+        act = [('CSP_DEFAULT', UI(determinist=True, freeze=True)),
                ('tWALK', UI(leaf_determinism=False))]
         for j in range(40):
             d = fmk.process_data(act)
@@ -5418,7 +5724,6 @@ class TestConstBackend(unittest.TestCase):
         self.assertEqual(idx, expected_idx)
         for s in outcomes:
             self.assertIn(s, expected_outcomes)
-
 
     def test_tconst_operator_1(self):
         idx = 0
@@ -5452,14 +5757,14 @@ class TestConstBackend(unittest.TestCase):
         self.assertEqual(idx, expected_idx)
         self.assertEqual(outcomes[:6], expected_outcomes)
 
-
     def test_tconst_operator_2(self):
         idx = 0
         expected_idx = 12
 
         samples_per_constraint = 6
 
-        act = [('CSP_Z3', UI(determinist=True)), ('tCONST', UI(samples_per_cst=samples_per_constraint))]
+        act = [('CSP_Z3', UI(determinist=True)),
+               ('tCONST', UI(samples_per_cst=samples_per_constraint))]
         for j in range(40):
             d = fmk.process_data(act)
             if d is None:
@@ -5501,7 +5806,8 @@ class TestConstBackend(unittest.TestCase):
             b'x = 3y + z (x:121, y:40, z:1-'
         ]
 
-        act = [('CSP_STR', UI(determinist=True)), ('tCONST', UI(samples_per_cst=samples_per_constraint))]
+        act = [('CSP_STR', UI(determinist=True)),
+               ('tCONST', UI(samples_per_cst=samples_per_constraint))]
         for j in range(500):
             d = fmk.process_data(act)
             if d is None:
@@ -5517,7 +5823,7 @@ class TestConstBackend(unittest.TestCase):
             z = nd['.*/variables/z/val'][0].get_raw_value()
 
             print(f'\nCurrent values - x:{x}, y:{y}, z:{z}')
-            if j <= len(expected_outcomes)-1:
+            if j <= len(expected_outcomes) - 1:
                 outcomes.append(d.to_bytes())
                 self.assertTrue(x == 3 * y + z)
             else:
@@ -5648,8 +5954,7 @@ class TestMW_tTYPE(unittest.TestCase):
             idx2 += 1
 
         self.assertAlmostEqual(idx2, expected_idx2, delta=1)
-        self.assertLess(idx,idx2)
-
+        self.assertLess(idx, idx2)
 
     def test_param_only_corner_cases(self):
 
@@ -5664,7 +5969,7 @@ class TestMW_tTYPE(unittest.TestCase):
         outcomes = []
 
         act = [('CSP_BASIC', UI(determinist=True)),
-               ('tTYPE', UI(only_corner_cases=True,csp_compliance_matters=False))]
+               ('tTYPE', UI(only_corner_cases=True, csp_compliance_matters=False))]
         for j in range(40):
             d = fmk.process_data(act)
             if d is None:
@@ -5683,7 +5988,6 @@ class TestMW_tTYPE(unittest.TestCase):
         for s in outcomes:
             self.assertIn(s, expected_outcomes)
 
-
         ### 2. tTYPE @only_corner_cases=True @csp_compliance_matters=True
 
         idx = 0
@@ -5695,7 +5999,7 @@ class TestMW_tTYPE(unittest.TestCase):
         outcomes = []
 
         act = [('CSP_BASIC#2', UI(determinist=True)),
-               ('tTYPE#2', UI(only_corner_cases=True,csp_compliance_matters=True))]
+               ('tTYPE#2', UI(only_corner_cases=True, csp_compliance_matters=True))]
         for j in range(40):
             d = fmk.process_data(act)
             if d is None:

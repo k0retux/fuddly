@@ -218,7 +218,7 @@ case2 = Step(Data(Node('case 2', vt=String(values=['CASE 2']))),
              do_before_data_processing=before_data_generation,
              do_before_sending=before_sending)
 final_step = FinalStep()
-option1 = Step(Data(Node('option 1', vt=SINT16_be(values=[10,15]))))
+option1 = Step(Data(Node('option 1', vt=SINT16_be(values=[10, 15]))))
 option2 = Step(Data(Node('option 2', vt=UINT8(min=3, max=9))))
 
 init.connect_to(request)

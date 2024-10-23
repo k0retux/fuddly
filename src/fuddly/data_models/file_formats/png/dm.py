@@ -46,7 +46,8 @@ class PNG_DataModel(DataModel):
                    {'name': 'type',
                     'contents': String(values=['IHDR', 'IEND', 'IDAT', 'PLTE'], size=4)},
                    {'name': 'data_gen',
-                    'contents': lambda x: Node('data', value_type=String(size=x[0].cc.get_raw_value())),
+                    'contents': lambda x: Node('data',
+                                               value_type=String(size=x[0].cc.get_raw_value())),
                     'node_args': ['len']},
                    {'name': 'crc32_gen',
                     'contents': CRC(vt=UINT32_be, clear_attrs=[MH.Attr.Mutable]),
@@ -91,7 +92,8 @@ class PNG_DataModel(DataModel):
                             {'name': 'type2',
                              'contents': String(values=['IEND', 'IDAT', 'PLTE'], size=4)},
                             {'name': 'data_gen',
-                             'contents': lambda x: Node('data', value_type=String(size=x.get_raw_value())),
+                             'contents': lambda x: Node('data',
+                                                        value_type=String(size=x.get_raw_value())),
                              'node_args': 'len'}
                         ]}
                    ]},

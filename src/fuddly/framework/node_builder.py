@@ -359,7 +359,7 @@ class NodeBuilder(object):
             recursive_link = contents
             default_node_desc = desc.get('default_node', None)
             if default_node_desc is not None:
-                default_node = self._create_graph_from_desc(default_node_desc, n)
+                default_node = self._create_graph_from_desc(default_node_desc, n, namespace=namespace)
             else:
                 default_node = None
 
@@ -787,7 +787,7 @@ class NodeBuilder(object):
             self._register_todo(node, self._clone_from_dict, args=(ref, desc, current_ns),
                                 prio=self.LOW_PRIO)
         else:
-            node.set_contents(self.node_dico[ref], keep_base_node_attrs=False)
+            node.set_contents(self.node_dico[ref], copy_base_node_attrs=True)
             self._handle_custo(node, desc, conf=None)
             self._handle_common_attr(node, desc, conf=None, current_ns=current_ns)
 
@@ -880,7 +880,10 @@ class NodeBuilder(object):
                                  conf, current_ns):
 
         from_ns = desc.get('from_namespace', None)
-        ns = current_ns if from_ns is None else from_ns
+        if recursive_link.namespace is None:
+            ns = current_ns if from_ns is None else from_ns
+        else:
+            ns = recursive_link.namespace
 
         rec_node = self.__get_node_from_db(recursive_link.node_ref, namespace=ns)
         node.set_recursive_node(rec_node, conf=conf)
@@ -1637,9 +1640,8 @@ class RegexParser(StateMachine):
         assert (values is not None or alphabet is not None)
 
         if alphabet is not None:
-            return [Node(name=name,
-                         vt=fvt.String(alphabet=alphabet, min_sz=qty[0], max_sz=qty[1],
-                                       codec=self.codec)), 1, 1]
+            return [Node(name=name, vt=fvt.String(alphabet=alphabet, min_sz=qty[0], max_sz=qty[1],
+                                                  codec=self.codec)), 1, 1]
         else:
             if type == fvt.String:
                 node = Node(name=name, vt=fvt.String(values=values, codec=self.codec))
@@ -1647,8 +1649,8 @@ class RegexParser(StateMachine):
                 if values == [i for i in range(10)] and (qty[1] != 0 or qty[1] is None):
                     max_digit = qty[1]
                     min_digit = qty[0]
-                    node = Node(name=name, vt=fvt.INT_str(min=(min_digit-1)*10,
-                                                          max=10**max_digit-1 if max_digit is not None else None))
+                    node = Node(name=name, vt=fvt.INT_str(min=(min_digit - 1) * 10,
+                                                          max=10 ** max_digit - 1 if max_digit is not None else None))
 
                     return [node, 1, 1]
 

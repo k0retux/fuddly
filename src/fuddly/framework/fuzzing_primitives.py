@@ -239,7 +239,7 @@ class ModelWalker(object):
                         if DEBUG:
                             DEBUG_PRINT('  ' * parent_node.depth +
                                         f'(2|from: {parent_node.name})--> processed node: {node.name}, '
-                                        f'consumed_node: {consumed_node.name}',
+                                        f'consumed_node: {consumed_node.name if consumed_node else None}',
                                         level=1)
                             DEBUG_PRINT('  ' * parent_node.depth +
                                         f"  [ reset: {reset} | ignore_node: {ignore_node} | "
@@ -362,29 +362,35 @@ class ModelWalker(object):
                     parent_node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
                     parent_node.freeze()
 
-                if node.is_nonterm():
+                if node.is_nonterm(): # or (consumer.walk_within_recursive_node and node.is_rec()):
                     structure_has_changed = node.cc.structure_will_change()
 
                 if structure_has_changed and consumer.need_reset_when_structure_change:
                     structure_has_changed = False
 
                     idx = node_list.index(node)
+                    # print(f'\n***DBG: {idx}, {node_list}')
+                    if idx == 0:
+                        structure_has_changed = False
+                        # if node.is_nonterm():
+                        consumed_nodes = set()
 
-                    gen = self.walk_graph_rec(node_list[:idx], False, set(), parent_node=parent_node, consumer=consumer)
-                    for consumed_node, orig_node_val in gen:
-                        yield consumed_node, orig_node_val # YIELD
+                    else:
+                        gen = self.walk_graph_rec(node_list[:idx], False, set(), parent_node=parent_node, consumer=consumer)
+                        for consumed_node, orig_node_val in gen:
+                            yield consumed_node, orig_node_val # YIELD
 
-                    # we need to reassess all the subnodes of the
-                    # guilty node that has produced the
-                    # structure_change (as it is not dealt with the
-                    # previous recursive call). To simplify the process
-                    consumed_nodes = set()
+                        # we need to reassess all the subnodes of the
+                        # guilty node that has produced the
+                        # structure_change (as it is not dealt with the
+                        # previous recursive call). To simplify the process
+                        consumed_nodes = set()
 
-                    # This solution does not work as expected especially for USB data model
-                    # nodes_to_remove = node.get_reachable_nodes(internals_criteria=self.ic, exclude_self=False)
-                    # for n in nodes_to_remove:
-                    #     if n in consumed_nodes:
-                    #         consumed_nodes.remove(n)
+                        # This solution does not work as expected especially for USB data model
+                        # nodes_to_remove = node.get_reachable_nodes(internals_criteria=self.ic, exclude_self=False)
+                        # for n in nodes_to_remove:
+                        #     if n in consumed_nodes:
+                        #         consumed_nodes.remove(n)
 
                 elif structure_has_changed and not consumer.need_reset_when_structure_change:
                     structure_has_changed = False

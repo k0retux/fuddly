@@ -438,7 +438,7 @@ class MyDF_DataModel(DataModel):
                                     contents=['foo', 'bar'], node_name='xml1')
 
         xml2_desc = xml.tag_builder('B1', params={'p1':'a', 'p2': ['foo', 'bar'], 'p3': 'c'},
-                                    contents=Node('intg',vt=UINT32_be(values=[1,2,3])),
+                                    contents=Node('intg', vt=UINT32_be(values=[1, 2, 3])),
                                     node_name='xml2')
 
         xml3_desc = xml.tag_builder('C1', params={'p1':'a', 'p2': ['foo', 'bar'], 'p3': 'c'},
@@ -484,7 +484,8 @@ class MyDF_DataModel(DataModel):
                           xtb('CMD_2', condition=(RawCondition(val=['CMD_2']), 'cmd_val'), contents= \
                               [{'name': 'msg_id'},
                                {'name': 'counter'},
-                               xtb('filename', contents=Node('fln', vt=Filename(values=['/usr/bin/ls'])))])
+                               xtb('filename', contents=Node('fln',
+                                                             vt=Filename(values=['/usr/bin/ls'])))])
                           ])
              ]}
 
@@ -999,7 +1000,39 @@ class MyDF_DataModel(DataModel):
                        'exists_if': (RawCondition('TLV'), 'type'),
                        'contents': MH.RecursiveLink('rec0', recursion_threshold=5),
                        'default_node': {'name': 'def_node_a',
-                                        'contents': String(values=['SA9my_string'])}},
+                                        'contents': String(values=['SA7our_str',
+                                                                   'SA11another_str',
+                                                                   'SA9their_str'])}},
+                  ]},
+             ]}
+
+
+        tlv_rec0b_desc = \
+            {'name': 'rec0b',
+             'contents': [
+                 {'name': 'type', 'contents': String(values=['SA','SB','TLV']),
+                  'default': 'TLV'},
+                 {'name': 'length', 'contents': LEN(vt=INT_str),
+                  # 'mutable': False,
+                  'node_args': 'value'},
+                 {'name': 'value',
+                  'custo_clear': MH.Custo.NTerm.MutableClone,
+                  'custo_set': MH.Custo.NTerm.CycleClone,
+                  'contents': [
+                      {'name': 'str_a',
+                       'exists_if': (RawCondition('SA'), 'type'),
+                       'contents': String(values=['my_string'])},
+                      {'name': 'str_b',
+                       'exists_if': (RawCondition('SB'), 'type'),
+                       'contents': String(values=['your_string'])},
+                      {'name': 'tlv_a',
+                       'qty': 3,
+                       'exists_if': (RawCondition('TLV'), 'type'),
+                       'contents': MH.RecursiveLink('rec0b', recursion_threshold=5),
+                       'default_node': {'name': 'def_node_a',
+                                        'contents': String(values=['SA7our_str',
+                                                                   'SA11another_str',
+                                                                   'SA9their_str'])}},
                   ]},
              ]}
 
@@ -1112,34 +1145,89 @@ class MyDF_DataModel(DataModel):
              ]}
 
 
-        tlv_rec5_desc = \
-            {'name': 'rec5',
+        recbig_desc = \
+            {'name': 'recbig',
              'contents': [
-                 {'name': 'type', 'contents': String(values=['SA','SB','TLV']),
-                  'default': 'TLV'},
-                 {'name': 'length', 'contents': LEN(vt=INT_str),
-                  'mutable': False,
-                  'node_args': 'value'},
-                 {'name': 'value',
+                 {'name': 'preamble',
+                  'contents': String(values=['(', '['])},
+
+                 {'name': 'part1',
+                  'namespace': 'p1ns',
                   'contents': [
-                      {'name': 'str_a',
-                       'exists_if': (RawCondition('SA'), 'type'),
-                       'contents': String(values=['my_string'])},
-                      {'name': 'str_b',
-                       'exists_if': (RawCondition('SB'), 'type'),
-                       'contents': String(values=['your_string'])},
-                      {'name': 'tlv_a',
-                       'exists_if': (RawCondition('TLV'), 'type'),
-                       'debug': True,
-                       'contents': MH.RecursiveLink('rec5', recursion_threshold=4),
-                       'default_node': {'name': 'def_node_a',
-                                        'debug': True,
-                                        # 'exists_if': (RawCondition('TLV'), 'type'),
-                                        'contents': String(values=['SA7FromTLV',
-                                                                   'SB9_From_TLV',
-                                                                   'SB10*From*TLV*'])}},
+                      {'name': 'type', 'contents': String(values=['Hero', 'Object', 'Mix']),
+                       'default': 'Mix'},
+                      {'name': 'length', 'contents': LEN(vt=INT_str),
+                       'mutable': False,
+                       'node_args': 'value'},
+                      {'name': 'value',
+                       'custo_set': MH.Custo.NTerm.CycleClone,
+                       'custo_clear': MH.Custo.NTerm.MutableClone,
+                       'contents': [
+                           {'name': 'hero',
+                            'exists_if': (RawCondition('Hero'), 'type'),
+                            'contents': String(values=['Gandalf','Eärendil'])},
+                           {'name': 'mix',
+                            'qty': 2,
+                            'exists_if': (RawCondition('Mix'), 'type'),
+                            'contents': MH.RecursiveLink('part1',
+                                                         recursion_threshold=3,
+                                                         namespace=NodeBuilder.RootNS),
+                            'default_node': {'name': 'def_node',
+                                             'debug': True,
+                                             'contents': String(values=['Hero5Gimli',
+                                                                        'Object3Bow',
+                                                                        'Object5Sword'])}},
+                           {'name': 'object',
+                            'exists_if': (RawCondition('Object'), 'type'),
+                            'contents': String(values=['Staff', 'Hammer'])},
+                       ]},
                   ]},
+
+                 {'name': 'part2',
+                  'namespace': 'p2ns',
+                  'contents': [
+
+                      {'name': 'start',
+                       'contents': String(values=[' <', ' |'])},
+
+                      {'name': 'part2.1',
+                       'contents': [
+                           {'name': 'type', 'contents': String(values=['Land', 'River', 'World']),
+                            'default': 'World'},
+                           {'name': 'length', 'contents': LEN(vt=INT_str),
+                            'mutable': False,
+                            'node_args': 'value'},
+                           {'name': 'value',
+                            'custo_set': MH.Custo.NTerm.CycleClone,
+                            'custo_clear': MH.Custo.NTerm.MutableClone,
+                            'contents': [
+                                {'name': 'land',
+                                 'exists_if': (RawCondition('Land'), 'type'),
+                                 'contents': String(values=['Pelargir', 'Osgiliath'])},
+                                {'name': 'world',
+                                 'qty': 3,
+                                 'exists_if': (RawCondition('World'), 'type'),
+                                 'contents': MH.RecursiveLink('part2.1',
+                                                              recursion_threshold=2),
+                                 'default_node': {'name': 'def_node',
+                                                  'debug': True,
+                                                  'contents': String(values=['Land7Numenor',
+                                                                             'River6Anduin',
+                                                                             'Land6Gondor'])}},
+                                {'name': 'river',
+                                 'exists_if': (RawCondition('River'), 'type'),
+                                 'contents': String(values=['Nimrodel', 'Brandywine'])},
+                            ]},
+                       ]},
+
+                      {'name': 'exit',
+                       'contents': String(values=['>', '|'])},
+                  ]},
+
+                 {'name': 'epilogue',
+                  'contents': String(values=[')', ']'])},
              ]}
+
 
 
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
@@ -1151,8 +1239,8 @@ class MyDF_DataModel(DataModel):
                       csp_desc, csp_z3_desc, csp_str_desc, csp_ns_desc, csp_basic_desc,
                       csp_default_desc, str_desc, rnd_desc,
                       shape_type_1_desc, shape_type_2_desc, ns_desc,
-                      tlv_rec0_desc, tlv_rec1_desc, tlv_rec2_desc, tlv_rec3_desc, tlv_rec4_desc,
-                      tlv_rec5_desc)
+                      tlv_rec0_desc, tlv_rec0b_desc, tlv_rec1_desc, tlv_rec2_desc, tlv_rec3_desc,
+                      tlv_rec4_desc, recbig_desc)
 
 
 data_model = MyDF_DataModel()

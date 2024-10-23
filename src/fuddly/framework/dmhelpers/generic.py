@@ -50,13 +50,19 @@ class MH(object):
     class RecursiveLink(object):
 
         def __init__(self, node_ref,
-                     recursion_threshold=NodeInternals_Recursive.DEFAULT_RECURSION_THRESHOLD):
+                     recursion_threshold=NodeInternals_Recursive.DEFAULT_RECURSION_THRESHOLD,
+                     namespace=None):
             self._node_ref = node_ref
             self._recursion_threshold = recursion_threshold
+            self._namespace = namespace
 
         @property
         def node_ref(self):
             return self._node_ref
+
+        @property
+        def namespace(self):
+            return self._namespace
 
         @property
         def recursion_threshold(self):
@@ -107,6 +113,10 @@ class MH(object):
             CloneExtNodeArgs = GenFuncCusto.CloneExtNodeArgs
             ResetOnUnfreeze = GenFuncCusto.ResetOnUnfreeze
             TriggerLast = GenFuncCusto.TriggerLast
+            PropagateMutableAttr = GenFuncCusto.PropagateMutableAttr
+
+        class Rec:
+            AlwaysUpdateFrozenNode = RecursiveCusto.AlwaysUpdateFrozenNode
 
         # Function node (leaf) custo
         class Func:
@@ -200,7 +210,7 @@ def LEN(vt=fvt.INT_str, base_len=0,
                     blob = n.to_bytes() if after_encoding else n.get_raw_value()
                     b += blob
 
-            n = Node('cts', value_type=self.vt(values=[len(b)+base_len], force_mode=True))
+            n = Node('cts', value_type=self.vt(values=[len(b) + base_len], force_mode=True))
             n.set_semantics(NodeSemantics(['len']))
             MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
             return n
@@ -532,7 +542,7 @@ def OFFSET(use_current_position=True, depth=1, vt=fvt.INT_str,
                 base = len(s)
                 off = nodes[-1].get_subnode_off(idx)
 
-            n = Node('cts_off', value_type=self.vt(values=[base+off], force_mode=True))
+            n = Node('cts_off', value_type=self.vt(values=[base + off], force_mode=True))
             MH._handle_attrs(n, self.set_attrs, self.clear_attrs)
             return n
 
@@ -652,7 +662,8 @@ def SELECT(idx=None, path=None, filter_func=None, fallback_node=None, clone=True
             self.set_attrs = set_attrs
             self.clear_attrs = clear_attrs
             self.idx = idx
-            self.fallback_node = Node('fallback_node', values=['!FALLBACK!']) if fallback_node is None else fallback_node
+            self.fallback_node = Node('fallback_node',
+                                      values=['!FALLBACK!']) if fallback_node is None else fallback_node
             self.clone = clone
             self.path = path
             self.filter_func = filter_func

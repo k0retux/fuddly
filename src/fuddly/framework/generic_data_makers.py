@@ -797,7 +797,8 @@ class sd_struct_constraints(StatefulDisruptor):
             return data
 
         # print('\n***disrupt before:\n',self.seed.to_bytes())
-        corrupted_seed = Node(self.seed.name, base_node=self.seed, ignore_frozen_state=False, new_env=True)
+        corrupted_seed = Node(self.seed.name, base_node=self.seed, ignore_frozen_state=False,
+                              new_env=True)
         corrupted_seed = self.seed.get_clone(ignore_frozen_state=False, new_env=True)
         self.seed.env.remove_node_to_corrupt(consumed_node)
 
@@ -1508,8 +1509,8 @@ class d_shallow_copy(Disruptor):
             return prev_data
 
         prev_data.add_info('shallow copy of input data has been done')
-        exported_node = Node(prev_content.name, base_node=prev_content, new_env=True,
-                             ignore_frozen_state=True)
+        exported_node = Node(prev_content.name, base_node=prev_content, ignore_frozen_state=True,
+                             new_env=True)
         prev_data.update_from(exported_node)
 
         return prev_data

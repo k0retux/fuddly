@@ -63,7 +63,7 @@ class DataBackend(object):
     def to_bytes(self):
         raise NotImplementedError
 
-    def show(self, raw_limit=200, log_func=sys.stdout.write):
+    def show(self, raw_limit=200, log_func=sys.stdout.write, debug=False):
         raise NotImplementedError
 
     def get_content(self, do_copy=False, materialize=True):
@@ -102,8 +102,8 @@ class NodeBackend(DataBackend):
     def to_bytes(self):
         return self._node.to_bytes()
 
-    def show(self, raw_limit=200, log_func=sys.stdout.write):
-        self._node.show(raw_limit=raw_limit, log_func=log_func)
+    def show(self, raw_limit=200, log_func=sys.stdout.write, debug=False):
+        self._node.show(raw_limit=raw_limit, log_func=log_func, debug=debug)
 
     def get_content(self, do_copy=False, materialize=True):
         if materialize:
@@ -157,7 +157,7 @@ class RawBackend(DataBackend):
     def to_bytes(self):
         return self._content
 
-    def show(self, raw_limit=200, log_func=sys.stdout.write):
+    def show(self, raw_limit=200, log_func=sys.stdout.write, debug=False):
         log_func(unconvert_from_internal_repr(self._content))
 
     def get_content(self, do_copy=False, materialize=True):
@@ -519,8 +519,8 @@ class Data(object):
     def get_content(self, do_copy=False):
         return self._backend.get_content(do_copy=do_copy)
 
-    def show(self, raw_limit=200, log_func=sys.stdout.write):
-        self._backend.show(raw_limit=raw_limit, log_func=log_func)
+    def show(self, raw_limit=200, log_func=sys.stdout.write, debug=False):
+        self._backend.show(raw_limit=raw_limit, log_func=log_func, debug=debug)
 
     pretty_print = show
 

@@ -87,8 +87,8 @@ class ZIP_DataModel(DataModel):
                                   ]},
                                  {'name': 'compressed_size',
                                   'type': MH.Generator,
-                                  'contents': lambda x: Node('cts', value_type=\
-                                                            UINT32_le(values=[len(x.to_bytes())])),
+                                  'contents': lambda x: Node('cts', value_type=UINT32_le(
+                                      values=[len(x.to_bytes())])),
                                   'node_args': 'data',
                                   'alt': [
                                       {'conf': 'ABS',
@@ -104,26 +104,27 @@ class ZIP_DataModel(DataModel):
                             {'name': 'file_name',
                              'type': MH.Generator,
                              'clear_attrs': [MH.Attr.Freezable],
-                             'contents': lambda x: Node('cts', value_type=\
-                                                        Filename(size=x.get_raw_value(), alphabet='ABC')),
+                             'contents': lambda x: Node('cts',
+                                                        value_type=Filename(size=x.get_raw_value(),
+                                                                            alphabet='ABC')),
                              'node_args': 'file_name_length'},
                             {'name': 'extra_field',
                              'type': MH.Generator,
-                             'contents': lambda x: Node('cts', value_type=\
-                                                        String(size=x.get_raw_value())),
+                             'contents': lambda x: Node('cts',
+                                                        value_type=String(size=x.get_raw_value())),
                              'node_args': 'extra_field_length'}
                         ]},
                        {'name': 'data',
                         'type': MH.Generator,
-                        'contents': lambda x: Node('cts', value_type=\
-                                                   String(values=[zlib.compress(b'a'*x.get_raw_value())])),
+                        'contents': lambda x: Node('cts', value_type=String(
+                            values=[zlib.compress(b'a' * x.get_raw_value())])),
                         'node_args': 'uncompressed_size',
                         'alt': [
                             {'conf': 'ABS',
                              'type': MH.Generator,
                              'custo_clear': MH.Custo.Gen.ResetOnUnfreeze,
-                             'contents': lambda x: Node('cts', value_type=\
-                                                        String(size=x.get_raw_value())),
+                             'contents': lambda x: Node('cts',
+                                                        value_type=String(size=x.get_raw_value())),
                              'node_args': 'compressed_size'}
                         ]},
                        {'name': 'data_desc',
@@ -155,8 +156,8 @@ class ZIP_DataModel(DataModel):
                         'contents': UINT32_le(max=2**5)},
                        {'name': 'extra_enc_field',
                         'type': MH.Generator,
-                        'contents': lambda x: Node('cts', value_type=\
-                                                  String(size=x.get_raw_value())),
+                        'contents': lambda x: Node('cts',
+                                                   value_type=String(size=x.get_raw_value())),
                         'node_args': 'extra_enc_field_len'}
                    ]}
               ]},
@@ -208,21 +209,21 @@ class ZIP_DataModel(DataModel):
                         'node_args': 'file_list',
                         'alt': [
                             {'conf': 'ABS',
-                             'contents': lambda x: Node('cts', value_type=\
-                                                        String(size=x.cc.generated_node.get_raw_value())),
+                             'contents': lambda x: Node('cts', value_type=String(
+                                 size=x.cc.generated_node.get_raw_value())),
                              'node_args': ('file_name_length', 2)} ]},
                        {'name': ('extra_field', 2),
                         'contents': COPY_VALUE(path='header/extra_field/cts$', depth=1),
                         'node_args': 'file_list',
                         'alt': [
                             {'conf': 'ABS',
-                             'contents': lambda x: Node('cts', value_type=\
-                                                        String(size=x.cc.generated_node.get_raw_value())),
+                             'contents': lambda x: Node('cts', value_type=String(
+                                 size=x.cc.generated_node.get_raw_value())),
                              'node_args': ('extra_field_length', 2)} ]},
                        {'name': 'file_comment',
                         'type': MH.Generator,
-                        'contents': lambda x: Node('cts', value_type=\
-                                                  String(size=x.get_raw_value())),
+                        'contents': lambda x: Node('cts',
+                                                   value_type=String(size=x.get_raw_value())),
                         'node_args': 'file_comment_length'}
                   ]}
               ]},
@@ -279,8 +280,8 @@ class ZIP_DataModel(DataModel):
                   {'name': 'disk_number_with_cdir_start',
                    'contents': UINT16_le()},
                   {'name': 'total_nb_of_cdir_entries_in_this_disk',
-                   'contents': lambda x: Node('cts', value_type=\
-                                              UINT16_le(values=[x.get_subnode_qty()])),
+                   'contents': lambda x: Node('cts',
+                                              value_type=UINT16_le(values=[x.get_subnode_qty()])),
                    'node_args': 'cdir'},
                   {'name': 'total_nb_of_cdir_entries',
                    'clone': 'total_nb_of_cdir_entries_in_this_disk'},
@@ -288,10 +289,11 @@ class ZIP_DataModel(DataModel):
                    'contents': UINT32_le()},
                   {'name': 'off_of_cdir',
                    'type': MH.Generator,
-                   'contents': lambda x: Node('cts', value_type=\
-                                              UINT32_le(values=[len(x[0].to_bytes()) \
-                                                                 + len(x[1].to_bytes()) #])),
-                                                                 + len(x[2].to_bytes())])),
+                   'contents': lambda x: Node('cts',
+                                              value_type=UINT32_le(values=[len(x[0].to_bytes()) \
+                                                                           + len(
+                                                  x[1].to_bytes())  # ])),
+                                                                           + len(x[2].to_bytes())])),
                    'node_args': ['start_padding', 'file_list', 'archive_desc_header']},
                   {'name': 'optional',
                    'qty': (0,1),
@@ -299,8 +301,7 @@ class ZIP_DataModel(DataModel):
                        {'name': 'ZIP_comment_len',
                         'contents': UINT32_le(max=2**10)},
                        {'name': 'ZIP_comment',
-                        'contents': lambda x: Node('cts', value_type=\
-                                                   String(size=x.get_raw_value())),
+                        'contents': lambda x: Node('cts', value_type=String(size=x.get_raw_value())),
                         'node_args': 'ZIP_comment_len'}
                    ]}
               ]},

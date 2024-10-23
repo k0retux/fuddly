@@ -113,7 +113,7 @@ class PDFObj(object):
         e_start, ident = PDFObj.__calc_prefix_wrapper_obj(ident, gen)
         e_end = PDFObj.__calc_suffix_wrapper_obj()
 
-        e = Node('wrapped_%d_'%ident + name, subnodes=[e_start, node, e_end])
+        e = Node('wrapped_%d_' % ident + name, subnodes=[e_start, node, e_end])
         e.set_private(ident)
 
         return e
@@ -149,7 +149,7 @@ class PDFObj(object):
         if enforce_unsigned:
             sign = Node('sign', values=['+'])
         else:
-            sign = Node('sign', values=['+','-'])
+            sign = Node('sign', values=['+', '-'])
 
         int_part = Node('int_part', value_type=INT_str(min=int_m, max=int_M, determinist=False))
         int_part.add_conf('ALT')
@@ -478,14 +478,16 @@ class PDFObj(object):
         xobj_suffix = 'endstream'
         e_suffix = Node('XObject_suffix', values=[xobj_suffix])
 
-        e_jpg_xobj_internals = Node('IMG_XObj_' + name, subnodes=[e_pref, PDFObj.jpg_node, e_suffix])
+        e_jpg_xobj_internals = Node('IMG_XObj_' + name,
+                                    subnodes=[e_pref, PDFObj.jpg_node, e_suffix])
         e_jpg_xobj = PDFObj.create_wrapped_obj('IMG_XObj_' + name, e_jpg_xobj_internals)
 
         xobj_id = e_jpg_xobj.get_private()
         e_resources_internals = make_wrapped_node('IMG_XObj_resource_' + name,
-                                                 node=Node("xobj_id", value_type=INT_str(values=[xobj_id])),
-                                                 prefix=["<< /ProcSet [/PDF /ImageC]\n /XObject << /Im1 "],
-                                                 suffix=[" 0 R >> >>"])
+                                                  node=Node("xobj_id",
+                                                            value_type=INT_str(values=[xobj_id])),
+                                                  prefix=["<< /ProcSet [/PDF /ImageC]\n /XObject << /Im1 "],
+                                                  suffix=[" 0 R >> >>"])
         e_resources = PDFObj.create_wrapped_obj('IMG_XObj_resource_' + name, e_resources_internals)
 
         cmd_str = ("q\n"
@@ -508,7 +510,7 @@ class PDFObj(object):
 
         l = []
         for i in kids_id:
-            l.append(Node("kid_%d"%i, values=["%d 0 R"%i]))
+            l.append(Node("kid_%d" % i, values=["%d 0 R" % i]))
 
         e_kids_array, e_kids_id = PDFObj.get_array("array", nodes=l, indirect=False, return_knob=True)
         e_kids = make_wrapped_node("Kids_E",
@@ -755,9 +757,10 @@ class PDFObj(object):
             node_list = obj_list + pagetree_objs
 
             e_raw_catalog = make_wrapped_node("Catalog",
-                                             node=Node("pagetree_id", value_type=INT_str(values=[pagetree_id])),
-                                             prefix=["<<\n/Pages "],
-                                             suffix=[" 0 R\n/Type /Catalog\n>>"])
+                                              node=Node("pagetree_id",
+                                                        value_type=INT_str(values=[pagetree_id])),
+                                              prefix=["<<\n/Pages "],
+                                              suffix=[" 0 R\n/Type /Catalog\n>>"])
             e_catalog = PDFObj.create_wrapped_obj("Catalog", e_raw_catalog)
 
             node_list.append(e_catalog)
@@ -909,7 +912,9 @@ class PDFObj(object):
 
             e_trailer2 = Node('trailer2', values=[trailer2_str])
 
-            e_pdf = Node('dyn', subnodes=[e_hdr, e_pdfobjs_gen, e_xref, e_trailer, e_random_obj, e_xref2, e_trailer2])
+            e_pdf = Node('dyn',
+                         subnodes=[e_hdr, e_pdfobjs_gen, e_xref, e_trailer, e_random_obj, e_xref2,
+                                   e_trailer2])
 
             return e_pdf
 
@@ -974,8 +979,8 @@ class PDFObj(object):
                 #            [str(random.randint(0, 5000))]]
 
                 mb_nodes = [Node('X', values=['0']), Node('Y', values=['0']),
-                           PDFObj.get_number('width', int_m=50, int_M=1000, enforce_unsigned=False, indirect=False),
-                           PDFObj.get_number('height', int_m=50, int_M=1000, enforce_unsigned=False, indirect=False)]
+                            PDFObj.get_number('width', int_m=50, int_M=1000, enforce_unsigned=False, indirect=False),
+                            PDFObj.get_number('height', int_m=50, int_M=1000, enforce_unsigned=False, indirect=False)]
 
                 page_leaf = PDFObj.make_page_leaf('JPG_leaf_%d-%d'%(i,j),
                                                   resources_id=internals.e_resources.get_private(),
@@ -1071,7 +1076,7 @@ class PageNode(object):
     def change_kids_id(self, kids_id, count_update=None):
         l = []
         for i in kids_id:
-            l.append(Node("kid_%d"%i, values=["%d 0 R"%i]))
+            l.append(Node("kid_%d" % i, values=["%d 0 R" % i]))
 
         rawlist = PDFObj.get_array("array", nodes=l, indirect=False, return_rawlist=True)
         self.e_kids_id.set_subnodes_basic(rawlist)

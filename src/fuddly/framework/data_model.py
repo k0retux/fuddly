@@ -145,7 +145,7 @@ class DataModel(object):
             try:
                 return self._create_atom_from_raw_data_specific(data, idx, filename)
             except NotImplementedError:
-                return Node('RAW_{:s}'.format(filename[:-len(self.file_extension)-1]),
+                return Node('RAW_{:s}'.format(filename[:-len(self.file_extension) - 1]),
                             values=[data])
 
     def register_atom_for_decoding(self, atom, absorb_constraints=AbsFullCsts(),
