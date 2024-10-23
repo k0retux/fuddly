@@ -20,6 +20,11 @@ def get_scripts() -> list():
     # Third party/modules
     for ep in entry_points(group=gr.ep_group_names["projects"]):
         p = find_spec(ep.module).origin
+        if p is None:
+            # the entry point is not a module, let's just ignore it
+            print(f"*** {ep.module} is not a python module, check your installed modules ***")
+            continue
+
         if os.path.basename(p) == "__init__.py":
             p=os.path.dirname(p)
         else:
