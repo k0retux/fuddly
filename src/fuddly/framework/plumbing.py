@@ -939,8 +939,13 @@ class FmkPlumbing(object):
             (path, dirs, files) = next(os.walk(search_path))
             if "__init__.py" in files:
                 # Normapath remove the / that will most likely be at the end of prefix
-                projects[os.path.normpath(prefix)] = [os.path.basename(search_path)]
-                return
+                basename=os.path.basename(search_path)
+                key=os.path.normpath(prefix)
+                if basename != "":
+                    if projects.get(key) is None:
+                        projects[key] = []
+                    projects[key].append(os.path.basename(search_path))
+                    return
 
             for d in [x for x in dirs if x != "__pycache__"]:
                 # Done recursively manually even though walk does go down a depth of one folder
@@ -950,14 +955,19 @@ class FmkPlumbing(object):
                     os.path.join(prefix, prj_dir) + os.sep
                 )
 
+            # Take all python files except for __init__.py and remove the .py suffix
             files = list(
-                    map(
-                        lambda x: x.removesuffix(".py"),
-                        filter(lambda x: x.endswith(".py"), files)
+                    map(lambda x: x.removesuffix(".py"),
+                        filter(lambda x: x.endswith(".py"), 
+                           filter(lambda x: x != "__init__.py", files)
+                        )
                     )
                 )
             if len(files) != 0:
-                projects[prefix+prj_dir] = files
+                key=prefix+prj_dir
+                if projects.get(key) is None:
+                    projects[key] = []
+                projects[key].extend(files)
 
         if gr.is_running_from_fs:
             if not self._quiet:
