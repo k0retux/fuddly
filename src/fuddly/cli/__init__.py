@@ -148,12 +148,14 @@ def main(argv: List[str] = None):
                 nargs='?',
                 help="Name of the tool to launch",
             )
+
+        # TODO add completion for tools
         p.add_argument(
             "args",
             action="append",
             nargs=argparse.REMAINDER,
             help="Arguments to passthrough to the tool",
-        )
+        ).completer = SuppressCompleter() 
 
     with subparsers.add_parser("workspace", help="Manage fuddly's workspace") as p:
         parsers["workspace"] = p
