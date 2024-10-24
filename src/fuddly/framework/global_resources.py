@@ -92,18 +92,14 @@ ensure_dir(config_folder)
 
 user_projects_folder = fuddly_data_folder + 'user_projects' + os.sep
 ensure_dir(user_projects_folder)
-ensure_file(user_projects_folder + os.sep + '__init__.py')
 user_data_models_folder = fuddly_data_folder + 'user_data_models' + os.sep
 ensure_dir(user_data_models_folder)
-ensure_file(user_data_models_folder + os.sep + '__init__.py')
 
 user_info_folder = fuddly_data_folder + 'user_info' + os.sep
 ensure_dir(user_info_folder)
-ensure_file(user_info_folder + os.sep + '__init__.py')
 
 user_targets_folder = fuddly_data_folder + 'user_targets' + os.sep
 ensure_dir(user_targets_folder)
-ensure_file(user_targets_folder + os.sep + '__init__.py')
 
 fmk_folder = app_folder + os.sep + 'framework' + os.sep
 

@@ -820,7 +820,9 @@ class FmkPlumbing(object):
         dms = entry_points(group=group_name)
         for module in dms:
             try:
-                dm_params = self._import_dm(module, module.name)
+                *prefix, name = module.module.split(".")
+                prefix = ".".join(prefix)
+                dm_params = self._import_dm(prefix + ".", name)
             except DataModelDuplicateError as e:
                 if not self._quiet:
                     self.print(colorize(f"*** The data model '{e.name}' was already defined, "
@@ -840,17 +842,8 @@ class FmkPlumbing(object):
                 self._fmkDB_insert_dm_and_dmakers(dm_params["dm"].name, dm_params["tactics"])
 
     def _import_dm(self, prefix, name, reload_dm=False):
-        load_from_module=False
         try:
-            # loading from a python module
-            if type(prefix) is importlib.metadata.EntryPoint:
-                load_from_module=True
-                module = prefix.load()
-
-            # loading from a file
-            else:
-                module = importlib.import_module(prefix + name)
-
+            module = importlib.import_module(prefix + name)
             if reload_dm:
                 importlib.reload(module.strategy)
                 importlib.reload(module.dm)
@@ -891,7 +884,7 @@ class FmkPlumbing(object):
         if dm_params["dm"].name is None:
             dm_params["dm"].name = name
 
-        if load_from_module and not reload_dm and self._name2dm.get(dm_params['dm'].name) is not None:
+        if not reload_dm and self._name2dm.get(dm_params['dm'].name) is not None:
             raise DataModelDuplicateError(dm_params['dm'].name)
 
         self._name2dm[dm_params["dm"].name] = dm_params["dm"]
@@ -941,21 +934,40 @@ class FmkPlumbing(object):
 
         projects = collections.OrderedDict()
 
-        def populate_projects(path, prefix=""):
-            prj_dir = os.path.basename(os.path.normpath(path))
-            for (dirpath, dirnames, filenames) in os.walk(path):
-                if filenames:
-                    projects[prefix + prj_dir] = []
-                    projects[prefix + prj_dir].extend(filenames)
-                for d in dirnames:
-                    full_path = os.path.join(path, d)
-                    rel_path = os.path.join(prj_dir, d)
-                    projects[prefix + rel_path] = []
-                    for (dth, dnames, fnm) in os.walk(full_path):
-                        projects[prefix + rel_path].extend(fnm)
-                        break
-                break
+        def populate_projects(search_path, prefix=""):
+            prj_dir = os.path.basename(os.path.normpath(search_path))
+            (path, dirs, files) = next(os.walk(search_path))
+            if "__init__.py" in files:
+                # Normapath remove the / that will most likely be at the end of prefix
+                basename=os.path.basename(search_path)
+                key=os.path.normpath(prefix)
+                if basename != "":
+                    if projects.get(key) is None:
+                        projects[key] = []
+                    projects[key].append(os.path.basename(search_path))
+                    return
 
+            for d in [x for x in dirs if x != "__pycache__"]:
+                # Done recursively manually even though walk does go down a depth of one folder
+                # but only one folder, so it would be nicer to do it ourselves
+                populate_projects(
+                    os.path.join(search_path, d),
+                    os.path.join(prefix, prj_dir) + os.sep
+                )
+
+            # Take all python files except for __init__.py and remove the .py suffix
+            files = list(
+                    map(lambda x: x.removesuffix(".py"),
+                        filter(lambda x: x.endswith(".py"), 
+                           filter(lambda x: x != "__init__.py", files)
+                        )
+                    )
+                )
+            if len(files) != 0:
+                key=prefix+prj_dir
+                if projects.get(key) is None:
+                    projects[key] = []
+                projects[key].extend(files)
 
         if gr.is_running_from_fs:
             if not self._quiet:
@@ -963,27 +975,11 @@ class FmkPlumbing(object):
             populate_projects(gr.projects_folder, prefix="fuddly/")
         populate_projects(gr.user_projects_folder)
 
-        prjs = copy.copy(projects)
-        for k in prjs:
-            projects[k] = list(filter(is_python_file, projects[k]))
-            if "__init__.py" in projects[k]:
-                projects[k].remove("__init__.py")
-            if not projects[k]:
-                del projects[k]
-
-        rexp_proj = re.compile(r'(.*)\.py$')
-
         for dname, file_list in projects.items():
             if not self._quiet:
-                self.print(
-                    colorize(">>> Look for Projects within '%s' Directory" % dname,
-                             rgb=Color.FMKINFOSUBGROUP))
+                self.print(colorize(f">>> Look for Projects within '{dname}' Directory", rgb=Color.FMKINFOSUBGROUP))
             prefix = dname.replace(os.sep, ".") + "."
-            for f in file_list:
-                res = rexp_proj.match(f)
-                if res is None:
-                    continue
-                name = res.group(1)
+            for name in file_list:
                 prj_params = self._import_project(prefix, name)
                 if prj_params is not None:
                     self._add_project(
@@ -1007,7 +1003,10 @@ class FmkPlumbing(object):
 
         for module in projects:
             try:
-                prj_params = self._import_project(module, module.name)
+                # module_name.submodule.name -> (module_name.submdule., name)
+                *prefix, name = module.module.split(".")
+                prefix = ".".join(prefix)
+                prj_params = self._import_project(prefix + ".", name)
             except ProjectDuplicateError as e:
                 if not self._quiet:
                     self.print(colorize(f"*** The project '{e.name}' was already defined, "
@@ -1024,21 +1023,17 @@ class FmkPlumbing(object):
                 self.import_successfull = False
 
     def _import_project(self, prefix, name, reload_prj=False):
-        load_from_module=False
         try: 
-            if type(prefix) is importlib.metadata.EntryPoint: # Reloading from a python module
-                # The prefix is the module in this case 
-                load_from_module=True
-                module = prefix.load()
-
-            else: # Reloading from a file
-                if importlib.util.find_spec(prefix + name) is None:
-                    name += "_proj"
-                module = importlib.import_module(prefix + name)
-                name = name.removesuffix("_proj")
+            if importlib.util.find_spec(prefix + name) is None:
+                name += "_proj"
+            module = importlib.import_module(prefix + name)
+            name = name.removesuffix("_proj")
 
             if reload_prj:
                 importlib.reload(module)
+                for i in list(filter(lambda x: x.startswith(prefix+name), sys.modules.keys())):
+                    importlib.reload(sys.modules[i])
+
         except:
             if self._quiet:
                 return None
@@ -1069,7 +1064,7 @@ class FmkPlumbing(object):
         else:
             name = prj_params["project"].name
 
-        if load_from_module and (not reload_prj and self._name2prj.get(prj_params["project"].name) is not None):
+        if not reload_prj and self._name2prj.get(prj_params["project"].name) is not None:
             raise ProjectDuplicateError(prj_params["project"].name)
 
         self._name2prj[prj_params["project"].name] = prj_params["project"]
