@@ -40,35 +40,34 @@ import signal
 
 from functools import wraps, partial
 from typing import Sequence
-from importlib.util import find_spec
 
-from fuddly.framework.data import Data, DataProcess
+from fuddly.framework.config import config, config_dot_proxy, update_config
+from fuddly.framework.cosmetics import aligned_stdout
 from fuddly.framework.database import FeedbackGate
-from fuddly.framework.knowledge.feedback_collector import FeedbackSource
+from fuddly.framework.data import Data, DataProcess
+from fuddly.framework.director_helpers import *
 from fuddly.framework.error_handling import *
 from fuddly.framework.evolutionary_helpers import EvolutionaryScenariosFactory
+from fuddly.framework.global_resources import *
+from fuddly.framework import generic_data_makers
+from fuddly.framework.knowledge.feedback_collector import FeedbackSource
 from fuddly.framework.logger import *
 from fuddly.framework.monitor import *
-from fuddly.framework.director_helpers import *
 from fuddly.framework.project import *
 from fuddly.framework.scenario import *
 from fuddly.framework.tactics_helpers import *
 from fuddly.framework.target_helpers import *
-from fuddly.framework.cosmetics import aligned_stdout
-from fuddly.framework.config import config, config_dot_proxy, update_config
-from fuddly.libs.utils import *
-
-from fuddly.framework import generic_data_makers
-
-from fuddly.framework.global_resources import *
+from fuddly.libs.importer import fuddly_importer_hook
 from fuddly.libs.utils import *
 
 import importlib
+from importlib.util import find_spec
 from importlib.metadata import entry_points
 
 import io
 
-sys.path.insert(0, fuddly_data_folder)
+# Needed for when fuddly is not used from the CLI
+fuddly_importer_hook.setup()
 sys.path.insert(0, external_libs_folder)
 
 sig_int_handler = signal.getsignal(signal.SIGINT)
@@ -851,6 +850,8 @@ class FmkPlumbing(object):
                 self.print(colorize(f">>> Look for Data Models within '{dname}' directory",
                                     rgb=Color.FMKINFOSUBGROUP))
             prefix = dname.replace(os.sep, ".") + "."
+            if prefix.startswith("user_data_models"):
+                prefix = prefix.replace("user_data_models", "fuddly.data_models")
             for name in names:
                 dm_abspath = os.path.join(gr.fuddly_data_folder, dname, name)
                 dm_params = self._import_dm(prefix, name, dm_abspath)
@@ -869,7 +870,7 @@ class FmkPlumbing(object):
         if not self._quiet:
             self.print(colorize(FontStyle.BOLD + "="*63+"[ Data Models (python modules) ]==", rgb=Color.FMKINFOGROUP))
 
-        group_name=gr.ep_group_names["data_models"]
+        group_name = gr.ep_group_names["data_models"]
         dms = entry_points(group=group_name)
         for module in dms:
             try:
@@ -880,6 +881,8 @@ class FmkPlumbing(object):
                     dm_path = os.path.dirname(m.origin)
                 else:
                     dm_path = None
+                if prefix == "":
+                    prefix = "fuddly.data_models"
                 dm_params = self._import_dm(prefix + ".", name, dm_path)
             except DataModelDuplicateError as e:
                 if not self._quiet:
@@ -905,6 +908,7 @@ class FmkPlumbing(object):
             if reload_dm:
                 importlib.reload(module.strategy)
                 importlib.reload(module.dm)
+
         except:
             if not self._quiet:
                 if reload_dm:
@@ -1006,6 +1010,8 @@ class FmkPlumbing(object):
             if not self._quiet:
                 self.print(colorize(f">>> Look for Projects within '{dname}' Directory", rgb=Color.FMKINFOSUBGROUP))
             prefix = dname.replace(os.sep, ".") + "."
+            if prefix.startswith("user_projects"):
+                prefix = prefix.replace("user_projects", "fuddly.projects")
             for name in file_list:
                 prj_path = None if prj_basepath is None else os.path.join(prj_basepath, name)
                 prj_params = self._import_project(prefix, name, prj_path)
@@ -1023,7 +1029,7 @@ class FmkPlumbing(object):
                     self.import_successfull = False
 
     def _get_projects_module(self, fmkDB_update=True):
-        group_name=gr.ep_group_names["projects"]
+        group_name = gr.ep_group_names["projects"]
         projects = entry_points(group=group_name)
 
         if not self._quiet:
@@ -1034,6 +1040,8 @@ class FmkPlumbing(object):
                 # module_name.submodule.name -> (module_name.submdule., name)
                 *prefix, name = module.module.split(".")
                 prefix = ".".join(prefix)
+                if prefix == "":
+                    prefix = "fuddly.projects"
                 m = find_spec(module.module)
                 if os.path.basename(m.origin) == "__init__.py":
                     prj_path = os.path.dirname(m.origin)
@@ -1056,7 +1064,7 @@ class FmkPlumbing(object):
                 self.import_successfull = False
 
     def _import_project(self, prefix, name, prj_path, reload_prj=False):
-        try: 
+        try:
             if importlib.util.find_spec(prefix + name) is None:
                 name += "_proj"
             module = importlib.import_module(prefix + name)

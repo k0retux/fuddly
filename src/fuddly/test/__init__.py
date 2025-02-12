@@ -51,6 +51,12 @@ if not (mock_module and ddt_module):
 
 mock = mock_mod
 
+# Import magic
+# import fuddly.{obj_type} will find targets, data_models, projects or info
+# automagically wethere they are define in an entry point, as part of fuddly's
+# core or in the user_data_folder
+from fuddly.libs.importer import fuddly_importer_hook
+fuddly_importer_hook.setup()
 
 parser = argparse.ArgumentParser(description='Process arguments.')
 parser.add_argument('-a', '--all', action='store_true',
