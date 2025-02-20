@@ -22,22 +22,14 @@
 ################################################################################
 
 from enum import Enum
-
-try:
-    from enum import auto
-except ImportError:
-    __my_enum_auto_id = 1
-    def auto():
-        global __my_enum_auto_id
-        i = __my_enum_auto_id
-        __my_enum_auto_id += 1
-        return i
+from enum import auto
 
 
 class TrustLevel(Enum):
     Maximum = auto()
     Medium = auto()
     Minimum = auto()
+
 
 class Info(Enum):
     def __init__(self, val):
@@ -77,40 +69,6 @@ class Info(Enum):
             return TrustLevel.Minimum
         else:
             return TrustLevel.Medium
-
-
-class OS(Info):
-    Linux = auto()
-    Windows = auto()
-    Android = auto()
-    Unknown = auto()
-
-class Hardware(Info):
-    X86_64 = auto()
-    X86_32 = auto()
-    PowerPc = auto()
-    ARM = auto()
-    Unknown = auto()
-
-class Language(Info):
-    C = auto()
-    Ada = auto()
-    Pascal = auto()
-    Unknown = auto()
-
-class InputHandling(Info):
-    Ctrl_Char_Set = auto()
-    Printable_Char_Set = auto()
-    Unknown = auto()
-
-class Test(Info):
-    Cursory = auto()
-    Medium = auto()
-    Deep = auto()
-
-class OperationMode(Info):
-    Determinist = auto()
-    Random = auto()
 
 
 class InformationCollector(object):
@@ -158,13 +116,3 @@ class InformationCollector(object):
 
     def __bool__(self):
         return bool(self._collector)
-
-
-if __name__ == "__main__":
-
-    OS.Linux.increase_trust()
-    OS.Linux.increase_trust()
-    OS.Linux.show_trust()
-
-    OS.Windows.show_trust()
-

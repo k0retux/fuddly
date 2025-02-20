@@ -42,8 +42,7 @@ from fuddly.framework import basic_primitives as bp
 from fuddly.framework.encoders import *
 from fuddly.framework.error_handling import *
 from fuddly.framework.global_resources import *
-from fuddly.framework.knowledge.information import *
-
+from fuddly.info.generic import *
 from fuddly.libs import debug_facility as dbg
 
 DEBUG = dbg.VT_DEBUG

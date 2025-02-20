@@ -22,18 +22,17 @@
 ################################################################################
 
 from __future__ import print_function
-
 import functools
-
-from fuddly.framework.knowledge.information import *
-from fuddly.libs.utils import Term
-
+from fuddly.framework.knowledge.information import Info
+from fuddly.info.generic import *
 from fuddly.libs import debug_facility as dbg
+from fuddly.libs.utils import Term
 
 if dbg.KNOW_DEBUG:
     DEBUG_PRINT = dbg.DEBUG_PRINT
 else:
     DEBUG_PRINT = dbg.NO_PRINT
+
 
 @functools.total_ordering
 class SimilarityMeasure(object):
@@ -53,6 +52,7 @@ class SimilarityMeasure(object):
     def __add__(self, other):
         new_lvl = (self._level + other._level) // 2
         return SimilarityMeasure(level=new_lvl)
+
 
 UNIQUE = SimilarityMeasure(level=0)
 EQUAL = SimilarityMeasure(level=16)
