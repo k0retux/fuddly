@@ -251,16 +251,16 @@ class FmkTask(threading.Thread):
         self._stop.set()
 
 
-def _populate_projects(search_path, prefix="" , projects=None):
+def _populate_projects(search_path, prefix="", projects=None):
     if projects is None:
         projects = collections.OrderedDict()
-    search_path=os.path.normpath(search_path)
+    search_path = os.path.normpath(search_path)
     for (path, dirs, files) in os.walk(search_path, followlinks=True):
-        rel_path=path.removeprefix(search_path).removeprefix(os.sep)
+        rel_path = path.removeprefix(search_path).removeprefix(os.sep)
         if "__init__.py" in files:
             # normapth make sure the path does not end in a '/'
-            key=os.path.normpath(os.path.join(prefix, os.path.dirname(rel_path)))
-            basename=os.path.basename(path.removeprefix(search_path).removeprefix(os.sep))
+            key = os.path.normpath(os.path.join(prefix, os.path.dirname(rel_path)))
+            basename = os.path.basename(path.removeprefix(search_path).removeprefix(os.sep))
             if basename != "":
                 if projects.get(key) is None:
                     projects[key] = (path.removesuffix(basename), [])
@@ -273,12 +273,12 @@ def _populate_projects(search_path, prefix="" , projects=None):
         files = list(
                 map(lambda x: x.removesuffix(".py"),
                     filter(lambda x: x.endswith(".py"),
-                       filter(lambda x: x != "__init__.py", files)
+                           filter(lambda x: x != "__init__.py", files)
+                           )
                     )
-                )
             )
         if len(files) != 0:
-            key=os.path.normpath(os.path.join(prefix, rel_path))
+            key = os.path.normpath(os.path.join(prefix, rel_path))
             if projects.get(key) is None:
                 projects[key] = (None, [])
             projects[key][1].extend(files)
@@ -827,13 +827,13 @@ class FmkPlumbing(object):
             for dirpath in dirs:
                 p = Path(os.path.join(path, dirpath))
                 # We only load modules that have a __init__.py, dm.py and strategy.py
-                inits = [ dirname(x) for x in  p.glob('**/__init__.py') ]
-                dms = [ dirname(x) for x in  p.glob('**/dm.py') ]
-                strats = [ dirname(x) for x in  p.glob('**/strategy.py') ]
+                inits = [dirname(x) for x in p.glob('**/__init__.py')]
+                dms = [dirname(x) for x in p.glob('**/dm.py')]
+                strats = [dirname(x) for x in p.glob('**/strategy.py')]
                 modules = list(set(inits) & set(strats) & set(dms))
                 for m in modules:
                     relpath = dirname(m)[len(base_path)+1:]
-                    key=prefix+relpath
+                    key = prefix+relpath
                     if data_models.get(key) is None:
                         data_models[key] = []
                     # print(f'***DBG {key} {basename(m)}')
