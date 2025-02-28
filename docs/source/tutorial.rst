@@ -39,7 +39,7 @@ At this point you can issue the following command to enter the `fuddly` shell:
 
 .. note::
    Some completion files are provided in `fuddly` repository for various shells
-   (bash, fish, zsh). They are located at ``<path to fuddly>/shell_completions/``.
+   (bash, fish, zsh). They are located at ``<path to fuddly>/contrib/shell_completions/``.
 
 .. note::
    If you want to get a `pipenv shell` from wherever you are, you can add the following script in your
@@ -56,6 +56,9 @@ At this point you can issue the following command to enter the `fuddly` shell:
 
 Refer to :ref:`tuto:cli` for more information on `fuddly` CLI.
 
+.. note::
+   You might also be able to install a native package through your package manager. Check the ``contrib/``
+   folder to see if there are build scripts for you distribution.
 
 Using ``fuddly`` simple UI: ``Fuddly Shell``
 ============================================
@@ -131,7 +134,7 @@ monitoring means as well as some scenarios and/or virtual directors.
 
    Projects and data models files are retrieved either from
    ``<root of fuddly>/{projects,data_models}/``,
-   ``<fuddly data folder>/{projects,data_models}/`` or from isntalled
+   ``<fuddly data folder>/user_{projects,data_models}/`` or from installed
    python modules exposing them through importlib entry_points.
    see :ref:`packaging` for more information on that
 
@@ -2183,7 +2186,7 @@ Defining a Project Environment
 ------------------------------
 
 The environment---composed of at least one target, a logger, and
-optionnaly some monitoring means and virtual directors---is setup
+optionally some monitoring means and virtual directors---is setup
 within a project file located within ``<root of fuddly>/projects/`` or within
 ``<fuddly data folder>/user_projects/``. To illustrate that let's
 show the beginning of ``generic/standard.py``:
