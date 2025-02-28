@@ -309,7 +309,7 @@ framework.evolutionary_helpers module
 framework.info.generic module
 --------------------------------------
 
-.. automodule:: fuddly.framework.info.generic
+.. automodule:: fuddly.info.generic
    :members:
    :undoc-members:
    :show-inheritance:
