@@ -93,7 +93,7 @@ framework.target_helpers module
 framework.targets.network module
 --------------------------------
 
-.. automodule:: fuddly.framework.targets.network
+.. automodule:: fuddly.targets.network
     :members:
     :undoc-members:
     :show-inheritance:
@@ -104,7 +104,7 @@ framework.targets.network module
 framework.targets.local module
 ------------------------------
 
-.. automodule:: fuddly.framework.targets.local
+.. automodule:: fuddly.targets.local
     :members:
     :undoc-members:
     :show-inheritance:
@@ -115,7 +115,7 @@ framework.targets.local module
 framework.targets.sim module
 ----------------------------
 
-.. automodule:: fuddly.framework.targets.sim
+.. automodule:: fuddly.targets.sim
     :members:
     :undoc-members:
     :show-inheritance:
@@ -126,7 +126,7 @@ framework.targets.sim module
 framework.targets.ssh module
 ----------------------------
 
-.. automodule:: fuddly.framework.targets.ssh
+.. automodule:: fuddly.targets.ssh
     :members:
     :undoc-members:
     :show-inheritance:
@@ -137,7 +137,7 @@ framework.targets.ssh module
 framework.targets.printer module
 --------------------------------
 
-.. automodule:: fuddly.framework.targets.printer
+.. automodule:: fuddly.targets.printer
     :members:
     :undoc-members:
     :show-inheritance:
@@ -148,7 +148,7 @@ framework.targets.printer module
 framework.targets.debug module
 ------------------------------
 
-.. automodule:: fuddly.framework.targets.debug
+.. automodule:: fuddly.targets.debug
     :members:
     :undoc-members:
     :show-inheritance:
@@ -299,6 +299,17 @@ framework.evolutionary_helpers module
 -------------------------------------
 
 .. automodule:: fuddly.framework.evolutionary_helpers
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
+
+framework.info.generic module
+--------------------------------------
+
+.. automodule:: fuddly.info.generic
    :members:
    :undoc-members:
    :show-inheritance:

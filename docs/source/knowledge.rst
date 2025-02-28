@@ -136,10 +136,10 @@ Information Categories and How to Define More
 
 The current information categories are:
 
-- :class:`fuddly.framework.knowledge.information.OS`
-- :class:`fuddly.framework.knowledge.information.Hardware`
-- :class:`fuddly.framework.knowledge.information.Language`
-- :class:`fuddly.framework.knowledge.information.InputHandling`
+- :class:`fuddly.info.generic.OS`
+- :class:`fuddly.info.generic.Hardware`
+- :class:`fuddly.info.generic.Language`
+- :class:`fuddly.info.generic.InputHandling`
 
 Depending on your project, you may want to define new specific information categories. In such case,
 You will simply have to define new python enumeration that inherits from
@@ -160,10 +160,10 @@ Automatic Fuddly Adaptation to Knowledge
 Currently, data models that use the following node types
 within their description will benefit from knowledge about the targets under test:
 
-- :class:`fuddly.framework.value_types.String`: Specific cases related to :class:`fuddly.framework.knowledge.information.Language`
+- :class:`fuddly.framework.value_types.String`: Specific cases related to :class:`fuddly.info.generic.Language`
   are added.
 - :class:`fuddly.framework.value_types.Filename`: Specific cases related to
-  :class:`fuddly.framework.knowledge.information.OS` and :class:`fuddly.framework.knowledge.information.Language`
+  :class:`fuddly.info.generic.OS` and :class:`fuddly.info.generic.Language`
   are added.
 
 If knowledge on the targets are provided to the framework (either from the project file or because
@@ -188,6 +188,4 @@ available to the user in various context like:
   :attr:`fuddly.framework.tactics_helpers.DataMaker.knowledge_source`.
 
 - Data model description (refer to :ref:`data-model`), through the attribute
-  :attr:`fuddly.framework.data_model.DataModel.knowledge_source`.
-
 These parameters refer to a global object defined for the project as a set of :class:`fuddly.framework.knowledge.information.Info`.

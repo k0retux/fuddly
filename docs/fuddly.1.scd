@@ -27,7 +27,7 @@ options.
 *workspace*
 	Manage the fuddly workspace
 *show*
-    Display the README file of a specified Project
+	Display the README file of a specified Project
 
 
 Each of these action have a section describing their syntax and they all support
@@ -135,8 +135,8 @@ a *-h* and *--help* options to describe their use from the command line
 
 *fuddly* show project_name
 
-    *project_name*
-        Name of the project whose README file is requested to be displayed.
+	*project_name*
+		Name of the project whose README file is requested to be displayed.
 
 
 # SEE ALSO
