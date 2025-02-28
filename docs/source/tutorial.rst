@@ -57,8 +57,48 @@ At this point you can issue the following command to enter the `fuddly` shell:
 Refer to :ref:`tuto:cli` for more information on `fuddly` CLI.
 
 .. note::
-   You might also be able to install a native package through your package manager. Check the ``contrib/``
+   You might also be able to `fuddly` through your package manager. Check the ``contrib/``
    folder to see if there are build scripts for you distribution.
+
+
+.. _tuto:cli:
+
+Fuddly CLI
+==========
+
+`Fuddly` comes with a cli to make interacting with it's various parts easier.
+
+A man page describing it's use is available at ``docs/fuddly.1.scd``.
+It is written in `scdoc <https://git.sr.ht/~sircmpwn/scdoc/>`_, which is itself quite readable without
+having to produce the roff man page.
+
+To call the cli, you can either run ``python -m fuddly.cli`` for the ``src/`` folder, or if `fuddly` is
+installed (either in a venv/pipenv or through your package manager), you can directly call the ``fuddly``
+command.)
+
+Just calling it without any arguments will give you a small help message to help you find the right
+incantation to use:
+
+.. code-block:: none
+
+   usage: fuddly [-h] action ...
+
+   the fuddly cli interface
+
+   positional arguments:
+     action
+       shell      launch the fuddly interactive shell
+       run        run a fuddly project script
+       new        create a new project or data model
+       tool       execute a fuddly tool
+       workspace  manage fuddly's workspace
+       show       display the README file of a specified Project
+
+   options:
+     -h, --help   show this help message and exit
+
+   use 'fuddly <action>' help more information on their arguments
+
 
 Using ``fuddly`` simple UI: ``Fuddly Shell``
 ============================================
