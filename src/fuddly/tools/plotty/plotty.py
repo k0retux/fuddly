@@ -40,16 +40,12 @@ def get_points(
 
     if is_typing_reference:
         global x_type
-        if len(PlottyOptions.formula.x_expression.variable_names) == 1:
-            column_name = tuple(PlottyOptions.formula.x_expression.variable_names)[0]
-            column_index = column_names.index(column_name)
-            x_type = type(data[0][column_index])
+        column_index = column_names.index(PlottyOptions.formula.x_variable_name)
+        x_type = type(data[0][column_index])
+
         global y_type
-        y_type = None
-        if len(PlottyOptions.formula.y_expression.variable_names) == 1:
-            column_name = tuple(PlottyOptions.formula.y_expression.variable_names)[0]
-            column_index = column_names.index(column_name)
-            y_type = type(data[0][column_index])
+        column_index = column_names.index(PlottyOptions.formula.y_variable_name)
+        y_type = type(data[0][column_index])
 
     if data is None:
         return None

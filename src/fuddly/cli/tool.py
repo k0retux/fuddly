@@ -35,14 +35,9 @@ def start(args: argparse.Namespace) -> int:
         return 0
 
     sys.argv = [args.tool, *args.args]
-
-    try:
-        pkg = importlib.util.find_spec(f"fuddly.tools.{args.tool}")
-        if pkg is None:
-            print(f"{args.tool} is not a valide fuddly tool")
-            return 1
-        mod = pkg.loader.load_module()
-        return mod.main()
-    except Exception as e:
-        print(f"Error while starting {args.tool}: {e}")
+    pkg = importlib.util.find_spec(f"fuddly.tools.{args.tool}")
+    if pkg is None:
+        print(f"{args.tool} is not a valid fuddly tool")
         return 1
+    mod = pkg.loader.load_module()
+    return mod.main()

@@ -1,6 +1,8 @@
 # Ignore these files
-*.pyc
+__pycache__/
 *~
-.idea
-.DS_Store
-venv
+
+build/
+src/fuddly.egg-info/
+
+.gitignore

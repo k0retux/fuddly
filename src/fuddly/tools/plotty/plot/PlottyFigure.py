@@ -125,5 +125,5 @@ class PlottyFigure:
 
     def __setup_legend(self):
         self.__axes.set_title(PlottyOptions.formula)
-        self.__axes.set_xlabel(PlottyOptions.formula.x_expression)
-        self.__axes.set_ylabel(PlottyOptions.formula.y_expression)
+        self.__axes.set_xlabel(PlottyOptions.formula.x_variable_name)
+        self.__axes.set_ylabel(PlottyOptions.formula.y_variable_name)

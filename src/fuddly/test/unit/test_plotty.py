@@ -11,30 +11,10 @@ import ddt
 class PlottyTest(unittest.TestCase):
 
 #region Formula
-    
-    @ddt.data(
-        {'expression': "a", 'variables': set(["a"])},
-        {'expression': "a + b", 'variables': set(["a", "b"])},
-        {'expression': "exp((a + b) / c)", 'variables': set(["a", "b", "c"]), 'functions': set(["exp"])},
-        {
-            'expression': "sqrt((1-a*exp(2t) + w^pi) / (sin(2x / pi) + cos(pi/y)))", 
-            'variables': set(["a", "t", "w", "pi", "x", "y"]),
-            'functions': set(["sqrt", "exp", "sin", "cos"])
-        }
-    )
-    @ddt.unpack
-    def test_should_find_all_variables_when_given_well_formed_expression(self, expression, variables=set(), functions=set()):
-        math_expression = Formula.MathExpression(expression)
-
-        self.assertSetEqual(set(math_expression.variable_names), variables)
-        self.assertSetEqual(set(math_expression.function_names), functions)
-
 
     @ddt.data(
         {'formula': "a ~ b"},
-        {'formula': "a + b ~ c"},
-        {'formula': "exp((a + b) / c) ~ cos(a + sin(b))"},
-        {'formula': "sqrt((1-a*exp(2t) + w^pi) ~ (sin(2x / pi) + cos(pi/y) ))  "}
+        {'formula': "super_y_variable ~ extraordinary_x_variable"},
     )
     @ddt.unpack
     def test_should_return_parts_when_given_valid_formula(self, formula):
@@ -55,29 +35,6 @@ class PlottyTest(unittest.TestCase):
 
         self.assertIsNone(result)
 
-
-    @ddt.data(
-        {'formula': "a ~ b", 'left_expr': "a", 'right_expr': "b"},
-        {'formula': "a + b ~ c", 'left_expr': "a+b", 'right_expr': "c"},
-        {
-            'formula': "exp((a + b) / c) ~ cos(a + sin(b))",
-            'left_expr': "exp((a+b)/c)", 
-            'right_expr': "cos(a+sin(b))"
-        },
-        {
-            'formula': "sqrt ((1  -a *exp(2t) + w^ pi) ~ (  sin(2x / pi) + cos(pi/y) ))  ",
-            'left_expr': "sqrt((1-a*exp(2t)+w^pi)", 
-            'right_expr': "(sin(2x/pi)+cos(pi/y)))"
-        }
-    )
-    @ddt.unpack
-    def test_should_properly_split_and_trim_when_given_valid_formula(self, formula, left_expr, right_expr):
-        result = parse_formula.parse_formula(formula)
-        self.assertIsNotNone(result)
-
-        left, right = result
-        self.assertEqual(left, left_expr)
-        self.assertEqual(right, right_expr)
     
 #endregion
     
