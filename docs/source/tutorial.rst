@@ -276,7 +276,7 @@ in the project file. In the case of the ``standard`` project, if you issue the f
 >> run_project standard
 
 the imaginary data model used by our tutorial (``mydf``) will be loaded and the default target
-will be chosen, namely the ``EmptyTarget`` (usefull for testing purpose) with the ID 0.
+will be chosen, namely the ``EmptyTarget`` (useful for testing purpose) with the ID 0.
 
 In order to run the project with the ``unzip`` target (ID 4), you will have to issue the following
 command::
@@ -1173,6 +1173,29 @@ refer to the section :ref:`tuto:operators`
 Implementing a Data Model and Defining a Project Environment
 ============================================================
 
+Foreword
+--------
+
+When using `fuddly`, data-models, projects, targets and knowledge can come
+from a variety of sources (external python modules detected through entry-points,
+fuddly internal modules, scripts and modules in the `fuddly_data_folder`).
+Moreover, the source on you machine could differ from the source on somebody
+else's machine for the same module.
+
+Therefore, fuddly hooks into python's import mechanism to abstract away the source
+of your module on import.
+
+Concretely, this means that you can respectively import data_models, projects,
+targets and knowledge from the `fuddly.data_models`, `fuddly.projects`,
+`fuddly.targets` and `fuddly.info` and fuddly will find it for you.
+
+This hooking is done automatically when you use the fuddly cli, or whenever you
+import `fuddly.framework.plumbing`.
+
+If 2 modules have the same name in different locations, the priority is
+fuddly_data_folder, then fuddly's internal modules, and lastly third party
+modules detected by their entry point group.
+
 .. _data-model:
 
 Data Modeling
@@ -1205,7 +1228,7 @@ From this model, data can be generated (look at the figure
 operation is a projection of the existing raw data within the data
 model (see the example :ref:`ex:zip-mod` and also the section
 :ref:`tuto:dm-absorption`). Data generation allows to create data that
-conforms to the model if we want to iteract correctly with the target,
+conforms to the model if we want to interact correctly with the target,
 or to create degenerate data if we want to assess target
 robustness. Data absorption can allow to generate data from existing
 ones if the model is not accurate enough to generate correct data by
@@ -1440,7 +1463,7 @@ model, by calling
      through specific Generators automatically created for you.
 
    If you need more flexibility in this sample absorption process, you should overwrite
-   the method :meth:`fuddly.framework.data_model.DataModel._atom_absorption_additional_actions()` as illsutrated
+   the method :meth:`fuddly.framework.data_model.DataModel._atom_absorption_additional_actions()` as illustrated
    by the JPG data model.
 
    Finally, if you need even more flexibility in order to create atoms from samples, because
@@ -1707,7 +1730,7 @@ And if we want to visualize it more gracefully, we can simply write
 figure :ref:`testnode-show`.
 
 .. note::
-   You can remark that we have instanciated twice the TestNode
+   You can remark that we have instantiated twice the TestNode
    data model in line 7 and 8. The first one referenced by ``data_gen``
    was used to generate the previous raw data while the second one
    referenced by ``data_abs`` will be used in what follows to
@@ -1764,7 +1787,7 @@ Currently, there is four kinds of constraints:
 ``similar_content``
   This constraint is a lighter version of ``content``. It allows values similar to the one defined
   in the data model to be accepted in absorption operations. This is especially leveraged by
-  String() to distinguish case sensitive from case incensitive strings.
+  String() to distinguish case sensitive from case insensitive strings.
 
 ``regexp``
   This constraint control if regular expression---that some terminal
@@ -1922,7 +1945,7 @@ generation).
 Describing Protocols Ruling a Data Model
 ----------------------------------------
 
-Two compementary options are provided by the framework:
+Two complementary options are provided by the framework:
 
 - The `Scenario Infrastructure` that enables you to have access to automatically-created
   `Generators` that comply to the protocols you described. Refer to :ref:`scenario-infra`.
