@@ -11,7 +11,7 @@ def get_each_project_module() -> []:
     project_modules = []
 
     # Project from user (FS)
-    projects = populate_projects(gr.user_projects_folder, prefix="user_projects", projects=None)
+    projects = populate_projects(gr.user_projects_folder, prefix="fuddly/projects", projects=None)
     for dname, (_, file_list) in projects.items():
         prefix = dname.replace(os.sep, ".") + "."
         for name in file_list:

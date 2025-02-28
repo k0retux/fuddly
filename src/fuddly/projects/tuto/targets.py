@@ -1,8 +1,8 @@
 import socket
 
-from fuddly.framework.targets.debug import TestTarget
+from fuddly.targets.debug import TestTarget
 from fuddly.framework.target_helpers import EmptyTarget
-from fuddly.framework.targets.network import NetworkTarget
+from fuddly.targets.network import NetworkTarget
 from fuddly.libs.external_modules import serial_module
 
 from .monitoring import (P1, P2, health_check, probe_pid, probe_mem)

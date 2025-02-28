@@ -50,14 +50,18 @@ fuddly_version = '0.30'
 ep_group_names = {
     "data_models": "fuddly.data_models",
     "projects":    "fuddly.projects",
+    "targets":     "fuddly.targets",
+    "info":        "fuddly.info",
 }
 framework_folder = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 framework_folder = '.' if framework_folder == '' else framework_folder
 
 app_folder = os.path.dirname(framework_folder)
 app_folder = '.' if app_folder == '' else app_folder
-projects_folder = app_folder + os.sep + 'projects' + os.sep
-data_models_folder = app_folder + os.sep + 'data_models' + os.sep
+projects_folder = app_folder + os.sep + "projects" + os.sep
+data_models_folder = app_folder + os.sep + "data_models" + os.sep
+targets_folder = app_folder + os.sep + "targets" + os.sep
+info_folder = app_folder + os.sep + "info" + os.sep
 
 fuddly_data_folder = os.path.expanduser('~' + os.sep + 'fuddly_data' + os.sep)
 if not xdg_mod_error and not os.path.exists(fuddly_data_folder):

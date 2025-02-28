@@ -23,12 +23,12 @@
 
 from fuddly.framework.comm_backends import Serial_Backend
 from fuddly.framework.plumbing import *
-from fuddly.framework.knowledge.information import *
 from fuddly.framework.knowledge.feedback_handler import TestFbkHandler
 from fuddly.framework.scenario import *
 from fuddly.framework.global_resources import UI
 from fuddly.framework.evolutionary_helpers import DefaultPopulation, CrossoverHelper
 from fuddly.framework.data import DataProcess
+from fuddly.info.generic import *
 
 project = Project()
 project.default_dm = ['mydf', 'myproto']

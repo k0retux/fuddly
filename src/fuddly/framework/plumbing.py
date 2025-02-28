@@ -40,35 +40,34 @@ import signal
 
 from functools import wraps, partial
 from typing import Sequence
-from importlib.util import find_spec
 
-from fuddly.framework.data import Data, DataProcess
+from fuddly.framework.config import config, config_dot_proxy, update_config
+from fuddly.framework.cosmetics import aligned_stdout
 from fuddly.framework.database import FeedbackGate
-from fuddly.framework.knowledge.feedback_collector import FeedbackSource
+from fuddly.framework.data import Data, DataProcess
+from fuddly.framework.director_helpers import *
 from fuddly.framework.error_handling import *
 from fuddly.framework.evolutionary_helpers import EvolutionaryScenariosFactory
+from fuddly.framework.global_resources import *
+from fuddly.framework import generic_data_makers
+from fuddly.framework.knowledge.feedback_collector import FeedbackSource
 from fuddly.framework.logger import *
 from fuddly.framework.monitor import *
-from fuddly.framework.director_helpers import *
 from fuddly.framework.project import *
 from fuddly.framework.scenario import *
 from fuddly.framework.tactics_helpers import *
 from fuddly.framework.target_helpers import *
-from fuddly.framework.cosmetics import aligned_stdout
-from fuddly.framework.config import config, config_dot_proxy, update_config
-from fuddly.libs.utils import *
-
-from fuddly.framework import generic_data_makers
-
-from fuddly.framework.global_resources import *
+from fuddly.libs.importer import fuddly_importer_hook
 from fuddly.libs.utils import *
 
 import importlib
+from importlib.util import find_spec
 from importlib.metadata import entry_points
 
 import io
 
-sys.path.insert(0, fuddly_data_folder)
+# Needed for when fuddly is not used from the CLI
+fuddly_importer_hook.setup()
 sys.path.insert(0, external_libs_folder)
 
 sig_int_handler = signal.getsignal(signal.SIGINT)
@@ -252,16 +251,16 @@ class FmkTask(threading.Thread):
         self._stop.set()
 
 
-def _populate_projects(search_path, prefix="" , projects=None):
+def _populate_projects(search_path, prefix="", projects=None):
     if projects is None:
         projects = collections.OrderedDict()
-    search_path=os.path.normpath(search_path)
+    search_path = os.path.normpath(search_path)
     for (path, dirs, files) in os.walk(search_path, followlinks=True):
-        rel_path=path.removeprefix(search_path).removeprefix(os.sep)
+        rel_path = path.removeprefix(search_path).removeprefix(os.sep)
         if "__init__.py" in files:
             # normapth make sure the path does not end in a '/'
-            key=os.path.normpath(os.path.join(prefix, os.path.dirname(rel_path)))
-            basename=os.path.basename(path.removeprefix(search_path).removeprefix(os.sep))
+            key = os.path.normpath(os.path.join(prefix, os.path.dirname(rel_path)))
+            basename = os.path.basename(path.removeprefix(search_path).removeprefix(os.sep))
             if basename != "":
                 if projects.get(key) is None:
                     projects[key] = (path.removesuffix(basename), [])
@@ -274,12 +273,12 @@ def _populate_projects(search_path, prefix="" , projects=None):
         files = list(
                 map(lambda x: x.removesuffix(".py"),
                     filter(lambda x: x.endswith(".py"),
-                       filter(lambda x: x != "__init__.py", files)
+                           filter(lambda x: x != "__init__.py", files)
+                           )
                     )
-                )
             )
         if len(files) != 0:
-            key=os.path.normpath(os.path.join(prefix, rel_path))
+            key = os.path.normpath(os.path.join(prefix, rel_path))
             if projects.get(key) is None:
                 projects[key] = (None, [])
             projects[key][1].extend(files)
@@ -828,13 +827,13 @@ class FmkPlumbing(object):
             for dirpath in dirs:
                 p = Path(os.path.join(path, dirpath))
                 # We only load modules that have a __init__.py, dm.py and strategy.py
-                inits = [ dirname(x) for x in  p.glob('**/__init__.py') ]
-                dms = [ dirname(x) for x in  p.glob('**/dm.py') ]
-                strats = [ dirname(x) for x in  p.glob('**/strategy.py') ]
+                inits = [dirname(x) for x in p.glob('**/__init__.py')]
+                dms = [dirname(x) for x in p.glob('**/dm.py')]
+                strats = [dirname(x) for x in p.glob('**/strategy.py')]
                 modules = list(set(inits) & set(strats) & set(dms))
                 for m in modules:
                     relpath = dirname(m)[len(base_path)+1:]
-                    key=prefix+relpath
+                    key = prefix+relpath
                     if data_models.get(key) is None:
                         data_models[key] = []
                     # print(f'***DBG {key} {basename(m)}')
@@ -851,6 +850,8 @@ class FmkPlumbing(object):
                 self.print(colorize(f">>> Look for Data Models within '{dname}' directory",
                                     rgb=Color.FMKINFOSUBGROUP))
             prefix = dname.replace(os.sep, ".") + "."
+            if prefix.startswith("user_data_models"):
+                prefix = prefix.replace("user_data_models", "fuddly.data_models")
             for name in names:
                 dm_abspath = os.path.join(gr.fuddly_data_folder, dname, name)
                 dm_params = self._import_dm(prefix, name, dm_abspath)
@@ -869,7 +870,7 @@ class FmkPlumbing(object):
         if not self._quiet:
             self.print(colorize(FontStyle.BOLD + "="*63+"[ Data Models (python modules) ]==", rgb=Color.FMKINFOGROUP))
 
-        group_name=gr.ep_group_names["data_models"]
+        group_name = gr.ep_group_names["data_models"]
         dms = entry_points(group=group_name)
         for module in dms:
             try:
@@ -880,6 +881,8 @@ class FmkPlumbing(object):
                     dm_path = os.path.dirname(m.origin)
                 else:
                     dm_path = None
+                if prefix == "":
+                    prefix = "fuddly.data_models"
                 dm_params = self._import_dm(prefix + ".", name, dm_path)
             except DataModelDuplicateError as e:
                 if not self._quiet:
@@ -905,6 +908,7 @@ class FmkPlumbing(object):
             if reload_dm:
                 importlib.reload(module.strategy)
                 importlib.reload(module.dm)
+
         except:
             if not self._quiet:
                 if reload_dm:
@@ -1006,6 +1010,8 @@ class FmkPlumbing(object):
             if not self._quiet:
                 self.print(colorize(f">>> Look for Projects within '{dname}' Directory", rgb=Color.FMKINFOSUBGROUP))
             prefix = dname.replace(os.sep, ".") + "."
+            if prefix.startswith("user_projects"):
+                prefix = prefix.replace("user_projects", "fuddly.projects")
             for name in file_list:
                 prj_path = None if prj_basepath is None else os.path.join(prj_basepath, name)
                 prj_params = self._import_project(prefix, name, prj_path)
@@ -1023,7 +1029,7 @@ class FmkPlumbing(object):
                     self.import_successfull = False
 
     def _get_projects_module(self, fmkDB_update=True):
-        group_name=gr.ep_group_names["projects"]
+        group_name = gr.ep_group_names["projects"]
         projects = entry_points(group=group_name)
 
         if not self._quiet:
@@ -1034,6 +1040,8 @@ class FmkPlumbing(object):
                 # module_name.submodule.name -> (module_name.submdule., name)
                 *prefix, name = module.module.split(".")
                 prefix = ".".join(prefix)
+                if prefix == "":
+                    prefix = "fuddly.projects"
                 m = find_spec(module.module)
                 if os.path.basename(m.origin) == "__init__.py":
                     prj_path = os.path.dirname(m.origin)
@@ -1056,7 +1064,7 @@ class FmkPlumbing(object):
                 self.import_successfull = False
 
     def _import_project(self, prefix, name, prj_path, reload_prj=False):
-        try: 
+        try:
             if importlib.util.find_spec(prefix + name) is None:
                 name += "_proj"
             module = importlib.import_module(prefix + name)

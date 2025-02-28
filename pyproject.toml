@@ -45,3 +45,14 @@ tuto = "fuddly.data_models.tutorial.tuto"
 standard = "fuddly.projects.generic.standard"
 usb = "fuddly.projects.specific.usb"
 tuto = "fuddly.projects.tuto"
+
+[project.entry-points."fuddly.targets"]
+debug = "fuddly.targets.debug"
+local = "fuddly.targets.local"
+network = "fuddly.targets.network"
+printer = "fuddly.targets.printer"
+sim = "fuddly.targets.sim"
+ssh = "fuddly.targets.ssh"
+
+[project.entry-points."fuddly.info"]
+generic = "fuddly.info.generic"
