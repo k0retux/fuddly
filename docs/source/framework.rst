@@ -306,6 +306,17 @@ framework.evolutionary_helpers module
    :special-members:
    :exclude-members: __dict__, __weakref__
 
+framework.info.generic module
+--------------------------------------
+
+.. automodule:: fuddly.framework.info.generic
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :private-members:
+   :special-members:
+   :exclude-members: __dict__, __weakref__
+
 framework.knowledge.feedback_collector module
 ---------------------------------------------
 
