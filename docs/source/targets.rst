@@ -32,7 +32,7 @@ NetworkTarget
 =============
 
 Reference:
-  :class:`fuddly.framework.targets.network.NetworkTarget`
+  :class:`fuddly.targets.network.NetworkTarget`
 
 Description:
   This generic target enables you to interact with a network target in
@@ -41,15 +41,15 @@ Description:
   customized by inheriting from it. Especially, the following methods
   are expected to be overloaded, depending on the user needs:
 
-  - :meth:`fuddly.framework.targets.network.NetworkTarget._custom_data_handling_before_emission()`
+  - :meth:`fuddly.targets.network.NetworkTarget._custom_data_handling_before_emission()`
     for performing some actions related to the data that will be emitted
     right after.
-  - :meth:`fuddly.framework.targets.network.NetworkTarget._feedback_handling()` for
+  - :meth:`fuddly.targets.network.NetworkTarget._feedback_handling()` for
     filtering/handling feedback in some ways before transferring it to
     ``fuddly``.
-  - :meth:`fuddly.framework.targets.network.NetworkTarget.initialize()` for doing
+  - :meth:`fuddly.targets.network.NetworkTarget.initialize()` for doing
     specific actions at target initialization.
-  - :meth:`fuddly.framework.targets.network.NetworkTarget.terminate()` for doing
+  - :meth:`fuddly.targets.network.NetworkTarget.terminate()` for doing
     specific actions at target termination.
 
 
@@ -109,7 +109,7 @@ Usage Example:
      identifier has to be provided (``fbk_id``), and will be used to
      refer to the interface at different points in time. Main
      interfaces (the first one and the ones defined through
-     :meth:`fuddly.framework.targets.network.NetworkTarget.register_new_interface()`)
+     :meth:`fuddly.targets.network.NetworkTarget.register_new_interface()`)
      has also an identifier but it is set automatically by the
      ``NetworkTarget``.
 
@@ -126,7 +126,7 @@ LocalTarget
 ===========
 
 Reference:
-  :class:`fuddly.framework.targets.local.LocalTarget`
+  :class:`fuddly.targets.local.LocalTarget`
 
 Description:
   This generic target enables you to interact with a program running
@@ -134,9 +134,9 @@ Description:
   inheriting from it. The following methods are expected to be
   overloaded, depending on the user needs:
 
-  - :meth:`fuddly.framework.targets.local.LocalTarget.initialize()` for doing
+  - :meth:`fuddly.targets.local.LocalTarget.initialize()` for doing
     specific actions at target initialization.
-  - :meth:`fuddly.framework.targets.local.LocalTarget.terminate()` for doing
+  - :meth:`fuddly.targets.local.LocalTarget.terminate()` for doing
     specific actions at target termination.
 
 Feedback:
@@ -173,7 +173,7 @@ Usage example:
      the command to execute for interacting with the targeted
      program. This parameter will be put after the file name, but you
      can also add parameters before it through the method
-     :meth:`fuddly.framework.targets.local.LocalTarget.set_pre_args()`. Note the use
+     :meth:`fuddly.targets.local.LocalTarget.set_pre_args()`. Note the use
      of the variable ``workspace_folder`` that points to the
      ``fuddly`` workspace directory which is typically used when
      temporary files need to be created.
@@ -183,7 +183,7 @@ SSHTarget
 =========
 
 Reference:
-  :class:`fuddly.framework.targets.ssh.SSHTarget`
+  :class:`fuddly.targets.ssh.SSHTarget`
 
 Description:
   This generic target enables you to interact with a remote target requiring an SSH connection.
@@ -206,7 +206,7 @@ PrinterTarget
 =============
 
 Reference:
-  :class:`fuddly.framework.targets.printer.PrinterTarget`
+  :class:`fuddly.targets.printer.PrinterTarget`
 
 Description:
   This generic target enables you to interact with a IPP server.
@@ -243,7 +243,7 @@ SIMTarget
 =========
 
 Reference:
-  :class:`fuddly.framework.targets.sim.SIMTarget`
+  :class:`fuddly.targets.sim.SIMTarget`
 
 Description:
   This generic target enables you to interact with a SIM card through a serial line
@@ -269,7 +269,7 @@ TestTarget
 ==========
 
 Reference:
-  :class:`fuddly.framework.targets.debug.TestTarget`
+  :class:`fuddly.targets.debug.TestTarget`
 
 Description:
   This generic target enables you to stimulate a virtual target that could be useful for test

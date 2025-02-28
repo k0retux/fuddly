@@ -2270,9 +2270,9 @@ the project file.
 Within the tutorial project (``projects/tuto.py``), multiple
 targets have been defined:
 
-- three different :class:`fuddly.framework.targets.local.LocalTarget` for interacting with local programs;
-- a :class:`fuddly.framework.targets.printer.PrinterTarget` to communicate with a CUPS server;
-- and finally a :class:`fuddly.framework.targets.network.NetworkTarget` that is setup
+- three different :class:`fuddly.targets.local.LocalTarget` for interacting with local programs;
+- a :class:`fuddly.targets.printer.PrinterTarget` to communicate with a CUPS server;
+- and finally a :class:`fuddly.targets.network.NetworkTarget` that is setup
   with two interfaces from which data can be sent to (and feedback
   retrieved from), plus an additional feedback source.
 
