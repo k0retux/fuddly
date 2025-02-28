@@ -92,23 +92,25 @@ this:
    :linenos:
    :emphasize-lines: 21
 
-   ===============================================================[ Data Models ]==
-   >>> Look for Data Models within 'data_models' directory
-   *** Found Data Model: 'mydf' ***
-   *** Found Data Model: 'example' ***
-   >>> Look for Data Models within 'data_models/protocols' directory
-   *** Found Data Model: 'usb' ***
-   >>> Look for Data Models within 'data_models/file_formats' directory
-   *** Found Data Model: 'zip' ***
-   *** Found Data Model: 'png' ***
-   *** Found Data Model: 'pdf' ***
+   ===================================================================[ Data Models (filesystem) ]==
+   ===============================================================[ Data Models (python modules) ]==
+   *** Found Data Model: 'HTTP' ***
    *** Found Data Model: 'jpg' ***
-   ==================================================================[ Projects ]==
-   >>> Look for Projects within 'projects/specific' Directory
-   *** Found Project: 'usb' ***
-   >>> Look for Projects within 'projects/generic' Directory
+   *** Found Data Model: 'json' ***
+   *** Found Data Model: 'myproto' ***
+   *** Found Data Model: 'pdf' ***
+   *** Found Data Model: 'png' ***
+   *** Found Data Model: 'pppoe' ***
+   *** Found Data Model: 'sms' ***
+   *** Found Data Model: 'mydf' ***
+   *** Found Data Model: 'usb' ***
+   *** Found Data Model: 'zip' ***
+   ======================================================================[ Projects (filesystem) ]==
+   ==================================================================[ Projects (python modules) ]==
    *** Found Project: 'standard' ***
-   ============================================[ Fuddly Home Information ]==
+   *** Found Project: 'tuto' ***
+   *** Found Project: 'usb' ***
+   ====================================================================[ Fuddly Home Information ]==
 
     --> data folder: ~/.local/share/fuddly/
     --> contains: - fmkDB.db, logs, imported/exported data, ...
