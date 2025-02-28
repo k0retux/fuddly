@@ -7,4 +7,4 @@ def parse_formula(formula: str) -> Optional[tuple[str, str]]:
     if len(parts) != 2:
         return None
 
-    return (parts[0], parts[1])
+    return (parts[0].strip(), parts[1].strip())
