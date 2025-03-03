@@ -90,7 +90,12 @@ class fuddly_importer_hook(MetaPathFinder):
 
             # Fuddly's user_data_folder
             p = os.path.join(fuddly_data_folder, "user_" + obj_type)
-            if p not in candidates:
+            if os.path.exists(p) and p not in candidates:
+                _p, dirs, _ = next(os.walk(p))
+                for d in dirs:
+                    if d == "__pycache__":
+                        continue
+                    candidates.append(os.path.join(_p, d))
                 candidates.append(p)
 
             # Fuddly core path
