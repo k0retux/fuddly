@@ -1218,23 +1218,31 @@ Foreword
 
 When using `fuddly`, data-models, projects, targets and knowledge can come
 from a variety of sources (external python modules detected through entry-points,
-fuddly internal modules, scripts and modules in the `fuddly_data_folder`).
-Moreover, the source on you machine could differ from the source on somebody
+`fuddly`'s internal modules or scripts and modules in `fuddly`'s `user_data_folder`).
+Moreover, the sources on your machine could differ from the sources on somebody
 else's machine for the same module.
 
-Therefore, fuddly hooks into python's import mechanism to abstract away the source
+Therefore, `fuddly` hooks into python's import mechanism to abstract away the source
 of your module on import.
 
 Concretely, this means that you can respectively import data_models, projects,
 targets and knowledge from the `fuddly.data_models`, `fuddly.projects`,
-`fuddly.targets` and `fuddly.info` and fuddly will find it for you.
+`fuddly.targets` and `fuddly.info` and `fuddly` will find it for you.
 
-This hooking is done automatically when you use the fuddly cli, or whenever you
+This hooking is done automatically when you use the `fuddly` cli, or whenever you
 import `fuddly.framework.plumbing`.
 
 If 2 modules have the same name in different locations, the priority is
-fuddly_data_folder, then fuddly's internal modules, and lastly third party
+`fuddly`'s user_data_folder, then `fuddly`'s internal modules, and lastly third party
 modules detected by their entry point group.
+
+.. note::
+   Historically, content in `fuddly`'s user_data_folder could be organised in 
+   subdirectories. To keep some kind of compatibility with this, the first subfolder
+   in any of the ``user_*`` directories is also checked during an import.
+   This means that if you have ``user_data_models/my_category/my_dm``, you can import
+   it with either ``fuddly.data_models.my_dm`` or ``fuddly.data_models.my_category.my_dm``.
+
 
 .. _data-model:
 
