@@ -3,9 +3,10 @@ from importlib.metadata import entry_points, EntryPoint
 from importlib.abc import MetaPathFinder
 from importlib.util import spec_from_file_location, module_from_spec
 from importlib.machinery import ModuleSpec, PathFinder
+from importlib.util import find_spec
 
 import fuddly
-from fuddly.framework.global_resources import ep_group_names, fuddly_data_folder
+from fuddly.framework.global_resources import ep_group_names, fuddly_data_folder, app_folder
 from fuddly.libs.external_modules import colorize, Color
 
 import os.path
@@ -89,12 +90,12 @@ class fuddly_importer_hook(MetaPathFinder):
             candidates = cls.path_candidates[obj_type]
 
             # Fuddly's user_data_folder
-            p = os.path.join(fuddly_data_folder, "user_" + obj_type)
+            p = os.path.join(fuddly_data_folder, obj_type)
             if p not in candidates:
                 candidates.append(p)
 
             # Fuddly core path
-            p = fuddly.__spec__.origin.removesuffix("__init__.py")
+            p = app_folder
             candidates.append(os.path.join(p, obj_type))
 
             # Entry point paths

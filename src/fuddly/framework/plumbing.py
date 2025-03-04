@@ -41,6 +41,10 @@ import signal
 from functools import wraps, partial
 from typing import Sequence
 
+# Needed for when fuddly is not used from the CLI
+from fuddly.libs.importer import fuddly_importer_hook
+fuddly_importer_hook.setup()
+
 from fuddly.framework.config import config, config_dot_proxy, update_config
 from fuddly.framework.cosmetics import aligned_stdout
 from fuddly.framework.database import FeedbackGate
@@ -57,7 +61,6 @@ from fuddly.framework.project import *
 from fuddly.framework.scenario import *
 from fuddly.framework.tactics_helpers import *
 from fuddly.framework.target_helpers import *
-from fuddly.libs.importer import fuddly_importer_hook
 from fuddly.libs.utils import *
 
 import importlib
@@ -66,8 +69,6 @@ from importlib.metadata import entry_points
 
 import io
 
-# Needed for when fuddly is not used from the CLI
-fuddly_importer_hook.setup()
 sys.path.insert(0, external_libs_folder)
 
 sig_int_handler = signal.getsignal(signal.SIGINT)
@@ -843,15 +844,15 @@ class FmkPlumbing(object):
             if not self._quiet:
                 self.print(colorize("*** Running directly from sources, loading internal data_models ***", rgb=Color.WARNING))
             populate_data_models(gr.data_models_folder, prefix="fuddly")
-        populate_data_models(gr.user_data_models_folder)
+        populate_data_models(gr.user_data_models_folder, prefix='<data folder>')
 
         for dname, names in data_models.items():
             if not self._quiet:
                 self.print(colorize(f">>> Look for Data Models within '{dname}' directory",
                                     rgb=Color.FMKINFOSUBGROUP))
             prefix = dname.replace(os.sep, ".") + "."
-            if prefix.startswith("user_data_models"):
-                prefix = prefix.replace("user_data_models", "fuddly.data_models")
+            if prefix.startswith("<data folder>.data_models"):
+                prefix = prefix.replace("<data folder>.data_models", "fuddly.data_models")
             for name in names:
                 dm_abspath = os.path.join(gr.fuddly_data_folder, dname, name)
                 dm_params = self._import_dm(prefix, name, dm_abspath)
@@ -1004,14 +1005,16 @@ class FmkPlumbing(object):
             if not self._quiet:
                 self.print(colorize("*** Running directly from sources, loading internal projects ***", rgb=Color.WARNING))
             _populate_projects(gr.projects_folder, prefix="fuddly/projects", projects=projects)
-        _populate_projects(gr.user_projects_folder, prefix="user_projects", projects=projects)
+        _populate_projects(gr.user_projects_folder, prefix="<data folder>/projects", projects=projects)
 
         for dname, (prj_basepath, file_list) in projects.items():
             if not self._quiet:
-                self.print(colorize(f">>> Look for Projects within '{dname}' Directory", rgb=Color.FMKINFOSUBGROUP))
+                self.print(colorize(
+                    f">>> Look for Projects within '{dname}' Directory",
+                    rgb=Color.FMKINFOSUBGROUP))
             prefix = dname.replace(os.sep, ".") + "."
-            if prefix.startswith("user_projects"):
-                prefix = prefix.replace("user_projects", "fuddly.projects")
+            if prefix.startswith("<data folder>.projects"):
+                prefix = prefix.replace("<data folder>.projects", "fuddly.projects")
             for name in file_list:
                 prj_path = None if prj_basepath is None else os.path.join(prj_basepath, name)
                 prj_params = self._import_project(prefix, name, prj_path)

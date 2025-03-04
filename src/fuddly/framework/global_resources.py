@@ -94,15 +94,15 @@ else:
     config_folder = xdg_fuddly_config_folder
 ensure_dir(config_folder)
 
-user_projects_folder = fuddly_data_folder + 'user_projects' + os.sep
+user_projects_folder = fuddly_data_folder + 'projects' + os.sep
 ensure_dir(user_projects_folder)
-user_data_models_folder = fuddly_data_folder + 'user_data_models' + os.sep
+user_data_models_folder = fuddly_data_folder + 'data_models' + os.sep
 ensure_dir(user_data_models_folder)
 
-user_info_folder = fuddly_data_folder + 'user_info' + os.sep
+user_info_folder = fuddly_data_folder + 'info' + os.sep
 ensure_dir(user_info_folder)
 
-user_targets_folder = fuddly_data_folder + 'user_targets' + os.sep
+user_targets_folder = fuddly_data_folder + 'targets' + os.sep
 ensure_dir(user_targets_folder)
 
 fmk_folder = app_folder + os.sep + 'framework' + os.sep

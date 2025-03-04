@@ -68,9 +68,9 @@ def start(args: argparse.Namespace):
         dest_dir = Path(".").absolute()
     else:
         if args.object.startswith("project"):
-            dest_dir = dest_dir/"user_projects"
+            dest_dir = dest_dir/"projects"
         else:
-            dest_dir = dest_dir/"user_data_models"
+            dest_dir = dest_dir/"data_models"
 
     if args.pyproject:
         # Overridding the name to reduce the risk of conflicting with an other package
