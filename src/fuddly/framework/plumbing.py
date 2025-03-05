@@ -1073,11 +1073,7 @@ class FmkPlumbing(object):
 
     def _import_project(self, prefix, name, prj_path, reload_prj=False):
         try:
-            if importlib.util.find_spec(prefix + name) is None:
-                name += "_proj"
             module = importlib.import_module(prefix + name)
-            name = name.removesuffix("_proj")
-
             if reload_prj:
                 importlib.reload(module)
                 for i in list(filter(lambda x: x.startswith(prefix+name), sys.modules.keys())):
@@ -1088,9 +1084,9 @@ class FmkPlumbing(object):
                 return None
 
             if reload_prj:
-                self.print(colorize(f"*** Problem during reload of '{name}'/'{name}_proj' ***", rgb=Color.ERROR))
+                self.print(colorize(f"*** Problem during reload of '{name}' ***", rgb=Color.ERROR))
             else:
-                self.print(colorize(f"*** Problem during import of '{name}'/'{name}_proj' ***", rgb=Color.ERROR))
+                self.print(colorize(f"*** Problem during import of '{name}' ***", rgb=Color.ERROR))
             self.print("-" * 60)
             traceback.print_exc(file=self.printer)
             self.print("-" * 60)
@@ -1105,7 +1101,7 @@ class FmkPlumbing(object):
             prj_params["project"] = module.project
         except:
             if not self._quiet:
-                self.print(colorize(f"*** ERROR: '{name}'/'{name}_proj' shall contain a global variable 'project' ***", rgb=Color.ERROR))
+                self.print(colorize(f"*** ERROR: '{name}' shall contain a global variable 'project' ***", rgb=Color.ERROR))
             return None
 
         if prj_path is not None:
