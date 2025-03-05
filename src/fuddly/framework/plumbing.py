@@ -256,6 +256,7 @@ def _populate_projects(search_path, prefix="", projects=None):
     if projects is None:
         projects = collections.OrderedDict()
     search_path = os.path.normpath(search_path)
+
     for (path, dirs, files) in os.walk(search_path, followlinks=True):
         rel_path = path.removeprefix(search_path).removeprefix(os.sep)
         if "__init__.py" in files:
@@ -874,6 +875,8 @@ class FmkPlumbing(object):
         group_name = gr.ep_group_names["data_models"]
         dms = entry_points(group=group_name)
         for module in dms:
+            if module.name.endswith("__root__"):
+                continue
             try:
                 *prefix, name = module.module.split(".")
                 prefix = ".".join(prefix)
@@ -1039,6 +1042,8 @@ class FmkPlumbing(object):
             self.print(colorize(FontStyle.BOLD + "="*66+"[ Projects (python modules) ]==", rgb=Color.FMKINFOGROUP))
 
         for module in projects:
+            if module.name.endswith("__root__"):
+                continue
             try:
                 # module_name.submodule.name -> (module_name.submdule., name)
                 *prefix, name = module.module.split(".")

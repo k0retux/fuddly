@@ -25,6 +25,8 @@ def get_each_project_module() -> []:
 
     # Projects from modules
     for ep in entry_points(group=gr.ep_group_names["projects"]):
+        if ep.name.endswith("__root__"):
+            continue
         m = find_spec(ep.module)
         # If an entry point does not actually point to a module
         # i.e. somebody broke their package
