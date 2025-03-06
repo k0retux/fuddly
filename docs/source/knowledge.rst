@@ -29,14 +29,14 @@ Defining a Feedback Handler to Create Knowledge from Targets' and Probes' Feedba
 ==================================================================================
 
 The :class:`fuddly.knowledge.feedback_handler.FeedbackHandler` class provides the frame to create knowledge based on
-feedback retrieved by fuddly (essentially from targets themselves and the probes that
+feedback retrieved by `fuddly` (essentially from targets themselves and the probes that
 monitor them).
 
 In your projects, you can use already defined feedback handlers in order to automatically extract information
 from feedback and create knowledge that will be directly usable in various relevant fuddly components
 (refer to :ref:`kn:leverage`).
 
-Let's illustrate that with the ``tuto`` project (refer to ``<fuddly_root>/projects/tuto_proj.py``) that
+Let's illustrate that with the ``tuto`` project (refer to ``<fuddly_root>/projects/tuto/prj.py``) that
 register a ``fuddly``-defined feedback handler whose sole purpose is to present the feature:
 
 .. code-block:: python

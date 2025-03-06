@@ -460,7 +460,7 @@ encoder
   (:meth:`fuddly.framework.node.Node.to_bytes`). Additionally, during an absorption
   (refer to :ref:`tuto:dm-absorption`), the *decoding* will also be performed automatically.
 
-  Several generic encoders are defined within ``fuddly.framework/encoders.py``. But if they
+  Several generic encoders are defined within ``framework/encoders.py``. But if they
   don't match your need, you can define your own encoder by inheriting from
   :class:`fuddly.framework.encoders.Encoder` and implementing its interface.
 
@@ -2051,7 +2051,7 @@ between multiple nodes.
     More details are provided in what follows.
 
 
-For instance, let's analyse the following data description (extracted from the ``mydf`` data model in ``tuto.py``),
+For instance, let's analyse the following data description (extracted from the ``mydf`` data model in ``tuto/dm.py``),
 leveraging :class:`fuddly.framework.constraint_helpers.Constraint` objects.
 
 .. code-block:: python
@@ -2089,7 +2089,7 @@ from the non-terminal node on which the ``constraints`` keyword is attached.
 It takes also a ``vars`` parameter expecting a list of the names of the nodes
 used in the boolean function (in the same order as the parameters of the function).
 
-The following example (also extracted from the ``mydf`` data model in ``tuto.py``) is similar to
+The following example (also extracted from the ``mydf`` data model in ``tuto/dm.py``) is similar to
 the previous one except that the Z3 backend is leveraged instead of the python ``constraint`` module.
 In order to leverage this backend, you only have to use :class:`fuddly.framework.constraint_helpers.Z3Constraint`
 instead of :class:`fuddly.framework.constraint_helpers.Constraint` and provide a Z3 formula within the
@@ -2163,5 +2163,5 @@ exception will be raised.
    The constructor of :class:`fuddly.framework.constraint_helpers.Constraint` takes also an optional parameter
    ``var_to_varns`` in order to support namespaces (used to discriminate nodes having identical
    name in the data description). Refer to ``namespace`` keyword for more details, and to the ``csp_ns`` node
-   description in the data model ``mydf`` (in ``tuto.py``).
+   description in the data model ``mydf`` (in ``tuto/dm.py``).
 
