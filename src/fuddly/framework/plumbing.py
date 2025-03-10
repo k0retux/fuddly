@@ -2172,7 +2172,8 @@ class FmkPlumbing(object):
                 else:
                     data = self.process_data(data_desc.process, seed=seed,
                                              save_gen_seed=save_generator_seed,
-                                             reset_dmakers=reset_dmakers)
+                                             reset_dmakers=reset_dmakers,
+                                             called_from_scenario=True)
                     if data is None:
                         if data_desc.auto_regen:
                             data_desc.auto_regen_cpt += 1
@@ -2180,7 +2181,8 @@ class FmkPlumbing(object):
                         while data_desc.next_process() or data_desc.auto_regen:
                             data = self.process_data(data_desc.process, seed=seed,
                                                      save_gen_seed=save_generator_seed,
-                                                     reset_dmakers=reset_dmakers)
+                                                     reset_dmakers=reset_dmakers,
+                                                     called_from_scenario=True)
                             if data is not None:
                                 break
 
@@ -3467,7 +3469,7 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=["S2"])
     def process_data(self, action_list, seed=None, valid_gen=False, save_gen_seed=False,
-                     reset_dmakers=False):
+                     reset_dmakers=False, called_from_scenario=False):
         """
 
         Args:
@@ -3688,7 +3690,7 @@ class FmkPlumbing(object):
                     self.__initialized_dmakers[dmaker_obj] = (False, None)
                 else:
                     ui = self.__initialized_dmakers[dmaker_obj][1]
-                    if ui is not None and ui != user_input:
+                    if ui is not None and ui != user_input and not called_from_scenario:
                         self.set_error(f"Detection of different user inputs provided for the data "
                                        f"maker '{dmaker_obj.__class__.__name__}' than "
                                        f"the ones already set. Take them into account.",
