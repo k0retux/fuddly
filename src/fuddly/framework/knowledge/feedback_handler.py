@@ -64,7 +64,7 @@ class FeedbackHandler(object):
     A feedback handler extract information from binary data.
     """
 
-    def __init__(self, new_window=False, new_window_title=None, **kwargs):
+    def __init__(self, new_window=False, new_window_title=None, keep_term=True, **kwargs):
         """
         Args:
             new_window: If `True`, a new terminal emulator is created, enabling the decoder to use
@@ -73,6 +73,7 @@ class FeedbackHandler(object):
         """
         self._new_window = new_window
         self._new_window_title = new_window_title
+        self._keep_term = keep_term
         self._s = None
         self.term = None
         self.fmkops = None
@@ -143,7 +144,7 @@ class FeedbackHandler(object):
         self._s = ''
         if self._new_window:
             nm = self.__class__.__name__ if self._new_window_title is None else self._new_window_title
-            self.term = Term(title=nm, keepterm=True)
+            self.term = Term(title=nm, keepterm=self._keep_term)
             self.term.start()
 
         self.start(current_dm)
