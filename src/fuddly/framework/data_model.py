@@ -429,7 +429,7 @@ class DataModel(object):
         if dm_samples:
             files.update(dm_samples)
 
-        # Imported data from the specified or default path (ususally the fuddly_data_folder)
+        # Imported data from the specified or default path (usually the fuddly_data_folder)
         # This takes priority over all other files since it arrives last in the list
         _, _, filenames = next(os.walk(path))
         for f in filenames:
