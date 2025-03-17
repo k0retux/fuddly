@@ -1958,6 +1958,46 @@ class TestModelWalker(unittest.TestCase):
             print(colorize('[%d] ' % idx + repr(rnode.to_bytes()), rgb=Color.INFO))
         self.assertEqual(idx, 24)
 
+
+    def test_nested_duplicated_nt(self):
+
+        idx = 0
+        crc_set = set()
+        expected_nb_outcomes = 2355
+        expected_nb_of_diff_outcomes = 2310
+
+        act = [('NESTED_NT', UI(determinist=True)),
+               ('tTYPE', UI(
+                   deep=True,
+                   ign_sep=True,
+                   only_invalid_cases=True,
+                   clone_node=True,
+                   leaf_determinism=False,
+                   consider_sibbling_change=False,
+                   full_combinatory=False
+               ))]
+        for j in range(4000):
+            d = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            crc = zlib.crc32(d.to_bytes())
+            if crc not in crc_set:
+                crc_set.add(crc)
+            # fmk._setup_new_sending()
+            # fmk._log_data(d)
+            idx += 1
+
+        print(f'\n'
+              f'*** Number of message with different CRCs: {len(crc_set)}\n'
+              f'*** Number of generated messages: {idx}\n')
+
+        self.assertAlmostEqual(len(crc_set), expected_nb_of_diff_outcomes, delta=10)
+        self.assertAlmostEqual(idx, expected_nb_outcomes, delta=10)
+        # almostequal because collision in String test cases can lead to less test cases
+        # (related to random bitflip test case that could collide with case_sensitive test case)
+
+
     def test_JPG(self):
         dm = fmk.get_data_model_by_name('jpg')
         dm.build_data_model()

@@ -6874,8 +6874,9 @@ class Node(object):
                                           copy_base_node_attrs=True,
                                           keep_own_sync_attrs=False)
 
-            if new_env and self.env is not None:
-                self.env.update_node_refs(node_dico, ignore_frozen_state=ignore_frozen_state)
+            if self.env is not None:
+                if new_env:
+                    self.env.update_node_refs(node_dico, ignore_frozen_state=ignore_frozen_state)
             elif DEBUG:
                 print("\n*** WARNING: the copied node '%s' don't have an Env() "
                       "associated with it!\n" % base_node.name)

@@ -979,6 +979,46 @@ class MyDF_DataModel(DataModel):
              ]}
 
 
+        nested_nt_desc = \
+        {'name': 'nested_nt',
+         'contents': [
+             {'name': 'TopLevel',
+              'qty': (0,1), 'default_qty': 1,
+              'contents': [
+                  {'name': 'Prefix', 'mutable': False,
+                   'contents': String(values=['(PRE)'])},
+                  {'name': 'MidLevel',
+                   'contents': [
+                       {'name': 'BottomLevel',
+                        'separator': {'contents': {'name': 'dash', 'contents': String(values=['-'])},
+                                      'prefix': False, 'suffix': False, 'unique': True, 'always': False},
+                        'contents': [
+                            {'name': 'Term',
+                             'qty': (1,4), 'default_qty': 2,
+                             'separator': {'contents': {'name': 'ddash', 'contents': String(values=['='])},
+                                           'prefix': False, 'suffix': False, 'unique': True, 'always': True},
+                             'contents': [
+                                 {'name': 'T_first',
+                                  'qty': (0,1), 'default_qty': 1,
+                                  'contents': [
+                                      {'name': 'Tfirst_pld',
+                                       'contents': String(values=['T1st'])},
+                                  ]},
+                                 {'name': 'T_second',
+                                  'qty': (0,1), 'default_qty': 1,
+                                  'contents': String(values=['T2nd'])},
+                             ]}
+                        ]}
+                   ]}
+              ]},
+                # CRC
+                {'name': 'crc',
+                'contents': CRC(vt=INT_str, poly=0x11021, init_crc=0, xor_out=0xffff, rev=True,
+                              clear_attrs=[NodeInternals.Freezable],min_sz=4,reverse_str=True),
+                'node_args': ['TopLevel'],
+                'clear_attrs': MH.Attr.Freezable},
+         ]}
+
 
         tlv_rec0_desc = \
             {'name': 'rec0',
@@ -1238,7 +1278,7 @@ class MyDF_DataModel(DataModel):
                       json1_desc, json2_desc, file_desc, nested_desc,
                       csp_desc, csp_z3_desc, csp_str_desc, csp_ns_desc, csp_basic_desc,
                       csp_default_desc, str_desc, rnd_desc,
-                      shape_type_1_desc, shape_type_2_desc, ns_desc,
+                      shape_type_1_desc, shape_type_2_desc, ns_desc, nested_nt_desc,
                       tlv_rec0_desc, tlv_rec0b_desc, tlv_rec1_desc, tlv_rec2_desc, tlv_rec3_desc,
                       tlv_rec4_desc, recbig_desc)
 

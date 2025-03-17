@@ -180,11 +180,11 @@ class Logger(object):
                 self._log_entry_list.append((Logger.WRITE_API, data))
                 self._log_entry_submitted_cond.notify()
 
-    def pretty_print_data(self, data: Data, fd=None, raw_limit: int = None):
+    def pretty_print_data(self, data: Data, fd=None, raw_limit: int = None, debug=True):
         with self._sync_lock:
             with self._log_entry_submitted_cond:
                 self._log_entry_list.append(
-                    (Logger.PRETTY_PRINT_API, (data, fd, raw_limit))
+                    (Logger.PRETTY_PRINT_API, (data, fd, raw_limit, debug))
                 )
                 self._log_entry_submitted_cond.notify()
 
@@ -328,16 +328,16 @@ class Logger(object):
                     else:
                         sys.stdout.write(params)
                 elif api == Logger.PRETTY_PRINT_API:
-                    data, fd, raw_limit = params
+                    data, fd, raw_limit, debug = params
                     if fd is None:
-                        data.show(log_func=accu.accumulate, raw_limit=raw_limit)
+                        data.show(log_func=accu.accumulate, raw_limit=raw_limit, debug=debug)
                         if self._ext_disp.is_enabled:
                             self._ext_disp.disp.print(accu.content)
                         else:
                             sys.stdout.write(accu.content)
                         accu.clear()
                     else:
-                        data.show(log_func=fd.write, raw_limit=raw_limit)
+                        data.show(log_func=fd.write, raw_limit=raw_limit, debug=debug)
                         fd.flush()
                 elif api == Logger.PRINT_CONSOLE_API:
                     self._print_console(*params)

@@ -151,7 +151,7 @@ class ModelWalker(object):
                                                        resolve_generator=True)
         for n in last_gen:
             n.unfreeze(ignore_entanglement=True)
-        node.unfreeze(recursive=False)
+        node.unfreeze(recursive=False, ignore_entanglement=True)
         # self._root_node.unfreeze(recursive=True, dont_change_state=True)
         node.unfreeze(recursive=True, dont_change_state=True, ignore_entanglement=True)
         consumer.do_after_reset(node)

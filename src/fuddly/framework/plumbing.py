@@ -3024,9 +3024,9 @@ class FmkPlumbing(object):
             return 0
 
     @EnforceOrder(accepted_states=["S2"])
-    def show_data(self, data: Data, verbose=True):
+    def show_data(self, data: Data, verbose=True, debug=False):
         self.lg.print_console("-=[ Data Visualization ]=-\n", rgb=Color.INFO, style=FontStyle.BOLD)
-        self.lg.pretty_print_data(data, raw_limit=400)
+        self.lg.pretty_print_data(data, raw_limit=400, debug=debug)
         self.lg.print_console("\n\n", nl_before=False)
 
     @EnforceOrder(accepted_states=["S2"])
@@ -6000,7 +6000,7 @@ class FmkShell(cmd.Cmd):
         if data is None:
             return False
 
-        self.fz.show_data(data, verbose=False)
+        self.fz.show_data(data, verbose=False, debug=False)
 
         self.__error = False
         return False
@@ -6015,7 +6015,7 @@ class FmkShell(cmd.Cmd):
         if data is None:
             return False
 
-        self.fz.show_data(data, verbose=True)
+        self.fz.show_data(data, verbose=True, debug=False)
 
         self.__error = False
         return False
