@@ -26,6 +26,11 @@ import sys
 import copy
 import inspect
 from enum import Enum
+try:
+    from fuddly.framework._version import version as fuddly_version
+except ModuleNotFoundError:
+    print("WARNING [FMK]: could not find the dynamically generated version, version information could be innacurate", file=sys.stderr)
+    fuddly_version = "0.30"
 
 xdg_mod_error = False
 try:
@@ -46,7 +51,6 @@ def ensure_file(f):
         open(f, 'a').close()
 
 
-fuddly_version = '0.30'
 ep_group_names = {
     "data_models": "fuddly.data_models",
     "projects":    "fuddly.projects",
