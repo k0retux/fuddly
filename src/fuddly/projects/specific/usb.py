@@ -21,6 +21,7 @@
 #
 ################################################################################
 
+import sys
 import time
 
 from fuddly.framework.plumbing import *
@@ -38,7 +39,7 @@ try:
     import rpyc
 except ImportError:
     rpyc_module = False
-    print('WARNING [USB DM]: rpyc lib not installed, Pandaboard target will not be available')
+    print('WARNING [USB DM]: rpyc lib not installed, Pandaboard target will not be available', file=sys.stderr)
 
 class Pandaboard(Target):
 

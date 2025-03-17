@@ -28,7 +28,7 @@ try:
     from xtermcolor import colorize
     xtermcolor.isatty = lambda x: True
 except ImportError:
-    print("WARNING [FMK]: python-xtermcolor module is not installed, colors won't be available!")
+    print("WARNING [FMK]: python-xtermcolor module is not installed, colors won't be available!", file=sys.stderr)
     def colorize(string, rgb=None, ansi=None, bg=None, ansi_bg=None, fd=1):
         return string
 
@@ -103,7 +103,7 @@ try:
 except ImportError:
     graphviz_module = False
     graphviz = None
-    print('WARNING [FMK]: python(3)-graphviz module is not installed, Scenario could not be visualized!')
+    print('WARNING [FMK]: python(3)-graphviz module is not installed, Scenario could not be visualized!', file=sys.stderr)
 
 sqlite3_module = True
 try:
@@ -111,7 +111,7 @@ try:
 except ImportError:
     sqlite3_module = False
     sqlite3 = None
-    print('WARNING [FMK]: SQLite3 not installed, FmkDB will not be available!')
+    print('WARNING [FMK]: SQLite3 not installed, FmkDB will not be available!', file=sys.stderr)
 
 cups_module = True
 try:
@@ -119,7 +119,7 @@ try:
 except ImportError:
     cups_module = False
     cups = None
-    print('WARNING [FMK]: python(3)-cups module is not installed, Printer targets will not be available!')
+    print('WARNING [FMK]: python(3)-cups module is not installed, Printer targets will not be available!', file=sys.stderr)
 
 crcmod_module = True
 try:
@@ -128,7 +128,7 @@ except ImportError:
     crcmod_module = False
     crcmod = None
     print('WARNING [FMK]: python(3)-crcmod module is not installed, the CRC()' \
-          ' generator template will not be available!')
+          ' generator template will not be available!', file=sys.stderr)
 
 ssh_module = True
 try:
@@ -137,7 +137,7 @@ except ImportError:
     ssh_module = False
     ssh = None
     print('WARNING [FMK]: python(3)-paramiko module is not installed! '
-          'Should be installed for ssh-based monitoring.')
+          'Should be installed for ssh-based monitoring.', file=sys.stderr)
 
 serial_module = True
 try:
@@ -146,7 +146,7 @@ except ImportError:
     serial_module = False
     serial = None
     print('WARNING [FMK]: python(3)-serial module is not installed! '
-          'Should be installed for serial-based Target.')
+          'Should be installed for serial-based Target.', file=sys.stderr)
 
 csp_module = True
 try:
@@ -155,7 +155,7 @@ except ImportError:
     csp_module = False
     constraint = None
     print('WARNING [FMK]: python-constraint module is not installed! '
-          'Should be installed to support constraint-based nodes.')
+          'Should be installed to support constraint-based nodes.', file=sys.stderr)
 
 z3_module = True
 try:
@@ -164,4 +164,4 @@ except ImportError:
     z3_module = False
     z3 = None
     print('WARNING [FMK]: python-z3 or z3-solver module is not installed! '
-          'Should be installed to support constraint-based nodes.')
+          'Should be installed to support constraint-based nodes.', file=sys.stderr)

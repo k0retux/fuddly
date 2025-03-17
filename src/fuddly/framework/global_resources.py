@@ -32,7 +32,7 @@ try:
     from xdg.BaseDirectory import xdg_data_home, xdg_config_home
 except ModuleNotFoundError:
     xdg_mod_error = True
-    print('WARNING [FMK]: python3-xdg module is not installed!')
+    print('WARNING [FMK]: python3-xdg module is not installed!', file=sys.stderr)
 
 
 # TODO: Taken out of libs.utils, is this the best place for them?
