@@ -6,7 +6,6 @@ name = "pypi"
 [packages]
 configparser = ">=5.3.0"
 crcmod = ">=1.7"
-cups = "*"
 rpyc = "<7.0.0,>=6.0.0"
 graphviz = "*"
 matplotlib = "*"
@@ -21,6 +20,7 @@ sphinxcontrib-napoleon = "*"
 sphinx-rtd-theme = "*"
 argcomplete = "*"
 fuddly = {file = "."}
+pycups = "*"
 
 [dev-packages]
 ddt = "*"
@@ -31,3 +31,4 @@ python_version = "3.12"
 
 [dev-extra]
 lz4 = "*"
+jsonschema = "*"
