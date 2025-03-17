@@ -76,7 +76,7 @@ or if a maximum number of generation exceeds.
   is configurable.
 
 Finally, to make an evolutionary process available to the framework, it has to be registered at project
-level (meaning inside a ``*_proj.py`` file), through :meth:`fuddly.framework.Project.register_evolutionary_process`.
+level (meaning inside a project module), through :meth:`fuddly.framework.Project.register_evolutionary_process`.
 This method expects processes in the form of 3-tuples containing:
 
 * a name for the scenario that will implement the evolutionary process;
@@ -85,7 +85,7 @@ This method expects processes in the form of 3-tuples containing:
   :class:`fuddly.framework.evolutionary_helpers.EvolutionaryScenariosFactory` in order to instantiate the appropriate
   population object.
 
-Here under is provided an example to register an evolutionary process (defined in ``tuto_proj.py``):
+Here under is provided an example to register an evolutionary process (defined in ``projects/tuto/prj.py``):
 
 .. code-block:: python
 
@@ -115,7 +115,7 @@ It expects the following parameters:
 - The first one describe the process to follow to generate the data in the initial population
   (refer to the API documentation for more information). In the example,
   the process enables to generate altered data from the data type ``exist_cond`` thanks to the
-  the operators ``tTYPE`` and ``tSTRUCT``.
+  operators ``tTYPE`` and ``tSTRUCT``.
 - The second specify the maximum size of the population.
 - The third is a criteria to stop the evolutionary process. It provides the maximum number of generation to reach
 - The fourth is the crossover algorithm to be used. You can either provide your own implementation

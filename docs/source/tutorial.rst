@@ -2685,7 +2685,7 @@ handle status as expected. Status rules are described below:
 
 To quickly retrieve the data that negatively impacted a target and which
 have been recorded within the FmkDB (refer to :ref:`logger-def`) you can
-run ``tools/fmkdb.py --data-with-impact -v``.
+run ``fuddly tools fmkdb --data-with-impact -v``.
 It will display for each target the data you sent for which a negative
 status has been recorded, coming either from:
 

@@ -4,7 +4,7 @@ pkgname="fuddly-git"
 conflicts=("${pkgname/-git/}")
 provides=("${pkgname/-git/}")
 replaces=("python-$pkgname" "python-${pkgname/-git/}")
-pkgver=0.30.r905.0dbf64a
+pkgver=0.30.r930.210a1b2
 pkgrel=1
 pkgdesc="Fuzzing and Data Manipulation Framework (for GNU/Linux)"
 arch=('any')
@@ -22,6 +22,8 @@ depends=(
 	"python-rpyc"
 	"python-sphinx_rtd_theme"
 	"python-argcomplete"
+	"python-z3-solver"
+	"python-pycups"
 
 	# For tests
 	"python-ddt"

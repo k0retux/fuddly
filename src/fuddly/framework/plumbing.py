@@ -256,6 +256,7 @@ def _populate_projects(search_path, prefix="", projects=None):
     if projects is None:
         projects = collections.OrderedDict()
     search_path = os.path.normpath(search_path)
+
     for (path, dirs, files) in os.walk(search_path, followlinks=True):
         rel_path = path.removeprefix(search_path).removeprefix(os.sep)
         if "__init__.py" in files:
@@ -874,6 +875,8 @@ class FmkPlumbing(object):
         group_name = gr.ep_group_names["data_models"]
         dms = entry_points(group=group_name)
         for module in dms:
+            if module.name.endswith("__root__"):
+                continue
             try:
                 *prefix, name = module.module.split(".")
                 prefix = ".".join(prefix)
@@ -1039,6 +1042,8 @@ class FmkPlumbing(object):
             self.print(colorize(FontStyle.BOLD + "="*66+"[ Projects (python modules) ]==", rgb=Color.FMKINFOGROUP))
 
         for module in projects:
+            if module.name.endswith("__root__"):
+                continue
             try:
                 # module_name.submodule.name -> (module_name.submdule., name)
                 *prefix, name = module.module.split(".")
@@ -1068,11 +1073,7 @@ class FmkPlumbing(object):
 
     def _import_project(self, prefix, name, prj_path, reload_prj=False):
         try:
-            if importlib.util.find_spec(prefix + name) is None:
-                name += "_proj"
             module = importlib.import_module(prefix + name)
-            name = name.removesuffix("_proj")
-
             if reload_prj:
                 importlib.reload(module)
                 for i in list(filter(lambda x: x.startswith(prefix+name), sys.modules.keys())):
@@ -1083,9 +1084,9 @@ class FmkPlumbing(object):
                 return None
 
             if reload_prj:
-                self.print(colorize(f"*** Problem during reload of '{name}'/'{name}_proj' ***", rgb=Color.ERROR))
+                self.print(colorize(f"*** Problem during reload of '{name}' ***", rgb=Color.ERROR))
             else:
-                self.print(colorize(f"*** Problem during import of '{name}'/'{name}_proj' ***", rgb=Color.ERROR))
+                self.print(colorize(f"*** Problem during import of '{name}' ***", rgb=Color.ERROR))
             self.print("-" * 60)
             traceback.print_exc(file=self.printer)
             self.print("-" * 60)
@@ -1100,7 +1101,7 @@ class FmkPlumbing(object):
             prj_params["project"] = module.project
         except:
             if not self._quiet:
-                self.print(colorize(f"*** ERROR: '{name}'/'{name}_proj' shall contain a global variable 'project' ***", rgb=Color.ERROR))
+                self.print(colorize(f"*** ERROR: '{name}' shall contain a global variable 'project' ***", rgb=Color.ERROR))
             return None
 
         if prj_path is not None:

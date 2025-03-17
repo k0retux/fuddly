@@ -6,7 +6,11 @@ from importlib.machinery import ModuleSpec, PathFinder
 from importlib.util import find_spec
 
 import fuddly
-from fuddly.framework.global_resources import ep_group_names, fuddly_data_folder, app_folder
+from fuddly.framework.global_resources import (
+    ep_group_names,
+    fuddly_data_folder,
+    app_folder
+)
 from fuddly.libs.external_modules import colorize, Color
 
 import os.path
@@ -14,7 +18,15 @@ import code
 import sys
 
 
-def _entry_point_path_editable(ep: EntryPoint) -> str | None:
+# When a module is installed editable in a venv, it is not present in the venv,
+# so you need to some more work to find the real location of the files on disk
+# At least in cases where the module was installed with pip, the module's
+# dist_info folder will contain a python module which is used to import it
+# from it's real location on disk.
+# We hijack this module to get the spec of the module so we can return it
+# for a name that is not the module's (i.e. we have our fuddly.{obj_type}
+# prefix in from of the module name)
+def _entry_point_path_editable(ep: EntryPoint, name: str) -> str | None:
     finder_location = ""
     # The RECORD files contains a list of off the files
     record = ep.dist.read_text("RECORD")
@@ -43,24 +55,21 @@ def _entry_point_path_editable(ep: EntryPoint) -> str | None:
     if mod_name != "":
         importlib.import_module(mod_name)
 
-    for i in range(len(ep.value.split("."))):
-        mod_name = ".".join(ep.value.split(".")[:-i])
-        modulespec = m._EditableFinder.find_spec(mod_name)
-        if modulespec is not None:
-            if modulespec.origin is not None:
-                return modulespec.origin.removesuffix("__init__.py")
-            else:
-                # Take the first path in it's submodule search path as an
-                # alternative
-                return list(modulespec.submodule_search_locations)[0]
+    modulespec = m._EditableFinder.find_spec(ep.value)
+    if modulespec is not None:
+        if modulespec.origin is not None:
+            return [modulespec.origin.removesuffix("__init__.py")]
+        elif modulespec.submodule_search_locations is not None:
+            return list(modulespec.submodule_search_locations)
 
     return None
 
 
-def _entry_point_path(ep: EntryPoint) -> str | None:
+def _entry_point_path(ep: EntryPoint) -> str | EntryPoint | None:
+
     # We use the distribution to find the location of the module's source
     # in the file system
-    dist_root = ep.dist.locate_file(".").joinpath(*ep.module.split(".")[:-1])
+    dist_root = ep.dist.locate_file(".").joinpath(*ep.module.split("."))
     if dist_root.exists():
         return str(dist_root)
     else:
@@ -69,53 +78,84 @@ def _entry_point_path(ep: EntryPoint) -> str | None:
 
 class fuddly_importer_hook(MetaPathFinder):
 
-    path_candidates: dict[str, list[str]] = {}
+    # The paths are organised like so:
+    # {
+    #   <obj_type>: {
+    #     <prefix>: [
+    #       "path",
+    #       "path2",
+    #       ...
+    #     ]
+    #   },
+    #   ...
+    # }
+    entry_point_paths: dict[str, dict[str, list[str]]] = {}
 
     # This method configures the paths to search modules in
-    # Call it every time you want to take into accound potential
-    # changes in this path (On reload for exemple ?)
+    # Use this at the start of files before any import (preferably)
     @classmethod
     def setup(cls):
         if cls not in sys.meta_path:
+            # The hook is installed first in the list so we can
+            # intercept everything to do our magic
             sys.meta_path.insert(0, cls)
             cls.reload()
 
+    # This method will reinitialise the search paths
+    # Use this during reloads
     @classmethod
     def reload(cls):
-        cls.path_candidates = {}
+        cls.entry_point_paths = {}
         for obj_type in ep_group_names:
-            cls.path_candidates[obj_type] = []
+            cls.entry_point_paths[obj_type] = {}
 
             # Preparing the dict of paths
-            candidates = cls.path_candidates[obj_type]
-
-            # Fuddly's user_data_folder
-            p = os.path.join(fuddly_data_folder, obj_type)
-            if p not in candidates:
-                candidates.append(p)
-
-            # Fuddly core path
-            p = app_folder
-            candidates.append(os.path.join(p, obj_type))
+            candidates = cls.entry_point_paths[obj_type]
 
             # Entry point paths
             for ep in entry_points(group=ep_group_names[obj_type]):
-                p = _entry_point_path(ep)
-                if p is not None and p not in candidates:
-                    candidates.append(p)
+                if not ep.name.endswith("__root__"):
                     continue
-                p = _entry_point_path_editable(ep)
-                if p is not None and p not in candidates:
-                    candidates.append(p)
+                name = ep.name.removesuffix("__root__")
+                if candidates.get(name) is None:
+                    candidates[name] = []
+
+                # A special cas for modules that are not namespaces,
+                # we store store the entry point itself to detect
+                # later on that this was a weird case
+                if "." not in ep.value:
+                    candidates[name] = ep
                     continue
 
+                p = _entry_point_path(ep)
+                if p is not None and p not in candidates[name]:
+                    candidates[name].append(p)
+                    continue
+
+                p = _entry_point_path_editable(ep, name)
+                if p is not None and p not in candidates[name]:
+                    candidates[name].extend(p)
+                    continue
+
+                if len(candidates[name]) == 0:
+                    del candidates[name]
+
+    # This method is used by importlib, you probably will never need
+    # to call it yourself, but it is where the magic happens
+    # When an import is done, this function will be called for every
+    # submodule of the imported module e.g.
+    # For import top.middle.bottom, this function will be called thrice
+    # with fullname being successively "top", "top.middle" and
+    # "top.middle.bottom"
     @classmethod
-    def find_spec(cls, fullname: str, path=None, target=None) -> ModuleSpec | None:
+    def find_spec(cls, fullname: str, path=None, target=None) -> (
+                ModuleSpec | None
+            ):
 
         if fullname.startswith("user_"):
             print(colorize(
-                "*** Import with the old user_{data_model,projects,target,info} "
-                "naming convention detected.",
+                "*** Import with the old user_{data_model,projects,target,info"
+                "} naming convention detected.",
                 rgb=Color.ERROR))
             fullname = fullname.removeprefix("user_")
             print(colorize(
@@ -133,27 +173,58 @@ class fuddly_importer_hook(MetaPathFinder):
         if obj_type not in ep_group_names:
             return None
 
-        path_candidates = cls.path_candidates[obj_type]
+        entry_point_paths = cls.entry_point_paths[obj_type]
 
         # For the fuddly.{targets,data-models,projects,info} modules, we return
         # a Namespace spec (A ModuleSpec with a submodule_search_location, no
         # loader, and the is_package parameter set to True)
+        # This namespace lists where submodules can be found, we add:
+        #   * fuddly's user_data_folder/{obj_type}
+        #   * fuddly's internal {obj_type} folder
+        #   * All the paths found from entry_points
+        spec = ModuleSpec(fullname, None, is_package=True)
         if len(parts) == 0:
-            spec = ModuleSpec(fullname, None, is_package=True)
-            spec.submodule_search_locations = path_candidates
+            spec.submodule_search_locations = [
+                    os.path.join(fuddly_data_folder, obj_type),
+                    os.path.join(app_folder, obj_type)
+                ]
+            spec.submodule_search_locations.extend(entry_point_paths.values())
             return spec
 
-        # For a first level submodule, we need to handle it before importlib
-        # can take over
+        # For the first submodule, we want to check if the submodule in
+        # question is in the list of prefixes defined by the entry_points.
+        # If it is, we should return a namespace that contains
+        #   * Fuddly's user_data_folder/{obj_type}/{prefix}
+        #   * fuddly's internal {obj_type}/{prefix}
+        #   * the entry_point's search paths
         elif len(parts) == 1:
-            spec = PathFinder.find_spec(
-                    fullname,
-                    path=path_candidates
-                )
-            return spec
+            # if parts[0] is one of our prefixes, that means we need to
+            # create a new virtual namespace packages for the entrypoint
+            # it maps to
+            prefix = parts[0]
+            if prefix in entry_point_paths.keys():
+                # For modules that only contains and {obj_type}, they are not
+                # namespaces, for them we simply return the spec of the module
+                # and call it a day...
+                if type(entry_point_paths[prefix]) is EntryPoint:
+                    return spec_from_file_location(
+                            fullname,
+                            entry_point_paths[prefix].load().__spec__.origin)
 
-        elif len(parts) > 1:
-            # let importlib handle the rest
-            return None
+                # We return a namespace for the submodule
+                spec.submodule_search_locations = [
+                    os.path.join(
+                        fuddly_data_folder,
+                        obj_type,
+                        prefix
+                    ),
+                    os.path.join(app_folder, obj_type, prefix)
+                ]
+                spec.submodule_search_locations.extend(
+                        entry_point_paths[prefix]
+                    )
+                return spec
 
+        # For more than one submodule, we should have set everything up so
+        # importlib can handle it
         return None
