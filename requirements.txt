@@ -1,5 +1,4 @@
 argcomplete
-configparser>=5.3.0
 crcmod>=1.7
 pycups
 rpyc<7.0.0,>=6.0.0
@@ -7,7 +6,7 @@ graphviz
 matplotlib
 paramiko<4.0.0,>=3.4.0
 pyserial
-python-constraint>=1.4.0
+python-constraint2
 z3-solver>=4.8
 pyxdg
 xtermcolor
