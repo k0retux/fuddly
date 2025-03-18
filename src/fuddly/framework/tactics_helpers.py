@@ -285,6 +285,21 @@ class Tactics(object):
         return None, None
 
 
+    def get_registered_operators(self, dmaker_type):
+        try:
+            for _, v in self.operators[dmaker_type][XT_NAME_LIST_K].items():
+                yield v['obj']
+        except KeyError:
+            return None
+
+    def get_registered_generators(self, dmaker_type):
+        try:
+            for _, v in self.generators[dmaker_type][XT_NAME_LIST_K].items():
+                yield v['obj']
+        except KeyError:
+            return None
+
+
     def get_operator_obj(self, dmaker_type, name):
         try:
             ret = self.operators[dmaker_type][XT_NAME_LIST_K][name]['obj']

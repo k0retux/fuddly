@@ -2129,7 +2129,7 @@ class FmkPlumbing(object):
         self._handle_data_callbacks([data], hook=HOOK.after_dmaker_production)
 
     def handle_data_desc(self, data_desc, resolve_dataprocess=True, original_data=None,
-                         save_generator_seed=False, reset_dmakers=False):
+                         save_generator_seed=False, reset_dmakers=False, called_from_scenario=False):
         if isinstance(data_desc, Data):
             data = data_desc
             data.generate_info_from_content(data=original_data)
@@ -2174,7 +2174,7 @@ class FmkPlumbing(object):
                     data = self.process_data(data_desc.process, seed=seed,
                                              save_gen_seed=save_generator_seed,
                                              reset_dmakers=reset_dmakers,
-                                             called_from_scenario=True)
+                                             called_from_scenario=called_from_scenario)
                     if data is None:
                         if data_desc.auto_regen:
                             data_desc.auto_regen_cpt += 1
@@ -2183,7 +2183,7 @@ class FmkPlumbing(object):
                             data = self.process_data(data_desc.process, seed=seed,
                                                      save_gen_seed=save_generator_seed,
                                                      reset_dmakers=reset_dmakers,
-                                                     called_from_scenario=True)
+                                                     called_from_scenario=called_from_scenario)
                             if data is not None:
                                 break
 
@@ -2281,7 +2281,8 @@ class FmkPlumbing(object):
                             data_tmp = self.handle_data_desc(d_desc,
                                                              resolve_dataprocess=resolve_dataprocess,
                                                              original_data=data,
-                                                             reset_dmakers=data.attrs.is_set(DataAttr.Reset_DMakers))
+                                                             reset_dmakers=data.attrs.is_set(DataAttr.Reset_DMakers),
+                                                             called_from_scenario=True)
 
                             if data_tmp is not None:
                                 if first_step:
@@ -2324,7 +2325,8 @@ class FmkPlumbing(object):
                         else:
                             periodic_data = self.handle_data_desc(data_desc,
                                                                   resolve_dataprocess=resolve_dataprocess,
-                                                                  original_data=data)
+                                                                  original_data=data,
+                                                                  called_from_scenario=True)
                             targets = [self.targets[x] for x in final_data_tg_ids]
                             func = [partial(tg.send_data_sync, from_fmk=False) for tg in targets]
 
@@ -3468,6 +3470,9 @@ class FmkPlumbing(object):
         except Exception:
             self._handle_user_code_exception(f"Validation tests has crashed on current data model {self.dm.name}")
 
+
+    __default_ui = UI(freeze=True)
+
     @EnforceOrder(accepted_states=["S2"])
     def process_data(self, action_list, seed=None, valid_gen=False, save_gen_seed=False,
                      reset_dmakers=False, called_from_scenario=False):
@@ -3520,7 +3525,57 @@ class FmkPlumbing(object):
         unrecoverable_error = False
         activate_all = False
 
+        def get_generator_object(dtype):
+            for obj in self._tactics.get_registered_generators(dtype):
+                yield obj
+            for obj in self._generic_tactics.get_registered_generators(dtype):
+                yield obj
+
+        def get_operator_object(dtype):
+            for obj in self._tactics.get_registered_operators(dtype):
+                yield obj
+            for obj in self._generic_tactics.get_registered_operators(dtype):
+                yield obj
+
         action_list_sz = len(action_list)
+
+        if not called_from_scenario:
+            for idx, full_action in enumerate(action_list):
+                if isinstance(full_action, (tuple, list)):
+                    assert len(full_action) == 2
+                    action, user_input = full_action
+                else:
+                    action = full_action
+                    user_input = None
+
+                get_dmaker_object = get_generator_object if idx == 0 else get_operator_object
+
+                for dmaker_obj in get_dmaker_object(action):
+                    if dmaker_obj in self.__initialized_dmakers:
+                        registered_ui = self.__initialized_dmakers[dmaker_obj][1]
+                        if registered_ui != user_input:
+                            if action_list_sz != 1:
+                                needed_update = True
+                            elif not user_input and self.__default_ui == registered_ui:
+                                needed_update = False
+                            elif user_input:
+                                user_input.merge_with(self.__default_ui)
+                                needed_update = False if user_input == registered_ui else True
+                            else:
+                                needed_update = True
+
+                            if needed_update:
+                                self.set_error(f"Detection of different user inputs provided for the "
+                                               f"generator '{dmaker_obj.__class__.__name__}' than "
+                                               f"the ones already set. Take them into account.",
+                                               code=Error.FmkWarning)
+                                reset_dmakers = True
+                        break
+                    else:
+                        pass
+                else:
+                    pass
+
         for idx, full_action in enumerate(action_list):
             if isinstance(full_action, (tuple, list)):
                 assert len(full_action) == 2
@@ -3620,22 +3675,13 @@ class FmkPlumbing(object):
             if first:  # Generator() case
                 if not reset_dmakers and \
                         (dmaker_obj in self.__initialized_dmakers and self.__initialized_dmakers[dmaker_obj][0]):
-                    ui = self.__initialized_dmakers[dmaker_obj][1]
-                    if ui is not None and ui != user_input:
-                        self.set_error(f"Detection of different user inputs provided for the "
-                                       f"generator '{dmaker_obj.__class__.__name__}' than "
-                                       f"the ones already set. Take them into account.",
-                                       code=Error.FmkWarning)
-                        self.cleanup_dmaker(dmaker_obj=dmaker_obj)
-                        self.__initialized_dmakers[dmaker_obj] = (
-                            self.__initialized_dmakers[dmaker_obj][0], user_input)
-                        ui = user_input
+                    registered_ui = self.__initialized_dmakers[dmaker_obj][1]
                 else:
                     if action_list_sz == 1 and isinstance(dmaker_obj, DynGenerator):
-                        ui = UI(freeze=True) if user_input is None else user_input.merge_with(UI(freeze=True))
+                        registered_ui = copy.copy(self.__default_ui) if user_input is None else user_input.merge_with(copy.copy(self.__default_ui))
                     else:
-                        ui = user_input
-                initial_generator_info = [dmaker_type, dmaker_name, ui]
+                        registered_ui = user_input
+                initial_generator_info = [dmaker_type, dmaker_name, registered_ui]
 
             # Make sure that if a Generator is active (i.e., it has
             # not been disabled by a 'controller' operator), all
@@ -3689,14 +3735,6 @@ class FmkPlumbing(object):
             try:
                 if dmaker_obj not in self.__initialized_dmakers:
                     self.__initialized_dmakers[dmaker_obj] = (False, None)
-                else:
-                    ui = self.__initialized_dmakers[dmaker_obj][1]
-                    if ui is not None and ui != user_input and not called_from_scenario:
-                        self.set_error(f"Detection of different user inputs provided for the data "
-                                       f"maker '{dmaker_obj.__class__.__name__}' than "
-                                       f"the ones already set. Take them into account.",
-                                       code=Error.FmkWarning)
-                        self.cleanup_dmaker(dmaker_obj=dmaker_obj)
 
                 if reset_dmakers or not self.__initialized_dmakers[dmaker_obj][0]:
                     initialized = dmaker_obj._setup(self.dm, user_input)
@@ -3865,7 +3903,7 @@ class FmkPlumbing(object):
                     dmaker_obj.produced_seed = None
 
     @EnforceOrder(accepted_states=["S1", "S2"])
-    def cleanup_dmaker( self, dmaker_type=None, name=None, dmaker_obj=None, reset_existing_seed=True, error_on_init=True):
+    def cleanup_dmaker(self, dmaker_type=None, name=None, dmaker_obj=None, reset_existing_seed=True, error_on_init=True):
         if dmaker_obj is not None:
             if reset_existing_seed and isinstance(dmaker_obj, Generator):
                 dmaker_obj.produced_seed = None

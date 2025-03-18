@@ -26,7 +26,7 @@ ddt = "*"
 mock = "*"
 
 [requires]
-python_version = "3.12"
+python_version = "3.11,3.12,3.13"
 
 [dev-extra]
 lz4 = "*"
