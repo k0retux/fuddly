@@ -248,6 +248,8 @@ class NodeBuilder(object):
                                            samples_from_current_dm=samples_from_current_dm)
             assert nd is not None, "The requested data ID '{:s}' does not exist!".format(data_id)
             self.node_dico[(name, ident)] = nd
+            self._handle_custo(nd, desc, conf=None)
+            self._handle_common_attr(nd, desc, conf=None, current_ns=namespace)
             return nd
 
         nd = Node(name)
