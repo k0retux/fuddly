@@ -342,8 +342,6 @@ class Target(object):
         Can be used in user-code to send data to the target without interfering
         with the framework.
         """
-        if data_list is None:
-            return
         with self._send_data_lock:
             if data_list is not None:
                 self._altered_data_queued = data_list[0].altered
@@ -351,10 +349,10 @@ class Target(object):
                 self._last_sending_date = datetime.datetime.now()
                 self.send_multiple_data(data_list, from_fmk=from_fmk)
                 self._project.notify_data_sending(data_list, self._last_sending_date, self)
-                if from_fmk:
+                if from_fmk and data_list is not None:
                     self._pending_data_id = data_list[-1].estimated_data_id
-                if not from_fmk:
-                    self._logger.log_async_data( data_list, sent_date=self._last_sending_date,
+                if not from_fmk and data_list is not None:
+                    self._logger.log_async_data(data_list, sent_date=self._last_sending_date,
                                                 target_ref=FeedbackSource(self),
                                                 prj_name=self._project.name,
                                                 current_data_id=self._pending_data_id)
