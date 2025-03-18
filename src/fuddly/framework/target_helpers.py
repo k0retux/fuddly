@@ -342,6 +342,8 @@ class Target(object):
         Can be used in user-code to send data to the target without interfering
         with the framework.
         """
+        if data_list is None:
+            return
         with self._send_data_lock:
             if data_list is not None:
                 self._altered_data_queued = data_list[0].altered
