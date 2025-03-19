@@ -304,8 +304,7 @@ class DefaultPopulation(Population):
         cpt = 0
         while cpt < self.MAX_SIZE or self.MAX_SIZE == -1:
             cpt += 1
-            data = self._fmk.handle_data_desc(self.DATA_PROCESS, resolve_dataprocess=True,
-                                              save_generator_seed=False)
+            data = self._fmk.handle_data_desc(self.DATA_PROCESS, resolve_dataprocess=True, save_generator_seed=False)
             if data is None:
                 break
             data.add_info('Data generated from the DataProcess provided for the population initialization:')

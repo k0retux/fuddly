@@ -6,7 +6,7 @@ authors = [
 ]
 description = "Fuzzing and Data Manipulation Framework (for GNU/Linux)"
 readme = "README.rst"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",

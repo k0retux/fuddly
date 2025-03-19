@@ -21,8 +21,6 @@
 #
 ################################################################################
 
-from __future__ import print_function
-
 import datetime
 
 from fuddly.framework.global_resources import *

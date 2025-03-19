@@ -2128,8 +2128,8 @@ class FmkPlumbing(object):
     def _do_after_dmaker_data_retrieval(self, data):
         self._handle_data_callbacks([data], hook=HOOK.after_dmaker_production)
 
-    def handle_data_desc(self, data_desc, resolve_dataprocess=True, original_data=None,
-                         save_generator_seed=False, reset_dmakers=False, called_from_scenario=False):
+    def handle_data_desc(self, data_desc, resolve_dataprocess=True, original_data=None, save_generator_seed=False,
+                         reset_dmakers=False, ignore_new_ui=False):
         if isinstance(data_desc, Data):
             data = data_desc
             data.generate_info_from_content(data=original_data)
@@ -2171,19 +2171,15 @@ class FmkPlumbing(object):
                 if data_desc.process is None:
                     data = seed
                 else:
-                    data = self.process_data(data_desc.process, seed=seed,
-                                             save_gen_seed=save_generator_seed,
-                                             reset_dmakers=reset_dmakers,
-                                             called_from_scenario=called_from_scenario)
+                    data = self.process_data(data_desc.process, seed=seed, save_gen_seed=save_generator_seed,
+                                             reset_dmakers=reset_dmakers, ignore_new_ui=ignore_new_ui)
                     if data is None:
                         if data_desc.auto_regen:
                             data_desc.auto_regen_cpt += 1
 
                         while data_desc.next_process() or data_desc.auto_regen:
-                            data = self.process_data(data_desc.process, seed=seed,
-                                                     save_gen_seed=save_generator_seed,
-                                                     reset_dmakers=reset_dmakers,
-                                                     called_from_scenario=called_from_scenario)
+                            data = self.process_data(data_desc.process, seed=seed, save_gen_seed=save_generator_seed,
+                                                     reset_dmakers=reset_dmakers, ignore_new_ui=ignore_new_ui)
                             if data is not None:
                                 break
 
@@ -2278,11 +2274,10 @@ class FmkPlumbing(object):
                         new_data = []
                         first_step = True
                         for d_desc, vtg_ids in zip(data_desc, vtg_ids_list):
-                            data_tmp = self.handle_data_desc(d_desc,
-                                                             resolve_dataprocess=resolve_dataprocess,
+                            data_tmp = self.handle_data_desc(d_desc, resolve_dataprocess=resolve_dataprocess,
                                                              original_data=data,
                                                              reset_dmakers=data.attrs.is_set(DataAttr.Reset_DMakers),
-                                                             called_from_scenario=True)
+                                                             ignore_new_ui=True)
 
                             if data_tmp is not None:
                                 if first_step:
@@ -2323,10 +2318,8 @@ class FmkPlumbing(object):
                             periodic_data = data_desc
                             func = partial(self._send_periodic, final_data_tg_ids)
                         else:
-                            periodic_data = self.handle_data_desc(data_desc,
-                                                                  resolve_dataprocess=resolve_dataprocess,
-                                                                  original_data=data,
-                                                                  called_from_scenario=True)
+                            periodic_data = self.handle_data_desc(data_desc, resolve_dataprocess=resolve_dataprocess,
+                                                                  original_data=data, ignore_new_ui=True)
                             targets = [self.targets[x] for x in final_data_tg_ids]
                             func = [partial(tg.send_data_sync, from_fmk=False) for tg in targets]
 
@@ -2484,8 +2477,7 @@ class FmkPlumbing(object):
                 data_list = []
                 for d_desc in data_desc:
                     data = self.handle_data_desc(d_desc, resolve_dataprocess=True,
-                                                 save_generator_seed=save_generator_seed,
-                                                 reset_dmakers=reset_dmakers)
+                                                 save_generator_seed=save_generator_seed, reset_dmakers=reset_dmakers)
                     if data is None:
                         data = Data()
                         data.make_unusable()
@@ -3324,7 +3316,8 @@ class FmkPlumbing(object):
                     if action_list is None:
                         data = orig
                     else:
-                        data = self.process_data(action_list, seed=orig, save_gen_seed=use_existing_seed)
+                        data = self.process_data(action_list, seed=orig, save_gen_seed=use_existing_seed,
+                                                 ignore_new_ui=True)
                     if data:
                         data.tg_ids = tg_ids
 
@@ -3474,8 +3467,8 @@ class FmkPlumbing(object):
     __default_ui = UI(freeze=True)
 
     @EnforceOrder(accepted_states=["S2"])
-    def process_data(self, action_list, seed=None, valid_gen=False, save_gen_seed=False,
-                     reset_dmakers=False, called_from_scenario=False):
+    def process_data(self, action_list, seed=None, valid_gen=False, save_gen_seed=False, reset_dmakers=False,
+                     ignore_new_ui=False):
         """
 
         Args:
@@ -3539,7 +3532,11 @@ class FmkPlumbing(object):
 
         action_list_sz = len(action_list)
 
-        if not called_from_scenario:
+        if not ignore_new_ui:
+            # We seek for all initialized data makers that match the current action_list, and if ever the
+            # registered user input does not match the provided user input, we take into account the provided
+            # ones, and program a reset of all the data makers involved in the action list (to avoid unexpected
+            # side effects).
             for idx, full_action in enumerate(action_list):
                 if isinstance(full_action, (tuple, list)):
                     assert len(full_action) == 2
@@ -3554,6 +3551,9 @@ class FmkPlumbing(object):
                     if dmaker_obj in self.__initialized_dmakers:
                         registered_ui = self.__initialized_dmakers[dmaker_obj][1]
                         if registered_ui != user_input:
+                            # We have to deal with the specific case where a Generator is used alone. Indeed,
+                            # in this situation the current method will automatically set the parameter @freeze
+                            # to True on the user input (even if not provided).
                             if action_list_sz != 1:
                                 needed_update = True
                             elif not user_input and self.__default_ui == registered_ui:

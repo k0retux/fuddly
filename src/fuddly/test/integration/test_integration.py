@@ -22,8 +22,6 @@
 #  along with fuddly. If not, see <http://www.gnu.org/licenses/>
 #
 ################################################################################
-from __future__ import print_function
-
 import time
 
 import sys
@@ -4391,9 +4389,8 @@ class TestDataModelHelpers(unittest.TestCase):
         data_sizes = [211, 149, 184]
         for i in range(100):
             # fmk.lg.export_raw_data = True
-            data = fmk.process_data(
-                ['XML5', ('tWALK', UI(path='xml5/command/start-tag/content/attr1/cmd_val',
-                                      consider_sibbling_change=False))])
+            data = fmk.process_data(['XML5', ('tWALK', UI(path='xml5/command/start-tag/content/attr1/cmd_val',
+                                                          consider_sibbling_change=False))])
             if data is None:
                 break
 
@@ -4410,8 +4407,7 @@ class TestDataModelHelpers(unittest.TestCase):
 
         specific_cases_checked = False
         for i in range(100):
-            data = fmk.process_data(
-                ['XML5', ('tTYPE', UI(path='xml5/command/LOGIN/start-tag/content/attr1/val'))])
+            data = fmk.process_data(['XML5', ('tTYPE', UI(path='xml5/command/LOGIN/start-tag/content/attr1/val'))])
             if data is None:
                 break
             node_to_check = data.content['xml5/command/LOGIN/start-tag/content/attr1/val'][0]

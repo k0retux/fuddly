@@ -21,8 +21,6 @@
 #
 ################################################################################
 
-from __future__ import print_function
-
 import struct
 import random
 import sys
