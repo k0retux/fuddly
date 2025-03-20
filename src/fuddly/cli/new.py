@@ -139,7 +139,11 @@ def _create_conf(dstPath: Path, srcPath: Path, conf: dict, **kwargs):
             _dstPath = _dstPath/e["path"]
             _srcPath = _srcPath/e["path"]
             _dstPath.mkdir(parents=True)
-        data = (_srcPath/e["name"]).read_text()
+        _srcPath = (_srcPath/e["name"])
+        if ".py" == _srcPath.suffix:
+            _srcPath = _srcPath.with_suffix(".py_")
+        data = _srcPath.read_text()
         f = _dstPath/e["name"]
+        print(f)
         f.touch()
         f.write_text(string.Template(data).substitute(**kwargs))
