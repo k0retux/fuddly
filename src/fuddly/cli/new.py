@@ -26,14 +26,15 @@ conf["project"] = {
         {"name": "README", "path": "samples"},
         {"name": "README", "path": "scripts"},
     ],
-    "exemple": [
-        {"name": "__init__.py"},
-        {"name": "prj.py"},
-        {"name": "monitoring.py"},
-        {"name": "targets.py"},
-        {"name": "README", "path": "scripts"},
-        {"name": "README", "path": "samples"},
-    ],
+    # Not yet created, uncomment once it is created 🙃
+    # "example": [
+    #     {"name": "__init__.py"},
+    #     {"name": "prj.py"},
+    #     {"name": "monitoring.py"},
+    #     {"name": "targets.py"},
+    #     {"name": "README", "path": "scripts"},
+    #     {"name": "README", "path": "samples"},
+    # ],
 }
 
 conf["module"] = [
