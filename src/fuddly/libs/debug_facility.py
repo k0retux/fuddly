@@ -21,6 +21,8 @@
 #
 ################################################################################
 
+import sys
+
 DEBUG = False
 LEVEL = 0
 
@@ -40,7 +42,7 @@ KNOW_DEBUG = False
 try:
     from xtermcolor import colorize
 except ImportError:
-    print("WARNING [FMK]: python-xtermcolor module is not installed, colors won't be available!")
+    print("WARNING [FMK]: python-xtermcolor module is not installed, colors won't be available!", file=sys.stderr)
     def colorize(string, rgb=None, ansi=None, bg=None, ansi_bg=None, fd=1):
         return string
 
