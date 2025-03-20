@@ -66,6 +66,13 @@ def main(argv: List[str] = None):
             epilog="use 'fuddly <action>' help more information on their arguments",
             exit_on_error=False
         )
+    parsers["main"].add_argument(
+        "-v",
+        "--version",
+        action="store_true",
+        help="print the vesion and exit",
+    )
+
     subparsers = arg_parser.add_subparsers(help="", dest="action", metavar="action")
 
     with subparsers.add_parser("shell", help="launch the fuddly interactive shell") as p:
@@ -188,6 +195,11 @@ def main(argv: List[str] = None):
         print(e.message)
         print()
         arg_parser.print_help()
+        return 0
+
+    if args.version:
+        from fuddly.framework.global_resources import fuddly_version
+        print(fuddly_version)
         return 0
 
     if args.action is None:

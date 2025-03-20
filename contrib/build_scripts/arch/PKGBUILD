@@ -13,17 +13,17 @@ license=('GPL-3.0-or-later')
 
 depends=(
 	"python"
+	"python-argcomplete"
 	"python-crcmod"
 	"python-graphviz"
 	"python-matplotlib"
 	"python-paramiko"
+	"python-pycups"
 	"python-pyserial"
 	"python-pyxdg"
 	"python-rpyc"
 	"python-sphinx_rtd_theme"
-	"python-argcomplete"
 	"python-z3-solver"
-	"python-pycups"
 
 	# For tests
 	"python-ddt"
@@ -38,9 +38,10 @@ depends=(
 
 makedepends=(
 	"git"
-	"python-setuptools"
 	"python-build"
 	"python-installer"
+	"python-setuptools"
+	"python-setuptools-scm"
 	"scdoc"
 )
 options=(!emptydirs)

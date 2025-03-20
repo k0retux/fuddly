@@ -1,6 +1,5 @@
 [project]
 name = "fuddly"
-version = "0.30"
 authors = [
   { name="Eric Lacombe", email="eric.lacombe@security-labs.org" },
 ]
@@ -11,7 +10,14 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-dynamic = ["dependencies"]
+dynamic = ["dependencies", "version"]
+
+[build-system]
+requires = ["setuptools>=64", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+version_file = "src/fuddly/framework/_version.py"
 
 [options]
 include_package_data = true
