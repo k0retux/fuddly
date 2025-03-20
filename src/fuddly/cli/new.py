@@ -145,6 +145,5 @@ def _create_conf(dstPath: Path, srcPath: Path, conf: dict, **kwargs):
             _srcPath = _srcPath.with_suffix(".py_")
         data = _srcPath.read_text()
         f = _dstPath/e["name"]
-        print(f)
         f.touch()
         f.write_text(string.Template(data).substitute(**kwargs))
