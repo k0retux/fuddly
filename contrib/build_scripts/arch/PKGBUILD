@@ -4,8 +4,9 @@ pkgname="fuddly-git"
 conflicts=("${pkgname/-git/}")
 provides=("${pkgname/-git/}")
 replaces=("python-$pkgname" "python-${pkgname/-git/}")
-pkgver=0.30.r930.210a1b2
-pkgrel=1
+pkgver=0.30.dev.r224.6af445f
+pkgrel=3
+epoch=1
 pkgdesc="Fuzzing and Data Manipulation Framework (for GNU/Linux)"
 arch=('any')
 url="https://github.com/k0retux/fuddly"
@@ -13,7 +14,6 @@ license=('GPL-3.0-or-later')
 
 depends=(
 	"python"
-	"python-argcomplete"
 	"python-crcmod"
 	"python-graphviz"
 	"python-matplotlib"
@@ -22,7 +22,6 @@ depends=(
 	"python-pyserial"
 	"python-pyxdg"
 	"python-rpyc"
-	"python-sphinx_rtd_theme"
 	"python-z3-solver"
 
 	# For tests
@@ -41,33 +40,37 @@ makedepends=(
 	"python-installer"
 	"python-setuptools"
 	"python-setuptools-scm"
+	"python-sphinx_rtd_theme"
 	"scdoc"
 )
 options=(!emptydirs)
-source=("$pkgname::git+$url")
+source=("$pkgname::git+$url#branch=develop")
 sha256sums=('SKIP')
 
 pkgver() {
-	cd "$srcdir/${pkgname}"
-	# Tags only exist on master so this just doesn't work for now...
-	# printf "%s" "$(git describe --long --tags | sed 's/\([^-]*-\)g/r\1/;s/-/./g')"
-	revision=$(git log --oneline | wc -l)
-	commit_hash=$(git log --oneline -n1 | cut -d' ' -f1)
-	printf "0.30.r%s.%s" "$revision" "$commit_hash"
+	cd "${srcdir}/${pkgname}" || return 1
+	printf "%s" "$(git describe --long --tags | sed 's/\([^-]*-\)g/r\1/;s/-/./g')"
 }
 
 build() {
-	cd "${srcdir}/${pkgname}"
+	cd "${srcdir}/${pkgname}" || return 1
 	python -m build --wheel --no-isolation
-	cd docs
+	cd docs || return 1
 	scdoc < fuddly.1.scd | gzip > fuddly.1.gz
+	make html
 }
 
 package() {
-	cd "${srcdir}/${pkgname}"
+	cd "${srcdir}/${pkgname}" || return 1
 	python -m installer --no-compile-bytecode --destdir="${pkgdir}" dist/*.whl
 	install -Dm644 contrib/shell_completions/zsh/_fuddly -t "${pkgdir}/usr/share/zsh/site-functions/"
 	install -Dm644 contrib/shell_completions/fish/fuddly.fish -t "${pkgdir}/usr/share/fish/vendor_completions.d/"
 	install -Dm644 contrib/shell_completions/bash/fuddly -t "${pkgdir}/usr/share/bash-completion/completions/"
 	install -Dm644 docs/fuddly.1.gz -t "${pkgdir}/usr/share/man/man1/"
+
+	# Docs
+	cd docs/build/html || return 1
+	find . -type f | while read -r f;do
+		install -Dm644 "${f}" "${pkgdir}/usr/share/doc/fuddly/${f}"
+	done
 }
