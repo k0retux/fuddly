@@ -30,7 +30,6 @@ depends=(
 
 	# Aur
 	"python-constraint"
-	"python-configparser"
 	"python-xtermcolor"
 	## For tests
 	"python-mock"
