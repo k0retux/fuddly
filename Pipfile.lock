@@ -1,11 +1,11 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "06f38a37c3c7321534f73786c3b931a305c1bf962bea88e9d53e3c85de2e8218"
+            "sha256": "4c3ba631e5bb2f6d41c1cddd6a9badd75095ddf663b291989b83aa4411517c25"
         },
         "pipfile-spec": 6,
         "requires": {
-            "python_version": "3.12"
+            "python_version": "3.11,3.12,3.13"
         },
         "sources": [
             {
@@ -461,6 +461,7 @@
             "version": "==4.56.0"
         },
         "fuddly": {
+            "editable": true,
             "file": "."
         },
         "graphviz": {

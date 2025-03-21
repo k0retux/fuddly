@@ -4132,12 +4132,12 @@ class FmkPlumbing(object):
                colorize(repr(default), rgb=Color.SUBINFO_ALT_HLIGHT) + " [type: {:s}]".format(args_type_desc)
         return msg
 
-    def _dmaker_desc_str(self, obj):
+    def _dmaker_desc_str(self, obj, short_desc=False):
         if obj.__doc__:
             msg = "\n" + colorize(obj.__doc__, rgb=Color.INFO_ALT_HLIGHT)
         else:
             msg = ""
-        if obj._args_desc:
+        if not short_desc and obj._args_desc:
             msg += "\n  parameters: "
             for k, v in obj._args_desc.items():
                 msg += self._make_str(k, v)
@@ -4288,6 +4288,7 @@ class FmkShell(cmd.Cmd):
         try:
             self._inline_doc = self.config.completion.inline_doc
             self._offline_doc = self.config.completion.offline_doc
+            self._dmaker_short_desc = self.config.completion.dmaker_short_desc
             self._reset_dmakers_mode = self.config.send.reset_dmakers
         except AttributeError:
             self.config, error_msg = update_config(from_whom=self, old_config=self.config)
@@ -4295,6 +4296,7 @@ class FmkShell(cmd.Cmd):
             self.available_configs['shell'] = self.config
             self._inline_doc = self.config.completion.inline_doc
             self._offline_doc = self.config.completion.offline_doc
+            self._dmaker_short_desc = self.config.completion.dmaker_short_desc
             self._reset_dmakers_mode = self.config.send.reset_dmakers
 
         self.__error = False
@@ -4327,6 +4329,8 @@ class FmkShell(cmd.Cmd):
             self.generators = None
             self.operators = None
             self.data_makers = None
+            self.generators_obj = {}
+            self.operators_obj = {}
             self.generators_params = {}
             self.operators_params = {}
             self.generators_params_desc = {}
@@ -4496,6 +4500,9 @@ class FmkShell(cmd.Cmd):
         if self.comp_step == start_completion_index:
             ret = self._complete_helper_generator(text)
             self.current_arg = ret[0]
+            obj = self.generators_obj[self.current_arg]
+            if obj:
+                self._display_dmaker_desc(self.current_arg, obj)
         elif self.comp_step == start_completion_index+1:
             if self.current_arg == None:
                 dt = line[:endidx].split()[-1]
@@ -4517,6 +4524,9 @@ class FmkShell(cmd.Cmd):
               and self.comp_step % 2 == start_completion_index % 2):
             ret = self._complete_helper_operator(text)
             self.current_arg = ret[0]
+            obj = self.operators_obj[self.current_arg]
+            if obj:
+                self._display_dmaker_desc(self.current_arg, obj)
         elif (self.comp_step >= start_completion_index+3
               and self.comp_step % 2 == (start_completion_index % 2)^1):
             if self.current_arg == None:
@@ -4541,6 +4551,25 @@ class FmkShell(cmd.Cmd):
         return ret
 
 
+    def _display_dmaker_desc(self, dtype, dmaker_obj):
+        if isinstance(dmaker_obj, Generator):
+            dtype_class = 'Generator'
+        elif isinstance(dmaker_obj, StatefulOperator):
+            dtype_class = 'Stateful Operator'
+        elif isinstance(dmaker_obj, Operator):
+            dtype_class = 'Stateless Operator'
+        else:
+            dtype_class = 'Unknown'
+
+        desc = FontStyle.BOLD + f'\n\n[{dtype} | {dtype_class}]\n' + FontStyle.END
+        desc = colorize(desc, rgb=Color.TITLE)
+        desc += self.fz._dmaker_desc_str(dmaker_obj, short_desc=self._dmaker_short_desc)
+
+        if self._inline_doc:
+            print(desc)
+        if self._offline_doc and self.fz.external_display.is_enabled:
+            self.fz.external_display.disp.print_nl(desc)
+
     def _reload_project_data(self):
         self._reset_completion_engine()
         self.generators = list(self.fz._generic_tactics.generator_types)
@@ -4552,6 +4581,7 @@ class FmkShell(cmd.Cmd):
             for dt in tactics.generator_types:
                 dt_list = tactics.get_generators_list(dt)
                 obj = tactics.get_generator_obj(dt, list(dt_list.keys())[0])
+                self.generators_obj[dt] = obj
                 self.generators_params[dt] = obj._args_desc.keys()
                 self.generators_params_desc[dt] = {}
                 for p, desc in obj._args_desc.items():
@@ -4560,6 +4590,7 @@ class FmkShell(cmd.Cmd):
             for dt in tactics.operator_types:
                 dt_list = tactics.get_operators_list(dt)
                 obj = tactics.get_operator_obj(dt, list(dt_list.keys())[0])
+                self.operators_obj[dt] = obj
                 self.operators_params[dt] = obj._args_desc.keys()
                 self.operators_params_desc[dt] = {}
                 for p, desc in obj._args_desc.items():

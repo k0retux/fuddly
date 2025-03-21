@@ -109,14 +109,22 @@ prompt = >>
 [completion]
 offline_doc = True
 inline_doc = False
+dmaker_short_desc = False
 
 ;;  [completion.doc]
-;;  offline_doc: When set to True, parameters documentation for Generators and Operators are
-                  are displayed on the external terminal if it is enabled (either via with
-                  the config parameter 'external_term' set to True in 'FmkPlumbing.ini',
-                  or by launching the fuddly shell with the option '--external-display').
-;;  inline_doc: When set to True, parameters documentation for Generators and Operators are
-                 displayed inline.
+;;  offline_doc: When set to True, documentation for Generators and Operators are
+                  are displayed (while being completed by the shell) on the external terminal
+                  if it is enabled (either via with the config parameter 'external_term' set
+                  to True in 'FmkPlumbing.ini', or by launching the fuddly shell with the
+                  option '--external-display').
+                  Besides, description of their parameters are also displayed on the external
+                  terminal while being completed by the shell.
+;;  inline_doc: When set to True, documentation for Generators and Operators are
+                 displayed inline, as well as description of their parameters when parameters
+                 are being completed by the shell.
+;;  dmaker_short_desc: When set to True, only a short description of data makers (Generators
+                        and Operators) will be displayed. Otherwise, full documentation
+                        including parameters will be displayed. 
 
 [config]
 middle = 40

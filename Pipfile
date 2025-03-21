@@ -19,7 +19,7 @@ sphinx-rtd-theme = "*"
 argcomplete = "*"
 pycups = "*"
 python-constraint2 = "*"
-fuddly = {file = "."}
+fuddly = {file = ".", editable = true}
 
 [dev-packages]
 ddt = "*"
