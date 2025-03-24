@@ -3816,7 +3816,7 @@ class FmkPlumbing(object):
                 # If a generator need a reset or a ('controller') operator has yielded
                 if dmaker_obj.is_attr_set(DataMakerAttr.SetupRequired):
                     assert dmaker_obj in self.__initialized_dmakers
-                    self.__initialized_dmakers[dmaker_obj] = (False, None)
+                    self.__initialized_dmakers[dmaker_obj] = (False, self.__initialized_dmakers[dmaker_obj][1])
 
                 def _handle_operators_handover(dmlist):
                     # dmlist[-1] is the current operator
