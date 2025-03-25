@@ -1975,7 +1975,7 @@ class TestModelWalker(unittest.TestCase):
                    full_combinatory=False
                ))]
         for j in range(4000):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -2049,7 +2049,7 @@ class TestModelWalker(unittest.TestCase):
         act = [('SHP1', UI(determinist=True, freeze=True)),
                ('tWALK', UI(nt_only=True))]
         for j in range(40):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -2080,7 +2080,7 @@ class TestModelWalker(unittest.TestCase):
         act = [('SHP2', UI(determinist=True, freeze=True)),
                ('tWALK', UI(nt_only=True))]
         for j in range(40):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -4389,7 +4389,7 @@ class TestDataModelHelpers(unittest.TestCase):
         data_sizes = [211, 149, 184]
         for i in range(100):
             # fmk.lg.export_raw_data = True
-            data = fmk.process_data(['XML5', ('tWALK', UI(path='xml5/command/start-tag/content/attr1/cmd_val',
+            data, _ = fmk.process_data(['XML5', ('tWALK', UI(path='xml5/command/start-tag/content/attr1/cmd_val',
                                                           consider_sibbling_change=False))])
             if data is None:
                 break
@@ -4407,7 +4407,7 @@ class TestDataModelHelpers(unittest.TestCase):
 
         specific_cases_checked = False
         for i in range(100):
-            data = fmk.process_data(['XML5', ('tTYPE', UI(path='xml5/command/LOGIN/start-tag/content/attr1/val'))])
+            data, _ = fmk.process_data(['XML5', ('tTYPE', UI(path='xml5/command/LOGIN/start-tag/content/attr1/val'))])
             if data is None:
                 break
             node_to_check = data.content['xml5/command/LOGIN/start-tag/content/attr1/val'][0]
@@ -4450,10 +4450,10 @@ class TestFMK(unittest.TestCase):
             print("\n\n---[ Tested Operator %r ]---" % dis)
             if dis == 'EXT':
                 act = [dmaker_type, (dis, UI(cmd='/bin/cat', file_mode=True))]
-                d = fmk.process_data(act)
+                d, _ = fmk.process_data(act)
             else:
                 act = [dmaker_type, dis]
-                d = fmk.process_data(act)
+                d, _ = fmk.process_data(act)
             if d is not None:
                 fmk._log_data(d)
                 print("\n---[ Pretty Print ]---\n")
@@ -4466,7 +4466,7 @@ class TestFMK(unittest.TestCase):
 
     def test_separator_operator(self):
         for i in range(100):
-            d = fmk.process_data(['SEPARATOR', 'tSEP'])
+            d, _ = fmk.process_data(['SEPARATOR', 'tSEP'])
             if d is None:
                 break
             fmk._setup_new_sending()
@@ -4489,7 +4489,7 @@ class TestFMK(unittest.TestCase):
                'tSTRUCT']
         for i in range(4):
             for j in range(10):
-                d = fmk.process_data(act)
+                d, _ = fmk.process_data(act)
                 if d is None:
                     print('--> Exiting (need new input)')
                     break
@@ -4511,7 +4511,7 @@ class TestFMK(unittest.TestCase):
         idx = 0
         act = [('SEPARATOR', UI(determinist=True)), ('tSTRUCT', UI(deep=True))]
         for j in range(10):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exiting (need new input)')
                 break
@@ -4533,7 +4533,7 @@ class TestFMK(unittest.TestCase):
 
         act = ['OFF_GEN', ('tTYPE', UI(min_node_tc=1, max_node_tc=4))]
         for j in range(100):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exiting (need new input)')
                 break
@@ -4588,7 +4588,7 @@ class TestFMK(unittest.TestCase):
 
         base_qty = 0
         for i in range(100):
-            data = fmk.process_data(['SC_NO_REGEN'])
+            data, _ = fmk.process_data(['SC_NO_REGEN'])
             data_list = fmk._send_data([data])  # needed to make the scenario progress
             if not data_list:
                 base_qty = i
@@ -4607,7 +4607,7 @@ class TestFMK(unittest.TestCase):
         print('\n*** test scenario SC_AUTO_REGEN via _send_data()')
 
         for i in range(base_qty * 3):
-            data = fmk.process_data(['SC_AUTO_REGEN'])
+            data, _ = fmk.process_data(['SC_AUTO_REGEN'])
             data_list = fmk._send_data([data])
             if not data_list:
                 raise ValueError
@@ -4620,7 +4620,7 @@ class TestFMK(unittest.TestCase):
 
         base_qty = 0
         for i in range(100):
-            data = fmk.process_data(['SC_NO_REGEN'])
+            data, _ = fmk.process_data(['SC_NO_REGEN'])
             go_on, _ = fmk.send_data_and_log([data])
             if not go_on:
                 base_qty = i
@@ -4640,7 +4640,7 @@ class TestFMK(unittest.TestCase):
         print('\n*** test scenario SC_AUTO_REGEN via send_data_and_log()')
 
         for i in range(base_qty * 3):
-            data = fmk.process_data(['SC_AUTO_REGEN'])
+            data, _ = fmk.process_data(['SC_AUTO_REGEN'])
             go_on, _ = fmk.send_data_and_log([data])
             if not go_on:
                 raise ValueError
@@ -4660,7 +4660,7 @@ class TestFMK(unittest.TestCase):
         now = datetime.datetime.now()
         for i in range(10):
             prev_data = data
-            data = fmk.process_data(['SC_EX1'])
+            data, _ = fmk.process_data(['SC_EX1'])
             ok, _ = fmk.send_data_and_log([data])  # needed to make the scenario progress
             if not ok:
                 raise ValueError
@@ -4675,7 +4675,7 @@ class TestFMK(unittest.TestCase):
         data = None
         steps = []
         for i in range(4):
-            data = fmk.process_data(['SC_EX2'])
+            data, _ = fmk.process_data(['SC_EX2'])
             if i == 3:
                 self.assertTrue(data is None)
             if data is not None:
@@ -4697,7 +4697,7 @@ class TestFMK(unittest.TestCase):
     def test_scenario_infra_03(self):
         steps = []
         for i in range(6):
-            data = fmk.process_data(['SC_EX3'])
+            data, _ = fmk.process_data(['SC_EX3'])
             steps.append(data.origin.current_step)
             ok, _ = fmk.send_data_and_log([data])  # needed to make the scenario progress
             if not ok:
@@ -4720,7 +4720,7 @@ class TestFMK(unittest.TestCase):
             steps = []
             scenario = None
             for i in range(iter_num):
-                data = fmk.process_data([name])
+                data, _ = fmk.process_data([name])
                 if i == 1:
                     scenario = data.origin
                 steps.append(data.origin.current_step)
@@ -4946,7 +4946,7 @@ class TestNode_Recursive(unittest.TestCase):
         act = [('REC0', UI(determinist=True)),
                ('tWALK', UI(path=None))]
         for j in range(30):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -4983,7 +4983,7 @@ class TestNode_Recursive(unittest.TestCase):
         act = [('REC0', UI(determinist=True)),
                ('tWALK', UI(path='rec0/value'))]
         for j in range(20):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5054,7 +5054,7 @@ class TestNode_Recursive(unittest.TestCase):
                ('tWALK', UI(path=None, clone_node=True, walk_within_recursive_node=True,
                             consider_sibbling_change=True))]
         for j in range(50):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5099,7 +5099,7 @@ class TestNode_Recursive(unittest.TestCase):
                ('tWALK', UI(path=None, clone_node=True, consider_sibbling_change=True,
                             walk_within_recursive_node=False))]
         for j in range(20):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5175,7 +5175,7 @@ class TestNode_Recursive(unittest.TestCase):
                ('tWALK', UI(path=None, clone_node=False, consider_sibbling_change=True,
                             walk_within_recursive_node=True))]
         for j in range(50):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5216,7 +5216,7 @@ class TestNode_Recursive(unittest.TestCase):
         act = [('REC1', UI(determinist=True)),
                ('tWALK', UI(path=None))]
         for j in range(20):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5256,7 +5256,7 @@ class TestNode_Recursive(unittest.TestCase):
         act = [('REC2', UI(determinist=True)),
                ('tWALK', UI(path=None))]
         for j in range(20):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5299,7 +5299,7 @@ class TestNode_Recursive(unittest.TestCase):
         act = [('REC3', UI(determinist=True)),
                ('tWALK', UI(path=None, consider_sibbling_change=True))]
         for j in range(20):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5337,7 +5337,7 @@ class TestNode_Recursive(unittest.TestCase):
         act = [('REC4', UI(determinist=True)),
                ('tWALK', UI(path=None))]
         for j in range(20):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5398,7 +5398,7 @@ class TestNode_Recursive(unittest.TestCase):
                ('tWALK', UI(path=None, clone_node=False, walk_within_recursive_node=True,
                             consider_sibbling_change=True))]
         for j in range(50):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5440,7 +5440,7 @@ class TestNode_Recursive(unittest.TestCase):
         act = [('REC0', UI(determinist=True)),
                ('tWALK', UI(path=None, nt_only=True))]
         for j in range(10):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5472,7 +5472,7 @@ class TestNode_Recursive(unittest.TestCase):
         act = [('REC0', UI(determinist=True)),
                ('tTYPE', UI(min_node_tc=-1, max_node_tc=-1))]
         for j in range(300):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5528,7 +5528,7 @@ class TestConstBackend(unittest.TestCase):
 
         act = [('CSP', UI(determinist=True)), ('tWALKcsp')]
         for j in range(20):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5558,7 +5558,7 @@ class TestConstBackend(unittest.TestCase):
 
         act = [('CSP_STR', UI(determinist=True)), ('tWALKcsp')]
         for j in range(20):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5593,7 +5593,7 @@ class TestConstBackend(unittest.TestCase):
 
         act = [('CSP_Z3', UI(determinist=True)), ('tWALKcsp')]
         for j in range(20):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5622,7 +5622,7 @@ class TestConstBackend(unittest.TestCase):
 
         act = [('CSP', UI(determinist=True)), ('tWALK', UI(path='csp/variables/x'))]
         for j in range(20):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5646,7 +5646,7 @@ class TestConstBackend(unittest.TestCase):
 
         act = [('CSP', UI(determinist=True)), ('tWALK', UI(path='csp/delim_1'))]
         for j in range(20):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5678,7 +5678,7 @@ class TestConstBackend(unittest.TestCase):
 
         act = [('CSP_BASIC', UI(determinist=True, freeze=True)), ('tWALK', UI(path='.*/idx'))]
         for j in range(20):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5710,7 +5710,7 @@ class TestConstBackend(unittest.TestCase):
         act = [('CSP_BASIC', UI(determinist=True, freeze=True)),
                ('tWALK', UI(leaf_determinism=True))]
         for j in range(20):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5743,7 +5743,7 @@ class TestConstBackend(unittest.TestCase):
         act = [('CSP_DEFAULT', UI(determinist=True, freeze=True)),
                ('tWALK', UI(leaf_determinism=False))]
         for j in range(40):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5775,7 +5775,7 @@ class TestConstBackend(unittest.TestCase):
 
         act = [('CSP', UI(determinist=True)), ('tCONST')]
         for j in range(500):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5801,7 +5801,7 @@ class TestConstBackend(unittest.TestCase):
         act = [('CSP_Z3', UI(determinist=True)),
                ('tCONST', UI(samples_per_cst=samples_per_constraint))]
         for j in range(40):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5844,7 +5844,7 @@ class TestConstBackend(unittest.TestCase):
         act = [('CSP_STR', UI(determinist=True)),
                ('tCONST', UI(samples_per_cst=samples_per_constraint))]
         for j in range(500):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5953,7 +5953,7 @@ class TestMW_tTYPE(unittest.TestCase):
 
         act = [('STR', UI(determinist=True)), ('tTYPE', UI(only_invalid_cases=True))]
         for j in range(40):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -5978,7 +5978,7 @@ class TestMW_tTYPE(unittest.TestCase):
 
         act = [('STR#2', UI(determinist=True)), ('tTYPE#2', UI(only_invalid_cases=False))]
         for j in range(40):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -6006,7 +6006,7 @@ class TestMW_tTYPE(unittest.TestCase):
         act = [('CSP_BASIC', UI(determinist=True)),
                ('tTYPE', UI(only_corner_cases=True, csp_compliance_matters=False))]
         for j in range(40):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break
@@ -6036,7 +6036,7 @@ class TestMW_tTYPE(unittest.TestCase):
         act = [('CSP_BASIC#2', UI(determinist=True)),
                ('tTYPE#2', UI(only_corner_cases=True, csp_compliance_matters=True))]
         for j in range(40):
-            d = fmk.process_data(act)
+            d, _ = fmk.process_data(act)
             if d is None:
                 print('--> Exit (need new input)')
                 break

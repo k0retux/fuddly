@@ -2171,17 +2171,24 @@ class FmkPlumbing(object):
                 if data_desc.process is None:
                     data = seed
                 else:
-                    data = self.process_data(data_desc.process, seed=seed, save_gen_seed=save_generator_seed,
-                                             reset_dmakers=reset_dmakers, ignore_new_ui=ignore_new_ui)
+                    data, exhausted_actions = self.process_data(
+                        data_desc.process, seed=seed, save_gen_seed=save_generator_seed,
+                        reset_dmakers=reset_dmakers, ignore_new_ui=ignore_new_ui)
                     if data is None:
-                        if data_desc.auto_regen:
-                            data_desc.auto_regen_cpt += 1
+                        if not exhausted_actions:
+                            data, exhausted_actions = self.process_data(
+                                data_desc.process, seed=seed, save_gen_seed=save_generator_seed,
+                                reset_dmakers=reset_dmakers, ignore_new_ui=ignore_new_ui)
+                        else:
+                            if data_desc.auto_regen:
+                                data_desc.auto_regen_cpt += 1
 
-                        while data_desc.next_process() or data_desc.auto_regen:
-                            data = self.process_data(data_desc.process, seed=seed, save_gen_seed=save_generator_seed,
-                                                     reset_dmakers=reset_dmakers, ignore_new_ui=ignore_new_ui)
-                            if data is not None:
-                                break
+                            while data_desc.next_process() or data_desc.auto_regen:
+                                data, exhausted_actions = self.process_data(
+                                    data_desc.process, seed=seed, save_gen_seed=save_generator_seed,
+                                    reset_dmakers=reset_dmakers, ignore_new_ui=ignore_new_ui)
+                                if data is not None:
+                                    break
 
                     if data is not None:
                         data.generate_info_from_content(data=original_data)
@@ -3316,8 +3323,9 @@ class FmkPlumbing(object):
                     if action_list is None:
                         data = orig
                     else:
-                        data = self.process_data(action_list, seed=orig, save_gen_seed=use_existing_seed,
-                                                 ignore_new_ui=True)
+                        data, exhausted_actions = self.process_data(
+                            action_list, seed=orig, save_gen_seed=use_existing_seed,
+                            ignore_new_ui=True)
                     if data:
                         data.tg_ids = tg_ids
 
@@ -3477,6 +3485,10 @@ class FmkPlumbing(object):
             [action_1, (action_2, UserInput_2), ... action_n]
             where action_N can be either: dmaker_type_N or (dmaker_type_N, dmaker_name_N)
 
+
+        Returns:
+           Data|None, bool: returns a tuple composed of a Data or None and a boolean value stating if
+           the action list is exhausted or not.
         """
 
         l = []
@@ -3638,7 +3650,7 @@ class FmkPlumbing(object):
                         dmaker_obj = get_generic_dmaker_obj(dmaker_type, cloned_dmaker_name)
                     else:
                         self.set_error(err_msg, code=Error.CloneError)
-                        return None
+                        return None, True
 
                     assert dmaker_obj is not None
                     is_gen = issubclass(dmaker_obj.__class__, Generator)
@@ -3646,7 +3658,7 @@ class FmkPlumbing(object):
 
                     if not ok:
                         self.set_error(err_msg, code=Error.CloneError)
-                        return None
+                        return None, True
 
                     self.fmkDB.insert_dmaker(self.dm.name, dmaker_type, cloned_dmaker_name,
                                              is_gen, stateful, clone_type=cloned_dmaker_type)
@@ -3664,7 +3676,7 @@ class FmkPlumbing(object):
                 if dmaker_obj is None:
                     self.set_error("Invalid generator/operator (%s)" % dmaker_ref,
                                    code=Error.InvalidDmaker)
-                    return None
+                    return None, True
 
             if reset_dmakers:
                 dmaker_obj._cleanup()
@@ -3696,7 +3708,7 @@ class FmkPlumbing(object):
                     except Exception:
                         unrecoverable_error = True
                         self._handle_user_code_exception("The cleanup() method of Data Maker '%s' has crashed!" % dmaker_ref)
-                        return None
+                        return None, True
                     self.__initialized_dmakers[dmaker_obj] = (False, None)
 
             if isinstance(dmaker_obj, Generator) and dmaker_obj.is_attr_set(DataMakerAttr.Active):
@@ -3727,7 +3739,7 @@ class FmkPlumbing(object):
                         self.set_error(msg, code=Error.CommandError)
                         for dmobj in current_dmobj_list[:-1]:
                             self.cleanup_dmaker(dmaker_obj=dmobj)
-                        return None
+                        return None, True
 
             setup_crashed = False
             setup_err = False
@@ -3819,6 +3831,7 @@ class FmkPlumbing(object):
                     self.__initialized_dmakers[dmaker_obj] = (False, self.__initialized_dmakers[dmaker_obj][1])
 
                 def _handle_operators_handover(dmlist):
+                    not_exhausted_action_list = False
                     # dmlist[-1] is the current operator
                     dmlist[-1].clear_attr(DataMakerAttr.HandOver)
 
@@ -3834,18 +3847,29 @@ class FmkPlumbing(object):
                         if dmobj.is_attr_set(DataMakerAttr.Controller):
                             dmobj.set_attr(DataMakerAttr.Active)
                             if dmobj.is_attr_set(DataMakerAttr.HandOver):
-                                _handle_operators_handover(dmlist[: dmlist_mangled_size - idx])
+                                not_exhausted_action_list = (
+                                    _handle_operators_handover(dmlist[: dmlist_mangled_size - idx]))
+                            else:
+                                not_exhausted_action_list = True
                             break
                         else:
                             dmobj.set_attr(DataMakerAttr.Active)
 
+                    return not_exhausted_action_list
+
                 # Apply to controller operator only
                 if dmaker_obj.is_attr_set(DataMakerAttr.HandOver):
-                    _handle_operators_handover(current_dmobj_list)
-                    self.set_error("Operator '{:s}' ({:s}) has yielded!".format(dmaker_name, dmaker_type),
+                    not_exhausted_actions = _handle_operators_handover(current_dmobj_list)
+                    if not_exhausted_actions:
+                        err_msg = (f"Operator '{dmaker_name}' ({dmaker_type}) has yielded, but the action list is "
+                                   f"not exhausted, you can still execute it for new outputs.")
+                    else:
+                        err_msg = (f"Operator '{dmaker_name}' ({dmaker_type}) has yielded and the action list "
+                                   f"is exhausted.")
+                    self.set_error(err_msg,
                                    context={"dmaker_name": dmaker_name, "dmaker_type": dmaker_type},
                                    code=Error.HandOver)
-                    return None
+                    return None, not not_exhausted_actions
 
             if not setup_crashed:
                 try:
@@ -3868,7 +3892,7 @@ class FmkPlumbing(object):
             first = False
 
         if unrecoverable_error:
-            return None
+            return None, True
 
         data.set_history(l)
         data.set_initial_dmaker(initial_generator_info)
@@ -3877,9 +3901,9 @@ class FmkPlumbing(object):
             self.set_error("Data is empty (probable reason: used data maker is disabled and need "
                            "to be reset)",
                            code=Error.DataInvalid)
-            return None
+            return None, True
         else:
-            return data
+            return data, False
 
     @EnforceOrder(accepted_states=["S1", "S2"])
     def cleanup_all_dmakers(self, reset_existing_seed=True):

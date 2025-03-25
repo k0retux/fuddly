@@ -264,7 +264,7 @@ class DefaultIndividual(Individual):
 
     def mutate(self):
         assert isinstance(self.data.content, Node)
-        data = self._fmk.process_data([('C', UI(nb=self.mutation_order))], seed=self.data)
+        data, exhausted_actions = self._fmk.process_data([('C', UI(nb=self.mutation_order))], seed=self.data)
         if data is None:
             raise PopulationError
         data.add_info('Mutation applied on data {}'.format(data._data_id))
