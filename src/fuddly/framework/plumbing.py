@@ -3568,11 +3568,15 @@ class FmkPlumbing(object):
                             # to True on the user input (even if not provided).
                             if action_list_sz != 1:
                                 needed_update = True
-                            elif not user_input and self.__default_ui == registered_ui:
-                                needed_update = False
-                            elif user_input:
-                                user_input.merge_with(self.__default_ui)
-                                needed_update = False if user_input == registered_ui else True
+                            elif isinstance(dmaker_obj, DynGenerator):
+                                if user_input:
+                                    user_input.merge_with(self.__default_ui)
+                                    needed_update = False if user_input == registered_ui else True
+                                else:
+                                    if self.__default_ui == registered_ui:
+                                        needed_update = False
+                                    else:
+                                        needed_update = True
                             else:
                                 needed_update = True
 
