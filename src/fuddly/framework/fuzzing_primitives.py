@@ -1017,10 +1017,15 @@ class TypedNodeDisruption(NodeConsumerStub):
         if fuzzed_vt:
             self.current_fuzz_vt_list += fuzzed_vt
 
-        if self.sep_list:
+        if self.sep_list and not self._only_corner_cases:
+            # only invalid cases are added here
             self._add_separator_cases(vt_node)
 
     def _add_separator_cases(self, vt_node):
+        """
+        Only invalid cases are generated
+        """
+
         current_val = vt_node.get_current_value()
         if vt_node.is_attr_set(dm.NodeInternals.Separator):
             sep_l = copy.copy(self.sep_list)
