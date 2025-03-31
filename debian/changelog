@@ -1,0 +1,1057 @@
+fuddly (0.30.dev226+g1791128.d20250331~1.gbp179112) UNRELEASED; urgency=medium
+
+  ** SNAPSHOT build @1791128de851ab0c2033b35fe10b4e7f5562616a **
+
+  [ Eric Lacombe ]
+
+  * [9be38c6] Initial commit for fuddly 0.18
+  * [606d560] fix missing file during github import
+  * [c033d6c] minor data model API enhancement + bugfix - INT.rewind() bugfix - add NodeInternals.ResetOnUnfreeze for Generators - add new Node.unfreeze() parameter: only_generators
+  * [672ff32] minor chnage on disruptors + bugfix - bugfix ALT disruptor - remove example class for typed_value - add new parameter for tTYPE
+  * [69862dd] tTYPE disruptor new param + Node() update + bugfix - add new parameter for tTYPE: order - Node.get_reachable_nodes(): minor implementation change for respect_order param - USB DM: add specific MSD_Conf desc - bugfix typo in FuzzShell.do_multi_send()
+  * [2e2d85f] - add 'port' attribute to PrinterTarget() - change data export behavior within Operators of jpg_strategy.py and   png_strategy.py
+  * [a0df539] Add sphinx scripts for documentation purpose, and start the documentation process.
+  * [e9775b8] More documentation...
+  * [8b20812] Initiate Tutorial structure & change default sphinx theme
+  * [61f6534] add test for building docs under readthedocs.org
+  * [31e110f] Target() bugfix and new features + doc progress
+  * [c0dfe32] FuzzShell Tutorial almost finished + bugfix
+  * [d0a4fc4] Basics within FuzzShell tutorial are done.
+  * [98994a7] Bumped version number to 0.18.1 + import global_resources.py in relevant places
+  * [5c7e629] Documentation progress & Minor changes with the DataModel class
+  * [d4bc7a8] Adding documentation about raw data absorption
+  * [653ef62] Document data absorption + DataModel minor bugfix
+  * [66e82e7] Support for absorbing MH.FullyRandom + bugfix within _try_absorption_with()
+  * [b4c4b84] Document 'Value Types' and add contents for 'Using fuddly with ipython' + bugfix
+  * [ac7105d] Bumped version number to 0.18.2
+  * [0a347bf] Add "separator" concept to non-terminal nodes
+  * [92e34c1] Add NodeCondition to synchronization infra + bugfix
+  * [e3ac8f5] Add Generator templates + Documentation + bugfix
+  * [2058ac6] Add infinity concept for data model description + bugfix
+  * [9e9afee] Add 'alphabet' parameter to String()
+  * [464e49a] add support for alphabet-compliant String() absorption
+  * [bd4c469] minor fix in String.absorb_auto_helper()
+  * [8f591be] Remove obsolete code
+  * [6b21055] add disruptor tSEP + basic documentation on disruptors + bugfix
+  * [b329c37] Bumped version number to 0.19
+  * [85f65dc] ModelHelper modif + bugfix
+  * [eb5f307] Add MH.WRAP
+  * [444e1ab] Bumped version number to 0.19.1
+  * [c5d5611] Add MH.CYCLE & MH.OFFSET + bugfix previous ModelHelper enhancement + Doc
+  * [2c2b62a] Add new Node infra for delayed jobs + bugfix
+  * [4a3c1a2] Rename Node.get_value() to Node._get_value() and make Node.freeze() the default
+  * [28ecf24] Enable by default 'delayed jobs' infra + some code cleanup
+  * [10bb9b7] Add new cases when walking a NonTerm in determinist mode (and in random + Finite)
+  * [d9ea0c7] ModelWalker news & cleanups + Docs + Bugfix
+  * [c219cd4] Add support for negative vals in RawCondition and IntCondition + bugfix Node.show()
+  * [45d6c02] Optimize DynHelper
+  * [b59adfa] Add MH.COPY_VALUE + generator template stuff + enhance&fix ZIP DM
+  * [1cb59f3] Add Filename() Type + support Node Attrs directly from MH class
+  * [076256b] Bumped version number to 0.20
+  * [ba52931] Minor cleanups + Bugfix + Docs
+  * [c20add6] Add documentation about non-terminal node shapes & optional nodes
+  * [b540ad6] Add NetworkTarget class + minor modifs
+  * [f0d1cad] Handle correctly cases where a network connection is not possible with NetworkTarget
+  * [c38f803] Add support for server mode in NetworkTarget + fix handling of socket.error
+  * [e8eef7a] Remove a bug on NetworkTarget + a maintenance latent one
+  * [463d6c8] Revamp Fuddly organization based on new project concept.
+  * [79ae6da] rename fuzzfmk/operator.py to avoid pbs with python3 + bugfix
+  * [f1c40df] Begin update of documention for new project-centric fuddly revamp + bugfix
+  * [bdfee66] Add missing target.rst to documentation
+  * [d243d10] Fix a bug in NetworkTarget triggering in server mode interface configuration
+  * [3e30a41] Update tutorial documentation + bugfix + polish
+  * [92eed74] fix dependency in operator_helper.py + error polish
+  * [60d8724] Add generic disruptor 'FREE' to make easy the release of node-constraints + bugfix
+  * [a46e8d4] Rename disruptor 'FREE' to 'FIX' + Enhance its description.
+  * [01ab813] Replace method clear_all_clone_info() by clear_clone_info_since()
+  * [480fa55] Add support for loading multiple data models at once + perf enhancement
+  * [8b2167a] Add new tSTRUCT disruptor + perf fix + bug fix
+  * [712a7af] Add new_env param to Node.get_clone() + Fix display bug in plumbing.py
+  * [bacd027] Make tWALK disruptor fix data constraints while walking
+  * [c85c97a] Define static method Node.filter_out_entangled_nodes() and use it in tSTRUCT
+  * [c23fe85] Various fix in NetworkTarget()
+  * [eabafe2] Enhance NetworkTarget() + bugfix
+  * [cfd9362] Enhance Node corruption hook infrastructure for handling various corruption types easily
+  * [a10ba89] Enhance tSTRUCT + various bugfix
+  * [5a11269] Add the new disruptors MOD and NEXT + minor changes
+  * [1451407] Add new type of corruption within tSTRUCT
+  * [96f6382] Change documentation related to tSTRUCT
+  * [b5c7b98] fix robustness issue with NetworkTarget + tSTRUCT filter out wrong test cases
+  * [c3a22e5] MutableClone mode fix + ModelWalker() fix
+  * [ebf9f13] Add support for holding connection to NetworkTarget + various stuff/fix
+  * [b7a9fe3] Fix dynamic feedback interface handling within NetworkTarget
+  * [747d62b] Add NetworkTarget support for 'hold_connection' in server mode + some cleanups
+  * [08f99e8] Complete the tutorial missing parts.
+  * [0f945f6] minor modifications in 'Target' tutorial section
+  * [78db5ac] Fix 2 bug within NetworkTarget (race & timeout) + Add new param to Logger()
+  * [d9a2504] minor modification concerning Logger doc and autodoc
+  * [7b08869] NetworkTarget fixes & tSTRUCT display fix
+  * [ca02b05] Enhance/Fix ModelWalker to avoid returning non-modified data (may trigger in some complex data model).
+  * [a8adc58] Add documentation about generic Targets
+  * [77d4ae1] Bumped version number to 0.21
+  * [b7d4973] fix feedback timeout in NetworkTarget with additional feedback sources (static & dynamic)
+  * [0c35643] Initial support for logging in a sqlite DB
+  * [11892b4] FMKDB: in progress (sql tables change, populate datamodels, ...)
+  * [ac6dbb6] FMKDB: in progress (populate disruptors)
+  * [69380cb] FMKDB first version is now complete + some bugfix
+  * [3505505] FMKDB: add Project and Target mapping
+  * [f2a8798] FMKDB: create a view STATS that provides the same level of information as trace/*_stats files from the Logger()
+  * [0f36e5c] FMKDB: Add view STATS_BY_TARGET
+  * [71ec49d] Enhance coverage of FMKDB + minor stuff
+  * [473149c] FMKDB: add Fuzzer.fmkdb_fetch_data() and related FuzzShell cmd + some polish
+  * [2ed189f] DOC: add a section about data replay
+  * [faf57f5] Add support to associate probes to targets & to facilitate automation
+  * [443201d] Add feedback status code for Target & Operator + complete automation based on status code
+  * [11bf8d1] Add tools/fmkdb.py to perform various FMKDB operations
+  * [e42611a] New tools/fmkdb.py features
+  * [43bf419] Bumped version number to 0.22
+  * [e9e677d] Add generic probe concept + ProbePID_SSH + some polish
+  * [d7a229f] Add more flexibility to ProbePID_SSH + bug fix + some polish
+  * [36e74dc] Bumped version number to 0.22.1
+
+  [ JB Cayrou ]
+  * [c61d588] Start the logger before calling _load_data_model().
+
+  [ Eric Lacombe ]
+  * [e52b03b] Update LocalTarget + doc update on feedback + bug fixes
+  * [0d12cb5] Rename LastInstruction.ExportData to LastInstruction.RecordData
+  * [bee92eb] Rename Data.*export* to Data.*record* to avoid confusion + some polish
+  * [47be9ab] Fix fmkDB recording for multi-send case + Fix some feedback recording bugs
+  * [f55a52f] Bumped version number to 0.22.2
+  * [55f9dd6] Update Doc to avoid confusion between "record" and "export"
+  * [550672d] FMKDB: remove PROJECT_RECORDS table & update DATA table
+  * [a8dbcdd] Clean-up + minor bug fixes + minor doc update
+  * [cdd0ba3] Add new operations to tools/fmkdb.py + some cleanup
+  * [e46d9ec] Add --info-by-date operation to ./tools/fmkdb.py + update tutorial
+  * [3a18f66] Bumped version number to 0.22.3
+  * [d2ea8c5] Add --project operation to ./tools/fmkdb.py
+  * [0486e69] Add some code to detect if FmkDB is valid or not
+  * [5598301] FMKDB validation fix: Fetch tables from the reference...
+  * [0eb38d3] Add encoded String support + SMS DM + SIMTarget
+  * [4afa1f0] Add String.encoded_test_cases() + UTF_16_LE val type
+  * [64f4a5a] Add doc on String encoding subclasses and on SIMTarget
+  * [efbfd44] Add String.init_encoding_scheme() + GZIP vtype + doc + bugfix
+  * [ec97ffd] String: encoded_string is now determined automatically
+  * [57d7759] Make adjustment on String encoding infra to support Node copy
+  * [2b86d4b] Revamp encoding infra & Add support for non-terminal node encoding
+  * [d864d01] After sending a data display its FmkDB data ID
+  * [96680f6] Add doc about encoding + add .get_raw_value() to non-term node
+  * [47da998] Add a wrapping encoder + its vtype counterpart
+  * [582a62c] Add a python codec encoder + some vtypes counterpart
+  * [c844970] SIMTarget: handle pin code
+  * [921efc9] Change FMKDB + log probe feedback at target init
+  * [56c678c] Save command history at FuzzShell exit
+  * [14e1952] Add handling of CTRL+D within FuzzShell
+  * [facb187] Seperate fuddly data from framework itself + Cleanup
+  * [4462027] Update .gitignore
+  * [2584f25] Support for DM and PRJ in fuddly_data/ + Doc
+  * [cc5aea6] Fix typo in data manipulation documentation
+  * [7dc7c95] Update data manipulation documentation + Fix node constraint matching
+  * [abbce81] Bumped version number to 0.23
+  * [2210351] Add 'dm' parameter to Probe methods + bugfix
+  * [df22404] Fix a robustness case in NetworkTarget() during fbk reception
+  * [ae360e6] Minor Target API changes + Bug fixes
+  * [866c8fb] Add '--info-by-ids' parameter to fmkdb.py + alert the user when a parameter is not recognized
+  * [f80de35] Add fmkDB disable/enable commands + bugfix
+  * [e326662] Fix FmkPlumbing.__show_entry() when data ID is None
+  * [340b92a] Cleanup probe launching code + NetworkTarget minor bugfix
+  * [ab36eba] More cleanup on probe launching code
+  * [1d5ab1f] Fix missing method in Project class
+  * [6af50c7] Bumped version number to 0.23.1
+  * [097ff8c] More cleanup regarding probe handling
+  * [2dac699] More cleanup regarding probe handling between monitor.py and project.py
+  * [75a0a32] Cleanup monitor.py and project.py regarding probes
+  * [3f724a2] Fix robustness regression when an exception is raised from a probe
+  * [4821a17] Monitor probe-related methods accept now as parameter either the probe class name or the probe class
+  * [5e25d28] Fix/Update ModelWalker, tSTRUCT, tTYPE, NetworkTarget
+  * [c19259d] Add Node Customization Concept
+  * [cd8f493] Add new fmkdb.py command and export reload_all() for Operator() usage
+  * [23b060d] fmkdb.py enhancements
+  * [2299f2d] fmkdb.py: add support for --fb-src to every --info* commands
+  * [e645894] Move specific node attributes to related node Customization
+  * [2bebbb4] Make the TriggerLast attribute a generator-node customization
+  * [a35c4bb] Move the code from fmkdb.py to new Database methods
+  * [a075903] Bumped version number to 0.23.2
+  * [3981603] Fix a robustness case while parsing a data model descriptor
+  * [f3f2b62] Fix feedback loss in NetworkTarget in multi-threading context + minor stuff
+  * [32968fa] Fix previous modification of Logger._decode_target_feedback()
+  * [d529b74] Change ("Fix") _construct_subnodes() behavior: custo are no longer transferred to child nodes
+  * [d88a955] Fix Database.display_data_info() regarding comments and fmkinfo timestamps
+  * [f3835af] Fix robustness issue in Logger (python3)
+  * [b5d04af] Update SMS data model
+  * [6fd3348] Support pretty print for encoded String() + Update SMS DM + other stuff
+  * [e594470] Update SMS DM + bugfix
+  * [47ea00f] Fix interaction between node existence condition and MH.Pick non-terminal shape type
+
+  [ Julien Baladier ]
+  * [eec4873] Calculate subfield_val_extremums when no constraints are provided
+  * [df38c5e] Add neg_val argument to BitFieldCondition
+  * [e210bf6] Simplify (isinstance(x, A) or isinstance(x, B)) to isinstance(x, (A, B))
+
+  [ Eric Lacombe ]
+  * [c805272] Add support for NodeCondition logic junctions
+  * [c8ef77d] Add support for describing bit-oriented data model (without byte-boundary constraint)
+  * [1a0dc46] Leverage bit-oriented modeling in SMS data model + bugfixes
+  * [1b460a4] Add support for calling callbacks related to Data()
+  * [d369254] Add infrastructure for launching threaded task + Data callback instructions + Fix
+  * [9f19967] Fix Data.__copy__() regarding callbacks
+
+  [ Julien Baladier ]
+  * [ffbebef] Add doc for exists_if/and, exists_if/or keywords & CollapsePadding custo
+
+  [ Eric Lacombe ]
+  * [6f8430c] Uncomment Data.__repr__()
+  * [2544509] Make the Database() object handle SQL statements in a thread
+  * [5a4cee6] Fix (unlikely) race condition with Database thread & Fix INT_str() handling
+  * [66349ee] Clarify different types of timeout + Add CallBackOps.Set_FbkTimeout
+
+  [ Julien Baladier ]
+  * [884e6aa] Add support for bitfield condition on multiple subfields + unit tests
+  * [ac15a2f] Operator helpers clean up
+
+  [ Eric Lacombe ]
+  * [46d3420] Fix minor bug in BitField.absorb() where BitField.drawn_val was not set properly
+
+  [ Julien Baladier ]
+  * [bfa8b79] Add a more complex example of BitfieldCondition usage in the doc
+
+  [ Eric Lacombe ]
+  * [a4934ef] Add support for triggering Data callBack at different places + various fmk enhancements
+  * [4552505] Fix regression in FmkPlumbing.launch_operator() + some cleanup
+  * [88661c4] Add 'Scenario' infrastructure (preliminary version)
+  * [777bb3a] Add possibility to specify a "data building chain" within a Step() of a Scenario() + minor fix
+
+  [ Julien Baladier ]
+  * [eafd39c] Rewrite monitor module using a ProbeRunner class
+  * [9754ddc] Monitor module clean up
+  * [29adcbe] Stuck probe support
+  * [c3b8ca1] Stuck probe when the execution of user defined methods takes too long
+  * [d51fae0] ProbeUser tests
+  * [3506d1c] Support for blocking probe triggered after sending data + clean up
+  * [c8da6d5] Update doc to tell about the new kind of blocking_probe
+  * [b971a99] Add another synchronization point after probes' main methods execution
+  * [bf348f5] Clean up monitor exception
+  * [cb77319] Update timestamp when getting a ProbeStatus object
+  * [7833d54] Fix ProbeStatus timestamp
+
+  [ Eric Lacombe ]
+  * [4ac3c5d] Fix ProbePID_SSH regarding Probe internals revamp
+
+  [ Julien Baladier ]
+  * [a2afbae] Fix ProbeUser tests regarding Probe internals revamp
+  * [23cc0f8] Improve error handling in the monitor module + clean up
+
+  [ Eric Lacombe ]
+  * [3b3eb2d] Scenario: PeriodicData can now be cleared by another Step + bug fix
+  * [31c2542] Scenario infra enhancement + some refactoring
+  * [9655457] Make the Scenario Infrastructure state-machine oriented
+  * [d9b82a5] Refactor 'fuzzfmk' directory to 'framework' directory
+  * [d42b6f1] Scenario callback can now prevent from sending data + Fix bugs
+  * [c114d11] Add Scenario documentation + Update SMS data model regarding CRC
+  * [48f25fe] Avoid to call rewind() in BitField.extend_right() and fix 'idx_inuse' extension
+
+  [ Julien Baladier ]
+  * [078e5f0] Some clean up
+
+  [ Eric Lacombe ]
+  * [b8eff22] Fix BitField.pretty_print and its methods that use 'idx_inuse'
+  * [bc65353] Bumped version number to 0.24
+  * [01da62a] Enhance the Scenario Infrastructure
+  * [e0120f7] Make NetworkTarget fully support collecting feedback without sending data
+  * [e980234] Enhance and fix NetworkTarget
+  * [19799e7] Add support for SOCK_RAW in NetworkTarget
+  * [3259147] Add PPPoE Data Model + Enhancement + Fix
+  * [7988303] Update PPPoE DM + Enhancement + Fix
+  * [e930a83] tTYPE: add new fuzzing cases for *INT and BitField
+  * [e2be71e] ModelHelper enhancement + FmkShell send_loop enhancement
+  * [ce7be46] Fix NetworkTarget and FmkPlumbing regarding target feedback retrieval in some cases
+  * [3a96e68] Revamp JPG data model +bug fixes
+  * [ac41a5f] Bumped version number to 0.24.1
+  * [7651bd0] Enhance Node absorption regarding postponed nodes
+  * [1104971] Add new data model keyword 'qty_from'
+  * [8d991ba] Add 2 new keywords to simplify data description + update PPPoE DM
+  * [f7ce4df] Add support for size constraints alteration to the disruptor tSTRUCT
+  * [34b4983] Add ModelHelper support for Node in 'contents' entry + Revamp USB DM
+  * [a674814] Add 'default' parameter to INT and BitField + bug fixes
+  * [d3769dc] Make auto-created Scenario Generators ignore Generator.produced_seed attribute + Fixes
+  * [6c793a0] Add keyword 'specific_fuzzy_vals' for data model description
+  * [7cfd53f] Add assertion to forbid '/' usage in a Node name + doc update
+  * [fbd0f17] Fix regression in NetworkTarget (regarding socket cleanup)
+  * [609d054] Fix limitation of Node.show() regarding multiple identical nodes with the same path
+  * [d9c03b4] ModelHelper: add support for clone modification + Fix
+  * [1f0d958] Various bug fixes + behavior change regarding scenario
+  * [aea5778] Various Fixes
+  * [d0f5348] Add 2 integration tests mixing operators and probes
+  * [1d451b4] PPPoE data model update
+  * [9e5d513] Enhance Scenario infrastructure
+  * [8071caf] Bumped version number to 0.24.2
+  * [b46f1f5] Revamp ProbePID_SSH + Add ProbePID_Serial
+  * [b3ad975] Fix ProbePID_Serial + fix monitoring/plumbing to wait for probe init + fix show_probes
+  * [e5f3c7b] Add new parameters to ProbePID_Serial + minor fixes/updates
+  * [ab203e3] Scenario Infra: register information regarding DataProcess()'s seed
+  * [ab90c9e] Generic probe usage modification + add new ProbeMem
+  * [7503cf9] Various fixes regarding tSTRUCT + minor stuff
+  * [07679da] Add comments regarding DJobs in Env.__copy__ + add assertion
+
+  [ Julien Baladier ]
+  * [26e4998] Clean up + correct some misspellings in the documentation
+
+  [ Eric Lacombe ]
+  * [a3197ad] Move to 'utf8' internal representation
+  * [d160bde] Minor fixes regarding internal encoding handling
+  * [6496b90] Add ASCII() and LATIN_1() node types + Fix
+  * [fe9c7f5] fmkdb.py: add support for removing a range of data IDs
+  * [2d47da8] Update/Fix PPPoE DM + Add BYTES() type node + Fix encoding issues
+  * [fbe969f] Use unconvert_from_internal_repr() in PythonCodec_Enc.
+  * [680b0b7] Polish Node.show() regarding encoded types
+
+  [ Julien Baladier ]
+  * [d81e1ec] RegexParser class supporting (, ) and \ as special chars
+  * [aceb699] Add support for quantifier {}, *, ?, +
+  * [f46f0fa] Add support for []
+  * [1ac451a] Add support for |
+  * [3b76758] Add support for shape in RegexParser
+  * [fd01f47] Revamp tests' organization
+  * [94156d6] Update instructions for tests usage in the readme file
+  * [d21374f] RegexParser tests
+  * [d28bfe4] RegexParser integration + a simple test
+  * [d0078db] Revamp RegexParser to add the notion of transition
+  * [6a35daf] Rewrite InsideSquaredBrackets using a SubStateMachine + clean up
+  * [46a8571] Rewrite InsideParenthesis & Escape using SubStateMachine
+  * [8113f8a] Revamp InsideBrackets state
+  * [840c067] Make RegexParser ddts use json format
+  * [ee49340] RegexParser tests clean up
+  * [ed5ac88] Add support for range in squared brackets + shortcuts using \
+  * [eb9fc7e] Add some test for range and escape + bug fix
+  * [dc5f2b8] Fix some RegexParser integration bugs + tests
+  * [2021a53] Fix non-terminal creation bug inside RegexParser
+  * [e53f539] Make Regex-Terminal translation possible when there is no ambiguity
+  * [8666046] Add INT_Str recognition + unit tests + bug fix
+  * [789314b] Add support for unicode chars + fix issues with python 2/3 compativility
+  * [e14ef3b] Add unit tests for unicode support
+  * [999f6e6] RegexParser clean up
+  * [addbf27] Revamp Escape states + usage of decorators to declare states
+  * [8bf446e] Add charset keyword
+  * [c21bb9c] Fix issues with charset and python 2/3
+  * [a2eb97c] RegexParser documentation + bug fix
+  * [4136983] Modify tests to use non-unicode strings in python 2
+  * [cef1028] Change position of RegexParser in data_model_helpers
+  * [34975be] Add support for . special char
+
+  [ Eric Lacombe ]
+  * [4ba4821] Update PPPoE DM + NetworkTarget enhancement
+  * [cd78b6f] Enhance fuzzing test cases of String-based nodes.
+  * [5e92e7e] Fix String absorption regarding encoding. (TBC)
+  * [2f09013] Fix String issues introduced by commit 5e92e7ea6c6476a498b92e7acf3f46b1d8dcf09b
+  * [6005e86] Revamp String encoding to fix inconsistencies and clumsiness
+  * [72c0d23] Fix encoding handling with 'size_sync_with' + some polish.
+  * [9e8fab9] Remove 'ascii_mode' String parameter + fix String._bytes2str()
+  * [7071613] Add Node debugging helper
+  * [9fd2532] Minor enhancements
+  * [537171e] String(): Populating in a lazy way + Fix
+  * [ec87d04] Add new expanded shapes for Non-terminal node + Fixes
+  * [a612f60] Update BasicVisitor to avoid duplicates
+  * [fd73006] Scenario: accept a DataProcess with a 'None' seed.
+  * [dbc33d5] Improve robustness of 'unconvert_from_internal_repr'
+  * [e6625f1] Polish up display stuff (fmkdb.py, ...)
+  * [959c20e] Fix Probe synchro issue + some cleanup
+  * [930126d] Update PPPoE DM regarding PADT
+  * [431405e] Fix Probe synchro in case of a sending error
+  * [2969f00] Monitor: differentiate probe initialization timeout from nominal timeout
+  * [8ea99d8] Update documentation regarding Regex Parser
+  * [8758939] Regex Parser update and DataModel Fix
+  * [6c7e849] Fix tTYPE disruptor + Add new fuzzing test cases for String-based nodes
+  * [2220381] Update/Fix counter-intuitive Node.set_values()/... behavior
+  * [274c9ae] Update/Fix counter-intuitive Node.set_contents() behavior
+  * [6bf12ac] Change interface of String-based and INT-based node types + WRAP update
+  * [950b62a] Rename INT class internal attributes
+  * [0d35325] Rename a BitField constructor parameter + rename String and BitField internal attributes
+  * [870ebb9] Add a 'fuzz magnitude' parameter to tTYPE disruptor + Fix infinite test cases situation
+  * [20dcee2] Improve tTYPE disruptor
+  * [4451e1a] PPPoE DM: uncomment a line in PADI definition
+  * [19a4adb] Make some Generator templates not freezable + bug fixes
+  * [8795bbe] Fix inconsistent NT 'expanded_nodelist' in a specific situation
+  * [07205ea] Update TODO list
+  * [46cfc3f] Bumped version number to 0.25
+
+  [ Julien Baladier ]
+  * [641faf9] Fix bug triggered when using a meta sequence directly after a |
+
+  [ Eric Lacombe ]
+  * [ae39aeb] tTYPE: add new test cases with INT_str()
+  * [1749734] Fix PPPoE DM scenario
+  * [76bb389] Enhance  Int/BitFieldCondition() + probe sync fixes
+  * [c1795c4] Update PPPoE DM
+  * [2868496] Fix unit test
+  * [b1ceb86] BasicVisitor: make it works even with DM containing 'singletons' only
+  * [c868803] Fix RawCondition() checking regression + Make sure Djobs are resolved after a freeze
+  * [87c0d54] Add Target feedback mode concept
+  * [16ad738] Add a Shell_Backend for local monitoring
+  * [e07f544] Data Model: add the new keyword 'evolution_func'
+  * [cec7446] Change 'ProbeMem' behavior
+  * [64d1ad3] FmkDB: Add the number of recorded Data IDs in display_stats()
+  * [7a68233] Fix FmkDB printing error
+  * [f0a6b6e] Bumped version number to 0.25.1
+  * [3aca40a] Polish up fmkdb.py
+  * [aa1de75] Add Scenario visualization through graphviz module
+  * [7fc3799] Fix Scenario display in case of multiple edges on the same node pair
+  * [0d2feee] Update README.rst
+  * [bcf9e5c] Add new parameter 'ign_sep' to tTYPE disruptor + minor fixes
+
+  [ Julien Baladier ]
+  * [bd032a3] Add support for shapes in regular expressions + tests
+  * [be880f6] Doc for shapes in regular expression
+
+  [ Eric Lacombe ]
+  * [83785e1] Various enhancements and fixes
+  * [97bd1fa] Minor fix to PPPoE DM
+  * [b6bc26b] Bumped version number to 0.25.2
+
+  [ Julien Baladier ]
+  * [276c5eb] Add an HTTP model
+  * [c78396b] Basic crossover disruptor
+  * [e256099] Combine disruptor
+  * [1c69efe] Clean up
+  * [eb710a3] Use get_clone instead of copy.copy
+
+  [ Eric Lacombe ]
+  * [b7066c9] NetworkTarget: Add a new parameter 'target_address'
+
+  [ Julien Baladier ]
+  * [0dbf7c5] Change disruptors order in generic_data_makers.py
+  * [be0c9da] Wait for Probes' threads to end after every test
+
+  [ Eric Lacombe ]
+  * [7451326] Minor documentation fixes
+  * [d372a78] NetworkTarget: add new parameter & fixes
+  * [562ba3d] NetworkTarget & Plumbing minor changes
+  * [a1c3415] NetworkTarget & Plumbing fixes and enhancements
+  * [6c0fdae] NetworkTarget: Fix race condition for setting self._feedback_handled
+  * [ba92129] Fix regression in _do_sending_and_logging_init()
+  * [6e5f13d] Scenario: add support for describing multiple data in a Step()
+  * [53d8dbb] New BitReverse encoder + fix and minor enhancement
+  * [ffb9ba4] Scenario: Fix 'auto_regen=False' support in the case of multidata Steps
+  * [2f3172f] Fix fmk info recording  for multidata case.
+  * [f99d379] NetworkTarget: improve performance in UDP/RAW server mode
+  * [1cb3936] Minor plumbing consistency fix
+
+  [ Julien Baladier ]
+  * [9f4859c] Evolutionary fuzzing structure
+  * [70d916f] Split Population __init__ into __init__ and setup methods
+  * [333d12c] Give populations access to fmk + bug fixes
+  * [8f440af] Create evolutionary interfaces + bug fixes + clean up
+  * [ab1c7cd] Fix issue when relaunching evolutionary scenarios
+  * [07e86e2] Fix issue when fmk.get_data return None
+  * [f649d61] Change user interface for evolutionary scenarios
+  * [96b4fca] Evolutionary scenarios clean up
+  * [3a7fa75] Remove FitnessScore class
+  * [a055d33] Add missing imports
+
+  [ Eric Lacombe ]
+  * [6683f22] Add helpers for describing XML data + New organization for DM helpers + minor enhancements
+
+  [ Julien Baladier ]
+  * [871d26c] Add default value for tCROSS percentage_to_share  parameter
+  * [6eda063] Add evolutionary scenarios documentation
+
+  [ Eric Lacombe ]
+  * [fbf171c] Evolutionary fuzzing: documentation fix
+  * [2f66c76] NodeInternals_NonTerm enhancements + fixes & Node minor fixes
+  * [c7a5453] Scenario Enhancements/Fixes + EmptyTarget enhancement + plumbing fixes
+  * [1c87a98] Scenario enhancements: reorganize callbacks that triggers before sending data
+  * [d7f483f] Scenario enhancements
+  * [4474329] Scenario cleanup + new non-reg test
+  * [2e1414c] Add Scenario Fuzzing Features + Scenario enhancements/cleanups/fixes
+  * [141a86a] Reorganize Target() related files
+  * [57922bc] Scenario enhancements + cleanup
+  * [ad9d9d6] API update + Scenario fuzzing documentation
+  * [34ceb1e] Scenario fuzz: revamp stutter approach
+  * [3e7b0fd] Facilitate the use within fuddly of modeled data not relying on Node()s
+  * [c136b50] Add missing copyright preambles
+  * [0ef203a] Bumped version number to 0.26
+  * [16b1102] Fix BitField.show() for non-standard padding
+
+  [ root ]
+  * [2b87a46] Addition of JSON message Parser
+
+  [ Eric Lacombe ]
+  * [184f83c] Add support for absorption of non byte-aligned nodes
+
+  [ plcp ]
+  * [b310d96] Add send_loop cosmetics for nicer display
+  * [1a285bd] Add config facility
+  * [b633491] Hard cleanup + Adjust implementation details
+
+  [ Eric Lacombe ]
+  * [b7e28d3] Make the disruptor C more respectful of the data model
+  * [f05d55f] Fix issue with python2
+
+  [ plcp ]
+  * [02b3eba] Make send_loop.aligned disabled by default
+  * [e011a79] Fix (see 02b3eba5e3e75dca4f38e87f75994dd5747d6069)
+  * [6e4ffc9] Fix config write-to-file
+
+  [ root ]
+  * [1d3dd61] Minor documentation update
+  * [6c64519] Minor documentation update
+
+  [ Eric Lacombe ]
+  * [3193a0a] Fix json_builder() and add examples in tuto.py
+  * [559dce0] New disruptor OP, new fmkDB features, bug fixes and other minor stuff
+  * [5c95901] Add Information Infrastructure + API changes + Bug fixes
+  * [3bb4a6c] Handle an exception raised by curses.setupterm in some condition
+  * [443add5] Fix do_send_loop and do_send_loop_keepseed semantics
+  * [5e2a042] Improved INT_str type + minor fixes
+  * [157f9ff] Logger: Make collected fbk mechanism source-aware & Harmonize feedback logs
+  * [589a025] Fix regression from fuddly 0.26 + CRC template enhancement
+  * [5da1ba7] Add support to use multiple targets at the same time
+  * [aed9636] Add support of multi-targets to replay_* FmkShell commands
+  * [dcc7881] Documentation update regarding Multi-Targets + minor bug fix
+  * [0d026d5] Add documentation about the Knowledge Infrastructure + minor updates
+  * [3f0e184] Enhance LocalTarget + cleanups
+  * [67275a1] Add Knowledge support to value_types.String
+  * [11d0db6] Fix FmkPlumbing DM/project reloading when a DM is broken
+  * [622bf9b] Fix feedback logging issues
+  * [dbb64d7] Fix feedback console printing issues
+  * [4e11dbd] Add new user_targets/ directory to fuddly_data/ + multi-target minor change
+  * [35a1022] Change in NetworkTarget feedback handling
+  * [bc80209] NetworkTarget UDP server mode change + new parameter + Fix
+  * [b9dd34d] Various fixes/changes
+  * [653ccb3] Colorize current data model in FmkPlumbing.show_data_models()
+  * [fb403c9] [API change] simplify parameters usage with DataMakers and Operators
+  * [fb8c99a] Fix INT class for absorption in specific condition
+  * [415ae7a] Scenario enhancement + bug fixes
+  * [05bd16c] Fix tTYPE with INT_str() with no min or max
+  * [ce7a40a] Scenario: fix vtg_ids handling when multiple-data steps are used
+  * [155e3ed] Fix too restrictive regex for parsing parameters in FmkShell
+  * [c179d23] Enhance XML helpers and node_builder.RegexParser
+  * [354b501] Add absorb_regexp parameter to xml.tag_builder()
+  * [3aa71cc] API change: DataModel.absorb()
+  * [6282568] Enhance xml.tag_builder() + minor changes
+  * [0a1b707] Fix regression in NetworkTarget + minor behavior change
+  * [32cd048] Documentation update
+  * [c234efa] Add new FmkShell command + fixes
+  * [3d5b2b1] Align semantics of raw format within fmkdb.py and the Logger() class
+  * [b77741f] Fix data modeling bugs
+  * [455f6bd] Add new data model myproto + new DM validation method
+  * [3072bf2] tTYPE and tSEP minor change
+  * [b83c05c] Add new test cases to INT_str()
+  * [6c24782] Fix incorrect display in fmkdb.py
+  * [cda25b3] Add new test cases for String()-typed Nodes
+  * [a37a7ba] Fix INT_str.get_fuzzed_vt()
+  * [270eb87] Enhance TypedNodeDisruption and Cleanup value_types.py
+  * [de5bd9e] Factorize some test cases between INT_str and String + new test cases
+  * [61756f1] Fix Bitfield.make_private() + myproto DM update
+  * [1090543] Fix Scenario.steps that did not include the first step
+  * [a0e24bf] Enhance TestTarget
+  * [9cf3b9b] Scenario: Fix step.content inconsistent side-effect
+  * [20ebb6c] Minor cosmetic change in step description
+  * [e554351] Fix NonTerm node unfreeze() method + minor cleanup
+  * [5e501f5] Fix myproto DM to avoid registering frozen atoms
+  * [eff5349] BitField @default is now usable when @subfield_values is also in use
+  * [cce8bfa] Add values_desc parameter to INT class
+  * [ec4b254] Documentation update
+  * [8eade0a] Bumped version number to 0.27
+  * [42b131a] FeedbackHandler enhancements (new term + API change)
+  * [2ca7fcf] Fixes regarding feedback handling + vtg support in Periodic class
+  * [68f1128] Enhance MOD disruptor
+  * [04b211d] Use functools.wraps in EnforceOrder decorator
+  * [50ad773] New disruptor CALL + NetworkTarget fix/improvements
+  * [69810ee] New Scenario configurability feature + various fixes
+  * [f8d9cb4] NetworkTarget update + various fixes
+  * [6a3fd6d] Fix DM/Proj reloading issues
+  * [9761f99] Enhance multi DM reloading
+  * [8b411f5] Enhance Scenario.graph()
+  * [6f2c3d0] Change the way util.Term() pop a new term
+  * [845813c] Make DataModel import available raw data automatically
+  * [2d072cf] Add new decoding feature to fmkDB.py
+  * [d8379de] Improve decoding feature of fmkdb.py and enhance DataModel decoding support
+  * [47c9757] [API] Move some code from FmkPlumbing.__init__() to new .start() method
+  * [1a755fa] Update scenario documentation + Fix scenario graph_periodic()
+  * [9dd093b] Bumped version number to 0.27.1
+  * [6e5d53c] Fix evolutionary handling and minor usage update
+  * [3505dc6] Evolutionary process API change
+  * [28fa7b5] Update Scenario documentation
+  * [0438678] Evolutionary Fuzzing: Fix the way feedback are set to Individual()
+  * [3c4d5a2] Add new Node.show() parameter to ignore the display of generator nodes
+  * [6a483a2] Enhance IntCondition() and BitFieldCondition()
+  * [fd334f8] Enhance RawCondition() + bugfix
+  * [eaebfc8] Documentation update
+  * [4f5fed8] Bumped version number to 0.27.2
+  * [b5fa7a1] Add Node.description attribute
+  * [ecf9d72] Add JSON data model
+  * [0b9be84] Fix JSON data model issue with python2
+  * [e73c48d] Scenario: Add new condition to cross a transition
+  * [f52cdb9] Add new FmkPlumbing.process_data_and_send() + cleanup + API change
+  * [408178d] New method Node.add() for NT + New generic disruptor ADD
+  * [ca8003f] Add new parameter @values_desc to String() type
+  * [c332267] minor API changes, enhancements and bug fixes
+  * [b347fe6] API Change on Node.get_node_by_path() + Perf improvement on Node.get_reachable_nodes()
+  * [470b603] [API Change] Node dictionary interface update
+  * [245a89e] Fix issue in Database.py with entry without any steps
+  * [be8bcee] Remove obsolete example DM
+  * [0de6eeb] Fix RegexParser when handling square brackets
+  * [f642bdc] Enhance and fix Evolutionary Fuzzing Infrastructure
+  * [db9dc12] BitField Enhancement
+  * [7b8eff0] Enhance Bitfield Collapsing operation + other minor stuff
+  * [224f897] New scenario features + bunch of enhancements/fixes
+  * [60bc745] [API change] node searching primitives new default behavior + other fixes/enhancements
+  * [cba5857] Fix/improve default behavior of node searching primitives
+  * [9e3ac4e] Fix ModelWalker that could mess up with @initial_step in some specific conditions
+  * [a8b8f74] Avoid side effects in NodeInternals_GenFunc
+  * [1b41dbc] Add new method Step.make_stutter()
+  * [cd9f06b] Handle String in random mode differently
+  * [c115ad2] Enhance Data_Model decoding API & minor fix/stuff
+  * [0c59336] Add new SSHTarget
+  * [437dfbb] Enhance and fix GENP data maker
+  * [9b22de2] Improve FmkPlumbing.send_eval() and .send_raw()
+  * [711de67] Add Node.is_path_valid() method
+  * [f2296c9] Minor cosmetic changes in tuto data model
+  * [6e73302] Fix race condition with NetworkTarget and other fixes in fuddly non-reg test suite
+  * [9e59265] BitField.*_subfield() methods can now reference subfields by description
+  * [3746f30] Add new method Node.get_nodes_by_paths()
+  * [981a141] String and Filename enhancements + end of python2 support
+  * [d234212] Parameter @default is now added to all typed nodes
+  * [4510d64] Simplify and make more robust the use of Encoders by String()s
+  * [298b8bc] Enhance FmkPlumbing.show_data_maker_types() with DM info
+  * [a7c8ff3] Improvements and API change regarding SSHBackend and SSHTarget
+  * [198f12a] Add a status threshold for target recovery
+  * [870ca6e] New stuff (about Scenario, TestTarget, FeedbackHandler, ...) and bug fix
+  * [40832dd] Non-terminal Node enhancement + new generator node template + bug fixes
+  * [145ba45] tWAlK and tTYPE enhancement
+  * [d2543fc] New keywords for model description + various enhancements/bugfixes
+  * [a5f0cdc] LocalTarget enhancement and bugfixes
+  * [e7bbb39] Fix robustness issue in Logger() and minor change
+  * [7fa6cf7] Add some support for flexibility + bugfix
+  * [e6a739a] Bug fixes: reload_all and LocalTarget
+  * [3470d44] Bugfix: DataProcess handling
+  * [6adea67] Fix _log_feedback() regression when timestamp is None
+  * [31f38f3] Add new option --fbk-status-formula to fmkdb.py and bug fixes
+  * [9a1a27d] Preliminary support of Test(Info) class in value_types.py
+  * [68c5303] Add new parameter @sem to tTYPE
+  * [4c95713] Add new parameter @sem to tWALK, tSTRUCT and tSEP
+  * [b52f1f6] Bug fixes
+  * [ad81ace] Scenario: Fix in plumbing a case of loss of vtg_ids provided in Step() object.
+  * [72b00c9] tWALK and tTYPE get the new parameter @ign_mutable_attr
+  * [82d393b] Add new parameters (@sem and @op_ref) to the disruptor OP
+  * [3d63c5d] DataModel: the keyword 'exists_if' can be used with a simple boolean condition now
+  * [7d230ad] New parameters added to Project()
+  * [e3a899a] fmkdb.py minor enhancement
+  * [6759c49] Fix incorrect condition for adding a fuzz test case in INT()
+  * [19a8dc5] Export the data ID of the last registered entry in fmkDB
+  * [e9c8694] Add description parameter to Data()
+  * [52b59ab] Fix post_freeze handler triggered by Node.freeze()
+  * [f167937] Node: fix incorrect handling of separator in some situation
+  * [3df7fe2] Fix regression with commit f1679374f2e7be24ddc93cbc1aedc44465f588e6
+  * [552a703] Improve tWALK exploration capability
+  * [8af49aa] Scenario: fix loss of data.scenario_dependence in some situation
+  * [9dec9ae] Fix node update issue happening in some condition
+  * [3a38906] Scenario: user_context is now a property that can be written
+  * [e7c9282] Update Operators/DataMakers
+  * [d079283] Scenario: add StepStub class
+  * [f1fe502] Minor bugfixes
+  * [12b4264] Scenario: Add a description for the transition generated by Step.make_stutter()
+  * [078629f] New constraint-based backend for data description
+  * [39da9c6] Constraint-backend: enhance API and fix bugs
+  * [2d7ab96] Add the new operator tSEM and update tWALKcsp
+  * [2e3d4ac] Rename, fix and enhance tSEM
+  * [2d29880] Improve support of constraint backend within Node infrastructure and various enhancement
+  * [67567d1] Enhancement and consistency improvement of DynGenerator
+  * [c85d6e9] Add new @display_feedback parameter to Target class + bugfix
+  * [03ba0d7] Scenario: new parameter @fbk_timeout_range to Step.make_stutter()
+  * [f39d8b5] Bugfix: Node.update()
+  * [f80b0b5] Add documentation for constraint-based data description
+  * [53a41a0] Add proxy jump support to SSHTarget and SSH_backend
+  * [e2dc3f4] Enhance password handling for SSHTarget and SSH_Backend
+  * [54e2c7a] Scenario: new parameter to Step.make_stutter() and minor fix
+  * [9b9968a] Scenario: fix Step object embedding multiple data
+  * [419ca5e] Node: fix node absorption bug in specific context
+  * [38a1d17] FmkPlumbing/Shell: Add new exec_dm_tests command
+  * [41bea5e] fix for compatibility with python3.11
+  * [565ac74] Scenario: add new parameter @refresh_atoms to Step object
+  * [24e5b38] Add verbose mode to EmptyTarget & fix
+  * [8e78b29] Add new class of information: OperationMode
+
+  [ RobertL31 ]
+  * [d27f5d5] Tools: new plotting tool
+
+  [ Eric Lacombe ]
+  * [f932bb4] plotty: fix inspection of fuddly root dir
+
+  [ RobertL31 ]
+  * [d03a70d] Tools-Plotty: clean argument list
+  * [ad9ebc0] Tools-Plotty: Add date conversion to sec / ms
+
+  [ Eric Lacombe ]
+  * [cb84828] Remove remaining code snippets to support python2
+  * [6921855] Fix a bug introduced by commit 3df7fe210507ff6a2f6a67a22f5dee4a980e2087
+  * [97ab288] Make the Logger threaded and add external_term feature
+  * [fe3270a] Remove unnecessary display latency
+  * [791816e] config: shell.send_loop.aligned changed to False
+
+  [ RobertL31 ]
+  * [b8c1ebf] Tools-Plotty: extract conversion from database request, specific datetime label plot, added point of interest principle
+
+  [ Nicolai Dagestad ]
+  * [0d28c92] Add XDG Base Directory support
+  * [c9df03c] Document the XDG Base Dir spec related changes
+
+  [ Eric Lacombe ]
+  * [85f8eb9] Database: add new ASYNC_DATA table
+  * [c593f9a] bugfix: XDG base dir support
+
+  [ RobertL31 ]
+  * [9177c8a] Tools-Plotty: define constants for error codes
+  * [aa33e18] Tools-Plotty: extract point of interest value sorting from point of interest plotting function
+  * [9c37a8e] Tools-Plotty: enhanced range support (added step)
+  * [47b9546] Tools-Plotty: made notification prints cleaner
+  * [55922f2] Tools-Plotty: option to display all point/value
+
+  [ Eric Lacombe ]
+  * [cc96b1d] Scenario: add @sending_delay parameter to Step()
+  * [2c4ee7e] Change section name of config file FmkPlumbing.ini
+
+  [ Nicolai Dagestad ]
+  * [cbf7e33] Add config entries for the Term class
+
+  [ Eric Lacombe ]
+  * [289561b] Add new config file related to database.py
+  * [d7cb3da] Scenario: display @sending_delay Step() parameter
+  * [525015a] Use xdg.BaseDirectory by default
+  * [676c1c2] Update documentation regarding fuddly data and config folders change
+  * [70142d5] Update README file regarding fuddly data and config folders change
+
+  [ RobertL31 ]
+  * [700926b] Tools-Plotty: parsing and formula code out of main, manipulating arg variable instead of many
+  * [1f2437a] Tools-Plotty: plot mutiple id_range against each others + plot title
+  * [ac83995] Tools-Plotty: option to match grid with points of interest
+  * [4a51c69] Tools-Plotty: add grid option to match every single point
+  * [dc3e4b8] Tools-Plotty: add async data plotting
+  * [74f343a] Tools-Plotty: fixed obvious bug for -gm all
+  * [1426cec] Tools-Plotty: fix crash when using -d ms
+
+  [ Eric Lacombe ]
+  * [06847c3] fix: python3-serial should not be a mandatory dependency
+  * [ffc8140] Add arguments to fuddly_shell.py
+
+  [ Nicolai Dagestad ]
+  * [2865684] Fix retrieve_app_handler not finding desktop files in ~/.local
+
+  [ Eric Lacombe ]
+  * [366c8b7] fix: async data can be associated to a wrong data id
+  * [b4d8a02] Add a requirements.txt file to the project
+  * [4bfa2be] Remove remaining python2-supporting code
+  * [dc76516] Add .readthedocs.yaml file to configure documentation builds
+  * [2fe71ec] fix .readthedocs.yaml path to conf.py
+  * [c8127cd] fix .readthedocs.yaml
+
+  [ Nicolai Dagestad ]
+  * [78fd092] Add a shebang for plotty
+
+  [ RobertL31 ]
+  * [2698c79] Tools-Plotty: fixed uncatched error if other range is not in database
+  * [917979a] Tools-Plotty: added configurable annotations for plotted data
+  * [58511c2] Tools-Plotty: removed useless date_unit + default formula
+  * [6be1cf4] Tools-Plotty: add option to choose date format + fix bug on database request fail
+  * [bfdf169] Tools-Plotty: -o option now aligns curves with main one
+
+  [ Eric Lacombe ]
+  * [7ea76fb] Scenario: change written TYPE column value of DATA table
+  * [001b0fd] Scenario: fix TYPE value of DATA table for Steps with arbitrary data
+  * [b591414] Fix Scenario parameters overlapping bug
+  * [79ea693] plotty: change default behavior and bugfixes
+  * [6c7da5f] plotty: add new vertical shift parameter
+  * [aec932b] plotty: change parameters for displaying labels above data points
+  * [de69396] plotty: revamp parameters for displaying labels above data points
+  * [4fab4ec] plotty: various fixes
+  * [379f37e] plotty: various fixes
+
+  [ RobertL31 ]
+  * [faeb87b] plotty: proper spacing between additional curves
+  * [91d59b5] plotty: add multi-db support
+  * [4caa888] Update documentation with Plotty
+
+  [ Eric Lacombe ]
+  * [4edcddd] Fix the pyxdg dependency information
+  * [9e96885] Bumped version number to 0.30
+  * [b33863d] bugfix: Bitfield in fuzz_mode
+  * [fc81d95] Scenario: Add a @private parameter to Step class
+  * [cedd93e] Fix algo to iterate over a BitField with default values
+  * [323dd84] fix Database start/stop sequence
+  * [9e038e9] Enhance absorption when DM leverage Encoders
+  * [7a610dc] Fix wrong assumption in Node._tobyte()
+
+  [ RobertL31 ]
+  * [3ff9601] Plotty: total refactorisation
+  * [98655c7] Plotty: fix wrong db usage
+  * [9496aed] Plotty : fix crash if calling with only unknown labels
+  * [fd0ac22] Plotty : fix horizontal grid lines don't appear
+  * [00fb1f7] Plotty : add different colors for different curves
+  * [0668c3d] Plotty : fix crash when given range doesn't have async data
+  * [0af56f3] Plotty : fix wrong curve shifting
+  * [8b8f91c] Plotty : fix curve height bug introduced by 0af56f3
+
+  [ Eric Lacombe ]
+  * [3042c18] Enhance the helper generator node LEN()
+  * [1204f73] Make double Ctrl+D exit FmkShell
+  * [baa0a4f] Fix a usability issue when CSP is used in a DM
+  * [e28d633] Fix problem with separators specific condition
+  * [150bb20] Add new Test.OnlyCornerCases attribute in knowledge infrastructure
+  * [e8f5dcb] Add support for Z3 as a new constraint backend
+  * [b8e33ff] Fix a SyntaxWarning issue
+  * [9c98a7b] Fix a DeprecationWarning issue
+  * [c086727] Add specific tests for Z3 backend
+  * [3a4c5c9] Add a Pipfile and a Pipfile.lock to the project
+  * [9ae4532] Add support for Z3 string constraint
+  * [9d4506e] DM: Fix an issue with separators
+  * [ae98e42] Fix issue with constraints backend and tWALK
+  * [f2e6fc6] Fix issue with constraints backend and tTYPE
+  * [215b9c5] Fix tWALK and enhance tTYPE wrt. constraint backend
+  * [ba017b8] RTD fix: add docs/requirements.txt
+  * [ab7d77c] RTD - update conf files
+  * [5d31ddf] Add new Info() item: Test.OnlyInvalidCases
+  * [2ff1929] Revamp design of OnlyInvalidCases and OnlyCornerCases
+  * [9d4d36b] Constraint Backend improvement
+  * [60b25e8] Fix limitation with Constraint()
+  * [2f9d216] Update the documentation about Z3Constraint()
+  * [6221d9e] Z3Constraint(): remove the @var_types parameter
+  * [70c1842] Fix loss of INT_str constraints with tTYPE
+  * [a5deb70] Constraint Backend: constraint split support + various fixes
+  * [246a154] Constraint backend fix: the same variable can now be used in different constraints objects
+  * [570ce86] CSP Z3 fix: default values constraints were added twice in some condition
+  * [ff78e87] String(): fix incorrect behaviors
+
+  [ RobertL31 ]
+  * [d872bf9] plotty : fix broken tests
+
+  [ Christopher Schwardt ]
+  * [8fdeee9] First pass at namespaceing/packageing
+
+  [ Nicolai Dagestad ]
+  * [a2cf373] update loading logic
+  * [0d529a2] Update a few more imports
+  * [272efe4] Fuddly_shell needs to be in the fuddly for pyproject to create a launch script
+  * [9e33f21] Make plotty and fmkdb standalone scripts
+  * [647440d] Update the documentation to reflect the packaging changes
+
+  [ Eric Lacombe ]
+  * [4122efc] DM: Fix irrelevant use of color escape sequences within generator nodes
+  * [9432e1c] tTYPE: Minimize the redundancy of generated data when @only_corner_cases=True
+  * [4be79f2] API change: FmkPlumbing.send_data_and_log()
+  * [5159a2a] Fix regression introduced by baa0a4f2f603a856a565f2b1742b911d6e1feba1
+  * [33ed94d] String & INT enhancements and bugfix
+
+  [ Nicolai Dagestad ]
+  * [6334e00] update loading logic
+  * [e6a0b9d] Make user_{data_models,targets,info,projects} loadable from a python module
+  * [b235840] Fix the names of internal projects in the pyproject metadata
+  * [c63273c] Make pyporject use requirements.txt (generated by pipenv)
+  * [6f02803] Move the entry_point group names to a global variable
+  * [e06d3e3] Ignore duplicate imports of project and data models from modules
+  * [6832cbf] Make {data_model,project}.name the same as module.name
+  * [d393fe0] Remove unneeded imports
+  * [4650448] Exit only if launched as a script
+  * [d43aa6a] Remove old import magic
+  * [92f33aa] Move fuddly_shell back in the fuddly package
+  * [b283332] Import internal objects from the fs only if ran from the sources directly
+  * [f2fdc88] Start documenting the packaging steps
+  * [81109ac] Merge _import_dm_from functions and make data_models+strategies be a module
+  * [f3cbc48] Reorganize data_models
+  * [584213e] Update fs import logic for new layout
+  * [a713e3a] Bunch of missing files because of a surprising .gitignore
+  * [70361c5] Fix the import logic for projects from the filesystem with the _proj suffix
+  * [29d78b7] Rename project files to remove _proj suffix
+  * [346e7dd] Update pyproject entrypoints after renamint of projects
+  * [703259f] Update requirements.txt from Pipfile (manually)
+  * [4896bf0] Try to workaround importlib weirdness
+  * [f998197] Error message should have been an f-string
+  * [54bdb87] Update documentation
+  * [7528472] Update documentation
+  * [18190e8] Useless line + removing old unused entry_point group name
+  * [25547f7] Use == instead of in to do a normal compare
+  * [9fc8eb8] Add a better local source execution detection
+  * [d32c30b] Fix comments from PR
+  * [db87df2] Doc tweak
+  * [a2b1f88] Small syntax changes and log message change
+  * [564377f] Change the data_model structure
+  * [2fd58ee] Update documentation
+
+  [ Eric Lacombe ]
+  * [c4bfc55] Fix various bugs linked to nested existence conditions or node qty==0
+
+  [ Nicolai Dagestad ]
+  * [ba881dc] Import data from module, fuddly's python package or user content
+  * [b5be17c] Update documentation
+  * [9d0075e] Add samples to the repo
+  * [3e04028] Refactor plumbing.py by merging _import_dm_* into a single _import_dm function
+  * [35567d3] Update README.rst
+
+  [ Eric Lacombe ]
+  * [6604093] Non-terminal node walking enhancement
+  * [89e2ac9] Add preliminary implementation for Recursive Nodes
+  * [a119170] Fix Existence Condition old bug + improve/fix recursive node generation
+  * [51d1250] Further integration of Recursive nodes within ModelWalking infrastructure
+  * [cdad313] Enhance Recursive nodes and allow more use cases
+
+  [ Nicolai Dagestad ]
+  * [add7bdb] Rework the preferred structure of projects
+  * [2aa1d62] Convert the tutorial project to the new project structure
+  * [9f5a334] Unifiy module and file system loading a bit more
+  * [cce54f1] Update project detection logic
+  * [6d4e783] Add a cli interface with arg completion
+  * [0a1954f] Add a man page for the cli
+  * [2176da0] Add shell completion scripts
+
+  [ Eric Lacombe ]
+  * [d8f72a7] Fix project modules discovery: make the research follow symbolic links
+
+  [ Nicolai Dagestad ]
+  * [d6f13df] fix the 'new' command
+
+  [ Eric Lacombe ]
+  * [96329eb] Update fuddly.1.scd
+
+  [ Nicolai Dagestad ]
+  * [f2cf56d] Properly check if a module exists before using it
+
+  [ Eric Lacombe ]
+  * [80d8c56] Remove obsolete jsonschema dependency
+  * [570c70c] [API update] String() - new parameter @samples
+  * [f6b2f6c] Fix commit 80d8c561 that mistakenly removed json DM
+  * [04177c4] Fix Node absorption bug when CollapsePadding custo is used
+
+  [ Nicolai Dagestad ]
+  * [d961f2b] [CLI] Make the run command detect scripts in the user_data_folder
+  * [56745bb] Update MANIFEST.in to include non python files from project templates
+  * [e8cf115] Syntax cleanup in the cli submodule
+
+  [ Eric Lacombe ]
+  * [20498f9] API change: Operator() is now renamed Director()
+  * [fd7e832] Add new parameter @store_fbk_in_db in Target()
+  * [d6c06dc] Add new Project.register_operators()
+  * [8268ea5] API change: Disruptors are now renamed Operators
+  * [6387725] Documentation: Update screenshot wrt. Director() renaming
+  * [6e82348] [CLI] Implement new command show
+  * [b81ef6a] Add FeedbackHandler.specific_init(**kwargs) stub
+  * [8fe7f6e] [CLI] command 'show' displays new information
+  * [b75dc34] [CLI] update show command
+
+  [ Nicolai Dagestad ]
+  * [1133545] Don't load package samples if module_name is None
+
+  [ Eric Lacombe ]
+  * [fbce448] [utils/Term] Make more generic the way to provide a title to the terminal emulator
+  * [32c5073] Fix BitField.update_raw_value() incorrect return value
+  * [95c8597] Load sample files from current project to populate associated DMs
+  * [e3e4d01] [UI] On reload_all force kill any Term()
+  * [98df0de] FeedbackHandler.extract_info_from_feedback() can now also return feedback that reach fmkDB
+  * [d816139] [UI] the fuddly shell supports now completion within some commands
+
+  [ Nicolai Dagestad ]
+  * [bb97fe0] Rework the terminal cmd logic
+
+  [ Eric Lacombe ]
+  * [5058eef] Protect Term.title for correct insertion within term.cmd format string
+  * [45daeef] [fuddly shell completion] don't display any param documentation when no text
+  * [4671dd2] [fuddly shell completion] add completion for show_generators and show_operators
+  * [0fc5d2e] [fuddly conf] Add update_config() + New conf param for auto-completion
+  * [86fa957] [Z3 backend] Catch an exception that may be raised in specific cases (data alteration)
+  * [2ca224b] [fuddly shell] reload completion metadata after the command "reload_data_model"
+  * [0f4cf6f] [fuddly shell] fix completion when cursor changes position
+  * [49f34c1] Fix Node.add() not setting its own Env() on the added node
+  * [0382c82] [fuddly shell completion] add completion for show_scenario
+  * [e3b4e71] Fix retrieval of DM samples on specific cases
+  * [b5a304d] Revert change on ModelWalker that triggers redundancy when dealing with Z3 constraints
+  * [61427c5] [DM] New keyword to customize import from external data model
+  * [bf99d75] Fix Term() to avoid BrokenPipeError on a CTRL-C
+  * [1fc3df2] Fix plotty when retrieved fmkDB data is None
+  * [7cb2198] Fix Step.content property setter
+  * [7541b9b] Remove a constraint in SQL statement used by Database.fetch_data()
+  * [240ab1c] [API] Take into account change of data maker parameters in send* commands
+  * [56917ab] [FMK] Optimize FmkPlumbing.set_feedback_timeout()
+  * [0dbf64a] Add documentation for installing fuddly
+
+  [ Nicolai Dagestad ]
+  * [23bf87b] Add 2 more entry_points for info and targets
+
+  [ RobertL31 ]
+  * [71689ae] remove cexprtk dependency
+  * [66d3b6a] show exception propagation on tool execution failure
+
+  [ Nicolai Dagestad ]
+  * [52601b6] Add a arch PKGBUILD and move shell completions to the contrib folder
+
+  [ RobertL31 ]
+  * [fd097e0] update .gitignore
+
+  [ Nicolai Dagestad ]
+  * [c90e495] docs: Update the tutorial preview of the fuddly shell output
+  * [a53ef6a] docs: Update to reflect the targets move
+
+  [ Eric Lacombe ]
+  * [2a59637] [plotty] Fix formula parsing
+
+  [ Nicolai Dagestad ]
+  * [26e568f] docs: Update to reflect the info module split
+  * [05a7b9f] docs: various small doc fixes
+  * [8d441e5] docs: Update sys.path so sphinx can properly find the fuddly source
+  * [e1324d9] docs: Add information about the import hook magic
+  * [f473721] Hook up the import magic
+  * [1703feb] Split out classes from fuddly.framework.knowledge.information to fuddly.info.generic
+  * [314792d] Move targets out of framework (fuddly.framework.targets -> fuddly.targets)
+  * [fb1a8ce] Fix some syntax the linter didn't like
+  * [84f8d60] docs: Add some info about the fuddly cli
+
+  [ Eric Lacombe ]
+  * [03d9858] Make <fuddly data folder>/user_{projects,data_models,targets,info} namespace packages
+  * [535797f] Fix commit 240ab1cc when process_data() is called from a scenario
+  * [a7af478] Fix OP and CALL operators type checking
+  * [210a1b2] Add @keep_term parameter to FeedbackHandler constructor
+
+  [ Nicolai Dagestad ]
+  * [feb1c8a] rework the magic imports
+  * [35ba18d] docs: Document the changes to the import hook
+  * [857fac5] Remove backward compatibility with _proj projects
+  * [01993d3] docs: Updates and some typo corrections
+
+  [ Eric Lacombe ]
+  * [9161472] Update packaging.rst
+  * [7697744] Fix ModelWalker incorrect behavior with entanglement
+
+  [ Nicolai Dagestad ]
+  * [8c79035] build_scripts: Add missing dependency to PKGBUILD
+
+  [ Eric Lacombe ]
+  * [f954c27] Fix cups dependency in PipFile and requirements.txt
+
+  [ Nicolai Dagestad ]
+  * [a93d1a3] Print warnings to stderr
+  * [1001189] Dynamically set the version inside of fuddly
+  * [0d65a3e] [CLI] Add a --version option
+  * [e9b3c72] build_script: Update arch build script dependencies
+  * [4e9bb13] build_script: remove configparser from PKGBUILD as it is already in the default python dist
+
+  [ Eric Lacombe ]
+  * [248b915] Fix robustness issue with Target.send_multiple_data_sync
+  * [31c8e4b] Fix differently robustness issue with Target.send_multiple_data_sync
+  * [305c8a4] [NodeBuilder] Fix missing attributes handling with nodes define via 'import_from'
+  * [df8586d] Update dependencies files
+  * [b2a822f] [Shell API] More robust approach when dealing with data maker parameters change in send* commands
+  * [b4bb379] Add comments to process_data() new feature + cleanups
+
+  [ Nicolai Dagestad ]
+  * [d35f4ff] Rename template files + change spelling (#75)
+
+  [ Eric Lacombe ]
+  * [ffe3fa7] [Shell] Display data makers description in shell completion handler
+  * [7a91891] [FmkPlumbing] Fix unexpected reset of data makers in some specific situation
+  * [b6da125] [API change] Change of FmkPlumbing.process_data() return value
+  * [6af445f] [FIX] FmkPlumbing.process_data() mistakenly handle parameter 'freeze' for scenario
+
+  [ Nicolai Dagestad ]
+  * [3bf5fd8] Include the fuddly documentation in built package (#76)
+
+  [ Eric Lacombe ]
+  * [1791128] Fix tTYPE when only_corner_cases=True
+
+ -- Eric Lacombe <eric.lacombe@security-labs.org>  Mon, 31 Mar 2025 15:10:32 +0200

@@ -1,0 +1,9 @@
+Document: fuddly
+Title: fuddly documentation
+Author: Eric Lacombe
+Abstract: This document describes how to use fuddly as well as
+  how to develop new projects, new data models and new targets
+Section: System/Security
+Format: HTML
+Index: /usr/share/doc/fuddly/html/index.html
+Files: /usr/share/doc/fuddly/html/*.html

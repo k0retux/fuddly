@@ -1,0 +1,7 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: fuddly
+Source: https://github.com/k0retux/fuddly
+
+Files: *
+Copyright: 2014-2025 Eric Lacombe <eric.lacombe@security-labs.org
+License: GPL-3.0-or-later
