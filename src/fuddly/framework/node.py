@@ -3666,8 +3666,6 @@ class NodeInternals_NonTerm(NodeInternals):
                            reset_state=True):
         # assert node in self.subnodes_attrs
         if node not in self.subnodes_attrs:
-            print(f'*** DBG {node.name} {id(node)} ***')
-            print(self.subnodes_attrs)
             for k, v in self.subnodes_attrs.items():
                 print(f'- {k.name} {id(k)}, {v}')
             raise ValueError('@node is not a direct child')
@@ -8189,16 +8187,43 @@ class Node(object):
     def get_env(self):
         return self.env
 
-    def set_csp(self, csp: CSP):
+    def _current_func_name(self):
+        return inspect.currentframe().f_back.f_code.co_name
+
+    def _check_env_existence(self):
+        caller_name = inspect.currentframe().f_back.f_code.co_name
         if self.env is None:
-            print('[ERROR] set_csp() is called on a node that does not have an Env()\n'
-                  '  --> node name: {!s}'.format(self.name))
+            print(f'[ERROR] {caller_name}() is called on a node that does not have an Env()\n'
+                  f'  --> node name: {self.name}')
             raise NodeError('No Env() object associated to the node')
 
+    def set_csp(self, csp: CSP):
+        self._check_env_existence()
         self.env.csp = copy.copy(csp)
 
     def get_csp(self):
+        self._check_env_existence()
         return self.env.csp
+
+    def enable_csp(self):
+        self._check_env_existence()
+        if self.env.csp_save is not None:
+            self.env.csp = self.env.csp_save
+            self.env.csp_save = None
+        elif DEBUG:
+            if self.env.csp is None:
+                print(f'[WARNING] {self._current_func_name()}: No CSP is currently defined')
+            else:
+                print(f'[WARNING] {self._current_func_name()}: CSP is already enabled')
+
+    def disable_csp(self):
+        self._check_env_existence()
+        if self.env.csp is not None:
+            self.env.csp_save = self.env.csp
+            self.env.csp = None
+        elif True:
+            print(f'[WARNING] {self._current_func_name()}: No CSP is currently defined')
+
 
     @property
     def no_more_solution_for_csp(self):
@@ -9281,7 +9306,8 @@ class Env(object):
         self.id_list = None
         self._reentrancy_cpt = 0
         self._color_enabled = False
-        self.csp: CSP = None
+        self.csp: CSP|None = None
+        self.csp_save: CSP|None = None
 
         self._decoded_blob = None
 

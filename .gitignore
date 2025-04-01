@@ -5,6 +5,7 @@ src/fuddly/framework/_version.py
 __pycache__/
 *~
 
+.pybuild/
 build/
 src/fuddly.egg-info/
 

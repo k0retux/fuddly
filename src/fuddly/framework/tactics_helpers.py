@@ -618,7 +618,9 @@ class DynGenerator(Generator):
                     "this parameter is set to 'True', or maximum quantity if set to 'False'. "
                     "Otherwise if set to 'None', nothing is done.", None, bool),
         'freeze': ("Freeze the generated node.", False, bool),
-        'resolve_csp': ("Resolve any CSP if any", True, bool)
+        'resolve_csp': ("Resolve any CSP if any", True, bool),
+        'ignore_csp': ("Generate data from the model as if there was no CSP linked to it.",
+                       False, bool)
     }
 
     def setup(self, dm, user_input):
@@ -657,8 +659,11 @@ class DynGenerator(Generator):
                         min, max = node.get_subnode_minmax(snd)
                         node.set_subnode_default_qty(snd, min if self.min_def else max)
 
-        if self.freeze:
-            atom.freeze(resolve_csp=self.resolve_csp)
+            if self.ignore_csp:
+                atom.disable_csp()
+
+            if self.freeze:
+                atom.freeze(resolve_csp=self.resolve_csp)
 
         return Data(atom)
 
