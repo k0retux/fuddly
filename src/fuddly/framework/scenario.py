@@ -148,21 +148,12 @@ class Step(object):
         self.sending_delay = sending_delay
 
         self._scenario_env = None
-        self._periodic_data = list(set_periodic) if set_periodic else None
-        if clear_periodic:
-            self._periodic_data_to_remove = []
-            for p in clear_periodic:
-                self._periodic_data_to_remove.append(id(p))
-        else:
-            self._periodic_data_to_remove = None
 
-        self._tasks = list(start_tasks) if start_tasks else None
-        if stop_tasks:
-            self._tasks_to_stop = []
-            for t in stop_tasks:
-                self._tasks_to_stop.append(id(t))
-        else:
-            self._tasks_to_stop = None
+        self.set_periodic(set_periodic)
+        self.clear_periodic(clear_periodic)
+
+        self.start_tasks(start_tasks)
+        self.stop_tasks(stop_tasks)
 
         self._stutter_cpt = None
         self._stutter_max = None
@@ -487,6 +478,28 @@ class Step(object):
     @data_desc.setter
     def data_desc(self, data_desc):
         self._handle_data_desc(data_desc)
+
+    def set_periodic(self, set_periodic):
+        self._periodic_data = list(set_periodic) if set_periodic else None
+
+    def clear_periodic(self, clear_periodic, id_provided=False):
+        if clear_periodic:
+            self._periodic_data_to_remove = []
+            for p in clear_periodic:
+                self._periodic_data_to_remove.append(p if id_provided else id(p))
+        else:
+            self._periodic_data_to_remove = None
+
+    def start_tasks(self, start_tasks):
+        self._tasks = list(start_tasks) if start_tasks else None
+
+    def stop_tasks(self, stop_tasks):
+        if stop_tasks:
+            self._tasks_to_stop = []
+            for t in stop_tasks:
+                self._tasks_to_stop.append(id(t))
+        else:
+            self._tasks_to_stop = None
 
     @property
     def periodic_to_set(self):
