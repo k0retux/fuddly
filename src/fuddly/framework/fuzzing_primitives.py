@@ -760,7 +760,7 @@ class BasicVisitor(NodeConsumerStub):
         pass
 
     def recover_node(self, node):
-        node.reset_state(recursive=False)
+        node.reset_state(recursive=False, ignore_entanglement=True)
         node.freeze(restrict_csp=True, resolve_csp=True)
 
     def need_reset(self, node):
@@ -902,7 +902,7 @@ class AltConfConsumer(NodeConsumerStub):
         if node is self.current_consumed_node and self.recover:
             DEBUG_PRINT(' *** RECOVER: ' + node.name + ', ' + node.get_current_conf())
 
-            node.reset_state(recursive=True)
+            node.reset_state(recursive=True, ignore_entanglement=True)
             node.get_value()
 
             node.set_current_conf(conf=self.orig_conf, reverse=True, recursive=False)
@@ -1103,7 +1103,7 @@ class SeparatorDisruption(NodeConsumerStub):
         # operation, especially usefull in our case, because we have
         # to preserve dm.NodeInternals.Separator
 
-        node.unfreeze() # ignore previous state
+        node.unfreeze(ignore_entanglement=True) # ignore previous state
 
         node.make_finite()
         node.make_determinist()

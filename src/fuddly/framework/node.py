@@ -8263,7 +8263,7 @@ class Node(object):
 
     def walk(self, conf=None, recursive=True, steps_num=1):
         for _ in range(steps_num):
-            self.unfreeze(conf=conf, recursive=recursive)
+            self.unfreeze(conf=conf, recursive=recursive, ignore_entanglement=True)
             self.freeze(conf=conf, recursive=recursive)
 
     def freeze(

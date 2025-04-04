@@ -173,10 +173,15 @@ def truncate_info(info, max_size=60):
                  'consider_sibbling_change':
                      ('While walking through terminal nodes, if sibbling nodes are '
                       'no more the same because of existence condition for instance, walk through '
-                      'the new nodes.', True, bool),
+                      'the new nodes.'
+                      'Note that it is ignored when "nt_only=True" as unwanted side effects '
+                      'occur.',
+                      True, bool),
                  'ign_mutable_attr': ('Walk through all the nodes even if their Mutable attribute '
                                       'is cleared.', True, bool),
-                 'fix_all': ('For each produced data, reevaluate the constraints on the whole graph.',
+                 'fix_all': ('For each produced data, reevaluate the constraints on the whole graph. '
+                             'Note that it is ignored when "nt_only=True" as unwanted side effects '
+                             'occur.',
                              True, bool)})
 class sd_walk_data_model(StatefulOperator):
     """
@@ -214,7 +219,7 @@ class sd_walk_data_model(StatefulOperator):
 
         if self.nt_only:
             consumer = NonTermVisitor(respect_order=self.order, ignore_mutable_attr=self.ign_mutable_attr,
-                                      consider_side_effects_on_sibbling=self.consider_sibbling_change,
+                                      consider_side_effects_on_sibbling=False,
                                       fix_constraints=self.fix_all, reset_when_change=self.deep)
         else:
             consumer = BasicVisitor(max_runs_per_node=self.max_runs_per_node,
@@ -246,9 +251,15 @@ class sd_walk_data_model(StatefulOperator):
             exported_node = rnode
 
         if self.fix_all:
-            exported_node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
-            exported_node.freeze()
-            data.add_info('reevaluate all the constraints (if any)')
+            if self.nt_only:
+                # Ignore fix_all as unwanted side effects occur with unfreeze().
+                # Indeed frozen_node_list of all NT nodes will be set to None, implying the reconstruction
+                # of dynamic Nodes based on the current shape of the initial one.
+                data.add_info('constraints reevaluation has been ignored (because "nt_only=True")')
+            else:
+                exported_node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
+                exported_node.freeze()
+                data.add_info('reevaluate all the constraints (if any)')
 
         data.update_from(exported_node)
 

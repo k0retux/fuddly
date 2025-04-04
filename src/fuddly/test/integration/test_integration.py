@@ -1957,12 +1957,14 @@ class TestModelWalker(unittest.TestCase):
         self.assertEqual(idx, 24)
 
 
-    def test_nested_duplicated_nt(self):
+    def test_nested_duplicated_nt_01(self):
 
         idx = 0
         crc_set = set()
         expected_nb_outcomes = 2355
         expected_nb_of_diff_outcomes = 2310
+
+        print(f'\n*** process NESTED_NT tTYPE(only_invalid_cases=True ...)')
 
         act = [('NESTED_NT', UI(determinist=True)),
                ('tTYPE', UI(
@@ -1994,6 +1996,44 @@ class TestModelWalker(unittest.TestCase):
         self.assertAlmostEqual(idx, expected_nb_outcomes, delta=10)
         # almostequal because collision in String test cases can lead to less test cases
         # (related to random bitflip test case that could collide with case_sensitive test case)
+
+    def test_nested_duplicated_nt_02(self):
+
+        idx = 0
+        crc_set = set()
+        expected_nb_outcomes = 34
+
+        print(f'\n*** process NESTED_NT tWALK(nt_only=True ...)')
+
+        act = [('NESTED_NT', UI(determinist=True)),
+               ('tWALK', UI(
+                   deep=True,
+                   nt_only=True,
+                   clone_node=True,
+                   leaf_determinism=False,
+                   full_combinatory=False,
+                   consider_sibbling_change=False,
+                   fix_all=False,
+               ))]
+        for j in range(50):
+            d, _ = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            crc = zlib.crc32(d.to_bytes())
+            if crc not in crc_set:
+                crc_set.add(crc)
+            # fmk._setup_new_sending()
+            # fmk._log_data(d)
+            idx += 1
+
+        print(f'\n'
+              f'*** Number of message with different CRCs: {len(crc_set)}\n'
+              f'*** Number of generated messages: {idx}\n')
+
+        self.assertAlmostEqual(len(crc_set), expected_nb_outcomes)
+        self.assertAlmostEqual(idx, expected_nb_outcomes)
+
 
 
     def test_JPG(self):
