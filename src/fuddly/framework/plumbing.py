@@ -4661,8 +4661,7 @@ class FmkShell(cmd.Cmd):
         (From raw format to interpreted format and reversely.)
         This command modify the current Project's Logger.
         """
-        self.fz.lg.export_raw_data = not self.fz.lg.export_raw_data
-
+        self.fz.lg.switch_log_format()
         return False
 
     def complete_config(self, text, line, bgidx, endix, target=None):

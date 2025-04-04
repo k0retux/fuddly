@@ -108,6 +108,8 @@ class Logger(object):
             raise ValueError(
                 "When @highlight_marked_nodes is True, @export_raw_data should be False"
             )
+
+        self._hl_marked_nodes_user_provided_value = highlight_marked_nodes
         self._hl_marked_nodes = highlight_marked_nodes
 
         self._tg_fbk = []
@@ -167,6 +169,13 @@ class Logger(object):
             return data
 
         self.log_fn = init_logfn
+
+    def switch_log_format(self):
+        self.export_raw_data = not self.export_raw_data
+        if not self.export_raw_data:
+            self._hl_marked_nodes = self._hl_marked_nodes_user_provided_value
+        else:
+            self._hl_marked_nodes = False
 
     def flush(self):
         with self._sync_lock:
