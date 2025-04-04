@@ -4778,9 +4778,31 @@ class NodeInternals_NonTerm(NodeInternals):
                         if n is old:
                             sublist[idx] = new
 
-    def add(
-        self, node, min=1, max=1, default_qty=None, after=None, before=None, idx=None
-    ):
+    def remove_subnode(self, subnode):
+        """
+        Remove a subnode belonging to this non-terminal node.
+        TODO: dependencies with other nodes are not checked for now, and can messup the all graph.
+
+        :param subnode:
+        :return: None
+        """
+        self.subnodes_set.remove(subnode)
+        del self.subnodes_attrs[subnode]
+
+        for weight, lnode_list in split_with(lambda x: isinstance(x, int), self.subnodes_order):
+            for delim, sublist in self.__iter_csts(lnode_list[0]):
+                if delim[:3] == "u=+" or delim[:3] == "s=+":
+                    for w, etp in split_with(lambda x: isinstance(x, int), sublist[1]):
+                        for idx, n in enumerate(copy.copy(etp)):
+                            if n is subnode:
+                                del etp[idx]
+                else:
+                    for idx, n in enumerate(copy.copy(sublist)):
+                        if n is subnode:
+                            del sublist[idx]
+
+
+    def add(self, node, min=1, max=1, default_qty=None, after=None, before=None, idx=None):
         """
         This method add a new node to this non-terminal. The location and the quantity can be configured
         through the parameters.
