@@ -147,6 +147,10 @@ class ModelWalker(object):
 
 
     def _do_reset(self, node, consumer):
+        # if DEBUG:
+        #     DEBUG_PRINT(
+        #         f'\n(*| do_reset: {node.name})\n')
+
         last_gen = self._root_node.get_reachable_nodes(internals_criteria=self.triglast_ic,
                                                        resolve_generator=True)
         for n in last_gen:
@@ -273,6 +277,10 @@ class ModelWalker(object):
                             perform_second_step = True
                             again = False
 
+                        if DEBUG:
+                            DEBUG_PRINT('  ' * parent_node.depth +
+                                        f'(3| Yield: {consumed_node.name} with original value: "{orig_node_val}"\n\n')
+
                         yield consumed_node, orig_node_val # YIELD
 
                         if consumer.consider_side_effects_on_sibbling:
@@ -299,7 +307,8 @@ class ModelWalker(object):
                                 #         level=2)
 
                                 parent_node.unfreeze(recursive=True, dont_change_state=False,
-                                                     reevaluate_constraints=True, ignore_entanglement=True)
+                                                     reevaluate_constraints=True, ignore_entanglement=True,
+                                                     except_for_subnodes=(node,))
                                 parent_node.freeze()
 
                                 new_parent_node_list = set(parent_node.subnodes_set).intersection(set(parent_node.frozen_node_list))
@@ -358,8 +367,10 @@ class ModelWalker(object):
                 else:
                     again = False
 
-                if consumer.consider_side_effects_on_sibbling:
-                    parent_node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
+                if consumer.consider_side_effects_on_sibbling and parent_node.is_nonterm():
+                    # DEBUG_PRINT(f'\n(****| DBG | parent: {parent_node.name}, subnode: {node.name}, reset: {reset})\n')
+                    parent_node.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True,
+                                         except_for_subnodes=(node,))
                     parent_node.freeze()
 
                 if node.is_nonterm(): # or (consumer.walk_within_recursive_node and node.is_rec()):

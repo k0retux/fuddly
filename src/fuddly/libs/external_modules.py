@@ -86,6 +86,11 @@ class Color(object):
     ANALYSIS_IMPACT = 0xFF0000
     ANALYSIS_NO_IMPACT = 0x00C0FF
 
+    DEBUG_L0 = 0xFF0000
+    DEBUG_L1 = 0x66FF00
+    DEBUG_L2 = 0xB1FF7D
+    DEBUG_L3 = 0xECFA9D
+
     @staticmethod
     def display():
         for c in dir(Color):

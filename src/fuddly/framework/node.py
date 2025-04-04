@@ -1612,7 +1612,8 @@ class NodeInternals_Recursive(NodeInternals):
         return self._frozen_recursive_node is not None
 
     def unfreeze(self, conf=None, recursive=False, dont_change_state=False,
-                 ignore_entanglement=False, only_generators=False, reevaluate_constraints=False):
+                 ignore_entanglement=False, only_generators=False, reevaluate_constraints=False,
+                 except_for_subnodes=()):
 
         self._frozen_recursive_node = None
         if recursive:
@@ -2082,13 +2083,14 @@ class NodeInternals_GenFunc(NodeInternals):
             )
 
     def unfreeze(
-        self,
-        conf=None,
-        recursive=True,
-        dont_change_state=False,
-        ignore_entanglement=False,
-        only_generators=False,
-        reevaluate_constraints=False,
+            self,
+            conf=None,
+            recursive=True,
+            dont_change_state=False,
+            ignore_entanglement=False,
+            only_generators=False,
+            reevaluate_constraints=False,
+            except_for_subnodes=()
     ):
         # if self.is_attr_set(NodeInternals.DEBUG):
         #     print('\n*** DBG Gen:', self.custo.reset_on_unfreeze_mode)
@@ -2371,13 +2373,14 @@ class NodeInternals_Term(NodeInternals):
         return self.frozen_node is not None
 
     def unfreeze(
-        self,
-        conf=None,
-        recursive=True,
-        dont_change_state=False,
-        ignore_entanglement=False,
-        only_generators=False,
-        reevaluate_constraints=False,
+            self,
+            conf=None,
+            recursive=True,
+            dont_change_state=False,
+            ignore_entanglement=False,
+            only_generators=False,
+            reevaluate_constraints=False,
+            except_for_subnodes=()
     ):
         if only_generators:
             return
@@ -6141,6 +6144,7 @@ class NodeInternals_NonTerm(NodeInternals):
         ignore_entanglement=False,
         only_generators=False,
         reevaluate_constraints=False,
+        except_for_subnodes=()
     ):
         mutable = self.is_attr_set(NodeInternals.Mutable)
         # mutable = True
@@ -6186,6 +6190,8 @@ class NodeInternals_NonTerm(NodeInternals):
 
                 if iterable is not None:
                     for n in iterable:
+                        if n in except_for_subnodes:
+                            continue
                         self._cleanup_entangled_nodes_from(n)
                         if (n.is_nonterm(conf) or n.is_genfunc(conf) or n.is_rec(conf)
                                 or n.is_func(conf)):
@@ -6209,6 +6215,8 @@ class NodeInternals_NonTerm(NodeInternals):
 
             if not reevaluate_constraints and iterable is not None:
                 for n in iterable:
+                    if n in except_for_subnodes:
+                        continue
                     n.unfreeze(conf=conf,
                                recursive=True,
                                dont_change_state=dont_change_state,
@@ -6226,6 +6234,8 @@ class NodeInternals_NonTerm(NodeInternals):
             self.frozen_node_list = None
             self._nodes_drawn_qty = {}
             for n in self.subnodes_set:
+                if n in except_for_subnodes:
+                    continue
                 self._clear_drawn_node_attrs(n)
                 n.clear_clone_info_since(n)
 
@@ -8540,6 +8550,7 @@ class Node(object):
         ignore_entanglement=False,
         only_generators=False,
         reevaluate_constraints=False,
+        except_for_subnodes=(),
         walk_csp=False,
         walk_csp_step_size=1,
     ):
@@ -8570,17 +8581,19 @@ class Node(object):
             ignore_entanglement=ignore_entanglement,
             only_generators=only_generators,
             reevaluate_constraints=reevaluate_constraints,
+            except_for_subnodes=except_for_subnodes
         )
 
         if not ignore_entanglement and self.entangled_nodes is not None:
-            for e in self.entangled_nodes:
-                e.unfreeze(
+            for n in self.entangled_nodes:
+                n.unfreeze(
                     conf=next_conf,
                     recursive=recursive,
                     dont_change_state=dont_change_state,
                     ignore_entanglement=True,
                     only_generators=only_generators,
                     reevaluate_constraints=reevaluate_constraints,
+                    except_for_subnodes=except_for_subnodes
                 )
 
     def unfreeze_all(self, recursive=True, ignore_entanglement=False):

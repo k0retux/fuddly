@@ -22,6 +22,7 @@
 ################################################################################
 
 import sys
+from fuddly.libs.external_modules import Color
 
 DEBUG = False
 LEVEL = 0
@@ -48,9 +49,10 @@ except ImportError:
 
 class DebugColor:
     LEVEL = {
-        0: 0xFF0000,
-        1: 0x66FF00,
-        2: 0xB1FF7D
+        0: Color.DEBUG_L0,
+        1: Color.DEBUG_L1,
+        2: Color.DEBUG_L2,
+        3: Color.DEBUG_L3,
         }
     MISC = 0xFF0000
 
