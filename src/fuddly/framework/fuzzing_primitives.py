@@ -577,6 +577,7 @@ class NodeConsumerStub(object):
 
         self._csp_compliance_matters = True
         self._only_corner_cases = False
+        self._only_corner_cases_and_extra = False
         self._only_invalid_cases = False
 
         self.init_specific(**kwargs)
@@ -929,7 +930,7 @@ class AltConfConsumer(NodeConsumerStub):
 class TypedNodeDisruption(NodeConsumerStub):
 
     def init_specific(self, ignore_separator=False, determinist=True, csp_compliance_matters=False,
-                      only_corner_cases=False, only_invalid_cases=False):
+                      only_corner_cases=False, only_corner_cases_and_extra=False, only_invalid_cases=False):
         mattr = None if self.ignore_mutable_attr else [dm.NodeInternals.Mutable]
         if ignore_separator:
             self._internals_criteria = dm.NodeInternalsCriteria(mandatory_attrs=mattr,
@@ -955,6 +956,7 @@ class TypedNodeDisruption(NodeConsumerStub):
 
         self._csp_compliance_matters = csp_compliance_matters
         self._only_corner_cases = only_corner_cases
+        self._only_corner_cases_and_extra = only_corner_cases_and_extra
         self._only_invalid_cases = only_invalid_cases
 
     def preload(self, root_node):
@@ -1017,6 +1019,7 @@ class TypedNodeDisruption(NodeConsumerStub):
             new_vt.make_private(forget_current_state=False)
             ok = new_vt.enable_fuzz_mode(fuzz_magnitude=fuzz_magnitude,
                                          only_corner_cases=self._only_corner_cases,
+                                         only_corner_cases_and_extra = self._only_corner_cases_and_extra,
                                          only_invalid_cases=self._only_invalid_cases)
 
             self.current_fuzz_vt_list = [new_vt] if ok else []
@@ -1024,11 +1027,12 @@ class TypedNodeDisruption(NodeConsumerStub):
             self.current_fuzz_vt_list = []
 
         fuzzed_vt = vt.get_fuzzed_vt_list(only_corner_cases=self._only_corner_cases,
+                                          only_corner_cases_and_extra = self._only_corner_cases_and_extra,
                                           only_invalid_cases=self._only_invalid_cases)
         if fuzzed_vt:
             self.current_fuzz_vt_list += fuzzed_vt
 
-        if self.sep_list and not self._only_corner_cases:
+        if self.sep_list and not self._only_corner_cases and not self._only_corner_cases_and_extra:
             # only invalid cases are added here
             self._add_separator_cases(vt_node)
 

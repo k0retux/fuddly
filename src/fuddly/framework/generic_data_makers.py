@@ -269,55 +269,60 @@ class sd_walk_data_model(StatefulOperator):
 
 @operator(tactics, dtype="tTYPE", weight=1, modelwalker_user=True,
           args={'path': ('Graph path regexp to select nodes on which' \
-                          ' the operator should apply.', None, str),
-                 'sem': ('Semantics to select nodes on which' \
-                         ' the operator should apply.', None, (str, list)),
-                 'order': ('When set to True, the fuzzing order is strictly guided ' \
-                           'by the data structure. Otherwise, fuzz weight (if specified ' \
-                           'in the data model) is used for ordering.', True, bool),
-                 'deep': ('When set to True, if a node structure has changed, the modelwalker ' \
-                          'will reset its walk through the children nodes.', True, bool),
-                 'full_combinatory': ('When set to True, enable full-combinatory mode for non-terminal nodes. It '
-                                      'means that the non-terminal nodes will be customized in "FullCombinatory" mode',
-                                      False,bool),
-                 'ign_sep': ('When set to True, separators will be ignored ' \
-                          'if any are defined.', False, bool),
-                 'fix_all': ('For each produced data, reevaluate the constraints on the whole graph.',
-                             False, bool),
-                 'fix': ("Limit constraints fixing to the nodes related to the currently fuzzed one"
-                         " (only implemented for 'sync_size_with' and 'sync_enc_size_with').", True, bool),
-                 'fuzz_mag': ('Order of magnitude for maximum size of some fuzzing test cases.',
-                              1.0, float),
-                 'make_determinist': ("If set to 'True', the whole model will be set in determinist mode."
-                                      "Otherwise it will be guided by the data model determinism.", False, bool),
-                 'leaf_fuzz_determinism': ("If set to 'True', each typed node will be fuzzed in "
-                                      "a deterministic way. If set to 'False' each typed node "
-                                      "will be fuzzed in a random way. Otherwise, if it is set to "
-                                      "'None', it will be guided by the "
-                                      "data model determinism. Note: this option is complementary to "
-                                      "'determinism' as it acts on the typed node substitutions "
-                                      "that occur through this operator", True, bool),
-                 'leaf_determinism': ("If set to 'True', all the typed nodes of the model will be "
-                                       "set to determinist mode prior to any fuzzing. If set "
-                                       "to 'False', they will be set to random mode. "
-                                       "Otherwise, if set to 'None', nothing will be done.", None, bool),
-                 'ign_mutable_attr': ('Walk through all the nodes even if their Mutable attribute '
-                                      'is cleared.', False, bool),
-                 'consider_sibbling_change':
-                     ('[EXPERIMENTAL] While walking through terminal nodes, if sibbling nodes are '
-                      'no more the same because of existence condition for instance, walk through '
-                      'the new nodes. (Currently, work only with some specific data model construction.)',
-                      False, bool),
-                 'csp_compliance_matters': ('Does the compliance to any defined CSP should be always'
-                                            ' guaranteed?', False, bool),
-                 'only_corner_cases': ('If set to True, when this operator walks through INT() and '
-                                       'String()-based nodes, only valid corner cases will be generated',
+                         ' the operator should apply.', None, str),
+                'sem': ('Semantics to select nodes on which' \
+                        ' the operator should apply.', None, (str, list)),
+                'order': ('When set to True, the fuzzing order is strictly guided ' \
+                          'by the data structure. Otherwise, fuzz weight (if specified ' \
+                          'in the data model) is used for ordering.', True, bool),
+                'deep': ('When set to True, if a node structure has changed, the modelwalker ' \
+                         'will reset its walk through the children nodes.', True, bool),
+                'full_combinatory': ('When set to True, enable full-combinatory mode for non-terminal nodes. It '
+                                     'means that the non-terminal nodes will be customized in "FullCombinatory" mode',
+                                     False,bool),
+                'ign_sep': ('When set to True, separators will be ignored ' \
+                            'if any are defined.', False, bool),
+                'fix_all': ('For each produced data, reevaluate the constraints on the whole graph.',
+                            False, bool),
+                'fix': ("Limit constraints fixing to the nodes related to the currently fuzzed one"
+                        " (only implemented for 'sync_size_with' and 'sync_enc_size_with').", True, bool),
+                'fuzz_mag': ('Order of magnitude for maximum size of some fuzzing test cases.',
+                             1.0, float),
+                'make_determinist': ("If set to 'True', the whole model will be set in determinist mode."
+                                     "Otherwise it will be guided by the data model determinism.", False, bool),
+                'leaf_fuzz_determinism': ("If set to 'True', each typed node will be fuzzed in "
+                                          "a deterministic way. If set to 'False' each typed node "
+                                          "will be fuzzed in a random way. Otherwise, if it is set to "
+                                          "'None', it will be guided by the "
+                                          "data model determinism. Note: this option is complementary to "
+                                          "'determinism' as it acts on the typed node substitutions "
+                                          "that occur through this operator", True, bool),
+                'leaf_determinism': ("If set to 'True', all the typed nodes of the model will be "
+                                     "set to determinist mode prior to any fuzzing. If set "
+                                     "to 'False', they will be set to random mode. "
+                                     "Otherwise, if set to 'None', nothing will be done.", None, bool),
+                'ign_mutable_attr': ('Walk through all the nodes even if their Mutable attribute '
+                                     'is cleared.', False, bool),
+                'consider_sibbling_change':
+                    ('[EXPERIMENTAL] While walking through terminal nodes, if sibbling nodes are '
+                     'no more the same because of existence condition for instance, walk through '
+                     'the new nodes. (Currently, work only with some specific data model construction.)',
+                     False, bool),
+                'csp_compliance_matters': ('Does the compliance to any defined CSP should be always'
+                                           ' guaranteed?', False, bool),
+                'only_corner_cases_and_extra':
+                    ('If set to True, when this operator walks through INT() and '
+                     'String()-based nodes, only valid corner cases and extra valid cases '
+                     'will be generated.',
+                     False, bool),
+                'only_corner_cases': ('If set to True, when this operator walks through INT() and '
+                                      'String()-based nodes, only valid corner cases will be generated',
+                                      False, bool),
+                'only_invalid_cases': ('If set to True, when this operator walks through INT() and '
+                                       'String()-based nodes, only invalid cases will be generated, '
+                                       'meaning valid corner cases will not be generated.',
                                        False, bool),
-                 'only_invalid_cases': ('If set to True, when this operator walks through INT() and '
-                                        'String()-based nodes, only invalid cases will be generated, '
-                                        'meaning valid corner cases will not be generated.',
-                                        False, bool),
-                 })
+                })
 class sd_fuzz_typed_nodes(StatefulOperator):
     """
     Perform alterations on typed nodes (one at a time) according to:
@@ -335,6 +340,7 @@ class sd_fuzz_typed_nodes(StatefulOperator):
     """
     def setup(self, dm, user_input):
         assert not (self.only_corner_cases and self.only_invalid_cases)
+        assert not (self.only_corner_cases_and_extra and self.only_invalid_cases)
         return True
 
     def set_seed(self, prev_data):
@@ -371,6 +377,7 @@ class sd_fuzz_typed_nodes(StatefulOperator):
                                             determinist=self.leaf_fuzz_determinism,
                                             csp_compliance_matters=self.csp_compliance_matters,
                                             only_corner_cases=self.only_corner_cases,
+                                            only_corner_cases_and_extra = self.only_corner_cases_and_extra,
                                             only_invalid_cases=self.only_invalid_cases)
         self.consumer.need_reset_when_structure_change = self.deep
         sem_crit = NSC(optionalbut1_criteria=self.sem)

@@ -121,7 +121,9 @@ class VT(object):
     def get_specific_fuzzy_vals(self):
         raise NotImplementedError
 
-    def get_fuzzed_vt_list(self, only_corner_cases=False, only_invalid_cases=False):
+    def get_fuzzed_vt_list(self, only_corner_cases=False,
+                           only_corner_cases_and_extra = False,
+                           only_invalid_cases=False):
         return None
 
 
@@ -131,6 +133,7 @@ class VT_Alt(VT):
         self._specific_fuzzy_vals = None
         self._fuzz_magnitude = 1.0
         self._only_corner_cases = False
+        self._only_corner_cases_and_extra = False
         self._only_invalid_cases = False
 
     @property
@@ -143,6 +146,7 @@ class VT_Alt(VT):
         else:
             self._enable_fuzz_mode(fuzz_magnitude=self._fuzz_magnitude,
                                    only_corner_cases=self._only_corner_cases,
+                                   only_corner_cases_and_extra = self._only_corner_cases_and_extra,
                                    only_invalid_cases=self._only_invalid_cases)
 
         self._fuzzy_mode = not self._fuzzy_mode
@@ -151,13 +155,18 @@ class VT_Alt(VT):
     def after_enabling_mode(self):
         pass
 
-    def enable_fuzz_mode(self, fuzz_magnitude=1.0, only_corner_cases=False, only_invalid_cases=False):
+    def enable_fuzz_mode(self, fuzz_magnitude=1.0,
+                         only_corner_cases=False,
+                         only_corner_cases_and_extra = False,
+                         only_invalid_cases=False):
         if not self._fuzzy_mode:
             self._fuzz_magnitude = fuzz_magnitude
             self._only_corner_cases = only_corner_cases
+            self._only_corner_cases_and_extra = only_corner_cases_and_extra,
             self._only_invalid_cases = only_invalid_cases
             ok = self._enable_fuzz_mode(fuzz_magnitude=self._fuzz_magnitude,
                                         only_corner_cases=self._only_corner_cases,
+                                        only_corner_cases_and_extra = self._only_corner_cases_and_extra,
                                         only_invalid_cases=self._only_invalid_cases)
 
             if ok:
@@ -180,7 +189,10 @@ class VT_Alt(VT):
     def _enable_normal_mode(self):
         raise NotImplementedError
 
-    def _enable_fuzz_mode(self, fuzz_magnitude=1.0, only_corner_cases=False, only_invalid_cases=False):
+    def _enable_fuzz_mode(self, fuzz_magnitude=1.0,
+                          only_corner_cases=False,
+                          only_corner_cases_and_extra = False,
+                          only_invalid_cases=False):
         raise NotImplementedError
 
     def add_specific_fuzzy_vals(self, vals):
@@ -1040,7 +1052,10 @@ class String(VT_Alt):
 
         self.drawn_val = None
 
-    def _enable_fuzz_mode(self, fuzz_magnitude=1.0, only_corner_cases=False, only_invalid_cases=False):
+    def _enable_fuzz_mode(self, fuzz_magnitude=1.0,
+                          only_corner_cases=False,
+                          only_corner_cases_and_extra = False,
+                          only_invalid_cases=False):
         self.values_fuzzy = []
 
         def add_to_fuzz_list(flist):
@@ -1048,7 +1063,7 @@ class String(VT_Alt):
                 if v not in self.values_fuzzy:
                     self.values_fuzzy.append(v)
 
-        if only_corner_cases:
+        if only_corner_cases or only_corner_cases_and_extra:
             if len(self.values) > 1:
                 max_sz = 0
                 min_sz = None
@@ -1067,6 +1082,18 @@ class String(VT_Alt):
                     self.values_fuzzy.append(max_val)
                 if min_val is not None and min_val != max_val and min_val is not self.drawn_val:
                     self.values_fuzzy.append(min_val)
+
+                if only_corner_cases_and_extra:
+                    for v in self.values[1:]:
+                        v_sz = len(v)
+                        if v is not self.drawn_val and v_sz != max_sz and v_sz != min_sz:
+                            self.values_fuzzy.append(v)
+                            break
+                    else:
+                        for v in self.values[::-1]:
+                            if v is not self.drawn_val and v not in self.values_fuzzy:
+                                self.values_fuzzy.append(v)
+                                break
 
         else:
             ### Common Test Cases
@@ -1587,9 +1614,11 @@ class INT(VT):
     def copy_attrs_from(self, vt):
         self.endian = vt.endian
 
-    def get_fuzzed_vt_list(self, only_corner_cases=False, only_invalid_cases=False):
+    def get_fuzzed_vt_list(self, only_corner_cases=False,
+                           only_corner_cases_and_extra = False,
+                           only_invalid_cases=False):
 
-        if only_corner_cases:
+        if only_corner_cases or only_corner_cases_and_extra:
             supp_list = []
 
             val = self.get_current_raw_val()
@@ -2363,12 +2392,16 @@ class INT_str(INT):
 
         return (format_str, regex + regex_prefix)
 
-    def get_fuzzed_vt_list(self, only_corner_cases=False, only_invalid_cases=False):
+    def get_fuzzed_vt_list(self, only_corner_cases=False,
+                           only_corner_cases_and_extra = False,
+                           only_invalid_cases=False):
+
         vt_list = INT.get_fuzzed_vt_list(self, only_corner_cases=only_corner_cases,
+                                         only_corner_cases_and_extra=only_corner_cases_and_extra,
                                          only_invalid_cases=only_invalid_cases)
         # print('\n*** DEBUG', vt_list[0].values)
 
-        if only_corner_cases:
+        if only_corner_cases or only_corner_cases_and_extra:
             return vt_list
 
         # Note that @only_invalid_cases is not applicable for this type, as every test cases
@@ -3041,7 +3074,10 @@ class BitField(VT_Alt):
         self.subfield_fuzzy_vals = [None for i in range(len(self.subfield_sizes))]
         self.exhausted = False
 
-    def _enable_fuzz_mode(self, fuzz_magnitude=1.0, only_corner_cases=False, only_invalid_cases=False):
+    def _enable_fuzz_mode(self, fuzz_magnitude=1.0,
+                          only_corner_cases=False,
+                          only_corner_cases_and_extra = False,
+                          only_invalid_cases=False):
 
         # TODO: add support for @only_corner_cases and @only_invalid_cases
 

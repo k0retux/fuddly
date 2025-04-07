@@ -173,6 +173,11 @@ Parameters:
         |      | desc: If set to True, when this operator walks through INT() and String()-based
         |      |       nodes, only valid corner cases will be generated
         |      | default: False [type: bool]
+        |_ only_corner_cases_and_extra
+        |     | desc: If set to True, when this operator walks through INT() and String()-based
+        |     |       nodes, only valid corner cases and extra valid cases will be
+        |     |       generated.
+        |     | default: False [type: bool]
         |_ only_invalid_cases
         |      | desc: If set to True, when this operator walks through INT() and String()-based
         |      |       nodes, only invalid cases will be generated, meaning valid corner
