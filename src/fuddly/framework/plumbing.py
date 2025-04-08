@@ -2426,6 +2426,7 @@ class FmkPlumbing(object):
                               max_loop=1, tg_ids=None,
                               verbose=False, console_display=True,
                               save_generator_seed=False,
+                              callback_func=None,
                               reset_dmakers=False):
         """
         Send data to the selected targets. These data can follow a specific processing before
@@ -2448,6 +2449,7 @@ class FmkPlumbing(object):
             save_generator_seed: If random Generators are used, the generated data will be internally saved
               and will be reused next time this generator will be called, until
               FmkPlumbing.cleanup_dmaker(... reset_existing_seed=True) is called on this Generator.
+            callback_func: If not None, it will be called on each generated data.
             reset_dmakers: If `True`, the Generators and Operators will be reset before being used
 
         Returns:
@@ -2467,6 +2469,9 @@ class FmkPlumbing(object):
             data = self.get_from_data_bank(id_from_db)
             if data is None:
                 return None
+
+        else:
+            pass
 
         if data_desc is not None:
             if id_from_fmkdb is not None:
@@ -2488,6 +2493,9 @@ class FmkPlumbing(object):
                     if data is None:
                         data = Data()
                         data.make_unusable()
+                    elif callback_func is not None:
+                        callback_func(data)
+
                     if tg_ids:
                         data.tg_ids = tg_ids
                     data_list.append(data)
@@ -2506,9 +2514,10 @@ class FmkPlumbing(object):
             sent_data = []
             while cpt < max_loop or max_loop == -1:
                 cpt += 1
+                if callback_func is not None:
+                    callback_func(data)
                 go_on, sdata = self.send_data_and_log(data, verbose=verbose,
                                                       console_display=console_display)
-
                 if sdata:
                     for d in sdata:
                         sent_data.append(d)
