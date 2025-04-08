@@ -880,14 +880,9 @@ class FmkPlumbing(object):
             try:
                 *prefix, name = module.module.split(".")
                 prefix = ".".join(prefix)
-                m = find_spec(module.module)
-                if os.path.basename(m.origin) == "__init__.py":
-                    dm_path = os.path.dirname(m.origin)
-                else:
-                    dm_path = None
                 if prefix == "":
                     prefix = "fuddly.data_models"
-                dm_params = self._import_dm(prefix + ".", name, dm_path)
+                dm_params = self._import_dm(prefix + ".", name)
             except DataModelDuplicateError as e:
                 if not self._quiet:
                     self.print(colorize(f"*** The data model '{e.name}' was already defined, "
@@ -906,7 +901,7 @@ class FmkPlumbing(object):
                 # populate FMK DB
                 self._fmkDB_insert_dm_and_dmakers(dm_params["dm"].name, dm_params["tactics"])
 
-    def _import_dm(self, prefix, name, dm_path, reload_dm=False):
+    def _import_dm(self, prefix, name, dm_path=None, reload_dm=False):
         try:
             module = importlib.import_module(prefix + name)
             if reload_dm:
@@ -935,6 +930,11 @@ class FmkPlumbing(object):
                 self.print(colorize(f"*** ERROR: '{name}' shall contain a global variable 'data_model' ***",
                                     rgb=Color.ERROR))
             return None
+
+        if dm_path is None:
+            m = module.__spec__
+            if os.path.basename(m.origin) == "__init__.py":
+                dm_path = os.path.dirname(m.origin)
 
         if dm_path is not None:
             dm_params["dm"].set_fs_path(dm_path)
@@ -1020,7 +1020,7 @@ class FmkPlumbing(object):
                 prefix = prefix.replace("<data folder>.projects", "fuddly.projects")
             for name in file_list:
                 prj_path = None if prj_basepath is None else os.path.join(prj_basepath, name)
-                prj_params = self._import_project(prefix, name, prj_path)
+                prj_params = self._import_project(prefix, name, prj_path=prj_path)
                 if prj_params is not None:
                     self._add_project(
                         prj_params["project"],
@@ -1050,12 +1050,7 @@ class FmkPlumbing(object):
                 prefix = ".".join(prefix)
                 if prefix == "":
                     prefix = "fuddly.projects"
-                m = find_spec(module.module)
-                if os.path.basename(m.origin) == "__init__.py":
-                    prj_path = os.path.dirname(m.origin)
-                else:
-                    prj_path = None
-                prj_params = self._import_project(prefix + ".", name, prj_path)
+                prj_params = self._import_project(prefix + ".", name)
             except ProjectDuplicateError as e:
                 if not self._quiet:
                     self.print(colorize(f"*** The project '{e.name}' was already defined, "
@@ -1071,7 +1066,7 @@ class FmkPlumbing(object):
             else:
                 self.import_successfull = False
 
-    def _import_project(self, prefix, name, prj_path, reload_prj=False):
+    def _import_project(self, prefix, name, prj_path=None, reload_prj=False):
         try:
             module = importlib.import_module(prefix + name)
             if reload_prj:
@@ -1103,6 +1098,11 @@ class FmkPlumbing(object):
             if not self._quiet:
                 self.print(colorize(f"*** ERROR: '{name}' shall contain a global variable 'project' ***", rgb=Color.ERROR))
             return None
+
+        if prj_path is None:
+            m = module.__spec__
+            if os.path.basename(m.origin) == "__init__.py":
+                prj_path = os.path.dirname(m.origin)
 
         if prj_path is not None:
             prj_params["project"].set_fs_path(prj_path)
