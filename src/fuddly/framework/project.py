@@ -24,6 +24,7 @@
 import queue as queue
 import collections
 
+from fuddly.framework.knowledge.feedback_collector import FeedbackSource
 from fuddly.framework.monitor import *
 from fuddly.framework.knowledge.feedback_handler import *
 from fuddly.framework.knowledge.information import InformationCollector
@@ -132,8 +133,13 @@ class Project(object):
         if self._fbk_handlers_disabled:
             return
 
+        meta_info = {}
         for fh in self._fbk_handlers:
-            fh.notify_data_sending(self.dm, data_list, timestamp, target)
+            mi = fh.notify_data_sending(self.dm, data_list, timestamp, target)
+            if mi is not None:
+                meta_info[FeedbackSource(fh)] = mi
+
+        return meta_info
 
     def trigger_feedback_handlers(self, source, timestamp, content, status):
         if not self._fbk_processing_enabled or self._fbk_handlers_disabled:

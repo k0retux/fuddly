@@ -1,7 +1,7 @@
 from fuddly.tools.plotty.Formula import Formula
 from fuddly.tools.plotty.PlottyDatabase import PlottyDatabase
 from fuddly.tools.plotty.cli.parse.range import parse_int_range_union
-from fuddly.tools.plotty.globals import GridMatch, PlottyOptions
+from fuddly.tools.plotty.globals import GridMatch, PlottyOptions, PlottyGlobals
 from fuddly.tools.plotty.utils import print_warning, print_error
 
 from fuddly.framework.database import Database
@@ -148,7 +148,7 @@ def parse_arguments():
     for db in fmkdb:
         if db is not None and not os.path.isfile(os.path.expanduser(db)):
             print_error(f"'{db}' does not exist")
-            sys.exit(ERR_INVALID_FMDBK)
+            sys.exit(PlottyGlobals.ERR_INVALID_FMDBK)
 
     PlottyOptions.fmkdb = list(map(lambda db: PlottyDatabase(db), fmkdb))
 

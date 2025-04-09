@@ -324,7 +324,13 @@ class Target(object):
             if self.is_target_ready_for_new_data():
                 self._last_sending_date = datetime.datetime.now()
                 self.send_data(data, from_fmk=from_fmk)
-                self._project.notify_data_sending([data], self._last_sending_date, self)
+                meta_info = self._project.notify_data_sending([data], self._last_sending_date, self)
+                if meta_info:
+                    for fh, mi in meta_info.items():
+                        data.add_info(f'from {fh!s}:')
+                        data.add_info(f' |_ {mi}')
+                        for k in data.info.keys(): pass #TODO: add Data method to retrieve this info
+                        data.bind_info(*k)
                 if from_fmk:
                     self._pending_data_id = data.estimated_data_id
                 if not from_fmk:
@@ -348,7 +354,14 @@ class Target(object):
             if self.is_target_ready_for_new_data():
                 self._last_sending_date = datetime.datetime.now()
                 self.send_multiple_data(data_list, from_fmk=from_fmk)
-                self._project.notify_data_sending(data_list, self._last_sending_date, self)
+                meta_info = self._project.notify_data_sending(data_list, self._last_sending_date, self)
+                if meta_info:
+                    for fh, mi in meta_info.items():
+                        for data in data_list:
+                            data.add_info(f'from {fh!s}:')
+                            data.add_info(f' |_ {mi}')
+                            for k in data.info.keys(): pass #TODO: add Data method to retrieve this info
+                            data.bind_info(*k)
                 if from_fmk and data_list is not None:
                     self._pending_data_id = data_list[-1].estimated_data_id
                 if not from_fmk and data_list is not None:

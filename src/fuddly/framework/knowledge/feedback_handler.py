@@ -63,7 +63,7 @@ class FeedbackHandler(object):
     A feedback handler extract information from binary data.
     """
 
-    def __init__(self, new_window=False, new_window_title=None, keep_term=True, **kwargs):
+    def __init__(self, name=None, new_window=False, new_window_title=None, keep_term=True, **kwargs):
         """
         Args:
             new_window: If `True`, a new terminal emulator is created, enabling the decoder to use
@@ -73,6 +73,7 @@ class FeedbackHandler(object):
         self._new_window = new_window
         self._new_window_title = new_window_title
         self._keep_term = keep_term
+        self._name = name
         self._s = None
         self.term = None
         self.fmkops = None
@@ -80,7 +81,11 @@ class FeedbackHandler(object):
         self.specific_init(**kwargs)
 
     def __str__(self):
-        return f'{self.__class__.__name__}[{self._new_window_title}]'
+        if self._new_window_title is None and self._name is None:
+            return f'{self.__class__.__name__}'
+        else:
+            name = self._new_window_title if self._name is None else self._name
+            return f'{self.__class__.__name__}[{name}]'
 
     def specific_init(self, **kwargs):
         pass
@@ -97,8 +102,12 @@ class FeedbackHandler(object):
             data_list (list): list of :class:`framework.data.Data` that were sent
             timestamp (datetime): date when data was sent
             target (:class:`framework.target_helpers.Target`): target to which data was sent
+
+        Returns:
+            None|str: may return a description that will be added to the contextual information
+              stored with the data sent
         """
-        pass
+        return None
 
     def extract_info_from_feedback(self, current_dm, source, timestamp, content, status):
         """
@@ -206,6 +215,10 @@ class FeedbackHandler(object):
 
 
 class TestFbkHandler(FeedbackHandler):
+
+    def notify_data_sending(self, current_dm, data_list, timestamp, target):
+        return 'Example of additional contextual information...'
+
     def extract_info_from_feedback(self, current_dm, source, timestamp, content, status):
         if content is None:
             return None
@@ -215,3 +228,5 @@ class TestFbkHandler(FeedbackHandler):
         elif b'Windows' in content:
             # OS.Windows.increase_trust()
             return OS.Windows
+
+        return (timestamp, b'Example of Feedback Processed', status)
