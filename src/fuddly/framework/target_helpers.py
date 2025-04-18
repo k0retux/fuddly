@@ -325,12 +325,7 @@ class Target(object):
                 self._last_sending_date = datetime.datetime.now()
                 self.send_data(data, from_fmk=from_fmk)
                 meta_info = self._project.notify_data_sending([data], self._last_sending_date, self)
-                if meta_info:
-                    for fh, mi in meta_info.items():
-                        data.add_info(f'from {fh!s}:')
-                        data.add_info(f' |_ {mi}')
-                        for k in data.info.keys(): pass #TODO: add Data method to retrieve this info
-                        data.bind_info(*k)
+
                 if from_fmk:
                     self._pending_data_id = data.estimated_data_id
                 if not from_fmk:
@@ -338,6 +333,9 @@ class Target(object):
                                                 target_ref=FeedbackSource(self),
                                                 prj_name=self._project.name,
                                                 current_data_id=self._pending_data_id)
+                if meta_info:
+                    for fh, mi in meta_info.items():
+                        self._logger.register_post_processed_info(f'from {fh!s}: {mi}')
             else:
                 self._logger.print_console( f"*** Target {self!s} Not ready ***\n",
                                            nl_before=False, rgb=Color.WARNING)
@@ -355,13 +353,6 @@ class Target(object):
                 self._last_sending_date = datetime.datetime.now()
                 self.send_multiple_data(data_list, from_fmk=from_fmk)
                 meta_info = self._project.notify_data_sending(data_list, self._last_sending_date, self)
-                if meta_info:
-                    for fh, mi in meta_info.items():
-                        for data in data_list:
-                            data.add_info(f'from {fh!s}:')
-                            data.add_info(f' |_ {mi}')
-                            for k in data.info.keys(): pass #TODO: add Data method to retrieve this info
-                            data.bind_info(*k)
                 if from_fmk and data_list is not None:
                     self._pending_data_id = data_list[-1].estimated_data_id
                 if not from_fmk and data_list is not None:
@@ -369,6 +360,9 @@ class Target(object):
                                                 target_ref=FeedbackSource(self),
                                                 prj_name=self._project.name,
                                                 current_data_id=self._pending_data_id)
+                if meta_info:
+                    for fh, mi in meta_info.items():
+                        self._logger.register_post_processed_info(f'from {fh!s}: {mi}')
             else:
                 self._logger.print_console(f'*** Target {self!s} Not ready ***\n',
                                            nl_before=False, rgb=Color.WARNING)

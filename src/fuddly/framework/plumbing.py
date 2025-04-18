@@ -2843,6 +2843,8 @@ class FmkPlumbing(object):
                         self.lg.print_console("### FmkDB Data ID: {!r}".format(self.last_data_id),
                                               rgb=Color.DATAINFO, nl_after=True)
 
+                self.lg.log_post_processed_info()
+
                 if multiple_data:
                     self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
 

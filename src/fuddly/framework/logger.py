@@ -128,6 +128,8 @@ class Logger(object):
 
         self._ext_disp = ExternalDisplay()
 
+        self._post_processed_info = None
+
         def init_logfn(
             x,
             nl_before=True,
@@ -217,6 +219,8 @@ class Logger(object):
         self._current_sent_date = None
         self._last_data_IDs = {}  # per target_ref
         self.last_data_recordable = None
+
+        self._post_processed_info = None
 
         with self._tg_fbk_lck:
             self._tg_fbk = []
@@ -501,9 +505,7 @@ class Logger(object):
         p = "\n" if nl_before else ""
         s = "\n" if nl_after else ""
 
-        msg = "{prefix:s}*** [ {message:s} ] ***{suffix:s}".format(
-            prefix=p, suffix=s, message=info
-        )
+        msg = f"{p:s}*** [ {info} ] ***{s:s}"
         if do_show:
             self.log_fn(msg, rgb=rgb)
 
@@ -819,6 +821,18 @@ class Logger(object):
                 msg = msg[: self._term_display_limit] + " ..."
 
             self.log_fn("    | " + msg, rgb=Color.DATAINFO)
+
+    def log_post_processed_info(self):
+        if self._post_processed_info:
+            for info in self._post_processed_info:
+                self.log_fmk_info(info)
+
+        self._post_processed_info = None
+
+    def register_post_processed_info(self, info):
+        if self._post_processed_info is None:
+            self._post_processed_info = []
+        self._post_processed_info.append(info)
 
     def log_info(self, info):
         msg = "### Info: {:s}".format(info)
