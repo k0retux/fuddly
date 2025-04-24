@@ -2048,13 +2048,15 @@ class FmkPlumbing(object):
         data_list = list(filter(lambda x: not x.is_blocked(), data_list))
 
         if self._burst_countdown == self._burst:
-            try:
-                max_fbk_timeout = max([tg.feedback_timeout for tg in self._currently_used_targets
-                                       if tg.feedback_timeout is not None])
-            except ValueError:
-                # empty list
+            if self._currently_used_targets:
+                fbkt_list = [tg.feedback_timeout for tg in self._currently_used_targets
+                             if tg.feedback_timeout is not None]
+                max_fbk_timeout = max(fbkt_list) if fbkt_list else self._fbk_timeout_default
+            else:
                 max_fbk_timeout = self._fbk_timeout_default
-            user_interrupt, go_on = self._collect_residual_feedback(timeout=max_fbk_timeout)
+
+            user_interrupt, go_on = self._collect_residual_feedback(timeout=max_fbk_timeout,
+                                                                    skip_if_fbk_received=True)
         else:
             user_interrupt, go_on = False, True
 
@@ -2074,7 +2076,7 @@ class FmkPlumbing(object):
         if self._collect_residual_feedback(force_mode=True, timeout=timeout)[0]:
             raise UserInterruption
 
-    def _collect_residual_feedback(self, force_mode=False, timeout=0):
+    def _collect_residual_feedback(self, force_mode=False, timeout=0, skip_if_fbk_received=False):
         # If feedback_timeout = 0 then we don't consider residual feedback.
         # We try to avoid unnecessary latency in this case, as well as
         # to avoid retrieving some feedback that could be a trigger for sending the next data
@@ -2082,7 +2084,7 @@ class FmkPlumbing(object):
         targets_to_retrieve_fbk = {}
         do_residual_tg_fbk_gathering = False
         for tg_id, tg in self.targets.items():
-            cond = True if tg.feedback_timeout is None or force_mode else tg.feedback_timeout > 0
+            cond = force_mode or tg.feedback_timeout is None or tg.feedback_timeout > 0
             if cond:
                 do_residual_tg_fbk_gathering = True
                 targets_to_retrieve_fbk[tg_id] = tg
@@ -2105,7 +2107,7 @@ class FmkPlumbing(object):
                 # We have to make sure the targets are ready for sending data after
                 # collecting feedback.
                 ftimeout = None if timeout == 0 else timeout
-                ret = self.wait_for_target_readiness(forced_feedback_timeout=ftimeout)
+                ret = self.wait_for_target_readiness(forced_feedback_timeout=ftimeout, skip_if_fbk_received=skip_if_fbk_received)
                 user_interrupt = ret == -2
                 tg_ready = ret >= 0
 
@@ -2580,14 +2582,22 @@ class FmkPlumbing(object):
         # the associated Target object either after Target.send_data()
         # is called or when Target.collect_unsolicited_feedback() is called.
         if self._burst_countdown == self._burst:
-            try:
-                # we compute the max fbk_timeout onl yon the target that have been stimulated
-                # as they rule the sequencing
-                max_fbk_timeout = max([tg.feedback_timeout for tg in self._currently_used_targets
-                                       if tg.feedback_timeout is not None])
-            except ValueError:
-                # empty list
-                max_fbk_timeout = self._fbk_timeout_default
+            # We first compute the max fbk_timeout on the targets that have been stimulated
+            # as they are normaly the ones ruling the sequencing.
+            # However, in the case of a Scenario we could have some steps that
+            # does not emit any data (e.g., NoDataStep).
+            # As a result these steps will lead to an empty self._currently_used_targets.
+            # in this case we fallback to the list of enabled targets, so that any
+            # feedback_timeout/mode values of a NoDataStep(), will be correctly taken
+            # into account.
+            if self._currently_used_targets:
+                target_list = self._currently_used_targets
+            else:
+                target_list = self.targets.values()
+
+            fbkt_list = [tg.feedback_timeout for tg in target_list if tg.feedback_timeout is not None]
+            max_fbk_timeout = max(fbkt_list) if fbkt_list else self._fbk_timeout_default
+
             for tg in self.targets.values():
                 if tg not in self._currently_used_targets:
                     tg.collect_unsolicited_feedback(timeout=max_fbk_timeout)
@@ -2942,7 +2952,7 @@ class FmkPlumbing(object):
         return err_detected
 
     @EnforceOrder(accepted_states=["S2"])
-    def wait_for_target_readiness(self, forced_feedback_timeout=None):
+    def wait_for_target_readiness(self, forced_feedback_timeout=None, skip_if_fbk_received=False):
         """
 
         Args:
@@ -2965,7 +2975,9 @@ class FmkPlumbing(object):
             elif self._last_sending_date is None:
                 # This case happens when we are waiting for feedback but no data has been sent,
                 # It is typical when a NoDataStep() is reached in a Scenario
-                fbk_timeout = self._fbk_timeout_default
+                fbkt_list = [tg.feedback_timeout for tg in self.targets.values()
+                             if tg.feedback_timeout is not None]
+                fbk_timeout = max(fbkt_list) if fbkt_list else self._fbk_timeout_default
             else:
                 fbk_timeout = self._fbk_timeout_max
 
@@ -2981,8 +2993,7 @@ class FmkPlumbing(object):
                             # self.print('\n*** DBG exit fast path1')
                             break
                         fbk_received = tg.is_feedback_received()
-                        if (tg.fbk_wait_until_recv_mode and fbk_received) or \
-                                (forced_feedback_timeout is not None and fbk_received):
+                        if (tg.fbk_wait_until_recv_mode or skip_if_fbk_received) and fbk_received:
                             # self.print('\n*** DBG exit fast path2')
                             break
                         now = datetime.datetime.now()
