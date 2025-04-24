@@ -162,7 +162,7 @@ class VT_Alt(VT):
         if not self._fuzzy_mode:
             self._fuzz_magnitude = fuzz_magnitude
             self._only_corner_cases = only_corner_cases
-            self._only_corner_cases_and_extra = only_corner_cases_and_extra,
+            self._only_corner_cases_and_extra = only_corner_cases_and_extra
             self._only_invalid_cases = only_invalid_cases
             ok = self._enable_fuzz_mode(fuzz_magnitude=self._fuzz_magnitude,
                                         only_corner_cases=self._only_corner_cases,
