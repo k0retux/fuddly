@@ -1020,6 +1020,28 @@ class MyDF_DataModel(DataModel):
          ]}
 
 
+        def_qty_desc = \
+            {'name': 'dqty',
+             'contents': [
+                 {'name': 'int_s', 'contents': INT_str(values=[8])},
+                 {'name': 'inner',
+                  'contents': [
+                      {'name': 'case1',
+                       'qty': (0, 3), 'default_qty': 0,
+                       'contents': [
+                           {'name': 'int1', 'contents': INT_str(values=[1])},
+                           {'name': 'sep1', 'contents': String(values=['-'])}
+                       ]},
+                      {'name': 'case2',
+                       'qty': (0, 6), 'default_qty': 1,
+                       'contents': [
+                           {'name': 'int2', 'contents': INT_str(values=[2])},
+                       ]},
+                  ]},
+                 {'name': 'int_e', 'contents': INT_str(values=[8])},
+             ]}
+
+
         tlv_rec0_desc = \
             {'name': 'rec0',
              'contents': [
@@ -1278,7 +1300,7 @@ class MyDF_DataModel(DataModel):
                       json1_desc, json2_desc, file_desc, nested_desc,
                       csp_desc, csp_z3_desc, csp_str_desc, csp_ns_desc, csp_basic_desc,
                       csp_default_desc, str_desc, rnd_desc,
-                      shape_type_1_desc, shape_type_2_desc, ns_desc, nested_nt_desc,
+                      shape_type_1_desc, shape_type_2_desc, ns_desc, nested_nt_desc, def_qty_desc,
                       tlv_rec0_desc, tlv_rec0b_desc, tlv_rec1_desc, tlv_rec2_desc, tlv_rec3_desc,
                       tlv_rec4_desc, recbig_desc)
 

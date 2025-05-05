@@ -673,6 +673,7 @@ class sd_struct_constraints(StatefulOperator):
 
         self.exist_cst_nodelist = self.seed.get_reachable_nodes(internals_criteria=ic_exist_cst, path_regexp=self.path,
                                                                 semantics_criteria=sem_crit,
+                                                                respect_order=True,
                                                                 ignore_fstate=True)
         # print('\n*** NOT FILTERED nodes')
         # for n in self.exist_cst_nodelist:
@@ -696,6 +697,7 @@ class sd_struct_constraints(StatefulOperator):
 
         self.qty_cst_nodelist_1 = self.seed.get_reachable_nodes(internals_criteria=ic_qty_cst, path_regexp=self.path,
                                                                 semantics_criteria=sem_crit,
+                                                                respect_order=True,
                                                                 ignore_fstate=True)
         # self.qty_cst_nodelist_1 = self.seed.filter_out_entangled_nodes(self.qty_cst_nodelist_1)
         nodelist = copy.copy(self.qty_cst_nodelist_1)
@@ -707,6 +709,7 @@ class sd_struct_constraints(StatefulOperator):
 
         self.size_cst_nodelist_1 = self.seed.get_reachable_nodes(internals_criteria=ic_size_cst, path_regexp=self.path,
                                                                  semantics_criteria=sem_crit,
+                                                                 respect_order=True,
                                                                  ignore_fstate=True)
         nodelist = copy.copy(self.size_cst_nodelist_1)
         for n in nodelist:
@@ -717,126 +720,257 @@ class sd_struct_constraints(StatefulOperator):
         if self.deep:
             minmax_cst_nodelist = self.seed.get_reachable_nodes(internals_criteria=ic_minmax_cst, path_regexp=self.path,
                                                                 semantics_criteria=sem_crit,
+                                                                respect_order=True,
                                                                 ignore_fstate=True)
-            self.minmax_cst_nodelist_1 = set()
+            self.minmax_cst_nodelist_1 = []
+            self.minmax_cst_nodelist_2 = []
+            self.minmax_cst_nodelist_3 = []
 
             for n in minmax_cst_nodelist:
                 for sn in n.subnodes_set:
                     minmax = n.get_subnode_minmax(sn)
                     if minmax is not None:
                         mini, maxi = minmax
-                        self.minmax_cst_nodelist_1.add((sn, mini, maxi))
-
-            nodedesclist = copy.copy(self.minmax_cst_nodelist_1)
-            for n_desc in nodedesclist:
-                n, mini, maxi = n_desc
-                if n.get_path_from(self.seed) is None:
-                    self.minmax_cst_nodelist_1.remove((n, mini, maxi))
-
-            self.minmax_cst_nodelist_2 = copy.copy(self.minmax_cst_nodelist_1)
-            self.minmax_cst_nodelist_3 = copy.copy(self.minmax_cst_nodelist_1)
+                        def_qty = n.get_subnode_default_qty(sn)
+                        obj = (sn, mini, maxi)
+                        if obj not in self.minmax_cst_nodelist_2:
+                            if def_qty != 0:
+                                self.minmax_cst_nodelist_1.append(obj)
+                            self.minmax_cst_nodelist_2.append(obj)
+                            self.minmax_cst_nodelist_3.append(obj)
 
         else:
             self.minmax_cst_nodelist_1 = self.minmax_cst_nodelist_2 = self.minmax_cst_nodelist_3 = []
 
         self.max_runs = len(self.exist_cst_nodelist) + 2*len(self.size_cst_nodelist_1) + \
-                        2*len(self.qty_cst_nodelist_1) + 3*len(self.minmax_cst_nodelist_1)
+                        2*len(self.qty_cst_nodelist_1) + len(self.minmax_cst_nodelist_1) + \
+                        len(self.minmax_cst_nodelist_2) + len(self.minmax_cst_nodelist_3)
 
-        # print('\n*** final setup:\n',self.seed.to_bytes())
+        self.num_of_irrelevant_cases = 0
+
+
+    OP_EXIST_COND_SWITCH = 'existence condition switched'
+    OP_INC_QTY_BY_1 = 'increase quantity constraint by 1'
+    OP_DEC_QTY_BY_1 = 'decrease quantity constraint by 1'
+    OP_INC_SZ_BY_1 = 'increase size constraint by 1'
+    OP_DEC_SZ_BY_1 = 'decrease size constraint by 1'
 
     def transform_data(self, dm, target, data):
 
-        stop = False
-        if self.idx == 0:
-            step_idx = self.init-1
-        else:
-            step_idx = self.idx
-
-        while self.idx <= step_idx:
-            if self.exist_cst_nodelist:
-                consumed_node = self.exist_cst_nodelist.pop()
-                if self.idx == step_idx:
-                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_EXIST_COND)
-                    op_performed = 'existence condition switched'
-            elif self.qty_cst_nodelist_1:
-                consumed_node = self.qty_cst_nodelist_1.pop()
-                if self.idx == step_idx:
-                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_QTY_SYNC,
-                                                      corrupt_op=lambda x: x+1)
-                    op_performed = 'increase quantity constraint by 1'
-            elif self.qty_cst_nodelist_2:
-                consumed_node = self.qty_cst_nodelist_2.pop()
-                if self.idx == step_idx:
-                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_QTY_SYNC,
-                                                      corrupt_op=lambda x: max(x-1, 0))
-                    op_performed = 'decrease quantity constraint by 1'
-            elif self.size_cst_nodelist_1:
-                consumed_node = self.size_cst_nodelist_1.pop()
-                if self.idx == step_idx:
-                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_SIZE_SYNC,
-                                                      corrupt_op=lambda x: x+1)
-                    op_performed = 'increase size constraint by 1'
-            elif self.size_cst_nodelist_2:
-                consumed_node = self.size_cst_nodelist_2.pop()
-                if self.idx == step_idx:
-                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_SIZE_SYNC,
-                                                      corrupt_op=lambda x: max(x-1, 0))
-                    op_performed = 'decrease size constraint by 1'
-            elif self.deep and self.minmax_cst_nodelist_1:
-                consumed_node, mini, maxi = self.minmax_cst_nodelist_1.pop()
-                if self.idx == step_idx:
-                    new_mini = max(0, mini-1)
-                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
-                                                      corrupt_op=lambda x, y: (new_mini, new_mini))
-                    op_performed = f"set node amount to its minimum minus one ({new_mini})"
-            elif self.deep and self.minmax_cst_nodelist_2:
-                consumed_node, mini, maxi = self.minmax_cst_nodelist_2.pop()
-                if self.idx == step_idx:
-                    new_maxi = (maxi+1)
-                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
-                                                      corrupt_op=lambda x, y: (new_maxi, new_maxi))
-                    op_performed = f"set node amount to its maximum plus one ({new_maxi})"
-            elif self.deep and self.minmax_cst_nodelist_3:
-                consumed_node, mini, maxi = self.minmax_cst_nodelist_3.pop()
-                if self.idx == step_idx:
-                    new_maxi = (maxi*10)
-                    self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
-                                                      corrupt_op=lambda x, y: (new_maxi, new_maxi))
-                    op_performed = f"set node amount to a value way beyond its maximum ({new_maxi})"
+        op_can_remove_node = False
+        relevant_case = False
+        while not relevant_case:
+            stop = False
+            if self.idx == 0:
+                step_idx = self.init-1
             else:
-                stop = True
-                break
+                step_idx = self.idx
 
-            self.idx += 1
+            while self.idx <= step_idx:
+                if self.exist_cst_nodelist:
+                    consumed_node = self.exist_cst_nodelist.pop()
+                    if self.idx == step_idx:
+                        self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_EXIST_COND)
+                        op_performed = self.OP_EXIST_COND_SWITCH
+                        op_can_remove_node = True
+                elif self.qty_cst_nodelist_1:
+                    consumed_node = self.qty_cst_nodelist_1.pop()
+                    if self.idx == step_idx:
+                        self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_QTY_SYNC,
+                                                          corrupt_op=lambda x: x+1)
+                        op_performed = self.OP_INC_QTY_BY_1
+                        op_can_remove_node = False
+                elif self.qty_cst_nodelist_2:
+                    consumed_node = self.qty_cst_nodelist_2.pop()
+                    if self.idx == step_idx:
+                        self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_QTY_SYNC,
+                                                          corrupt_op=lambda x: max(x-1, 0))
+                        op_performed = self.OP_DEC_QTY_BY_1
+                        op_can_remove_node = True
+                elif self.size_cst_nodelist_1:
+                    consumed_node = self.size_cst_nodelist_1.pop()
+                    if self.idx == step_idx:
+                        self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_SIZE_SYNC,
+                                                          corrupt_op=lambda x: x+1)
+                        op_performed = self.OP_INC_SZ_BY_1
+                        op_can_remove_node = False
+                elif self.size_cst_nodelist_2:
+                    consumed_node = self.size_cst_nodelist_2.pop()
+                    if self.idx == step_idx:
+                        self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_SIZE_SYNC,
+                                                          corrupt_op=lambda x: max(x-1, 0))
+                        op_performed = self.OP_DEC_SZ_BY_1
+                        op_can_remove_node = False
+                elif self.deep and self.minmax_cst_nodelist_1:
+                    consumed_node, mini, maxi = self.minmax_cst_nodelist_1.pop()
+                    if self.idx == step_idx:
+                        new_mini = max(0, mini-1)
+                        self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
+                                                          corrupt_op=lambda x, y: (new_mini, new_mini))
+                        op_performed = f"set node amount to its minimum minus one ({new_mini})"
+                        op_can_remove_node = True
+                elif self.deep and self.minmax_cst_nodelist_2:
+                    consumed_node, mini, maxi = self.minmax_cst_nodelist_2.pop()
+                    if self.idx == step_idx:
+                        new_maxi = (maxi+1)
+                        self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
+                                                          corrupt_op=lambda x, y: (new_maxi, new_maxi))
+                        op_performed = f"set node amount to its maximum plus one ({new_maxi})"
+                        op_can_remove_node = False
+                elif self.deep and self.minmax_cst_nodelist_3:
+                    consumed_node, mini, maxi = self.minmax_cst_nodelist_3.pop()
+                    if self.idx == step_idx:
+                        new_maxi = (maxi*10)
+                        self.seed.env.add_node_to_corrupt(consumed_node, corrupt_type=Node.CORRUPT_NODE_QTY,
+                                                          corrupt_op=lambda x, y: (new_maxi, new_maxi))
+                        op_performed = f"set node amount to a value way beyond its maximum ({new_maxi})"
+                        op_can_remove_node = False
+                else:
+                    stop = True
+                    break
 
-        if stop or (self.idx > self.max_steps and self.max_steps != -1):
-            data.make_unusable()
-            self.handover()
-            return data
+                self.idx += 1
 
-        # print('\n***transform before:\n',self.seed.to_bytes())
-        corrupted_seed = Node(self.seed.name, base_node=self.seed, ignore_frozen_state=False,
-                              new_env=True)
-        corrupted_seed = self.seed.get_clone(ignore_frozen_state=False, new_env=True)
-        self.seed.env.remove_node_to_corrupt(consumed_node)
+            if stop or (self.idx > self.max_steps and self.max_steps != -1):
+                data.make_unusable()
+                self.handover()
+                return data
 
-        # print('\n***transform source:\n',self.seed.to_bytes())
-        # print('\n***transform clone 1:\n',corrupted_seed.to_bytes())
-        # nt_nodes_crit = NodeInternalsCriteria(node_kinds=[NodeInternals_NonTerm])
-        # ntlist = corrupted_seed.get_reachable_nodes(internals_criteria=nt_nodes_crit, ignore_fstate=False)
-        # for nd in ntlist:
-        #     # print(nd.is_attr_set(NodeInternals.Finite))
-        #     nd.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
+            # print('\n***transform before:\n',self.seed.to_bytes())
+            corrupted_seed = Node(self.seed.name, base_node=self.seed, ignore_frozen_state=False,
+                                  new_env=True)
+            corrupted_seed = self.seed.get_clone(ignore_frozen_state=False, new_env=True)
+            self.seed.env.remove_node_to_corrupt(consumed_node)
 
-        corrupted_seed.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
-        corrupted_seed.freeze()
+            # print('\n***transform source:\n',self.seed.to_bytes())
+            # print('\n***transform clone 1:\n',corrupted_seed.to_bytes())
+            # nt_nodes_crit = NodeInternalsCriteria(node_kinds=[NodeInternals_NonTerm])
+            # ntlist = corrupted_seed.get_reachable_nodes(internals_criteria=nt_nodes_crit, ignore_fstate=False)
+            # for nd in ntlist:
+            #     # print(nd.is_attr_set(NodeInternals.Finite))
+            #     nd.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
 
-        # print('\n***transform after:\n',corrupted_seed.to_bytes())
+            corrupted_seed.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
+            corrupted_seed.freeze()
 
-        data.add_info('sample index: {:d}'.format(self.idx))
-        data.add_info(' |_ run: {:d} / {:d}'.format(self.idx, self.max_runs))
-        data.add_info('current fuzzed node:    {:s}'.format(consumed_node.get_path_from(self.seed)))
-        data.add_info(' |_ {:s}'.format(op_performed))
+            # print('\n***transform after:\n',corrupted_seed.to_bytes())
+
+            # For all cases check if all parents in the path exists.
+            path_from_top = consumed_node.get_path_from(self.seed, ignore_fstate=False)
+            reevaluate_corrupted_seed = False
+            if path_from_top is None:
+                # This case happens when at least one non-terminal node in the path does not exist.
+                # We try to make them exist (in compliance with the model).
+                # ex: when a non-terminal node in the path has a default_qty == 0, we try to change its qty to 1.
+                relevant_case = False
+                # It means a node in the path is not existing by default (ex: default_qty==0)
+                processed_node = None
+                removed_node_nb = 1
+
+                path_from_top = consumed_node.get_path_from(self.seed, ignore_fstate=True)
+                path_elts = path_from_top.split('/')
+                path_elts_len = len(path_elts)
+
+                # obj_list = corrupted_seed.get_reachable_nodes(path_regexp=path_from_top, ignore_fstate=True,
+                #                                               return_parent=True)
+                # if obj_list:
+                #     nd, internal1 = obj_list[0]
+                #     new_path = '^' + '/'.join(path_elts[:-1]) + '$'
+                #     parent_nd, internal2 = corrupted_seed.get_reachable_nodes(path_regexp=new_path, ignore_fstate=True,
+                #                                                               return_parent=True)[0]
+                #     mini, maxi = parent_nd.get_subnode_minmax(nd)
+                #     def_qty = parent_nd.get_subnode_default_qty(nd)
+                #     print(f'\n*** DBG 2.0: node "{nd.name}" (parent "{parent_nd.name}"): {mini} {maxi} {def_qty}')
+                #     mini, maxi, corrupted = parent_nd.nodeqty_corrupt_hook(nd, mini, maxi)
+                #     print(f'\n*** DBG 2.1: corrupted:{corrupted} --> {mini} {maxi} {def_qty}')
+
+                while removed_node_nb < path_elts_len:
+                    if path_from_top is None:
+                        print(f'\n*** ERROR: {consumed_node.name} should exists somewhere but is not findable')
+                        relevant_case = False
+                        break
+                    else:
+                        if path_elts_len > 2:
+                            new_path = '^' + '/'.join(path_elts[:-removed_node_nb]) + '$'
+                            obj_list = corrupted_seed.get_reachable_nodes(path_regexp=new_path, ignore_fstate=True,
+                                                                          return_parent=True)
+                            if obj_list:
+                                nd, internal = obj_list[0]
+                                # print(f'\n*** DBG[r{removed_node_nb}] 0: parent:{nd.name}')
+                                if processed_node is not None:
+                                    def_qty = nd.get_subnode_default_qty(processed_node)
+                                    # print(f'\n*** DBG[r{removed_node_nb}] 1: {processed_node.name}, def_qty:{def_qty}')
+                                    if def_qty == 0:
+                                        minmax = nd.get_subnode_minmax(processed_node)
+                                        if minmax is not None:
+                                            mini, maxi = minmax
+                                            if 1 >= mini:
+                                                nd.set_subnode_default_qty(processed_node, default_qty=1)
+                                                nd.freeze()
+                                                relevant_case = True # We succeeded to make the use case relevant
+                                                reevaluate_corrupted_seed = True
+                                            else:
+                                                print(f'\n*** DBG[r{removed_node_nb}] 1a: ERROR mini:{mini} with def')
+                                                relevant_case = False
+                                                break
+                                        else:
+                                            print(f'\n*** DBG[r{removed_node_nb}] 1b: ERROR minmax')
+                                            relevant_case = False
+                                            break
+                                    else:
+                                        # Nothing to do
+                                        pass
+                                else:
+                                    # Nothing to do
+                                    pass
+
+                                processed_node = nd
+
+                            else:
+                                print(f'\n*** DBG[r{removed_node_nb}] 1c: ERROR obj_list')
+                                relevant_case = False
+                                break
+                        else:
+                            # - It means the consumed node is the root node (==1) and a path should always exist.
+                            # - or the consumed node is not existing by default in the seed.
+                            #   it should not be that its default_qty == 0 as this case is filtered out at setup time,
+                            #   but it could be because of other existence conditions
+                            print(f'\n*** ERROR: {consumed_node.name} not found in original seed')
+                            relevant_case = False
+                            break
+
+                    removed_node_nb += 1
+
+            else:
+                relevant_case = True
+
+            if not relevant_case:
+                self.num_of_irrelevant_cases += 1
+                continue
+
+            if reevaluate_corrupted_seed:
+                corrupted_seed.unfreeze(recursive=True, reevaluate_constraints=True, ignore_entanglement=True)
+                corrupted_seed.freeze()
+                path_from_top = consumed_node.get_path_from(self.seed, ignore_fstate=True)
+
+            if path_from_top is None:
+                if op_can_remove_node:
+                    path_from_top = consumed_node.get_path_from(self.seed, ignore_fstate=True)
+                    # print(f'\n*** DBG: "{consumed_node.name}" is not present in the altered data but still '
+                    #       f'a RELEVANT case')
+                    relevant_case = True
+                else:
+                    # print(f'\n*** DBG: "{consumed_node.name}" is not present in the altered data! irrelevant case')
+                    relevant_case = False
+                    self.num_of_irrelevant_cases += 1
+            else:
+                relevant_case = True
+
+        data.add_info(f'sample index: {self.idx}')
+        data.add_info(f' |_ run: {self.idx} / {self.max_runs} (theoritical max)')
+        data.add_info(f' |_ pruned irrelevant cases: {self.num_of_irrelevant_cases}')
+        data.add_info(f'current fuzzed node:    {path_from_top}')
+        data.add_info(f' |_ {op_performed}')
 
         data.update_from(corrupted_seed)
         data.altered = True

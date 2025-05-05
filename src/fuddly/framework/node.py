@@ -561,17 +561,20 @@ class NonTermCusto(NodeCustomization):
     """
 
     MutableClone = 1
-    CycleClone = 2
-    FrozenCopy = 3
-    CollapsePadding = 4
-    DelayCollapsing = 5
+    FrozenCopy = 2
+    CycleClone = 3
+    ResetClone = 4
 
-    FullCombinatory = 6
-    StickToDefault = 7
+    CollapsePadding = 15
+    DelayCollapsing = 16
+
+    FullCombinatory = 20
+    StickToDefault = 21
 
     _custo_items = {
         MutableClone: True,
         CycleClone: False,
+        ResetClone: False,
         FrozenCopy: True,
         CollapsePadding: False,
         DelayCollapsing: False,
@@ -586,6 +589,10 @@ class NonTermCusto(NodeCustomization):
     @property
     def cycle_clone_mode(self):
         return self._custo_items[self.CycleClone]
+
+    @property
+    def reset_clone_mode(self):
+        return self._custo_items[self.ResetClone]
 
     @property
     def frozen_copy_mode(self):
@@ -1168,6 +1175,10 @@ class NodeInternals(object):
     def reset_fuzz_weight(self, recursive):
         pass
 
+    def get_child_all_path(self, name, htable, conf, recursive,
+                           resolve_generator=False, ignore_fstate=False):
+        return
+
     def get_child_nodes_by_attr(self, internals_criteria, semantics_criteria,
                                 owned_conf, conf, path_regexp, exclude_self,
                                 respect_order, relative_depth, top_node, ignore_fstate,
@@ -1654,20 +1665,16 @@ class NodeInternals_Recursive(NodeInternals):
         return True
 
 
-    def get_child_all_path(self, name, htable, conf, recursive, resolve_generator=False):
+    def get_child_all_path(self, name, htable, conf, recursive,
+                           resolve_generator=False, ignore_fstate=False):
         if self.env is not None:
             if self._recursive_generated_node is None and resolve_generator:
                 self._get_value(conf=conf, recursive=recursive)
 
             if self._recursive_generated_node is not None:
-                self._recursive_generated_node._get_all_paths_rec(
-                    name,
-                    htable,
-                    conf,
-                    recursive=recursive,
-                    first=False,
-                    resolve_generator=resolve_generator,
-                )
+                self._recursive_generated_node._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False,
+                                                                  resolve_generator=resolve_generator,
+                                                                  ignore_fstate=ignore_fstate)
             else:
                 pass
         else:
@@ -2189,16 +2196,12 @@ class NodeInternals_GenFunc(NodeInternals):
                     ignore_entanglement=ignore_entanglement,
                 )
 
-    def get_child_all_path(self, name, htable, conf, recursive, resolve_generator=False):
+    def get_child_all_path(self, name, htable, conf, recursive,
+                           resolve_generator=False, ignore_fstate=False):
         if self.env is not None:
-            self.generated_node._get_all_paths_rec(
-                name,
-                htable,
-                conf,
-                recursive=recursive,
-                first=False,
-                resolve_generator=resolve_generator,
-            )
+            self.generated_node._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False,
+                                                   resolve_generator=resolve_generator,
+                                                   ignore_fstate=ignore_fstate)
         else:
             # If self.env is None, that means that a node graph is not fully constructed
             # thus we avoid a freeze side-effect (by resolving 'generated_node') of the
@@ -2422,11 +2425,6 @@ class NodeInternals_Term(NodeInternals):
         return None
 
     def set_child_current_conf(self, node, conf, reverse, ignore_entanglement):
-        pass
-
-    def get_child_all_path(
-        self, name, htable, conf, recursive, resolve_generator=False
-    ):
         pass
 
 
@@ -4001,6 +3999,11 @@ class NodeInternals_NonTerm(NodeInternals):
                     elif self.custo.cycle_clone_mode:
                         new_node.freeze()
                         new_node.walk(steps_num=1)
+                        transformed_node = new_node
+
+                    elif self.custo.reset_clone_mode:
+                        new_node.reset_state(ignore_entanglement=True)
+                        new_node.freeze()
                         transformed_node = new_node
 
                 new_node._set_clone_info((base_node.tmp_ref_count - 1, nb), base_node)
@@ -6421,7 +6424,7 @@ class NodeInternals_NonTerm(NodeInternals):
                                 respect_order, relative_depth, top_node, ignore_fstate,
                                 resolve_generator=False,
                                 return_parent=False):
-        if self.frozen_node_list is not None and not ignore_fstate:
+        if not ignore_fstate and self.frozen_node_list is not None:
             iterable = self.frozen_node_list
         else:
             iterable = self.subnodes_set
@@ -6485,10 +6488,9 @@ class NodeInternals_NonTerm(NodeInternals):
                 e, conf, reverse, ignore_entanglement=ignore_entanglement
             )
 
-    def get_child_all_path(
-        self, name, htable, conf, recursive, resolve_generator=False
-    ):
-        if self.frozen_node_list is not None:
+    def get_child_all_path(self, name, htable, conf, recursive,
+                           resolve_generator=False, ignore_fstate=False):
+        if not ignore_fstate and self.frozen_node_list is not None:
             iterable = self.frozen_node_list
         else:
             iterable = copy.copy(self.subnodes_set)
@@ -6496,15 +6498,9 @@ class NodeInternals_NonTerm(NodeInternals):
                 iterable.add(self.separator.node)
 
         for idx, node in enumerate(iterable):
-            node._get_all_paths_rec(
-                name,
-                htable,
-                conf,
-                recursive=recursive,
-                first=False,
-                resolve_generator=resolve_generator,
-                clone_idx=idx,
-            )
+            node._get_all_paths_rec(name, htable, conf, recursive=recursive, first=False,
+                                    resolve_generator=resolve_generator, clone_idx=idx,
+                                    ignore_fstate=ignore_fstate)
 
     def set_size_from_constraints(self, size, encoded_size):
         # not supported
@@ -7899,7 +7895,8 @@ class Node(object):
 
             if path_regexp is not None:
                 paths = node.get_all_paths_from(
-                    top_node, flush_cache=False, resolve_generator=resolve_generator
+                    top_node, flush_cache=False, resolve_generator=resolve_generator,
+                    ignore_fstate=ignore_fstate
                 )
                 for p in paths:
                     if re.search(path_regexp, p):
@@ -8002,9 +7999,8 @@ class Node(object):
         #     print(' |_ ' + n.name)
         return ret
 
-    def iter_nodes_by_path(
-        self, path_regexp, conf=None, flush_cache=True, resolve_generator=False
-    ):
+    def iter_nodes_by_path(self, path_regexp, conf=None, flush_cache=True,
+                           resolve_generator=False, ignore_fstate=False):
         """
         iterate over all the nodes that match the `path_regexp` parameter.
 
@@ -8022,14 +8018,15 @@ class Node(object):
 
         """
         for p, node in self.iter_paths(
-            conf=conf, flush_cache=flush_cache, resolve_generator=resolve_generator
+            conf=conf, flush_cache=flush_cache, resolve_generator=resolve_generator,
+            ignore_fstate=ignore_fstate
         ):
             if re.search(path_regexp, p):
                 yield node
 
-    def get_first_node_by_path(
-        self, path_regexp, conf=None, flush_cache=True, resolve_generator=False
-    ):
+    def get_first_node_by_path(self,path_regexp, conf=None, flush_cache=True,
+                               resolve_generator=False,
+                               ignore_fstate=False):
         """
         Return the first Node that match the `path_regexp` parameter.
 
@@ -8049,6 +8046,7 @@ class Node(object):
                     conf=conf,
                     flush_cache=flush_cache,
                     resolve_generator=resolve_generator,
+                    ignore_fstate=ignore_fstate
                 )
             )
         except StopIteration:
@@ -8056,7 +8054,7 @@ class Node(object):
 
         return node
 
-    def get_nodes_by_paths(self, path_list):
+    def get_nodes_by_paths(self, path_list, ignore_fstate=False):
         """
         Provide a dictionnary of the nodes referenced by the paths provided in @path_list.
         Keys of the dict are the paths provided in @path_list.
@@ -8069,20 +8067,14 @@ class Node(object):
         """
         node_dict = {}
         for p in path_list:
-            node_dict[p] = self.get_first_node_by_path(path_regexp=p, flush_cache=False)
+            node_dict[p] = self.get_first_node_by_path(path_regexp=p, flush_cache=False,
+                                                       ignore_fstate=ignore_fstate)
 
         return node_dict
 
-    def _get_all_paths_rec(
-        self,
-        pname,
-        htable,
-        conf,
-        recursive,
-        first=True,
-        resolve_generator=False,
-        clone_idx=0,
-    ):
+    def _get_all_paths_rec(self, pname, htable, conf, recursive, first=True,
+                           resolve_generator=False, clone_idx=0,
+                           ignore_fstate=False):
         next_conf = conf if recursive else None
 
         if not self.is_conf_existing(conf):
@@ -8096,27 +8088,20 @@ class Node(object):
         else:
             htable[name] = self
 
-        side_effect_risk = (
-            isinstance(internal, NodeInternals_GenFunc) and not internal.is_frozen()
-        )
+        side_effect_risk = isinstance(internal, NodeInternals_GenFunc) and not internal.is_frozen()
         if resolve_generator or not side_effect_risk:
-            internal.get_child_all_path(
-                name,
-                htable,
-                conf=next_conf,
-                recursive=recursive,
-                resolve_generator=resolve_generator,
-            )
+            internal.get_child_all_path(name, htable, conf=next_conf, recursive=recursive,
+                                        resolve_generator=resolve_generator,
+                                        ignore_fstate=ignore_fstate)
 
-    def get_all_paths(
-        self,
-        conf=None,
-        recursive=True,
-        depth_min=None,
-        depth_max=None,
-        resolve_generator=False,
-        flush_cache=True,
-    ):
+    def get_all_paths(self,
+                      conf=None,
+                      recursive=True,
+                      depth_min=None,
+                      depth_max=None,
+                      resolve_generator=False,
+                      ignore_fstate=False,
+                      flush_cache=True):
         """
         Args:
             resolve_generator: if `True`, the generator nodes will be resolved in order to perform
@@ -8134,13 +8119,9 @@ class Node(object):
 
         if flush_cache or self._paths_htable is None:
             self._paths_htable = collections.OrderedDict()
-            self._get_all_paths_rec(
-                "",
-                self._paths_htable,
-                conf,
-                recursive=recursive,
-                resolve_generator=resolve_generator,
-            )
+            self._get_all_paths_rec("", self._paths_htable, conf, recursive=recursive,
+                                    resolve_generator=resolve_generator,
+                                    ignore_fstate=ignore_fstate)
 
         if depth_min is not None or depth_max is not None:
             depth_min = int(depth_min) if depth_min is not None else 0
@@ -8157,22 +8138,22 @@ class Node(object):
 
         return paths
 
-    def iter_paths(
-        self,
-        conf=None,
-        recursive=True,
-        depth_min=None,
-        depth_max=None,
-        only_paths=False,
-        resolve_generator=False,
-        flush_cache=True,
-    ):
+    def iter_paths(self,
+                   conf=None,
+                   recursive=True,
+                   depth_min=None,
+                   depth_max=None,
+                   only_paths=False,
+                   resolve_generator=False,
+                   ignore_fstate=False,
+                   flush_cache=True):
         htable = self.get_all_paths(
             conf=conf,
             recursive=recursive,
             depth_min=depth_min,
             depth_max=depth_max,
             resolve_generator=resolve_generator,
+            ignore_fstate=ignore_fstate,
             flush_cache=flush_cache,
         )
         for path, node in htable.items():
@@ -8181,29 +8162,31 @@ class Node(object):
             else:
                 yield path if only_paths else (path, node)
 
-    def get_path_from(self, node, conf=None, flush_cache=True, resolve_generator=False):
+    def get_path_from(self, node, conf=None, flush_cache=True,
+                      resolve_generator=False, ignore_fstate=False):
         for path, nd in node.iter_paths(
-            conf=conf, flush_cache=flush_cache, resolve_generator=resolve_generator
+            conf=conf, flush_cache=flush_cache, resolve_generator=resolve_generator,
+            ignore_fstate=ignore_fstate
         ):
             if nd == self:
                 return path
         else:
             return None
 
-    def get_all_paths_from(
-        self, node, conf=None, flush_cache=True, resolve_generator=False
-    ):
+    def get_all_paths_from(self, node, conf=None, flush_cache=True, resolve_generator=False,
+                           ignore_fstate=False):
         l = []
         for path, nd in node.iter_paths(
-            conf=conf, flush_cache=flush_cache, resolve_generator=resolve_generator
+            conf=conf, flush_cache=flush_cache, resolve_generator=resolve_generator,
+            ignore_fstate=ignore_fstate
         ):
             if nd == self:
                 l.append(path)
         return l
 
-    def is_path_valid(self, path, resolve_generator=False):
+    def is_path_valid(self, path, resolve_generator=False, ignore_fstate=False):
         htable = self.get_all_paths(
-            resolve_generator=resolve_generator, flush_cache=True
+            resolve_generator=resolve_generator, flush_cache=True, ignore_fstate=ignore_fstate
         )
         for p in htable.keys():
             if re.match(path, p):

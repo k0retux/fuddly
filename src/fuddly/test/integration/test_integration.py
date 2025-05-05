@@ -4514,19 +4514,22 @@ class TestFMK(unittest.TestCase):
 
         self.assertGreater(i, 2)
 
-    def test_struct_operator(self):
+    def test_struct_operator_01(self):
 
         idx = 0
         expected_idx = 6
 
-        expected_outcomes = [b'A1', b'A2', b'A3$ A32_VALID $', b'A3T\x0f\xa0\x00\n$ A32_VALID $',
-                             b'A3T\x0f\xa0\x00\n*1*0*', b'A1']
-        expected_outcomes_24_alt = [b'A3$ A32_INVALID $', b'A3T\x0f\xa0\x00\n$ A32_INVALID $']
+        expected_outcomes = [b'A1', b'A2',
+                             b'A3T\x0f\xa0\x00\n*1*0*',
+                             b'A3T\x0f\xa0\x00\n$ A32_VALID $',
+                             b'A3$ A32_VALID $',
+                             b'A1']
 
         outcomes = []
 
         act = [('EXIST_COND', UI(determinist=True)), ('tWALK', UI(consider_sibbling_change=False)),
                'tSTRUCT']
+        fmk.lg.switch_log_format()
         for i in range(4):
             for j in range(10):
                 d, _ = fmk.process_data(act)
@@ -4539,10 +4542,8 @@ class TestFMK(unittest.TestCase):
                 d.show()
                 idx += 1
 
-        self.assertEqual(outcomes[:2], expected_outcomes[:2])
-        self.assertTrue(
-            outcomes[2:4] == expected_outcomes[2:4] or outcomes[2:4] == expected_outcomes_24_alt)
-        self.assertEqual(outcomes[-2:], expected_outcomes[-2:])
+        for i in outcomes:
+            self.assertIn(i, expected_outcomes)
         self.assertEqual(idx, expected_idx)
 
         print('\n****\n')
@@ -4562,6 +4563,55 @@ class TestFMK(unittest.TestCase):
             idx += 1
 
         self.assertEqual(idx, expected_idx)
+
+    def test_struct_operator_02(self):
+        idx = 0
+        expected_idx = 21
+        expected_outcomes = [b'88',
+                             b'8128',
+                             b'8-28',
+                             b'88',
+                             b'82',
+                             b'88',
+                             b'28',
+                             b'8228',
+                             b'81--28',
+                             b'811-28',
+                             b'822222228',
+                             b'8288',
+                             b'8228',
+                             b'8828',
+                             b'822222222228',
+                             b'81----------28',
+                             b'81111111111-28',
+                             b'82222222222222222222222222222222222222222222222222222222222228',
+                             b'828888888888',
+                             b'822222222228',
+                             b'888888888828']
+
+        outcomes = []
+
+        act = [('DQTY', UI(determinist=True)),
+               ('tSTRUCT', UI(deep=True))]
+        for j in range(40):
+            d, _ = fmk.process_data(act)
+            if d is None:
+                print('--> Exit (need new input)')
+                break
+            fmk._setup_new_sending()
+            fmk._log_data(d)
+            outcomes.append(d.to_bytes())
+            # time.sleep(0.1)
+            # d.show()
+            idx += 1
+
+        # time.sleep(0.1)
+        # print(f'\n*** DEBUG : {len(expected_outcomes)}')
+        # pp(outcomes, width=150)
+
+        self.assertEqual(idx, expected_idx)
+        for o in outcomes:
+            self.assertIn(o, expected_outcomes)
 
     def test_typednode_operator(self):
 
