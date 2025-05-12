@@ -904,13 +904,13 @@ class sd_struct_constraints(StatefulOperator):
                                         minmax = nd.get_subnode_minmax(processed_node)
                                         if minmax is not None:
                                             mini, maxi = minmax
-                                            if 1 >= mini:
+                                            if 1 >= mini and 1 <= maxi:
                                                 nd.set_subnode_default_qty(processed_node, default_qty=1)
                                                 nd.freeze()
                                                 relevant_case = True # We succeeded to make the use case relevant
                                                 reevaluate_corrupted_seed = True
                                             else:
-                                                print(f'\n*** DBG[r{removed_node_nb}] 1a: ERROR mini:{mini} with def')
+                                                # print(f'\n*** DBG[r{removed_node_nb}] 1a: ERROR mini:{mini} with def')
                                                 relevant_case = False
                                                 break
                                         else:
