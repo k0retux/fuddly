@@ -3970,8 +3970,8 @@ class NodeInternals_NonTerm(NodeInternals):
 
                     new_node._reset_depth(parent_depth=base_node.depth - 1)
 
-                    # For dynamically created Node(), don't propagate the fuzz weight
-                    if not self.custo.mutable_clone_mode:
+                    if not self.custo.mutable_clone_mode and not self.custo.cycle_clone_mode:
+                        # For dynamically created Node(), don't propagate the fuzz weight and remove Mutable attr
                         new_node.reset_fuzz_weight(recursive=True)
                         new_node.clear_attr(
                             NodeInternals.Mutable, all_conf=True, recursive=True
@@ -4920,7 +4920,8 @@ class NodeInternals_NonTerm(NodeInternals):
             node = Node(nid, base_node=base_node, ignore_frozen_state=ignore_frozen_state,
                         accept_external_entanglement=False)
             node._reset_depth(parent_depth=base_node.depth - 1)
-            if base_node.is_nonterm() and not base_node.cc.custo.mutable_clone_mode:
+            if (base_node.is_nonterm() and not base_node.cc.custo.mutable_clone_mode
+                    and not base_node.cc.custo.cycle_clone_mode):
                 node.reset_fuzz_weight(recursive=True)
                 node.clear_attr(NodeInternals.Mutable, all_conf=True, recursive=True)
         else:
