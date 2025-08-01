@@ -712,6 +712,7 @@ class NodeInternals(object):
     Abs_Postpone = 6
     Separator = 15
     AutoSeparator = 16
+    Optional = 17
 
     Highlight = 30
     DEBUG = 40
@@ -743,6 +744,7 @@ class NodeInternals(object):
             # Used to distinguish separator
             NodeInternals.Separator: False,
             NodeInternals.AutoSeparator: False,
+            NodeInternals.Optional: False,
             # Used to display visual effect when the node is printed on the console
             NodeInternals.Highlight: False,
             # Used for debugging purpose
@@ -2437,11 +2439,16 @@ class NodeInternals_TypedValue(NodeInternals_Term):
     def _make_specific(self, name):
         if name == NodeInternals.Determinist:
             self.value_type.make_determinist()
+        elif name == NodeInternals.Optional:
+            self.value_type.is_optional = True
         return True
 
     def _unmake_specific(self, name):
         if name == NodeInternals.Determinist:
             self.value_type.make_random()
+        elif name == NodeInternals.Optional:
+            self.value_type.is_optional = False
+
         return True
 
     def _set_default_value_specific(self, val):
@@ -3293,6 +3300,9 @@ class NodeInternals_NonTerm(NodeInternals):
                         self.subnodes_attrs[node] = NodeInternals_NonTerm.NodeAttrs()
                     self.subnodes_attrs[node].default_qty = default_qty
                     self.subnodes_attrs[node].qty = [mini, maxi]
+                    if mini == 0:
+                        node.set_attr(NodeInternals.Optional, all_conf=True)
+
                     new_sublist.append(node)
 
                 sublist = new_sublist
@@ -3682,6 +3692,9 @@ class NodeInternals_NonTerm(NodeInternals):
             self.subnodes_attrs[node].qty = [min, max]
         else:
             raise ValueError("No values are provided!")
+
+        if min == 0:
+            node.set_attr(NodeInternals.Optional, all_conf=True)
 
         if default_qty is None:
             orig_default_qty = self.subnodes_attrs[node].default_qty
@@ -4837,6 +4850,9 @@ class NodeInternals_NonTerm(NodeInternals):
         self.subnodes_attrs[node] = NodeInternals_NonTerm.NodeAttrs()
         self.subnodes_attrs[node].default_qty = default_qty
         self.subnodes_attrs[node].qty = [min, max]
+
+        if min == 0:
+            node.set_attr(NodeInternals.Optional, all_conf=True)
 
         if after is not None:
             pivot = after

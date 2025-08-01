@@ -54,6 +54,7 @@ class VT(object):
     mini = None
     maxi = None
     knowledge_source = None
+    _node_is_optional = None
 
     BigEndian = 1
     LittleEndian = 2
@@ -62,6 +63,15 @@ class VT(object):
     enc2struct = {BigEndian: ">", LittleEndian: "<", Native: "="}
 
     endian = None
+
+
+    @property
+    def is_optional(self):
+        return self._node_is_optional
+
+    @is_optional.setter
+    def is_optional(self, value: bool):
+        self._node_is_optional = value
 
     def make_private(self, forget_current_state):
         pass
@@ -128,6 +138,7 @@ class VT(object):
 
 
 class VT_Alt(VT):
+
     def __init__(self):
         self._fuzzy_mode = False
         self._specific_fuzzy_vals = None
@@ -1115,7 +1126,7 @@ class String(VT_Alt):
             val = orig_val + b"A"*(sz_delta_with_max + 1)
             self.values_fuzzy.append(val)
 
-            if len(self.encode(orig_val)) > 0:
+            if len(self.encode(orig_val)) > 0 and not self.is_optional:
                 self.values_fuzzy.append(b'')
 
             if sz > 0:
@@ -2472,7 +2483,9 @@ class INT_str(INT):
         if fuzzed_vals:
             if vt_list is None:
                 vt_list = []
-            vt_list.insert(0, String(values=fuzzed_vals))
+            new_vt = String(values=fuzzed_vals)
+            new_vt.is_optional = self.is_optional
+            vt_list.insert(0, new_vt)
 
         return vt_list
 
@@ -3077,7 +3090,8 @@ class BitField(VT_Alt):
     def _enable_fuzz_mode(self, fuzz_magnitude=1.0,
                           only_corner_cases=False,
                           only_corner_cases_and_extra = False,
-                          only_invalid_cases=False):
+                          only_invalid_cases=False,
+                          node_is_optional=False):
 
         # TODO: add support for @only_corner_cases and @only_invalid_cases
 

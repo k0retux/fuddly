@@ -137,6 +137,7 @@ class MH(object):
 
         Separator = NodeInternals.Separator
         AutoSeparator = NodeInternals.AutoSeparator
+        Optional = NodeInternals.Optional
 
         Highlight = NodeInternals.Highlight
 

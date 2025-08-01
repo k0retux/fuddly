@@ -1291,6 +1291,17 @@ class MyDF_DataModel(DataModel):
              ]}
 
 
+        optional_desc = {
+            'name': 'opt',
+            'contents': [
+                {'name': 'prefix', 'contents': '<'},
+                {'name': 'pld',
+                 'contents': INT_str(min=1,max=5),
+                 'qty': (0,1)},
+                {'name': 'suffix', 'contents': '>'}
+            ]
+        }
+
 
         self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
@@ -1302,7 +1313,8 @@ class MyDF_DataModel(DataModel):
                       csp_default_desc, str_desc, rnd_desc,
                       shape_type_1_desc, shape_type_2_desc, ns_desc, nested_nt_desc, def_qty_desc,
                       tlv_rec0_desc, tlv_rec0b_desc, tlv_rec1_desc, tlv_rec2_desc, tlv_rec3_desc,
-                      tlv_rec4_desc, recbig_desc)
+                      tlv_rec4_desc, recbig_desc,
+                      optional_desc)
 
 
 data_model = MyDF_DataModel()
