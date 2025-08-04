@@ -546,9 +546,6 @@ class Database(object):
         self.last_feedback[source].append(fbk_entry)
         self.feedback_trail[source].append(fbk_entry)
 
-        if self.current_project and not from_fb_handler:
-            self.current_project.trigger_feedback_handlers(source, timestamp, content, status_code)
-
         if not self.enabled:
             return None
 

@@ -92,6 +92,7 @@ class Logger(object):
 
         self.name = name
         self.p = prefix
+        self.current_project = None
         self.__record_data = record_data
         self.__explicit_data_recording = explicit_data_recording
         self._term_display_limit = term_display_limit
@@ -373,6 +374,7 @@ class Logger(object):
         if self._fd:
             self._fd.close()
 
+        self.current_project = None
         self.reset_current_state()
         self._current_sent_date = None
         self._last_data_IDs = {}
@@ -589,6 +591,16 @@ class Logger(object):
                     "Feedback not displayed", rgb=Color.WARNING, do_record=record
                 )
 
+        if isinstance(content, list):
+            content = map(lambda x: self._encode_target_feedback(x), content)
+        else:
+            content = self._encode_target_feedback(content)
+
+        if self.current_project and not from_fbk_handler:
+            if not isinstance(source, FeedbackSource):
+                source = FeedbackSource(source)
+            self.current_project.trigger_feedback_handlers(source, timestamp, content, status_code)
+
         if record:
             assert isinstance(source, FeedbackSource)
             if source.related_tg is not None:
@@ -606,13 +618,13 @@ class Logger(object):
                 ids = self._last_data_IDs.values()
                 data_id = max(ids) if ids else None
 
-            if isinstance(content, list):
+            if isinstance(content, (list, map)):
                 for fbk, ts in zip(content, timestamp):
                     self.fmkDB.insert_feedback(
                         data_id,
                         source,
                         ts,
-                        self._encode_target_feedback(fbk),
+                        fbk,
                         status_code=status_code,
                         store_in_db=store_in_db,
                         from_fb_handler=from_fbk_handler,
@@ -622,11 +634,12 @@ class Logger(object):
                     data_id,
                     source,
                     timestamp,
-                    self._encode_target_feedback(content),
+                    content,
                     status_code=status_code,
                     store_in_db=store_in_db,
                     from_fb_handler=from_fbk_handler,
                 )
+
 
     def log_collected_feedback(self, preamble=None, epilogue=None,
                                store_in_db=True):

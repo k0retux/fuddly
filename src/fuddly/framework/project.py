@@ -144,15 +144,19 @@ class Project(object):
     def trigger_feedback_handlers(self, source, timestamp, content, status):
         if not self._fbk_processing_enabled or self._fbk_handlers_disabled:
             return
-        self._feedback_fifo.put((source, timestamp, content, status))
+        if isinstance(content, (list, map)):
+            for fbk, ts in zip(content, timestamp):
+                self._feedback_fifo.put((source, ts, fbk, status))
+        else:
+            self._feedback_fifo.put((source, timestamp, content, status))
 
     def _feedback_processing(self):
-        '''
+        """
         core function of the feedback processing thread
-        '''
+        """
         while self._run_fbk_handling_thread:
             try:
-                fbk_tuple = self._feedback_fifo.get(timeout=0.1)
+                fbk_tuple = self._feedback_fifo.get(timeout=0.001)
             except queue.Empty:
                 continue
 

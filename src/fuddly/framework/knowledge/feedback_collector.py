@@ -67,8 +67,8 @@ class FeedbackCollector(object):
         self._feedback_collector_tstamped = collections.OrderedDict()
         self._tstamped_bstring = None
 
-    def add_fbk_from(self, ref, fbk, status=0):
-        now = datetime.datetime.now()
+    def add_fbk_from(self, ref, fbk, status=0, timestamp=None):
+        now = datetime.datetime.now() if timestamp is None else timestamp
         with self.fbk_lock:
             if ref not in self._feedback_collector:
                 self._feedback_collector[ref] = {}

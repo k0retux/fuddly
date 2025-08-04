@@ -181,7 +181,7 @@ class Target(object):
     def is_feedback_received(self):
         """
         To be overloaded if the target implements FBK_WAIT_UNTIL_RECV mode, so that
-        it can informs the framework about feedback reception.
+        it can inform the framework about feedback reception.
         """
         return True
 
@@ -263,6 +263,10 @@ class Target(object):
             return True
         else:
             return False
+
+    @property
+    def feedback_mode(self):
+        return self._feedback_mode
 
     @property
     def fbk_wait_full_time_slot_mode(self):

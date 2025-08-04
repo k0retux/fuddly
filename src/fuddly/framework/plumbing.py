@@ -1547,6 +1547,7 @@ class FmkPlumbing(object):
         self.dm = dm
         # self.dm.knowledge_source = prj.knowledge_source
         self.lg = self.__logger_dict[prj]
+        self.lg.current_project = prj
 
         self.targets = {}
         try:
