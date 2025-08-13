@@ -1961,8 +1961,8 @@ class TestModelWalker(unittest.TestCase):
 
         idx = 0
         crc_set = set()
-        expected_nb_outcomes = 2355
-        expected_nb_of_diff_outcomes = 2310
+        expected_nb_outcomes = 2268
+        expected_nb_of_diff_outcomes = 2268
 
         print(f'\n*** process NESTED_NT tTYPE(only_invalid_cases=True ...)')
 

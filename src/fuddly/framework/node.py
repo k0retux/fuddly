@@ -110,6 +110,26 @@ def flatten(nested):
             yield x
 
 
+def convert_nodeinternals_list_to_bstring(node_internals_list, conf=None, recursive=True):
+    def tobytes_helper(node_internals):
+        if isinstance(node_internals, bytes):
+            return node_internals
+        else:
+            return node_internals._get_value(conf=conf, recursive=recursive, return_node_internals=False)[0]
+
+    if isinstance(node_internals_list, list):
+        node_internals_list = list(flatten(node_internals_list))
+        if node_internals_list:
+            node_internals_list = list(map(tobytes_helper, node_internals_list))
+            val = b''.join(node_internals_list)
+        else:
+            val = b''
+    else:
+        val = node_internals_list
+
+    return val
+
+
 nodes_weight_re = re.compile(r'(.*?)\((.*)\)')
 
 ### Debug Means ###
@@ -8478,27 +8498,8 @@ class Node(object):
                 )
 
     def to_bytes(self, conf=None, recursive=True):
-        def tobytes_helper(node_internals):
-            if isinstance(node_internals, bytes):
-                return node_internals
-            else:
-                return node_internals._get_value(
-                    conf=conf, recursive=recursive, return_node_internals=False
-                )[0]
-
         node_internals_list = self.freeze(conf=conf, recursive=recursive)
-        if isinstance(node_internals_list, list):
-            node_internals_list = list(flatten(node_internals_list))
-            if node_internals_list:
-                # if issubclass(node_internals_list[0].__class__, NodeInternals):
-                node_internals_list = list(map(tobytes_helper, node_internals_list))
-                val = b"".join(node_internals_list)
-            else:
-                val = b""
-        else:
-            val = node_internals_list
-
-        return val
+        return convert_nodeinternals_list_to_bstring(node_internals_list, conf=conf, recursive=recursive)
 
     def to_str(self, conf=None, recursive=True):
         val = self.to_bytes(conf=conf, recursive=recursive)
