@@ -1,3 +1,6 @@
-graft src/fuddly/imported_data/
 graft src/fuddly/cli/templates/
 include src/fuddly/framework/fmk_db.sql
+recursive-include **/samples/ *
+recursive-include **/conf/ *
+global-include README
+recursive-exclude **/ __pycache__

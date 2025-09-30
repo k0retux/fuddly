@@ -43,6 +43,8 @@ class DataModel(object):
     name = None
     module_name = None
 
+    config_items = None
+
     knowledge_source = None
 
     def pre_build(self):
@@ -61,6 +63,16 @@ class DataModel(object):
         To be implemented by the user.
         """
         pass
+
+    def process_config_items(self, filename, filepath):
+        """
+        Optional method that is called when a data model is loaded.
+        Placeholder for a data model needing some customization from configuration files
+        (such files should be present in a 'conf' subdirectory of the DM directory).
+        """
+
+        return None
+
 
     def validation_tests(self):
         """
@@ -262,8 +274,9 @@ class DataModel(object):
     def cleanup(self):
         pass
 
-    def __init__(self, samples_subdir='samples'):
+    def __init__(self, samples_subdir='samples', config_subdir='config'):
         self._samples_subdir = samples_subdir
+        self._config_subdir = config_subdir
         self.node_backend = NodeBackend(self)
         self._dm_db = None
         self._built = False
@@ -344,6 +357,8 @@ class DataModel(object):
                 if raw_data is not None:
                     self.register(*list(map(lambda x: x[0], raw_data.values())))
 
+                self.config_items = self.import_config_files(from_dm=from_dm)
+
             self._built = True
 
     def merge_with(self, data_model):
@@ -392,6 +407,20 @@ class DataModel(object):
                 self._sample_files[f] = os.path.join(samples_path, f)
 
         return self._sample_files
+
+
+    def get_config_files(self, subdir):
+        if self._dm_fs_path is None or self._config_subdir is None or subdir is None:
+            return None
+
+        self._config_files = collections.OrderedDict()
+        config_path = os.path.join(self._dm_fs_path, self._config_subdir)
+        if os.path.exists(config_path):
+            _, _, filenames = next(os.walk(config_path))
+            for f in filenames:
+                self._config_files[f] = os.path.join(config_path, f)
+
+        return self._config_files
 
 
     def import_file_contents(self, extension=None, absorber=None,
@@ -463,6 +492,48 @@ class DataModel(object):
                     msgs[name] = (d_abs, filepath)
 
         return msgs
+
+    def import_config_files(self, config_consumer=None,
+                            subdir=None, path=None, from_dm=None):
+
+        assert self.included_models is None or len(self.included_models) == 1
+
+        if subdir is None:
+            subdir = self.name
+
+        if config_consumer is None:
+            config_consumer = self.process_config_items
+
+        if path is None:
+            path = self.get_user_import_directory_path(subdir=subdir)
+
+        files = {}
+
+        dm_origin = self if from_dm is None else from_dm
+        # Get from packages (entry_points and fuddly)
+        if dm_origin.module_name is not None:
+            try:
+                module_path = importlib.resources.files(dm_origin.module_name).joinpath("conf")
+                _, _, filenames = next(os.walk(module_path))
+                for f in filenames:
+                    files[f]=os.path.join(module_path, f)
+            except StopIteration:
+                # The folder doesn't exist
+                pass
+
+        # Get config from the current data model in the FS.
+        dm_config = dm_origin.get_config_files(subdir=subdir)
+        if dm_config:
+            files.update(dm_config)
+
+        config_items = {}
+        for name, filepath in files.items():
+            config_obj = config_consumer(name, filepath)
+            if config_obj is not None:
+                config_items[name] = (config_obj, name)
+
+        return config_items
+
 
     def get_user_import_directory_path(self, subdir=None):
         if subdir is None:
