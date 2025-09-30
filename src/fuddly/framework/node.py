@@ -8766,7 +8766,9 @@ class Node(object):
                 pretty_print=pretty_print,
             )
 
-    def show(self, conf=None, verbose=True,
+
+
+    def show(self, conf=None, verbose=Verbose.Heavy,
             print_name_func=None, print_contents_func=None, print_raw_func=None,
             print_nonterm_func=None, print_recursive_func=None, print_type_func=None,
             alpha_order=False, raw_limit=None,
@@ -8857,7 +8859,7 @@ class Node(object):
 
         unindent_generated_node = False
 
-        if verbose:
+        if verbose > Verbose.Light:
             prev_depth = 0
             for n, i in zip(l, range(nodes_nb)):
                 name, node = n
@@ -8945,7 +8947,7 @@ class Node(object):
                     val = node.pretty_print(max_size=raw_limit)
 
                     prefix = "{:s}".format(indent_term)
-                    name = "{:s} ".format(name)
+                    name = name.split('/')[-1] + ' '
                     if isinstance(node.c[conf_tmp], NodeInternals_Func):
                         args = get_args(node, conf_tmp)
                         type_and_args = "[{:s} | node_args: {:s}] size={:d}B".format(
@@ -8972,27 +8974,46 @@ class Node(object):
                     print_nonterm_func(
                         prefix, nl=False, log_func=log_func, pretty_print=pretty_print
                     )
-                    print_name_func(
-                        "({:d}) {:s}".format(depth, name),
-                        nl=False,
-                        log_func=log_func,
-                        pretty_print=pretty_print,
-                    )
-                    print_type_func(
-                        type_and_args,
-                        nl=False,
-                        log_func=log_func,
-                        pretty_print=pretty_print,
-                    )
-                    if node.is_attr_set(NodeInternals.Separator):
-                        self._print(
-                            sep_deco,
-                            rgb=Color.ND_SEPARATOR,
-                            style=FontStyle.BOLD,
+                    if verbose > verbose.Normal:
+                        print_name_func(
+                            "({:d}) {:s}".format(depth, name),
                             nl=False,
                             log_func=log_func,
                             pretty_print=pretty_print,
                         )
+                        print_type_func(
+                            type_and_args,
+                            nl=False,
+                            log_func=log_func,
+                            pretty_print=pretty_print,
+                        )
+                        if node.is_attr_set(NodeInternals.Separator):
+                            self._print(
+                                sep_deco,
+                                rgb=Color.ND_SEPARATOR,
+                                style=FontStyle.BOLD,
+                                nl=False,
+                                log_func=log_func,
+                                pretty_print=pretty_print,
+                            )
+                    else:
+                        if node.is_attr_set(NodeInternals.Separator):
+                            self._print(
+                                sep_deco,
+                                rgb=Color.ND_SEPARATOR,
+                                style=FontStyle.BOLD,
+                                nl=False,
+                                log_func=log_func,
+                                pretty_print=pretty_print,
+                            )
+                        else:
+                            print_name_func(
+                                "({:d}) {:s}".format(depth, name),
+                                nl=False,
+                                log_func=log_func,
+                                pretty_print=pretty_print,
+                            )
+
                     self._print(
                         graph_deco,
                         rgb=Color.ND_DUPLICATED,
@@ -9023,15 +9044,17 @@ class Node(object):
                             )
 
                     if val is not None:
+                        if verbose > Verbose.Normal or not node.is_attr_set(NodeInternals.Separator):
+                            print_nonterm_func("{:s}  ".format(indent_spc), nl=False, log_func=log_func, pretty_print=pretty_print)
+                            print_contents_func(r"\_ {:s}".format(val), log_func=log_func, pretty_print=pretty_print)
+                    if verbose > Verbose.Normal:
                         print_nonterm_func("{:s}  ".format(indent_spc), nl=False, log_func=log_func, pretty_print=pretty_print)
-                        print_contents_func(r"\_ {:s}".format(val), log_func=log_func, pretty_print=pretty_print)
-                    print_nonterm_func("{:s}  ".format(indent_spc), nl=False, log_func=log_func, pretty_print=pretty_print)
-                    if raw_limit is not None and raw_len > raw_limit:
-                        print_raw_func(r"\_raw: {:s}".format(repr(raw[:raw_limit])), nl=False,
-                                       log_func=log_func, pretty_print=pretty_print)
-                        print_raw_func(" ...", hlight=True, log_func=log_func, pretty_print=pretty_print)
-                    else:
-                        print_raw_func(r"\_raw: {:s}".format(repr(raw)), log_func=log_func, pretty_print=pretty_print)
+                        if raw_limit is not None and raw_len > raw_limit:
+                            print_raw_func(r"\_raw: {:s}".format(repr(raw[:raw_limit])), nl=False,
+                                           log_func=log_func, pretty_print=pretty_print)
+                            print_raw_func(" ...", hlight=True, log_func=log_func, pretty_print=pretty_print)
+                        else:
+                            print_raw_func(r"\_raw: {:s}".format(repr(raw)), log_func=log_func, pretty_print=pretty_print)
                 else:
                     is_gen_node = isinstance(node.c[conf_tmp], NodeInternals_GenFunc)
                     is_recursive_node = isinstance(node.c[conf_tmp], NodeInternals_Recursive)
@@ -9105,25 +9128,26 @@ class Node(object):
                             pretty_print=pretty_print,
                         )
                     else:
-                        if debug:
-                            syncw_str = ''
-                            syncw = node.c[conf_tmp]._sync_with
-                            if syncw:
-                                for scope, obj in syncw.items():
-                                    if isinstance(obj, SyncObj):
-                                        continue
-                                    nd, param = obj
-                                    syncw_str = f', sync with: {nd.name} (NdInt: {id(nd.c[conf_tmp])})'
+                        if verbose > Verbose.Normal:
+                            if debug:
+                                syncw_str = ''
+                                syncw = node.c[conf_tmp]._sync_with
+                                if syncw:
+                                    for scope, obj in syncw.items():
+                                        if isinstance(obj, SyncObj):
+                                            continue
+                                        nd, param = obj
+                                        syncw_str = f', sync with: {nd.name} (NdInt: {id(nd.c[conf_tmp])})'
 
-                            syncw_str += (f', mutable: '
-                                          f'{node.c[conf_tmp].is_attr_set(NodeInternals.Mutable)}')
+                                syncw_str += (f', mutable: '
+                                              f'{node.c[conf_tmp].is_attr_set(NodeInternals.Mutable)}')
 
-                        print_nonterm_func(
-                            f" [{node_type}]{syncw_str}" if debug else f" [{node_type}]",
-                            nl=False,
-                            log_func=log_func,
-                            pretty_print=pretty_print,
-                        )
+                            print_nonterm_func(
+                                f" [{node_type}]{syncw_str}" if debug else f" [{node_type}]",
+                                nl=False,
+                                log_func=log_func,
+                                pretty_print=pretty_print,
+                            )
                         if node.is_nonterm(conf_tmp) and node.encoder is not None:
                             self._print(f" [Encoded by {node.encoder.__class__.__name__}]",
                                         rgb=Color.ND_ENCODED,
@@ -9182,6 +9206,7 @@ class Node(object):
                     log_func=log_func,
                     pretty_print=pretty_print,
                 )
+
 
     def __lt__(self, other):
         return self.depth < other.depth

@@ -191,7 +191,8 @@ class DataModel(object):
         for scope in decoding_scope:
             self._atoms_for_abs[scope] = (prepared_atom, absorb_constraints)
 
-    def decode(self, data, scope=None, atom_name=None, requested_abs_csts=None, colorized=True):
+    def decode(self, data, scope=None, atom_name=None, requested_abs_csts=None, colorized=True,
+               verbose=Verbose.Heavy):
         """
         Args:
             data:
@@ -199,6 +200,7 @@ class DataModel(object):
             scope (str): requested scope for the decoding (linked to self.register_atom_for_decoding)
             requested_abs_csts:
             colorized:
+            verbose:
 
         Returns:
             tuple:
@@ -225,7 +227,8 @@ class DataModel(object):
             accumulate(r'\n \_ remaining: {!r}'.format(data[size:size+1000]))
         else:
             accumulate('\n')
-            atom.show(log_func=accumulate, display_title=False, pretty_print=colorized)
+            atom.show(log_func=accumulate, display_title=False, pretty_print=colorized,
+                      verbose=verbose)
 
         return atom, a.content
 

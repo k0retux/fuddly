@@ -1454,7 +1454,7 @@ class String(VT_Alt):
                 len(dec), self.codec, desc
             )
         else:
-            return "codec={!s}{:s}".format(self.codec, desc)
+            return f"{self.drawn_val.decode(self.codec, "replace")} [codec={self.codec}{desc}]"
 
 
 class INT(VT):
@@ -2313,6 +2313,7 @@ class INT_str(INT):
         letter_case="upper",
         min_size=None,
         reverse=False,
+        values_desc=None,
     ):
         INT.__init__(
             self,
@@ -2323,6 +2324,7 @@ class INT_str(INT):
             determinist=determinist,
             force_mode=force_mode,
             fuzz_mode=fuzz_mode,
+            values_desc=values_desc,
         )
         assert base in [10, 16, 8, 2]
         assert letter_case in ["upper", "lower"]
@@ -2496,7 +2498,13 @@ class INT_str(INT):
         if self.drawn_val is None:
             self.get_value()
 
-        return str(self.drawn_val)
+        if self.values_desc:
+            desc = self.values_desc.get(self.drawn_val)
+            desc = "" if desc is None else " [" + desc + "]"
+        else:
+            desc = ""
+
+        return str(self.drawn_val) + desc
 
     def _read_value_from(self, blob, size):
         g = re.match(self._regex, blob)

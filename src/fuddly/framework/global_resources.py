@@ -273,6 +273,15 @@ class Conf(object):
         return new_conf
 
 
+class Verbose(Enum):
+    Light = 1
+    Normal = 2
+    Heavy = 3
+
+    def __lt__(self, other):
+        if self.__class__ is other.__class__:
+            return self.value < other.value
+        return NotImplemented
 
 ### Exports for Node Absorption ###
 
