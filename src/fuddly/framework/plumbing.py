@@ -39,6 +39,7 @@ import time
 import signal
 
 from functools import wraps, partial
+from tabnanny import verbose
 from typing import Sequence
 
 # Needed for when fuddly is not used from the CLI
@@ -3051,9 +3052,9 @@ class FmkPlumbing(object):
             return 0
 
     @EnforceOrder(accepted_states=["S2"])
-    def show_data(self, data: Data, verbose=True, debug=False):
+    def show_data(self, data: Data, verbose=Verbose.Normal, debug=False):
         self.lg.print_console("-=[ Data Visualization ]=-\n", rgb=Color.INFO, style=FontStyle.BOLD)
-        self.lg.pretty_print_data(data, raw_limit=400, debug=debug)
+        self.lg.pretty_print_data(data, raw_limit=400, verbose=verbose, debug=debug)
         self.lg.print_console("\n\n", nl_before=False)
 
     @EnforceOrder(accepted_states=["S2"])
@@ -6122,25 +6123,78 @@ class FmkShell(cmd.Cmd):
         if data is None:
             return False
 
-        self.fz.show_data(data, verbose=False, debug=False)
+        self.fz.show_data(data, verbose=Verbose.Light, debug=False)
 
         self.__error = False
         return False
+
+    def complete_show_data(self, text, line, begidx, endidx):
+        self._complete_helper_preambule(text, line, begidx, endidx, step_with_subparams=[])
+        if self.comp_step == 1:
+            ret = ['0', '1', '2']
+        elif self.comp_step == 2:
+            ret = list(filter(lambda x: x.startswith(text), ['debug']))
+        else:
+            ret = []
+
+        return ret
 
     def do_show_data(self, line):
         """
         Show the last generated data.
+        |_ syntax: show_data [verbose_level debug|verbose_level]
+
+        Notes:
+            verbose_level:
+              - 0 (Verbose.Light)
+              - 1 (Verbose.Normal)
+              - 2 (Verbose.Heavy)
+
+            debug: bool
         """
+        args = line.split()
+        args_len = len(args)
+
         self.__error = True
 
-        data = self.fz.get_last_data()
-        if data is None:
+        if args_len > 2:
             return False
 
-        self.fz.show_data(data, verbose=True, debug=False)
+        try:
+            if args_len == 0:
+                verbose_level = 1
+                debug = False
+            elif args_len == 1:
+                verbose_level = int(args.pop(0))
+                debug = False
+            elif args_len == 2:
+                verbose_level = int(args.pop(0))
+                debug = 'debug' == args.pop(0)
+            else:
+                raise NotImplementedError
 
-        self.__error = False
-        return False
+            if verbose_level > 2:
+                return False
+
+        except ValueError:
+            return False
+
+        except NotImplementedError:
+            return False
+
+        else:
+            verbose_mode = {0: Verbose.Light,
+                            1: Verbose.Normal,
+                            2: Verbose.Heavy}.get(verbose_level)
+
+            data = self.fz.get_last_data()
+            if data is None:
+                return False
+
+            self.fz.show_data(data, verbose=verbose_mode, debug=debug)
+
+            self.__error = False
+            return False
 
     def do_show_scenario(self, line):
         """
