@@ -3493,9 +3493,14 @@ class FmkPlumbing(object):
     @EnforceOrder(accepted_states=["S2"])
     def exec_dm_tests(self):
         try:
-            self.dm.validation_tests()
+            ok = self.dm.validation_tests()
         except Exception:
             self._handle_user_code_exception(f"Validation tests has crashed on current data model {self.dm.name}")
+        else:
+            if ok:
+                self.lg.log_fmk_info(f"Validation tests from the data model '{self.dm.name}' run successfully")
+            else:
+                self.lg.log_error(f"Validation tests from the data model '{self.dm.name}' failed")
 
 
     __default_ui = UI(freeze=True)

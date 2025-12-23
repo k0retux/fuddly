@@ -58,7 +58,7 @@ class NodeBuilder(object):
         'constraints', 'constraints_highlight',
         # NonTerminal Node description keys
         'weight', 'shape_type', 'section_type', 'duplicate_mode', 'weights',
-        'separator', 'prefix', 'suffix', 'unique', 'always',
+        'separator', 'prefix', 'suffix', 'unique', 'always', 'optional_tail',
         'encoder',
         # Generator/Function Node description keys
         'node_args', 'other_args', 'provide_helpers', 'trigger_last',
@@ -306,6 +306,21 @@ class NodeBuilder(object):
         self._handle_common_attr(n, desc, conf, current_ns=namespace)
         return n
 
+    def _handle_separator_node(self, n, desc, conf, namespace=None):
+        sep_desc = desc.get('separator', None)
+        if sep_desc is not None:
+            self._verify_keys_conformity(sep_desc)
+            sep_node_desc = sep_desc.get('contents', None)
+            assert (sep_node_desc is not None)
+            sep_node = self._create_graph_from_desc(sep_node_desc, n, namespace=namespace)
+            prefix = sep_desc.get('prefix', True)
+            suffix = sep_desc.get('suffix', True)
+            unique = sep_desc.get('unique', False)
+            always = sep_desc.get('always', False)
+            optional_tail = sep_desc.get('optional_tail', False)
+            n.conf(conf).set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique,
+                                 always=always, optional_tail=optional_tail)
+
     def _create_generator_node(self, desc, node=None, namespace=None):
 
         n, conf = self.__pre_handling(desc, node, namespace=namespace)
@@ -382,6 +397,9 @@ class NodeBuilder(object):
 
         n, conf = self.__pre_handling(desc, node, namespace=namespace)
 
+        ns = desc.get('namespace')
+        ns = namespace if ns is None else ns
+
         name =  desc.get('name') if desc.get('name') is not None else node.name
         if isinstance(name, tuple):
             name = name[0]
@@ -397,22 +415,10 @@ class NodeBuilder(object):
             n.set_subnodes_with_csts(nodes, conf=conf)
 
         self._handle_custo(n, desc, conf)
-
-        sep_desc = desc.get('separator', None)
-        if sep_desc is not None:
-            sep_node_desc = sep_desc.get('contents', None)
-            assert (sep_node_desc is not None)
-            sep_node = self._create_graph_from_desc(sep_node_desc, n)
-            prefix = sep_desc.get('prefix', True)
-            suffix = sep_desc.get('suffix', True)
-            unique = sep_desc.get('unique', False)
-            always = sep_desc.get('always', False)
-            n.set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique, always=always)
-
+        self._handle_separator_node(n, desc, conf, namespace=ns)
         self._handle_common_attr(n, desc, conf, current_ns=namespace)
 
         return n
-
 
     def _create_non_terminal_node(self, desc, node=None, namespace=None):
 
@@ -459,18 +465,7 @@ class NodeBuilder(object):
         n.set_subnodes_with_csts(shapes, conf=conf)
 
         self._handle_custo(n, desc, conf)
-
-        sep_desc = desc.get('separator', None)
-        if sep_desc is not None:
-            sep_node_desc = sep_desc.get('contents', None)
-            assert(sep_node_desc is not None)
-            sep_node = self._create_graph_from_desc(sep_node_desc, n, namespace=ns)
-            prefix = sep_desc.get('prefix', True)
-            suffix = sep_desc.get('suffix', True)
-            unique = sep_desc.get('unique', False)
-            always = sep_desc.get('always', False)
-            n.conf(conf).set_separator_node(sep_node, prefix=prefix, suffix=suffix, unique=unique, always=always)
-
+        self._handle_separator_node(n, desc, conf, namespace=ns)
         self._handle_common_attr(n, desc, conf, current_ns=namespace)
 
         constraints = desc.get('constraints', None)
@@ -504,6 +499,7 @@ class NodeBuilder(object):
                     l.insert(0, node)
                     sh.append(l)
                 else:
+                    pp(n)
                     raise ValueError('Unrecognized section type!')
 
         sh = []

@@ -250,6 +250,9 @@ custo_set, custo_clear
     the `payload` subnode will be resolved too early and will produce a byte-string without
     any collapse operation.
 
+  - ``MH.Custo.NTerm.SepDelOptionalTail``: By default, this mode is *enabled*.
+    When the non-terminal node is defining separator nodes with the attribute `optional_tail`,
+    the generation will omit any separators at the tail. Otherwise, separators will remain.
 
   For *generator* node, the customizable behavior modes are:
 
@@ -425,7 +428,8 @@ separator
 		   'prefix': False,
 		   'suffix': False,
 		   'unique': True,
-		   'always': False},
+		   'always': False,
+           'optional_tail': False},
 
   The keys ``prefix``, ``suffix``, ``unique`` and ``always`` are optional. They are
   described below.
@@ -453,6 +457,11 @@ always
   the separator will be always generated even if the
   subnodes it separates are not generated because their evaluated quantity is 0.
 
+optional_tail
+  Used optionally within a *separator descriptor*. Relevant when `always` is True.
+  If set to `True` then when subnodes at the tail are not generated, separators are considered to be optional.
+  Therefore separators could be omitted at the tail when the non-terminal node will be resolved.
+  This is enforced when :attr:`fuddly.framework.node.NonTermCusto.SepDelOptionalTail` is set.
 
 encoder
   If specified, an encoder instance should be provided. The *encoding* will be applied

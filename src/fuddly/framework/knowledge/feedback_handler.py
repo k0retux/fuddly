@@ -161,17 +161,18 @@ class FeedbackHandler(object):
         self._s = None
         if self._new_window and self.term is not None:
             self.term.stop(force_kill=True if before_reload else False)
+            self.term = None
 
         self.stop()
 
     def print(self, msg):
-        if self._new_window:
+        if self._new_window and self.term is not None:
             self.term.print(msg)
         else:
             print(msg)
 
     def print_nl(self, msg):
-        if self._new_window:
+        if self._new_window and self.term is not None:
             self.term.print_nl(msg)
         else:
             print(msg)

@@ -191,6 +191,19 @@ class MyDF_DataModel(DataModel):
               ]}
          ]}
 
+        separator_2_desc = \
+        {'name': 'sep2',
+         'separator': {'contents': {'name': 'sep', 'contents': String(values=[','])},
+                       'prefix': False, 'suffix': False, 'unique': True,
+                       'always': True, 'optional_tail': True},
+         'contents': [
+             {'name': 'c1', 'contents': '11'},
+             {'name': 'c2', 'contents': '22'},
+             {'name': 'c3', 'contents': '33', 'qty': (0,1)},
+             {'name': 'c4', 'contents': '44', 'qty': (0,1)},
+             {'name': 'c5', 'contents': '55', 'qty': (0,1), 'default_qty': 0},
+             {'name': 'c6', 'contents': '66', 'qty': (0,1), 'default_qty': 0},
+         ]}
 
         sync_desc = \
         {'name': 'exist_cond',
@@ -1303,7 +1316,8 @@ class MyDF_DataModel(DataModel):
         }
 
 
-        self.register(test_node_desc, abstest_desc, abstest2_desc, separator_desc,
+        self.register(test_node_desc, abstest_desc, abstest2_desc,
+                      separator_desc, separator_2_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
                       shape_desc, for_network_tg1, for_network_tg2, for_net_default_tg, basic_intg,
                       enc_desc, example_desc,
@@ -1315,6 +1329,46 @@ class MyDF_DataModel(DataModel):
                       tlv_rec0_desc, tlv_rec0b_desc, tlv_rec1_desc, tlv_rec2_desc, tlv_rec3_desc,
                       tlv_rec4_desc, recbig_desc,
                       optional_desc)
+
+
+    def validation_tests(self):
+
+        print('\n*** Positive absorption tests ***\n')
+        ok = True
+        data = [
+            "11,22,33,44,55,66",
+            "11,22,33,,,66",
+            "11,22,,,55,66",
+            "11,22,33,44,,",
+            "11,22,33,,,",
+            "11,22,33,,",
+            "11,22,33",
+        ]
+
+        for idx, d in enumerate(data):
+            print(f'# test case #{idx}')
+            atom, desc = self.decode(d, atom_name='sep2', requested_abs_csts=AbsFullCsts())
+            print(desc)
+            if atom is None:
+                ok = False
+
+        print('\n*** Negative absorption tests ***\n')
+        # should not work
+        data = [
+            "11,22,33,44,55,66,",
+            "11,22,33,44,,,",
+            ",11,22,33,,,",
+        ]
+
+        for idx, d in enumerate(data):
+            print(f'# test case #{idx}')
+            atom, desc = self.decode(d, atom_name='sep2', requested_abs_csts=AbsFullCsts())
+            print(desc)
+            if atom is not None:
+                ok = False
+
+        return ok
+
 
 
 data_model = MyDF_DataModel()

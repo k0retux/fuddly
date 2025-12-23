@@ -591,6 +591,8 @@ class NonTermCusto(NodeCustomization):
     FullCombinatory = 20
     StickToDefault = 21
 
+    SepDelOptionalTail = 30
+
     _custo_items = {
         MutableClone: True,
         CycleClone: False,
@@ -600,6 +602,7 @@ class NonTermCusto(NodeCustomization):
         DelayCollapsing: False,
         FullCombinatory: False,
         StickToDefault: False,
+        SepDelOptionalTail: True
     }
 
     @property
@@ -637,6 +640,10 @@ class NonTermCusto(NodeCustomization):
     @property
     def stick_to_default_mode(self):
         return self._custo_items[self.StickToDefault]
+
+    @property
+    def separator_delete_optional_tail(self):
+        return self._custo_items[self.SepDelOptionalTail]
 
 class RecursiveCusto(NodeCustomization):
     """
@@ -2877,7 +2884,7 @@ class NodeSeparator(object):
       make_private (function): used for full copy
     """
 
-    def __init__(self, node, prefix=True, suffix=True, unique=False, always=False):
+    def __init__(self, node, prefix=True, suffix=True, unique=False, always=False, optional_tail=False):
         """
         Args:
           node (Node): node to be used for separation.
@@ -2885,9 +2892,16 @@ class NodeSeparator(object):
           suffix (bool): if `True`, a serapator will also be placed at the end.
           unique (bool): if `False`, the same node will be used for each separation,
             otherwise a new node will be generated.
-          always (bool): if `True`, the separator will be always generated even if the
+          always (bool): if `True`, the separator will always be generated even if the
             subnodes it separates are not generated because their evaluated quantity is 0.
+          optional_tail (bool): relevant when @always is True. If `True` but subnodes at the tail are not generated,
+            then separators are considered to be optional.
+            (if NonTermCusto.SepDelOptionalTail is set, separators will be omitted at the tail)
         """
+
+        assert (suffix != optional_tail) or (suffix == optional_tail == False)
+        assert (optional_tail and always) or not optional_tail
+
         self.node = node
         self.node.set_attr(NodeInternals.Separator)
         self.node.set_attr(NodeInternals.AutoSeparator)
@@ -2895,6 +2909,7 @@ class NodeSeparator(object):
         self.suffix = suffix
         self.unique = unique
         self.always = always
+        self.optional_tail = optional_tail
 
     def make_private(self, node_dico, ignore_frozen_state):
         if self.node in node_dico:
@@ -3962,6 +3977,9 @@ class NodeInternals_NonTerm(NodeInternals):
             if (self.separator is not None
                     and self.separator.always
                     and not ignore_separator):
+                # TODO: in this case we do not consider max_qty, we should add max_qty separators.
+                #  Also, if @always and depending on @nb, we should always add max_qty-nb separators
+                #  at the end of this function.
                 new_sep = self._clone_separator(self.separator.node,
                                                 unique=self.separator.unique,
                                                 ignore_frozen_state=ignore_sep_fstate)
@@ -4428,8 +4446,13 @@ class NodeInternals_NonTerm(NodeInternals):
             if (not self.separator.suffix and self.frozen_node_list
                     and self.frozen_node_list[-1].is_attr_set(NodeInternals.AutoSeparator)):
                 self.frozen_node_list.pop(-1)
+                self._clone_separator_decrease_refcount()
 
-            self._clone_separator_decrease_refcount()
+            if (self.custo.separator_delete_optional_tail
+                    and self.separator.always and self.separator.optional_tail):
+                while self.frozen_node_list and self.frozen_node_list[-1].is_attr_set(NodeInternals.AutoSeparator):
+                    self.frozen_node_list.pop(-1)
+                    self._clone_separator_decrease_refcount()
 
         self._reevaluation_pending = False
         return (self.frozen_node_list, True)
@@ -4578,7 +4601,6 @@ class NodeInternals_NonTerm(NodeInternals):
             if (disabled_node and self.separator is not None and isinstance(val, NodeInternals)
                     and val.is_attr_set(NodeInternals.AutoSeparator)
                     and not self.separator.always): # and not self.separator.suffix
-
                 # TODO: The case "suffix False and always True" should be already handled at
                 #  self.get_subnodes_with_csts()
                 #  --> TBC
@@ -4596,11 +4618,22 @@ class NodeInternals_NonTerm(NodeInternals):
             l.append(val)
 
         if self.separator is not None and l:
+            # TODO: This case is not always handled before (at the end of the method
+            #  self.get_subnodes_with_csts())
+            #  (e.g., when tuto:sep2 node is absorbed, we reach this case)
             if (not self.separator.always and not self.separator.suffix
                     and isinstance(l[-1], NodeInternals) and l[-1].is_attr_set(NodeInternals.AutoSeparator)):
                 l.pop(-1)
                 self.frozen_node_list.pop(-1)
                 self._clone_separator_decrease_refcount()
+
+            if (self.custo.separator_delete_optional_tail
+                    and self.separator.always and self.separator.optional_tail):
+                while (l and isinstance(l[-1], NodeInternals) and
+                       l[-1].is_attr_set(NodeInternals.AutoSeparator)):
+                    l.pop(-1)
+                    self.frozen_node_list.pop(-1)
+                    self._clone_separator_decrease_refcount()
 
         if node_list:
             node_env = self.env #node_list[0].env
@@ -4743,7 +4776,8 @@ class NodeInternals_NonTerm(NodeInternals):
             # and the idx remains only valid in descending order.
             node_list.remove(node)
 
-    def set_separator_node(self, sep_node, prefix=True, suffix=True, unique=False, always=False):
+    def set_separator_node(self, sep_node, prefix=True, suffix=True, unique=False,
+                           always=False, optional_tail=False):
         check_err = set()
         for n in self.subnodes_set:
             check_err.add(n.name)
@@ -4751,7 +4785,8 @@ class NodeInternals_NonTerm(NodeInternals):
             raise ValueError("\n*** The separator node name shall not be used by a subnode of "
                              "this non-terminal node")
         self.separator = NodeSeparator(
-            sep_node, prefix=prefix, suffix=suffix, unique=unique, always=always
+            sep_node, prefix=prefix, suffix=suffix, unique=unique,
+            always=always, optional_tail=optional_tail
         )
 
     def get_separator_node(self):
@@ -5257,6 +5292,7 @@ class NodeInternals_NonTerm(NodeInternals):
             if abort:
                 blob = orig_blob
                 consumed_size = orig_consumed_size
+                self._clone_separator_decrease_refcount()
 
             return abort, blob, consumed_size, new_sep
 
@@ -5504,6 +5540,8 @@ class NodeInternals_NonTerm(NodeInternals):
             )
 
         postponed_to_send_back = None
+
+        self.custo.clear_items(NonTermCusto.SepDelOptionalTail)
 
         while not abs_exhausted and status == AbsorbStatus.Reject:
             abort = False
@@ -6068,12 +6106,43 @@ class NodeInternals_NonTerm(NodeInternals):
                 and self.frozen_node_list
                 and self.frozen_node_list[-1].is_attr_set(NodeInternals.AutoSeparator)
             ):
-                if not self.separator.suffix and not self.separator.always:
-                    # TODO: check self.separator.always is maybe not always enough
-                    sep = self.frozen_node_list.pop(-1)
-                    data = sep._tobytes()
-                    consumed_size = consumed_size - len(data)
-                    blob = blob + data
+                if not self.separator.suffix:
+                    if not self.separator.always:
+                        sep = self.frozen_node_list.pop(-1)
+                        data = sep._tobytes()
+                        consumed_size = consumed_size - len(data)
+                        blob = blob + data
+                    else:
+                        if self.separator.node.tmp_ref_count > len(self.subnodes_attrs):
+                            abort = True
+                        else:
+                            pass
+                elif self.separator.always and self.separator.optional_tail:
+                    max_seps = len(self.subnodes_attrs)
+                    # TODO: we should consider max_qty for each self.subnodes_attrs entries,
+                    #  even if not usual in a DM
+                    if self.separator.prefix and self.separator.suffix:
+                        max_seps += 1
+                    elif not self.separator.prefix and not self.separator.suffix:
+                        max_seps -= 1
+                    else:
+                        pass
+
+                    while self.separator.node.tmp_ref_count-1 <= max_seps:
+                        optional_sep_abort, blob, consumed_size, new_sep = _try_separator_absorption_with(
+                            blob, consumed_size
+                        )
+                        if optional_sep_abort:
+                            break
+                        else:
+                            self.frozen_node_list.append(new_sep)
+
+            elif (
+                self.separator is not None and self.separator.suffix
+                and self.frozen_node_list
+                and not self.frozen_node_list[-1].is_attr_set(NodeInternals.AutoSeparator)
+            ):
+                abort = True
 
             if not abort:
                 status = AbsorbStatus.Absorbed
