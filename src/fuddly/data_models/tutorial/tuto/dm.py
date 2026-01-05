@@ -205,6 +205,17 @@ class MyDF_DataModel(DataModel):
              {'name': 'c6', 'contents': '66', 'qty': (0,1), 'default_qty': 0},
          ]}
 
+        separator_3_desc = \
+        {'name': 'sep3',
+         'separator': {'contents': {'name': 'sep', 'contents': String(values=[','])},
+                       'prefix': False, 'suffix': False, 'unique': True,
+                       'always': True, 'optional_tail': False},
+         'contents': [
+             {'name': 'c1', 'contents': '11'},
+             {'name': 'c2', 'contents': '22'}
+         ]}
+
+
         sync_desc = \
         {'name': 'exist_cond',
          'shape_type': MH.Ordered,
@@ -1317,7 +1328,7 @@ class MyDF_DataModel(DataModel):
 
 
         self.register(test_node_desc, abstest_desc, abstest2_desc,
-                      separator_desc, separator_2_desc,
+                      separator_desc, separator_2_desc, separator_3_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
                       shape_desc, for_network_tg1, for_network_tg2, for_net_default_tg, basic_intg,
                       enc_desc, example_desc,

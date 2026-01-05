@@ -433,6 +433,7 @@ class ModelWalker(object):
                 return True
 
         orig_node_val = node.to_bytes()
+        consumer.current_parent_node = parent_node
 
         not_recovered = False
         consume_called_again = False
@@ -564,6 +565,7 @@ class NodeConsumerStub(object):
         self._owned_confs = None
         self._path_regexp = None
         self._conf = None
+        self._parent_node = None
 
         assert(max_runs_per_node > 0 or max_runs_per_node==-1)
         assert(min_runs_per_node > 0 or min_runs_per_node==-1)
@@ -722,6 +724,14 @@ class NodeConsumerStub(object):
     @property
     def csp_compliance_matters(self):
         return self._csp_compliance_matters
+
+    @property
+    def current_parent_node(self):
+        return self._parent_node
+
+    @current_parent_node.setter
+    def current_parent_node(self, parent_node):
+        self._parent_node = parent_node
 
 
 class BasicVisitor(NodeConsumerStub):
@@ -951,6 +961,9 @@ class TypedNodeDisruption(NodeConsumerStub):
         self.determinist = determinist
         self._ignore_separator  = ignore_separator
         self.sep_list = None
+        self.specific_separator_test_cases = False
+        self.current_separator = None
+        self.separator_desc = None
 
         self.need_reset_when_structure_change = True
 
@@ -974,6 +987,18 @@ class TypedNodeDisruption(NodeConsumerStub):
         if node is not self.current_node:
             self.current_node = node
             self.current_fuzz_vt_list = None
+            self.specific_separator_test_cases = False
+            self.current_separator = None
+            self.separator_desc = None
+            if self.current_parent_node is not None and self.current_parent_node.is_nonterm():
+                subnodes_nb = self.current_parent_node.get_subnode_qty()
+                node_idx = self.current_parent_node.get_subnode_idx(node)
+                if node_idx+1 == subnodes_nb:
+                    sep = self.current_parent_node.separator
+                    if sep is not None:
+                        self.specific_separator_test_cases = True
+                        self.current_separator = sep.node.to_bytes()
+                        self.separator_desc = sep
 
         if not self.current_fuzz_vt_list:
             self.orig_internal = node.cc
@@ -1032,7 +1057,7 @@ class TypedNodeDisruption(NodeConsumerStub):
         if fuzzed_vt:
             self.current_fuzz_vt_list += fuzzed_vt
 
-        if self.sep_list and not self._only_corner_cases and not self._only_corner_cases_and_extra:
+        if self.sep_list:
             # only invalid cases are added here
             self._add_separator_cases(vt_node)
 
@@ -1042,7 +1067,8 @@ class TypedNodeDisruption(NodeConsumerStub):
         """
 
         current_val = vt_node.get_current_value()
-        if vt_node.is_attr_set(dm.NodeInternals.Separator):
+        if (vt_node.is_attr_set(dm.NodeInternals.Separator)
+                and not self._only_corner_cases and not self._only_corner_cases_and_extra):
             sep_l = copy.copy(self.sep_list)
             try:
                 sep_l.remove(current_val)
@@ -1052,13 +1078,49 @@ class TypedNodeDisruption(NodeConsumerStub):
             if sep_l:
                 self.current_fuzz_vt_list.insert(0, vtype.String(values=sep_l))
         else:
-            sz = len(current_val)
-            if sz > 1:
-                fuzzy_sep_val_list = []
-                for sep in self.sep_list:
-                    new_val = current_val[:-1] + sep + current_val[-1:]
-                    fuzzy_sep_val_list.append(new_val)
-                self.current_fuzz_vt_list.insert(0, vtype.String(values=fuzzy_sep_val_list))
+            if not self._only_corner_cases and not self._only_corner_cases_and_extra:
+                sz = len(current_val)
+                if sz > 1:
+                    fuzzy_sep_val_list = []
+                    for sep in self.sep_list:
+                        new_val = current_val[:-1] + sep + current_val[-1:]
+                        fuzzy_sep_val_list.append(new_val)
+                    self.current_fuzz_vt_list.insert(0, vtype.String(values=fuzzy_sep_val_list))
+
+            if self.specific_separator_test_cases:
+                specific_sep_val_list = []
+                if self.separator_desc.optional_tail:
+                    max_seps = len(self.current_parent_node.subnodes_attrs)
+                    # TODO: we should consider max_qty for each self.subnodes_attrs entries,
+                    #  even if not usual in a DM
+                    if self.separator_desc.prefix and self.separator_desc.suffix:
+                        max_seps += 1
+                    elif not self.separator_desc.prefix and not self.separator_desc.suffix:
+                        max_seps -= 1
+                    else:
+                        pass
+                    nb_sep = len(list(filter(lambda x: x.is_attr_set(dm.NodeInternals.AutoSeparator),
+                                             self.current_parent_node.frozen_node_list)))
+
+                    if not self._only_corner_cases and not self._only_corner_cases_and_extra:
+                        if nb_sep <= max_seps:
+                            new_val = current_val + self.current_separator * (max_seps - nb_sep + 1)
+                            specific_sep_val_list.append(new_val)
+                        else:
+                            # TODO: compute correctly @max_sep
+                            pass
+                    else:
+                        if nb_sep < max_seps:
+                            new_val = current_val + self.current_separator * (max_seps - nb_sep)
+                            specific_sep_val_list.append(new_val)
+
+                elif (not self.separator_desc.suffix
+                      and not self._only_corner_cases and not self._only_corner_cases_and_extra):
+                    new_val = current_val + self.current_separator
+                    specific_sep_val_list.append(new_val)
+
+                if specific_sep_val_list:
+                    self.current_fuzz_vt_list.insert(0, vtype.String(values=specific_sep_val_list))
 
     def save_node(self, node):
         pass
