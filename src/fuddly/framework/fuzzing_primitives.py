@@ -1109,7 +1109,8 @@ class TypedNodeDisruption(NodeConsumerStub):
                         else:
                             # TODO: compute correctly @max_sep
                             pass
-                    else:
+                        
+                    if not self._only_invalid_cases:
                         if nb_sep < max_seps:
                             new_val = current_val + self.current_separator * (max_seps - nb_sep)
                             specific_sep_val_list.append(new_val)
