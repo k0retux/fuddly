@@ -42,7 +42,7 @@ import configparser
 
 from fuddly.framework.global_resources import config_folder
 
-reserved = {'config_name', 'parser', 'help', 'write', 'global'}
+reserved = {'config_name', 'parser', 'help', 'write', 'global', '_config_changed'}
 verbose = False
 
 
@@ -449,6 +449,7 @@ def config_setattr(that, name, value):
 
         strvalue = str(value)
         that.parser.set('global', name, strvalue)
+        object.__setattr__(that, '_config_changed', True)
         return object.__setattr__(that, name, value)
 
     if attr is None:
@@ -545,9 +546,11 @@ class config_dot_proxy(object):
 
 
 class config(object):
+
     def __init__(self, parent, path=['.'], ext=['.ini', '.conf', '.cfg']):
 
         object.__setattr__(self, 'parser', configparser.ConfigParser())
+        loaded_from_default = False
 
         if isinstance(parent, str):
             name = parent
@@ -586,6 +589,7 @@ class config(object):
                 self.parser.read_string(default.configs[name],
                                         'default_' + name)
                 loaded = True
+                loaded_from_default = True
 
             if not self.parser.has_section('global'):
                 raise AttributeError(
@@ -656,6 +660,17 @@ class config(object):
             object.__getattribute__(self, 'config_name')
         except BaseException:
             self.config_name = 'global'
+
+        if loaded_from_default:
+            object.__setattr__(self, '_config_changed', True)
+        else:
+            object.__setattr__(self, '_config_changed', False)
+
+    def save(self, path):
+        if self._config_changed:
+            filename = os.path.join(path, self.config_name + ".ini")
+            with open(filename, "w") as cfile:
+                self.write(cfile)
 
     def __getattribute__(self, name):
         config_get = config_getattribute

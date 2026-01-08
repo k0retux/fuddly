@@ -4337,9 +4337,7 @@ class FmkShell(cmd.Cmd):
 
         def save_config():
             for conf in self.available_configs.values():
-                filename = os.path.join(config_folder, conf.config_name + ".ini")
-                with open(filename, "w") as cfile:
-                    conf.write(cfile)
+                conf.save(config_folder)
 
         atexit.register(save_config)
 
@@ -4790,6 +4788,7 @@ class FmkShell(cmd.Cmd):
             else:
                 try:
                     target = self.available_configs[args[0]]
+                    self._tmp_do_config_initial_target = target
                     self.__error = False
                     return self.do_config(" ".join(args[1:]), target)
                 except KeyError as e:
@@ -4829,6 +4828,9 @@ class FmkShell(cmd.Cmd):
             except AttributeError as e:
                 self.__error_msg = "config: " + str(e)
                 return False
+            else:
+                object.__setattr__(self._tmp_do_config_initial_target,
+                                   '_config_changed', True)
 
             self.print(target.help(args[0], level, indent, middle))
             self.__error = False
@@ -4847,6 +4849,9 @@ class FmkShell(cmd.Cmd):
             except AttributeError as e:
                 self.__error_msg = "config: " + str(e)
                 return False
+            else:
+                object.__setattr__(self._tmp_do_config_initial_target,
+                                   '_config_changed', True)
 
             self.print(target.help(key, level, indent, middle))
             self.__error = False
