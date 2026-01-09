@@ -23,6 +23,7 @@
 
 import datetime
 import threading
+import copy
 
 from fuddly.framework.data import Data
 from fuddly.framework.knowledge.feedback_collector import FeedbackSource
@@ -59,7 +60,6 @@ class Target(object):
 
     STATUS_THRESHOLD_FOR_RECOVERY = 0  # When a feedback status gathered by FmkPlumbing is
                                        # strictly lesser than this value, .recover_target() will be called
-
     _started = None
 
     _logger = None
@@ -127,6 +127,43 @@ class Target(object):
 
     def is_started(self):
         return self._started
+
+    # Can be used by any subclasses as a customization variable that may
+    # serve any purposes. This variable is exported to the framework so that it can be
+    # changed easily.
+    custo = None
+    # This list can be updated by any subclasses in order to declare
+    # the attributes that shall be configurable by the config_attribute interface.
+    _configurable_attributes = ['custo']
+
+    def get_config_attribute_list(self):
+        return copy.copy(self._configurable_attributes)
+
+    def set_config_attribute(self, attribute, value):
+        """
+        Allow the user to change attributes of the target
+        """
+        if attribute not in self._configurable_attributes:
+            return False
+
+        try:
+            object.__setattr__(self, attribute, value)
+        except AttributeError:
+            return False
+        else:
+            return True
+
+    def get_config_attribute(self, attribute):
+        if attribute not in self._configurable_attributes:
+            raise AttributeError
+
+        try:
+            attr_val = getattr(self, attribute)
+        except AttributeError:
+            raise
+        else:
+            return attr_val
+
 
     def record_info(self, info):
         """

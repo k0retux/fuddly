@@ -5029,6 +5029,92 @@ class FmkShell(cmd.Cmd):
 
         return ret
 
+    def do_config_target(self, line):
+        """
+        Configure some attribute of the specified target (that should be enabled)
+        |_ syntax: config_target <target_id> [<attribute> [value]]
+
+        Notes:
+          - if @attribute is not provided the command will return the attributes
+            that can be configured from the target.
+          - if @value is not provided the command will provide the current value
+            of the specified @attribute.
+        """
+
+        self.__error = True
+
+        args = line.split()
+        args_len = len(args)
+
+        if args_len < 1:
+            self.__error_msg = "Syntax Error!"
+            return False
+
+        try:
+            tg_id = int(args[0].strip())
+        except ValueError:
+            self.__error_msg = "the parameter <target_id> shall be an integer!"
+            return False
+
+        if tg_id not in self.fz.targets:
+            self.__error_msg = f"the specified <target_id> ({tg_id}) is not currently enabled!"
+            return False
+
+        tg_desc = self.fz.targets[tg_id]
+
+        try:
+            attr = args[1].strip()
+        except IndexError:
+            l = tg_desc.get_config_attribute_list()
+            self.print(colorize(f"\n [ Attribute List - Target ID#{tg_id} ]\n", rgb=Color.INFO))
+            for a in l:
+                self.print(colorize(f"- {a}", rgb=Color.SUBINFO))
+
+            return False
+
+        try:
+            new_value = args[2]
+        except IndexError:
+            new_value = None
+
+        if new_value is None:
+            try:
+                current_value = tg_desc.get_config_attribute(attr)
+            except AttributeError:
+                self.__error_msg = (f"the specified attribute ({attr}) does not exist (or is not configurable) for the "
+                                    f"target ID#{tg_id}!")
+                return False
+            else:
+                self.print(colorize(f"\n --> {attr} = {current_value}", rgb=Color.SUBINFO))
+        else:
+            new_value = new_value.strip()
+            if new_value == 'True':
+                new_value = True
+            elif new_value == 'False':
+                new_value = False
+            elif new_value == 'None':
+                new_value = None
+            else:
+                try:
+                    new_value = int(new_value)
+                except ValueError:
+                    try:
+                        new_value = float(new_value)
+                    except ValueError:
+                        pass
+
+            if tg_desc.set_config_attribute(attr, new_value):
+                self.print(colorize(
+                    f"\n --> the attribute '{attr}' of the target ID#{tg_id} as been set to '{new_value}'",
+                    rgb=Color.SUBINFO))
+            else:
+                self.__error_msg = (f"the specified attribute ({attr}) does not exist for the "
+                                    f"target ID#{tg_id}!")
+                return False
+
+        self.__error = False
+        return False
+
 
     def do_load_targets(self, line):
         """
