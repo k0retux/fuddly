@@ -5068,8 +5068,9 @@ class FmkShell(cmd.Cmd):
             l = tg_desc.get_config_attribute_list()
             self.print(colorize(f"\n [ Attribute List - Target ID#{tg_id} ]\n", rgb=Color.INFO))
             for a in l:
-                self.print(colorize(f"- {a}", rgb=Color.SUBINFO))
-
+                val = tg_desc.get_config_attribute(a)
+                self.print(colorize(f"  - {a} = {val}", rgb=Color.SUBINFO))
+            self.__error = False
             return False
 
         try:

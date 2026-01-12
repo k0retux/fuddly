@@ -131,7 +131,24 @@ class Target(object):
     # Can be used by any subclasses as a customization variable that may
     # serve any purposes. This variable is exported to the framework so that it can be
     # changed easily.
-    custo = None
+    _custo = None
+
+    @property
+    def custo(self):
+        """
+        To be overloaded if needed
+        """
+        return self._custo
+
+    @custo.setter
+    def custo(self, value):
+        """
+        To be overloaded if needed.
+        Allows to trigger some needed code execution further to the modification of the
+        custo property.
+        """
+        self._custo = value
+
     # This list can be updated by any subclasses in order to declare
     # the attributes that shall be configurable by the config_attribute interface.
     _configurable_attributes = ['custo']
