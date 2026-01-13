@@ -8586,8 +8586,7 @@ class Node(object):
             val = eval("{!a}".format(val))
         except:
             val = repr(val)
-        finally:
-            return val
+        return val
 
     def _tobytes(self, conf=None, recursive=True):
         def tobytes_helper(node_internals):
