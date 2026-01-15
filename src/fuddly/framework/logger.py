@@ -596,7 +596,7 @@ class Logger(object):
                 )
 
         if isinstance(content, list):
-            content = map(lambda x: self._encode_target_feedback(x), content)
+            content = list(map(lambda x: self._encode_target_feedback(x), content))
         else:
             content = self._encode_target_feedback(content)
 
