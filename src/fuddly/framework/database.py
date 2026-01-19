@@ -20,7 +20,7 @@
 #  along with fuddly. If not, see <http://www.gnu.org/licenses/>
 #
 ################################################################################
-
+import sqlite3
 import sys
 import os
 import re
@@ -278,6 +278,14 @@ class Database(object):
                     else:
                         cursor.execute(sql_stmt, sql_params)
                     connection.commit()
+                except sqlite3.IntegrityError as e:
+                    connection.rollback()
+                    if (e.args[0] == 'FOREIGN KEY constraint failed'
+                        and sql_error == self.ASYNC_error_msg):
+                        pass
+                    else:
+                        print(f"\n*** ERROR[SQL:{e.args[0]}] "+sql_error)
+                    last_stmt_error = True
                 except sqlite3.Error as e:
                     connection.rollback()
                     print("\n*** ERROR[SQL:{:s}] ".format(e.args[0])+sql_error)
@@ -471,6 +479,8 @@ class Database(object):
         elif self._data_id is not None:
             return self._data_id + 1
 
+    ASYNC_error_msg = 'while inserting a value into table ASYNC_DATA!'
+
     def insert_async_data(self, dtype, dm_name, raw_data, sz, sent_date,
                           target_ref, prj_name, current_data_id=None):
 
@@ -494,7 +504,7 @@ class Database(object):
             data_id = self._data_id if current_data_id is None else current_data_id
 
         params = (data_id, dtype, dm_name, blob, sz, sent_date, str(target_ref), prj_name)
-        err_msg = 'while inserting a value into table ASYNC_DATA!'
+        err_msg = self.ASYNC_error_msg
 
         self.submit_sql_stmt(stmt, params=params, outcome_type=None, error_msg=err_msg)
 
