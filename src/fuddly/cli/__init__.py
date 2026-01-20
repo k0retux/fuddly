@@ -22,11 +22,19 @@
 #
 ################################################################################
 
-import sys
+import argcomplete
 import fuddly.cli.argparse_wrapper as argparse
 import importlib
+import sys
+from typing import List
 
-import argcomplete
+# TODO script_argument_completer will be used once a sub-script argument completion logic is developped
+from fuddly.cli.run import script_argument_completer
+# TODO tool_argument_completer will be used once a sub-script argument completion logic is developped
+from fuddly.cli.tool import tool_argument_completer
+from fuddly.cli.utils import get_projects, get_tools, get_scripts, get_all_objects
+from fuddly.cli.error import CliException
+
 # Import magic
 # import fuddly.{obj_type} will find targets, data_models, projects or info
 # automagically wethere they are define in an entry point, as part of fuddly's
@@ -34,14 +42,6 @@ import argcomplete
 from fuddly.libs.importer import fuddly_importer_hook
 fuddly_importer_hook.setup()
 
-# TODO script_argument_completer will be used once a sub-script argument completion logic is developped
-from .run import get_scripts, script_argument_completer
-# TODO tool_argument_completer will be used once a sub-script argument completion logic is developped
-from .tool import get_tools, tool_argument_completer
-from .show import get_projects
-
-from typing import List
-from fuddly.cli.error import CliException
 
 def main(argv: List[str] = None):
     # This is done so you can call it from python shell if you want to
