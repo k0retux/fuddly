@@ -25,11 +25,11 @@ def get_module_type(name: str) -> str:
 # the function is called multiple times
 
 # Return a list of all projects, dms, and targets fuddly knows about
-def get_all_objects() -> list():
-    if get_all_objects.modules is not None:
-        return get_all_objects.modules
+def get_all_object_names() -> list():
+    if get_all_object_names.modules is not None:
+        return get_all_object_names.modules
     else:
-        get_all_objects.modules = []
+        get_all_object_names.modules = []
 
     # Projects
     project_modules = get_each_project_module()
@@ -46,12 +46,12 @@ def get_all_objects() -> list():
         else:
             # Ignoring old single-files projects
             continue
-        get_all_objects.modules.append(m.name)
+        get_all_object_names.modules.append(m.name)
 
-    return get_all_objects.modules
+    return get_all_object_names.modules
 
 
-get_all_objects.modules = None
+get_all_object_names.modules = None
 
 
 # Return a list of scripts from all the projects fuddly knows about
