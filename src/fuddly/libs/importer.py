@@ -2,9 +2,11 @@ import importlib
 from importlib.metadata import entry_points, EntryPoint
 from importlib.abc import MetaPathFinder
 from importlib.util import spec_from_file_location, module_from_spec
-from importlib.machinery import ModuleSpec, PathFinder
+from importlib.machinery import ModuleSpec
 from importlib.util import find_spec
 
+# This import is important for some of the magic this module does
+# At least I think it is
 import fuddly
 from fuddly.framework.global_resources import (
     ep_group_names,
@@ -14,7 +16,6 @@ from fuddly.framework.global_resources import (
 from fuddly.libs.external_modules import colorize, Color
 
 import os.path
-import code
 import sys
 
 

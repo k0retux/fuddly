@@ -2,40 +2,13 @@ import fuddly.cli.argparse_wrapper as argparse
 from fuddly.cli.error import CliException
 from importlib.util import find_spec
 from importlib.metadata import entry_points
-import fuddly.framework.global_resources as gr
 import sys
 import os.path
 import os
 import argcomplete
 
-from fuddly.libs.fmk_services import get_each_project_module
-
-def get_scripts() -> []:
-    # The function is called for when the CLI is called and if we use the list option
-    # having paths be an attribute to the functions means we will not run it twice
-    if get_scripts.paths is not None:
-        return get_scripts.paths
-    else:
-        get_scripts.paths = []
-
-    project_modules = get_each_project_module()
-
-    for m in project_modules:
-        p = m.origin
-        if os.path.basename(p) == "__init__.py":
-            p = os.path.dirname(p)
-        else:
-            # Ignoring old single-files projects
-            continue
-        if os.path.isdir(os.path.join(p, "scripts")):
-            for f in next(os.walk(os.path.join(p, "scripts")))[2]:
-                if f.endswith(".py") and f != "__init__.py":
-                    get_scripts.paths.append(m.name + ".scripts." + f.removesuffix(".py"))
-
-    return get_scripts.paths
-
-
-get_scripts.paths = None
+import fuddly.framework.global_resources as gr
+from fuddly.cli.utils import get_scripts
 
 
 def script_from_pkg_name(name) -> str:
