@@ -10,7 +10,25 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-dynamic = ["dependencies", "version"]
+dynamic = ["version"]
+
+dependencies = [
+"crcmod>=1.7",
+"rpyc<7.0.0,>=6.0.0",
+"graphviz",
+"matplotlib",
+"paramiko<4.0.0,>=3.4.0",
+"pyserial",
+"z3-solver>=4.8",
+"pyxdg",
+"xtermcolor",
+"sphinx",
+"sphinxcontrib-napoleon",
+"sphinx-rtd-theme",
+"argcomplete",
+"pycups",
+"python-constraint2"
+]
 
 [build-system]
 requires = ["setuptools>=64", "setuptools-scm>=8"]
@@ -21,9 +39,6 @@ version_file = "src/fuddly/framework/_version.py"
 
 [options]
 include_package_data = true
-
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
 
 [project.scripts]
 fuddly = "fuddly.cli:main"

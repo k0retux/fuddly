@@ -1,6 +1,6 @@
-fuddly (0.30.dev226+g1791128.d20250331~1.gbp179112) UNRELEASED; urgency=medium
+fuddly (0.30.dev259+gac4c69977.d20260115~1.gbpac4c69) UNRELEASED; urgency=medium
 
-  ** SNAPSHOT build @1791128de851ab0c2033b35fe10b4e7f5562616a **
+  ** SNAPSHOT build @ac4c699778e55f439dd7c0a40a668199b73b7b51 **
 
   [ Eric Lacombe ]
 
@@ -1053,5 +1053,41 @@ fuddly (0.30.dev226+g1791128.d20250331~1.gbp179112) UNRELEASED; urgency=medium
 
   [ Eric Lacombe ]
   * [1791128] Fix tTYPE when only_corner_cases=True
+  * [60e41c6] [Packaging] Add debian specific files to build a fuddly debian package
+  * [a72d7a3] Add new parameter @ignore_csp to dynamic Generator
+  * [87c0229] [Scenario] periodic and tasks can now be set and cleared within a callback
+  * [12e0c3d] Fix logger_switch_format shell command
+  * [e8c1794] Fix loop case in ModelWalker infra with consider_sibbling_change=True
+  * [204ab2a] Add a new non-terminal node method: remove_subnode()
+  * [48aaa83] Improve behavior of tWALK(nt_only=True ...)
+  * [297f4a1] Add @only_corner_cases_and_extra to tTYPE
 
- -- Eric Lacombe <eric.lacombe@security-labs.org>  Mon, 31 Mar 2025 15:10:32 +0200
+  [ Nicolai Dagestad ]
+  * [dfb4e0d] Find the module path directly in _import_module
+  * [7e37b40] Move dm_path the same way as prj_path
+
+  [ Eric Lacombe ]
+  * [67845a5] Add new parameter @callback_func to FmkPlumbing.process_data_and_send()
+  * [a692ca3] Change @callback_func of FmkPlumbing.process_data_and_send() into @validator_func
+  * [7c16743] FeedbackHandler.notify_data_sending() can now return info that will be stored within fmkDB
+  * [9d11f94] Change how returned data from FeedbackHandler.notify_data_sending() are handled/stored
+  * [91fdf07] [Scenario subsystem] Fix incorrect handling of NoDataStep(feedback_timeout=X)
+  * [687ec57] Fix commit 297f4a1b7b943b59812e35fd9bc24db9c422f77e
+  * [9c56993] tSTRUCT - Add support for nodes having a default_qty==0
+  * [f271f1f] Fix tSTRUCT when a node as a qty == 0
+  * [a7d8299] Change behavior of customization MutableClone for NT nodes
+  * [7a00c14] Add the new Node attribute "Optional" and make tTYPE leverages it
+  * [92536ff] Update & fix the way feedback handlers are triggered
+  * [196536f] Add new helper function convert_nodeinternals_list_to_bstring()
+  * [50f6a49] Add new method DataModel.process_config_items() for DM customization
+  * [546a0a8] Change the behavior of the parameter @verbose in Node.show() and add it to DataModel.decode()
+  * [612a6a5] Change the behavior of the parameter @verbose in Node.show() and add it to DataModel.decode()
+  * [70348ca] Add new Node separator attribute @optional_tail + various fixes linked to separator absorption
+  * [0276010] tTYPE - add new test cases related to separators
+  * [38c381c] fix commit 02760101 regarding tTYPE(only_invalid_cases)
+  * [dd9d35e] Add new config.save() method
+  * [7077900] Add the new shell command config_target and the support within the Target class
+  * [e4eeaf5] Target(): custo attr is now a property
+  * [ac4c699] Fix bug in Logger preventing storing feedback in fmkDB in some specific condition
+
+ -- Eric Lacombe <eric.lacombe@security-labs.org>  Thu, 15 Jan 2026 17:56:07 +0100

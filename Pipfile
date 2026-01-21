@@ -4,21 +4,6 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-crcmod = ">=1.7"
-rpyc = "<7.0.0,>=6.0.0"
-graphviz = "*"
-matplotlib = "*"
-paramiko = "<4.0.0,>=3.4.0"
-pyserial = "*"
-z3-solver = ">=4.8"
-pyxdg = "*"
-xtermcolor = "*"
-sphinx = "*"
-sphinxcontrib-napoleon = "*"
-sphinx-rtd-theme = "*"
-argcomplete = "*"
-pycups = "*"
-python-constraint2 = "*"
 fuddly = {file = ".", editable = true}
 
 [dev-packages]
