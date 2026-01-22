@@ -32,7 +32,12 @@ from typing import List
 from fuddly.cli.run import script_argument_completer
 # TODO tool_argument_completer will be used once a sub-script argument completion logic is developped
 from fuddly.cli.tool import tool_argument_completer
-from fuddly.cli.utils import get_projects, get_tools, get_scripts, get_all_objects
+from fuddly.cli.utils import (
+        get_projects,
+        get_tools,
+        get_scripts,
+        get_all_object_names,
+)
 from fuddly.cli.error import CliException
 
 # Import magic
@@ -135,13 +140,20 @@ def main(argv: List[str] = None):
             action="store_true",
             help="create a python package project structure"
         )
-        p.add_argument(
-            "object",
-            choices=["dm", "data-model", "project:bare"],
-            # This one has not yet been create: "project:example"
-            metavar="object",
-            help="type of object to create. [dm, data-model, project]",
-        )
+        with p.add_mutually_exclusive_group() as g:
+            g.add_argument(
+                "--clone",
+                metavar="object_name",
+                help="name of the object to clone.",
+                choices=["list", *get_all_object_names()],
+            )
+            g.add_argument(
+                "--type",
+                choices=["dm", "data-model", "project:bare"],
+                # This one has not yet been create: "project:example"
+                metavar="object",
+                help="type of object to create. [dm, data-model, project:bare]",
+            )
         p.add_argument(
             "name",
             help="name to give the create object.",

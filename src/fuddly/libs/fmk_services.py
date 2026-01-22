@@ -40,7 +40,7 @@ def get_each_data_model_module() -> list():
 def get_each_target_module() -> list():
     return get_module_of_type(
             group_name="targets",
-            prefix="fuddly/data_models"
+            prefix="fuddly/targets"
         )
 
 
