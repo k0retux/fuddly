@@ -1,9 +1,38 @@
-import os
-import importlib
-
 import fuddly.cli.argparse_wrapper as argparse
 from fuddly.cli.error import CliException
-from fuddly.cli.utils import get_projects
+from importlib.util import find_spec
+from importlib.metadata import entry_points
+
+import sys
+import os
+import argcomplete
+import importlib
+
+from fuddly.libs.fmk_services import get_each_project_module
+
+def get_projects() -> []:
+
+    if get_projects.modules is not None:
+        return get_projects.modules
+    else:
+        get_projects.modules = []
+
+    project_modules = get_each_project_module()
+
+    for m in project_modules:
+        path = m.origin
+        if os.path.basename(path) == "__init__.py":
+            path = os.path.dirname(path)
+        else:
+            # Ignoring old single-files projects
+            continue
+        *prefix, prj_name = path.split("/")
+        get_projects.modules.append((prj_name, path, m))
+
+
+    return get_projects.modules
+
+get_projects.modules = None
 
 
 def info_from_project_name(name) -> str | None:
@@ -20,8 +49,7 @@ def info_from_project_name(name) -> str | None:
     else:
         return None
 
-
-def readme_from_project_name(name) -> (str | None, bool):
+def readme_from_project_name(name) -> (str|None, bool):
     for prj in get_projects():
         prj_name, path, m = prj
         if prj_name == name:
@@ -55,3 +83,4 @@ def start(args: argparse.Namespace) -> int:
         print(info)
 
     return 0
+
