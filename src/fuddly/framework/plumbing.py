@@ -38,6 +38,9 @@ import datetime
 import time
 import signal
 
+from pathlib import Path
+from os.path import dirname, basename
+
 from functools import wraps, partial
 from tabnanny import verbose
 from typing import Sequence
@@ -262,12 +265,12 @@ def _populate_projects(search_path, prefix="", projects=None):
         rel_path = path.removeprefix(search_path).removeprefix(os.sep)
         if "__init__.py" in files:
             # normapth make sure the path does not end in a '/'
-            key = os.path.normpath(os.path.join(prefix, os.path.dirname(rel_path)))
-            basename = os.path.basename(path.removeprefix(search_path).removeprefix(os.sep))
-            if basename != "":
+            key = os.path.normpath(os.path.join(prefix, dirname(rel_path)))
+            basename_ = basename(path.removeprefix(search_path).removeprefix(os.sep))
+            if basename_ != "":
                 if projects.get(key) is None:
-                    projects[key] = (path.removesuffix(basename), [])
-                projects[key][1].append(basename)
+                    projects[key] = (path.removesuffix(basename_), [])
+                projects[key][1].append(basename_)
                 dirs.clear()
                 continue
         if "__pycache__" in dirs:
@@ -287,6 +290,38 @@ def _populate_projects(search_path, prefix="", projects=None):
             projects[key][1].extend(files)
 
     return projects
+
+
+def _populate_data_models(searchpath, prefix="", data_models=None):
+
+    if data_models is None:
+        data_models = collections.OrderedDict()
+
+    searchpath = os.path.normpath(searchpath)
+
+    if searchpath[-1] == '/':
+        searchpath = searchpath[:-1]
+    if prefix != "" and prefix[-1] != '/':
+        prefix = prefix + '/'
+
+    base_path = dirname(searchpath)
+    _, dirs, _ = next(os.walk(searchpath))
+    for dirpath in dirs:
+        p = Path(os.path.join(searchpath, dirpath))
+        # We only load modules that have a __init__.py, dm.py and strategy.py
+        inits = [dirname(x) for x in p.glob('**/__init__.py')]
+        dms = [dirname(x) for x in p.glob('**/dm.py')]
+        strats = [dirname(x) for x in p.glob('**/strategy.py')]
+        modules = list(set(inits) & set(strats) & set(dms))
+        for m in modules:
+            relpath = dirname(m)[len(base_path)+1:]
+            key = prefix+relpath
+            if data_models.get(key) is None:
+                data_models[key] = []
+            # print(f'***DBG {key} {basename(m)}')
+            data_models[key].append(basename(m))
+
+    return data_models
 
 class FmkPlumbing(object):
     """
@@ -829,38 +864,11 @@ class FmkPlumbing(object):
             self.print(colorize(FontStyle.BOLD + "=" * 67 + "[ Data Models (filesystem) ]==", rgb=Color.FMKINFOGROUP))
 
         data_models = collections.OrderedDict()
-
-        def populate_data_models(path, prefix=""):
-            from pathlib import Path
-            from os.path import dirname,basename
-
-            if path[-1] == '/':
-                path = path[:-1]
-            if prefix != "" and prefix[-1] != '/':
-                prefix = prefix + '/'
-
-            base_path = dirname(path)
-            _, dirs, _ = next(os.walk(path))
-            for dirpath in dirs:
-                p = Path(os.path.join(path, dirpath))
-                # We only load modules that have a __init__.py, dm.py and strategy.py
-                inits = [dirname(x) for x in p.glob('**/__init__.py')]
-                dms = [dirname(x) for x in p.glob('**/dm.py')]
-                strats = [dirname(x) for x in p.glob('**/strategy.py')]
-                modules = list(set(inits) & set(strats) & set(dms))
-                for m in modules:
-                    relpath = dirname(m)[len(base_path)+1:]
-                    key = prefix+relpath
-                    if data_models.get(key) is None:
-                        data_models[key] = []
-                    # print(f'***DBG {key} {basename(m)}')
-                    data_models[key].append(basename(m))
-
         if gr.is_running_from_fs:
             if not self._quiet:
                 self.print(colorize("*** Running directly from sources, loading internal data_models ***", rgb=Color.WARNING))
-            populate_data_models(gr.data_models_folder, prefix="fuddly")
-        populate_data_models(gr.user_data_models_folder, prefix='<data folder>')
+            _populate_data_models(gr.data_models_folder, prefix="fuddly", data_models=data_models)
+        _populate_data_models(gr.user_data_models_folder, prefix='<data folder>', data_models=data_models)
 
         for dname, names in data_models.items():
             if not self._quiet:
@@ -949,8 +957,8 @@ class FmkPlumbing(object):
 
         if dm_path is None:
             m = module.__spec__
-            if os.path.basename(m.origin) == "__init__.py":
-                dm_path = os.path.dirname(m.origin)
+            if basename(m.origin) == "__init__.py":
+                dm_path = dirname(m.origin)
 
         if dm_path is not None:
             dm_params["dm"].set_fs_path(dm_path)
@@ -1119,8 +1127,8 @@ class FmkPlumbing(object):
 
         if prj_path is None:
             m = module.__spec__
-            if os.path.basename(m.origin) == "__init__.py":
-                prj_path = os.path.dirname(m.origin)
+            if basename(m.origin) == "__init__.py":
+                prj_path = dirname(m.origin)
 
         if prj_path is not None:
             prj_params["project"].set_fs_path(prj_path)
