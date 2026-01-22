@@ -22,24 +22,11 @@
 #
 ################################################################################
 
-import argcomplete
+import sys
 import fuddly.cli.argparse_wrapper as argparse
 import importlib
-import sys
-from typing import List
 
-# TODO script_argument_completer will be used once a sub-script argument completion logic is developped
-from fuddly.cli.run import script_argument_completer
-# TODO tool_argument_completer will be used once a sub-script argument completion logic is developped
-from fuddly.cli.tool import tool_argument_completer
-from fuddly.cli.utils import (
-        get_projects,
-        get_tools,
-        get_scripts,
-        get_all_object_names,
-)
-from fuddly.cli.error import CliException
-
+import argcomplete
 # Import magic
 # import fuddly.{obj_type} will find targets, data_models, projects or info
 # automagically wethere they are define in an entry point, as part of fuddly's
@@ -47,6 +34,14 @@ from fuddly.cli.error import CliException
 from fuddly.libs.importer import fuddly_importer_hook
 fuddly_importer_hook.setup()
 
+# TODO script_argument_completer will be used once a sub-script argument completion logic is developped
+from .run import get_scripts, script_argument_completer
+# TODO tool_argument_completer will be used once a sub-script argument completion logic is developped
+from .tool import get_tools, tool_argument_completer
+from .show import get_projects
+
+from typing import List
+from fuddly.cli.error import CliException
 
 def main(argv: List[str] = None):
     # This is done so you can call it from python shell if you want to
@@ -140,20 +135,13 @@ def main(argv: List[str] = None):
             action="store_true",
             help="create a python package project structure"
         )
-        with p.add_mutually_exclusive_group() as g:
-            g.add_argument(
-                "--clone",
-                metavar="object_name",
-                help="name of the object to clone.",
-                choices=["list", *get_all_object_names()],
-            )
-            g.add_argument(
-                "--type",
-                choices=["dm", "data-model", "project:bare"],
-                # This one has not yet been create: "project:example"
-                metavar="object",
-                help="type of object to create. [dm, data-model, project:bare]",
-            )
+        p.add_argument(
+            "object",
+            choices=["dm", "data-model", "project:bare"],
+            # This one has not yet been create: "project:example"
+            metavar="object",
+            help="type of object to create. [dm, data-model, project]",
+        )
         p.add_argument(
             "name",
             help="name to give the create object.",

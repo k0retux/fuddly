@@ -1,20 +1,24 @@
+import fuddly.cli.argparse_wrapper as argparse
+
+from fuddly.cli.error import CliException
+
 import importlib
 import sys
 import argcomplete
 
-import fuddly.cli.argparse_wrapper as argparse
-from fuddly.cli.utils import get_tools
-from fuddly.cli.error import CliException
+
+def get_tools() -> list():
+    import pkgutil
+    tools = importlib.import_module("fuddly.tools")
+    return list(map(lambda x: x.name, pkgutil.walk_packages(tools.__path__)))
 
 
 def tool_argument_completer(prefix, parsed_args, **kwargs):
-    # Set _ARC_DEBUG in the shell for _DEBUG to be true
+    # Set _ARC_DEBUG in the shell fro _DEBUG to be true
     from argcomplete.io import _DEBUG
     if parsed_args.tool is not None:
         if _DEBUG:
-            argcomplete.warn(f"Prefix: {prefix}\n"
-                             f"parsed_args: {parsed_args}\n"
-                             f"kwargs: {kwargs}")
+            argcomplete.warn(f"Prefix: {prefix}\nparsed_args: {parsed_args}\nkwargs: {kwargs}")
         # TODO For now we always return [], it should eventually be the tool's arguments
         return []
     else:
