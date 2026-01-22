@@ -1,4 +1,5 @@
 import os
+import sys
 import importlib
 from importlib.util import find_spec
 from importlib.metadata import entry_points
@@ -57,8 +58,8 @@ def find_modules_in_dir(path: str, prefix: str) -> list():
             m = find_spec(prefix+name)
             # This should never happen
             if m is None or m.origin is None:
-                print(f"{prefix+name} detected as a module in "f"{fullpath},"
-                      " but could not be imported")
+                sys.stderr.write(f"{prefix+name} detected as a module in "f"{fullpath},"
+                      " but could not be imported\n")
                 continue
             res.append(m)
     return res
@@ -75,7 +76,7 @@ def find_modules_from_ep_group(group_name: str) -> list():
         # i.e. somebody broke their package
         if m is None or m.origin is None:
             # the entry point is not a module, let's just ignore it
-            print(f"*** {ep.module} is not a python module, check your installed modules ***")
+            sys.stderr.write(f"*** {ep.module} is not a python module, check your installed modules ***\n")
             continue
         res.append(m)
     return res
@@ -90,8 +91,8 @@ def get_project_from_name(name):
             try:
                 prj_obj = mod.project
             except AttributeError:
-                print(f'[ERROR] the project "{name}" does not contain a global variable '
-                      f'named "project"')
+                sys.stderr.write(f'[ERROR] the project "{name}" does not contain a global variable '
+                      f'named "project"\n')
                 return None
             else:
                 if os.path.basename(m.origin) == "__init__.py":
