@@ -28,6 +28,7 @@ import sys
 import datetime
 import threading
 import itertools
+import logging
 
 from typing import List, Tuple
 
@@ -39,7 +40,6 @@ from fuddly.framework.database import Database
 from fuddly.framework.knowledge.feedback_collector import FeedbackSource
 from fuddly.libs.utils import ExternalDisplay, Accumulator
 from fuddly.framework import global_resources as gr
-
 
 class Logger(object):
     """
@@ -623,7 +623,7 @@ class Logger(object):
                 data_id = max(ids) if ids else None
 
             if isinstance(content, (list, map)):
-                for fbk, ts in zip(content, timestamp):
+                for fbk, ts in zip(content, timestamp, strict=True):
                     self.fmkDB.insert_feedback(
                         data_id,
                         source,

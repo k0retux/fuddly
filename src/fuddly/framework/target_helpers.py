@@ -24,10 +24,13 @@
 import datetime
 import threading
 import copy
+import logging
+import os
 
 from fuddly.framework.data import Data
 from fuddly.framework.knowledge.feedback_collector import FeedbackSource
 from fuddly.libs.external_modules import *
+import fuddly.framework.global_resources as gr
 
 class TargetStuck(Exception): pass
 class TargetError(Exception): pass
@@ -42,6 +45,8 @@ class Target(object):
     either after Target.send_data() is called or when Target.collect_unsolicited_feedback() is called.
 
     """
+
+    _cls_user_count = None
 
     name = None
     feedback_timeout = None
@@ -75,10 +80,45 @@ class Target(object):
 
     display_feedback = False
 
-    def __init__(self, name=None, display_feedback=True):
+    def __init__(self, name=None, display_feedback=True, enable_specific_logger=False, log_level=logging.INFO):
         self.name = name
         self.display_feedback = display_feedback
         self._started = False
+        self._cls_user_count = 0
+        self.log_level = log_level
+        self.enable_specific_logger = enable_specific_logger
+
+    def setup_child_logger(self, filename=None, level=logging.INFO):
+
+        def get_obj():
+            f = sys._getframe(1)
+            try:
+                obj = f.f_locals['self']
+            except KeyError:
+                obj = None
+            return obj
+
+        now = datetime.datetime.now().strftime("%Y_%m_%d_%H%M%S")
+
+        obj = get_obj()
+        cls_name = 'Unknown' if obj is None else obj.__class__.__name__
+        user_count = f'_{obj._cls_user_count}' if hasattr(obj, '_cls_user_count') else ''
+        # caller_name = inspect.currentframe().f_back.f_code.co_name
+        name = f'{cls_name}{user_count}'
+
+        if filename is None:
+            filename = os.path.join(gr.logs_folder, f'{cls_name}_trace_{now}{user_count}.log')
+
+        handler = logging.FileHandler(filename)
+        formatter = logging.Formatter(fmt='%(asctime)s.%(msecs)03d %(levelname)-8s %(message)s',
+                                      datefmt='%Y-%m-%d %H:%M:%S')
+        handler.setFormatter(formatter)
+        logger = logging.getLogger(name)
+        logger.addHandler(handler)
+        logger.setLevel(level)
+        logger.propagate = False
+
+        return logger
 
     @staticmethod
     def get_fbk_mode_desc(fbk_mode, short=False):
@@ -101,6 +141,11 @@ class Target(object):
                                    nl_before=False, rgb=Color.COMPONENT_START)
         self._pending_data = []
         self._pending_data_id = None
+        self._cls_user_count += 1
+        if self.enable_specific_logger:
+            self.logger = self.setup_child_logger(level=self.log_level)
+        else:
+            self.logger = None
         self._started = self.start()
         return self._started
 

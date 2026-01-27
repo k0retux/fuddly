@@ -145,7 +145,7 @@ class Project(object):
         if not self._fbk_processing_enabled or self._fbk_handlers_disabled:
             return
         if isinstance(content, (list, map)):
-            for fbk, ts in zip(content, timestamp):
+            for fbk, ts in zip(content, timestamp, strict=True):
                 self._feedback_fifo.put((source, ts, fbk, status))
         else:
             self._feedback_fifo.put((source, timestamp, content, status))

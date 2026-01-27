@@ -295,6 +295,14 @@ class FmkPlumbing(object):
 
     def __init__(self, exit_on_error=False, debug_mode=False, quiet=False,
                  external_term=False, fmkdb_path=None):
+
+        now = datetime.datetime.now().strftime("%Y_%m_%d_%H%M%S")
+        logging.basicConfig(filename=os.path.join(gr.logs_folder, f'fuddly_root_logger_{now}.log'),
+                            format='%(asctime)s %(levelname)-8s %(message)s',
+                            level=logging.INFO,
+                            datefmt='%Y-%m-%d %H:%M:%S',
+                            force=True)
+
         self._debug_mode = debug_mode
         self._exit_on_error = exit_on_error
         self._quiet = quiet
@@ -2968,7 +2976,9 @@ class FmkPlumbing(object):
             t0 = datetime.datetime.now() if self._last_sending_date is None else self._last_sending_date
             signal.signal(signal.SIGINT, sig_int_handler)
             ret = 0
-            if forced_feedback_timeout is not None:
+            if self._burst_countdown < self._burst:
+                fbk_timeout = 0
+            elif forced_feedback_timeout is not None:
                 fbk_timeout = forced_feedback_timeout
             elif self._currently_used_targets:
                 fbkt_list = [tg.feedback_timeout for tg in self._currently_used_targets
@@ -6384,7 +6394,7 @@ class FmkShell(cmd.Cmd):
     def do_send_eval(self, line):
         """
         Send python-evaluation of the parameter <data>
-        |_ syntax: send_eval <data> [targetID1 ... targetIDN]
+        |_ syntax: send_eval [targetID1 ... targetIDN]
         """
         self.__error_msg = "Syntax Error!"
         args = line.split()
