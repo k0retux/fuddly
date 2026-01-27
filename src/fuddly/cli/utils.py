@@ -25,11 +25,11 @@ def get_module_type(name: str) -> str:
 # the function is called multiple times
 
 # Return a list of all projects, dms, and targets fuddly knows about
-def get_all_object_names() -> list():
-    if get_all_object_names.modules is not None:
-        return get_all_object_names.modules
+def get_all_objects() -> list():
+    if get_all_objects.modules is not None:
+        return get_all_objects.modules
     else:
-        get_all_object_names.modules = []
+        get_all_objects.modules = []
 
     # Projects
     project_modules = get_each_project_module()
@@ -46,25 +46,28 @@ def get_all_object_names() -> list():
         else:
             # Ignoring old single-files projects
             continue
-        get_all_object_names.modules.append(m.name)
+        get_all_objects.modules.append(m.name)
 
-    return get_all_object_names.modules
+    return get_all_objects.modules
 
 
-get_all_object_names.modules = None
+get_all_objects.modules = None
 
 
 # Return a list of scripts from all the projects fuddly knows about
-def get_scripts() -> list():
-    if get_scripts.paths is not None:
-        return get_scripts.paths
-    else:
-        get_scripts.paths = []
-
+def get_project_scripts(prefix: str, parsed_args: (object | str), **kwargs) -> list[str]:
+    paths = []
     project_modules = get_each_project_module()
+    if type(parsed_args) is str:
+        project = parsed_args
+    else:
+        project = parsed_args.project.split(".")[-1]
 
     for m in project_modules:
+        if project != m.name.split(".")[-1]:
+            continue
         p = m.origin
+        # origin shoudl point to the __init__.py of the module
         if os.path.basename(p) == "__init__.py":
             p = os.path.dirname(p)
         else:
@@ -73,12 +76,9 @@ def get_scripts() -> list():
         if os.path.isdir(os.path.join(p, "scripts")):
             for f in next(os.walk(os.path.join(p, "scripts")))[2]:
                 if f.endswith(".py") and f != "__init__.py":
-                    get_scripts.paths.append(m.name + ".scripts." + f.removesuffix(".py"))
+                    paths.append(f.removesuffix(".py"))
 
-    return get_scripts.paths
-
-
-get_scripts.paths = None
+    return paths
 
 
 # Return a list of projects fuddly knows about
