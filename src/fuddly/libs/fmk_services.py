@@ -82,7 +82,7 @@ def find_modules_from_ep_group(group_name: str) -> list():
     return res
 
 
-def get_project_from_name(name):
+def get_project_from_name(name: str) -> object | None:
     prj_modules = get_each_project_module()
     for m in prj_modules:
         prj_name = m.name.split(".")[-1]

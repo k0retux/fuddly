@@ -35,7 +35,7 @@ from fuddly.cli.tool import tool_argument_completer
 from fuddly.cli.utils import (
         get_projects,
         get_tools,
-        get_all_object_names,
+        get_all_objects,
         get_project_scripts,
 )
 from fuddly.cli.error import CliException
