@@ -860,9 +860,10 @@ class FmkPlumbing(object):
             if not self._quiet:
                 self.print(colorize(f">>> Look for Data Models within '{dname}' directory",
                                     rgb=Color.FMKINFOSUBGROUP))
-            prefix = dname.replace(os.sep, ".") + "."
-            if prefix.startswith("<data folder>.data_models"):
-                prefix = prefix.replace("<data folder>.data_models", "fuddly.data_models")
+            dname_orig = dname
+            dname = dname.replace('<data folder>/', '')
+            prefix = dname_orig.replace('<data folder>', 'fuddly')
+            prefix = prefix.replace(os.sep, ".") + "."
             for name in names:
                 dm_abspath = os.path.join(gr.fuddly_data_folder, dname, name)
                 dm_params = self._import_dm(prefix, name, dm_abspath)
@@ -1024,9 +1025,11 @@ class FmkPlumbing(object):
                 self.print(colorize(
                     f">>> Look for Projects within '{dname}' Directory",
                     rgb=Color.FMKINFOSUBGROUP))
-            prefix = dname.replace(os.sep, ".") + "."
-            if prefix.startswith("<data folder>.projects"):
-                prefix = prefix.replace("<data folder>.projects", "fuddly.projects")
+
+            dname_orig = dname
+            dname = dname.replace('<data folder>/', '')
+            prefix = dname_orig.replace('<data folder>', 'fuddly')
+            prefix = prefix.replace(os.sep, ".") + "."
             for name in file_list:
                 prj_path = None if prj_basepath is None else os.path.join(prj_basepath, name)
                 prj_params = self._import_project(prefix, name, prj_path=prj_path)

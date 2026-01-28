@@ -135,30 +135,38 @@ class DataModel(object):
         """
         if self._default_atom_for_abs:
             atom, abs_csts = self._default_atom_for_abs
-            nm = '{:s}_{:0>2d}'.format(self.name.upper(), idx)
+
+            nm = f'{self.name.upper()}{idx:0>2d}_{filename[:-len(self.file_extension) - 1]}'
             atom_for_abs = self._backend(atom).atom_copy(atom, new_name=nm)
 
             status, off, size, name = atom_for_abs.absorb(data, constraints=abs_csts)
 
-            print('{:s} Absorb Status: {!r}, {:d}, {:d}'.format(nm, status, off, size))
-            print(r' \_ length of original data: {:d}'.format(len(data)))
-            print(r' \_ remaining: {!r}'.format(data[size:size+1000]))
-
             if status == AbsorbStatus.FullyAbsorbed:
-                print("--> Create {:s} from files in '{:s}{:s}' directory"
-                      .format(nm, gr.imported_data_folder, self.name))
+                print(colorize(
+                    f' ++ {nm} Generator created from raw data retrieved from the file "{filename}"',
+                    rgb=Color.FMKINFO
+                ))
                 atom_for_abs, msg = self._atom_absorption_additional_actions(atom_for_abs)
                 if msg:
                     print("     |_ {!s}".format(msg))
                 return atom_for_abs
             else:
+                print(colorize(f'*** ERROR while importing the file "{filename}" ***', rgb=Color.ERROR))
+                print(colorize(f'{nm} - Absorb Status: {status}, {off}, {size}',
+                               rgb=Color.FMKINFO))
+                print(colorize(f' \\_ length of original data: {len(data)}',rgb=Color.FMKINFO))
+                print(colorize(f' \\_ remaining: {data[size:size+1000]}',rgb=Color.FMKINFO))
                 return None
         else:
             try:
                 return self._create_atom_from_raw_data_specific(data, idx, filename)
             except NotImplementedError:
-                return Node('RAW_{:s}'.format(filename[:-len(self.file_extension) - 1]),
-                            values=[data])
+                nm = f'{self.name.upper()}_RAW{idx:0>2d}_{filename[:-len(self.file_extension) - 1]}'
+                print(colorize(
+                    f' ++ {nm} Raw Generator created from raw data retrieved from the file "{filename}"',
+                    rgb=Color.FMKINFO
+                ))
+                return Node(nm, values=[data], new_env=True)
 
     def register_atom_for_decoding(self, atom, absorb_constraints=AbsFullCsts(),
                                    decoding_scope=None):

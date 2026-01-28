@@ -5,5 +5,5 @@
 # of the venv and in the fuddly root directory
 
 pipenv install -e .   # to trigger the generation of _version.py file
-gbp dch -S -N (python -m fuddly.cli -v)
+gbp dch -S -N (python -m fuddly.cli -v 2> /dev/null)
 #gbp dch -R -N (fuddly -v) --distribution unstable --force-distribution
