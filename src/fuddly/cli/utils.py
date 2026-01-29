@@ -19,17 +19,9 @@ def get_module_type(name: str) -> str:
     return None
 
 
-# These functions uses a trick to have a variable with cached info
-# On first run, a member of the object the function (Everything is an object
-# in python) is populated with a list of values so that it can be reused if
-# the function is called multiple times
-
 # Return a list of all projects, dms, and targets fuddly knows about
 def get_all_objects() -> list():
-    if get_all_objects.modules is not None:
-        return get_all_objects.modules
-    else:
-        get_all_objects.modules = []
+    modules = []
 
     # Projects
     project_modules = get_each_project_module()
@@ -46,12 +38,9 @@ def get_all_objects() -> list():
         else:
             # Ignoring old single-files projects
             continue
-        get_all_objects.modules.append(m.name)
+        modules.append(m.name)
 
-    return get_all_objects.modules
-
-
-get_all_objects.modules = None
+    return modules
 
 
 # Return a list of scripts from all the projects fuddly knows about
@@ -83,10 +72,7 @@ def get_project_scripts(prefix: str, parsed_args: (object | str), **kwargs) -> l
 
 # Return a list of projects fuddly knows about
 def get_projects() -> list():
-    if get_projects.modules is not None:
-        return get_projects.modules
-    else:
-        get_projects.modules = []
+    modules = []
 
     project_modules = get_each_project_module()
 
@@ -98,25 +84,15 @@ def get_projects() -> list():
             # Ignoring old single-files projects
             continue
         *prefix, prj_name = path.split("/")
-        get_projects.modules.append((prj_name, path, m))
+        modules.append((prj_name, path, m))
 
-    return get_projects.modules
-
-
-get_projects.modules = None
+    return modules
 
 
 # Return a list of all the fuddly tools
 def get_tools() -> list():
     import pkgutil
-
-    if get_tools.modules is not None:
-        return get_tools.modules
-    else:
-        get_tools.modules = []
+    modules = []
     tools = import_module("fuddly.tools")
-    get_tools.modules = list(map(lambda x: x.name, pkgutil.walk_packages(tools.__path__)))
-    return get_tools.modules
-
-
-get_tools.modules = None
+    modules = list(map(lambda x: x.name, pkgutil.walk_packages(tools.__path__)))
+    return modules
