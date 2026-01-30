@@ -365,6 +365,12 @@ class FmkPlumbing(object):
         self._fbk_timeout_default = 0.005
         self._last_sending_date = None
 
+        self._delay = None
+        self._burst = None
+        self._burst_countdown = None
+        self._orig_delay = None
+        self._orig_burst = None
+
         self._current_sent_date = None
 
         self.error = False
@@ -1852,6 +1858,9 @@ class FmkPlumbing(object):
             self.lg.log_fmk_info("Wrong delay value!", do_record=False)
             return False
 
+    def _save_current_sending_delay(self):
+        self._orig_delay = self._delay
+
     @EnforceOrder(accepted_states=["S1", "S2"])
     def set_sending_burst_counter(self, val, do_record=False):
         if val >= 1:
@@ -1863,6 +1872,17 @@ class FmkPlumbing(object):
         else:
             self.lg.log_fmk_info("Wrong burst value!", do_record=False)
             return False
+
+    def _save_current_sending_burst_counter(self):
+        self._orig_burst = self._burst
+
+    def _restore_previous_state(self):
+        if self._orig_delay is not None:
+            self.set_sending_delay(self._orig_delay)
+            self._orig_delay = None
+        if self._orig_burst is not None:
+            self.set_sending_burst_counter(self._orig_burst)
+            self._orig_burst = None
 
     @EnforceOrder(accepted_states=["S1", "S2"])
     def set_health_check_timeout(
@@ -1979,42 +1999,44 @@ class FmkPlumbing(object):
         delay is set to -1)
         """
         ret = True
-        if self._burst_countdown <= 1:
-            self._burst_countdown = self._burst
 
-            if self.__tg_enabled:
-                if self._delay == -1.0:
-                    try:
-                        signal.signal(signal.SIGINT, sig_int_handler)
-                        cont = get_user_input(colorize("\n*** Press [ENTER] to continue ('q' to exit) ***\n",
-                                                       rgb=Color.PROMPT))
-                        if cont == "q":
-                            ret = False
-                    except KeyboardInterrupt:
+        if self.__tg_enabled:
+            if self._delay == -1.0:
+                try:
+                    signal.signal(signal.SIGINT, sig_int_handler)
+                    cont = get_user_input(colorize("\n*** Press [ENTER] to continue ('q' to exit) ***\n",
+                                                   rgb=Color.PROMPT))
+                    if cont == "q":
                         ret = False
-                        self.set_error("The operation has been cancelled by the user (while in delay step)!",
-                                       code=Error.OperationCancelled)
-                    finally:
-                        signal.signal(signal.SIGINT, signal.SIG_IGN)
+                except KeyboardInterrupt:
+                    ret = False
+                    self.set_error("The operation has been cancelled by the user (while in delay step)!",
+                                   code=Error.OperationCancelled)
+                finally:
+                    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
-                elif self._delay == 0.0:
-                    pass
-                elif self._delay > 0:
-                    try:
-                        signal.signal(signal.SIGINT, sig_int_handler)
-                        time.sleep(self._delay)
-                    except KeyboardInterrupt:
-                        ret = False
-                        self.set_error("The operation has been cancelled by the user (while in delay step)!",
-                                       code=Error.OperationCancelled)
-                    finally:
-                        signal.signal(signal.SIGINT, signal.SIG_IGN)
-                else:
-                    raise ValueError
-        else:
-            self._burst_countdown -= 1
+            elif self._delay == 0.0:
+                pass
+            elif self._delay > 0:
+                try:
+                    signal.signal(signal.SIGINT, sig_int_handler)
+                    time.sleep(self._delay)
+                except KeyboardInterrupt:
+                    ret = False
+                    self.set_error("The operation has been cancelled by the user (while in delay step)!",
+                                   code=Error.OperationCancelled)
+                finally:
+                    signal.signal(signal.SIGINT, signal.SIG_IGN)
+            else:
+                raise ValueError
 
         return ret
+
+    def _perform_burst_countdown(self):
+        if self._burst_countdown <= 1:
+            self._burst_countdown = self._burst
+        else:
+            self._burst_countdown -= 1
 
     def _do_before_sending_data(self, data_list: Sequence[Data]) -> Sequence[Data]:
         # Monitor hook function before sending
@@ -2045,7 +2067,12 @@ class FmkPlumbing(object):
     def _do_sending_and_logging_init(self, data_list):
         for d in data_list:
             if d.sending_delay is not None:
+                self._save_current_sending_delay()
                 self.set_sending_delay(d.sending_delay)
+
+            if d.burst_count is not None:
+                self._save_current_sending_burst_counter()
+                self.set_sending_burst_counter(d.burst_count, do_record=True)
 
             if d.feedback_timeout is not None:
                 tg_ids = self._vtg_to_tg(d)
@@ -2060,7 +2087,7 @@ class FmkPlumbing(object):
         blocked_data = list(filter(lambda x: x.is_blocked(), data_list))
         data_list = list(filter(lambda x: not x.is_blocked(), data_list))
 
-        if self._burst_countdown == self._burst:
+        if self._burst_countdown <= 1:
             if self._currently_used_targets:
                 fbkt_list = [tg.feedback_timeout for tg in self._currently_used_targets
                              if tg.feedback_timeout is not None]
@@ -2136,9 +2163,13 @@ class FmkPlumbing(object):
         return user_interrupt, go_on
 
     def _do_after_feedback_retrieval(self, data_list):
-        self._handle_data_callbacks(data_list, hook=HOOK.after_fbk)
+        if self._burst_countdown <= 1:
+            self._handle_data_callbacks(data_list, hook=HOOK.after_fbk)
+
         self._handle_data_callbacks(data_list, hook=HOOK.final)
         self.fmkDB.flush_current_feedback()
+
+        self._perform_burst_countdown()
 
     def _do_after_dmaker_data_retrieval(self, data):
         self._handle_data_callbacks([data], hook=HOOK.after_dmaker_production)
@@ -2570,6 +2601,7 @@ class FmkPlumbing(object):
         data_list = self._send_data(data_list)
 
         if self._sending_error or self._stop_sending:
+            self._restore_previous_state()
             return False, None
 
         if data_list is None:
@@ -2594,7 +2626,7 @@ class FmkPlumbing(object):
         # Note: Feedback retrieved from a real target has to be provided to the framework through
         # the associated Target object either after Target.send_data()
         # is called or when Target.collect_unsolicited_feedback() is called.
-        if self._burst_countdown == self._burst:
+        if self._burst_countdown <= 1:
             # We first compute the max fbk_timeout on the targets that have been stimulated
             # as they are normaly the ones ruling the sequencing.
             # However, in the case of a Scenario we could have some steps that
@@ -2646,13 +2678,13 @@ class FmkPlumbing(object):
         cont1 = True
         cont2 = True
         # That means this is the end of a burst
-        if self._burst_countdown == self._burst:
+        if self._burst_countdown <= 1:
             cont1 = self.retrieve_and_log_target_feedback()
 
         self.mon.notify_target_feedback_retrieval()
         self.mon.wait_for_probe_status_retrieval()
 
-        if self._burst_countdown == self._burst:
+        if self._burst_countdown <= 1:
             # We handle probe feedback if any
             cont2 = self.monitor_probes(force_record=True)
             for tg in self._currently_used_targets:
@@ -2871,13 +2903,14 @@ class FmkPlumbing(object):
                 if multiple_data:
                     self.lg.log_fn("--------------------------", rgb=Color.SUBINFO)
 
-                self.lg.log_target_ack_date()
+                if self._burst_countdown <= 1:
+                    self.lg.log_target_ack_date()
 
                 self.lg.reset_current_state()
 
     @EnforceOrder(accepted_states=["S2"])
     def _setup_new_sending(self):
-        if self._burst > 1 and self._burst_countdown == self._burst:
+        if self._burst > 1 and self._burst_countdown <= 1:
             p = "\n::[ START BURST ]::\n"
         else:
             p = "\n"
@@ -2979,7 +3012,7 @@ class FmkPlumbing(object):
             t0 = datetime.datetime.now() if self._last_sending_date is None else self._last_sending_date
             signal.signal(signal.SIGINT, sig_int_handler)
             ret = 0
-            if self._burst_countdown < self._burst:
+            if self._burst_countdown > 1:
                 fbk_timeout = 0
             elif forced_feedback_timeout is not None:
                 fbk_timeout = forced_feedback_timeout
@@ -3408,12 +3441,18 @@ class FmkPlumbing(object):
                 if not data_list:
                     continue
 
+                if not self._delay_sending():
+                    self.lg.log_fmk_info("Director will shutdown because waiting has been cancelled by the user")
+                    break
+
                 data_list = self._send_data(data_list)
                 if self._sending_error:
                     self.lg.log_fmk_info("Director will shutdown because of a sending error")
+                    self._restore_previous_state()
                     break
                 elif self._stop_sending:
                     self.lg.log_fmk_info("Director will shutdown because a DataProcess has yielded")
+                    self._restore_previous_state()
                     break
                 elif data_list is None:
                     self.lg.log_fmk_info("Director will shutdown because there is no data to send")
@@ -3452,13 +3491,13 @@ class FmkPlumbing(object):
                         self.lg.log_fmk_info("Director will shutdown because of exception in user code")
 
                 # Target fbk is logged only at the end of a burst
-                if self._burst_countdown == self._burst:
+                if self._burst_countdown <= 1:
                     cont1 = self.retrieve_and_log_target_feedback()
 
                 self.mon.notify_target_feedback_retrieval()
                 self.mon.wait_for_probe_status_retrieval()
 
-                if self._burst_countdown == self._burst:
+                if self._burst_countdown <= 1:
                     cont2 = self.monitor_probes(force_record=True)
                     if not cont1 or not cont2:
                         exit_director = True
@@ -3484,14 +3523,9 @@ class FmkPlumbing(object):
                     for tg in self.targets.values():
                         self._recover_target(tg)
 
-                if self._burst_countdown == self._burst:
+                if self._burst_countdown <= 1:
                     for tg in self.targets.values():
                         tg.cleanup()
-
-                # Delay introduced after logging data
-                if not self._delay_sending():
-                    exit_director = True
-                    self.lg.log_fmk_info("Director will shutdown because waiting has been cancelled by the user")
 
         try:
             director.stop(self._exportable_fmk_ops, self.dm, self.mon, self.targets, self.lg)

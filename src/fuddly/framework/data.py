@@ -294,6 +294,7 @@ class Data(object):
         self.feedback_mode = None if from_data is None else from_data.feedback_mode
 
         self.sending_delay = None if from_data is None else from_data.sending_delay
+        self.burst_count = None if from_data is None else from_data.burst_count
 
         self.altered = False if from_data is None else from_data.altered
 
@@ -713,6 +714,8 @@ class DataProcess(object):
         self.outcomes = None
         self.feedback_timeout = None
         self.feedback_mode = None
+        self.sending_delay = None
+        self.burst_count = None
         self.tg_ids = tg_ids
 
         self.dp_completed = False

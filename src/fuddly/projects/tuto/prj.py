@@ -30,8 +30,12 @@ from fuddly.framework.evolutionary_helpers import DefaultPopulation, CrossoverHe
 from fuddly.framework.data import DataProcess
 from fuddly.info.generic import *
 
+from .scenarios import sc_burst
+
 project = Project()
 project.default_dm = ['mydf', 'myproto']
+
+project.register_scenarios(sc_burst)
 
 project.map_targets_to_scenario('ex1', {0: 7, 1: 8, None: 8})
 

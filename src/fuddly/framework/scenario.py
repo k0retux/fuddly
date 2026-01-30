@@ -78,6 +78,7 @@ class Step(object):
 
     def __init__(self, data_desc=None, final=False,
                  fbk_timeout=None, fbk_mode=None, sending_delay=None,
+                 burst_count: int = None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
                  start_tasks=None, stop_tasks=None,
                  do_before_data_processing=None, do_before_sending=None,
@@ -91,6 +92,10 @@ class Step(object):
             final:
             fbk_timeout:
             fbk_mode:
+            sending_delay:
+            burst_count: if > 1 walk steps in burst, meaning that feedback won't be retrieved before
+              `burst_count` steps have been executed. Thus, steps callbacks that are normally executed
+              after feedback retrieval will be ignored till we reach the step after the burst.
             set_periodic:
             clear_periodic:
             step_desc:
@@ -146,6 +151,7 @@ class Step(object):
         self.feedback_timeout = fbk_timeout
         self.feedback_mode = fbk_mode
         self.sending_delay = sending_delay
+        self.burst_count = burst_count
 
         self._scenario_env = None
 
@@ -319,6 +325,17 @@ class Step(object):
         for d in self._data_desc:
             if isinstance(d, (Data, DataProcess)):
                 d.sending_delay = delay
+
+    @property
+    def burst_count(self):
+        return self._burst_count
+
+    @burst_count.setter
+    def burst_count(self, count):
+        self._burst_count = count
+        for d in self._data_desc:
+            if isinstance(d, (Data, DataProcess)):
+                d.burst_count = count
 
     @property
     def feedback_timeout(self):
@@ -697,22 +714,26 @@ class Step(object):
 
 class FinalStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None, sending_delay=None,
+                 burst_count: int = None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
                  start_tasks=None, stop_tasks=None,
                  do_before_data_processing=None, do_before_sending=None, valid=True, vtg_ids=None,
                  refresh_atoms=True, private=None):
-        Step.__init__(self, final=True, do_before_data_processing=do_before_data_processing,
+        Step.__init__(self, final=True,
+                      do_before_data_processing=do_before_data_processing,
                       do_before_sending=do_before_sending,
                       valid=valid, vtg_ids=vtg_ids, private=private)
 
 class NoDataStep(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None, sending_delay=None,
+                 burst_count: int = None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
                  start_tasks=None, stop_tasks=None,
                  do_before_data_processing=None, do_before_sending=None,
                  valid=True, vtg_ids=None, refresh_atoms=True, private=None):
         Step.__init__(self, data_desc=Data(''), final=final,
                       fbk_timeout=fbk_timeout, fbk_mode=fbk_mode, sending_delay=sending_delay,
+                      burst_count=burst_count,
                       set_periodic=set_periodic, clear_periodic=clear_periodic,
                       start_tasks=start_tasks, stop_tasks=stop_tasks,
                       step_desc=step_desc, do_before_data_processing=do_before_data_processing,
@@ -725,12 +746,14 @@ class NoDataStep(Step):
 
 class StepStub(Step):
     def __init__(self, data_desc=None, final=False, fbk_timeout=None, fbk_mode=None, sending_delay=None,
+                 burst_count: int = None,
                  set_periodic=None, clear_periodic=None, step_desc=None,
                  start_tasks=None, stop_tasks=None,
                  do_before_data_processing=None, do_before_sending=None,
                  valid=True, vtg_ids=None, refresh_atoms=True, private=None):
         Step.__init__(self, data_desc=EmptyDataProcess(), final=final,
                       fbk_timeout=fbk_timeout, fbk_mode=fbk_mode, sending_delay=sending_delay,
+                      burst_count=burst_count,
                       set_periodic=set_periodic, clear_periodic=clear_periodic,
                       start_tasks=start_tasks, stop_tasks=stop_tasks,
                       step_desc=step_desc, do_before_data_processing=do_before_data_processing,
