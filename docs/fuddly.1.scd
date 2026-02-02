@@ -64,9 +64,44 @@ a *-h* and *--help* options to describe their use from the command line
 
 ## NEW
 
-*fuddly* new [OPTIONS] object name
+*fuddly* new [OPTIONS] name
 
-	*object*
+	*name*
+		Name to give the created object. This should conform to python's module
+		naming convention.
+
+	*--clone* object_name
+		Clone an existing data-model, project or target.
+
+		The object_name shall be the python module name identifying the object
+		to clone. Using list instead of an object name will show a list of all
+		available objects that can be cloned.
+
+		The new object will be be created in the path given by *--dest*,
+		following it's default when missing from the command line.
+
+		This option is not compatible with *--pyproject*
+
+		NOTE: Due to the way argparse works, the *name* argument is still
+		required when using the *list* argument to *--clone*.
+
+	*--dest* PATH  
+		Directory to create the object in.
+
+		If PATH is omitted, a default value will be used.
+		If *--pyproject* was used, the default PATH will be the current working directory. 
+		If not, it will be the appropriate folder in the fuddly data_folder. This can be 
+		either "~/.local/share/fuddly/{user_data_models, user_projects}" or 
+		"~/fuddly_data/{user_data_models, user_projects}" depending on your system setup.
+
+	*--pyproject*
+		If this option is given, the object will be created in a python project
+		structure. A README.md and pyproject.toml file will be added and
+		partially filled. The object will be placed in the "src/" directory.
+
+		This option is incompatible with the *--clone* option
+
+	*--type* object_type
 		Type of object to create. [dm, data-model, project:<template>]
 		The "project" object should be followed by ":<template>" where
 		"<template>" is the name of the project template to use.
@@ -81,24 +116,6 @@ a *-h* and *--help* options to describe their use from the command line
 		The "exemple" template is more complete, and more or less creates the
 		same project as in the fuddly tutorial with comments to guide you on
 		where to put what.
-
-	*name*
-		Name to give the created object. This should conform to python's module
-		naming convention.
-
-	*--dest* PATH  
-		Directory to create the object in.
-
-		if PATH is ommited, a default value will be used.
-		If *--pyproject* was used, the default PATH will be the current working directory. 
-		If not, it will be the appropriate folder in the fuddly data_folder. This can be 
-		either "~/.local/share/fuddly/{user_data_models, user_projects}" or 
-		"~/fuddly_data/{user_data_models, user_projects}" depending on your system setup.
-
-	*--pyproject*
-		If this option is given, the object will be created in a python project
-		structure. A README.md and pyproject.toml file will be added and
-		partially filled. The object will be placed in the "src/" directory.
 
 ## TOOL
 
