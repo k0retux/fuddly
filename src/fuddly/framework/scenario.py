@@ -118,6 +118,8 @@ class Step(object):
 
         self.final = final
         self.valid = valid
+        self._in_connectors = None
+        self._out_connectors = None
 
         self.data_attrs = DataAttr()
 
@@ -964,6 +966,9 @@ class Scenario(object):
         if reinit_anchor is not None:
             self.set_reinit_anchor(reinit_anchor)
 
+        self._in_connectors = None
+        self._out_connectors = None
+
     def __str__(self):
         return "Scenario '{:s}'".format(self.name)
 
@@ -971,6 +976,18 @@ class Scenario(object):
         new_sc = copy.copy(self)
         new_sc.name = new_name
         return new_sc
+
+    def set_in_connectors(self, in_connectors: list):
+        self._in_connectors = {i: in_c for i, in_c in enumerate(in_connectors, start=1)}
+
+    def set_out_connectors(self, out_connectors: list):
+        self._out_connectors = {i: out_c for i, out_c in enumerate(out_connectors, start=1)}
+
+    def in_connectors(self, idx):
+        return self._in_connectors[idx]
+
+    def out_connectors(self, idx):
+        return self._out_connectors[idx]
 
     def reset(self):
         self._current = self._anchor
@@ -1298,6 +1315,7 @@ class Scenario(object):
         else:
             new_current = copy.copy(self._current)
             new_anchor = copy.copy(self._anchor)
+
         new_anchor.set_scenario_env(new_sc._env)
         dico = {self._anchor: new_anchor}
         graph_copy(new_anchor, dico, new_sc._env)
@@ -1309,5 +1327,15 @@ class Scenario(object):
             dico.update({self._reinit_anchor: new_reinit_anchor})
             graph_copy(new_reinit_anchor, dico, new_sc._env)
             new_sc.set_reinit_anchor(new_reinit_anchor)
+
+        if self._in_connectors is not None:
+            new_sc._in_connectors = {} #collections.OrderedDict()
+            for k, in_c in self._in_connectors.items():
+                new_sc._in_connectors[k] = dico[in_c]
+
+        if self._out_connectors is not None:
+            new_sc._out_connectors = {} #collections.OrderedDict()
+            for k, out_c in self._out_connectors.items():
+                new_sc._out_connectors[k] = dico[out_c]
 
         return new_sc

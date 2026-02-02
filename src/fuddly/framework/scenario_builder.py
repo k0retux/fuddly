@@ -1,5 +1,89 @@
+import copy
+
 from fuddly.framework.scenario import *
 import fuddly.framework.node as nd
+
+
+class ScenarioBrick(object):
+
+    _scenario = None
+
+    def __init__(self, name: str, starting_step: Step = None,
+                 in_connectors: list = None, out_connectors: list = None,
+                 final: bool = False, user_context: UI = None):
+
+        self._name = name
+        self._final = final
+        uc = UI() if user_context is None else user_context
+
+        if in_connectors is not None and out_connectors is not None and starting_step is not None:
+            self._scenario = Scenario(self._name, anchor=starting_step, user_context=uc)
+            self._scenario.set_in_connectors(in_connectors)
+            self._scenario.set_out_connectors(out_connectors)
+            # self._in_connectors = self._scenario._in_connectors
+            # self._out_connectors = self._scenario._out_connectors
+
+        else:
+            # used during copy
+            assert in_connectors is None and out_connectors is None and starting_step is None
+
+
+        if final:
+            self.finalize()
+
+    def in_connectors(self, idx):
+        return self._scenario.in_connectors(idx)
+
+    def out_connectors(self, idx):
+        return self._scenario.out_connectors(idx)
+
+    def connect_out_to(self, scbrick, out_idx=None, in_idx=None, **connect_kwargs):
+        out_idx = 1 if out_idx is None else out_idx
+        in_idx = 1 if in_idx is None else in_idx
+        if isinstance(scbrick, ScenarioBrick):
+            self._scenario.set_scenario_env(scbrick._scenario.env, merge_user_contexts=True)
+            self.out_connectors(out_idx).connect_to(scbrick.in_connectors(in_idx), **connect_kwargs)
+        elif isinstance(scbrick, Step):
+            self.out_connectors(out_idx).connect_to(scbrick, **connect_kwargs)
+        else:
+            raise NotImplementedError
+
+    def connect_in_to(self, scbrick, in_idx=None, out_idx=None, **connect_kwargs):
+        out_idx = 1 if out_idx is None else out_idx
+        in_idx = 1 if in_idx is None else in_idx
+        if isinstance(scbrick, ScenarioBrick):
+            self._scenario.set_scenario_env(scbrick._scenario.env, merge_user_contexts=True)
+            self.in_connectors(in_idx).connect_to(scbrick.out_connectors(out_idx), **connect_kwargs)
+        elif isinstance(scbrick, Step):
+            scbrick.connect_to(self.in_connectors(in_idx))
+        else:
+            raise NotImplementedError
+
+    def finalize(self, **kwargs):
+        fs = FinalStep()
+        for s in self._scenario._out_connectors.values():
+            s.connect_to(fs, **kwargs)
+
+    @property
+    def starting_step(self):
+        return self._scenario.anchor
+
+    def clone(self):
+        return copy.copy(self)
+
+    def get_scenario(self, name: str):
+        sc = self._scenario.clone(name)
+        return sc
+
+    def __copy__(self):
+        new_scbrick = type(self)(name=self._name, final=self._final)
+        new_scbrick.__dict__.update(self.__dict__)
+        new_scbrick._scenario = copy.copy(self._scenario)
+        # new_scbrick._in_connectors = new_scbrick._scenario._in_connectors
+        # new_scbrick._out_connectors = new_scbrick._scenario._out_connectors
+
+        return new_scbrick
+
 
 class ScenarioTemplate(object):
 
