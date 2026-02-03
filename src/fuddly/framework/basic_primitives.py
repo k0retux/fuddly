@@ -76,7 +76,7 @@ def calc_parity_bit(x):
     parity = 0
     while x:
         parity ^= x & 1
-        x = x // 2
+        x = x >> 1
     return parity
 
 if __name__ == "__main__":
