@@ -100,6 +100,27 @@ def main(argv: List[str] = None):
             help="limit the information displayed at startup.",
         )
 
+    with subparsers.add_parser("ishell", help="launch fuddly within IPython") as p:
+        parsers["ishell"] = p
+        group = p.add_argument_group("Miscellaneous Options")
+        group.add_argument(
+            "-f",
+            "--fmkdb",
+            metavar="PATH",
+            help="path to an alternative fmkDB.db. Create " "it if it does not exist.",
+        )
+        group.add_argument(
+            "--external-display",
+            action="store_true",
+            help="display information on another terminal.",
+        )
+        group.add_argument(
+            "--quiet",
+            action="store_true",
+            help="limit the information displayed at startup.",
+        )
+
+
     with subparsers.add_parser("run", help="run a fuddly project script") as p:
         # XXX Should you be able to run script from outside the script dirs?
         parsers["run"] = p

@@ -4370,7 +4370,8 @@ class FmkShell(cmd.Cmd):
         self.printer = fmk_plumbing.printer
         self.print = fmk_plumbing.printer.print
 
-        self.intro = colorize(FontStyle.BOLD + "\n-=[ %s ]=- (with Fuddly FmK %s)\n" % (title, fuddly_version), rgb=Color.TITLE)
+        self.intro = colorize(FontStyle.BOLD + f"\n-=[ {title} ]=- (with Fuddly FmK {fuddly_version})\n",
+                              rgb=Color.TITLE)
 
         self.__allowed_cmd = re.compile(
             "^quit$|^switch_term$|^show_projects$|^show_data_models$|^load_project|^load_data_model"

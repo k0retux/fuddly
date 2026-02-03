@@ -10,5 +10,5 @@ Rules-Requires-Root: no
 Package: fuddly
 Architecture: any
 Depends: ${misc:Depends}, ${python3:Depends}, python3, python3-xdg, python3-argcomplete, python3-crcmod, python3-graphviz, python3-matplotlib, python3-z3 (>=4.8)
-Recommends: python3-cups, python3-rpyc (<<7.0.0), python3-rpyc (>=6.0.0), python3-paramiko (<<4.0.0), python3-paramiko (>=3.4.0), python3-serial, python3-xtermcolor
+Recommends: python3-cups, python3-rpyc (<<7.0.0), python3-rpyc (>=6.0.0), python3-paramiko (<<4.0.0), python3-paramiko (>=3.4.0), python3-serial, python3-xtermcolor, ipython3
 Description: fuddly is a fuzzing and data manipulation framework
