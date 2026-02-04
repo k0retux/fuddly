@@ -143,7 +143,7 @@ class DataModel(object):
 
             if status == AbsorbStatus.FullyAbsorbed:
                 print(colorize(
-                    f' ++ {nm} Generator created from raw data retrieved from the file "{filename}"',
+                    f' ++ {nm} Generator created from file [{filename}]',
                     rgb=Color.FMKINFO
                 ))
                 atom_for_abs, msg = self._atom_absorption_additional_actions(atom_for_abs)
@@ -161,11 +161,12 @@ class DataModel(object):
             try:
                 return self._create_atom_from_raw_data_specific(data, idx, filename)
             except NotImplementedError:
-                nm = f'{self.name.upper()}_RAW{idx:0>2d}_{filename[:-len(self.file_extension) - 1]}'
-                print(colorize(
-                    f' ++ {nm} Raw Generator created from raw data retrieved from the file "{filename}"',
-                    rgb=Color.FMKINFO
-                ))
+                nm = f'{self.name}_RAW{idx:0>2d}_{filename[:-len(self.file_extension) - 1]}'
+                nm = nm.upper()
+                print(
+                    colorize(f' ++ {nm}', rgb=Color.FMKINFO) +
+                    colorize(f' Raw Generator created from file [{filename}]', rgb=Color.FMKSUBINFO)
+                )
                 return Node(nm, values=[data], new_env=True)
 
     def register_atom_for_decoding(self, atom, absorb_constraints=AbsFullCsts(),
@@ -299,6 +300,7 @@ class DataModel(object):
         self._dm_access_lock = threading.Lock()
         self._current_prj = None
         self._dm_fs_path = None
+        self._public_attrs = None
 
     def _backend(self, atom):
         if isinstance(atom, (Node, dict)):
@@ -308,6 +310,10 @@ class DataModel(object):
 
     def __str__(self):
         return self.name if self.name is not None else 'Unnamed'
+
+    @property
+    def public_attrs(self):
+        return self._public_attrs
 
     @property
     def included_models(self):
@@ -378,17 +384,39 @@ class DataModel(object):
         self._included_data_models[data_model] = []
         for k, v in data_model._dm_hashtable.items():
             if k in self._dm_hashtable:
-                raise ValueError("the data ID {:s} exists already".format(k))
+                raise ValueError(f"the data reference '{k}' already exists")
             else:
                 self._dm_hashtable[k] = v
                 self._included_data_models[data_model].append(k)
 
         self.node_backend.merge_with(data_model.node_backend)
 
+        if data_model._public_attrs is not None:
+            if self._public_attrs is None:
+                self._public_attrs = data_model._public_attrs
+            else:
+                for k, v in data_model._public_attrs:
+                    try:
+                        self._public_attrs.add_user_input(k, v)
+                    except ValueError:
+                        raise
+
     def atom_identifiers(self):
         hkeys = sorted(self._dm_hashtable.keys())
         for k in hkeys:
             yield k
+
+    def export_attributes(self, attrs: dict):
+        if self._public_attrs is None:
+            self._public_attrs = UI()
+        else:
+            print(colorize('\n[Warning] some attributes were already defined but are about to be removed',
+                           rgb=Color.WARNING))
+        self._public_attrs.set_user_inputs(attrs)
+
+    def iter_exported_attributes(self):
+        for k, v in self._public_attrs:
+            yield k, v
 
     def update_atom(self, atom):
         self._backend(atom).update_atom(atom)

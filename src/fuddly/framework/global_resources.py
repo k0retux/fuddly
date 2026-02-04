@@ -181,6 +181,18 @@ class UI(object):
     def __bool__(self):
         return bool(self._inputs)
 
+    def __iter__(self):
+        for k, v in self._inputs.items():
+            yield k, v
+
+    def __contains__(self, item):
+        return item in self._inputs
+
+    def add_user_input(self, input, value):
+        if input in self._inputs:
+            raise ValueError(f'the attribute "{input}" already exists')
+        self._inputs[input] = value
+
     def get_inputs(self):
         return self._inputs
 
@@ -207,7 +219,7 @@ class UI(object):
         if name in self._inputs:
             return self._inputs[name]
         else:
-            return None
+            raise AttributeError(f'"{name}" does not exist')
 
     def __str__(self):
         if self._inputs:
@@ -247,7 +259,7 @@ class Conf(object):
         if name in self._entries:
             return self._entries[name]
         else:
-            return None
+            raise AttributeError(f'"{name}" does not exist')
 
     def __str__(self):
         if self._entries:

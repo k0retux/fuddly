@@ -451,7 +451,10 @@ def _handle_user_inputs(dmaker, user_input):
     else:
         for k, v in dmaker._args_desc.items():
             desc, default, arg_type = v
-            ui_val = getattr(user_input, k)
+            try:
+                ui_val = getattr(user_input, k)
+            except AttributeError:
+                ui_val = None
             if isinstance(arg_type, tuple):
                 assert(type(ui_val) in arg_type or ui_val is None)
             elif isinstance(arg_type, type):
