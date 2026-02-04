@@ -6398,12 +6398,10 @@ class FmkShell(cmd.Cmd):
         if data is None:
             return False
 
-        tg_ids = None
-
-        if line:
-            args = line.split()
-            args, tg_ids = self._retrieve_tg_ids(args)
-
+        args = line.split()
+        args, tg_ids = self._retrieve_tg_ids(args)
+        args_len = len(args)
+        if args_len > 0:
             actions = self.__parse_instructions(args)
             if actions is None:
                 self.__error_msg = "Syntax Error!"
@@ -6411,44 +6409,70 @@ class FmkShell(cmd.Cmd):
         else:
             actions = None
 
-        self.__error = self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids, seed=data)) is None
+        if tg_ids is not None:
+            data.tg_ids = tg_ids
+
+        if actions is None:
+            ret = self.fz.process_data_and_send(data)
+        else:
+            ret = self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids, seed=data))
+
+        self.__error = ret is None
 
         return False
 
     def do_send_raw(self, line):
         """
         Send raw data
-        |_ syntax: send_raw [targetID1 ... targetIDN]
+        |_ syntax: send_raw [operator_type_1 ... operator_type_n] [targetID1 ... targetIDN]
 
         A prompt will then ask you to write your input
         """
 
-        self.__error_msg = "Syntax Error!"
+        self.__error = True
+
         args = line.split()
         args, tg_ids = self._retrieve_tg_ids(args)
-        if args:
-            self.__error = True
-            return False
+        args_len = len(args)
+        if args_len > 0:
+            actions = self.__parse_instructions(args)
+            if actions is None:
+                self.__error_msg = "Syntax Error!"
+                return False
+        else:
+            actions = None
 
         data_str = get_user_input(colorize("*** Data to be sent without interpretation:\n# ",
                                            rgb=Color.PROMPT))
 
-        self.fz.process_data_and_send(Data(data_str), tg_ids=tg_ids)
+        if actions is None:
+            self.__error = (
+                self.fz.process_data_and_send(Data(data_str), tg_ids=tg_ids) is None)
+        else:
+            self.__error = (
+                    self.fz.process_data_and_send(
+                        DataProcess(actions, seed=Data(data_str), tg_ids=tg_ids),
+                        verbose=verbose, reset_dmakers=self._reset_dmakers_mode) is None)
 
         return False
 
     def do_send_eval(self, line):
         """
         Send python-evaluation of the parameter <data>
-        |_ syntax: send_eval [targetID1 ... targetIDN]
+        |_ syntax: send_eval [operator_type_1 ... operator_type_n] [targetID1 ... targetIDN]
         """
-        self.__error_msg = "Syntax Error!"
-        args = line.split()
+        self.__error = True
 
+        args = line.split()
         args, tg_ids = self._retrieve_tg_ids(args)
-        if args:
-            self.__error = True
-            return False
+        args_len = len(args)
+        if args_len > 0:
+            actions = self.__parse_instructions(args)
+            if actions is None:
+                self.__error_msg = "Syntax Error!"
+                return False
+        else:
+            actions = None
 
         data_str = get_user_input(colorize("*** Data to be sent after evaluation:\n# ",
                                            rgb=Color.PROMPT))
@@ -6459,7 +6483,14 @@ class FmkShell(cmd.Cmd):
             self.__error = True
             return False
 
-        self.fz.process_data_and_send(data, tg_ids=tg_ids)
+        if actions is None:
+            self.__error = (
+                self.fz.process_data_and_send(data, tg_ids=tg_ids) is None)
+        else:
+            self.__error = (
+                    self.fz.process_data_and_send(
+                        DataProcess(actions, seed=data, tg_ids=tg_ids),
+                        verbose=verbose, reset_dmakers=self._reset_dmakers_mode) is None)
 
         return False
 
