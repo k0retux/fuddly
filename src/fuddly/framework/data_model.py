@@ -200,7 +200,7 @@ class DataModel(object):
             self._atoms_for_abs[scope] = (prepared_atom, absorb_constraints)
 
     def decode(self, data, scope=None, atom_name=None, requested_abs_csts=None, colorized=True,
-               verbose=Verbose.Heavy):
+               verbose=Verbose.Heavy, debug=False):
         """
         Args:
             data:
@@ -236,7 +236,7 @@ class DataModel(object):
         else:
             accumulate('\n')
             atom.show(log_func=accumulate, display_title=False, pretty_print=colorized,
-                      verbose=verbose)
+                      verbose=verbose, debug=debug)
 
         return atom, a.content
 

@@ -3106,9 +3106,12 @@ class FmkPlumbing(object):
             return 0
 
     @EnforceOrder(accepted_states=["S2"])
-    def show_data(self, data: Data, verbose=Verbose.Normal, debug=False):
+    def show_data(self, data: Data | str, verbose=Verbose.Normal, debug=False):
         self.lg.print_console("-=[ Data Visualization ]=-\n", rgb=Color.INFO, style=FontStyle.BOLD)
-        self.lg.pretty_print_data(data, raw_limit=400, verbose=verbose, debug=debug)
+        if isinstance(data, Data):
+            self.lg.pretty_print_data(data, raw_limit=400, verbose=verbose, debug=debug)
+        else:
+            self.lg.write(f'\n{data}')
         self.lg.print_console("\n\n", nl_before=False)
 
     @EnforceOrder(accepted_states=["S2"])
@@ -3157,18 +3160,36 @@ class FmkPlumbing(object):
             self.__data_bank[self.__db_idx] = d
 
     @EnforceOrder(accepted_states=["S2"])
-    def fmkdb_fetch_data(self, start_id=1, end_id=-1):
+    def fmkdb_fetch_data(self, start_id=1, end_id=-1,
+                         decode=False, dec_verbose=Verbose.Normal, dec_debug=False):
         data_list = []
         for record in self.fmkDB.fetch_data(start_id=start_id, end_id=end_id):
-            data_id, content, dtype, dmk_name, dm_name = record
+            data_id, content, dtype, dmk_name, dm_name, prj_name = record
             data = Data(content)
             data.set_data_id(data_id)
             data.set_initial_dmaker((str(dtype), str(dmk_name), None))
             data.from_fmkdb = True
+            decoded_result = None
             if dm_name != Database.DEFAULT_DM_NAME:
                 dm = self.get_data_model_by_name(dm_name)
                 data.set_data_model(dm)
-            data_list.append(data)
+                if decode:
+                    from fuddly.libs.fmk_services import get_project_from_name
+                    prj_obj = get_project_from_name(prj_name)
+                    try:
+                        dm.load_data_model(self._name2dm, from_prj=prj_obj)
+                    except:
+                        msg = ("Error encountered while loading the data model. (checkup the associated" \
+                               " '{:s}.py' file)".format(self.dm.name))
+                        self._handle_user_code_exception(msg=msg)
+                    else:
+                        decoded_result = dm.decode(content, atom_name=dtype.lower(),
+                                                   verbose=dec_verbose, debug=dec_debug)
+
+            if decode:
+                data_list.append((data, decoded_result))
+            else:
+                data_list.append(data)
 
         if not data_list:
             data_list = None
@@ -6295,23 +6316,47 @@ class FmkShell(cmd.Cmd):
     def do_show_data(self, line):
         """
         Show the last generated data.
-        |_ syntax: show_data [verbose_level debug|verbose_level]
+        |_ syntax:
+             show_data [verbose_level "debug"|verbose_level]
+        |_ syntax for showing data from FmkDB:
+             show_data f<entry_idx> [verbose_level "debug"|verbose_level]
+        |_ syntax for showing data from DBank:
+             show_data d<entry_idx> [verbose_level "debug"|verbose_level]
 
         Notes:
             verbose_level:
               - 0 (Verbose.Light)
               - 1 (Verbose.Normal)
               - 2 (Verbose.Heavy)
-
-            debug: bool
         """
         args = line.split()
         args_len = len(args)
 
         self.__error = True
 
-        if args_len > 2:
+        if args_len > 3:
             return False
+
+        id_from_fmkdb = None
+        id_from_db = None
+
+        if args_len > 0:
+            try:
+                full_id = args.pop(0)
+                idx = int(full_id[1:])
+                if full_id[0] == "f":
+                    id_from_fmkdb = idx
+                    id_from_db = None
+                elif full_id[0] == "d":
+                    id_from_fmkdb = None
+                    id_from_db = idx
+                else:
+                    raise ValueError
+
+            except ValueError:
+                args.insert(0, full_id)
+            else:
+                args_len = len(args)
 
         try:
             if args_len == 0:
@@ -6340,9 +6385,29 @@ class FmkShell(cmd.Cmd):
                             1: Verbose.Normal,
                             2: Verbose.Heavy}.get(verbose_level)
 
-            data = self.fz.get_last_data()
-            if data is None:
-                return False
+            if id_from_fmkdb is None and id_from_db is None:
+                data = self.fz.get_last_data()
+                if data is None:
+                    return False
+
+            elif id_from_fmkdb is not None:
+                data, decoded_result = self.fz.fmkdb_fetch_data(start_id=id_from_fmkdb, end_id=id_from_fmkdb,
+                                                                decode=True, dec_verbose=verbose_mode,
+                                                                dec_debug=debug)
+                if data is None:
+                    return False
+                else:
+                    _, decoded_str = decoded_result
+                    blob_desc = colorize('Raw data retrieved from FmkDB:', rgb=Color.FMKINFO)
+                    data = f'{blob_desc}\n\n{data.to_str()!a}\n\n{decoded_str}'
+
+            elif id_from_db is not None:
+                data = self.fz.get_from_data_bank(id_from_db)
+                if data is None:
+                    return None
+            else:
+                # Non reachable code
+                pass
 
             self.fz.show_data(data, verbose=verbose_mode, debug=debug)
 
