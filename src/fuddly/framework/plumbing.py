@@ -36,6 +36,7 @@ import cmd
 import atexit
 import datetime
 import time
+import threading
 import signal
 
 from pathlib import Path
@@ -211,49 +212,49 @@ class EnforceOrder(object):
 
 
 class FmkTask(threading.Thread):
-    def __init__( self, name, func, arg, period=None, error_func=lambda x: x, cleanup_func=lambda: None):
+    def __init__(self, name, func, arg, period=None, error_func=lambda x: x, cleanup_func=lambda: None):
         threading.Thread.__init__(self)
-        self._name = name
-        self._func = func
-        self._arg = arg
-        self._period = period
-        self._stop = threading.Event()
-        self._error_func = error_func
-        self._cleanup_func = cleanup_func
+        self.__name = name
+        self.__func = func
+        self.__arg = arg
+        self.__period = period
+        self.__stop = threading.Event()
+        self.__error_func = error_func
+        self.__cleanup_func = cleanup_func
         if isinstance(func, Task):
-            func.stop_event = self._stop
+            func.stop_event = self.__stop
 
     def run(self):
-        if isinstance(self._func, Task):
-            self._func._setup()
+        if isinstance(self.__func, Task):
+            self.__func._setup()
 
-        if isinstance(self._func, Task):
-            time.sleep(self._func.init_delay)
+        if isinstance(self.__func, Task):
+            time.sleep(self.__func.init_delay)
 
-        while not self._stop.is_set():
+        while not self.__stop.is_set():
             try:
-                # print("\n*** Function '{!s}' executed by Task '{!s}' ***".format(self._func, self._name))
-                if isinstance(self._func, list):
-                    for f in self._func:
-                        f(self._arg)
+                # print("\n*** Function '{!s}' executed by Task '{!s}' ***".format(self.__func, self.__name))
+                if isinstance(self.__func, list):
+                    for f in self.__func:
+                        f(self.__arg)
                 else:
-                    self._func(self._arg)
+                    self.__func(self.__arg)
             except DataProcessTermination:
                 break
             except:
-                self._error_func("Task '{!s}' has crashed!".format(self._name))
+                self.__error_func("Task '{!s}' has crashed!".format(self.__name))
                 break
-            if self._period is not None:
-                self._stop.wait(max(self._period, 0.0001))
+            if self.__period is not None:
+                self.__stop.wait(max(self.__period, 0.0001))
             else:
-                self._cleanup_func()
+                self.__cleanup_func()
                 break
 
-        if isinstance(self._func, Task):
-            self._func._cleanup()
+        if isinstance(self.__func, Task):
+            self.__func._cleanup()
 
     def stop(self):
-        self._stop.set()
+        self.__stop.set()
 
 
 def _populate_projects(search_path, prefix="", projects=None):
