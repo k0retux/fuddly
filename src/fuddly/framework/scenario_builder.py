@@ -1,5 +1,6 @@
 import copy
 
+from fuddly.framework.error_handling import ScenarioDefinitionError
 from fuddly.framework.scenario import *
 import fuddly.framework.node as nd
 
@@ -8,28 +9,50 @@ class ScenarioBrick(object):
 
     _scenario = None
 
-    def __init__(self, name: str, starting_step: Step = None,
-                 in_connectors: list = None, out_connectors: list = None,
-                 final: bool = False, user_context: UI = None):
+    def __init__(self):
 
-        self._name = name
+        self._name = self.__class__.__name__
+        self._scenario = None
+
+    def build(self, user_context: UI = None, **kwargs):
+        """
+        To be overloaded
+
+        :param user_context:
+        :param kwargs:
+        :return:
+
+        """
+        raise NotImplementedError
+
+    def setup(self, final: bool = False, **kwargs):
         self._final = final
-        uc = UI() if user_context is None else user_context
+        if self._scenario is None:
+            ret = self._build(**kwargs)
+            if ret is None:
+                raise ScenarioDefinitionError
 
-        if in_connectors is not None and out_connectors is not None and starting_step is not None:
-            self._scenario = Scenario(self._name, anchor=starting_step, user_context=uc)
-            self._scenario.set_in_connectors(in_connectors)
-            self._scenario.set_out_connectors(out_connectors)
-            # self._in_connectors = self._scenario._in_connectors
-            # self._out_connectors = self._scenario._out_connectors
 
+    def _build(self, **kwargs):
+
+        uc = UI()
+
+        try:
+            starting_step, in_connectors, out_connectors = self.build(user_context=uc, **kwargs)
+        except:
+            self._scenario = None
+            return False
         else:
-            # used during copy
-            assert in_connectors is None and out_connectors is None and starting_step is None
+            assert starting_step is not None
 
+        self._scenario = Scenario(self._name, anchor=starting_step, user_context=uc)
+        self._scenario.set_in_connectors(in_connectors)
+        self._scenario.set_out_connectors(out_connectors)
 
-        if final:
+        if self._final:
             self.finalize()
+
+        return True
 
     def in_connectors(self, idx):
         return self._scenario.in_connectors(idx)
@@ -71,37 +94,25 @@ class ScenarioBrick(object):
     def clone(self):
         return copy.copy(self)
 
-    def get_scenario(self, name: str):
-        sc = self._scenario.clone(name)
-        return sc
+    def get_scenario(self, name: str = None):
+        return self._scenario.clone(self._name if name is None else name)
 
     def __copy__(self):
-        new_scbrick = type(self)(name=self._name, final=self._final)
+        new_scbrick = type(self)()
         new_scbrick.__dict__.update(self.__dict__)
-        new_scbrick._scenario = copy.copy(self._scenario)
-        # new_scbrick._in_connectors = new_scbrick._scenario._in_connectors
-        # new_scbrick._out_connectors = new_scbrick._scenario._out_connectors
+        new_scbrick._scenario = None
 
         return new_scbrick
 
 
-class ScenarioTemplate(object):
+class FragmentationBrick(ScenarioBrick):
 
-    def __init__(self, **kwargs):
-        self.scenario_template = None
+    def build(self, user_context: UI = None,
+              pod_atom_name=None, payload=None, fragidx_ref=None, fragmax_ref=None, pld_ref=None, fbk_timeout=2):
 
-    def instantiate_scenario(self, name, ui=None):
-        new_sc = copy.copy(self.scenario_template)
-        new_sc.name = name
-        if ui is not None:
-            new_sc.merge_user_context_with(ui)
-        return new_sc
+        user_context.merge_with(UI(fbk_timeout=fbk_timeout, payload=payload))
 
-class FragScenarioTemplate(ScenarioTemplate):
-
-    def __init__(self, atom_name, fragidx_ref, fragmax_ref, pld_ref, fbk_timeout=2):
-        ScenarioTemplate.__init__(self)
-        self.atom_name = atom_name
+        self.atom_name = pod_atom_name
         self.fragidx_ref = fragidx_ref
         self.fragmax_ref = fragmax_ref
         self.pld_ref = pld_ref
@@ -112,37 +123,18 @@ class FragScenarioTemplate(ScenarioTemplate):
 
         def init_frag(env, step):
             env._frag_idx = 0
-            # pld = env.user_context.payload
             env._payload_frag_max = len(env.user_context.payload)
-
-        # def change_fragid(env, step):
-        #     atom = env.dm.get_atom(self.atom_name)
-        #     # fragidx_node = atom[self.fragidx_sem]
-        #     # fragmax_node = atom[self.fragmax_sem]
-        #     env._frag_idx += 1
-        #     atom[self.fragidx_sem] = env._frag_idx
-        #     atom[self.fragmax_sem] = env._payload_frag_max
-        #
-        #     env._header = atom
-
 
         def change_fragmax(env, step):
             pass
 
         def send_frag(env, step):
             atom = env.dm.get_atom(self.atom_name)
-            # fragidx_node = atom[self.fragidx_sem]
-            # fragmax_node = atom[self.fragmax_sem]
             env._frag_idx += 1
             atom[self.fragidx_sem] = env._frag_idx
             atom[self.fragmax_sem] = env._payload_frag_max
             atom[self.pld_sem] = env.user_context.payload[env._frag_idx-1]
             step.data_desc = Data(atom)
-
-            # step.set_dmaker_reset()
-            # step.data_desc = DataProcess(
-            #     process=[('ADD', UI(raw=env.user_context.payload[env._frag_idx-1]))],
-            #     seed=Data(atom))
 
         def check_max_loop(env, current_step, next_step, fbkgate):
             if env._frag_idx < env._payload_frag_max:
@@ -153,15 +145,18 @@ class FragScenarioTemplate(ScenarioTemplate):
 
         step_init = NoDataStep(fbk_timeout=0, do_before_data_processing=init_frag,
                                step_desc='Init')
-        # step_change_fragidx = NoDataStep(do_before_data_processing=change_fragid)
-        step_change_fragmax = NoDataStep(do_before_data_processing=change_fragmax)
+        # step_change_fragmax = NoDataStep(do_before_data_processing=change_fragmax)
         step_send_frag = StepStub(do_before_data_processing=send_frag, fbk_timeout=fbk_timeout)
+        step_out = NoDataStep()
 
         step_init.connect_to(step_send_frag)
-        step_send_frag.connect_to(FinalStep(), cbk_after_fbk=check_max_loop)
+        step_send_frag.connect_to(step_out, cbk_after_fbk=check_max_loop)
 
-        self.scenario_template = Scenario(self.__class__.__name__, anchor=step_init,
-                                          user_context=UI(fbk_timeout=fbk_timeout))
+        starting_step = step_init
+        in_connectors = [step_init]
+        out_connectors = [step_out]
+
+        return starting_step, in_connectors, out_connectors
 
 
 class ScenarioBuilder(object):
@@ -169,8 +164,12 @@ class ScenarioBuilder(object):
     def __init__(self):
         pass
 
-    def set_frag_scenario_template(self, atom_name, fragidx_ref, fragmax_ref, pld_ref, fbk_timeout=2):
-        self.frag_sc = FragScenarioTemplate(atom_name, fragidx_ref=fragidx_ref, fragmax_ref=fragmax_ref, pld_ref=pld_ref, fbk_timeout=fbk_timeout)
+    def build_fragmentation_scenario(self, name,
+                                     pod_atom_name, payload,
+                                     fragidx_ref, fragmax_ref, pld_ref, fbk_timeout=2):
 
-    def build_frag_scenarios_from(self, name, payload):
-        return self.frag_sc.instantiate_scenario(name, ui=UI(payload=payload))
+        frag_brick = FragmentationBrick()
+        frag_brick.setup(final=True, pod_atom_name=pod_atom_name, payload=payload,
+                         fragidx_ref=fragidx_ref, fragmax_ref=fragmax_ref,
+                         pld_ref=pld_ref, fbk_timeout=fbk_timeout)
+        return frag_brick.get_scenario(name)

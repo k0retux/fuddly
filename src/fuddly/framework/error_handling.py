@@ -39,6 +39,8 @@ class DataModelDuplicateError(ValueError):
         super().__init__(f"A data model with the name '{name}' already exist!")
         self.name = name
 
+class ScenarioDefinitionError(Exception): pass
+
 class NodeError(Exception): pass
 
 class ProjectDefinitionError(Exception): pass
