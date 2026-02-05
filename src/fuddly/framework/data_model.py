@@ -136,7 +136,8 @@ class DataModel(object):
         if self._default_atom_for_abs:
             atom, abs_csts = self._default_atom_for_abs
 
-            nm = f'{self.name.upper()}{idx:0>2d}_{filename[:-len(self.file_extension) - 1]}'
+            nm = f'{self.name}{idx:0>2d}_{filename[:-len(self.file_extension) - 1]}'
+            nm  = nm.upper()
             atom_for_abs = self._backend(atom).atom_copy(atom, new_name=nm)
 
             status, off, size, name = atom_for_abs.absorb(data, constraints=abs_csts)

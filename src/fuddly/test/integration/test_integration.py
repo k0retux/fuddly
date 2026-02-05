@@ -2486,15 +2486,15 @@ class TestNodeFeatures(unittest.TestCase):
     def test_show(self):
 
         a = fmk.dm.get_external_atom(dm_name='usb', data_id='DEV')
-        b = fmk.dm.get_external_atom(dm_name='png', data_id='PNG_00')
+        b = fmk.dm.get_external_atom(dm_name='png', data_id='PNG00_LENNA_TEST_IMAGE')
 
         a.show(raw_limit=400)
         b.show(raw_limit=400)
 
-        b['PNG_00/chunks/chk/height'] = a
+        b['.*/chunks/chk/height'] = a
         b.show(raw_limit=400)
 
-        b['PNG_00/chunks/chk/height/idProduct'] = a
+        b['.*/chunks/chk/height/idProduct'] = a
         b.show(raw_limit=400)
 
     def test_exist_condition_01(self):
