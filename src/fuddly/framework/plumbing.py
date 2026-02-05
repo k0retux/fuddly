@@ -2516,15 +2516,19 @@ class FmkPlumbing(object):
         assert id_from_fmkdb is None or id_from_db is None
 
         if id_from_fmkdb is not None:
-            data = self.fmkdb_fetch_data(start_id=id_from_fmkdb, end_id=id_from_fmkdb)
+            data, decoded_result = self.fmkdb_fetch_data(start_id=id_from_fmkdb, end_id=id_from_fmkdb,
+                                                         decode=True)
             if data is None:
                 return None
+            else:
+                atom, _ = decoded_result
+                if atom is not None:
+                    data = Data(atom)
 
         elif id_from_db is not None:
             data = self.get_from_data_bank(id_from_db)
             if data is None:
                 return None
-
         else:
             pass
 
