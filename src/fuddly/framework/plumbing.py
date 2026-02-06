@@ -43,8 +43,8 @@ from pathlib import Path
 from os.path import dirname, basename
 
 from functools import wraps, partial
-from tabnanny import verbose
 from typing import Sequence
+from pprint import pprint
 
 # Needed for when fuddly is not used from the CLI
 from fuddly.libs.importer import fuddly_importer_hook
@@ -2517,11 +2517,13 @@ class FmkPlumbing(object):
         assert id_from_fmkdb is None or id_from_db is None
 
         if id_from_fmkdb is not None:
-            data, decoded_result = self.fmkdb_fetch_data(start_id=id_from_fmkdb, end_id=id_from_fmkdb,
-                                                         decode=True)
-            if data is None:
+            ret = self.fmkdb_fetch_data(start_id=id_from_fmkdb, end_id=id_from_fmkdb,
+                                        decode=True)
+
+            if ret is None:
                 return None
             else:
+                data, decoded_result = ret[0]
                 atom, _ = decoded_result
                 if atom is not None:
                     data = Data(atom)
@@ -3198,8 +3200,6 @@ class FmkPlumbing(object):
 
         if not data_list:
             data_list = None
-        elif len(data_list) == 1:
-            data_list = data_list[0]
 
         return data_list
 
@@ -4477,6 +4477,7 @@ class FmkShell(cmd.Cmd):
 
         self.comp_step = 0
         self.current_arg = None
+        self._comp_tmp = None
 
     def postcmd(self, stop, line):
         self.prompt = "\n" + self.config.prompt + " "
@@ -4667,6 +4668,38 @@ class FmkShell(cmd.Cmd):
             if obj:
                 self._display_dmaker_desc(self.current_arg, obj)
         elif (self.comp_step >= start_completion_index+3
+              and self.comp_step % 2 == (start_completion_index % 2)^1):
+            if self.current_arg == None:
+                dt = line[:endidx].split()[-1]
+                dt = dt[:dt.index('(')]
+            else:
+                dt = self.current_arg
+            ret = self._complete_helper_operator_param(dt, text)
+            if (self._inline_doc or self._offline_doc) and text:
+                param = ret[0]
+                obj = self.operators_params_desc[dt].get(param)
+                if obj:
+                    if self._inline_doc:
+                        print(self.fz._make_str(param, obj, prefix1='', prefix2='', prefix3='  | '))
+                    if self._offline_doc and self.fz.external_display.is_enabled:
+                        self.fz.external_display.disp.print_nl(
+                            self.fz._make_str(param, obj, prefix1='', prefix2='', prefix3='  | ')
+                        )
+        else:
+            ret = []
+
+        return ret
+
+
+    def _complete_helper_operators(self, text, line, begidx, endidx, start_completion_index=1):
+        if (self.comp_step >= start_completion_index
+              and self.comp_step % 2 == start_completion_index % 2):
+            ret = self._complete_helper_operator(text)
+            self.current_arg = ret[0]
+            obj = self.operators_obj[self.current_arg]
+            if obj:
+                self._display_dmaker_desc(self.current_arg, obj)
+        elif (self.comp_step >= start_completion_index+1
               and self.comp_step % 2 == (start_completion_index % 2)^1):
             if self.current_arg == None:
                 dt = line[:endidx].split()[-1]
@@ -5812,8 +5845,7 @@ class FmkShell(cmd.Cmd):
     def complete_send_loop(self, text, line, begidx, endidx):
         self._complete_helper_preambule(text, line, begidx, endidx, step_without_subparams=[1])
         if self.comp_step == 1:
-            ret = list(map(lambda x: str(x), range(2, 10)))
-            ret.insert(0, str(-1))
+            ret = ['-1', '2', '3', '4', '5', '6', '7', '8', '9']
         else:
             ret = self._complete_helper_gen_and_op(text, line, begidx, endidx, start_completion_index=2)
 
@@ -6218,10 +6250,20 @@ class FmkShell(cmd.Cmd):
         else:
             actions = None
 
+        self.__error_msg = "Error with the command!"
         self.__error = self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
                                                      id_from_fmkdb=id_from_fmkdb,
                                                      id_from_db=id_from_db) is None
         return False
+
+    def complete_replay_db(self, text, line, begidx, endidx):
+        self._complete_helper_preambule(text, line, begidx, endidx, step_without_subparams=[1])
+        if self.comp_step == 1:
+            ret = ['f', 'd']
+        else:
+            ret = self._complete_helper_operators(text, line, begidx, endidx, start_completion_index=2)
+
+        return ret
 
     def do_replay_db_loop(self, line):
         """
@@ -6264,59 +6306,25 @@ class FmkShell(cmd.Cmd):
         else:
             actions = None
 
+        self.__error_msg = "Error with the command!"
         self.__error = self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
                                                      id_from_fmkdb=id_from_fmkdb,
                                                      id_from_db=id_from_db,
                                                      max_loop=nb) is None
         return False
 
-    def do_replay_db_all(self, line):
-        """
-        Replay all data from the Data Bank
-        |_ syntax: replay_db_all [targetID1 ... targetIDN]
-        """
 
-        args = line.split()
-        args, tg_ids = self._retrieve_tg_ids(args)
-
-        try:
-            next(self.fz.iter_data_bank())
-        except StopIteration:
-            self.__error = True
-            self.__error_msg = "the Data Bank is empty"
-            return False
-
-        for data in self.fz.iter_data_bank():
-            self.fz.process_data_and_send(data, tg_ids=tg_ids)
-
-        return False
-
-    def do_show_data_paths(self, line):
-        """
-        Show the graph paths of the last generated data.
-        Can be used as inputs for some generators or operators.
-        """
-        self.__error = True
-
-        data = self.fz.get_last_data()
-        if data is None:
-            return False
-
-        self.fz.show_data(data, verbose=Verbose.Light, debug=False)
-
-        self.__error = False
-        return False
-
-    def complete_show_data(self, text, line, begidx, endidx):
-        self._complete_helper_preambule(text, line, begidx, endidx, step_with_subparams=[])
+    def complete_replay_db_loop(self, text, line, begidx, endidx):
+        self._complete_helper_preambule(text, line, begidx, endidx, step_without_subparams=[1, 2])
         if self.comp_step == 1:
-            ret = ['0', '1', '2']
+            ret = ['-1', '2', '3', '4', '5', '6', '7', '8', '9']
         elif self.comp_step == 2:
-            ret = list(filter(lambda x: x.startswith(text), ['debug']))
+            ret = ['f', 'd']
         else:
-            ret = []
+            ret = self._complete_helper_operators(text, line, begidx, endidx, start_completion_index=3)
 
         return ret
+
 
     def do_show_data(self, line):
         """
@@ -6396,15 +6404,16 @@ class FmkShell(cmd.Cmd):
                     return False
 
             elif id_from_fmkdb is not None:
-                data, decoded_result = self.fz.fmkdb_fetch_data(start_id=id_from_fmkdb, end_id=id_from_fmkdb,
+                ret = self.fz.fmkdb_fetch_data(start_id=id_from_fmkdb, end_id=id_from_fmkdb,
                                                                 decode=True, dec_verbose=verbose_mode,
                                                                 dec_debug=debug)
-                if data is None:
+                if ret is None:
                     return False
                 else:
+                    d, decoded_result = ret[0]
                     _, decoded_str = decoded_result
                     blob_desc = colorize('Raw data retrieved from FmkDB:', rgb=Color.FMKINFO)
-                    data = f'{blob_desc}\n\n{data.to_str()!a}\n\n{decoded_str}'
+                    data = f'{blob_desc}\n\n{d.to_str()!a}\n\n{decoded_str}'
 
             elif id_from_db is not None:
                 data = self.fz.get_from_data_bank(id_from_db)
@@ -6418,6 +6427,27 @@ class FmkShell(cmd.Cmd):
 
             self.__error = False
             return False
+
+
+    def complete_show_data(self, text, line, begidx, endidx):
+        self._complete_helper_preambule(text, line, begidx, endidx, step_with_subparams=[])
+        # print(f'\n{text} - {self.comp_step}')
+        if self.comp_step == 1:
+            if text:
+                self._comp_tmp = text[0]
+            ret = list(filter(lambda x: x.startswith(text), ['f', 'd', '0', '1', '2']))
+        elif self.comp_step == 2:
+            if self._comp_tmp in ['f', 'd']:
+                ret = list(filter(lambda x: x.startswith(text), ['0', '1', '2']))
+            else:
+                ret = list(filter(lambda x: x.startswith(text), ['debug']))
+        elif self.comp_step == 3:
+            ret = list(filter(lambda x: x.startswith(text), ['debug']))
+        else:
+            ret = []
+
+        return ret
+
 
     def do_show_scenario(self, line):
         """
@@ -6526,6 +6556,11 @@ class FmkShell(cmd.Cmd):
 
         return False
 
+    def complete_send_raw(self, text, line, begidx, endidx):
+        self._complete_helper_preambule(text, line, begidx, endidx)
+        return self._complete_helper_operators(text, line, begidx, endidx, start_completion_index=1)
+
+
     def do_send_eval(self, line):
         """
         Send python-evaluation of the parameter <data>
@@ -6563,6 +6598,10 @@ class FmkShell(cmd.Cmd):
                         verbose=verbose, reset_dmakers=self._reset_dmakers_mode) is None)
 
         return False
+
+    def complete_send_eval(self, text, line, begidx, endidx):
+        self._complete_helper_preambule(text, line, begidx, endidx)
+        return self._complete_helper_operators(text, line, begidx, endidx, start_completion_index=1)
 
     def do_register_db(self, line):
         """
