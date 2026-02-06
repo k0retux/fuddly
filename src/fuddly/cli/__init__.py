@@ -35,8 +35,8 @@ from fuddly.cli.tool import tool_argument_completer
 from fuddly.cli.utils import (
         get_projects,
         get_tools,
-        get_scripts,
-        get_all_object_names,
+        get_all_objects,
+        get_project_scripts,
 )
 from fuddly.cli.error import CliException
 
@@ -132,18 +132,26 @@ def main(argv: List[str] = None):
         )
 
         p.add_argument(
-            "script",
-            metavar="script",
-            help="name of the script to launch, the special value \"list\" list available scripts",
-            choices=["list", *get_scripts()],
+            "project",
+            help="Project who's script to launch",
+            choices=["list", *map(lambda x: x[0], get_projects())],
         )
+
+        #p.add_argument(
+        #    "script",
+        #    metavar="script",
+        #    help="name of the script to launch, the special value \"list\" list available scripts",
+        #).completer = get_project_scripts
 
         # TODO add arg completion for scripts
         p.add_argument(
-            "args",
+            "script",
+            metavar="script",
             nargs=argparse.REMAINDER,
-            help="arguments to pass through to the script",
-        )  # .completer = script_argument_completer
+            help="name of the script to launch and it's arguments, the special value \"list\" list available scripts",
+            #help="arguments to pass through to the script",
+        ).completer = get_project_scripts
+        #)  # .completer = script_argument_completer
 
     with subparsers.add_parser("new", help="create a new project or data model") as p:
         parsers["new"] = p
@@ -166,7 +174,7 @@ def main(argv: List[str] = None):
                 "--clone",
                 metavar="object_name",
                 help="name of the object to clone.",
-                choices=["list", *get_all_object_names()],
+                choices=["list", *get_all_objects()],
             )
             g.add_argument(
                 "--type",

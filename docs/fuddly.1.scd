@@ -50,14 +50,18 @@ a *-h* and *--help* options to describe their use from the command line
 
 ## RUN
 
-*fuddly* run list | script_name [script_args...]
+*fuddly* run list | (project script_name [script_args...])
 
 	*list*
 		This option gives you a list of all the available scripts.
 		
+	*project*
+		Name of the project from which to run the script. Using *list*
+		will show all available projects.
+
 	*script_name*
-		Name of the script to launch, the format is a python package like
-		syntax as given from thte *list* argument.
+		Name of the script to launch, using *list* will show all available
+		scripts for that project.
 
 	*script_args...*
 		Arguments to give to the script as if it was its command line arguments.
