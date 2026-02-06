@@ -9205,6 +9205,9 @@ class Node(object):
                                         if isinstance(obj, SyncObj):
                                             continue
                                         nd, param = obj
+                                        if nd is None:
+                                            # TODO: why nd can be None?
+                                            continue
                                         syncw_str = f', sync with: {nd.name} (NdInt: {id(nd.c[conf_tmp])})'
 
                                 syncw_str += (f', mutable: '

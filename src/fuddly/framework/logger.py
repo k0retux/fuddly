@@ -23,7 +23,7 @@
 
 import os
 import time
-
+import traceback
 import sys
 import datetime
 import threading
@@ -314,59 +314,83 @@ class Logger(object):
             self._log_handler_thread.join()
 
     def _log_handler(self):
-        self._thread_initialized.set()
 
-        accu = Accumulator()
-        while True:
-            # self._log_displayed.clear()
-            with self._log_entry_submitted_cond:
-                if self._log_handler_stop_event.is_set() and not self._log_entry_list:
-                    break
-                self._log_entry_submitted_cond.wait(0.001)
+        try:
+            self._thread_initialized.set()
 
-                if self._log_entry_list:
-                    log_entries = self._log_entry_list
-                    self._log_entry_list = []
-                else:
-                    continue
+            accu = Accumulator()
+            while True:
+                with self._log_entry_submitted_cond:
+                    if self._log_handler_stop_event.is_set() and not self._log_entry_list:
+                        break
+                    self._log_entry_submitted_cond.wait(0.001)
 
-            for log_e in log_entries:
-                api, params = log_e
-
-                if api == Logger.FLUSH_API:
-                    if not self._ext_disp.is_enabled:
-                        sys.stdout.flush()
-                elif api == Logger.WRITE_API:
-                    if self._ext_disp.is_enabled:
-                        self._ext_disp.disp.print(params)
+                    if self._log_entry_list:
+                        log_entries = self._log_entry_list
+                        self._log_entry_list = []
                     else:
-                        sys.stdout.write(params)
-                elif api == Logger.PRETTY_PRINT_API:
-                    data, fd, raw_limit, verbose, debug = params
-                    if fd is None:
-                        data.show(log_func=accu.accumulate, raw_limit=raw_limit, verbose=verbose,
-                                  debug=debug)
+                        continue
+
+                for log_e in log_entries:
+                    api, params = log_e
+
+                    if api == Logger.FLUSH_API:
+                        if not self._ext_disp.is_enabled:
+                            sys.stdout.flush()
+                    elif api == Logger.WRITE_API:
                         if self._ext_disp.is_enabled:
-                            self._ext_disp.disp.print('\n')
-                            self._ext_disp.disp.print(accu.content)
+                            self._ext_disp.disp.print(params)
                         else:
-                            sys.stdout.write('\n')
-                            sys.stdout.write(accu.content)
-                        accu.clear()
+                            sys.stdout.write(params)
+                    elif api == Logger.PRETTY_PRINT_API:
+                        data, fd, raw_limit, verbose, debug = params
+                        if fd is None:
+                            try:
+                                data.show(log_func=accu.accumulate, raw_limit=raw_limit, verbose=verbose,
+                                          debug=debug)
+                            except Exception as e:
+                                err_msg = colorize(f"\n*** ERROR: data.show() raise the exception [{e}]\n",
+                                                   rgb=Color.ERROR)
+                                if self._ext_disp.is_enabled:
+                                    self._ext_disp.disp.print(err_msg)
+                                else:
+                                    sys.stderr.write(err_msg)
+                                traceback.print_exc()
+
+                            if self._ext_disp.is_enabled:
+                                self._ext_disp.disp.print('\n')
+                                self._ext_disp.disp.print(accu.content)
+                            else:
+                                sys.stdout.write('\n')
+                                sys.stdout.write(accu.content)
+                            accu.clear()
+                        else:
+                            try:
+                                data.show(log_func=fd.write, raw_limit=raw_limit, verbose=verbose,
+                                          debug=debug)
+                            except Exception as e:
+                                err_msg = colorize(f"\n*** ERROR: data.show() raise the exception [{e}]\n",
+                                                   rgb=Color.ERROR)
+                                fd.write(err_msg)
+                                traceback.print_exc()
+
+                            fd.flush()
+
+                    elif api == Logger.PRINT_CONSOLE_API:
+                        self._print_console(*params)
                     else:
-                        data.show(log_func=fd.write, raw_limit=raw_limit, verbose=verbose,
-                                  debug=debug)
-                        fd.flush()
-                elif api == Logger.PRINT_CONSOLE_API:
-                    self._print_console(*params)
-                else:
-                    self._print_console(
-                        "*** ERROR[Logger]: Unknown API ***", rgb=Color.ERROR
-                    )
-
-            # self._log_displayed.set()
-
+                        self._print_console(
+                            "*** ERROR[Logger]: Unknown API ***", rgb=Color.ERROR
+                        )
+        except Exception as e:
+            err_msg = colorize(f'\n*** ERROR: The display server thread got an exeception [{e}]\n',
+                               rgb=Color.ERROR)
+            sys.stderr.write(err_msg)
+            traceback.print_exc()
+        else:
             self._log_handler_stop_event.wait(0.001)
+        finally:
+            sys.stdout.write(colorize('\n*** The display server thread has stopped ***\n', rgb=Color.FMKINFO))
 
     def wait_for_sync(self):
         # while not self._log_displayed.is_set():
