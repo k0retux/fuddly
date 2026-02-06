@@ -93,7 +93,7 @@ class Tactics(object):
             op_obj = op_cls()
             if issubclass(op_cls, StatefulOperator):
                 op_obj.set_attr(DataMakerAttr.Controller)
-            op_cls_name = op_cls.__class__.__name__
+            op_cls_name = op_obj.__class__.__name__
 
             self.register_new_operator(op_cls_name, op_obj, weight=1, dmaker_type=op_type,
                                        valid=valid)
