@@ -625,13 +625,13 @@ class Database(object):
             '''
             SELECT DATA.ID, DATA.CONTENT, DATA.TYPE, DMAKERS.NAME, DATA.DM_NAME, DATA.PRJ_NAME
             FROM DATA INNER JOIN DMAKERS
-              ON DATA.TYPE = DMAKERS.TYPE AND DMAKERS.CLONE_TYPE IS NULL
+              ON DATA.TYPE = DMAKERS.TYPE AND DMAKERS.CLONE_TYPE IS NULL AND DATA.DM_NAME = DMAKERS.DM_NAME
             WHERE DATA.ID >= {sid:d} {ign_eid:s} AND DATA.ID <= {eid:d}
             UNION ALL
             SELECT DATA.ID, DATA.CONTENT, DMAKERS.CLONE_TYPE AS TYPE, DMAKERS.CLONE_NAME AS NAME,
                    DATA.DM_NAME, DATA.PRJ_NAME
             FROM DATA INNER JOIN DMAKERS
-              ON DATA.TYPE = DMAKERS.TYPE AND DMAKERS.CLONE_TYPE IS NOT NULL
+              ON DATA.TYPE = DMAKERS.TYPE AND DMAKERS.CLONE_TYPE IS NOT NULL AND DATA.DM_NAME = DMAKERS.DM_NAME
             WHERE DATA.ID >= {sid:d} {ign_eid:s} AND DATA.ID <= {eid:d}
             '''.format(sid = start_id, eid = end_id, ign_eid = ign_end_id)
 
