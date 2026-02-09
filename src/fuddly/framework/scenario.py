@@ -934,7 +934,7 @@ viewer_filename = None
 class Scenario(object):
 
     def __init__(self, name, anchor=None, reinit_anchor=None, user_context=None,
-                 user_args=None):
+                 user_args=None, description=''):
         """
         Note: only at copy the ScenarioEnv are propagated to the steps and transitions
 
@@ -947,6 +947,7 @@ class Scenario(object):
         """
 
         self.name = name
+        self.description = description
         self._user_args = user_args
         self._steps = None
         self._reinit_steps = None
@@ -1150,7 +1151,7 @@ class Scenario(object):
         """Start filepath with its associated application (windows)."""
         os.startfile(os.path.normpath(filepath))
 
-    def graph(self, fmt='pdf', select_current=False, display_ucontext=True):
+    def graph(self, fmt='pdf', select_current=False, display_ucontext=True, display_description=True):
         global viewer_format
         global viewer_app
         global viewer_app_name
@@ -1242,12 +1243,23 @@ class Scenario(object):
         except:
             print("\n*** ERROR: Unknown format ('{!s}') ***".format(fmt))
         else:
-            if display_ucontext and self.env.user_context:
-                with g.subgraph(name='cluster_1') as graph:
-                    graph.attr(label='SCENARIO', fontcolor='black', labelloc='b')
-                    graph_creation(self._anchor, node_list=[], edge_list=[], graph=graph)
+            with g.subgraph(name='cluster_1') as graph:
+                graph.attr(label='SCENARIO', fontcolor='black', labelloc='b')
+                graph_creation(self._anchor, node_list=[], edge_list=[], graph=graph)
 
-                with g.subgraph(name='cluster_2') as h:
+            if display_description and self.description:
+                desc_id = str(id(self.description))
+                with g.subgraph(name='cluster_2') as g_desc:
+                    g_desc.attr(label='DESCRIPTION',
+                                style='filled', color='gray95', labelloc='b')
+                    g_desc.node(desc_id, label=self.description,
+                                shape='record', style='filled', color='invis', fillcolor='gray95',
+                                fontcolor='black', fontsize='10')
+            else:
+                desc_id = None
+
+            if display_ucontext and self.env.user_context:
+                with g.subgraph(name='cluster_3') as h:
                     h.attr(label='USER CONTEXT', style='filled', color='gray90', labelloc='b')
                     context_id = str(id(self.env.user_context))
                     if isinstance(self.env.user_context, UI):
@@ -1255,6 +1267,8 @@ class Scenario(object):
                         uinputs = self.env.user_context.get_inputs()
                         for k, v in uinputs.items():
                             v = f'{v!s}'
+                            if len(v) > 50:
+                                v = v[:50] + ' [...]'
                             v = v.replace('{', r'\{')
                             v = v.replace('}', r'\}')
                             uctxt_desc += r'{:s} = {:s}\l|'.format(k, v)
@@ -1264,8 +1278,11 @@ class Scenario(object):
                     h.node(context_id, label=uctxt_desc,
                            shape='record', style='filled,bold', color='black', fillcolor='deepskyblue',
                            fontcolor='black', fontsize='10')
-            else:
-                graph_creation(self._anchor, node_list=[], edge_list=[], graph=g)
+                    if desc_id is not None:
+                        h.edge(context_id, desc_id, style='invis')
+
+            # else:
+            #     graph_creation(self._anchor, node_list=[], edge_list=[], graph=g)
 
             try:
                 rendered = g.render()

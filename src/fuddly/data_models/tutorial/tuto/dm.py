@@ -1327,6 +1327,28 @@ class MyDF_DataModel(DataModel):
         }
 
 
+        fragment_desc = {
+            'name': 'frag_cmd',
+            'contents': [
+                {'name': 'cmd_type',
+                 'contents': String(values=['CMD'])},
+                {'name': 'frag_idx',
+                 'semantics': 'f_idx',
+                 'contents': UINT8(min=0, max=19)},
+                {'name': 'frag_count',
+                 'semantics': 'f_count',
+                 'contents': UINT8(min=1, max=20)},
+                {'name': 'size',
+                 'semantics': 'size',
+                 'contents': UINT16_be()},
+                {'name': 'payload',
+                 'semantics': 'pld',
+                 'sync_size_with': 'size',
+                 'contents': String(samples=['empty'], max_sz=400)}
+            ]
+        }
+
+
         self.register(test_node_desc, abstest_desc, abstest2_desc,
                       separator_desc, separator_2_desc, separator_3_desc,
                       sync_desc, len_gen_desc, misc_gen_desc, offset_gen_desc,
@@ -1339,7 +1361,7 @@ class MyDF_DataModel(DataModel):
                       shape_type_1_desc, shape_type_2_desc, ns_desc, nested_nt_desc, def_qty_desc,
                       tlv_rec0_desc, tlv_rec0b_desc, tlv_rec1_desc, tlv_rec2_desc, tlv_rec3_desc,
                       tlv_rec4_desc, recbig_desc,
-                      optional_desc)
+                      optional_desc, fragment_desc)
 
 
     def validation_tests(self):

@@ -180,6 +180,13 @@ class Logger(object):
         else:
             self._hl_marked_nodes = False
 
+    def set_log_format(self, raw: bool):
+        self.export_raw_data = raw
+        if not self.export_raw_data:
+            self._hl_marked_nodes = self._hl_marked_nodes_user_provided_value
+        else:
+            self._hl_marked_nodes = False
+
     def flush(self):
         with self._sync_lock:
             with self._log_entry_submitted_cond:

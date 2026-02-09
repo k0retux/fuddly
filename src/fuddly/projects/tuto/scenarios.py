@@ -1,4 +1,6 @@
 from fuddly.framework.scenario import *
+from fuddly.framework.scenario_builder import ScenarioBuilder, FragmentationScenarioBuilder
+
 
 def check_fbk(env, current_step, next_step, fbk):
     print(f'\n*** Callback After Feedback Retrieval [from: {str(current_step)}] ***')
@@ -19,3 +21,11 @@ s3.connect_to(s4)
 s4.connect_to(final, cbk_after_fbk=check_fbk)
 
 sc_burst = Scenario('burst', anchor=s1)
+
+
+payload = ['ABCD', 'OOOOOOOOO', 'MMMMM', 'UUU', 'H'*100]
+
+sb_frag = FragmentationScenarioBuilder()
+sb_frag.set_scenario_params(name='frag', pod_atom_name='frag_cmd', payload=payload,
+                            fragidx_ref='f_idx', fragcount_ref='f_count', pld_ref='pld',
+                            fbk_timeout=0.1)

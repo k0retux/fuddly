@@ -1358,6 +1358,13 @@ class FmkPlumbing(object):
                 else:
                     pass
 
+                if self.prj.project_scenario_builders:
+                    sc_list = []
+                    for sb in self.prj.project_scenario_builders:
+                        sb.load(self.dm)
+                        sc_list += list(sb)
+                    self.prj.register_scenarios(*sc_list)
+
                 if self.prj.project_scenarios:
                     self._generic_tactics.register_scenarios(*self.prj.project_scenarios)
 
