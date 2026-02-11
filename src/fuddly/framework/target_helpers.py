@@ -80,13 +80,26 @@ class Target(object):
 
     display_feedback = False
 
-    def __init__(self, name=None, display_feedback=True, enable_specific_logger=False, log_level=logging.INFO):
+    # This list can be updated by any subclasses in order to declare
+    # the attributes that shall be configurable by the config_attribute interface.
+    _configurable_attributes = None
+
+    def __init__(self, name=None, display_feedback=True, enable_specific_logger=False, log_level=logging.INFO,
+                 config_attributes: list | None = None):
+        """
+        Attributes:
+            config_attributes (list): This list can be updated by any subclasses in order to declare
+               the attributes that shall be configurable by the config_attribute interface.
+        """
+
         self.name = name
         self.display_feedback = display_feedback
         self._started = False
         self._cls_user_count = 0
         self.log_level = log_level
         self.enable_specific_logger = enable_specific_logger
+        self._configurable_attributes = ['custo'] if config_attributes is None else ['custo'] + config_attributes
+        self._custo = None
 
     def setup_child_logger(self, filename=None, level=logging.INFO):
 
@@ -173,15 +186,14 @@ class Target(object):
     def is_started(self):
         return self._started
 
-    # Can be used by any subclasses as a customization variable that may
-    # serve any purposes. This variable is exported to the framework so that it can be
-    # changed easily.
-    _custo = None
-
     @property
     def custo(self):
         """
-        To be overloaded if needed
+        To be overloaded if needed.
+
+        Can be used by any subclasses as a customization property that may
+        serve any purposes. This variable is exported to the framework so that it can be
+        changed easily.
         """
         return self._custo
 
@@ -189,14 +201,11 @@ class Target(object):
     def custo(self, value):
         """
         To be overloaded if needed.
+
         Allows to trigger some needed code execution further to the modification of the
         custo property.
         """
         self._custo = value
-
-    # This list can be updated by any subclasses in order to declare
-    # the attributes that shall be configurable by the config_attribute interface.
-    _configurable_attributes = ['custo']
 
     def get_config_attribute_list(self):
         return copy.copy(self._configurable_attributes)
