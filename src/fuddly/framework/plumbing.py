@@ -1361,7 +1361,7 @@ class FmkPlumbing(object):
                 if self.prj.project_scenario_builders:
                     sc_list = []
                     for sb in self.prj.project_scenario_builders:
-                        sb.load(self.dm)
+                        sb._load(self.dm)
                         sc_list += list(sb)
                     self.prj.register_scenarios(*sc_list)
 

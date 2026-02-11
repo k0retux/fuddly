@@ -1,5 +1,5 @@
 from fuddly.framework.scenario import *
-from fuddly.framework.scenario_builder import ScenarioBuilder, FragmentationScenarioBuilder
+from fuddly.framework.scenario_builder import ScenarioBrick, ScenarioBuilder, FragmentationScenarioBuilder
 
 
 def check_fbk(env, current_step, next_step, fbk):
@@ -23,9 +23,27 @@ s4.connect_to(final, cbk_after_fbk=check_fbk)
 sc_burst = Scenario('burst', anchor=s1)
 
 
+class InitSBrick(ScenarioBrick):
+
+    def build(self, user_context: UI = None, **kwargs):
+        dp_init = DataProcess(['C'], seed='init')
+        step_init = Step(dp_init, fbk_timeout=0.5, vtg_ids=1)
+        # step_out = NoDataStep()
+        # step_os.connect_to(step_out)
+
+        starting_step = step_init
+        in_connectors = [step_init]
+        out_connectors = [step_init]
+
+        return starting_step, in_connectors, out_connectors
+
+sbrick_init = InitSBrick()
+
+
 payload = ['ABCD', 'OOOOOOOOO', 'MMMMM', 'UUU', 'H'*100]
 
 sb_frag = FragmentationScenarioBuilder()
 sb_frag.set_scenario_params(name='frag', pod_atom_name='frag_cmd', payload=payload,
                             fragidx_ref='f_idx', fragcount_ref='f_count', pld_ref='pld',
                             fbk_timeout=0.1)
+sb_frag.set_starting_sbrick(sbrick_init)
