@@ -6559,7 +6559,7 @@ class FmkShell(cmd.Cmd):
             self.__error = (
                     self.fz.process_data_and_send(
                         DataProcess(actions, seed=Data(data_str), tg_ids=tg_ids),
-                        verbose=verbose, reset_dmakers=self._reset_dmakers_mode) is None)
+                        verbose=True, reset_dmakers=self._reset_dmakers_mode) is None)
 
         return False
 
@@ -6602,7 +6602,7 @@ class FmkShell(cmd.Cmd):
             self.__error = (
                     self.fz.process_data_and_send(
                         DataProcess(actions, seed=data, tg_ids=tg_ids),
-                        verbose=verbose, reset_dmakers=self._reset_dmakers_mode) is None)
+                        verbose=True, reset_dmakers=self._reset_dmakers_mode) is None)
 
         return False
 
