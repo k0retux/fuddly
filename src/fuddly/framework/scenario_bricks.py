@@ -360,7 +360,7 @@ class FragmentationBrick(ScenarioBrick):
                     data.add_info(f'fragment {env._frag_idx}/{env._payload_frag_count}')
                     atom[self.fragidx_sem] = env._frag_idx
                     atom[self.fragcount_sem] = env._payload_frag_count
-                    atom[self.pld_sem] = env.user_context.payload[env._frag_idx]
+                    atom[self.pld_sem] = env.user_context.payload[env._frag_idx-self.idx_min]
                     env._frag_idx += 1
 
                 case 'alt_1':
@@ -380,13 +380,13 @@ class FragmentationBrick(ScenarioBrick):
 
             match shape_id:
                 case ScenarioBrick.BASIC_SHAPE:
-                    if env._frag_idx < env._payload_frag_count:
+                    if env._frag_idx-self.idx_min < env._payload_frag_count:
                         ret = False
                     else:
                         env._frag_idx = self.frag_idx_init
                         ret = True
                 case 'alt_1':
-                    if env._frag_idx < self.shape_alt1_max_fidx:
+                    if env._frag_idx-self.idx_min < self.shape_alt1_max_fidx:
                         ret = False
                     else:
                         env._frag_idx = self.frag_idx_init
