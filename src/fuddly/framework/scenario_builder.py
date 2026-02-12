@@ -28,15 +28,11 @@ class ScenarioBuilder(object):
         raise NotImplementedError
 
     def set_starting_sbrick(self, sbrick: ScenarioBrick, out_connector_id = 1, **connect_params):
-        if not sbrick.is_setup():
-            sbrick.setup(start=True)
         self._starting_sbrick = sbrick
         self._starting_sbrick_out_id = out_connector_id
         self._starting_sbrick_connect_params = connect_params
 
     def set_ending_sbrick(self, sbrick: ScenarioBrick, in_connector_id = 1, **connect_params):
-        if not sbrick.is_setup():
-            sbrick.setup(final=True)
         self._ending_sbrick = sbrick
         self._ending_sbrick_in_id = in_connector_id
         self._ending_sbrick_connect_params = connect_params
@@ -59,6 +55,9 @@ class ScenarioBuilder(object):
                                         in_idx=self._ending_sbrick_in_id,
                                         **self._ending_sbrick_connect_params)
 
+        self._sbrick.build_connection()
+        self._sbrick.find_and_finalize_ending_sbrick(self._sbrick)
+
     @property
     def dm(self):
         return self._dm
@@ -77,7 +76,6 @@ class FragmentationScenarioBuilder(ScenarioBuilder):
     def load(self, dm: DataModel):
         frag_brick = FragmentationBrick(self.name)
         frag_brick.dm = dm
-
-        frag_brick.setup(final=True, **self.kwargs)
+        frag_brick.setup(**self.kwargs)
 
         return frag_brick

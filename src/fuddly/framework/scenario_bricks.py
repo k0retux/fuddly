@@ -87,39 +87,93 @@ class ScenarioBrick(object):
         self._scenario.set_in_connectors(in_connectors)
         self._scenario.set_out_connectors(out_connectors)
 
-        # for out_idx, obj in self.out_connection.items():
-        #     in_idx, scbrick, connect_kwargs = obj
-        #     if isinstance(scbrick, ScenarioBrick):
-        #         self._scenario.set_scenario_env(scbrick._scenario.env, merge_user_contexts=True)
-        #         self.out_connectors(out_idx).connect_to(scbrick.in_connectors(in_idx), **connect_kwargs)
-        #     elif isinstance(scbrick, Step):
-        #         self.out_connectors(out_idx).connect_to(scbrick, **connect_kwargs)
-        #     else:
-        #         raise NotImplementedError
-        #
-        # for in_idx, obj in self.in_connection.items():
-        #     out_idx, scbrick, connect_kwargs = obj
-        #     if isinstance(scbrick, ScenarioBrick):
-        #         self._scenario.set_scenario_env(scbrick._scenario.env, merge_user_contexts=True)
-        #         self.in_connectors(in_idx).connect_to(scbrick.out_connectors(out_idx), **connect_kwargs)
-        #     elif isinstance(scbrick, Step):
-        #         scbrick.connect_to(self.in_connectors(in_idx))
-        #     else:
-        #         raise NotImplementedError
-
-        if self._final:
-            self.finalize()
+        self.build_connection()
 
         return True
 
-    def find_and_set_starting_sbrick(self, current_scb):
-        for _, connected_scb, _ in current_scb.in_connection.values():
-            if connected_scb.is_starting_brick():
-                self.starting_step = connected_scb.starting_step
-                break
+    def build_connection(self):
+
+        for out_idx, obj in self.out_connection.items():
+            in_idx, scbrick, connect_kwargs = obj
+            if isinstance(scbrick, ScenarioBrick):
+                if not scbrick.is_setup():
+                    scbrick.setup()
+                self._scenario.set_scenario_env(scbrick._scenario.env, merge_user_contexts=True)
+                self.out_connectors(out_idx).connect_to(scbrick.in_connectors(in_idx), **connect_kwargs)
+            elif isinstance(scbrick, Step):
+                self.out_connectors(out_idx).connect_to(scbrick, **connect_kwargs)
             else:
-                for _, scb, _ in connected_scb.in_connection.values():
-                    self.find_and_set_starting_sbrick(scb)
+                raise NotImplementedError
+
+        for in_idx, obj in self.in_connection.items():
+            out_idx, scbrick, connect_kwargs = obj
+            if isinstance(scbrick, ScenarioBrick):
+                if not scbrick.is_setup():
+                    scbrick.setup()
+                self._scenario.set_scenario_env(scbrick._scenario.env, merge_user_contexts=True)
+                scbrick.out_connectors(out_idx).connect_to(self.in_connectors(in_idx), **connect_kwargs)
+            elif isinstance(scbrick, Step):
+                scbrick.connect_to(self.in_connectors(in_idx))
+            else:
+                raise NotImplementedError
+
+        self.find_ending_sbrick_and_flag_it_final(self)
+
+        self.find_starting_sbrick_and_flag_it_start(self)
+        self.find_and_set_starting_sbrick(self)
+
+    def find_and_set_starting_sbrick(self, current_scb):
+        if current_scb.is_starting_brick():
+            self.starting_step = current_scb.starting_step
+        else:
+            for _, connected_scb, _ in current_scb.in_connection.values():
+                if connected_scb.is_starting_brick():
+                    self.starting_step = connected_scb.starting_step
+                    break
+                else:
+                    for _, scb, _ in connected_scb.in_connection.values():
+                        self.find_and_set_starting_sbrick(scb)
+
+    def find_starting_sbrick_and_flag_it_start(self, current_scb):
+        if not current_scb.in_connection.values():
+            current_scb.start = True
+        else:
+            current_scb.start = False
+            for _, connected_scb, _ in current_scb.in_connection.values():
+                if not connected_scb.in_connection.values():
+                    connected_scb.start = True
+                else:
+                    connected_scb.start = False
+                    for _, scb, _ in connected_scb.in_connection.values():
+                        self.find_starting_sbrick_and_flag_it_start(scb)
+
+
+    def find_and_finalize_ending_sbrick(self, current_scb):
+        if current_scb.is_ending_brick():
+            current_scb.finalize()
+        else:
+            for _, connected_scb, _ in current_scb.out_connection.values():
+                if connected_scb.is_ending_brick():
+                    connected_scb.finalize()
+                    break
+                else:
+                    for _, scb, _ in connected_scb.out_connection.values():
+                        self.find_and_finalize_ending_sbrick(scb)
+
+
+    def find_ending_sbrick_and_flag_it_final(self, current_scb):
+        if not current_scb.out_connection.values():
+            current_scb.final = True
+        else:
+            current_scb.final = False
+            for _, connected_scb, _ in current_scb.out_connection.values():
+                if not connected_scb.out_connection.values():
+                    connected_scb.final = True
+                else:
+                    connected_scb.final = False
+                    for _, scb, _ in connected_scb.out_connection.values():
+                        self.find_ending_sbrick_and_flag_it_final(scb)
+
 
 
     def in_connectors(self, idx):
@@ -134,38 +188,46 @@ class ScenarioBrick(object):
 
         self.out_connection[out_idx] = (in_idx, scbrick, connect_kwargs)
 
-        if isinstance(scbrick, ScenarioBrick):
-            self._scenario.set_scenario_env(scbrick._scenario.env, merge_user_contexts=True)
-            self.out_connectors(out_idx).connect_to(scbrick.in_connectors(in_idx), **connect_kwargs)
-        elif isinstance(scbrick, Step):
-            self.out_connectors(out_idx).connect_to(scbrick, **connect_kwargs)
-        else:
-            raise NotImplementedError
-
     def connect_in_to(self, scbrick, in_idx=None, out_idx=None, **connect_kwargs):
         out_idx = 1 if out_idx is None else out_idx
         in_idx = 1 if in_idx is None else in_idx
 
         self.in_connection[in_idx] = (out_idx, scbrick, connect_kwargs)
 
-        if isinstance(scbrick, ScenarioBrick):
-            self._scenario.set_scenario_env(scbrick._scenario.env, merge_user_contexts=True)
-            scbrick.out_connectors(out_idx).connect_to(self.in_connectors(in_idx), **connect_kwargs)
-        elif isinstance(scbrick, Step):
-            scbrick.connect_to(self.in_connectors(in_idx))
-        else:
-            raise NotImplementedError
-
-        self.find_and_set_starting_sbrick(self)
-
     def finalize(self, **kwargs):
-        fs = FinalStep()
+        self._final = True
         for s in self._scenario._out_connectors.values():
-            s.connect_to(fs, **kwargs)
+            if isinstance(s, FinalStep):
+                fs = s
+                break
+        else:
+            fs = FinalStep()
 
+        for s in self._scenario._out_connectors.values():
+            if not isinstance(s, FinalStep):
+                s.connect_to(fs, **kwargs)
 
     def is_starting_brick(self):
         return self._start
+
+    def is_ending_brick(self):
+        return self._final
+
+    @property
+    def final(self):
+        return self._final
+
+    @final.setter
+    def final(self, value):
+        self._final = value
+
+    @property
+    def start(self):
+        return self._start
+
+    @final.setter
+    def start(self, value):
+        self._start = value
 
     def is_setup(self):
         return self._scenario is not None

@@ -40,6 +40,34 @@ class InitSBrick(ScenarioBrick):
 sbrick_init = InitSBrick()
 
 
+class FinalSBrick_1(ScenarioBrick):
+
+    def build(self, user_context: UI = None, **kwargs):
+        dp_final = DataProcess(['C'], seed='register')
+        step_final = Step(dp_final, fbk_timeout=0.5, vtg_ids=1)
+
+        starting_step = step_final
+        in_connectors = [step_final]
+        out_connectors = [step_final]
+
+        return starting_step, in_connectors, out_connectors
+
+class FinalSBrick_2(ScenarioBrick):
+
+    def build(self, user_context: UI = None, **kwargs):
+        step_final = Step('zregister', fbk_timeout=0.5, vtg_ids=1)
+
+        starting_step = step_final
+        in_connectors = [step_final]
+        out_connectors = [step_final]
+
+        return starting_step, in_connectors, out_connectors
+
+sbrick_final_1 = FinalSBrick_1()
+sbrick_final_2 = FinalSBrick_2()
+
+sbrick_final_1.connect_out_to(sbrick_final_2)
+
 payload = ['ABCD', 'OOOOOOOOO', 'MMMMM', 'UUU', 'H'*100]
 
 sb_frag = FragmentationScenarioBuilder()
@@ -47,3 +75,4 @@ sb_frag.set_scenario_params(name='frag', pod_atom_name='frag_cmd', payload=paylo
                             fragidx_ref='f_idx', fragcount_ref='f_count', pld_ref='pld',
                             fbk_timeout=0.1)
 sb_frag.set_starting_sbrick(sbrick_init)
+sb_frag.set_ending_sbrick(sbrick_final_1)
