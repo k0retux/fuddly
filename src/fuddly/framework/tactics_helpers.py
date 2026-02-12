@@ -729,6 +729,7 @@ class DynGeneratorFromScenario(Generator):
             fmkops.unregister_task(periodic_id, ign_error=True)
         for task_id in self.scenario.tasks_to_stop:
             fmkops.unregister_task(task_id, ign_error=True)
+        self.scenario.cleanup_steps()
 
     def _cleanup_walking_attrs(self):
         self.tr_selected = None

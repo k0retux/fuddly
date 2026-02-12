@@ -28,6 +28,7 @@ import random
 
 from typing import Tuple
 
+from fuddly.framework.data import RawBackend
 from fuddly.framework.global_resources import *
 from fuddly.framework.data import Data, DataProcess, EmptyDataProcess, DataAttr, NodeBackend
 from fuddly.framework.node import Node
@@ -301,9 +302,18 @@ class Step(object):
         self.data_attrs.clear(DataAttr.Reset_DMakers)
 
     def cleanup(self):
-        for d in self._data_desc:
+        data_desc_copy = copy.copy(self._data_desc)
+        clean_data = False
+        for idx, d in enumerate(data_desc_copy):
             if isinstance(d, DataProcess):
                 d.outcomes = None
+            elif isinstance(d, Data) and self._node_name[idx] is not None:
+                self._data_desc[idx] = None
+                self._atom = None
+                clean_data = True
+        if clean_data:
+            # recompute the step content
+            self.content
 
     def has_dataprocess(self):
         if len(self._data_desc) > 1:
@@ -428,7 +438,7 @@ class Step(object):
         if not isinstance(node_list, list):
             d_desc = self._data_desc[0]
             if isinstance(d_desc, Data):
-                d = d_desc
+                d = copy.copy(d_desc) if isinstance(d_desc._backend, RawBackend) else d_desc
             elif node_list is not None:
                 d = Data(node_list)
             else:
@@ -1297,6 +1307,10 @@ class Scenario(object):
                     raise RuntimeError('{!r} has no built-in viewer support for {!r} '
                                        'on {!r} platform'.format(self.__class__, fmt, PLATFORM))
                 view_method(rendered, graph_filename+'.'+viewer_format)
+
+    def cleanup_steps(self):
+        for s in self.steps:
+            s.cleanup()
 
     def __copy__(self):
 
