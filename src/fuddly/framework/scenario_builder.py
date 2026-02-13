@@ -55,7 +55,8 @@ class ScenarioBuilder(object):
                                         in_idx=self._ending_sbrick_in_id,
                                         **self._ending_sbrick_connect_params)
 
-        self._sbrick.build_connection()
+        self._sbrick.build_connection(auto_update_starting_step=True,
+                                      auto_update_ending_step=True)
         self._sbrick.find_and_finalize_ending_sbrick(self._sbrick)
 
     @property

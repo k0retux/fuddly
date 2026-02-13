@@ -1,5 +1,6 @@
 from fuddly.framework.scenario import *
-from fuddly.framework.scenario_builder import ScenarioBrick, ScenarioBuilder, FragmentationScenarioBuilder
+from fuddly.framework.scenario_builder import ScenarioBuilder, FragmentationScenarioBuilder
+from fuddly.framework.scenario_bricks import ScenarioBrick, FRAG_POL
 
 
 def check_fbk(env, current_step, next_step, fbk):
@@ -68,11 +69,21 @@ sbrick_final_2 = FinalSBrick_2()
 
 sbrick_final_1.connect_out_to(sbrick_final_2)
 
-payload = ['ABCD', 'OOOOOOOOO', 'MMMMM', 'UUU', 'H'*100]
+pld_list = ['ABCD', 'OOOOOOOOO', 'MMMMM', 'UUU', 'H'*100]
 
-sb_frag = FragmentationScenarioBuilder()
-sb_frag.set_scenario_params(name='frag', pod_atom_name='frag_cmd', payload=payload,
-                            fragidx_ref='f_idx', fragcount_ref='f_count', pld_ref='pld',
-                            fbk_timeout=0.1)
-sb_frag.set_starting_sbrick(sbrick_init)
-sb_frag.set_ending_sbrick(sbrick_final_1)
+sb_frag_01 = FragmentationScenarioBuilder()
+sb_frag_01.set_scenario_params(name='frag_1', host_name='frag_cmd', payload_list=pld_list,
+                               fragidx_ref='f_idx', fragcount_ref='f_count', pld_ref='pld',
+                               pldsz_ref='size',
+                               fbk_timeout=0.1)
+sb_frag_01.set_starting_sbrick(sbrick_init)
+sb_frag_01.set_ending_sbrick(sbrick_final_1)
+
+pld = 'A'*6+'B'*6+'C'*6+'D'*6+'E'*6+'123'
+
+sb_frag_02 = FragmentationScenarioBuilder()
+sb_frag_02.set_scenario_params(name='frag_2', host_name='frag_cmd',
+                               payload=pld, frag_amount=5, frag_policy=FRAG_POL.EQUAL_SZ,
+                               fragidx_ref='f_idx', fragcount_ref='f_count', pld_ref='pld',
+                               pldsz_ref='size',
+                               fbk_timeout=0.1)

@@ -1,6 +1,7 @@
 import copy
 import itertools
 import traceback
+import random
 
 from fuddly.libs.external_modules import colorize, Color
 from fuddly.framework.data_model import DataModel
@@ -54,12 +55,16 @@ class ScenarioBrick(object):
         """
         raise NotImplementedError
 
-    def setup(self, start: bool = True, final: bool = False, **kwargs):
+    def setup(self, start: bool = True, final: bool = False,
+              auto_update_starting_step=True, auto_update_ending_step=True,
+              **kwargs):
         self._final = final
         self._start = start
 
         if self._scenario is None:
-            ok = self._build(**kwargs)
+            ok = self._build(auto_update_starting_step=auto_update_starting_step,
+                             auto_update_ending_step=auto_update_ending_step,
+                             **kwargs)
             if not ok:
                 raise ScenarioDefinitionError
         else:
@@ -67,7 +72,27 @@ class ScenarioBrick(object):
                                       f" scenario is already setup\n",
                                       rgb=Color.WARNING))
 
-    def _build(self, **kwargs):
+    def connect_out_to(self, scbrick, out_idx=None, in_idx=None, **connect_kwargs):
+        out_idx = 1 if out_idx is None else out_idx
+        in_idx = 1 if in_idx is None else in_idx
+
+        self.out_connection[out_idx] = (in_idx, scbrick, connect_kwargs)
+
+    def connect_in_to(self, scbrick, in_idx=None, out_idx=None, **connect_kwargs):
+        out_idx = 1 if out_idx is None else out_idx
+        in_idx = 1 if in_idx is None else in_idx
+
+        self.in_connection[in_idx] = (out_idx, scbrick, connect_kwargs)
+
+
+    def in_connectors(self, idx):
+        return self._scenario.in_connectors(idx)
+
+    def out_connectors(self, idx):
+        return self._scenario.out_connectors(idx)
+
+
+    def _build(self, auto_update_starting_step=True, auto_update_ending_step=True, **kwargs):
 
         uc = UI(shape_id=None)
 
@@ -87,11 +112,12 @@ class ScenarioBrick(object):
         self._scenario.set_in_connectors(in_connectors)
         self._scenario.set_out_connectors(out_connectors)
 
-        self.build_connection()
+        self.build_connection(auto_update_starting_step=auto_update_starting_step,
+                              auto_update_ending_step=auto_update_ending_step)
 
         return True
 
-    def build_connection(self):
+    def build_connection(self, auto_update_starting_step=True, auto_update_ending_step=True):
 
         for out_idx, obj in self.out_connection.items():
             in_idx, scbrick, connect_kwargs = obj
@@ -100,8 +126,8 @@ class ScenarioBrick(object):
                     scbrick.setup()
                 self._scenario.set_scenario_env(scbrick._scenario.env, merge_user_contexts=True)
                 self.out_connectors(out_idx).connect_to(scbrick.in_connectors(in_idx), **connect_kwargs)
-            elif isinstance(scbrick, Step):
-                self.out_connectors(out_idx).connect_to(scbrick, **connect_kwargs)
+            # elif isinstance(scbrick, Step):
+            #     self.out_connectors(out_idx).connect_to(scbrick, **connect_kwargs)
             else:
                 raise NotImplementedError
 
@@ -112,15 +138,37 @@ class ScenarioBrick(object):
                     scbrick.setup()
                 self._scenario.set_scenario_env(scbrick._scenario.env, merge_user_contexts=True)
                 scbrick.out_connectors(out_idx).connect_to(self.in_connectors(in_idx), **connect_kwargs)
-            elif isinstance(scbrick, Step):
-                scbrick.connect_to(self.in_connectors(in_idx))
+            # elif isinstance(scbrick, Step):
+            #     scbrick.connect_to(self.in_connectors(in_idx))
             else:
                 raise NotImplementedError
 
-        self.find_ending_sbrick_and_flag_it_final(self)
+        if auto_update_ending_step:
+            self.find_ending_sbrick_and_flag_it_final(self)
 
-        self.find_starting_sbrick_and_flag_it_start(self)
-        self.find_and_set_starting_sbrick(self)
+        if auto_update_starting_step:
+            self.find_starting_sbrick_and_flag_it_start(self)
+            self.find_and_set_starting_sbrick(self)
+
+
+    def set_starting_sbrick(self, scbrick):
+        for _, obj in self.in_connection.items():
+            _, scb, _ = obj
+            if scbrick is scb:
+                scbrick.start = True
+                self.starting_step = scbrick.starting_step
+                break
+
+
+    def set_ending_sbrick(self, scbrick, finalize=False):
+        for _, obj in self.out_connection.items():
+            _, scb, _ = obj
+            if scbrick is scb:
+                scbrick.final = True
+                if finalize:
+                    scbrick.finalize()
+                break
+
 
     def find_and_set_starting_sbrick(self, current_scb):
         if current_scb.is_starting_brick():
@@ -174,28 +222,8 @@ class ScenarioBrick(object):
                     for _, scb, _ in connected_scb.out_connection.values():
                         self.find_ending_sbrick_and_flag_it_final(scb)
 
-
-
-    def in_connectors(self, idx):
-        return self._scenario.in_connectors(idx)
-
-    def out_connectors(self, idx):
-        return self._scenario.out_connectors(idx)
-
-    def connect_out_to(self, scbrick, out_idx=None, in_idx=None, **connect_kwargs):
-        out_idx = 1 if out_idx is None else out_idx
-        in_idx = 1 if in_idx is None else in_idx
-
-        self.out_connection[out_idx] = (in_idx, scbrick, connect_kwargs)
-
-    def connect_in_to(self, scbrick, in_idx=None, out_idx=None, **connect_kwargs):
-        out_idx = 1 if out_idx is None else out_idx
-        in_idx = 1 if in_idx is None else in_idx
-
-        self.in_connection[in_idx] = (out_idx, scbrick, connect_kwargs)
-
     def finalize(self, **kwargs):
-        self._final = True
+        self.final = True
         for s in self._scenario._out_connectors.values():
             if isinstance(s, FinalStep):
                 fs = s
@@ -259,41 +287,143 @@ class ScenarioBrick(object):
 
         return new_scbrick
 
+class FRAG_POL(Enum):
+    EQUAL_SZ = 1
+    INCREASING_SZ = 2
+    DECREASING_SZ = 3
 
 class FragmentationBrick(ScenarioBrick):
 
+    VALID_SHAPE_ORDER = 'valid_ordered'
+    VALID_SHAPE_UNORDER = 'valid_unordered'
+    ALT01A_SHAPE = 'alt01A'
+    ALT02A_SHAPE = 'alt02A'
+    ALT01B_SHAPE = 'alt01B'
+    ALT02B_SHAPE = 'alt02B'
+    ALT03_SHAPE = 'alt03'
+    ALT04_SHAPE = 'alt04'
+    ALT05A_SHAPE = 'alt05A'
+    ALT06A_SHAPE = 'alt06A'
+    ALT07A_SHAPE = 'alt07A'
+    ALT05B_SHAPE = 'alt05B'
+    ALT06B_SHAPE = 'alt06B'
+    ALT07B_SHAPE = 'alt07B'
+
+    
     def description_from_shape_id(self, shape_id):
 
         match shape_id:
-            case ScenarioBrick.BASIC_SHAPE:
-                desc = f'Nominal fragmentation scenario'
+            case FragmentationBrick.VALID_SHAPE_ORDER:
+                desc = (f'Valid fragmentation scenario.\n'
+                        f'(Fragments are sent in order)')
 
-            case 'alt_1':
+            case FragmentationBrick.VALID_SHAPE_UNORDER:
+                desc = (f'Valid fragmentation scenario.\n'
+                        f'(Fragments are not sent in order.)')
+
+            case FragmentationBrick.ALT01A_SHAPE | FragmentationBrick.ALT01B_SHAPE:
                 desc = (f'Invalid fragmentation scenario "{shape_id}":\n'
-                        f'{self.shape_alt1_max_fidx} fragments will be '
-                        f'sent while the maximum is specified to be {self.count_max-1}')
+                        f'{self.inv_big_fragments_number} fragments will be sent\n'
+                        f'while the maximum is specified to be {self.count_max-1}.')
+
+            case FragmentationBrick.ALT02A_SHAPE | FragmentationBrick.ALT02B_SHAPE:
+                desc = (f'Invalid fragmentation scenario "{shape_id}":\n'
+                        f'{self.inv_big_fragments_number} fragments will be sent\n'
+                        f'while the maximum is specified to be {self.count_max-1},\n'
+                        f'and we never send the expected last fragment.')
+
+            case FragmentationBrick.ALT03_SHAPE:
+                desc = (f'Invalid fragmentation scenario "{shape_id}":\n'
+                        f'{self.inv_big_fragments_number} fragments will be sent\n'
+                        f'with always the same fragment index\n'
+                        f'but with different payload.')
+
+            case FragmentationBrick.ALT04_SHAPE:
+                desc = (f'Invalid fragmentation scenario "{shape_id}":\n'
+                        f'{self.inv_big_fragments_number} fragments will be sent\n'
+                        f'with always the same fragment index\n'
+                        f'and the same payload.')
+
+            case FragmentationBrick.ALT05A_SHAPE | FragmentationBrick.ALT05B_SHAPE:
+                desc = (f'Invalid fragmentation scenario "{shape_id}":\n'
+                        f'{self.inv_max_fragments_number} fragments will be sent\n'
+                        f'cycling from 1st fragment to penultimate fragment\n'
+                        f'never completing the full message.')
+
+            case FragmentationBrick.ALT06A_SHAPE | FragmentationBrick.ALT06B_SHAPE:
+                desc = (f'Invalid fragmentation scenario "{shape_id}":\n'
+                        f'{self.inv_max_fragments_number} fragments will be sent\n'
+                        f'cycling from last fragment to 2nd fragment\n'
+                        f'never completing the full message.')
+
+            case FragmentationBrick.ALT07A_SHAPE | FragmentationBrick.ALT07B_SHAPE:
+                desc = (f'Invalid fragmentation scenario "{shape_id}":\n'
+                        f'{self.inv_max_fragments_number} fragments will be sent\n'
+                        f'randomly but never completing the full message.\n'
+                        f'(The penultimate fragment will never be sent.)')
 
             case _:
                 desc = 'Unknown'
+
+        match shape_id[-1]:
+            case 'A':
+                desc += '\n\nNote: All the fragments are the same.'
+            case 'B':
+                desc += '\n\nNote: The fragments are different or cycle.'
+            case _:
+                pass
 
         desc = desc.replace('\n', '\\n')
         return desc
 
     def build(self, user_context: UI,
-              pod_atom_name=None, payload=None, fragidx_ref=None, fragcount_ref=None, pld_ref=None, fbk_timeout=2):
+              host_name: Node = None,
+              payload_list: list = None,
+              payload: bytes | str = None, frag_amount = 3, frag_policy: FRAG_POL = FRAG_POL.EQUAL_SZ,
+              fragidx_ref: str = None, fragcount_ref: str = None, pld_ref: str = None,
+              pldsz_ref: str = None,
+              fbk_timeout = 2):
 
-        user_context.merge_with(UI(fbk_timeout=fbk_timeout, payload=payload))
+        user_context.merge_with(UI(fbk_timeout=fbk_timeout))
 
-        self.atom_name = pod_atom_name
+        self.shape_ids = [
+            FragmentationBrick.VALID_SHAPE_ORDER,
+            FragmentationBrick.VALID_SHAPE_UNORDER,
+        ]
+
+        if payload is None:
+            assert payload_list is not None
+            self.payload_list = payload_list
+            self.fragment_count = len(payload_list)
+        else:
+            self.payload_list = []
+            self.fragment_count = frag_amount
+            payload_sz = len(payload)
+            for fg in range(frag_amount):
+                match frag_policy:
+                    case FRAG_POL.EQUAL_SZ:
+                        fsz = payload_sz // frag_amount
+                        idx_start = fg*fsz
+                        pld = payload[idx_start:idx_start+fsz] if fg < frag_amount - 1 else payload[idx_start:]
+                    case FRAG_POL.DECREASING_SZ:
+                        raise NotImplementedError
+                    case FRAG_POL.INCREASING_SZ:
+                        raise NotImplementedError
+                self.payload_list.append(pld)
+
+        self.host_name = host_name
         self.fragidx_ref = fragidx_ref
         self.fragcount_ref = fragcount_ref
         self.pld_ref = pld_ref
+        self.pldsz_ref = pldsz_ref
 
         self.fragidx_sem = nd.NodeSemanticsCriteria(mandatory_criteria=[self.fragidx_ref])
         self.fragcount_sem = nd.NodeSemanticsCriteria(mandatory_criteria=[self.fragcount_ref])
         self.pld_sem = nd.NodeSemanticsCriteria(mandatory_criteria=[self.pld_ref])
+        if self.pldsz_ref is not None:
+            self.pldsz_sem = nd.NodeSemanticsCriteria(mandatory_criteria=[self.pldsz_ref])
 
-        atom = self.dm.get_atom(self.atom_name)
+        atom = self.dm.get_atom(self.host_name)
         fidx_a = atom[self.fragidx_sem][0]
         if fidx_a.is_term():
             vtype = fidx_a.value_type
@@ -337,40 +467,131 @@ class FragmentationBrick(ScenarioBrick):
             raise NotImplementedError(f'Unrecognized fragment count type [{fcount_a.cc}]')
 
         self.frag_idx_init = self.idx_min
+        self.cycling_payload = itertools.cycle(self.payload_list)
+
+        self.fragidx_list = list(range(self.frag_idx_init, self.fragment_count + self.frag_idx_init))
+
+        self.inv_big_fragments_number = self.count_max + 5
+        self.inv_max_fragments_number = self.count_max + 100
 
         if self.idx_vtype_max is None or self.idx_vtype_max > self.count_max - 1:
-            self.shape_ids.append('alt_1')
-            self.shape_alt1_max_fidx = self.count_max + 5
-            self.shape_alt1_iter_pld = itertools.cycle(payload)
+            self.shape_ids += [
+                FragmentationBrick.ALT01A_SHAPE, FragmentationBrick.ALT01B_SHAPE,
+                FragmentationBrick.ALT02A_SHAPE, FragmentationBrick.ALT02B_SHAPE,
+            ]
+
+        self.shape_ids += [
+            FragmentationBrick.ALT03_SHAPE,
+            FragmentationBrick.ALT04_SHAPE,
+            FragmentationBrick.ALT05A_SHAPE, FragmentationBrick.ALT05B_SHAPE,
+            FragmentationBrick.ALT06A_SHAPE, FragmentationBrick.ALT06B_SHAPE,
+        ]
+
+        if self.fragment_count > 2:
+            self.fragidx_incomplete_list = list(range(self.frag_idx_init, self.fragment_count + self.frag_idx_init))
+            self.fragidx_incomplete_list.pop(-2)
+            self.shape_ids.append(FragmentationBrick.ALT07A_SHAPE)
+            self.shape_ids.append(FragmentationBrick.ALT07B_SHAPE)
 
         def init_frag(env, step):
-            env._payload_frag_count = len(env.user_context.payload)
             env._frag_idx = self.frag_idx_init
+            env._fidx_list = list(self.fragidx_list)
 
         def change_fragmax(env, step):
             pass
 
         def send_frag(env, step):
             data = Data()
-            atom = env.dm.get_atom(self.atom_name)
+            atom = env.dm.get_atom(self.host_name)
             shape_id = env.user_context.shape_id
 
             match shape_id:
-                case ScenarioBrick.BASIC_SHAPE:
-                    data.add_info(f'fragment {env._frag_idx}/{env._payload_frag_count}')
+                case FragmentationBrick.VALID_SHAPE_ORDER:
+                    data.add_info(f'fragment {env._frag_idx - self.frag_idx_init + 1}/{self.fragment_count}')
                     atom[self.fragidx_sem] = env._frag_idx
-                    atom[self.fragcount_sem] = env._payload_frag_count
-                    atom[self.pld_sem] = env.user_context.payload[env._frag_idx-self.idx_min]
+                    atom[self.fragcount_sem] = self.fragment_count
+                    atom[self.pld_sem] = self.payload_list[env._frag_idx-self.idx_min]
                     env._frag_idx += 1
 
-                case 'alt_1':
+                case FragmentationBrick.VALID_SHAPE_UNORDER:
+                    fidx = random.choice(env._fidx_list)
+                    env._fidx_list.remove(fidx)
+                    data.add_info(f'fragment {fidx - self.frag_idx_init + 1}/{self.fragment_count}')
                     atom[self.fragidx_sem] = env._frag_idx
-                    atom[self.fragcount_sem] = env._payload_frag_count
-                    atom[self.pld_sem] = next(self.shape_alt1_iter_pld)
+                    atom[self.fragcount_sem] = self.fragment_count
+                    atom[self.pld_sem] = self.payload_list[env._frag_idx-self.frag_idx_init]
+                    env._frag_idx += 1
+
+                case FragmentationBrick.ALT01A_SHAPE | FragmentationBrick.ALT01B_SHAPE:
+                    atom[self.fragidx_sem] = env._frag_idx
+                    atom[self.fragcount_sem] = self.fragment_count
+                    if shape_id == FragmentationBrick.ALT01A_SHAPE:
+                        atom[self.pld_sem] = next(self.cycling_payload)
+                    else:
+                        atom[self.pld_sem] = self.payload_list[0]
+                    env._frag_idx += 1
+
+                case FragmentationBrick.ALT02A_SHAPE | FragmentationBrick.ALT02B_SHAPE:
+                    if env._frag_idx + (self.idx_min - 1) == self.fragment_count:
+                        env._frag_idx += 1
+                    atom[self.fragidx_sem] = env._frag_idx
+                    atom[self.fragcount_sem] = self.fragment_count
+                    if shape_id == FragmentationBrick.ALT02A_SHAPE:
+                        atom[self.pld_sem] = next(self.cycling_payload)
+                    else:
+                        atom[self.pld_sem] = self.payload_list[0]
+                    env._frag_idx += 1
+
+                case FragmentationBrick.ALT03_SHAPE:
+                    atom[self.fragidx_sem] = self.frag_idx_init
+                    atom[self.fragcount_sem] = self.fragment_count
+                    atom[self.pld_sem] = next(self.cycling_payload)
+                    env._frag_idx += 1
+
+                case FragmentationBrick.ALT04_SHAPE:
+                    atom[self.fragidx_sem] = self.frag_idx_init
+                    atom[self.fragcount_sem] = self.fragment_count
+                    atom[self.pld_sem] = env.user_context.payload[0]
+                    env._frag_idx += 1
+
+                case FragmentationBrick.ALT05A_SHAPE | FragmentationBrick.ALT05B_SHAPE:
+                    fidx = env._frag_idx % (self.fragment_count+self.frag_idx_init-1)
+                    if fidx == 0:
+                        fidx = self.frag_idx_init
+                    atom[self.fragidx_sem] = fidx
+                    atom[self.fragcount_sem] = self.fragment_count
+                    if shape_id == FragmentationBrick.ALT05A_SHAPE:
+                        atom[self.pld_sem] = next(self.cycling_payload)
+                    else:
+                        atom[self.pld_sem] = self.payload_list[0]
+                    env._frag_idx += 1
+
+                case FragmentationBrick.ALT06A_SHAPE | FragmentationBrick.ALT06B_SHAPE:
+                    fidx = self.fragment_count + (self.frag_idx_init - 1) - (env._frag_idx - self.frag_idx_init)
+                    if fidx == self.frag_idx_init+1:
+                        fidx = self.fragment_count + (self.frag_idx_init - 1)
+                    atom[self.fragidx_sem] = fidx
+                    atom[self.fragcount_sem] = self.fragment_count
+                    if shape_id == FragmentationBrick.ALT06A_SHAPE:
+                        atom[self.pld_sem] = next(self.cycling_payload)
+                    else:
+                        atom[self.pld_sem] = self.payload_list[0]
+                    env._frag_idx += 1
+
+                case FragmentationBrick.ALT07A_SHAPE | FragmentationBrick.ALT07B_SHAPE:
+                    atom[self.fragidx_sem] = random.choice(self.fragidx_incomplete_list)
+                    atom[self.fragcount_sem] = self.fragment_count
+                    if shape_id == FragmentationBrick.ALT07A_SHAPE:
+                        atom[self.pld_sem] = next(self.cycling_payload)
+                    else:
+                        atom[self.pld_sem] = self.payload_list[0]
                     env._frag_idx += 1
 
                 case _:
                     pass
+
+            if self.pldsz_ref is not None:
+                atom[self.pldsz_sem] = len(atom[self.pld_sem][0].to_bytes())
 
             data.update_from(atom)
             step.data_desc = data
@@ -379,14 +600,25 @@ class FragmentationBrick(ScenarioBrick):
             shape_id = env.user_context.shape_id
 
             match shape_id:
-                case ScenarioBrick.BASIC_SHAPE:
-                    if env._frag_idx-self.idx_min < env._payload_frag_count:
+                case FragmentationBrick.VALID_SHAPE_ORDER | FragmentationBrick.VALID_SHAPE_UNORDER:
+                    if env._frag_idx-self.frag_idx_init < self.fragment_count:
                         ret = False
                     else:
                         env._frag_idx = self.frag_idx_init
                         ret = True
-                case 'alt_1':
-                    if env._frag_idx-self.idx_min < self.shape_alt1_max_fidx:
+                case FragmentationBrick.ALT01A_SHAPE | FragmentationBrick.ALT01B_SHAPE \
+                     | FragmentationBrick.ALT2A_SHAPE | FragmentationBrick.ALT02B_SHAPE \
+                     | FragmentationBrick.ALT03_SHAPE | FragmentationBrick.ALT04_SHAPE:
+                    if env._frag_idx-self.frag_idx_init < self.inv_big_fragments_number:
+                        ret = False
+                    else:
+                        env._frag_idx = self.frag_idx_init
+                        ret = True
+
+                case FragmentationBrick.ALT05A_SHAPE | FragmentationBrick.ALT05B_SHAPE \
+                     | FragmentationBrick.ALT06A_SHAPE | FragmentationBrick.ALT06B_SHAPE \
+                     | FragmentationBrick.ALT07A_SHAPE | FragmentationBrick.ALT07B_SHAPE:
+                    if env._frag_idx-self.frag_idx_init < self.inv_max_fragments_number:
                         ret = False
                     else:
                         env._frag_idx = self.frag_idx_init
@@ -399,7 +631,6 @@ class FragmentationBrick(ScenarioBrick):
 
         step_init = NoDataStep(fbk_timeout=0, do_before_data_processing=init_frag,
                                step_desc='Init')
-        # step_change_fragmax = NoDataStep(do_before_data_processing=change_fragmax)
         step_send_frag = StepStub(do_before_data_processing=send_frag, fbk_timeout=fbk_timeout)
         step_out = NoDataStep()
 
