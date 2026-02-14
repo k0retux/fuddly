@@ -399,17 +399,35 @@ class FragmentationBrick(ScenarioBrick):
             self.payload_list = []
             self.fragment_count = frag_amount
             payload_sz = len(payload)
-            for fg in range(frag_amount):
-                match frag_policy:
-                    case FRAG_POL.EQUAL_SZ:
-                        fsz = payload_sz // frag_amount
-                        idx_start = fg*fsz
-                        pld = payload[idx_start:idx_start+fsz] if fg < frag_amount - 1 else payload[idx_start:]
-                    case FRAG_POL.DECREASING_SZ:
-                        raise NotImplementedError
-                    case FRAG_POL.INCREASING_SZ:
-                        raise NotImplementedError
-                self.payload_list.append(pld)
+
+            match frag_policy:
+                case FRAG_POL.EQUAL_SZ:
+                    fsz = payload_sz // frag_amount
+                    for fg in range(frag_amount):
+                        idx_start = fg * fsz
+                        pld = payload[idx_start:idx_start + fsz] if fg < frag_amount - 1 else payload[idx_start:]
+                        self.payload_list.append(pld)
+                case FRAG_POL.DECREASING_SZ | FRAG_POL.INCREASING_SZ:
+                    qty = (frag_amount+1)*frag_amount//2
+                    remaining_sz = payload_sz - qty
+                    if remaining_sz < frag_amount:
+                        raise ValueError(f'the size of the payload ({payload_sz}) is too small compared to the '
+                                         f'number of fragments ({frag_amount}) requested for creating fragments with '
+                                         f'decreasing size or increasing size')
+                    frag_init_sz = remaining_sz // frag_amount
+                    idx_start = 0
+                    for fg in range(frag_amount):
+                        idx_end = idx_start+frag_init_sz
+                        if fg ==0 and frag_policy == FRAG_POL.DECREASING_SZ:
+                            left_over = remaining_sz % frag_amount
+                            idx_end += left_over
+                        idx_end += (frag_amount-fg) if frag_policy == FRAG_POL.DECREASING_SZ else fg+1
+                        if fg == frag_amount-1:
+                            pld = payload[idx_start:]
+                        else:
+                            pld = payload[idx_start:idx_end]
+                            idx_start = idx_end
+                        self.payload_list.append(pld)
 
         self.host_name = host_name
         self.fragidx_ref = fragidx_ref
