@@ -146,7 +146,10 @@ class g_population(Generator):
 
 def truncate_info(info, max_size=60):
     if len(info) > max_size:
-        info = info[:max_size] + b' ...'
+        if isinstance(info, bytes):
+            info = info[:max_size] + b' ...'
+        else:
+            info = info[:max_size] + ' ...'
     return repr(info)
 
 
@@ -1593,17 +1596,14 @@ class d_modify_nodes(Operator):
 
     def _add_info(self, prev_data, n, new_value, status, size):
         val_len = len(new_value)
-        prev_data.add_info("changed node:     {!s}".format(n.name))
-        prev_data.add_info("absorption status: {!s}".format(status))
-        prev_data.add_info("value provided:   {!s}".format(truncate_info(new_value)))
-        prev_data.add_info("__ length:         {:d}".format(val_len))
+        prev_data.add_info(f"changed node:     {n.name}")
+        prev_data.add_info(f"absorption status: {status}")
+        prev_data.add_info(f"value provided:   {truncate_info(new_value)}")
+        prev_data.add_info(f"__ length:         {val_len}")
         if status != AbsorbStatus.FullyAbsorbed:
-            prev_data.add_info("absorbed size:     {:d}".format(size))
-            if val_len - size > 100:
-                remaining = self.value[size:size+100] + ' ...'
-            else:
-                remaining = self.value[size:]
-            prev_data.add_info("remaining:      '{!s}'".format(remaining))
+            prev_data.add_info(f"absorbed size:     {size}")
+            remaining = self.value[size:]
+            prev_data.add_info(f"remaining:      {truncate_info(remaining)}")
 
 
 @operator(tactics, dtype="CALL", weight=4,
