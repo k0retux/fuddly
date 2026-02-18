@@ -957,7 +957,7 @@ class Scenario(object):
         """
 
         self.name = name
-        self.description = description
+        self._description_for_graph = description
         self._user_args = user_args
         self._steps = None
         self._reinit_steps = None
@@ -983,10 +983,21 @@ class Scenario(object):
     def __str__(self):
         return "Scenario '{:s}'".format(self.name)
 
+    @property
+    def description(self):
+        return self._description_for_graph.replace('\\n', '\n')
+
+    @description.setter
+    def description(self, value):
+        self._description_for_graph = value.replace('\n', '\\n')
+
     def clone(self, new_name):
         new_sc = copy.copy(self)
         new_sc.name = new_name
         return new_sc
+
+    def set_scenario_parameters(self, params: dict):
+        self._user_args = params
 
     def set_in_connectors(self, in_connectors: list):
         self._in_connectors = {i: in_c for i, in_c in enumerate(in_connectors, start=1)}
@@ -1257,12 +1268,12 @@ class Scenario(object):
                 graph.attr(label='SCENARIO', fontcolor='black', labelloc='b')
                 graph_creation(self._anchor, node_list=[], edge_list=[], graph=graph)
 
-            if display_description and self.description:
-                desc_id = str(id(self.description))
+            if display_description and self._description_for_graph:
+                desc_id = str(id(self._description_for_graph))
                 with g.subgraph(name='cluster_2') as g_desc:
                     g_desc.attr(label='DESCRIPTION',
                                 style='filled', color='gray95', labelloc='b')
-                    g_desc.node(desc_id, label=self.description,
+                    g_desc.node(desc_id, label=self._description_for_graph,
                                 shape='record', style='filled', color='invis', fillcolor='gray95',
                                 fontcolor='black', fontsize='10')
             else:

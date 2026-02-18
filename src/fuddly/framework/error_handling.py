@@ -40,6 +40,7 @@ class DataModelDuplicateError(ValueError):
         self.name = name
 
 class ScenarioDefinitionError(Exception): pass
+class ScenarioParameterError(Exception): pass
 
 class NodeError(Exception): pass
 

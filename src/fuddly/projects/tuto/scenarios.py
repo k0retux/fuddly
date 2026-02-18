@@ -72,7 +72,7 @@ sbrick_final_1.connect_out_to(sbrick_final_2)
 pld_list = ['ABCD', 'OOOOOOOOO', 'MMMMM', 'UUU', 'H'*100]
 
 sb_frag_01 = FragmentationScenarioBuilder()
-sb_frag_01.set_scenario_params(name='frag_1', host_name='frag_cmd', payload_list=pld_list,
+sb_frag_01.set_scenario_params(name='frag_1', host_name='frag_cmd', fragment_list=pld_list,
                                fragidx_ref='f_idx', fragcount_ref='f_count', pld_ref='pld',
                                pldsz_ref='size',
                                fbk_timeout=0.1)
@@ -83,7 +83,7 @@ pld = 'A'*6+'B'*6+'C'*6+'D'*6+'E'*6+'123'
 
 sb_frag_02 = FragmentationScenarioBuilder()
 sb_frag_02.set_scenario_params(name='frag_2', host_name='frag_cmd',
-                               payload=pld, frag_amount=5, frag_policy=FRAG_POL.DECREASING_SZ,
+                               payload=pld,
                                fragidx_ref='f_idx', fragcount_ref='f_count', pld_ref='pld',
                                pldsz_ref='size',
                                fbk_timeout=0.1)

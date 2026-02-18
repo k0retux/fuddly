@@ -64,6 +64,7 @@ from fuddly.framework.logger import *
 from fuddly.framework.monitor import *
 from fuddly.framework.project import *
 from fuddly.framework.scenario import *
+from fuddly.framework.scenario_bricks import FRAG_POL
 from fuddly.framework.tactics_helpers import *
 from fuddly.framework.target_helpers import *
 from fuddly.libs.utils import *

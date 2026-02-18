@@ -75,6 +75,7 @@ class Tactics(object):
             dmaker_type = self.scenario_ref_from(sc)
             gen_cls_name = 'g_' + sc.name.lower()
             gen = dyn_generator_from_scenario(gen_cls_name, (DynGeneratorFromScenario,), {})()
+            gen.__doc__ = sc.description
             self.register_new_generator(gen_cls_name, gen, weight=1, dmaker_type=dmaker_type,
                                         valid=True)
 
