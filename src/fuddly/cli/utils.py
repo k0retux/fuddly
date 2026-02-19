@@ -5,7 +5,8 @@ from fuddly.libs.fmk_services import (
     get_each_data_model_module,
     get_each_target_module,
 )
-from importlib import import_module
+import importlib
+import types
 
 
 # Return the type a module is of
@@ -20,7 +21,7 @@ def get_module_type(name: str) -> str:
 
 
 # Return a list of all projects, dms, and targets fuddly knows about
-def get_all_objects() -> list():
+def get_all_object_names() -> list[str]:
     modules = []
 
     # Projects
@@ -71,7 +72,7 @@ def get_project_scripts(prefix: str, parsed_args: (object | str), **kwargs) -> l
 
 
 # Return a list of projects fuddly knows about
-def get_projects() -> list():
+def get_projects() -> list[importlib.machinery.ModuleSpec]:
     modules = []
 
     project_modules = get_each_project_module()
@@ -90,9 +91,9 @@ def get_projects() -> list():
 
 
 # Return a list of all the fuddly tools
-def get_tools() -> list():
+def get_tools() -> list[types.ModulesType]:
     import pkgutil
     modules = []
-    tools = import_module("fuddly.tools")
+    tools = importlib.import_module("fuddly.tools")
     modules = list(map(lambda x: x.name, pkgutil.walk_packages(tools.__path__)))
     return modules

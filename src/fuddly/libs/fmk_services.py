@@ -9,7 +9,7 @@ from fuddly.framework.plumbing import _populate_projects as populate_projects
 
 
 # Get all modules (from FS and entry_points)
-def get_module_of_type(group_name: str, prefix: str):
+def get_module_of_type(group_name: str, prefix: str) -> list[importlib.machinery.ModuleSpec]:
     path = {
         "targets": gr.user_targets_folder,
         "projects": gr.user_projects_folder,
@@ -23,21 +23,21 @@ def get_module_of_type(group_name: str, prefix: str):
     return modules
 
 
-def get_each_project_module() -> list():
+def get_each_project_module() -> list[importlib.machinery.ModuleSpec]:
     return get_module_of_type(
             group_name="projects",
             prefix="fuddly/projects"
         )
 
 
-def get_each_data_model_module() -> list():
+def get_each_data_model_module() -> list[importlib.machinery.ModuleSpec]:
     return get_module_of_type(
             group_name="data_models",
             prefix="fuddly/data_models"
         )
 
 
-def get_each_target_module() -> list():
+def get_each_target_module() -> list[importlib.machinery.ModuleSpec]:
     return get_module_of_type(
             group_name="targets",
             prefix="fuddly/targets"
@@ -45,7 +45,7 @@ def get_each_target_module() -> list():
 
 
 # Find python modules in a specific path, prepend "prefix" to the modules' names
-def find_modules_in_dir(path: str, prefix: str) -> list():
+def find_modules_in_dir(path: str, prefix: str) -> list[importlib.machinery.ModuleSpec]:
     res = []
     fullpath = os.path.join(gr.fuddly_data_folder, path)
     # TODO this is the project specific detector which checks if it's a python
@@ -66,7 +66,7 @@ def find_modules_in_dir(path: str, prefix: str) -> list():
 
 
 # Get all the python modules corresponding to a certain entry_point name group
-def find_modules_from_ep_group(group_name: str) -> list():
+def find_modules_from_ep_group(group_name: str) -> list[importlib.machinery.ModuleSpec]:
     res = []
     for ep in entry_points(group=group_name):
         if ep.name.endswith("__root__"):
