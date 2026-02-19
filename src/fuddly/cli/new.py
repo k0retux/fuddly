@@ -26,6 +26,8 @@ conf["project"] = {
         {"name": "prj.py"},
         {"name": "monitoring.py"},
         {"name": "targets.py"},
+        {"name": "conf.py", "interpolate": ["name"]},
+        {"name": "README"},
         {"name": "README", "path": "samples"},
         {"name": "README", "path": "scripts"},
     ],
