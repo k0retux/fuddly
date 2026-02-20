@@ -46,6 +46,7 @@ class Tactics(object):
         self.generators = {}
         self.operator_clones = {}
         self.generator_clones = {}
+        self._scenario_builders = None
         self._fmkops = None
         self._related_dm = None
 
@@ -69,15 +70,31 @@ class Tactics(object):
     def scenario_ref_from(scenario):
         return 'SC_' + scenario.name.upper()
 
+    @staticmethod
+    def scenario_cls_name_from(scenario):
+        return 'g_' + scenario.name.lower()
+
     def register_scenarios(self, *scenarios):
         for sc in scenarios:
             dyn_generator_from_scenario.scenario = sc
             dmaker_type = self.scenario_ref_from(sc)
-            gen_cls_name = 'g_' + sc.name.lower()
+            gen_cls_name = self.scenario_cls_name_from(sc)
             gen = dyn_generator_from_scenario(gen_cls_name, (DynGeneratorFromScenario,), {})()
             gen.__doc__ = sc.description
             self.register_new_generator(gen_cls_name, gen, weight=1, dmaker_type=dmaker_type,
                                         valid=True)
+
+    def register_scenario_builders(self, *scenario_builders):
+        if self._scenario_builders is None:
+            self._scenario_builders = []
+        self._scenario_builders += scenario_builders
+
+    @property
+    def scenario_builders(self):
+        if self._scenario_builders is None:
+            return
+        for sb in self._scenario_builders:
+            yield sb
 
     @staticmethod
     def operator_ref_from(op):
@@ -770,6 +787,10 @@ class DynGeneratorFromScenario(Generator):
             if not self._ign_final:
                 self.scenario.current_step.final = True
 
+        if self.scenario._user_args:
+            for ua in self.scenario._user_args.keys():
+                setattr(self.scenario.env, str(ua), getattr(self, str(ua)))
+
         return True
 
     def _stutter_cbk(self, env, current_step, next_step):
@@ -922,10 +943,6 @@ class DynGeneratorFromScenario(Generator):
                 self._alteration_just_performed = False
 
         self.scenario.set_target(target)
-
-        if self.scenario._user_args:
-            for ua in self.scenario._user_args.keys():
-                setattr(self.scenario.env, str(ua), getattr(self, str(ua)))
 
         self.step = self.scenario.current_step
 

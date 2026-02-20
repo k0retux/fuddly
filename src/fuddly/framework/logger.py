@@ -819,40 +819,19 @@ class Logger(object):
         self, dmaker_type, name, user_input, data_id=None, disabled=False
     ):
         msg = "### Initial Generator (currently disabled):\n" if disabled else ""
-        msg += (
-            ""
-            if data_id is None
-            else " |- retrieved from data id: {:d}\n".format(data_id)
-        )
-        if user_input:
-            msg += " |- generator type: %s | generator name: %s | User input: %s" % (
-                dmaker_type,
-                name,
-                user_input,
-            )
-        else:
-            msg += " |- generator type: %s | generator name: %s | No user input" % (
-                dmaker_type,
-                name,
-            )
+        msg += "" if data_id is None else f" |- retrieved from data id: {data_id}\n"
+        msg += f"|- generator type: {dmaker_type} | generator name: {name}"
+        msg += f"\n|- user input: {user_input}" if user_input else f"\n|- no user input"
         msg += "\n  ..." if disabled else ""
+
         if not disabled:
             self._current_dmaker_list.append((dmaker_type, name, user_input))
             self._current_src_data_id = data_id
         self.log_fn(msg, rgb=Color.DISABLED if disabled else Color.DATAINFO)
 
     def log_operator_info(self, dmaker_type, name, user_input):
-        if user_input:
-            msg = " |- operator type: %s | operator name: %s | User input: %s" % (
-                dmaker_type,
-                name,
-                user_input,
-            )
-        else:
-            msg = " |- operator type: %s | operator name: %s | No user input" % (
-                dmaker_type,
-                name,
-            )
+        msg = f"|- operator type: {dmaker_type} | operator name: {name}"
+        msg += f"\n|- user input: {user_input}" if user_input else f"\n|- no user input"
 
         self._current_dmaker_list.append((dmaker_type, name, user_input))
         self.log_fn(msg, rgb=Color.DATAINFO)
@@ -863,7 +842,7 @@ class Logger(object):
 
         self._current_dmaker_info[(dmaker_type, data_maker_name)] = data_info
 
-        self.log_fn(" |- data info:", rgb=Color.DATAINFO)
+        self.log_fn("|- data info:", rgb=Color.DATAINFO)
         for msg in data_info:
             if len(msg) > self._term_display_limit:
                 msg = msg[: self._term_display_limit] + " ..."

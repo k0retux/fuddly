@@ -36,7 +36,8 @@ class ScenarioBrick(object):
     def dm(self, dm: DataModel):
         self._dm = dm
 
-    def description_from_shape_id(self, shape_id):
+    @classmethod
+    def description_from_shape_id(cls, shape_id):
         """
 
         :param shape_id:
@@ -45,7 +46,8 @@ class ScenarioBrick(object):
         return 'No description'
 
 
-    def scenario_parameters_per_shape_id(self, shape_id):
+    @classmethod
+    def scenario_parameters_per_shape_id(cls, shape_id):
         """
 
         :param shape_id:
@@ -263,7 +265,7 @@ class ScenarioBrick(object):
     def start(self):
         return self._start
 
-    @final.setter
+    @start.setter
     def start(self, value):
         self._start = value
 
@@ -309,8 +311,8 @@ class FRAG_POL(Enum):
 
 class FragmentationBrick(ScenarioBrick):
 
-    VALID_SHAPE_ORDER = 'valid_ordered'
-    VALID_SHAPE_UNORDER = 'valid_unordered'
+    VALID_ORDERED_SHAPE = 'valid_ordered'
+    VALID_UNORDERED_SHAPE = 'valid_unordered'
     SZ01_SHAPE = 'sz01'
     ALT01A_SHAPE = 'alt01A'
     ALT02A_SHAPE = 'alt02A'
@@ -329,14 +331,15 @@ class FragmentationBrick(ScenarioBrick):
     ALT10_SHAPE = 'alt10'
     ALT11_SHAPE = 'alt11'
 
-    def scenario_parameters_per_shape_id(self, shape_id):
+    @classmethod
+    def scenario_parameters_per_shape_id(cls, shape_id):
 
         match shape_id:
-            case self.VALID_SHAPE_ORDER | self.VALID_SHAPE_UNORDER \
-                 | self.ALT07A_SHAPE | self.ALT07B_SHAPE | self.ALT08_SHAPE | self.ALT09_SHAPE \
-                 | self.ALT06A_SHAPE | self.ALT06B_SHAPE | self.ALT05A_SHAPE | self.ALT05B_SHAPE \
-                 | self.ALT01A_SHAPE | self.ALT01B_SHAPE | self.ALT02A_SHAPE | self.ALT02B_SHAPE \
-                 | self.ALT10_SHAPE | self.ALT11_SHAPE:
+            case cls.VALID_ORDERED_SHAPE | cls.VALID_UNORDERED_SHAPE \
+                 | cls.ALT07A_SHAPE | cls.ALT07B_SHAPE | cls.ALT08_SHAPE | cls.ALT09_SHAPE \
+                 | cls.ALT06A_SHAPE | cls.ALT06B_SHAPE | cls.ALT05A_SHAPE | cls.ALT05B_SHAPE \
+                 | cls.ALT01A_SHAPE | cls.ALT01B_SHAPE | cls.ALT02A_SHAPE | cls.ALT02B_SHAPE \
+                 | cls.ALT10_SHAPE | cls.ALT11_SHAPE | cls.ALT03_SHAPE | cls.ALT04_SHAPE:
                 params = {
                     'fragment_count': ('Number of fragment to generate [parameter used when relevant]', 3, int),
                     'fragment_policy': ('Policy for fragment generation ('
@@ -346,7 +349,7 @@ class FragmentationBrick(ScenarioBrick):
                                         '[parameter used when relevant]', FRAG_POL.DECREASING_SZ, FRAG_POL)
                 }
 
-            case self.SZ01_SHAPE | self.ALT03_SHAPE | self.ALT04_SHAPE:
+            case cls.SZ01_SHAPE:
                 params = {
                     'fragment_count': ('Number of fragment to generate [parameter used when relevant]', 3, int),
                 }
@@ -355,14 +358,15 @@ class FragmentationBrick(ScenarioBrick):
                 params = {}
 
         match shape_id:
-            case self.ALT01A_SHAPE | self.ALT01B_SHAPE | self.ALT02A_SHAPE | self.ALT02B_SHAPE \
-                | self.ALT03_SHAPE | self.ALT04_SHAPE:
+            case cls.ALT01A_SHAPE | cls.ALT01B_SHAPE | cls.ALT02A_SHAPE | cls.ALT02B_SHAPE \
+                 | cls.ALT03_SHAPE | cls.ALT04_SHAPE:
                 params.update({
                     'add_frag_to_send': ('Number of fragment to be sent in addition '
                                          'to the nominal case (by repeating some fragment)', 5, int)
                 })
-            case self.ALT05A_SHAPE | self.ALT05B_SHAPE | self.ALT06A_SHAPE | self.ALT06B_SHAPE \
-                | self.ALT07A_SHAPE | self.ALT07B_SHAPE | self.ALT10_SHAPE | self.ALT11_SHAPE:
+            case cls.ALT05A_SHAPE | cls.ALT05B_SHAPE | cls.ALT06A_SHAPE | cls.ALT06B_SHAPE \
+                 | cls.ALT07A_SHAPE | cls.ALT07B_SHAPE | cls.ALT08_SHAPE | cls.ALT09_SHAPE \
+                 | cls.ALT10_SHAPE | cls.ALT11_SHAPE:
                 params.update({
                     'add_frag_to_send': ('Number of fragment to be sent in addition '
                                          'to the nominal case (by repeating some fragment)', 100, int)
@@ -385,28 +389,28 @@ class FragmentationBrick(ScenarioBrick):
         desc = '\n'
 
         match shape_id:
-            case FragmentationBrick.VALID_SHAPE_ORDER:
+            case self.VALID_ORDERED_SHAPE:
                 desc += (f'Valid fragmentation scenario [{shape_id}]:\n'
                          f' - fragments are sent in order')
 
-            case FragmentationBrick.VALID_SHAPE_UNORDER:
+            case self.VALID_UNORDERED_SHAPE:
                 desc += (f'Valid fragmentation scenario [{shape_id}]:\n'
                          f' - fragments are not sent in order')
 
-            case FragmentationBrick.ALT01A_SHAPE | FragmentationBrick.ALT01B_SHAPE:
+            case self.ALT01A_SHAPE | self.ALT01B_SHAPE:
                 desc += (f'Invalid fragmentation scenario [{shape_id}]:\n'
-                         f'{self.count_max-1} + @add_frag_to_send fragments will be sent\n'
-                         f'while the maximum is specified to be {self.count_max-1}.\n'
+                         f'{self.count_max} + @add_frag_to_send fragments will be sent\n'
+                         f'while the maximum is specified to be {self.count_max}.\n'
                          f'\nNotes:\n'
                          f' - the number of individual fragments is equal to @fragment_count\n'
                          f'   (when no fragment list is provided)\n'
                          f' - fragment size ordering is following the @fragment_policy\n'
                          f'   (when no fragment list is provided)\n')
 
-            case FragmentationBrick.ALT02A_SHAPE | FragmentationBrick.ALT02B_SHAPE:
+            case self.ALT02A_SHAPE | self.ALT02B_SHAPE:
                 desc += (f'Invalid fragmentation scenario [{shape_id}]:\n'
-                         f'{self.count_max-1} + @add_frag_to_send fragments will be sent\n'
-                         f'while the maximum is specified to be {self.count_max-1},\n'
+                         f'{self.count_max} + @add_frag_to_send fragments will be sent\n'
+                         f'while the maximum is specified to be {self.count_max},\n'
                          f'and we never send the expected last fragment.\n'
                          f'\nNotes:\n'
                          f' - the number of individual fragments is equal to @fragment_count\n'
@@ -414,27 +418,27 @@ class FragmentationBrick(ScenarioBrick):
                          f' - fragment size ordering is following the @fragment_policy\n'
                          f'   (when no fragment list is provided)\n')
 
-            case FragmentationBrick.ALT03_SHAPE:
+            case self.ALT03_SHAPE:
                 desc += (f'Invalid fragmentation scenario [{shape_id}]:\n'
-                         f'{self.count_max-1} + @add_frag_to_send fragments will be sent\n'
+                         f'{self.count_max} + @add_frag_to_send fragments will be sent\n'
                          f'with always the same fragment index\n'
                          f'but with different payload.\n'
                          f'\nNotes:\n'
                          f' - the number of individual fragments is equal to @fragment_count\n'
                          f'   (when no fragment list is provided)\n')
 
-            case FragmentationBrick.ALT04_SHAPE:
+            case self.ALT04_SHAPE:
                 desc += (f'Invalid fragmentation scenario [{shape_id}]:\n'
-                         f'{self.count_max-1} + @add_frag_to_send fragments will be sent\n'
+                         f'{self.count_max} + @add_frag_to_send fragments will be sent\n'
                          f'with always the same fragment index\n'
                          f'and the same payload.\n'
                          f'\nNotes:\n'
                          f' - the number of individual fragments is equal to @fragment_count\n'
                          f'   (when no fragment list is provided)\n')
 
-            case FragmentationBrick.ALT05A_SHAPE | FragmentationBrick.ALT05B_SHAPE:
+            case self.ALT05A_SHAPE | self.ALT05B_SHAPE:
                 desc += (f'Invalid fragmentation scenario [{shape_id}]:\n'
-                         f'{self.count_max-1} + @add_frag_to_send fragments will be sent\n'
+                         f'{self.count_max} + @add_frag_to_send fragments will be sent\n'
                          f'cycling from the 1st fragment to penultimate fragment\n'
                          f'never completing the full message.\n'
                          f'\nNotes:\n'
@@ -443,9 +447,9 @@ class FragmentationBrick(ScenarioBrick):
                          f' - fragment size ordering is following the @fragment_policy\n'
                          f'   (when no fragment list is provided)\n')
 
-            case FragmentationBrick.ALT06A_SHAPE | FragmentationBrick.ALT06B_SHAPE:
+            case self.ALT06A_SHAPE | self.ALT06B_SHAPE:
                 desc += (f'Invalid fragmentation scenario [{shape_id}]:\n'
-                         f'{self.count_max-1} + @add_frag_to_send fragments will be sent\n'
+                         f'{self.count_max} + @add_frag_to_send fragments will be sent\n'
                          f'cycling from the last fragment to 2nd fragment\n'
                          f'never completing the full message.\n'
                          f'\nNotes:\n'
@@ -454,50 +458,49 @@ class FragmentationBrick(ScenarioBrick):
                          f' - fragment size ordering is following the @fragment_policy\n'
                          f'   (when no fragment list is provided)\n')
 
-            case FragmentationBrick.ALT07A_SHAPE | FragmentationBrick.ALT07B_SHAPE:
+            case self.ALT07A_SHAPE | self.ALT07B_SHAPE:
                 desc += (f'Invalid fragmentation scenario [{shape_id}]:\n'
-                         f'{self.count_max-1} + @add_frag_to_send fragments will be sent\n'
+                         f'{self.count_max} + @add_frag_to_send fragments will be sent\n'
                          f'randomly but never completing the full message.\n'
                          f'\nNotes:\n'
                          f' - the number of individual fragments is equal to @fragment_count\n'
                          f'   (when no fragment list is provided)\n'
                          f' - the penultimate fragment will never be sent.\n')
 
-            case FragmentationBrick.ALT08_SHAPE:
+            case self.ALT08_SHAPE:
                 desc += (f'Invalid fragmentation scenario [{shape_id}]:\n'
                          f'empty fragments will be sent')
 
-            case FragmentationBrick.ALT09_SHAPE:
+            case self.ALT09_SHAPE:
                 desc += (f'Invalid fragmentation scenario [{shape_id}]:\n'
                          f'an empty fragment will be sent among the other fragments')
 
-            case FragmentationBrick.ALT09_SHAPE:
-                desc += (f'Invalid fragmentation scenario [{shape_id}]:\n'
-                         f'an empty fragment will be sent among the other fragments')
-
-            case FragmentationBrick.ALT10_SHAPE:
+            case self.ALT10_SHAPE:
                 desc += (f'Invalid fragmentation scenario [{shape_id}]:\n'
                          f'The fragment count is set to its specified maximum {self.count_max},\n'
-                         f'and {self.count_max-1} + @add_frag_to_send fragments will be sent\n'
+                         f'and {self.count_max} + @add_frag_to_send fragments will be sent\n'
                          f'randomly.\n'
                          f'\nNotes:\n'
                          f' - the number of individual fragments is equal to @fragment_count\n'
                          f'   (when no fragment list is provided)\n')
 
-            case FragmentationBrick.ALT11_SHAPE:
+            case self.ALT11_SHAPE:
                 desc += (f'Invalid fragmentation scenario [{shape_id}]:\n'
                          f'The fragment count is set to its possible maximum {self.count_vtype_max} '
                          f'(wrt. its node type),\n'
-                         f'and {self.count_max-1} + @add_frag_to_send fragments will be sent\n'
+                         f'and {self.count_max} + @add_frag_to_send fragments will be sent\n'
                          f'randomly.\n'
                          f'\nNotes:\n'
                          f' - the number of individual fragments is equal to @fragment_count\n'
                          f'   (when no fragment list is provided)\n')
 
-            case FragmentationBrick.SZ01_SHAPE:
+            case self.SZ01_SHAPE:
                 desc += (f'Invalid fragmentation scenario [{shape_id}]:\n'
-                         f'Fragments will be randomly generated and will cycle between the\n'
-                         f'maximum size value and the minimum size value.\n')
+                         f'Two fragment payloads are generated based on the original payload:\n'
+                         f'- one with a size equal to the maximum value {self.fsz_vtype_max} that\n'
+                         f' can fit in the specified node type\n'
+                         f'- another one which is empty\n'
+                         f'Then they are sent alternatively until @fragment_count have been sent.\n')
 
             case _:
                 desc += 'Unknown'
@@ -548,9 +551,6 @@ class FragmentationBrick(ScenarioBrick):
                         idx_start = idx_end
                     fragments.append(pld)
 
-        # print(f'\n***DBG: {payload_sz}***')
-        # print(fragments)
-
         return fragments
 
 
@@ -565,14 +565,14 @@ class FragmentationBrick(ScenarioBrick):
         user_context.merge_with(UI(fbk_timeout=fbk_timeout))
 
         self.shape_ids = [
-            FragmentationBrick.VALID_SHAPE_ORDER,
-            FragmentationBrick.VALID_SHAPE_UNORDER,
+            self.VALID_ORDERED_SHAPE,
+            self.VALID_UNORDERED_SHAPE,
         ]
 
         self.payload = payload
         if self.payload is None:
             assert fragment_list is not None
-            self.fragment_list = fragment_list
+            self.fragment_list = list(fragment_list)
             self.fragment_count = len(fragment_list)
 
         self.host_name = host_name
@@ -586,7 +586,7 @@ class FragmentationBrick(ScenarioBrick):
         self.pld_sem = nd.NodeSemanticsCriteria(mandatory_criteria=[self.pld_ref])
         if self.pldsz_ref is not None:
             self.pldsz_sem = nd.NodeSemanticsCriteria(mandatory_criteria=[self.pldsz_ref])
-            self.shape_ids.append(FragmentationBrick.SZ01_SHAPE)
+            self.shape_ids.append(self.SZ01_SHAPE)
 
         atom = self.dm.get_atom(self.host_name)
         fidx_a = atom[self.fragidx_sem][0]
@@ -599,13 +599,13 @@ class FragmentationBrick(ScenarioBrick):
             self.idx_vtype_min = vtype.__class__.mini
             self.idx_vtype_max = vtype.__class__.maxi
 
-            print(
-                f'|= fragment index type: {self.idx_vtype}\n'
-                f'|            vtype min: {self.idx_vtype_min}\n'
-                f'|            vtype max: {self.idx_vtype_max}\n'
-                f'|        specified min: {self.idx_min}\n'
-                f'|        specified max: {self.idx_max}\n'
-            )
+            # print(
+            #     f'|= fragment index type: {self.idx_vtype}\n'
+            #     f'|            vtype min: {self.idx_vtype_min}\n'
+            #     f'|            vtype max: {self.idx_vtype_max}\n'
+            #     f'|        specified min: {self.idx_min}\n'
+            #     f'|        specified max: {self.idx_max}\n'
+            # )
 
         else:
             raise NotImplementedError(f'Unrecognized fragment index type [{fidx_a.cc}]')
@@ -620,13 +620,13 @@ class FragmentationBrick(ScenarioBrick):
             self.count_vtype_min = vtype.__class__.mini
             self.count_vtype_max = vtype.__class__.maxi
 
-            print(
-                f'|= fragment count type: {self.count_vtype}\n'
-                f'|            vtype min: {self.count_vtype_min}\n'
-                f'|            vtype max: {self.count_vtype_max}\n'
-                f'|        specified min: {self.count_min}\n'
-                f'|        specified max: {self.count_max}\n'
-            )
+            # print(
+            #     f'|= fragment count type: {self.count_vtype}\n'
+            #     f'|            vtype min: {self.count_vtype_min}\n'
+            #     f'|            vtype max: {self.count_vtype_max}\n'
+            #     f'|        specified min: {self.count_min}\n'
+            #     f'|        specified max: {self.count_max}\n'
+            # )
 
         else:
             raise NotImplementedError(f'Unrecognized fragment count type [{fcount_a.cc}]')
@@ -642,13 +642,13 @@ class FragmentationBrick(ScenarioBrick):
                 self.fsz_vtype_min = vtype.__class__.mini
                 self.fsz_vtype_max = vtype.__class__.maxi
 
-                print(
-                    f'|= fragment size type: {self.fsz_vtype}\n'
-                    f'|            vtype min: {self.fsz_vtype_min}\n'
-                    f'|            vtype max: {self.fsz_vtype_max}\n'
-                    f'|        specified min: {self.fsz_min}\n'
-                    f'|        specified max: {self.fsz_max}\n'
-                )
+                # print(
+                #     f'|= fragment size type: {self.fsz_vtype}\n'
+                #     f'|            vtype min: {self.fsz_vtype_min}\n'
+                #     f'|            vtype max: {self.fsz_vtype_max}\n'
+                #     f'|        specified min: {self.fsz_min}\n'
+                #     f'|        specified max: {self.fsz_max}\n'
+                # )
 
             else:
                 raise NotImplementedError(f'Unrecognized fragment size type [{fsize_a.cc}]')
@@ -658,21 +658,22 @@ class FragmentationBrick(ScenarioBrick):
 
         if self.idx_vtype_max is None or self.idx_vtype_max > self.count_max - 1:
             self.shape_ids += [
-                FragmentationBrick.ALT01A_SHAPE, FragmentationBrick.ALT01B_SHAPE,
-                FragmentationBrick.ALT02A_SHAPE, FragmentationBrick.ALT02B_SHAPE,
+                self.ALT01A_SHAPE, self.ALT01B_SHAPE,
+                self.ALT02A_SHAPE, self.ALT02B_SHAPE,
             ]
 
         self.shape_ids += [
-            FragmentationBrick.ALT03_SHAPE,
-            FragmentationBrick.ALT04_SHAPE,
-            FragmentationBrick.ALT05A_SHAPE, FragmentationBrick.ALT05B_SHAPE,
-            FragmentationBrick.ALT06A_SHAPE, FragmentationBrick.ALT06B_SHAPE,
-            FragmentationBrick.ALT07A_SHAPE, FragmentationBrick.ALT07B_SHAPE,
-            FragmentationBrick.ALT10_SHAPE
+            self.ALT03_SHAPE,
+            self.ALT04_SHAPE,
+            self.ALT05A_SHAPE, self.ALT05B_SHAPE,
+            self.ALT06A_SHAPE, self.ALT06B_SHAPE,
+            self.ALT07A_SHAPE, self.ALT07B_SHAPE,
+            self.ALT08_SHAPE, self.ALT09_SHAPE,
+            self.ALT10_SHAPE
         ]
 
         if self.count_vtype_max is None or self.count_vtype_max > self.count_max:
-            self.shape_ids.append(FragmentationBrick.ALT11_SHAPE)
+            self.shape_ids.append(self.ALT11_SHAPE)
 
 
         def init_frag(env, step):
@@ -681,14 +682,22 @@ class FragmentationBrick(ScenarioBrick):
 
             if self.payload is not None:
                 self.fragment_count = env.fragment_count
-                fp = env.fragment_policy
+                if shape_id in [self.SZ01_SHAPE]:
+                    fp = FRAG_POL.EQUAL_SZ
+                else:
+                    fp = env.fragment_policy
                 self.fragment_list = self._generate_fragments(self.payload,
                                                               fragment_count=self.fragment_count,
                                                               fragment_policy=fp)
 
-            self.fragidx_list = list(range(self.frag_idx_init, self.fragment_count + self.frag_idx_init))
+
+            env.fragment_list = list(self.fragment_list)
+            env.fragment_count = self.fragment_count
+
+            self.fragidx_list = list(range(self.frag_idx_init, env.fragment_count+ self.frag_idx_init))
+
             if shape_id in [FragmentationBrick.ALT07A_SHAPE, FragmentationBrick.ALT07B_SHAPE]:
-                if self.fragment_count <= 2:
+                if env.fragment_count<= 2:
                     raise ScenarioParameterError
                 else:
                     self.fragidx_incomplete_list = list(self.fragidx_list)
@@ -700,29 +709,24 @@ class FragmentationBrick(ScenarioBrick):
                 if pld_len < self.fsz_vtype_max:
                     qty = self.fsz_vtype_max // pld_len
                     left_over = self.fsz_vtype_max % pld_len
-                    env._max_frag_pld = orig_pld*qty + orig_pld[:left_over]
+                    env.max_frag_pld = orig_pld * qty + orig_pld[:left_over]
                 else:
-                    env._max_frag_pld = orig_pld[:self.fsz_vtype_max]
+                    env.max_frag_pld = orig_pld[:self.fsz_vtype_max]
 
             elif shape_id == FragmentationBrick.ALT08_SHAPE:
-                self.fragment_list = ['' for i in range(self.fragment_count)]
+                env.fragment_list = ['' for i in range(env.fragment_count)]
 
             elif shape_id == FragmentationBrick.ALT09_SHAPE:
-                self.fragment_count += 1
-                self.fragment_list.insert(1, '')
+                env.fragment_count += 1
+                env.fragment_list.insert(1, '')
+                env._test = env.fragment_count
 
-            self.cycling_payload = itertools.cycle(self.fragment_list)
-            self.fragidx_list = list(range(self.frag_idx_init, self.fragment_count + self.frag_idx_init))
-            env._frag_idx = self.frag_idx_init
-            env._fidx_list = list(self.fragidx_list)
+            self.cycling_payload = itertools.cycle(env.fragment_list)
+            env.frag_idx = self.frag_idx_init
+            env.fidx_list = list(self.fragidx_list)
 
             self._nb_of_sent_frag = 0
             match shape_id:
-                case FragmentationBrick.VALID_SHAPE_ORDER | FragmentationBrick.VALID_SHAPE_UNORDER \
-                    | FragmentationBrick.ALT08_SHAPE | FragmentationBrick.ALT09_SHAPE:
-
-                    self._planned_nb_fragments_to_send = self.fragment_count
-
                 case FragmentationBrick.ALT01A_SHAPE | FragmentationBrick.ALT01B_SHAPE \
                      | FragmentationBrick.ALT02A_SHAPE | FragmentationBrick.ALT02B_SHAPE \
                      | FragmentationBrick.ALT03_SHAPE | FragmentationBrick.ALT04_SHAPE \
@@ -733,119 +737,103 @@ class FragmentationBrick(ScenarioBrick):
 
                     self._planned_nb_fragments_to_send = self.count_max + env.add_frag_to_send
 
-            # print(f'\n'
-            #       f'|= Scenario parameters:\n'
-            #       f'|    fragment count: {env.fragment_count}\n'
-            #       f'|  fragement policy: {env.fragment_policy}\n')
+                case _:
+                    self._planned_nb_fragments_to_send = env.fragment_count
 
-        def send_frag(env, step):
+
+        def build_frag(env, step):
             data = Data()
             atom = env.dm.get_atom(self.host_name)
             shape_id = env.user_context.shape_id
 
             match shape_id:
-                case FragmentationBrick.VALID_SHAPE_ORDER | FragmentationBrick.ALT08_SHAPE \
-                    | FragmentationBrick.ALT09_SHAPE:
-                    # data.add_info(f'fragment {env._frag_idx - self.frag_idx_init + 1}/{self.fragment_count}')
-                    atom[self.fragidx_sem] = env._frag_idx
-                    atom[self.fragcount_sem] = self.fragment_count
-                    atom[self.pld_sem] = self.fragment_list[env._frag_idx - self.frag_idx_init]
-                    env._frag_idx += 1
+                case FragmentationBrick.VALID_ORDERED_SHAPE | FragmentationBrick.ALT08_SHAPE \
+                     | FragmentationBrick.ALT09_SHAPE:
+                    atom[self.fragidx_sem] = env.frag_idx
+                    atom[self.fragcount_sem] = env.fragment_count
+                    atom[self.pld_sem] = env.fragment_list[env.frag_idx - self.frag_idx_init]
 
-                case FragmentationBrick.VALID_SHAPE_UNORDER:
-                    fidx = random.choice(env._fidx_list)
-                    env._fidx_list.remove(fidx)
-                    # data.add_info(f'fragment {fidx - self.frag_idx_init + 1}/{self.fragment_count}')
-                    atom[self.fragidx_sem] = env._frag_idx
-                    atom[self.fragcount_sem] = self.fragment_count
-                    atom[self.pld_sem] = self.fragment_list[env._frag_idx - self.frag_idx_init]
-                    env._frag_idx += 1
+                case FragmentationBrick.VALID_UNORDERED_SHAPE:
+                    fidx = random.choice(env.fidx_list)
+                    env.fidx_list.remove(fidx)
+                    atom[self.fragidx_sem] = fidx
+                    atom[self.fragcount_sem] = env.fragment_count
+                    atom[self.pld_sem] = env.fragment_list[env.frag_idx - self.frag_idx_init]
 
                 case FragmentationBrick.SZ01_SHAPE:
-                    atom[self.fragidx_sem] = env._frag_idx
-                    atom[self.fragcount_sem] = self.fragment_count
-                    if env._frag_id % 2:
-                        atom[self.pld_sem] = env._max_frag_pld
+                    atom[self.fragidx_sem] = env.frag_idx
+                    atom[self.fragcount_sem] = env.fragment_count
+                    if env.frag_idx % 2:
+                        atom[self.pld_sem] = env.max_frag_pld
                     else:
                         atom[self.pld_sem] = ''
 
-                    if env.update_pld_size:
-                        atom[self.pldsz_sem] = len(atom[self.pld_sem][0].to_bytes())
-                    else:
-                        atom[self.pldsz_sem][0].unfreeze(recursive=True, dont_change_state=True,
-                                                         reevaluate_constraints=True)
-                    env._frag_idx += 1
-
                 case FragmentationBrick.ALT01A_SHAPE | FragmentationBrick.ALT01B_SHAPE:
-                    atom[self.fragidx_sem] = env._frag_idx
-                    atom[self.fragcount_sem] = self.fragment_count
+                    atom[self.fragidx_sem] = env.frag_idx
+                    atom[self.fragcount_sem] = env.fragment_count
                     if shape_id == FragmentationBrick.ALT01A_SHAPE:
                         atom[self.pld_sem] = next(self.cycling_payload)
                     else:
-                        atom[self.pld_sem] = self.fragment_list[0]
-                    env._frag_idx += 1
+                        atom[self.pld_sem] = env.fragment_list[0]
 
                 case FragmentationBrick.ALT02A_SHAPE | FragmentationBrick.ALT02B_SHAPE:
-                    if env._frag_idx + (self.frag_idx_init - 1) == self.fragment_count:
-                        env._frag_idx += 1
-                    atom[self.fragidx_sem] = env._frag_idx
-                    atom[self.fragcount_sem] = self.fragment_count
+                    if env.frag_idx + (1 - self.frag_idx_init) == env.fragment_count:
+                        env.frag_idx += 1
+                    atom[self.fragidx_sem] = env.frag_idx
+                    atom[self.fragcount_sem] = env.fragment_count
                     if shape_id == FragmentationBrick.ALT02A_SHAPE:
                         atom[self.pld_sem] = next(self.cycling_payload)
                     else:
-                        atom[self.pld_sem] = self.fragment_list[0]
-                    env._frag_idx += 1
+                        atom[self.pld_sem] = env.fragment_list[0]
 
                 case FragmentationBrick.ALT03_SHAPE:
                     atom[self.fragidx_sem] = self.frag_idx_init
-                    atom[self.fragcount_sem] = self.fragment_count
+                    atom[self.fragcount_sem] = env.fragment_count
                     atom[self.pld_sem] = next(self.cycling_payload)
-                    env._frag_idx += 1
 
                 case FragmentationBrick.ALT04_SHAPE:
                     atom[self.fragidx_sem] = self.frag_idx_init
-                    atom[self.fragcount_sem] = self.fragment_count
-                    atom[self.pld_sem] = env.user_context.payload[0]
-                    env._frag_idx += 1
+                    atom[self.fragcount_sem] = env.fragment_count
+                    atom[self.pld_sem] = env.fragment_list[0]
 
                 case FragmentationBrick.ALT05A_SHAPE | FragmentationBrick.ALT05B_SHAPE:
-                    fidx = env._frag_idx % (self.fragment_count+self.frag_idx_init-1)
+                    fidx = env.frag_idx % (env.fragment_count+self.frag_idx_init-1)
                     if fidx == 0:
                         fidx = self.frag_idx_init
                     atom[self.fragidx_sem] = fidx
-                    atom[self.fragcount_sem] = self.fragment_count
+                    atom[self.fragcount_sem] = env.fragment_count
                     if shape_id == FragmentationBrick.ALT05A_SHAPE:
-                        atom[self.pld_sem] = self.fragment_list[fidx]
+                        atom[self.pld_sem] = env.fragment_list[fidx]
                     else:
-                        atom[self.pld_sem] = self.fragment_list[0]
-                    env._frag_idx += 1
+                        atom[self.pld_sem] = env.fragment_list[0]
 
                 case FragmentationBrick.ALT06A_SHAPE | FragmentationBrick.ALT06B_SHAPE:
-                    fidx = self.fragment_count + (self.frag_idx_init - 1) - (env._frag_idx - self.frag_idx_init)
-                    if fidx == self.frag_idx_init+1:
-                        fidx = self.fragment_count + (self.frag_idx_init - 1)
+                    fidx_modulo = env.frag_idx % (env.fragment_count+self.frag_idx_init-1)
+                    if fidx_modulo == 0:
+                        fidx_modulo = self.frag_idx_init
+                    fidx = env.fragment_count + (self.frag_idx_init - 1) - (fidx_modulo - self.frag_idx_init)
+                    if fidx == self.frag_idx_init:
+                        fidx = env.fragment_count + (self.frag_idx_init - 1)
                     atom[self.fragidx_sem] = fidx
-                    atom[self.fragcount_sem] = self.fragment_count
+                    atom[self.fragcount_sem] = env.fragment_count
                     if shape_id == FragmentationBrick.ALT06A_SHAPE:
-                        atom[self.pld_sem] = self.fragment_list[fidx]
+                        atom[self.pld_sem] = env.fragment_list[fidx]
                     else:
-                        atom[self.pld_sem] = self.fragment_list[0]
-                    env._frag_idx += 1
+                        atom[self.pld_sem] = env.fragment_list[0]
 
                 case FragmentationBrick.ALT07A_SHAPE | FragmentationBrick.ALT07B_SHAPE:
                     rand_idx = random.choice(self.fragidx_incomplete_list)
                     atom[self.fragidx_sem] = rand_idx
-                    atom[self.fragcount_sem] = self.fragment_count
+                    atom[self.fragcount_sem] = env.fragment_count
                     if shape_id == FragmentationBrick.ALT07A_SHAPE:
-                        atom[self.pld_sem] = self.fragment_list[rand_idx]
+                        atom[self.pld_sem] = env.fragment_list[rand_idx]
                     else:
-                        atom[self.pld_sem] = self.fragment_list[0]
-                    env._frag_idx += 1
+                        atom[self.pld_sem] = env.fragment_list[0]
 
                 case FragmentationBrick.ALT10_SHAPE | FragmentationBrick.ALT11_SHAPE:
                     rand_idx = random.choice(self.fragidx_list)
                     atom[self.fragidx_sem] = rand_idx
-                    atom[self.pld_sem] = self.fragment_list[rand_idx]
+                    atom[self.pld_sem] = env.fragment_list[rand_idx]
                     if shape_id == FragmentationBrick.ALT10_SHAPE:
                         atom[self.fragcount_sem] = self.count_max
                     else:
@@ -854,18 +842,14 @@ class FragmentationBrick(ScenarioBrick):
                 case _:
                     pass
 
+            env.frag_idx += 1
 
-            match shape_id:
-                case FragmentationBrick.ALT10_SHAPE | FragmentationBrick.ALT11_SHAPE:
-                    pass
-
-                case _:
-                    if self.pldsz_ref is not None:
-                        if env.update_pld_size:
-                            atom[self.pldsz_sem] = len(atom[self.pld_sem][0].to_bytes())
-                        else:
-                            atom[self.pldsz_sem][0].unfreeze(recursive=True, dont_change_state=True, reevaluate_constraints=True)
-                            atom.freeze()
+            if self.pldsz_ref is not None:
+                if env.update_pld_size:
+                    atom[self.pldsz_sem] = len(atom[self.pld_sem][0].to_bytes())
+                else:
+                    atom[self.pldsz_sem][0].unfreeze(recursive=True, dont_change_state=True, reevaluate_constraints=True)
+                    atom.freeze()
 
             current_frag_idx = atom[self.fragidx_sem][0].get_raw_value()
             current_frag_count = atom[self.fragcount_sem][0].get_raw_value()
@@ -887,13 +871,6 @@ class FragmentationBrick(ScenarioBrick):
             shape_id = env.user_context.shape_id
 
             match shape_id:
-                case FragmentationBrick.VALID_SHAPE_ORDER | FragmentationBrick.VALID_SHAPE_UNORDER \
-                    | FragmentationBrick.ALT08_SHAPE | FragmentationBrick.ALT09_SHAPE:
-                    if env._frag_idx-self.frag_idx_init < self.fragment_count:
-                        ret = False
-                    else:
-                        env._frag_idx = self.frag_idx_init
-                        ret = True
                 case FragmentationBrick.ALT01A_SHAPE | FragmentationBrick.ALT01B_SHAPE \
                      | FragmentationBrick.ALT02A_SHAPE | FragmentationBrick.ALT02B_SHAPE \
                      | FragmentationBrick.ALT03_SHAPE | FragmentationBrick.ALT04_SHAPE \
@@ -901,21 +878,26 @@ class FragmentationBrick(ScenarioBrick):
                      | FragmentationBrick.ALT06A_SHAPE | FragmentationBrick.ALT06B_SHAPE \
                      | FragmentationBrick.ALT07A_SHAPE | FragmentationBrick.ALT07B_SHAPE \
                      | FragmentationBrick.ALT10_SHAPE | FragmentationBrick.ALT11_SHAPE:
-                    if env._frag_idx-self.frag_idx_init < self.count_max + env.add_frag_to_send:
+                    if env.frag_idx-self.frag_idx_init < self.count_max + env.add_frag_to_send:
                         ret = False
                     else:
-                        env._frag_idx = self.frag_idx_init
+                        env.frag_idx = self.frag_idx_init
                         ret = True
 
                 case _:
-                    ret = True
+                    if env.frag_idx-self.frag_idx_init < env.fragment_count:
+                        ret = False
+                    else:
+                        env.frag_idx = self.frag_idx_init
+                        ret = True
 
             return ret
 
         step_init = NoDataStep(fbk_timeout=0, do_before_data_processing=init_frag,
-                               step_desc='Init')
-        step_send_frag = StepStub(do_before_data_processing=send_frag, fbk_timeout=fbk_timeout)
-        step_out = NoDataStep()
+                               step_desc='Init Fragment SBrick')
+        step_send_frag = StepStub(do_before_data_processing=build_frag, fbk_timeout=fbk_timeout,
+                                  step_desc='Send Fragment')
+        step_out = NoDataStep(step_desc='Exit Fragment SBrick')
 
         step_init.connect_to(step_send_frag)
         step_send_frag.connect_to(step_out, cbk_after_fbk=check_max_loop)

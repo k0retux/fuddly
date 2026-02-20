@@ -87,3 +87,4 @@ sb_frag_02.set_scenario_params(name='frag_2', host_name='frag_cmd',
                                fragidx_ref='f_idx', fragcount_ref='f_count', pld_ref='pld',
                                pldsz_ref='size',
                                fbk_timeout=0.1)
+# sb_frag_02.set_starting_sbrick(sbrick_init.clone())

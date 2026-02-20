@@ -1290,6 +1290,19 @@ class FmkPlumbing(object):
                     self.__dynamic_generator_ids[self.dm].append(dmaker_type)
                     self.fmkDB.insert_dmaker(self.dm.name, dmaker_type, gen_cls_name, True, True)
 
+                sc_list = []
+                for sb in self._tactics.scenario_builders:
+                    sb._load(self.dm)
+                    sc_list += list(sb)
+
+                for sc in sc_list:
+                    self._tactics.register_scenarios(sc)
+                    dmaker_type = self._tactics.scenario_ref_from(sc)
+                    gen_cls_name = self._tactics.scenario_cls_name_from(sc)
+                    self.__dynamic_generator_ids[self.dm].append(dmaker_type)
+                    self.fmkDB.insert_dmaker(self.dm.name, dmaker_type,
+                                             gen_cls_name, True, True)
+
             self.print(colorize("*** Data Model '%s' loaded ***" % self.dm.name, rgb=Color.DATA_MODEL_LOADED))
             self._dm_to_be_reloaded = False
 
@@ -1364,7 +1377,8 @@ class FmkPlumbing(object):
                     for sb in self.prj.project_scenario_builders:
                         sb._load(self.dm)
                         sc_list += list(sb)
-                    self.prj.register_scenarios(*sc_list)
+                    self.prj.project_scenarios_from_builders = sc_list
+                    self._generic_tactics.register_scenarios(*sc_list)
 
                 if self.prj.project_scenarios:
                     self._generic_tactics.register_scenarios(*self.prj.project_scenarios)
@@ -1372,7 +1386,8 @@ class FmkPlumbing(object):
                 if self.prj.project_operators:
                     self._generic_tactics.register_operators(*self.prj.project_operators)
 
-                if self.prj.project_scenarios or self.prj.project_operators:
+                if (self.prj.project_scenarios or self.prj.project_operators
+                        or self.prj.project_scenario_builders):
                     self._fmkDB_insert_dm_and_dmakers("generic", self._generic_tactics)
 
                 if need_monitoring:
@@ -1392,6 +1407,11 @@ class FmkPlumbing(object):
         if self.prj:
             if self.prj.project_scenarios:
                 for sc_ref in [Tactics.scenario_ref_from(sc) for sc in self.prj.project_scenarios]:
+                    if sc_ref in self._generic_tactics.generators:
+                        del self._generic_tactics.generators[sc_ref]
+
+            if self.prj.project_scenarios_from_builders:
+                for sc_ref in [Tactics.scenario_ref_from(sc) for sc in self.prj.project_scenarios_from_builders]:
                     if sc_ref in self._generic_tactics.generators:
                         del self._generic_tactics.generators[sc_ref]
 
@@ -3253,7 +3273,6 @@ class FmkPlumbing(object):
 
     def _show_entry(self, data):
         gen = self.__current_gen
-
         data_id = data.get_data_id()
         data_makers_history = data.get_history()
         if data_makers_history:
@@ -3264,22 +3283,15 @@ class FmkPlumbing(object):
                     gen_info = data.get_initial_dmaker()
                     gen_type_initial, gen_name, gen_ui = (None, None, None) if gen_info is None else gen_info
                     if gen_type_initial is None:
-                        msg = "|- data id: %r | no generator (seed was used)"
-                    elif gen_ui:
-                        msg = "|- data id: %r | generator type: %s | generator name: %s | User input: %s" % \
-                            (data_id, gen_type_initial, gen_name, gen_ui)
+                        msg = f"|- data id: {data_id} | no generator (seed was used)"
                     else:
-                        msg = "|- data id: %r | generator type: %s | generator name: %s | No user input" % \
-                            (data_id, gen_type_initial, gen_name)
+                        msg = f"|- data id: {data_id} | generator type: {gen_type_initial} | generator name: {gen_name}"
+                        msg += f"\n|- user input: {gen_ui}" if gen_ui else f"\n|- no user input"
                     self.lg.print_console(msg, rgb=Color.SUBINFO)
 
                 if dmaker_type not in gen:
-                    if user_input:
-                        msg = "|- operator type: %s | data_maker name: %s | User input: %s" % \
-                            (dmaker_type, data_maker_name, user_input)
-                    else:
-                        msg = "|- operator type: %s | data_maker name: %s | No user input" % \
-                            (dmaker_type, data_maker_name)
+                    msg = f"|- operator type: {dmaker_type} | data_maker name: {data_maker_name}"
+                    msg += f"\n|- user input: {user_input}" if user_input else f"\n|- no user input"
                     self.lg.print_console(msg, rgb=Color.SUBINFO)
 
                     self.lg.print_console("|- data info:", rgb=Color.SUBINFO)
@@ -3295,8 +3307,7 @@ class FmkPlumbing(object):
                 dtype, dmk_name, _ = init_dmaker
             dm = data.get_data_model()
             dm_name = None if dm is None else dm.name
-            msg = "|- data id: {!r} | type: {:s} | data model: {!s}".format(data_id, dtype, dm_name
-            )
+            msg = f"|- data id: {data_id} | type: {dtype} | data model: {dm_name}"
             self.lg.print_console(msg, rgb=Color.SUBINFO)
 
         self.lg.print_console("|_ OUT > ", rgb=Color.SUBINFO)
