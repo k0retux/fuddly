@@ -91,7 +91,7 @@ def get_projects() -> list[importlib.machinery.ModuleSpec]:
 
 
 # Return a list of all the fuddly tools
-def get_tools() -> list[types.ModulesType]:
+def get_tools() -> list[types.ModuleType]:
     import pkgutil
     modules = []
     tools = importlib.import_module("fuddly.tools")
