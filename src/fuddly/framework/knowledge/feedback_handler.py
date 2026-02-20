@@ -21,6 +21,7 @@
 #
 ################################################################################
 
+import time
 import functools
 from fuddly.framework.knowledge.information import Info
 from fuddly.info.generic import *
@@ -217,6 +218,9 @@ class FeedbackHandler(object):
 
 class TestFbkHandler(FeedbackHandler):
 
+    def specific_init(self, **kwargs):
+        self.idx = 0
+
     def notify_data_sending(self, current_dm, data_list, timestamp, target):
         return 'Example of additional contextual information...'
 
@@ -230,4 +234,6 @@ class TestFbkHandler(FeedbackHandler):
             # OS.Windows.increase_trust()
             return OS.Windows
 
-        return (timestamp, b'Example of Feedback Processed', status)
+        self.idx += 1
+        # time.sleep(2)
+        return (timestamp, f'[{self.idx}] Example of Feedback Processed'.encode(), status)

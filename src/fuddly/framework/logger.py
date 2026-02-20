@@ -226,6 +226,7 @@ class Logger(object):
         self.reset_current_state()
         self._current_sent_date = None
         self._last_data_IDs = {}  # per target_ref
+        self._returned_last_data_ID = None
         self.last_data_recordable = None
 
         self._post_processed_info = None
@@ -413,6 +414,7 @@ class Logger(object):
         self.reset_current_state()
         self._current_sent_date = None
         self._last_data_IDs = {}
+        self._returned_last_data_ID = None
         self.last_data_recordable = None
 
         self._stop_log_handler()
@@ -490,6 +492,7 @@ class Logger(object):
                 for msg, now in self._current_fmk_info:
                     self.fmkDB.insert_fmk_info(last_data_id, msg, now)
 
+            self._returned_last_data_ID = last_data_id
             return last_data_id
 
         else:
@@ -589,7 +592,8 @@ class Logger(object):
             return False
 
     def _log_feedback(self, source, content, status_code, timestamp,
-                      record=True, store_in_db=True, from_fbk_handler=False):
+                      record=True, store_in_db=True, from_fbk_handler=False,
+                      related_data_id=None):
         processed_feedback = self._process_target_feedback(content)
         fbk_cond = status_code is not None and status_code < 0
         hdr_color = Color.FEEDBACK_ERR if fbk_cond else Color.FEEDBACK
@@ -634,11 +638,15 @@ class Logger(object):
         if self.current_project and not from_fbk_handler:
             if not isinstance(source, FeedbackSource):
                 source = FeedbackSource(source)
-            self.current_project.trigger_feedback_handlers(source, timestamp, content, status_code)
+            self.current_project.trigger_feedback_handlers(source, timestamp, content, status_code,
+                                                           self._returned_last_data_ID)
 
         if record:
             assert isinstance(source, FeedbackSource)
-            if source.related_tg is not None:
+            if related_data_id is not None:
+                data_id = related_data_id
+
+            elif source.related_tg is not None:
                 try:
                     data_id = self._last_data_IDs[source.related_tg]
                 except KeyError:
@@ -736,7 +744,8 @@ class Logger(object):
             self.log_fn(epilogue, do_record=record, rgb=Color.FMKINFO)
 
 
-    def log_fbkhandler_feedback(self, fbkhandler, content, status_code, timestamp, store_in_db=True):
+    def log_fbkhandler_feedback(self, fbkhandler, content, status_code, timestamp, store_in_db=True,
+                                related_data_id=None):
         self._log_feedback(
             FeedbackSource(fbkhandler),
             content,
@@ -744,7 +753,8 @@ class Logger(object):
             timestamp,
             record=self.shall_record(),
             store_in_db=store_in_db,
-            from_fbk_handler=True
+            from_fbk_handler=True,
+            related_data_id=related_data_id
         )
 
 

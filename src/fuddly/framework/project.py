@@ -143,14 +143,14 @@ class Project(object):
 
         return meta_info
 
-    def trigger_feedback_handlers(self, source, timestamp, content, status):
+    def trigger_feedback_handlers(self, source, timestamp, content, status, related_data_id):
         if not self._fbk_processing_enabled or self._fbk_handlers_disabled:
             return
         if isinstance(content, (list, map)):
             for fbk, ts in zip(content, timestamp, strict=True):
-                self._feedback_fifo.put((source, ts, fbk, status))
+                self._feedback_fifo.put((source, ts, fbk, status, related_data_id))
         else:
-            self._feedback_fifo.put((source, timestamp, content, status))
+            self._feedback_fifo.put((source, timestamp, content, status, related_data_id))
 
     def _feedback_processing(self):
         """
@@ -163,12 +163,15 @@ class Project(object):
                 continue
 
             for fh in self._fbk_handlers:
-                info_set, processed_fbk = fh.process_feedback(self.dm, *fbk_tuple)
+                source, ts, fbk, status, related_data_id = fbk_tuple
+                info_set, processed_fbk = fh.process_feedback(self.dm, source=source, timestamp=ts,
+                                                              content=fbk, status=status)
                 if info_set:
                     self.knowledge_source.add_information(info_set)
                 for p_fbk in processed_fbk:
                     timestamp, content, status_code = p_fbk
-                    self.logger.log_fbkhandler_feedback(fh, content, status_code, timestamp)
+                    self.logger.log_fbkhandler_feedback(fh, content, status_code, timestamp,
+                                                        related_data_id=related_data_id)
 
     def estimate_last_data_impact_uniqueness(self):
         similarity = UNIQUE
