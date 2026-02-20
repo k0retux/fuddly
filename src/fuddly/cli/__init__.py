@@ -35,7 +35,7 @@ from fuddly.cli.tool import tool_argument_completer
 from fuddly.cli.utils import (
         get_projects,
         get_tools,
-        get_all_objects,
+        get_all_object_names,
         get_project_scripts,
 )
 from fuddly.cli.error import CliException
@@ -174,7 +174,7 @@ def main(argv: List[str] = None):
                 "--clone",
                 metavar="object_name",
                 help="name of the object to clone.",
-                choices=["list", *get_all_objects()],
+                choices=["list", *get_all_object_names()],
             )
             g.add_argument(
                 "--type",

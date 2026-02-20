@@ -26,6 +26,8 @@ conf["project"] = {
         {"name": "prj.py"},
         {"name": "monitoring.py"},
         {"name": "targets.py"},
+        {"name": "conf.py", "interpolate": ["name"]},
+        {"name": "README"},
         {"name": "README", "path": "samples"},
         {"name": "README", "path": "scripts"},
     ],
@@ -80,8 +82,8 @@ def start(args: argparse.Namespace):
             # This id not ideal, a better solution would be having a list command to show 
             # all the modules (and scripts for that matter)
             if args.clone == "list":
-                for n in get_all_object_names():
-                    print(n)
+                for m in get_all_object_names():
+                    print(m)
                 return 0
             dest_dir = dest_dir / get_module_type(args.clone)
         elif args.type.startswith("project"):
@@ -99,7 +101,7 @@ def start(args: argparse.Namespace):
         dest_dir = dest_dir/args.name
         dest_dir.mkdir(parents=True)
 
-    elif args.type is not None:
+    if args.type is not None:
         match PartialMatchString(args.type):
             case "dm" | "data-model":
                 create_msg = f"Creating new data-model \"{module_name}\""

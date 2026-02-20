@@ -1,0 +1,44 @@
+from fuddly.framework.global_resources import Conf, config_folder
+from fuddly.framework.config import config, default as def_config
+
+# When your project is loaded, this will create a config file in
+# your $$XDG_CONFIG_HOME/fuddly directory.
+# You can then reuse values from the config file in you project
+conf_name = "Project_${name}"
+def_config.add(conf_name, f"""
+[global]
+config_name = {conf_name}
+var=Global section value
+
+;; [global.doc]
+;; self: This is documentation for your config file.
+;; Use this to describe what the various entries are for
+;; or however you want
+
+[section]
+var=Value
+
+;;  [section.doc]
+;;  self: You can group parameters in sections like this
+;;
+;;  var: This is the documentation for you var parameter in this section
+
+""")
+
+${name}_conf = config(conf_name, path=[config_folder])
+${name}_conf.save(config_folder)
+conf = Conf(
+    var=${name}_conf.var,
+    var_in_section=${name}_conf.section.var,
+)
+
+INFO = f"""
+${name} project configuration (automatically generated)
+
+The content of INFO is show with the command `fuddly show <project_name>
+
+Here you can use parameter from your config, when the associated files
+is created.
+To show a parameter's value, do: {conf.var} (literally {{var}})
+"""
+
