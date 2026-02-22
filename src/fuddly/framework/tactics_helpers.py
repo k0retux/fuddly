@@ -47,6 +47,7 @@ class Tactics(object):
         self.operator_clones = {}
         self.generator_clones = {}
         self._scenario_builders = None
+        self._scenario_bricks = None
         self._fmkops = None
         self._related_dm = None
 
@@ -89,11 +90,23 @@ class Tactics(object):
             self._scenario_builders = []
         self._scenario_builders += scenario_builders
 
+    def register_scenario_bricks(self, *scenario_bricks):
+        if self._scenario_bricks is None:
+            self._scenario_bricks = []
+        self._scenario_bricks += scenario_bricks
+
     @property
     def scenario_builders(self):
         if self._scenario_builders is None:
             return
         for sb in self._scenario_builders:
+            yield sb
+
+    @property
+    def scenario_bricks(self):
+        if self._scenario_bricks is None:
+            return
+        for sb in self._scenario_bricks:
             yield sb
 
     @staticmethod

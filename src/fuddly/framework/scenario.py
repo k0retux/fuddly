@@ -1272,9 +1272,9 @@ class Scenario(object):
                 desc_id = str(id(self._description_for_graph))
                 with g.subgraph(name='cluster_2') as g_desc:
                     g_desc.attr(label='DESCRIPTION',
-                                style='filled', color='gray95', labelloc='b')
+                                style='filled', color='gray90', labelloc='b')
                     g_desc.node(desc_id, label=self._description_for_graph,
-                                shape='record', style='filled', color='invis', fillcolor='gray95',
+                                shape='record', style='filled', color='invis', fillcolor='gray90',
                                 fontcolor='black', fontsize='10')
             else:
                 desc_id = None

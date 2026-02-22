@@ -17,7 +17,9 @@ class ScenarioBrick(object):
 
     _scenario = None
 
-    def __init__(self, name=None):
+    def __init__(self, name=None, start: bool = True, final: bool = False,
+                 auto_update_starting_step=True, auto_update_ending_step=True,
+                 **kwargs):
 
         self._name = self.__class__.__name__ if name is None else name
         self._scenario = None
@@ -25,8 +27,11 @@ class ScenarioBrick(object):
         self.shape_ids = [ScenarioBrick.BASIC_SHAPE]
         self.out_connection = {}
         self.in_connection = {}
-        self._final = None
-        self._start = None
+        self._final = final
+        self._start = start
+        self._auto_update_starting_step = auto_update_starting_step
+        self._auto_update_ending_step = auto_update_ending_step
+        self._kwargs = kwargs
 
     @property
     def dm(self):
@@ -67,16 +72,12 @@ class ScenarioBrick(object):
         """
         raise NotImplementedError
 
-    def setup(self, start: bool = True, final: bool = False,
-              auto_update_starting_step=True, auto_update_ending_step=True,
-              **kwargs):
-        self._final = final
-        self._start = start
+    def setup(self):
 
         if self._scenario is None:
-            ok = self._build(auto_update_starting_step=auto_update_starting_step,
-                             auto_update_ending_step=auto_update_ending_step,
-                             **kwargs)
+            ok = self._build(auto_update_starting_step=self._auto_update_starting_step,
+                             auto_update_ending_step=self._auto_update_ending_step,
+                             **self._kwargs)
             if not ok:
                 raise ScenarioDefinitionError
         else:
@@ -138,8 +139,6 @@ class ScenarioBrick(object):
                     scbrick.setup()
                 self._scenario.set_scenario_env(scbrick._scenario.env, merge_user_contexts=True)
                 self.out_connectors(out_idx).connect_to(scbrick.in_connectors(in_idx), **connect_kwargs)
-            # elif isinstance(scbrick, Step):
-            #     self.out_connectors(out_idx).connect_to(scbrick, **connect_kwargs)
             else:
                 raise NotImplementedError
 
@@ -150,8 +149,6 @@ class ScenarioBrick(object):
                     scbrick.setup()
                 self._scenario.set_scenario_env(scbrick._scenario.env, merge_user_contexts=True)
                 scbrick.out_connectors(out_idx).connect_to(self.in_connectors(in_idx), **connect_kwargs)
-            # elif isinstance(scbrick, Step):
-            #     scbrick.connect_to(self.in_connectors(in_idx))
             else:
                 raise NotImplementedError
 

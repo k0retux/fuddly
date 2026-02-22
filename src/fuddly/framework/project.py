@@ -97,6 +97,8 @@ class Project(object):
         self._fmkops = None
         self.project_scenarios = None
         self.project_scenarios_from_builders = None
+        self.project_scenarios_from_bricks = None
+        self.project_scenario_bricks = None
         self.project_scenario_builders = None
         self.project_operators = None
         self.evol_processes = None
@@ -216,6 +218,11 @@ class Project(object):
         if self.project_scenarios is None:
             self.project_scenarios = []
         self.project_scenarios += scenarios
+
+    def register_scenario_bricks(self, *scenario_bricks):
+        if self.project_scenario_bricks is None:
+            self.project_scenario_bricks = []
+        self.project_scenario_bricks += scenario_bricks
 
     def register_scenario_builders(self, *scenario_builders):
         if self.project_scenario_builders is None:

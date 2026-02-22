@@ -75,8 +75,8 @@ class ScenarioBuilder(object):
 class FragmentationScenarioBuilder(ScenarioBuilder):
 
     def load(self, dm: DataModel):
-        frag_brick = FragmentationBrick(self.name)
+        frag_brick = FragmentationBrick(self.name, **self.kwargs)
         frag_brick.dm = dm
-        frag_brick.setup(**self.kwargs)
+        frag_brick.setup()
 
         return frag_brick

@@ -1295,6 +1295,11 @@ class FmkPlumbing(object):
                     sb._load(self.dm)
                     sc_list += list(sb)
 
+                for sb in self._tactics.scenario_bricks:
+                    sb.setup()
+                    sb.find_and_finalize_ending_sbrick(sb)
+                    sc_list.append(sb.get_scenario())
+
                 for sc in sc_list:
                     self._tactics.register_scenarios(sc)
                     dmaker_type = self._tactics.scenario_ref_from(sc)
@@ -1372,6 +1377,15 @@ class FmkPlumbing(object):
                 else:
                     pass
 
+                if self.prj.project_scenario_bricks:
+                    sc_list = []
+                    for scb in self.prj.project_scenario_bricks:
+                        scb.setup()
+                        scb.find_and_finalize_ending_sbrick(scb)
+                        sc_list.append(scb.get_scenario())
+                    self.prj.project_scenarios_from_bricks = sc_list
+                    self._generic_tactics.register_scenarios(*sc_list)
+
                 if self.prj.project_scenario_builders:
                     sc_list = []
                     for sb in self.prj.project_scenario_builders:
@@ -1407,6 +1421,11 @@ class FmkPlumbing(object):
         if self.prj:
             if self.prj.project_scenarios:
                 for sc_ref in [Tactics.scenario_ref_from(sc) for sc in self.prj.project_scenarios]:
+                    if sc_ref in self._generic_tactics.generators:
+                        del self._generic_tactics.generators[sc_ref]
+
+            if self.prj.project_scenarios_from_bricks:
+                for sc_ref in [Tactics.scenario_ref_from(sc) for sc in self.prj.project_scenarios_from_bricks]:
                     if sc_ref in self._generic_tactics.generators:
                         del self._generic_tactics.generators[sc_ref]
 
