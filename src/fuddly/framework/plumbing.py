@@ -1297,6 +1297,7 @@ class FmkPlumbing(object):
 
                 for sb in self._tactics.scenario_bricks:
                     sb.setup()
+                    sb.dm = self.dm
                     sb.find_and_finalize_ending_sbrick(sb)
                     sc_list.append(sb.get_scenario())
 
@@ -1381,6 +1382,7 @@ class FmkPlumbing(object):
                     sc_list = []
                     for scb in self.prj.project_scenario_bricks:
                         scb.setup()
+                        scb.dm = self.dm
                         scb.find_and_finalize_ending_sbrick(scb)
                         sc_list.append(scb.get_scenario())
                     self.prj.project_scenarios_from_bricks = sc_list

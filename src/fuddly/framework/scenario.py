@@ -246,7 +246,7 @@ class Step(object):
             if isinstance(d, (Data, DataProcess)):
                 d.make_free()
 
-    def _stutter_cbk(self, env, current_step, next_step):
+    def _stutter_cbk(self, env, current_step, next_step, *fbk_gate):
         if self._stutter_cpt == 1 and self._rd_count_range:
             self._stutter_max = random.randint(self._rd_count_range[0], self._rd_count_range[1])
         self._stutter_cpt += 1
@@ -260,7 +260,7 @@ class Step(object):
             return True
 
     def make_stutter(self, count=None, rd_count_range: Tuple[int, int] = None,
-                     fbk_timeout_range: Tuple[float, float] = None):
+                     fbk_timeout_range: Tuple[float, float] = None, stutter_after_fbk=False):
         """
         Further to this call, a step is connected to itself with a guard enabling looping on the
         step for a number of time: either @count times or a random value within @rd_count_range.
@@ -282,7 +282,11 @@ class Step(object):
             desc_str = f'Loop {count} times' if count > 1 else f'Loop once'
         else:
             desc_str = f'Loop randomly between {rd_count_range[0]} and {rd_count_range[1]} times'
-        self.connect_to(self, cbk_after_sending=self._stutter_cbk, description=desc_str)
+
+        if stutter_after_fbk:
+            self.connect_to(self, cbk_after_fbk=self._stutter_cbk, description=desc_str)
+        else:
+            self.connect_to(self, cbk_after_sending=self._stutter_cbk, description=desc_str)
 
     def is_blocked(self):
         return self._blocked
@@ -944,7 +948,7 @@ viewer_filename = None
 class Scenario(object):
 
     def __init__(self, name, anchor=None, reinit_anchor=None, user_context=None,
-                 user_args=None, description=''):
+                 user_args=None, description='No description'):
         """
         Note: only at copy the ScenarioEnv are propagated to the steps and transitions
 
@@ -1172,7 +1176,7 @@ class Scenario(object):
         """Start filepath with its associated application (windows)."""
         os.startfile(os.path.normpath(filepath))
 
-    def graph(self, fmt='pdf', select_current=False, display_ucontext=True, display_description=True):
+    def graph(self, fmt='pdf', select_current=False, display_additional_info=True):
         global viewer_format
         global viewer_app
         global viewer_app_name
@@ -1268,39 +1272,66 @@ class Scenario(object):
                 graph.attr(label='SCENARIO', fontcolor='black', labelloc='b')
                 graph_creation(self._anchor, node_list=[], edge_list=[], graph=graph)
 
-            if display_description and self._description_for_graph:
-                desc_id = str(id(self._description_for_graph))
-                with g.subgraph(name='cluster_2') as g_desc:
-                    g_desc.attr(label='DESCRIPTION',
-                                style='filled', color='gray90', labelloc='b')
-                    g_desc.node(desc_id, label=self._description_for_graph,
-                                shape='record', style='filled', color='invis', fillcolor='gray90',
-                                fontcolor='black', fontsize='10')
-            else:
-                desc_id = None
+            if display_additional_info:
 
-            if display_ucontext and self.env.user_context:
-                with g.subgraph(name='cluster_3') as h:
-                    h.attr(label='USER CONTEXT', style='filled', color='gray90', labelloc='b')
-                    context_id = str(id(self.env.user_context))
-                    if isinstance(self.env.user_context, UI):
-                        uctxt_desc = '{'
-                        uinputs = self.env.user_context.get_inputs()
-                        for k, v in uinputs.items():
+                if self._user_args:
+                    params_id = str(id(self._user_args))
+                    with g.subgraph(name='cluster_3') as h:
+                        h.attr(label='Parameters', style='filled', color='gray90', labelloc='b')
+                        params_desc = '{'
+                        for k, obj in self._user_args.items():
+                            _, v, _ = obj
                             v = f'{v!s}'
                             if len(v) > 50:
                                 v = v[:50] + ' [...]'
                             v = v.replace('{', r'\{')
                             v = v.replace('}', r'\}')
-                            uctxt_desc += r'{:s} = {:s}\l|'.format(k, v)
-                        uctxt_desc = uctxt_desc[:-1] + '}'
-                    else:
-                        uctxt_desc = str(self.env.user_context)
-                    h.node(context_id, label=uctxt_desc,
-                           shape='record', style='filled,bold', color='black', fillcolor='deepskyblue',
-                           fontcolor='black', fontsize='10')
-                    if desc_id is not None:
-                        h.edge(context_id, desc_id, style='invis')
+                            params_desc += r'{:s} = {:s}\l|'.format(k, v)
+                        params_desc = params_desc[:-1] + '}'
+
+                        h.node(params_id, label=params_desc,
+                               shape='record', style='filled,bold', color='black', fillcolor='deepskyblue',
+                               fontcolor='black', fontsize='10')
+                else:
+                    params_id = None
+
+                if self.env.user_context:
+                    context_id = str(id(self.env.user_context))
+                    with g.subgraph(name='cluster_4') as h:
+                        h.attr(label='User Context', style='filled', color='gray90', labelloc='b')
+                        if isinstance(self.env.user_context, UI):
+                            uctxt_desc = '{'
+                            uinputs = self.env.user_context.get_inputs()
+                            for k, v in uinputs.items():
+                                v = f'{v!s}'
+                                if len(v) > 50:
+                                    v = v[:50] + ' [...]'
+                                v = v.replace('{', r'\{')
+                                v = v.replace('}', r'\}')
+                                uctxt_desc += r'{:s} = {:s}\l|'.format(k, v)
+                            uctxt_desc = uctxt_desc[:-1] + '}'
+                        else:
+                            uctxt_desc = str(self.env.user_context)
+                        h.node(context_id, label=uctxt_desc,
+                               shape='record', style='filled,bold', color='black', fillcolor='deepskyblue',
+                               fontcolor='black', fontsize='10')
+                        # if params_id is not None:
+                        #     h.edge(context_id, params_id, style='invis')
+                        # h.edge(context_id if params_id is None else params_id, desc_id, style='invis')
+                else:
+                    context_id = None
+
+                desc_id = str(id(self._description_for_graph))
+                with g.subgraph(name='cluster_2') as g_desc:
+                    g_desc.attr(label='',
+                                style='filled', color='gray90', labelloc='b')
+                    g_desc.node(desc_id, label=self._description_for_graph,
+                                shape='record', style='filled', color='invis', fillcolor='gray90',
+                                fontcolor='black', fontsize='10')
+                    if context_id is not None:
+                        g_desc.edge(desc_id, context_id, style='invis')
+                    if params_id is not None:
+                        g_desc.edge(desc_id if context_id is None else context_id, params_id, style='invis')
 
             # else:
             #     graph_creation(self._anchor, node_list=[], edge_list=[], graph=g)

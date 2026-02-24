@@ -220,6 +220,9 @@ class Target(object):
         try:
             object.__setattr__(self, attribute, value)
         except AttributeError:
+            self._logger.print_console(
+                f"*** BUG: attribute {attribute!r} is not implemented in Target {self!s} ***\n",
+                nl_before=True, rgb=Color.ERROR)
             return False
         else:
             return True
@@ -231,6 +234,9 @@ class Target(object):
         try:
             attr_val = getattr(self, attribute)
         except AttributeError:
+            self._logger.print_console(
+                f"*** BUG: attribute {attribute!r} is not implemented in Target {self!s} ***\n",
+                nl_before=True, rgb=Color.ERROR)
             raise
         else:
             return attr_val

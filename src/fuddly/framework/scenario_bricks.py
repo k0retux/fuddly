@@ -14,7 +14,7 @@ class ScenarioBrick(object):
 
     BASIC_SHAPE = 'basic'
     shape_ids = None
-
+    description = 'No description'
     _scenario = None
 
     def __init__(self, name=None, start: bool = True, final: bool = False,
@@ -48,7 +48,7 @@ class ScenarioBrick(object):
         :param shape_id:
         :return:
         """
-        return 'No description'
+        return cls.description
 
 
     @classmethod
@@ -58,7 +58,7 @@ class ScenarioBrick(object):
         :param shape_id:
         :return:
         """
-        return shape_id
+        return None
 
 
     def build(self, user_context: UI, **kwargs):
