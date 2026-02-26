@@ -33,10 +33,10 @@ from fuddly.cli.run import script_argument_completer
 # TODO tool_argument_completer will be used once a sub-script argument completion logic is developped
 from fuddly.cli.tool import tool_argument_completer
 from fuddly.cli.utils import (
-        get_projects,
-        get_tools,
-        get_all_object_names,
-        get_project_scripts,
+    get_projects,
+    get_tools,
+    get_all_object_names,
+    get_project_scripts, get_data_models,
 )
 from fuddly.cli.error import CliException
 
@@ -228,6 +228,26 @@ def main(argv: List[str] = None):
             choices=["list", *map(lambda x: x[0], get_projects())],
         )
 
+
+    with subparsers.add_parser("decode", help="decode the arguments leveraging the provided data model" ) as p:
+        parsers["decode"] = p
+        p.add_argument(
+            "data_model",
+            metavar="data_model",
+            help="name of the data model to use for decoding, the special value \"list\" list available data models",
+            choices=["list", *map(lambda x: x[0], get_data_models())],
+        )
+        group = p.add_argument_group("Miscellaneous Options")
+        group.add_argument(
+            "-v", "--verbose",
+            action='store_true',
+            help="verbose mode",
+        )
+        group.add_argument(
+            "--atom-name",
+            metavar="atom_name",
+            help="optional atom name to support the decoding",
+        )
 
     # Needed because we set exit_on_error=False in the constructor
     try:

@@ -1908,6 +1908,9 @@ class FmkPlumbing(object):
 
     @EnforceOrder(accepted_states=["S1", "S2"])
     def set_sending_delay(self, delay, do_record=True):
+        # TODO: sending_delay here is a delay between two emission
+        #  not to be confused with target sending delay.
+        #  --> rename this method
         if delay >= 0 or delay == -1:
             self._delay = delay
             self.lg.log_fmk_info("Sending delay = {:.2f}s".format(self._delay), do_record=do_record)

@@ -7,7 +7,6 @@ from importlib.metadata import entry_points
 import fuddly.framework.global_resources as gr
 from fuddly.framework.plumbing import _populate_projects as populate_projects
 
-
 # Get all modules (from FS and entry_points)
 def get_module_of_type(group_name: str, prefix: str) -> list[importlib.machinery.ModuleSpec]:
     path = {
@@ -101,3 +100,45 @@ def get_project_from_name(name: str) -> object | None:
                     prj_path = None
                 prj_obj.set_fs_path(prj_path)
                 return prj_obj
+
+def get_data_model_from_name(name: str) -> object | None:
+    dm_modules = get_each_data_model_module()
+    for m in dm_modules:
+        dm_name = m.name.split(".")[-1]
+        if dm_name == name:
+            mod = importlib.import_module(m.name)
+            try:
+                dm_obj = mod.data_model
+            except AttributeError:
+                sys.stderr.write(f'[ERROR] the data model "{name}" does not contain a global variable '
+                      f'named "data_model"\n')
+                return None
+            else:
+                if os.path.basename(m.origin) == "__init__.py":
+                    dm_path = os.path.dirname(m.origin)
+                else:
+                    dm_path = None
+                dm_obj.set_fs_path(dm_path)
+                return dm_obj
+
+
+def create_data_model_dict() -> dict:
+    dm_modules = get_each_data_model_module()
+    name2dm = {}
+    for m in dm_modules:
+        dm_name = m.name.split(".")[-1]
+        mod = importlib.import_module(m.name)
+        try:
+            dm_obj = mod.data_model
+        except AttributeError:
+            sys.stderr.write(f'[Warning] the data model "{dm_name}" does not contain a global variable '
+                             f'named "data_model". Ignore it.\n')
+        else:
+            if os.path.basename(m.origin) == "__init__.py":
+                dm_path = os.path.dirname(m.origin)
+            else:
+                dm_path = None
+            dm_obj.set_fs_path(dm_path)
+            name2dm[dm_name] = dm_obj
+
+    return name2dm

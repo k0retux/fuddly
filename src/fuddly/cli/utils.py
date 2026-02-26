@@ -90,6 +90,25 @@ def get_projects() -> list[importlib.machinery.ModuleSpec]:
     return modules
 
 
+# Return a list of projects fuddly knows about
+def get_data_models() -> list[importlib.machinery.ModuleSpec]:
+    modules = []
+
+    data_model_modules = get_each_data_model_module()
+
+    for m in data_model_modules:
+        path = m.origin
+        if os.path.basename(path) == "__init__.py":
+            path = os.path.dirname(path)
+        else:
+            # Ignoring old single-files projects
+            continue
+        *prefix, prj_name = path.split("/")
+        modules.append((prj_name, path, m))
+
+    return modules
+
+
 # Return a list of all the fuddly tools
 def get_tools() -> list[types.ModuleType]:
     import pkgutil
