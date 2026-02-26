@@ -233,8 +233,8 @@ class DataModel(object):
             accumulate(colorize("\n*** DECODING ERROR [atom used: '{:s}'] ***", rgb=Color.ERROR)
                        .format(name))
             accumulate('\nAbsorption Status: {!r}, {:d}, {:d}'.format(status, off, size))
-            accumulate(r'\n \_ length of original data: {:d}'.format(len(data)))
-            accumulate(r'\n \_ remaining: {!r}'.format(data[size:size+1000]))
+            accumulate('\n \\_ length of original data: {:d}'.format(len(data)))
+            accumulate('\n \\_ remaining: {!r}'.format(data[size:size+1000]))
         else:
             accumulate('\n')
             atom.show(log_func=accumulate, display_title=False, pretty_print=colorized,

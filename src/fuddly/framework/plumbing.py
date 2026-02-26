@@ -96,7 +96,7 @@ class Printer(io.StringIO):
         pass
 
     def write(self, data):
-        if False and self.fmk.lg:
+        if self.fmk.lg:
             self.fmk.lg.write(data)
         else:
             sys.__stdout__.write(data)
@@ -6470,7 +6470,7 @@ class FmkShell(cmd.Cmd):
                     d, decoded_result = ret[0]
                     _, decoded_str = decoded_result
                     blob_desc = colorize('Raw data retrieved from FmkDB:', rgb=Color.FMKINFO)
-                    data = f'{blob_desc}\n\n{d.to_str()!a}\n\n{decoded_str}'
+                    data = f'{blob_desc}\n\n{d.to_str()!a}\n\n' + decoded_str
 
             elif id_from_db is not None:
                 data = self.fz.get_from_data_bank(id_from_db)
