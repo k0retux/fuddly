@@ -636,6 +636,28 @@ class Database(object):
             '''.format(sid = start_id, eid = end_id, ign_eid = ign_end_id)
 
         ret = self.submit_sql_stmt(stmt, outcome_type=Database.OUTCOME_DATA)
+
+        if not ret:
+            # We relax the DM_NAME constraint in this case as some valid cases exist where
+            # the equality is wrong. However, we still have invalid cases when the equality is not also checked.
+            # refer to comments in FmkPlumbing.fmkdb_fetch_data()
+            # TODO: find a better way than doing 2 sql queries
+            stmt = \
+                '''
+                SELECT DATA.ID, DATA.CONTENT, DATA.TYPE, DMAKERS.NAME, DATA.DM_NAME, DATA.PRJ_NAME
+                FROM DATA INNER JOIN DMAKERS
+                  ON DATA.TYPE = DMAKERS.TYPE AND DMAKERS.CLONE_TYPE IS NULL
+                WHERE DATA.ID >= {sid:d} {ign_eid:s} AND DATA.ID <= {eid:d}
+                UNION ALL
+                SELECT DATA.ID, DATA.CONTENT, DMAKERS.CLONE_TYPE AS TYPE, DMAKERS.CLONE_NAME AS NAME,
+                       DATA.DM_NAME, DATA.PRJ_NAME
+                FROM DATA INNER JOIN DMAKERS
+                  ON DATA.TYPE = DMAKERS.TYPE AND DMAKERS.CLONE_TYPE IS NOT NULL
+                WHERE DATA.ID >= {sid:d} {ign_eid:s} AND DATA.ID <= {eid:d}
+                '''.format(sid=start_id, eid=end_id, ign_eid=ign_end_id)
+
+            ret = self.submit_sql_stmt(stmt, outcome_type=Database.OUTCOME_DATA)
+
         return ret
 
 

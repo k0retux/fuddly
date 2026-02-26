@@ -3235,12 +3235,28 @@ class FmkPlumbing(object):
                     try:
                         dm.load_data_model(self._name2dm, from_prj=prj_obj)
                     except:
-                        msg = ("Error encountered while loading the data model. (checkup the associated" \
-                               " '{:s}.py' file)".format(self.dm.name))
+                        msg = (f"Error encountered while loading the data model. "
+                               f"(checkup the associated '{self.dm.name}.py' file)")
                         self._handle_user_code_exception(msg=msg)
                     else:
-                        decoded_result = dm.decode(content, atom_name=dtype.lower(),
-                                                   verbose=dec_verbose, debug=dec_debug)
+                        atom_name = dtype.lower()
+                        # About atom_name potential existence:
+                        # - The dm_name can be inconsistent with the dtype in the following situation:
+                        # the initial atom created by the Generator (dtype) can then be put by a further operator
+                        # within another atom (from another data model). Meaning the final data model that
+                        # will be associated to the Data() will be the last one (as the reference will point to
+                        # the root of this new atom). Thus, in this case the atom_name will not be related to the
+                        # retrieved dm_name.
+                        # It is not an issue, just a caution to consider while trying to decode such kind of data.
+                        #
+                        # - For generators that are not automatically created from the DM registerd atoms,
+                        # the previous atom_name will not exist
+
+                        if dm.is_existing(atom_name):
+                            decoded_result = dm.decode(content, atom_name=dtype.lower(),
+                                                       verbose=dec_verbose, debug=dec_debug)
+                        else:
+                            decoded_result = dm.decode(content, verbose=dec_verbose, debug=dec_debug)
 
             if decode:
                 data_list.append((data, decoded_result))
@@ -6290,7 +6306,7 @@ class FmkShell(cmd.Cmd):
         else:
             actions = None
 
-        self.__error_msg = "Error with the command!"
+        self.__error_msg = "Error within the method process_data_and_send()"
         self.__error = self.fz.process_data_and_send(DataProcess(actions, tg_ids=tg_ids),
                                                      id_from_fmkdb=id_from_fmkdb,
                                                      id_from_db=id_from_db) is None
@@ -6445,9 +6461,10 @@ class FmkShell(cmd.Cmd):
 
             elif id_from_fmkdb is not None:
                 ret = self.fz.fmkdb_fetch_data(start_id=id_from_fmkdb, end_id=id_from_fmkdb,
-                                                                decode=True, dec_verbose=verbose_mode,
-                                                                dec_debug=debug)
+                                               decode=True, dec_verbose=verbose_mode,
+                                               dec_debug=debug)
                 if ret is None:
+                    self.__error_msg = "Data cannot be fetched (likely inexistant)"
                     return False
                 else:
                     d, decoded_result = ret[0]
@@ -6715,6 +6732,10 @@ class FmkShell(cmd.Cmd):
             eid = -1
 
         data_list = self.fz.fmkdb_fetch_data(start_id=sid, end_id=eid)
+        if data_list is None:
+            self.__error_msg = "Data cannot be fetched (likely inexistant)"
+            return False
+
         self.fz.register_in_data_bank(data_list)
 
         self.__error = False

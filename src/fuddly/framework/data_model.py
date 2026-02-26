@@ -407,6 +407,9 @@ class DataModel(object):
         for k in hkeys:
             yield k
 
+    def is_existing(self, atom: str):
+        return atom in self._dm_hashtable
+
     def export_attributes(self, attrs: dict):
         if self._public_attrs is None:
             self._public_attrs = UI()
