@@ -233,7 +233,7 @@ def main(argv: List[str] = None):
         parsers["decode"] = p
         p.add_argument(
             "data_model",
-            metavar="data_model",
+            metavar="DATA_MODEL",
             help="name of the data model to use for decoding, the special value \"list\" list available data models",
             choices=["list", *map(lambda x: x[0], get_data_models())],
         )
@@ -243,11 +243,39 @@ def main(argv: List[str] = None):
             action='store_true',
             help="verbose mode",
         )
+        group = p.add_argument_group("Decoding constraints")
+        group = group.add_mutually_exclusive_group()
         group.add_argument(
-            "--atom-name",
-            metavar="atom_name",
+            "--atom",
+            metavar="ATOM_NAME",
             help="optional atom name to support the decoding",
         )
+        group.add_argument(
+            "--scope",
+            metavar="SCOPE",
+            type=str,
+            help="optional scope to support the decoding",
+        )
+        group = p.add_mutually_exclusive_group()
+        group.add_argument(
+            "-d",
+            "--data",
+            metavar="DATA",
+            type=str,
+            help="optional data to decode",
+        )
+        group.add_argument(
+            "-f",
+            "--from",
+            dest='file_path',
+            metavar="FILE_PATH",
+            type=argparse.PathType(
+                dash_ok=False,
+                type="file"
+            ),
+            help="optional file path from which data to decode shall be retrieved",
+        )
+
 
     # Needed because we set exit_on_error=False in the constructor
     try:

@@ -6,7 +6,7 @@ from fuddly.cli.error import CliException
 from fuddly.libs.fmk_services import create_data_model_dict
 from fuddly.libs.external_modules import colorize, Color
 from fuddly.framework.global_resources import Verbose
-
+from pathlib import Path
 
 def start(args: argparse.Namespace) -> int:
     if args.data_model is None:
@@ -23,6 +23,7 @@ def start(args: argparse.Namespace) -> int:
     if dm is None:
         raise CliException("Incorrect data model name")
 
+
     prj_obj = None
     try:
         dm.load_data_model(name2dm, from_prj=prj_obj)
@@ -32,17 +33,36 @@ def start(args: argparse.Namespace) -> int:
         sys.stderr(msg)
     else:
         verbose = Verbose.Heavy if args.verbose else Verbose.Normal
-        atom_name = args.atom_name
+        atom_name = args.atom
         debug = False
 
-        data_str = input(colorize("*** Data to be decoded:\n", rgb=Color.PROMPT))
-        data = eval(data_str)
+        if args.data is not None:
+            data = 'b"' + args.data.replace('\\\\', '\\') + '"'
+            data = eval(data)
 
-        if dm.is_existing(atom_name):
-            decoded_result = dm.decode(data, atom_name=atom_name,
-                                       verbose=verbose, debug=debug)
+        elif args.file_path is not None:
+            file_path = Path(args.file_path).absolute()
+
+            with open(file_path, 'rb') as f:
+                data = f.read()
+
         else:
-            decoded_result = dm.decode(data, verbose=verbose, debug=debug)
+            try:
+                data_str = input(colorize("*** Data to be decoded:\n", rgb=Color.PROMPT))
+                if data_str:
+                    data = 'b"' + data_str.replace('\\\\', '\\') + '"'
+                    data = eval(data)
+                else:
+                    raise CliException("No data input provided")
+            except KeyboardInterrupt:
+                raise CliException("Action canceled by the user")
+
+        atom_name = atom_name if dm.is_existing(atom_name) else None
+        scope = args.scope
+
+        decoded_result = dm.decode(data, atom_name=atom_name, scope=scope,
+                                   verbose=verbose, debug=debug)
+
 
         _, decoded_str = decoded_result
         print(decoded_str)

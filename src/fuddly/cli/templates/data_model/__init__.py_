@@ -1,1 +1,2 @@
 from . import (dm, strategy)
+from .dm import data_model

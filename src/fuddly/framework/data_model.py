@@ -274,7 +274,11 @@ class DataModel(object):
                     atom_for_abs = self.get_atom(atom_name)
                     abs_csts = AbsFullCsts()
             except ValueError:
-                raise ValueError(f"provided atom name is unknown: '{atom_name}'")
+                if atom_name is not None:
+                    msg = f"provided atom name is unknown: '{atom_name}'"
+                else:
+                    msg = f"provided scope is unknown: '{scope}'"
+                raise ValueError(msg)
 
         abs_csts_to_apply = abs_csts if requested_abs_csts is None else requested_abs_csts
         status, off, size, name = atom_for_abs.absorb(data, constraints=abs_csts_to_apply)
