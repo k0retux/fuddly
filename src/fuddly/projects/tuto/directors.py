@@ -20,9 +20,9 @@ class MyDir(Director):
         self.detected_error = 0
 
         if self.mode == 1:
-            fmk_ops.set_sending_delay(0)
+            fmk_ops.set_delay_between_two_actions(0)
         else:
-            fmk_ops.set_sending_delay(0.5)
+            fmk_ops.set_delay_between_two_actions(0.5)
 
         return True
 

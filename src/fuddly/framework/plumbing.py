@@ -118,7 +118,7 @@ class Printer(io.StringIO):
 
 class ExportableFMKOps(object):
     def __init__(self, fmk):
-        self.set_sending_delay = fmk.set_sending_delay
+        self.set_delay_between_two_actions = fmk.set_delay_between_two_actions
         self.set_sending_burst_counter = fmk.set_sending_burst_counter
         self.set_health_check_timeout = fmk.set_health_check_timeout
         self.cleanup_all_dmakers = fmk.cleanup_all_dmakers
@@ -555,7 +555,7 @@ class FmkPlumbing(object):
         # where SIGINT is accepted from user
         delay = self.config.misc.fuzz.delay if self.prj.default_sending_delay is None else self.prj.default_sending_delay
         burst = self.config.misc.fuzz.burst if self.prj.default_burst_value is None else self.prj.default_burst_value
-        self.set_sending_delay(delay)
+        self.set_delay_between_two_actions(delay)
         self.set_sending_burst_counter(burst)
 
         if self.prj.default_fbk_timeout is not None:
@@ -1546,7 +1546,7 @@ class FmkPlumbing(object):
         self.print(colorize("  [ General Information ]", rgb=Color.INFO))
         self.print(colorize("                  FmkDB enabled: ", rgb=Color.SUBINFO) + repr(self.fmkDB.enabled))
         self.print(colorize("              Workspace enabled: ", rgb=Color.SUBINFO) + repr(self.prj.wkspace_enabled))
-        self.print(colorize("                  Sending delay: ", rgb=Color.SUBINFO) + delay_str)
+        self.print(colorize("      Delay between two actions: ", rgb=Color.SUBINFO) + delay_str)
         self.print(colorize("   Number of data sent in burst: ", rgb=Color.SUBINFO) + str(self._burst))
         self.print(colorize(" Target(s) health-check timeout: ", rgb=Color.SUBINFO) + str(self._hc_timeout_max))
 
@@ -1907,13 +1907,10 @@ class FmkPlumbing(object):
         self.prj.wkspace_enabled = False
 
     @EnforceOrder(accepted_states=["S1", "S2"])
-    def set_sending_delay(self, delay, do_record=True):
-        # TODO: sending_delay here is a delay between two emission
-        #  not to be confused with target sending delay.
-        #  --> rename this method
+    def set_delay_between_two_actions(self, delay, do_record=True):
         if delay >= 0 or delay == -1:
             self._delay = delay
-            self.lg.log_fmk_info("Sending delay = {:.2f}s".format(self._delay), do_record=do_record)
+            self.lg.log_fmk_info("Delay between two actions = {:.2f}s".format(self._delay), do_record=do_record)
             return True
         else:
             self.lg.log_fmk_info("Wrong delay value!", do_record=False)
@@ -1939,7 +1936,7 @@ class FmkPlumbing(object):
 
     def _restore_previous_state(self):
         if self._orig_delay is not None:
-            self.set_sending_delay(self._orig_delay)
+            self.set_delay_between_two_actions(self._orig_delay)
             self._orig_delay = None
         if self._orig_burst is not None:
             self.set_sending_burst_counter(self._orig_burst)
@@ -2129,7 +2126,7 @@ class FmkPlumbing(object):
         for d in data_list:
             if d.sending_delay is not None:
                 self._save_current_sending_delay()
-                self.set_sending_delay(d.sending_delay)
+                self.set_delay_between_two_actions(d.sending_delay)
 
             if d.burst_count is not None:
                 self._save_current_sending_burst_counter()
@@ -6197,10 +6194,10 @@ class FmkShell(cmd.Cmd):
 
     def do_set_delay(self, line):
         """
-        Delay sending. Can be usefull during a loop.
+        Set delay between two actions (e.g., data emission).
         |  syntax: set_delay <arg>
         |  |_ possible values for <arg>:
-        |     -1  : wait for keyboard input after each emission of data
+        |     -1  : wait for keyboard input after each action
         |      0  : no delay
         |     x>0 : delay expressed in seconds (fraction is possible)
         """
@@ -6213,7 +6210,7 @@ class FmkShell(cmd.Cmd):
             return False
         try:
             delay = float(args[0])
-            self.fz.set_sending_delay(delay)
+            self.fz.set_delay_between_two_actions(delay)
         except:
             return False
 
