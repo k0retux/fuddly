@@ -594,7 +594,7 @@ class FragmentationBrick(ScenarioBrick):
             self.idx_max = vtype.maxi
             self.idx_vtype = vtype.__class__.__name__
             self.idx_vtype_min = vtype.__class__.mini
-            self.idx_vtype_max = vtype.__class__.maxi
+            self.idx_vtype_max = self.idx_max + 10 if vtype.__class__.maxi is None else vtype.__class__.maxi
 
             # print(
             #     f'|= fragment index type: {self.idx_vtype}\n'
@@ -615,7 +615,7 @@ class FragmentationBrick(ScenarioBrick):
             self.count_max = vtype.maxi
             self.count_vtype = vtype.__class__.__name__
             self.count_vtype_min = vtype.__class__.mini
-            self.count_vtype_max = vtype.__class__.maxi
+            self.count_vtype_max = self.count_max + 10 if vtype.__class__.maxi is None else vtype.__class__.maxi
 
             # print(
             #     f'|= fragment count type: {self.count_vtype}\n'
@@ -637,7 +637,7 @@ class FragmentationBrick(ScenarioBrick):
                 self.fsz_max = vtype.maxi
                 self.fsz_vtype = vtype.__class__.__name__
                 self.fsz_vtype_min = vtype.__class__.mini
-                self.fsz_vtype_max = vtype.__class__.maxi
+                self.fsz_vtype_max = self.fsz_max + 10 if vtype.__class__.maxi is None else vtype.__class__.maxi
 
                 # print(
                 #     f'|= fragment size type: {self.fsz_vtype}\n'
@@ -720,6 +720,7 @@ class FragmentationBrick(ScenarioBrick):
 
             self.cycling_payload = itertools.cycle(env.fragment_list)
             env.frag_idx = self.frag_idx_init
+            env._loop_count = 0
             env.fidx_list = list(self.fragidx_list)
 
             self._nb_of_sent_frag = 0
@@ -794,10 +795,11 @@ class FragmentationBrick(ScenarioBrick):
                     atom[self.pld_sem] = env.fragment_list[0]
 
                 case FragmentationBrick.ALT05A_SHAPE | FragmentationBrick.ALT05B_SHAPE:
-                    fidx = env.frag_idx % (env.fragment_count+self.frag_idx_init-1)
-                    if fidx == 0:
-                        fidx = self.frag_idx_init
-                    atom[self.fragidx_sem] = fidx
+                    fidx = ((env.frag_idx + env._loop_count) - self.frag_idx_init) % env.fragment_count
+                    if fidx == env.fragment_count-1:
+                        fidx = 0
+                        env._loop_count += 1
+                    atom[self.fragidx_sem] = fidx + self.frag_idx_init
                     atom[self.fragcount_sem] = env.fragment_count
                     if shape_id == FragmentationBrick.ALT05A_SHAPE:
                         atom[self.pld_sem] = env.fragment_list[fidx]
@@ -805,13 +807,12 @@ class FragmentationBrick(ScenarioBrick):
                         atom[self.pld_sem] = env.fragment_list[0]
 
                 case FragmentationBrick.ALT06A_SHAPE | FragmentationBrick.ALT06B_SHAPE:
-                    fidx_modulo = env.frag_idx % (env.fragment_count+self.frag_idx_init-1)
-                    if fidx_modulo == 0:
-                        fidx_modulo = self.frag_idx_init
-                    fidx = env.fragment_count + (self.frag_idx_init - 1) - (fidx_modulo - self.frag_idx_init)
-                    if fidx == self.frag_idx_init:
-                        fidx = env.fragment_count + (self.frag_idx_init - 1)
-                    atom[self.fragidx_sem] = fidx
+                    fidx_modulo = ((env.frag_idx + env._loop_count) - self.frag_idx_init) % env.fragment_count
+                    fidx = env.fragment_count - fidx_modulo - 1
+                    if fidx == 0:
+                        fidx = env.fragment_count - 1
+                        env._loop_count += 1
+                    atom[self.fragidx_sem] = fidx + self.frag_idx_init
                     atom[self.fragcount_sem] = env.fragment_count
                     if shape_id == FragmentationBrick.ALT06A_SHAPE:
                         atom[self.pld_sem] = env.fragment_list[fidx]
@@ -823,14 +824,14 @@ class FragmentationBrick(ScenarioBrick):
                     atom[self.fragidx_sem] = rand_idx
                     atom[self.fragcount_sem] = env.fragment_count
                     if shape_id == FragmentationBrick.ALT07A_SHAPE:
-                        atom[self.pld_sem] = env.fragment_list[rand_idx]
+                        atom[self.pld_sem] = env.fragment_list[rand_idx - self.frag_idx_init]
                     else:
                         atom[self.pld_sem] = env.fragment_list[0]
 
                 case FragmentationBrick.ALT10_SHAPE | FragmentationBrick.ALT11_SHAPE:
                     rand_idx = random.choice(self.fragidx_list)
                     atom[self.fragidx_sem] = rand_idx
-                    atom[self.pld_sem] = env.fragment_list[rand_idx]
+                    atom[self.pld_sem] = env.fragment_list[rand_idx - self.frag_idx_init]
                     if shape_id == FragmentationBrick.ALT10_SHAPE:
                         atom[self.fragcount_sem] = self.count_max
                     else:
